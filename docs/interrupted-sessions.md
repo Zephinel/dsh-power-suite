@@ -45,8 +45,8 @@ Host:
   It reads the Session log through `ctx.sessionQuery.readSession()` on the first
   ask and caches the answer per Session; `session/event` `turn/start` and
   `turn/end` events keep the cache current. `&refresh=1` recomputes.
-- Registered in [`lib/features/interrupted-sessions/host.js`](../lib/features/interrupted-sessions/host.js);
-  the pure fold lives in [`turns.js`](../lib/features/interrupted-sessions/turns.js).
+- Registered in [`src/features/interrupted-sessions/host.js`](../src/features/interrupted-sessions/host.js);
+  the pure fold lives in [`turns.js`](../src/features/interrupted-sessions/turns.js).
 
 Browser:
 

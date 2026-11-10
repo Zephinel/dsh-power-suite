@@ -2,16 +2,16 @@
  * Host half of DSH Power Suite.
  *
  * One Host plugin owns every feature's Host-side registrations, so the suite
- * installs as one plugin and each feature stays a module under `lib/features/`.
+ * installs as one plugin and each feature stays a module under `src/features/`.
  * Features register inside `apply` through `ctx.effect`, which ties their
  * lifetime to this entry.
  */
 
-import { installInterruptedSessions } from './lib/features/interrupted-sessions/host.js'
-import { installPromptHistory } from './lib/features/prompt-history/host.js'
-import { installSessionArtifacts } from './lib/features/session-artifacts/host.js'
-import { installSettings } from './lib/features/settings/host.js'
-import { installWorkspacePresets } from './lib/features/workspace-presets/host.js'
+import { installInterruptedSessions } from './features/interrupted-sessions/host.js'
+import { installPromptHistory } from './features/prompt-history/host.js'
+import { installSessionArtifacts } from './features/session-artifacts/host.js'
+import { installSettings } from './features/settings/host.js'
+import { installWorkspacePresets } from './features/workspace-presets/host.js'
 
 /** Stable Loader identity. */
 export const name = 'power-suite'

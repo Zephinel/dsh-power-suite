@@ -13,7 +13,7 @@ import {
   shouldApplyPreset,
   storePath,
   withPreset
-} from '../lib/features/workspace-presets/store.js'
+} from '../src/features/workspace-presets/store.js'
 
 test('missing, malformed, or wrong-version state reads as empty', () => {
   assert.deepEqual(parseState(''), emptyState())

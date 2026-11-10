@@ -18,7 +18,7 @@ inventory grows with the suite.
 ## Install
 
 ```text
-plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-suite/packages/power-suite
+plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-suite
 ```
 
 The profile keeps this package as a `link:` dependency, so an edited checkout is
@@ -27,24 +27,24 @@ the code the Host runs after a restart. Removing the bundle removes the plugin.
 ## Layout
 
 ```
-packages/power-suite/
-  package.json              # bundle patch + browser entry
+.
+  package.json              # bundle patch + exports + checks
   cordis.patch.yml          # inserts the single `power-suite` row
-  index.js                  # Host entry: calls each feature's installer
-  lib/features/<name>/      # Host-side feature modules
-  client.js                 # browser entry: one `#region feature: <name>` per feature
+  src/index.js              # Host entry: calls each feature's installer
+  src/features/<name>/      # Host-side feature modules
+  src/client.js             # browser entry: one `#region feature: <name>` per feature
   locale/                   # plugin display metadata (en, zh)
-  docs/                     # suite overview, per-feature reference, settings
+  docs/                     # architecture, guides, per-feature reference
   test/                     # pure-logic tests (node --test)
 ```
 
 ## Add a feature
 
-1. Host side: create `lib/features/<name>/host.js` exporting
+1. Host side: create `src/features/<name>/host.js` exporting
    `install<Name>(ctx)`; register routes, services, and events inside
-   `ctx.effect`. Call the installer from [`index.js`](index.js) and add any new
+   `ctx.effect`. Call the installer from [`src/index.js`](../src/index.js) and add any new
    service names to its `inject` union.
-2. Browser side: add a `//#region feature: <name>` section to [`client.js`](client.js)
+2. Browser side: add a `//#region feature: <name>` section to [`src/client.js`](../src/client.js)
    with its tab type, guide card, slot component, and copy. The entry's `apply`
    registers each feature's contributions.
 3. Feature routes live under `/api/<feature>.*` and use
@@ -55,7 +55,7 @@ packages/power-suite/
 5. Add a pure-logic test under `test/` when a feature derives state from the
    Session log.
 6. A user preference belongs in the suite settings document
-   (`lib/features/settings/` + the Plugins-page section in `client.js`); see
+   (`src/features/settings/` + the Plugins-page section in `src/client.js`); see
    [settings.md](settings.md).
 
 Features share one plugin row; enabling or disabling the plugin toggles them

@@ -1,6 +1,6 @@
 # The suite bundle's patch layer: one Loader row for the suite itself.
-# Features are modules inside this package (Host: lib/features/<name>/,
-# browser: #region feature marks in client.js), so the Plugin list shows one
+# Features are modules inside this package (Host: src/features/<name>/,
+# browser: #region feature marks in src/client.js), so the Plugin list shows one
 # plugin whose inventory grows with the suite.
 - insert:
     - id: power-suite

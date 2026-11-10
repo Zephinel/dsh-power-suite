@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { describeInterruption, isInterrupted, isInterruptedEnd, lastTurnState } from '../lib/features/interrupted-sessions/turns.js'
+import { describeInterruption, isInterrupted, isInterruptedEnd, lastTurnState } from '../src/features/interrupted-sessions/turns.js'
 
 const start = (turn, seq) => ({ type: 'turn/start', seq, data: { turn } })
 const end = (turn, seq, kind, cause) => ({

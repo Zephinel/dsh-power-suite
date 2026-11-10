@@ -8,7 +8,7 @@ import {
   mutationPath,
   previewKindOf,
   resolveArtifactPath
-} from '../lib/features/session-artifacts/artifact-index.js'
+} from '../src/features/session-artifacts/artifact-index.js'
 
 /** Build one raw session event. */
 function event(seq, type, data) {

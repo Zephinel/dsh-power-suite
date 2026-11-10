@@ -1,6 +1,6 @@
 # Settings
 
-![The Prompt history section on the bundle's Plugins page](settings-page.png)
+![The Prompt history section on the bundle's Plugins page](assets/settings-page.png)
 
 The bundle carries its own configuration section on its **Plugins** page:
 

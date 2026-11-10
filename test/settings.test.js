@@ -13,7 +13,7 @@ import {
   serializeSettings,
   settingsPath,
   validatePatch
-} from '../lib/features/settings/store.js'
+} from '../src/features/settings/store.js'
 
 test('empty, malformed, and wrong-version files read as defaults', () => {
   assert.deepEqual(parseSettings(''), defaultSettings())

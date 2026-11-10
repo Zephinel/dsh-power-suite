@@ -3,23 +3,27 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A growing set of small DeepSeek Harness Web GUI enhancements in one plugin: session artifacts, per-Workspace default agent presets, composer prompt history, and their settings.",
+  "description": "One DeepSeek Harness Web plugin that adds session artifacts, per-Workspace default agent presets, composer prompt history, interrupted-session recovery, and their settings.",
+  "main": "./src/index.js",
   "exports": {
-    ".": "./index.js",
-    "./client": "./client.js",
+    ".": "./src/index.js",
+    "./client": "./src/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.png",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.js",
-    "client.js",
-    "lib",
+    "src",
     "cordis.patch.yml",
-    "locale/*.json",
+    "locale",
     "docs",
-    "icon.png"
+    "icon.png",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE",
+    "PRODUCT.md"
   ],
   "dsh": {
     "bundle": {
@@ -39,5 +43,24 @@
       ]
     }
   },
-  "icon": "./icon.png"
+  "icon": "./icon.png",
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "test": "node --test test/*.test.js",
+    "pack:check": "npm pack --dry-run --json"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "dsh-bundle",
+    "power-suite",
+    "artifacts",
+    "prompt-history"
+  ],
+  "author": "rexxin",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  }
 }

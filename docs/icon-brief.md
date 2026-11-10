@@ -1,6 +1,6 @@
 # Icon brief
 
-![Shipped icon: 48 px and 24 px on light and dark surfaces](icon-preview.png)
+![Shipped icon: 48 px and 24 px on light and dark surfaces](assets/icon-preview.png)
 
 The shipped plugin icon is the supplied 3D toolbox illustration, composited
 onto a soft sky-blue rounded tile so it reads on both light and dark pages. This
@@ -38,7 +38,7 @@ Source: a `1254×1254` transparent PNG containing the toolbox illustration.
    `rgba(8,56,120,0.18)`, Gaussian blur `7`, drawn behind the illustration.
 5. Export `256×256` PNG (about 76 KB, under the 256 KiB cap).
 
-The shipped file is `packages/power-suite/icon.png`; the package manifest points
+The shipped file is `icon.png` at the repository root; the package manifest points
 `icon` and the `./icon` export at it.
 
 ## Replacing it

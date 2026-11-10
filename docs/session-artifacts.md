@@ -148,16 +148,16 @@ application's cookies, storage, or same-origin APIs.
 This feature ships inside [DSH Power Suite](overview.md); install the suite:
 
 ```text
-plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-suite/packages/power-suite
+plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-suite
 ```
 
 The Host half serves the two routes; the browser half registers the page type
 and its guide card. Restart the Host process after upgrading the package's
 JavaScript.
 
-Implementation: Host entry [`lib/features/session-artifacts/host.js`](../lib/features/session-artifacts/host.js),
-pure fold [`artifact-index.js`](../lib/features/session-artifacts/artifact-index.js),
-browser surface [`client.js`](../client.js) under its `feature: session artifacts`
+Implementation: Host entry [`src/features/session-artifacts/host.js`](../src/features/session-artifacts/host.js),
+pure fold [`artifact-index.js`](../src/features/session-artifacts/artifact-index.js),
+browser surface [`client.js`](../src/client.js) under its `feature: session artifacts`
 region, tests [`test/session-artifacts.test.js`](../test/session-artifacts.test.js).
 
 ## Limits
