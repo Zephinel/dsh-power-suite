@@ -22,7 +22,7 @@ npm run pack:check
 
 Current evidence (2026-11-11, Node 24.22.2):
 
-- `npm test`: **33 tests, 33 passed, 0 failed**.
+- `npm test`: **39 tests, 39 passed, 0 failed**.
 - `npm run check`: passed.
 - `npm run pack:check`: **38 files** (0.1.0 tarball), including `src/`,
   `locale/`, `docs/`, `cordis.patch.yml`, `icon.png`, and the standard
@@ -30,6 +30,12 @@ Current evidence (2026-11-11, Node 24.22.2):
 - The root-package reinstall was verified after a Host restart: the Loader row
   `include:power-suite` reports `fiberPhase: active` from the new repository
   root path.
+
+Interrupted-session subagent detection was also checked against real local
+Session logs without restarting the running Host: the parent
+`session-bd41197f-48fd-4065-a4f8-5545510cc86e` (main turn completed, two child
+sessions left with open crash tails) returned `interrupted: true,
+subagent: true`; two completed control Sessions stayed `interrupted: false`.
 
 ## Manual UI checks
 

@@ -85,3 +85,37 @@ The plugin does not depend on the icon package or network at runtime.
   never overwrites something the user typed.
 - **Visible prompt.** Continuing adds an ordinary user message to the transcript;
   there is no hidden continuation channel.
+
+## Automatic refresh after a Host restart
+
+Interruption state is Host-owned but the browser caches one record per Session.
+After a DSH restart the browser may keep its old page, so a stale record used to
+survive until that row was clicked.
+
+- The browser listens for the client Connection's `connection/reset` event,
+  which fires whenever a new Host generation is established, and immediately
+  repulls every known/watched Session. Window focus, `visibilitychange`,
+  `online`, and a 20 s poll refresh the same set.
+- A pending badge therefore appears on its own after the Web page reconnects;
+  clicking a Session is no longer required.
+- The Host caches a Session's own fold, but derived parent values are invalidated
+  on every `session/event`, so a child finishing or starting a turn is reflected
+  on the next refresh.
+
+## Delegated subagent work
+
+A parent Session can finish its own `turn/end` while delegated subagent
+Sessions are still running. If the Host restarts in that state, the parent log
+looks `completed` even though the delegated work was cut off.
+
+The route folds known child Sessions (`header.parentSession`) too:
+
+- a child that is **still running** is live work, not an interruption;
+- a child whose last turn ended before the parent's latest `turn/end` is old;
+- a child that was interrupted (or has an open crash tail) **after** the
+  parent's latest completed turn marks the parent as interrupted;
+- the badge tooltip distinguishes a delegated-subagent interruption, and
+  Continue resumes the parent Session (the subagent is not a visible Session).
+
+Nested delegations are followed recursively; a subagent Session is never shown
+as its own row in the sidebar.

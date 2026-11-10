@@ -6,6 +6,15 @@ All notable changes to this repository are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Interrupted-session badges now repull automatically after a Host restart
+  (Connection generation reset), on focus/visibility/online, and on a 20 s poll
+  instead of waiting for a Session click.
+- Parent Sessions whose delegated subagent was interrupted after the parent's
+  last completed turn are now marked interrupted, including nested
+  delegations; a live child remains live work.
+
 ### Changed
 
 - Standardized the repository around a single root package: source under

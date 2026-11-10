@@ -101,3 +101,51 @@ export function describeInterruption(state, running) {
     open: state.open
   }
 }
+
+/**
+ * Timestamp of the newest event in a Session log.
+ * @param {readonly object[]} events - raw events in ascending sequence order.
+ * @returns {number | null} epoch milliseconds, or null for an empty/invalid log.
+ */
+export function lastEventTime(events) {
+  if (!Array.isArray(events)) return null
+  let latest = null
+  for (const event of events) {
+    if (!isRecord(event) || typeof event.time !== 'number') continue
+    if (latest === null || event.time > latest) latest = event.time
+  }
+  return latest
+}
+
+/**
+ * Timestamp of the newest completed turn boundary in a Session log.
+ * @param {readonly object[]} events - raw events in ascending sequence order.
+ * @returns {number | null} epoch milliseconds, or null when no turn ended.
+ */
+export function lastTurnEndTime(events) {
+  if (!Array.isArray(events)) return null
+  let latest = null
+  for (const event of events) {
+    if (!isRecord(event) || event.type !== 'turn/end' || typeof event.time !== 'number') continue
+    if (latest === null || event.time > latest) latest = event.time
+  }
+  return latest
+}
+
+/**
+ * Whether a delegated subagent's interrupted turn belongs to the parent's
+ * latest completed turn. The parent is idle after its `turn/end`, so only a
+ * descendant that was still active (or cut off) after that boundary means the
+ * parent's task is incomplete.
+ * @param {number | null} parentEndTime - parent's newest `turn/end` timestamp.
+ * @param {boolean} childInterrupted - whether the child's last turn was interrupted.
+ * @param {boolean} childRunning - whether the child Agent is currently running.
+ * @param {number | null} childInterruptedAt - child timestamp when it was interrupted.
+ * @returns {boolean} whether the parent should inherit the child interruption.
+ */
+export function subagentInterruptionAfter(parentEndTime, childInterrupted, childRunning, childInterruptedAt) {
+  if (childRunning) return false
+  if (childInterrupted !== true) return false
+  if (typeof parentEndTime !== 'number' || typeof childInterruptedAt !== 'number') return false
+  return childInterruptedAt > parentEndTime
+}

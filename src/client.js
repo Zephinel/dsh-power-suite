@@ -2903,6 +2903,7 @@ window.__ModuleLoader__.load({
     const INTERRUPTED_EN = {
       'badge.aria': 'Task interrupted',
       'badge.title': 'The last task was interrupted. Hover this session to continue it.',
+      'badge.title.subagent': 'A delegated subagent task was interrupted. Hover this session to continue it.',
       'continue.label': 'Continue',
       'continue.aria': 'Continue the interrupted task',
       'continue.prompt': 'Continue the interrupted task.'
@@ -2910,6 +2911,7 @@ window.__ModuleLoader__.load({
     const INTERRUPTED_ZH = {
       'badge.aria': '任务被中断',
       'badge.title': '上一个任务被中断，悬停此会话可继续。',
+      'badge.title.subagent': '委派的子任务被中断，悬停此会话可继续。',
       'continue.label': '继续',
       'continue.aria': '继续被中断的任务',
       'continue.prompt': '继续完成被中断的任务。'
@@ -3076,7 +3078,8 @@ window.__ModuleLoader__.load({
           turn: typeof payload?.turn === 'number' ? payload.turn : null,
           running: payload?.running === true,
           open: payload?.open === true,
-          reason: typeof payload?.reason === 'string' ? payload.reason : null
+          reason: typeof payload?.reason === 'string' ? payload.reason : null,
+          subagent: payload?.subagent === true
         })
       } catch {
         setInterruptedRecord(sessionId, { status: 'error', interrupted: false })
@@ -3104,11 +3107,13 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Refresh every currently watched Session.
+     * Refresh every Session already known to the browser. After a reconnect the
+     * previous records can all be stale, including rows that are not mounted.
      * @returns {void}
      */
-    function refreshWatchedInterrupted() {
-      for (const sessionId of [...interruptedStore.watchers.keys()]) {
+    function refreshAllInterrupted() {
+      const ids = new Set([...interruptedStore.watchers.keys(), ...interruptedStore.records.keys()])
+      for (const sessionId of ids) {
         ensureInterrupted(sessionId, { force: true, refreshHost: false })
       }
     }
@@ -3126,7 +3131,7 @@ window.__ModuleLoader__.load({
         return
       }
       if (interruptedStore.pollTimer !== null) return
-      interruptedStore.pollTimer = window.setInterval(refreshWatchedInterrupted, 60000)
+      interruptedStore.pollTimer = window.setInterval(refreshAllInterrupted, 20000)
     }
 
     /**
@@ -3234,7 +3239,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         className: 'dps-row-interrupted',
         role: 'img',
         'aria-label': t('badge.aria'),
-        title: t('badge.title')
+        title: record.subagent === true ? t('badge.title.subagent') : t('badge.title')
       }, React.createElement(RemixIcon, { path: REMIX_WARNING_FILL, size: 14 }))
     }
 
@@ -3375,17 +3380,25 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       interruptedRuntime.uiWorkspace = ctx.uiWorkspace
       ctx.effect(() => ctx.locale.register(INTERRUPTED_NS, { en: INTERRUPTED_EN, zh: INTERRUPTED_ZH }), 'power-suite: interrupted dictionaries')
       ctx.effect(() => {
-        const refresh = () => refreshWatchedInterrupted()
+        const refresh = () => refreshAllInterrupted()
         const onVisibility = () => {
           if (document.visibilityState === 'visible') refresh()
         }
         document.addEventListener('visibilitychange', onVisibility)
         window.addEventListener('focus', refresh)
+        window.addEventListener('online', refresh)
         return () => {
           document.removeEventListener('visibilitychange', onVisibility)
           window.removeEventListener('focus', refresh)
+          window.removeEventListener('online', refresh)
         }
       }, 'power-suite: interrupted refresh cues')
+      ctx.effect(() => {
+        // Every established Connection generation means the Host may have
+        // restarted; wire-derived interruption state must be repulled.
+        const dispose = ctx.on('connection/reset', () => refreshAllInterrupted())
+        return typeof dispose === 'function' ? dispose : undefined
+      }, 'power-suite: interrupted connection reset')
       ctx.effect(() => {
         const tag = document.createElement('style')
         tag.dataset.powerSuiteCss = 'interrupted'

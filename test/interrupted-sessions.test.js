@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { describeInterruption, isInterrupted, isInterruptedEnd, lastTurnState } from '../src/features/interrupted-sessions/turns.js'
+import { describeInterruption, isInterrupted, isInterruptedEnd, lastEventTime, lastTurnEndTime, lastTurnState, subagentInterruptionAfter } from '../src/features/interrupted-sessions/turns.js'
 
 const start = (turn, seq) => ({ type: 'turn/start', seq, data: { turn } })
 const end = (turn, seq, kind, cause) => ({
@@ -69,4 +69,19 @@ test('the wire value carries the facts a badge needs', () => {
     reason: null,
     open: true
   })
+})
+
+test('subagent interruptions count only after the parent turn ended', () => {
+  const parent = [
+    { type: 'turn/start', time: 1000, data: { turn: 1 } },
+    { type: 'turn/end', time: 2000, data: { turn: 1, reason: { kind: 'completed' } } }
+  ]
+  assert.equal(lastEventTime(parent), 2000)
+  assert.equal(lastTurnEndTime(parent), 2000)
+  assert.equal(subagentInterruptionAfter(2000, true, false, 2500), true)
+  assert.equal(subagentInterruptionAfter(2000, true, false, 1500), false)
+  assert.equal(subagentInterruptionAfter(2000, false, false, 2500), false)
+  // A live child is working, not interrupted.
+  assert.equal(subagentInterruptionAfter(2000, true, true, 2500), false)
+  assert.equal(subagentInterruptionAfter(null, true, false, 2500), false)
 })

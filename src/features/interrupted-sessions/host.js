@@ -5,12 +5,30 @@
  * a Host restart. The answer folds the Session log the first time a browser asks
  * and then follows live `session/event` boundaries, so a row badge stays current
  * without re-reading every log on each request.
+ *
+ * A parent Session can finish its own turn while delegated subagent Sessions are
+ * still running. If the Host restarts in that state, the parent log ends
+ * `completed`, yet the delegated work was cut off. The route therefore folds
+ * known child Sessions too: an interrupted descendant that was still active
+ * after the parent's latest `turn/end` marks the parent as interrupted.
  */
 
-import { INTERRUPTED_ROUTE, describeInterruption, isInterruptedEnd, lastTurnState } from './turns.js'
+import {
+  INTERRUPTED_ROUTE,
+  describeInterruption,
+  isInterruptedEnd,
+  lastEventTime,
+  lastTurnEndTime,
+  lastTurnState,
+  subagentInterruptionAfter
+} from './turns.js'
 
 /** Cache bound: the route is asked per listed Session, including old ones. */
 const MAX_CACHED = 2000
+/** Child-session lineage is refreshed at most this often. */
+const LINEAGE_TTL_MS = 5000
+/** Parent values derived through descendants are cached briefly. */
+const DERIVED_TTL_MS = 5000
 
 /**
  * Answer with JSON and a no-store policy: the value changes with the log.
@@ -34,15 +52,13 @@ function agentRunning(ctx, sessionId) {
 }
 
 /**
- * Read one Session's interruption state from its log.
- * @param {object} ctx - Host context.
- * @param {string} sessionId - Session to inspect.
- * @returns {Promise<object>} the wire value.
+ * The public wire fields of one interruption value.
+ * @param {object} value - internal value with timing fields.
+ * @returns {object} the wire value.
  */
-async function readInterruption(ctx, sessionId) {
-  const snapshot = await ctx.sessionQuery.readSession(sessionId)
-  const state = lastTurnState(snapshot.events)
-  return describeInterruption(state, agentRunning(ctx, sessionId))
+function toWire(value) {
+  const { lastEndTime, lastEventTime: eventTime, interruptedAt, ...wire } = value
+  return wire
 }
 
 /**
@@ -52,11 +68,18 @@ async function readInterruption(ctx, sessionId) {
  */
 export function installInterruptedSessions(ctx) {
   const cache = new Map()
+  const derived = new Map()
+  const lineage = {
+    at: 0,
+    promise: null,
+    parentBySession: new Map(),
+    childrenByParent: new Map()
+  }
 
   /**
-   * Store one computed value, evicting the oldest insert when full.
+   * Store one computed base value, evicting the oldest insert when full.
    * @param {string} sessionId - Session key.
-   * @param {object} value - wire value.
+   * @param {object} value - wire value plus internal timing.
    * @returns {void}
    */
   const remember = (sessionId, value) => {
@@ -67,21 +90,138 @@ export function installInterruptedSessions(ctx) {
     cache.set(sessionId, value)
   }
 
+  /**
+   * Read one Session's interruption state from its log.
+   * @param {string} sessionId - Session to inspect.
+   * @returns {Promise<object>} public value plus internal timing fields.
+   */
+  async function readBase(sessionId) {
+    const cached = cache.get(sessionId)
+    if (cached !== undefined) return cached
+    const snapshot = await ctx.sessionQuery.readSession(sessionId)
+    const state = lastTurnState(snapshot.events)
+    const running = agentRunning(ctx, sessionId)
+    const described = describeInterruption(state, running)
+    const eventTime = lastEventTime(snapshot.events)
+    const value = {
+      ...described,
+      lastEndTime: lastTurnEndTime(snapshot.events),
+      lastEventTime: eventTime,
+      interruptedAt: described.interrupted ? eventTime : null
+    }
+    remember(sessionId, value)
+    return value
+  }
+
+  /**
+   * Load child-session lineage. `listSessions` is body-free and cheap; the
+   * promise is shared so a burst of row requests reads it once.
+   * @returns {Promise<object>} the lineage state.
+   */
+  async function loadLineage() {
+    if (Date.now() - lineage.at < LINEAGE_TTL_MS) return lineage
+    if (lineage.promise !== null) return lineage.promise
+    lineage.promise = ctx.sessionQuery.listSessions()
+      .then((records) => {
+        const parentBySession = new Map()
+        const childrenByParent = new Map()
+        for (const record of Array.isArray(records) ? records : []) {
+          const header = record?.header
+          if (typeof header?.id !== 'string' || typeof header?.parentSession !== 'string') continue
+          parentBySession.set(header.id, header.parentSession)
+          const siblings = childrenByParent.get(header.parentSession) ?? []
+          siblings.push(header.id)
+          childrenByParent.set(header.parentSession, siblings)
+        }
+        lineage.parentBySession = parentBySession
+        lineage.childrenByParent = childrenByParent
+        lineage.at = Date.now()
+        return lineage
+      })
+      .catch(() => {
+        lineage.parentBySession = new Map()
+        lineage.childrenByParent = new Map()
+        lineage.at = Date.now()
+        return lineage
+      })
+      .finally(() => {
+        lineage.promise = null
+      })
+    return lineage.promise
+  }
+
+  /**
+   * Read one Session's effective interruption state, inheriting interrupted
+   * descendants that were active after the Session's latest completed turn.
+   * @param {string} sessionId - Session to inspect.
+   * @param {Set<string>} seen - recursion guard.
+   * @returns {Promise<object>} public value plus internal timing fields.
+   */
+  async function readEffective(sessionId, seen = new Set()) {
+    if (seen.has(sessionId)) return readBase(sessionId)
+    seen.add(sessionId)
+    const base = await readBase(sessionId)
+    if (base.running === true || base.interrupted === true) return base
+    const cached = derived.get(sessionId)
+    if (cached !== undefined && Date.now() - cached.at < DERIVED_TTL_MS) return cached.value
+    let value = base
+    try {
+      const graph = await loadLineage()
+      const children = graph.childrenByParent.get(sessionId) ?? []
+      const parentEnd = base.lastEndTime
+      for (const childId of children) {
+        const child = await readEffective(childId, new Set(seen))
+        if (child.interrupted !== true) continue
+        const childAt = typeof child.interruptedAt === 'number' ? child.interruptedAt : child.lastEventTime
+        if (!subagentInterruptionAfter(parentEnd, true, child.running === true, childAt)) continue
+        value = {
+          ...base,
+          interrupted: true,
+          reason: typeof child.reason === 'string' ? child.reason : 'interrupted',
+          interruptedAt: childAt,
+          subagent: true
+        }
+        break
+      }
+    } catch {
+      // Without lineage, fall back to the Session's own turn state.
+    }
+    derived.set(sessionId, { at: Date.now(), value })
+    return value
+  }
+
   ctx.effect(() => ctx.on('session/event', (session, event) => {
     if (session === null || typeof session !== 'object' || typeof session.id !== 'string') return
     if (event === null || typeof event !== 'object') return
+    const time = typeof event.time === 'number' ? event.time : null
+    const previous = cache.get(session.id)
     if (event.type === 'turn/start') {
-      remember(session.id, { interrupted: false, running: true, turn: event.data?.turn ?? null, reason: null, open: true })
+      remember(session.id, {
+        interrupted: false,
+        running: true,
+        turn: event.data?.turn ?? null,
+        reason: null,
+        open: true,
+        lastEndTime: previous?.lastEndTime ?? null,
+        lastEventTime: time,
+        interruptedAt: null
+      })
     } else if (event.type === 'turn/end') {
       const ending = event.data?.reason
+      const interrupted = isInterruptedEnd(ending)
       remember(session.id, {
-        interrupted: isInterruptedEnd(ending),
+        interrupted,
         running: false,
         turn: null,
         reason: typeof ending?.kind === 'string' ? ending.kind : null,
-        open: false
+        open: false,
+        lastEndTime: time ?? previous?.lastEndTime ?? null,
+        lastEventTime: time,
+        interruptedAt: interrupted ? time : null
       })
     }
+    derived.clear()
+    if (event.type === 'subagent/descriptor') lineage.at = 0
   }), 'power-suite: interrupted cache')
 
 
@@ -96,13 +236,14 @@ export function installInterruptedSessions(ctx) {
         return sendJson(400, { code: 'bad-request', message: 'sessionId is required' })
       }
       const refresh = url.searchParams.get('refresh') === '1'
-      if (!refresh) {
-        const cached = cache.get(sessionId)
-        if (cached !== undefined) return sendJson(200, { sessionId, ...cached })
+      if (refresh) {
+        cache.delete(sessionId)
+        derived.clear()
+        lineage.at = 0
       }
       let value
       try {
-        value = await readInterruption(ctx, sessionId)
+        value = await readEffective(sessionId)
       } catch (error) {
         const code = error !== null && typeof error === 'object' ? error.code : undefined
         if (code === 'SESSION_QUERY_SESSION_NOT_FOUND') {
@@ -113,8 +254,7 @@ export function installInterruptedSessions(ctx) {
           message: typeof error?.message === 'string' ? error.message : 'Interruption state unavailable'
         })
       }
-      remember(sessionId, value)
-      return sendJson(200, { sessionId, ...value })
+      return sendJson(200, { sessionId, ...toWire(value) })
     }
   }), `power-suite: interrupted GET ${INTERRUPTED_ROUTE}`)
 }
