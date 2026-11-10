@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DSH 增强套件",
+    "description": "一个插件里持续增加的 DSH Web GUI 小能力：会话产物、按 WorkSpace 的默认 Agent 预设、输入框提示历史，以及它们的设置。"
+  }
+}
