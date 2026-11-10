@@ -1,0 +1,16 @@
+DSH Power Suite
+Copyright (c) 2026 rexxin
+
+Third-party notices
+-------------------
+
+Remix Icon
+  The browser entry (src/client.js) inlines SVG path data from Remix Icon.
+  Remix Icon is licensed under the Apache License, Version 2.0.
+  https://remixicon.com/
+  https://github.com/Remix-Design/RemixIcon
+
+DeepSeek Harness
+  DeepSeek Harness, its client packages, and their names are part of the
+  DeepSeek Harness platform. This repository is an independent plugin and is
+  not affiliated with DeepSeek.
