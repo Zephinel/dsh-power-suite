@@ -265,7 +265,7 @@ window.__ModuleLoader__.load({
         height: size ?? 12,
         fill: 'none',
         stroke: 'currentColor',
-        strokeWidth: 1.7,
+        strokeWidth: 1.6,
         strokeLinecap: 'round',
         strokeLinejoin: 'round',
         'aria-hidden': 'true',
@@ -2299,7 +2299,7 @@ window.__ModuleLoader__.load({
           RemixGlyph(REMIX_FILTER_LINE, 12),
           React.createElement('span', { className: 'dsa-filter-trigger-label' }, t(`filter.${filter}`)),
           React.createElement('span', { className: 'dsa-filter-trigger-count' }, filterCounts[filter]),
-          React.createElement('span', { className: 'dsa-filter-caret' }, FilterCaretGlyph(12))),
+          React.createElement('span', { className: 'dsa-filter-caret' }, FilterCaretGlyph(14))),
           filterMenu)
         : null
 
