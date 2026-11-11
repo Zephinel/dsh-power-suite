@@ -60,22 +60,22 @@ All notable changes to this repository are documented here. The format follows
   Version-1 files migrate to the default windows, and running Sessions ignore
   both windows.
 
-- Project view: a native `conversation.view` tab (`power-suite-project`, order
-  20) next to Chat/Trajectory/Statistics that turns the current Workspace into a
-  project dashboard. Overview carries the project header, four stat cards
+- Project view: a standalone full-window page, opened by clicking a Workspace's
+  title/folder area in the sidebar (a window `power-suite:open-project` event
+  handled by a `shell.overlay` seat, `power-suite.project-page`), that turns the
+  Workspace into a project dashboard. Overview carries the project header, four stat cards
   (running Sessions, completed today, total runs, average completed duration),
   a Session preview, the honest grouping/archiving explainer, and a recent
   activity feed; Sessions offers status chips and title search; Runs lists turns
   newest first with status filters, session filter, include-jobs toggle, search,
   expandable nested job rows, live elapsed time, and Show-more paging; Settings
   edits the Workspace default preset and shows the grouping windows read-only
-  plus path actions. Clicking a Workspace's title/folder area in the sidebar
-  opens that Workspace's project page: the current Session is reused when it
-  belongs to the Workspace, otherwise the newest non-blank non-archived Session
-  is opened and the Project tab is activated (bounded retry, matched by localized
-  label); the native chevron fold, row context menu, New Session button, Session
-  rows, drags, and modified clicks keep their behavior, and the header switcher
-  remains a secondary entry. The new authenticated `GET /api/power-suite.project` route
+  plus path actions. The page fills the window (`position: fixed; inset: 0`) with
+  its own top bar (back/close, title, Active badge, refresh) over the four tabs;
+  Esc or the back control closes it and restores the conversation, Session,
+  draft, selected view, and sidebars untouched. The native chevron fold, row
+  context menu, New Session button, Session rows, drags, and modified clicks keep
+  their behavior. The new authenticated `GET /api/power-suite.project` route
   serves one snapshot (workspaceId or sessionId, newest 20 Sessions, 10 s cache
   with `refresh=1`, `no-store`), and the pure folds live in
   `src/features/project-view/fold.js`.

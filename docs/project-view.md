@@ -1,62 +1,68 @@
 # Project view
 
-A DSH Power Suite feature: a native conversation view tab **Project** that turns
-the current Session's Workspace into a lightweight project dashboard — the design
-mock's 项目详情 / 运行记录. It is a real DSH conversation view, registered through
-the `conversation.view` slot (`power-suite-project`, order 20, label
-`Project`/`项目`, locale namespace `powerSuiteProjectView`, `psv-` token CSS).
-It appears in the conversation header's view switcher next to **Chat**,
-**Trajectory**, and **Statistics**; selecting it replaces the conversation body,
-and switching away unmounts it cleanly (no leftover roots or styles).
+A DSH Power Suite feature: a **standalone full-window Project page** for the
+current sidebar Workspace — the design mock's 项目详情 / 运行记录. It is not a
+conversation view tab: clicking a Workspace's title/folder area in the sidebar
+covers the whole window with a page of its own, and closing it returns to the
+conversation exactly as it was.
 
-The **primary entry** is the sidebar: clicking a Workspace's title/folder area
-opens that Workspace's project page directly (see
-[Open from the sidebar](#open-from-the-sidebar)). The header view switcher stays
-as the secondary entry — for switching back, or for opening the view on a Session
-whose Workspace row is not at hand.
+- **Opening**: a click on a sidebar Workspace title dispatches the window
+  CustomEvent `power-suite:open-project` with `{ workspaceId }`; an invisible
+  `shell.overlay` seat (`power-suite.project-page`) renders one page instance.
+- **Page surface**: `position: fixed; inset: 0` with the shell's token
+  background — a full-window carrier with its own top bar above the unchanged
+  four tabs: **Overview / Sessions / Runs / Settings**.
+- **Top bar**: a back/close chevron, the project title, the **Active /
+  Inactive** badge, and a refresh control. **Esc** and the back control both
+  close the page.
+- **Closing** restores the conversation, current Session, composer draft,
+  selected conversation view, and both sidebar states; opening and closing never
+  navigate.
 
-The view is read-only for project facts and Session logs. Its one write path is
+The page is read-only for project facts and Session logs. Its one write path is
 the Workspace's default agent preset, which reuses the existing workspace-presets
 routes.
 
-## Open from the sidebar
+## Opening, covering, and closing
 
-![Clicking a Workspace row in the sidebar opens its Project page](assets/project-workspace-entry.png)
+![The standalone Project page over the conversation](assets/project-overview.png)
 
-Clicking a **Workspace row's title/folder area** in the sidebar opens that
-Workspace's Project page on the existing four-tab conversation view:
+Clicking a Workspace row's **title/folder area** in the sidebar opens that
+Workspace's project page. The click target is the title text: the leading icon
+doubles as the native fold chevron on hover, so it still folds/expands the
+Workspace group.
 
-- If the Session currently in the conversation belongs to that Workspace, it is
-  **reused without navigation**; the Project view is simply selected.
-- Otherwise the **newest non-blank, non-archived Session** of the Workspace (by
-  `updatedAt`) is opened, and the Project view tab is activated. Activation is
-  matched by the localized **Project** / **项目** label (never by tab position)
-  and retried for at most **2.5 s**, waiting until the newly opened Session owns
-  the header; it is cancelled when another activation starts or the feature
-  unmounts.
-- A Workspace with **no usable Session** falls back to the native
-  `openWorkspace` blank Hero. The shell renders no conversation view tabs there,
-  so the project page cannot appear until that Workspace has a Session.
+While the page is open it **covers the composer and input box, both sidebars, and
+the conversation history rails by design** — the page fills the viewport, so the
+full-window layout applies even as those underlying surfaces change size. Closing
+returns to the conversation with the current Session, draft, selected view, and
+sidebar states untouched:
 
-Native sidebar behavior is intentionally preserved:
+![The conversation restored after closing the Project page](assets/project-standalone-closed.png)
 
-- the **leading chevron** still folds/expands the Workspace group — the leading
-  icon doubles as the fold chevron on hover, and the **title text** is the open
-  affordance;
-- the row's **context menu** and **New Session** button keep their own behavior;
-- **Session rows** still open their Session with its own view;
-- **drags** (movement past a small slop threshold or a `dragstart`) and
-  **modified or non-primary clicks** (⌘/Ctrl/⇧/Alt, secondary buttons) are
-  ignored, so drag reordering and open-in-new-tab gestures stay native.
-
-The entry is one document-level capture click handler with pointer/drag tracking
-and full cleanup: HMR/remount cannot stack handlers (live listener inspection
-showed exactly one capture listener per type before and after a reload), and each
-click leaves exactly one project root.
+- **Native sidebar behavior is preserved**: the row context menu and New Session
+  button keep their own behavior, **Session rows** still open their own Session,
+  **drags** (past a small slop threshold or a `dragstart`) and **modified or
+  non-primary clicks** (⌘/Ctrl/⇧/Alt, secondary buttons) are ignored, and the
+  Workspace service is resolved lazily through `ctx.get('workspaces')`, so the
+  plugin still loads without a Workspace UI.
+- **One handler, HMR-safe**: a single document-level capture click handler
+  dispatches the open event, and the seat keeps exactly one
+  `power-suite:open-project` listener; cleanup removes both and cancels pending
+  work, so remounts cannot stack handlers (live listener inspection showed one
+  capture handler and one event listener before and after a reload).
+- **No in-page workspace switcher.** The sidebar is covered while the page is
+  open, so switching projects means closing the page (Esc or back) and clicking
+  another Workspace.
+- **Navigation leaves the page**: **Open Workspace**, **New Session**, and
+  clicking a Session in the Overview preview or the Sessions list close the page
+  first, then navigate so the user lands on the Session/Workspace just opened.
+  Refresh, Copy project path, the Settings preset editor, and Runs turn/job
+  expansion stay inside the page.
 
 ## Overview
 
-![Project view Overview tab](assets/project-overview.png)
+![Project page Overview tab](assets/project-overview.png)
 
 - **Project header**: workspace folder icon, title (or **Untitled project**), an
   **Active / Inactive** badge, the workspace path, `Created …` and
@@ -71,8 +77,8 @@ click leaves exactly one project root.
   and when the measurement cap bites the cards are annotated
   `Measured from the newest N sessions`.
 - **Sessions preview**: up to six Sessions with a status dot and chip, run count,
-  relative last update, and click-to-open; **View all** switches to the Sessions
-  tab.
+  relative last update, and click-to-open (which closes the page first);
+  **View all** switches to the Sessions tab.
 - **Dynamic bucketing & auto-archiving** explains the honest current behavior:
   the sidebar keeps the Workspace in Active Projects while a Session runs or its
   last activity is inside the active window, and finished Sessions stay in the
@@ -83,19 +89,19 @@ click leaves exactly one project root.
 
 ## Sessions
 
-![Project view Sessions tab](assets/project-sessions.png)
+![Project page Sessions tab](assets/project-sessions.png)
 
 - Status chips **All / Running / Completed / Interrupted** with counts, and a
   title search field.
 - Rows show the title (or **Untitled session**), status chip, run count,
   relative update time, and a **Subagent** marker for delegated Sessions; click a
-  row to open that Session.
+  row to close the page and open that Session.
 - Archived Sessions are not listed (the Host excludes them from the snapshot),
-  and templates/Sessions not accounted to this Workspace never appear.
+  and Sessions not accounted to this Workspace never appear.
 
 ## Runs
 
-![Project view Runs tab](assets/project-runs.png)
+![Project page Runs tab](assets/project-runs.png)
 
 Turns become **runs**, newest first, across the measured Sessions. Each row
 carries the Session title, `Turn N`, status, a relative start time (the exact
@@ -105,7 +111,7 @@ timestamp is in its tooltip), the duration, tool-call count, and job count.
   **Interrupted** (crash/restart cutoff), **Stopped** (human/plugin cancellation,
   blocked, token ceiling, fork seed, or an unknown close reason), **Failed**
   (structured error).
-- Filters: status chips with counts, a Session dropdown, a **Include jobs**
+- Filters: status chips with counts, a Session dropdown, an **Include jobs**
   toggle, and free-text search over Session title, turn number, and job labels;
   an empty-filtered state appears when nothing matches.
 - **Expandable turns** reveal the nested job rows folded under that turn: job
@@ -113,13 +119,13 @@ timestamp is in its tooltip), the duration, tool-call count, and job count.
   `exit code: 0`). Per-run job rows are capped at 24 while the row's job count
   keeps the full total, so the expansion can say `Showing X of Y jobs`.
 - A running turn shows a **live elapsed** value that keeps counting while the
-  view is open.
+  page is open.
 - **Show more** pages the list by 60 rows; when the snapshot is capped the
   header notes `The newest N of M measured runs are shown.`
 
 ## Settings
 
-![Project view Settings tab](assets/project-settings.png)
+![Project page Settings tab](assets/project-settings.png)
 
 - **Default agent preset**: a select-style trigger and menu with **Follow global
   default** plus the available presets (for example Standard, PTC, Minimal,
@@ -128,31 +134,44 @@ timestamp is in its tooltip), the duration, tool-call count, and job count.
   brief **Saved** acknowledgement.
 - **Grouping windows**: read-only text describing the active-project window and
   the finished-Session window, with a pointer to edit them on the Plugins page.
-- **Workspace path** with **Copy project path** and **Open Workspace**.
+- **Workspace path** with **Copy project path** and **Open Workspace** (the
+  latter closes the page and navigates).
 - If any measured Session log could not be read, a warnings banner reports how
   many were skipped.
+
+## Data loading
+
+The page fetches one Workspace snapshot by id:
+
+- `GET /api/power-suite.project?workspaceId=<id>` on mount, then every 15 s while
+  open; a window `focus` event also refreshes it. The manual refresh control
+  re-fetches with `refresh=1` (a single request per click, bypassing the Host's
+  cache).
+- A workspace switch cancels the previous request (`AbortController`), so a slow
+  response for the old Workspace can never overwrite the new page.
+- Loading, error (with retry), and empty states are handled; a `404
+  workspace-not-found` renders the **Workspace not found** empty state. Host
+  warnings and measurement-cap notes carry into the page.
 
 ## Host route and payload
 
 One authenticated exact route, behind the same browser cookie and Host/Origin
 fence as the rest of the GUI:
 
-- `GET /api/power-suite.project?workspaceId=<id>` or
-  `?sessionId=<id>` — returns one Workspace snapshot. Supplying `sessionId`
-  resolves the Workspace by direct membership, then the Session's durable parent
-  chain (for a subagent), then the canonical `cwd`; empty or whitespace-only
-  parameters count as absent. No parameter at all → `400 bad-request`;
-  an unknown Workspace or an unaccounted Session → `404 workspace-not-found`.
-  `refresh=1` bypasses the cache. Every response is `cache-control: no-store`.
+- `GET /api/power-suite.project?workspaceId=<id>` (or `?sessionId=<id>` for
+  other consumers) — returns one Workspace snapshot. The page always asks by
+  Workspace id. Empty or whitespace-only parameters count as absent; no
+  parameter at all → `400 bad-request`; an unknown Workspace → `404
+  workspace-not-found`; `refresh=1` bypasses the cache. Every response is
+  `cache-control: no-store`.
 - The route lists the Workspace's accounted Sessions, keeps the newest 20 for
   measurement (running Sessions first, then live records, then by rank), reads
   their logs with concurrency 4, slices a fork's inherited event prefix, and
   excludes archived Sessions. Unreadable logs are skipped and reported in
   `warnings[]`.
 - An in-memory snapshot cache keyed by Workspace id + `updatedAt` + member count
-  holds a response for 10 s (up to 30 Workspace snapshots per Host process); the
-  browser polls every 15 s while the view is open and manual refresh bypasses the
-  cache.
+  holds a response for 10 s (up to 30 Workspace snapshots per Host process);
+  manual refresh bypasses the cache.
 
 Payload:
 
@@ -194,8 +213,8 @@ average covers completed turns with measurable timing.
 The Active/Inactive badge, the explainer text, and the read-only windows in
 Settings all use the same Host settings document as Dynamic Workspaces
 (`activeProjectDays`, `recentSessionMinutes`, edited on the Plugins page). This
-view only reads them; changing them there updates the sidebar buckets, the
-card, and this view's copy on their next snapshot.
+page only reads them; changing them there updates the sidebar buckets, the card,
+and this page's copy on their next snapshot.
 
 ## Install
 
@@ -205,9 +224,9 @@ This feature ships inside [DSH Power Suite](overview.md); install the suite:
 plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-suite
 ```
 
-The Host half registers the route; the browser half registers the conversation
-view and the sidebar Workspace-row entry. Restart the Host process after
-upgrading the package's Host JavaScript.
+The Host half registers the route; the browser half registers the `shell.overlay`
+page seat, the sidebar Workspace entry, and the locale dictionaries. Restart the
+Host process after upgrading the package's Host JavaScript.
 
 Implementation: Host route and cache
 [`src/features/project-view/host.js`](../src/features/project-view/host.js), pure
@@ -217,6 +236,16 @@ folds [`fold.js`](../src/features/project-view/fold.js), browser surface
 
 ## Limits
 
+- **The page covers the whole window by design.** While open it hides the
+  composer/input, both sidebars, and the conversation history rails; that is the
+  full-window layout, not a rendering bug. Closing restores them.
+- **Switching projects requires closing the page.** The sidebar is covered while
+  the page is open, so there is no in-page Workspace switcher: close with Esc or
+  the back control, then click another Workspace.
+- **The page is Workspace-scoped.** It needs a Workspace id; a stale/unknown
+  Workspace renders the **Workspace not found** empty state and asks the user to
+  close and refresh the sidebar. Sessions are reached through the page's own
+  lists, not by opening a Session first.
 - **Sample-bounded statistics.** Stats and Runs are measured from at most the
   20 newest Sessions of the Workspace, not the whole project history. When the
   cap hits, `stats.truncated` is set and the Overview says
@@ -231,22 +260,19 @@ folds [`fold.js`](../src/features/project-view/fold.js), browser surface
   `Showing X of Y jobs`. Jobs are associated heuristically when the exact tool
   call cannot be matched.
 - **First loads are slow on large logs.** A first or forced refresh took roughly
-  1.7–4.6 s on a five-Session repository; the 10 s snapshot cache absorbs the
-  browser's 15 s poll, and manual refresh intentionally pays the cost again.
-  Unreadable Session logs are skipped with a warning rather than failing the
-  view.
+  1.7–4.6 s on a five-Session repository (a cold 30-Session Workspace took about
+  12.5 s); the 10 s snapshot cache absorbs the 15 s poll, and manual refresh
+  intentionally pays the cost again. Unreadable Session logs are skipped with a
+  warning rather than failing the page.
 - **No virtualization and no infinite background loading.** The list grows by
   **Show more** in batches of 60; a very long project keeps every rendered run in
   the DOM.
-- **Archived Sessions are excluded, and this view cannot archive or unarchive.**
+- **Archived Sessions are excluded, and this page cannot archive or unarchive.**
   Inactive is only a window classification; automatic archiving is not
   implemented anywhere in the suite.
-- **Workspace membership is required.** A Session not accounted to a Workspace
-  (including some subagent edge cases) shows **No project workspace** instead of
-  a guessed project.
 - **Statuses are coarse.** A turn that closed without a recognized reason is
   reported as stopped, not as a success or failure.
-- **Localization.** The view ships English and Chinese copy; the live GUI checks
+- **Localization.** The page ships English and Chinese copy; the live GUI checks
   ran in English, so the Chinese strings are code-reviewed but not
   live-exercised.
 

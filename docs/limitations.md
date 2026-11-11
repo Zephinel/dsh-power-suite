@@ -172,6 +172,18 @@
 
 ## Project view
 
+- **The page is a full-window surface by design.** While open it covers the
+  composer/input box, both sidebars, and the conversation history rails; it is
+  not a bug that they are hidden. Closing with Esc or the back control restores
+  the conversation, current Session, draft, selected view, and sidebar states.
+- **Switching projects requires closing the page.** The sidebar is covered while
+  the page is open, so there is no in-page Workspace switcher: close and click
+  another Workspace. Open Workspace, New Session, and Session-list clicks close
+  the page first and then navigate.
+- **The page is Workspace-scoped.** It is opened by Workspace id (not by Session)
+  and a stale/unknown Workspace renders the **Workspace not found** empty state;
+  closing and refreshing the sidebar is the recovery path. Sessions are reached
+  through the page's own lists, not by opening a Session first.
 - **Sample-bounded statistics.** The Project view measures at most the **20
   newest Sessions** of the Workspace. Stats and Runs carry only what those logs
   recorded; when the cap hits, `stats.truncated` is set and the Overview notes
@@ -194,17 +206,14 @@
   the project snapshot; the view cannot archive or unarchive. Automatic
   archiving is not implemented anywhere — Inactive is only a window
   classification.
-- **Workspace membership is required.** A Session not accounted to a Workspace
-  shows **No project workspace**; subagent Sessions resolve through their parent
-  chain but are not project rows of their own.
-- **A Workspace without a usable Session cannot show the project page.** Clicking
-  such a Workspace opens the native blank Hero, where the shell renders no
-  conversation view tabs; the page appears only after that Workspace has a
-  Session. Archived Sessions do not count as usable.
+- **A project needs a Workspace row.** Sessions not accounted to a Workspace are
+  not listed in the page, and a Workspace that no longer exists in the registry
+  shows the **Workspace not found** empty state instead of a guessed project.
+  Archived Sessions are still excluded from the snapshot.
 - **The sidebar open affordance is the title text, not the leading icon.** The
   leading icon doubles as the native fold chevron on hover, so clicking it folds
-  or expands the Workspace group; the title/folder text is what opens the project
-  page. The sidebar entry also ignores drags and modified or non-primary clicks by
+  or expands the Workspace group; the title/folder text opens the project page.
+  The sidebar entry also ignores drags and modified or non-primary clicks by
   design, leaving drag reordering and open-in-new-tab gestures native.
 - **Coarse statuses.** A turn that closed without a recognized reason is reported
   as stopped, not as completed or failed.

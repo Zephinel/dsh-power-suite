@@ -25,7 +25,7 @@ Current evidence (2026-11-11, Node 24.22.2):
 - `npm test`: **73 tests, 73 passed, 0 failed**.
 - `npm run check`: passed (`14 modules, 7 test files`).
 - `npm run pack:check`: **57 files** (0.2.0 tarball), including `src/`,
-  `locale/`, `docs/` (with the Project view, sidebar-entry, Artifacts
+  `locale/`, `docs/` (with the standalone Project page, Artifacts
   panel/filter-menu/Quick Look, Dynamic Workspaces, hover-detail, and
   prompt-history rail captures), `cordis.patch.yml`, `icon.png`, and the
   standard repository files.
@@ -178,21 +178,34 @@ These were exercised in the Web GUI during development:
   count; and the subagent connector trunk is centered under the parent's status
   indicator (dot center x = 35, trunk x = 35) with short branches and no
   dangling end.
-- The Project view was verified live: the conversation view switcher showed
-  **Chat / Trajectory / Project / Statistics**, and the Project view resolved one
-  project root. The Overview stat cards matched the route JSON exactly —
-  **1 / 18 / 67 / 10m 44s** (average 644104 ms) — the Sessions tab showed chips
-  **5 / 1 / 2 / 0** with working title search, and Runs showed **59** rows
-  (Running 1, Completed 55, Interrupted 3). Expanding **Turn 16** revealed
-  **24 of 31** job rows, a running turn's live elapsed changed from **8m 37s**
-  to **11m 22s**, and **Show more** paged the list by 60. Settings showed the
-  preset roster, saved a preset with the **Saved** toast, and **Copy project
-  path** reached the clipboard. Keyboard arrows moved between tabs, switching
-  away and back unmounted/remounted cleanly (0 roots/styles then 1/1), and there
-  were no console exceptions. Route probes: `sessionId` 200, `workspaceId` 200
-  (cached response 78 ms), empty `workspaceId` + `sessionId` 200 (falls back to
-  the Session), unknown Workspace 404, no parameters 400, `cache-control:
-  no-store` on every response.
+- The standalone Project page was verified live: clicking a sidebar Workspace
+  title covers the window with the page, whose rectangle is `(0, 0, 2548 × 1321)`
+  — equal to `window.innerWidth/innerHeight` — in both the expanded and
+  rail-collapsed sidebar states. Hit tests at the left sidebar, the right rail,
+  the composer, and the top-left app area all resolve inside `[data-psv-page]`,
+  confirming the full-window coverage. The page's title, Active badge, and the
+  four tabs render; the current Session stayed
+  `session-c5864acd…`, a composer draft marker survived opening and closing, the
+  selected conversation view stayed Chat, and both sidebar states were preserved.
+  Esc and the back control both closed the page and restored the conversation.
+  Opening `nanobot-suite` showed its title, and `dsh-intelligenct-ui` (30
+  Sessions) showed the loading state and then its data. Two rapid open events
+  kept one instance/root with the final Workspace and no stale content. The
+  conversation header switcher showed **Chat / Trajectory / Statistics** only (no
+  Project tab), and a Lead-side independent check confirmed the same. A
+  Sessions-list click closed the page and then opened that Session; Runs showed
+  **63** runs with status filters and expandable turn jobs; Settings showed a
+  preset choice (Cordis), the read-only windows, and the path actions; Copy
+  project path produced the toast and a matching paste; refresh emitted exactly
+  one `workspaceId=…&refresh=1` request; New Session and Open Workspace closed the
+  page and then navigated. HMR showed exactly one document capture handler and
+  one `power-suite:open-project` listener before and after a reload (one
+  page/root per click), with 0 console exceptions/plugin errors and 0 failed
+  responses (one unrelated native `/api/changes.summary` 404 was noted).
+  Route probes from the earlier iteration still hold: `sessionId` 200,
+  `workspaceId` 200 (cached response 78 ms), empty `workspaceId` + `sessionId`
+  200, unknown Workspace 404, no parameters 400, `cache-control: no-store` on
+  every response.
 - The settings page and the configurable windows were verified live: the
   **DSH Power Suite** Plugins page shows exactly three setting rows (Shortcut
   modifier, Finished Session retention, Active project retention) with the
@@ -231,11 +244,11 @@ by code inspection plus an observed reload where an archived Session disappeared
 from the card.
 
 The live surfaces are captured in
-[assets/project-workspace-entry.png](assets/project-workspace-entry.png),
 [assets/project-overview.png](assets/project-overview.png),
 [assets/project-sessions.png](assets/project-sessions.png),
 [assets/project-runs.png](assets/project-runs.png),
 [assets/project-settings.png](assets/project-settings.png),
+[assets/project-standalone-closed.png](assets/project-standalone-closed.png),
 [assets/artifacts-panel.png](assets/artifacts-panel.png),
 [assets/artifacts-filter-menu.png](assets/artifacts-filter-menu.png),
 [assets/artifacts-quicklook.png](assets/artifacts-quicklook.png),

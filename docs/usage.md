@@ -105,16 +105,19 @@ turn starts.
 ## Project view
 
 **Click a Workspace's title/folder area in the sidebar** to open its Project
-page. The current Session is reused when it belongs to that Workspace; otherwise
-the Workspace's newest non-blank Session is opened and the Project view is
-selected automatically. A Workspace with no usable Session opens the blank Hero
-instead (the page needs a Session to exist). The leading chevron still folds the
-Workspace group, and the row's context menu, New Session button, Session rows,
-drags, and modified clicks keep their native behavior.
+page. This is the only entry: the page is a **standalone full-window surface**,
+not a conversation view tab, so the conversation header switcher stays **Chat /
+Trajectory / Statistics**. The leading chevron still folds the Workspace group,
+and the row's context menu, New Session button, Session rows, drags, and modified
+clicks keep their native behavior.
 
-The conversation header's view switcher (**Chat / Trajectory / Project /
-Statistics**) remains the secondary entry, for switching back or opening the
-view on the current Session's Workspace.
+While the page is open it covers the composer/input box, both sidebars, and the
+history rails. **Esc** or the page's back control closes it and restores the
+conversation, current Session, draft, selected view, and sidebar states exactly.
+There is no in-page Workspace switcher: close the page and click another
+Workspace to switch projects. **Open Workspace**, **New Session**, and clicking a
+Session in the page's lists close the page first and then navigate; refresh, Copy
+project path, Settings, and Runs expansion stay inside the page.
 
 - **Overview** — project header (Active/Inactive, path, created/last active,
   Open Workspace, New Session, refresh, more menu with Copy project path), four

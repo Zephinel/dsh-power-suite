@@ -26,7 +26,7 @@ src/client.js           Browser entry (DSH module loader)
 ├─ Dynamic Workspaces buckets + running & recent Sessions card
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
 ├─ Plugins-page settings section
-├─ Project conversation view (Overview / Sessions / Runs / Settings)
+├─ Standalone Project page seat (full-window Overview / Sessions / Runs / Settings)
 └─ Shared hover Quick Look for generated/provided Artifacts rows and native Workspace file rows
 ```
 
@@ -208,27 +208,26 @@ workaround, so a reload cannot restore Files. See
 
 ### Project view
 
-The one conversation-body surface: a native `conversation.view` registration
-(id `power-suite-project`, order 20, locale namespace `powerSuiteProjectView`,
-custom `psv-` token CSS). Its primary entry is a click on a sidebar Workspace
-row's title; it also appears in the conversation header's view switcher next to
-Chat/Trajectory/Statistics and replaces the conversation body while selected.
-The registration receives the Session id, locale `t`, workspace
-navigation helpers, the shell `sessions` listing, the existing workspace-preset
-read/write helpers, and the shared clipboard helper. Internally it has four tabs
-(Overview / Sessions / Runs / Settings), polls
-`GET /api/power-suite.project` every 15 s while open, keeps a running turn's
-elapsed time live on a timer, and pages Runs by 60 rows with **Show more**.
-A separate document-level capture click handler turns a plain click on a sidebar
-Workspace title/folder area into "open this Workspace's project page": the current
-Session is reused when it belongs to the Workspace, otherwise the newest
-non-blank, non-archived Session is opened and the Project tab is activated by its
-localized label with a bounded 2.5 s retry. The native fold chevron, row context
-menu, New Session button, Session rows, drags, and modified/non-primary clicks
-stay native; the Workspace service is resolved lazily through
-`ctx.get('workspaces')` (the plugin loads without a Workspace UI), and the effect
-cleanup removes every listener and cancels a pending activation so HMR cannot
-stack handlers.
+A standalone full-window page, not a conversation view. An invisible
+`shell.overlay` seat (id `power-suite.project-page`, locale namespace
+`powerSuiteProjectView`, custom `psv-` token CSS) listens for the window
+CustomEvent `power-suite:open-project` (`detail.workspaceId`) and renders one
+`position: fixed; inset: 0` page over the whole window: its own top bar (back/
+close chevron, project title, Active/Inactive badge, refresh) above the unchanged
+four tabs (Overview / Sessions / Runs / Settings). Esc and the back control close
+it; opening never navigates and closing restores the conversation, current
+Session, composer draft, selected conversation view, and both sidebar states. The
+page is workspace-scoped: it fetches
+`GET /api/power-suite.project?workspaceId=…` (15 s poll, window-focus refresh,
+manual `refresh=1`, `AbortController` cancels stale requests on a workspace
+switch) and handles loading/error/404-empty states. Header navigation (Open
+Workspace, New Session, Sessions-list click) closes the page then navigates;
+refresh, Copy project path, settings presets, and Runs expansion stay in-page.
+A single document-level capture click handler on sidebar Workspace titles
+dispatches the open event; the native fold chevron, row context menu, New Session
+button, Session rows, drags, and modified/non-primary clicks stay native, the
+Workspace service is resolved lazily through `ctx.get('workspaces')`, and effect
+cleanup removes the handler and the event listener so HMR cannot stack them.
 
 The Host route resolves a Workspace from `workspaceId` or from a `sessionId`
 (direct membership → durable parent chain → canonical cwd), measures the newest
@@ -273,8 +272,7 @@ leave the content invisible.
 | `contextMenus.register` (`workspace`) | Default agent preset submenu |
 | `conversation.input.overlay` | Renderless prompt-history keyboard seat and draft-attachment memory seat |
 | `conversation.input.dock` | Session hooks for the body-portaled prompt-history rail |
-| `conversation.view` | Project conversation view (`power-suite-project`, order 20) |
-| `shell.overlay` | Frame-wide seat that augments the native Workspaces sidebar |
+| `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation and the standalone Project page (`power-suite.project-page`) |
 | `plugins.bundle.config` | Plugin settings page |
 | `sidebar.session.row.leading` | Interrupted-session badge |
 | `sidebar.workspaces.session.row.action` | Continue action |

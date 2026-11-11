@@ -13,7 +13,7 @@ shows one plugin whose inventory grows with the suite.
 | [Workspace presets](docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions created in that Workspace. |
 | [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with single-line rows, right-edge disclosure chevrons, unread completions marked green until opened, a row hover detail (workspace, status, last active), nested subagent Sessions, and configurable retention windows. |
 | [Prompt history](docs/prompt-history.md) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; a right-edge rail lists them newest first with a hover full-text preview, an inline search, and click-to-copy. Plain arrows keep their original behavior. |
-| [Project view](docs/project-view.md) | A native **Project** conversation view opened by clicking a Workspace in the sidebar (or via the Chat/Trajectory/Project/Statistics switcher), with Overview stats, Sessions, Runs with expandable turn/job records, and Workspace settings. |
+| [Project view](docs/project-view.md) | A **standalone full-window Project page** opened by clicking a Workspace in the sidebar, with Overview stats, Sessions, Runs with expandable turn/job records, and Workspace settings; Esc/back returns to the untouched conversation. |
 | [Draft attachments](docs/draft-attachments.md) | Attachments in a draft (pasted images, dropped or picked files) survive switching Sessions and coming back, for the page lifetime; the shell only persists the draft text. |
 | [Interrupted sessions](docs/interrupted-sessions.md) | Sessions cut off by a restart carry an amber mark left of the title, a hover-only Continue action with a row mask, and a play-shaped composer submit control. |
 | [Settings](docs/settings.md) | The bundle's Plugins page carries its own configuration section: the prompt-history modifier plus the two Dynamic Workspaces retention windows (finished Sessions and Active projects). |
@@ -42,10 +42,10 @@ New in 0.2.0:
 - **Draft attachment memory** — attachments in a draft survive switching
   Sessions and coming back for the page lifetime, even though the shell only
   persists the draft's text and reference chips.
-- **Project view** — clicking a Workspace's title in the sidebar opens that
-  Workspace's project page (reusing the current Session when it belongs, else
-  opening the newest non-blank one), and the same view stays reachable from the
-  conversation header switcher. It turns the Workspace into a project dashboard: four stat cards, a Sessions browser, a Runs history
+- **Project view** — clicking a Workspace's title in the sidebar opens a
+  standalone full-window Project page over the conversation (Esc/back closes it
+  and restores the Session, draft, view, and sidebars untouched). It turns the
+  Workspace into a project dashboard: four stat cards, a Sessions browser, a Runs history
   whose turns expand into their nested job records with live elapsed time, and
   Workspace settings (default agent preset, read-only grouping windows, path
   actions).
