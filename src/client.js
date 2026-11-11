@@ -6652,6 +6652,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** Window event that asks the seat to open one Workspace's Project page. */
     const PROJECT_PAGE_EVENT = 'power-suite:open-project'
 
+    /** Root attribute marking that the Project page is open (hides the prompt rail). */
+    const PROJECT_PAGE_ATTR = 'data-power-suite-project-page'
+
     /** Host route serving one Workspace's project snapshot. */
     const PROJECT_ROUTE = 'api/power-suite.project'
 
@@ -6938,6 +6941,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     const PROJECT_VIEW_CSS = `
 .psv-page{position:fixed;top:0;left:0;z-index:200;display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);animation:psv-page-in .14s ease-out}
 .psv-page .psv-root{flex:1 1 auto;min-height:0}
+html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='true'] [data-psp-preview-card],html[${PROJECT_PAGE_ATTR}='true'] [data-psp-search-card],html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail-divider],html[${PROJECT_PAGE_ATTR}='true'] [data-psp-search-toggle]{display:none!important}
 .psv-page-bar{flex:none;display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
 .psv-page-back{width:30px;height:30px;flex:none}
 .psv-page-title{min-width:0;font-size:15px;font-weight:600;line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -7490,7 +7494,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @param {object} props - header props.
      * @returns {object} the header card.
      */
-    function PsvProjectHeader({ project, copy, nav, refresh, refreshing, t }) {
+    function PsvProjectHeader({ project, copy, nav, refresh, t }) {
       const [copied, setCopied] = React.useState(false)
       const copyTimer = React.useRef(null)
       React.useEffect(() => () => {
@@ -7539,15 +7543,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         RemixGlyph(PsvExternalLine, 14), t('action.openWorkspace'))
       const newButton = psv('button', { type: 'button', className: 'psv-btn', 'data-variant': 'primary', onClick: newSession },
         RemixGlyph(PsvPlusLine, 14), t('action.newSession'))
-      const refreshButton = psv('button', {
-        type: 'button',
-        className: 'psv-iconbtn',
-        'aria-label': t('action.refresh'),
-        title: t('action.refresh'),
-        'data-busy': refreshing ? 'true' : undefined,
-        disabled: refreshing,
-        onClick: refresh
-      }, RemixGlyph(REMIX_REFRESH_LINE, 15))
       const moreMenu = psv(PsvDropdown, {
         t,
         label: t('action.more'),
@@ -7560,7 +7555,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             copied ? t('action.copied') : t('action.copyPath'))
         ]
       })
-      const actions = psv('div', { className: 'psv-actions' }, openButton, newButton, refreshButton, moreMenu)
+      const actions = psv('div', { className: 'psv-actions' }, openButton, newButton, moreMenu)
       const main = psv('div', { className: 'psv-header-main' },
         psv('span', { className: 'psv-mark', 'aria-hidden': 'true' }, RemixGlyph(PsvFolderLine, 22)),
         titleWrap,
@@ -8161,17 +8156,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             'aria-controls': `psv-panel-${entry.id}`,
             tabIndex: tab === entry.id ? 0 : -1,
             onClick: () => setTab(entry.id)
-          }, t(entry.key)))),
-        psv('div', { className: 'psv-tabbar-actions' },
-          psv('button', {
-            type: 'button',
-            className: 'psv-iconbtn',
-            'aria-label': t('action.refresh'),
-            title: t('action.refresh'),
-            'data-busy': refreshing ? 'true' : undefined,
-            disabled: refreshing,
-            onClick: refresh
-          }, RemixGlyph(REMIX_REFRESH_LINE, 15))))
+          }, t(entry.key)))))
       let content = null
       if (state.status === 'loading') {
         content = psv('div', { className: 'psv-card psv-state', role: 'status' },
@@ -8220,7 +8205,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             copy: props.copy,
             nav: navigation,
             refresh,
-            refreshing,
             t
           }),
           psv(PsvStatCards, { stats: snapshot.stats, t }),
@@ -8517,6 +8501,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         window.addEventListener(PROJECT_PAGE_EVENT, onOpen)
         return () => window.removeEventListener(PROJECT_PAGE_EVENT, onOpen)
       }, [ctx])
+      React.useEffect(() => {
+        if (!open) return undefined
+        const root = document.documentElement
+        root.setAttribute(PROJECT_PAGE_ATTR, 'true')
+        return () => root.removeAttribute(PROJECT_PAGE_ATTR)
+      }, [open])
       React.useEffect(() => {
         if (!open) return undefined
         const onKeyDown = (event) => {
