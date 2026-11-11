@@ -151,7 +151,6 @@
         <div class="stopped"><span>Stopped</span><span class="line"></span><span>01:59</span></div>
         <div class="runrow"><span class="arrow">›</span><span>Ran commands, called tools, updated the plan</span></div>
         <div class="continuation-marker" id="marker-after"><span class="spin"></span><span>继续任务中…</span></div>
-        <div class="callout show" id="callout-after">这里没有用户气泡：继续动作只产生一条隐藏的 context 消息。</div>
         <div class="spacer"></div>
       </div>
       <div class="continue-wrap" id="actions-after">
@@ -207,14 +206,13 @@
     const button = document.getElementById('continue-after');
     if (button.disabled) return;
     button.disabled = true;
-    document.getElementById('actions-after').querySelector('.hint').textContent = '已隐式继续，未新增用户消息…';
+    document.getElementById('actions-after').querySelector('.hint').textContent = '继续任务已触发…';
     const marker = document.getElementById('marker-after');
     marker.classList.add('show');
     await wait(320);
     await wait(380);
     marker.classList.remove('show');
     addMessage(card, 'assistant', '继续处理仓库规范化：先补上标准文件，再运行检查。', '02:00');
-    document.getElementById('callout-after').textContent = '已隐式继续：没有新增用户消息。';
   }
 
   document.getElementById('continue-before').addEventListener('click', runBefore);
