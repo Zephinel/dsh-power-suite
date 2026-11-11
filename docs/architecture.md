@@ -58,8 +58,17 @@ the browser tolerates both shapes.
 ### Workspace presets and settings
 
 Both features persist small JSON documents in the suite's Host storage. The
-settings document currently holds the prompt-history modifier mode; the preset
-map is keyed by Workspace id. Neither writes into session logs.
+settings document is schema version 2 and holds the prompt-history modifier mode
+plus the two Dynamic Workspaces retention windows: `recentSessionMinutes`
+(finished-Session retention, 1/2/6/12/24 hours, default 120) and
+`activeProjectDays` (Active-project retention, 1/3/7/14/30 days, default 7).
+Version-1 files (modifier only) migrate to the default windows on read; the
+Plugins page edits the same authenticated route. The preset map is keyed by
+Workspace id. Neither writes into session logs.
+
+The suite's Plugins-page settings section hides the bundle page's auto-rendered
+package README document (`[data-detail-document]`) while the section is mounted
+and restores it on unmount, so the page shows only the real controls.
 
 ### Interrupted sessions
 
@@ -90,11 +99,27 @@ status, and Workspace stores, inserts a summary card above the native Workspaces
 header and two bucket headers into the native `[role="tree"]`, and writes flex
 `order` values on the native group sections to band Active Projects above
 Inactive Projects. Inside the card, running, recent, and direct subagent
-Sessions are derived from the same stores: rows are single-line (dot, title,
+Sessions are derived from the same stores: rows are single-line (glyph, title,
 time) with disclosure chevrons at the far right, subagent rows nest under their
-parent, and each row's workspace path, status, last-active time, and subagent
-count live in a native-style hover card that does not capture the pointer. A
-parent counts as active while a direct child runs. A `MutationObserver` on the
+parent, and each row's workspace title and path, status, last-active time, and
+subagent count live in a native-style hover card that does not capture the
+pointer. Both retention windows are Host settings: finished-Session retention
+(`recentSessionMinutes`) bounds the card and its nested subagent rows, and
+Active-project retention (`activeProjectDays`) bounds the Active bucket, with
+running Sessions always listed and always active. The card header's indicator is
+a blue pulsing business-primary dot while any listed Session runs and the white
+RemixIcon `sparkling-line` when nothing runs, horizontally centred on the same
+glyph column as the row glyphs and followed by the title on the row-title
+column; the header chevron shares one right-edge centre column with the row
+disclosure arrows. The leading glyph has
+three states: the shell loading indicator while running, the green done dot while
+a completion is unread, and a white session-type icon (RemixIcon `deepseek-fill`
+for main rows, `robot-2-line` for subagent rows) once the Session has been opened
+and the completion acknowledged; a new run clears the acknowledgement. The card
+body hides its scrollbar, rows have no native tooltips, and the row body and
+disclosure arrow highlight independently (the body highlight has 8 px horizontal
+inner padding).
+A parent counts as active while a direct child runs. A `MutationObserver` on the
 sidebar reconciles the foreign nodes after native re-renders; unload removes them
 and restores the inline styles. The native browser keeps owning every row, menu,
 search, drag, and dialog. See [dynamic-workspaces.md](dynamic-workspaces.md).
@@ -110,11 +135,15 @@ the scroll surface's right edge, with no native class names), separated by a
 short divider and falling back to the vertical middle of the scrollport when
 there is no room below. Its marks reuse the native turn-rail tick style
 (20 x 2 px, 60 % width at rest, 90 % on hover, right-aligned on the native
-column), with a horizontal 24 x 1 divider and no visible scrollbar. The
-full-text hover card follows the native preview card style (line-clamped, panel
-elevation) and the on-demand search card hangs directly below the magnifier,
-right-aligned to the ticks; both are portaled to the document body, as is the
-copy confirmation chip. A clicked prompt is copied through the Session input's
+column), with a horizontal 32 x 1 divider and no visible scrollbar; a long
+history caps at `min(available band, 420 px)` and scrolls its ticks internally
+behind 24 px fade masks while the pinned 20 x 22 search button stays at the
+foot. The full-text hover card follows the native preview card style
+(line-clamped, panel elevation). The search card opens directly below the pinned
+magnifier (right edge on the rail column) or, with no room above the composer,
+to the magnifier's left (right edge 8 px from the button), clamped above the
+composer; both cards are portaled to the document body, as is the copy
+confirmation chip. A clicked prompt is copied through the Session input's
 `setDraft`. Placement is re-measured in one animation frame on resize, scroll,
 composer height, sidebar width, and native-rail changes. Registration id
 `power-suite.prompt-history-preview`, order 100, locale namespace

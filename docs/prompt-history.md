@@ -33,7 +33,7 @@ send, so your own new prompt is recallable immediately.
 
 A fixed vertical rail sits at the right edge of the conversation, directly
 **below** the native **Session history** turn rail and sharing its column. A
-horizontal divider (a 24 x 1 px line, right-aligned on that column) separates
+horizontal divider (a 32 x 1 px line, right-aligned on that column) separates
 the native rail from the prompt marks. The composer dock slot only supplies the
 Session-scoped hooks: the component renders nothing in the composer flow — no
 horizontal card and no Conversation History bar — and portals its fixed rail and
@@ -49,9 +49,12 @@ prompts.
   hairline treatment (a brand-coloured tick at full width with a 20 px ring on
   the right edge). The marks have a fixed pitch, newest at the top, oldest at
   the bottom. The rail has no visible scrollbar but still scrolls with the wheel
-  or trackpad when there are more prompts than fit. Each mark's accessible name
-  carries the action and the prompt text (`Copy prompt #N: …`), so the visible
-  tick never hides what the mark stands for.
+  or trackpad when there are more prompts than fit, and it caps its height at
+  `min(available band, 420 px)` like the native turn rail: a long history
+  scrolls its ticks inside that frame with 24 px fade masks at the top and
+  bottom, while the search button stays pinned at the rail's foot. Each mark's
+  accessible name carries the action and the prompt text (`Copy prompt #N: …`),
+  so the visible tick never hides what the mark stands for.
 - **Hover or keyboard focus**: a preview card opens to the **left** of the rail
   in the native preview style: at most 300 px wide, 10 x 12 px padding,
   `radius-lg`, background layer 1, the panel elevation, no border and no
@@ -63,16 +66,19 @@ prompts.
   the prompt into the composer draft, focuses the composer editor, and shows a
   quiet fixed **Copied to input** chip beside the rail for about two seconds —
   no layout shift.
-- **Search**: the magnifier button sits below the marks. It opens a card
-  **directly below the button**, right-aligned to the rail's ticks (up to 300 px
-  wide), in the same native card style with an input. Matching is a
-  case-insensitive substring over the prompt text; the card reports
-  **Showing {count} of {total}** and shows **No matching prompts** when nothing
-  matches. There is no close (×) button: a blank pointer press outside the card
-  dismisses it and clears the filter, and Escape does the same and returns focus
-  to the magnifier. While the card is open the rail reserves its height so the
-  magnifier cannot slide, and the card clamps above the composer when there is
-  no room below.
+- **Search**: the magnifier is a 20 x 22 px button below the marks, right-aligned
+  so the magnifier's centre lines up with the tick column. It stays pinned when
+  the search opens — the button does not move or hide. The card appears
+  **directly below the button** (its right edge on the rail column, up to 300 px
+  wide) when there is room above the composer; when the button sits close to the
+  composer or the rail is long, the card instead opens **to the left of the
+  magnifier** (right edge 8 px left of the button) and is clamped above the
+  composer. In both cases it is the same native-style card with an input.
+  Matching is a case-insensitive substring over the prompt text; the card
+  reports **Showing {count} of {total}** and shows **No matching prompts** when
+  nothing matches. There is no close (×) button: a blank pointer press outside
+  the card dismisses it and clears the filter, and Escape does the same and
+  returns focus to the magnifier.
 - **Placement**: the rail measures the conversation's scroll surface, its
   composer seat, and the native turn rail's marks, then sits below the native
   rail when at least 90 px of room is available; otherwise it falls back to the
@@ -81,10 +87,10 @@ prompts.
   composer-height changes, sidebar-width changes, and the native rail
   appearing/loading, with a follow-up measurement after a short settle delay.
 
-The rail with the search card open (it hangs directly below the magnifier, right
-edge aligned to the ticks):
+The rail with the search card open — with the button near the composer the card
+flips to the magnifier's left (right edge 8 px from the button):
 
-![Prompt-history rail with the search card open below the magnifier](assets/prompt-history-search.png)
+![Prompt-history rail with the search card open beside the magnifier](assets/prompt-history-search.png)
 
 The rail and the keyboard recall share one source, so both see the same
 human-only prompts and the same 500-entry cap. The rail refetches per Session

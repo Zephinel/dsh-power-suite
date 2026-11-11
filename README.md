@@ -11,11 +11,11 @@ shows one plugin whose inventory grows with the suite.
 |---|---|
 | [Session artifacts](docs/session-artifacts.md) | An **Artifacts** card in the right Sidebar's Start page listing the current Session's created and delivered files, with native open, download, and LAN link copy. |
 | [Workspace presets](docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions created in that Workspace. |
-| [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with single-line rows, right-edge disclosure chevrons, a row hover detail (workspace, status, last active), and nested subagent Sessions. |
+| [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with single-line rows, right-edge disclosure chevrons, unread completions marked green until opened, a row hover detail (workspace, status, last active), nested subagent Sessions, and configurable retention windows. |
 | [Prompt history](docs/prompt-history.md) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; a right-edge rail lists them newest first with a hover full-text preview, an inline search, and click-to-copy. Plain arrows keep their original behavior. |
 | [Draft attachments](docs/draft-attachments.md) | Attachments in a draft (pasted images, dropped or picked files) survive switching Sessions and coming back, for the page lifetime; the shell only persists the draft text. |
 | [Interrupted sessions](docs/interrupted-sessions.md) | Sessions cut off by a restart carry an amber mark left of the title, a hover-only Continue action with a row mask, and a play-shaped composer submit control. |
-| [Settings](docs/settings.md) | The bundle's Plugins page carries its own configuration section; the prompt-history modifier is the first setting. |
+| [Settings](docs/settings.md) | The bundle's Plugins page carries its own configuration section: the prompt-history modifier plus the two Dynamic Workspaces retention windows (finished Sessions and Active projects). |
 
 New in 0.2.0:
 
@@ -24,7 +24,10 @@ New in 0.2.0:
   independently with persisted state, and hide in rail mode, while a **Running &
   recent** card above the native header lists running and recently finished
   Sessions as single-line rows, nests delegated subagent Sessions under their
-  parent, opens any row, and shows workspace/status/last-active detail on hover.
+  parent, marks unread completions green until the Session is opened, opens any
+  row, and shows workspace/status/last-active detail on hover. Both retention
+  windows (finished Sessions 1–24 h, default 2 h; Active projects 1–30 days,
+  default 7) are settings on the bundle's Plugins page.
 - **Prompt history preview** — a vertical rail at the conversation's right edge
   shows the current Session's prompts newest first as tick marks, with the full
   prompt on hover, an inline search, and click-to-copy into the draft.

@@ -22,16 +22,18 @@ npm run pack:check
 
 Current evidence (2026-11-11, Node 24.22.2):
 
-- `npm test`: **49 tests, 49 passed, 0 failed**.
+- `npm test`: **50 tests, 50 passed, 0 failed**.
 - `npm run check`: passed.
 - `npm run pack:check`: **47 files** (0.2.0 tarball), including `src/`,
   `locale/`, `docs/` (with the Dynamic Workspaces, hover-detail, and
   prompt-history rail captures), `cordis.patch.yml`, `icon.png`, and the standard
   repository files.
 - Host tests cover the read-vs-event cache race, silent-subagent timing, continue
-  content-type/state/in-flight validation, the non-human source fields, and the
+  content-type/state/in-flight validation, the non-human source fields, the
   prompt-history timestamp fold (`at` from a finite event time, `null`
-  otherwise) with the 500-prompt cap unchanged.
+  otherwise) with the 500-prompt cap unchanged, and the settings store (schema
+  version 2 with the two retention windows, version-1 migration to the default
+  windows, and patch validation for unknown/invalid fields).
 - None of the browser-only features adds a Host route: Dynamic Workspaces
   derives its buckets and summary card from the browser's Session, status, and
   Workspace stores; the prompt-history rail shares the existing
@@ -80,28 +82,61 @@ These were exercised in the Web GUI during development:
   restored afterwards) the route served `{ seq, text, at }` and the preview of
   that iteration showed prompt times; the timestamp fold is also covered by the
   node tests.
-- The prompt-history rail was verified live after its second refinement round:
-  the prompt ticks sit on the native turn-rail column (our mark right edge 2529
-  equals the native tick right edge), resting at 60 % width with the 90 % hover
-  growth and the brand hairline on keyboard focus; the horizontal 24 x 1 px
-  divider is right-aligned between the native rail and the first tick; no
-  scrollbar is visible while the mark column still wheel-scrolls. It showed 8
-  marks for the development Session and 65 marks for a long-session test; the
-  native-style hover card showed the full prompt text and its time; clicking a
-  mark copied the exact prompt into the Lexical draft. The search card opens
-  directly below the magnifier (6 px gap) with its right edge on the tick column
-  (2529), contains 0 buttons, and a blank pointer press outside closed it and
-  cleared the filter with all 65 marks restored; `Showing N of M` filtered
-  correctly. No console errors were reported and `node --check src/client.js`
-  plus `node --test test/*.test.js` stayed green.
-- The Dynamic Workspaces card was verified live after its refinement: rows are
-  single-line (dot, title, time) with disclosure chevrons at the far right; the
-  hover card shows Workspace (title + path), Status with time, Last active as an
-  absolute timestamp, and the running subagent count; header toggle, **View
-  all**, and header chevron all measure 30 px with the same 12 px corner radius;
-  bucket chevrons sit at the far right after the count; and the subagent
-  connector trunk is centered under the parent's status indicator (dot center
-  x = 35, trunk x = 35) with short branches and no dangling end.
+- The prompt-history rail was verified live after its third refinement round:
+  the prompt ticks sit on the native turn-rail column, resting at 60 % width
+  with the 90 % hover growth and the brand hairline on keyboard focus; the
+  horizontal divider is now 32 x 1 px and its right edge (2541) equals the rail
+  right edge. The 20 x 22 px magnifier sits right-aligned with its SVG centre at
+  x = 2531.5 against a tick-column centre of x = 2531, and its measured rect is
+  identical before and after opening the search
+  (`{x: 2521, y: 836, w: 20, h: 22}`), so the button is pinned. In the roomy
+  case the search card hangs directly below it with right edge 2541; in the
+  left-fallback case the card's right edge is 2513 = `toggle.x - 8` and its
+  bottom 1140 stays above `composerTop` 1171. A long session capped the rail at
+  313 px while 65 marks scrolled inside it behind hidden scrollbars and the fade
+  masks; no scrollbar is visible anywhere in the rail. The hover card showed the
+  full prompt text and its time; clicking a mark copied the exact prompt into the
+  Lexical draft; 0 buttons exist inside the search card, and a blank pointer
+  press outside (or Escape) closed it and cleared the filter with all 65 marks
+  restored; `Showing N of M` filtered correctly. No console errors were
+  reported and `node --check src/client.js` plus `node --test test/*.test.js`
+  stayed green.
+- The Dynamic Workspaces card was verified live after its final indicator round:
+  rows are single-line (glyph, title, time) with disclosure chevrons at the far
+  right. The header indicator has its two states: with two running Sessions it is
+  the blue pulsing dot (computed colour `rgb(122, 170, 255)`, business-primary
+  8 px dot with the expanding 2 s ring), and with nothing running it is the white
+  `sparkling-line` SVG. Both are horizontally centred at x = 43 on the same glyph
+  column as the top-level rows' glyphs (also x = 43), with the header title at
+  x = 58 matching the row titles' x = 58. The header chevron centre x = 248
+  equals every row arrow centre x = 248 (rows without children reserve the same
+  column), and the row-body highlight carries 8 px horizontal inner padding.
+  The glyph states checked out — the shell loading indicator while running, the
+  green done dot on finished unread rows, and, after opening a Session, a white
+  `deepseek-fill` SVG on main rows (computed colour `rgb(249, 250, 251)`) and a
+  white `robot-2-line` SVG on subagent rows, with unread rows still showing the
+  green dot and a new run re-enabling it. The card body's
+  `scrollbarWidth` is 0 while it still wheel-scrolls, and the row elements carry
+  0 native `title` attributes. The hover card's title is the Workspace name with
+  the full wrapped workspace path, followed by Status with time, absolute Last
+  active (`2026-11-11 04:44` style), and the running subagent count when
+  present. Header toggle, **View all**, and header chevron all measure 30 px with
+  the same 12 px corner radius; bucket chevrons sit at the far right after the
+  count; and the subagent connector trunk is centered under the parent's status
+  indicator (dot center x = 35, trunk x = 35) with short branches and no
+  dangling end.
+- The settings page and the configurable windows were verified live: the
+  **DSH Power Suite** Plugins page shows exactly three setting rows (Shortcut
+  modifier, Finished Session retention, Active project retention) with the
+  defaults checked (120 minutes / 7 days), and the package README document above
+  the configuration has computed `display: none` (`[data-detail-document]`).
+  Switching Finished Session retention to 1 hour dropped the finished card row
+  older than one hour (rows 4 → 3) and reverting to 2 hours restored it (3 → 4);
+  switching Active project retention to 1 day moved older projects to Inactive
+  (Active 8 → 5, Inactive 6 → 9) and reverting to 7 days restored 8/6. The Host
+  route persisted `{ promptHistoryModifier, recentSessionMinutes,
+  activeProjectDays }` with `"version": 2`, and the raw document read back from
+  the route matched. `npm test` then reported 50/50 passing.
 
 The manual checks are evidence for the behavior described in the feature docs;
 they are not a substitute for the automated gate above.
@@ -119,15 +154,16 @@ remount. Because the prompt-history surface has since been redesigned as the
 right-edge rail, that pass's preview evidence applies to the earlier panel
 design; the final rail's live verification is recorded above. Residual risks the
 pass
-explicitly could not exercise: elapsing the full 12-hour retention window, the
-alternate View-options grouping modes, the empty-card state, and screen-reader
-behavior with a real assistive technology; the archived-row exclusion is covered
+explicitly could not exercise: elapsing the longest retention windows (24 hours
+and 30 days), the alternate View-options grouping modes, the empty-card state,
+and screen-reader behavior with a real assistive technology; the archived-row exclusion is covered
 by code inspection plus an observed reload where an archived Session disappeared
 from the card.
 
 The live surfaces are captured in
 [assets/dynamic-workspaces.png](assets/dynamic-workspaces.png),
 [assets/dynamic-workspaces-hover.png](assets/dynamic-workspaces-hover.png),
-[assets/prompt-history-preview.png](assets/prompt-history-preview.png), and
-[assets/prompt-history-search.png](assets/prompt-history-search.png), embedded
-in their feature references.
+[assets/prompt-history-preview.png](assets/prompt-history-preview.png),
+[assets/prompt-history-search.png](assets/prompt-history-search.png), and
+[assets/settings-page.png](assets/settings-page.png), embedded in their feature
+references.

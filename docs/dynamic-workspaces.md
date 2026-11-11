@@ -24,6 +24,11 @@ The row hover detail (Workspace, Status, Last active, subagent count):
   one of its Sessions starts, drops back to Inactive once nothing it accounts
   for is running or inside the retention window, and a finished Session lingers
   in the card instead of vanishing on the stop.
+- **Configurable windows** — the two retention windows are Host settings on the
+  suite's Plugins page ([Settings](settings.md)): finished-Session retention
+  (1/2/6/12/24 hours, default **2 hours**) and active-project retention
+  (1/3/7/14/30 days, default **7 days**). Running Sessions ignore both. Changes
+  apply to the card, its nested subagent rows, and the buckets without a reload.
 
 ## Active and Inactive Projects
 
@@ -34,11 +39,10 @@ A Workspace is **Active** while at least one of its accounted Sessions is:
   still loading; or
 - **last active within the retention window**.
 
-The retention window is the `DW_ACTIVE_WINDOW_MS` constant in the
-`//#region feature: dynamic workspaces` section of
-[`src/client.js`](../src/client.js): **12 hours** today. It keeps a project in
-Active after its last turn ends, so the "I left it here" affordance survives a
-break; it is a code constant and has no settings UI. Inactive means no accounted
+The retention window is the Host-backed **Active project retention** setting
+([Settings](settings.md)): 1/3/7/14/30 days, default **7 days** (field
+`activeProjectDays`). It keeps a project in Active after its last turn ends, so
+the "I left it here" affordance survives a break. Inactive means no accounted
 Session is running and none was active inside the window.
 
 - A parent Session whose own turn has closed still counts while a delegated
@@ -50,8 +54,9 @@ Session is running and none was active inside the window.
   row stays available under the native archived filter, but it neither keeps its
   Workspace Active nor appears in the card.
 - A 30-second clock tick re-evaluates expiry, so a Workspace drops to Inactive
-  when its window ends even with no new Session event. Every other change
-  follows the stores immediately — no page reload and no Host restart.
+  when its window ends even with no new Session event. A settings change to the
+  window re-derives the buckets immediately. Every other change follows the
+  stores — no page reload and no Host restart.
 - The bucket counts are **Workspace** counts, not Session counts.
 - The section order follows the native grouping: Active sections
   `order: 100 + index` (most recent activity first), the Active header
@@ -63,38 +68,68 @@ Session is running and none was active inside the window.
 The card sits directly above the native **Workspaces** section header, below the
 sidebar's panel tabs. It starts expanded.
 
-- **Header**: a green pulsing dot, the title **Running & recent**, a count badge
-  with the number of listed rows, and the disclosure controls. The pulse uses
-  `corner-shape: round` so it stays a true circle under the shell's
-  superellipse corner shape, and reduced-motion preferences stop its animation.
-  The toggle block, the **View all** link, and the header chevron are all 30 px
-  tall with the same corner radius (12 px in the shell), so their hover
-  highlights line up; the chevron is the rightmost control and folds the body.
-- **Rows**: a Session row is **one line**: status dot, title, and time, with a
-  disclosure chevron at the far right when the Session has subagent children.
-  Running Sessions come first, then recently finished Sessions inside the same
-  12-hour window, each group newest activity first. A running row uses the
-  shell's own `StateDot` with `state: "ongoing"` as its loading glyph — no
+- **Header**: the leading indicator has two states. While at least one listed
+  Session is running it is a **blue pulsing dot** — a business-primary 8 px dot
+  with an expanding ring on a 2 s loop (static under reduced motion); when every
+  task is complete it is the white 14 px RemixIcon **sparkling-line** glyph.
+  Both states are horizontally centred on the same **leading-glyph column** as
+  the top-level rows (the pulse/sparkle, the green unread-completion dots, and
+  the white session-type icons share one centre; header sparkle/pulse centre
+  x = 43 and row glyph centre x = 43), and the header title starts on the same
+  column as the row titles (x = 58). Then come the **Running & recent** title
+  and a count badge with the number of listed rows. The toggle
+  block, the **View all** link, and the header chevron are all 30 px tall with
+  the same corner radius (12 px in the shell), so their hover highlights line
+  up; the chevron is the rightmost control and folds the body.
+- **Rows**: a Session row is **one line**: leading glyph, title, and time, with
+  a disclosure chevron at the far right when the Session has subagent children.
+  Running Sessions are always listed, then recently finished Sessions inside
+  the finished-Session **retention window** (default 2 hours, configurable in
+  [Settings](settings.md)), each group newest activity first. A running row uses the
+  shell's own `StateDot` with `state: "ongoing"` as its loading indicator — no
   bespoke spinner — and its right side shows the **observed run duration** once
   the run started while this page has been open; for a run that was already
-  going when the page loaded it falls back to the relative last-activity time. A
-  finished row uses the shell's green `StateDot state: "done"` and a relative
-  time. The Workspace is not printed under the row any more; it lives in the
-  hover card below.
-- **Hover detail**: resting on a row for about a quarter second opens a
-  native-style card beside it with the Session title, **Workspace** (the
-  durable title and its path), **Status** (`Running`/`Finished` plus the observed
-  or relative time), **Last active** (absolute `YYYY-MM-DD HH:MM`), and the
-  subagent count when it has one. The card does not capture the pointer and
-  hides shortly after the pointer leaves; clicking still opens the Session.
+  going when the page loaded it falls back to the relative last-activity time.
+  The glyph then tells the read state: a **finished but unread** row shows the
+  shell's green `StateDot state: "done"` (the green marker means *only* this
+  unread completion), while a **finished and acknowledged** row swaps the green
+  dot for the white session-type icon — the RemixIcon `deepseek-fill` glyph on
+  main rows and `robot-2-line` on subagent rows, drawn at 14 px / 12 px in the
+  primary label colour. Opening a Session from this card or anywhere else
+  acknowledges it; a new run clears the acknowledgement, so its next completion
+  shows the green dot again. The Workspace is not printed under the row any
+  more; it lives in the hover card below.
+- **Hover detail**: the row carries no native `title` tooltip; the hover card is
+  the only detail surface. Resting on a row for about a quarter second opens a
+  native-style card beside it whose **title is the Workspace name** (not the
+  Session name, which is already on the row), followed by the **full workspace
+  path** (wrapped, not truncated) and then **Status** (`Running`/`Finished` plus
+  the observed or relative time), **Last active** (absolute `YYYY-MM-DD HH:MM`),
+  and the running subagent count when there is one. The card does not capture
+  the pointer and hides shortly after the pointer leaves; clicking still opens
+  the Session.
+- **Disclosure column**: the header chevron and every row's disclosure arrow
+  are horizontally centred on one right-edge column (not merely right-aligned),
+  and rows without children reserve the same column with a spacer, so their
+  times stay aligned with rows that have children.
+- **Split row highlight**: hovering the row body highlights only the main part
+  of the row; hovering the disclosure arrow highlights only the arrow — the two
+  are independent and never compose into a nested two-layer highlight. The row
+  body's highlight carries 8 px horizontal inner padding, so the leading glyph
+  and title do not sit flush against the highlight edge.
+- **No body scrollbar**: the card body scrolls with the wheel or trackpad but
+  hides its scrollbar (native `scrollbar-width` / WebKit rules), matching the
+  native sidebar surfaces.
 - **Nested subagents**: a parent row with running or recently active direct
   subagent Sessions gets a per-parent disclosure chevron at its far right.
   Expanding it shows the children indented deeper beneath the parent, connected
   by a thin vertical trunk that is centered under the parent's status indicator
   (the dot column) with one short horizontal branch to each child's indicator;
   the trunk is masked below the last child's tick, so no dangling line hangs
-  under the group. Each child has its own status dot, title, and relative time.
-  Each parent folds independently; the card header still folds the whole list.
+  under the group. Each child row has its own leading glyph (the same running /
+  unread / acknowledged states, using the white `robot-2-line` icon when
+  acknowledged), title, and relative time. Each parent folds independently; the
+  card header still folds the whole list.
 - **Click**: clicking a parent row opens that Session; clicking a child row
   opens the child Session. The disclosure chevron is a separate control.
 - **Five-row default**: with more than five top-level rows the header also shows
@@ -150,7 +185,7 @@ adds sibling nodes and inline layout:
   500 ms retry keeps the foreign nodes present across native re-renders and
   sidebar folds. Unloading the plugin removes every inserted node and clears
   every inline `order`/`display` it wrote.
-- **Styling**: theme tokens only; the pulse and the animated flow bar are
+- **Styling**: theme tokens only; the animated flow bar on running rows is
   stopped under reduced motion, and the disclosure chevrons keep their short
   transform transition.
 
@@ -180,8 +215,13 @@ The native **View options** menu picks how Sessions are grouped:
   public contract. If a future DSH changes the slot attribute, the `tree` role, or
   the row-key scheme, this feature degrades to doing nothing while the native
   browser keeps working.
-- **Fixed retention window.** Active and "recent" use the 12-hour
-  `DW_ACTIVE_WINDOW_MS` constant; there is no setting UI for it.
+- **Retention windows are shared settings.** Finished-Session retention
+  (1/2/6/12/24 hours, default 2 hours) and Active-project retention
+  (1/3/7/14/30 days, default 7 days) are Host-wide preferences edited on the
+  suite's Plugins page; every browser shares them, and a change applies to this
+  page's card and buckets immediately while other open browsers pick it up on
+  their next page load. Running Sessions are always listed and always keep their
+  project Active regardless of either window.
 - **Durations are observation-only.** A run's duration is exact only when this
   page was open when the run started; otherwise the row shows the Session's
   last-activity distance. A background tab throttles the once-per-second
@@ -215,30 +255,50 @@ Manual checks on the running DSH Web GUI:
    Workspace counts.
 2. Start a turn in a Workspace: within one snapshot the Workspace moves into
    Active (top of that bucket) and its Session appears in the card with the
-   ongoing dot and, after a second, a running duration.
+   shell loading indicator and, after a second, a running duration.
 3. Stop the turn: the Session stays in the card, moves below the still-running
    rows, and shows `done` with a relative time. Start another turn in the same
    Workspace: it stays in Active and its row returns to the running group. A
-   Workspace becomes Inactive only after the 12-hour window, re-evaluated on the
-   30-second tick; no page reload is needed at any step.
-4. Fold **Active Projects**: its sections disappear, the chevron flips, and the
+   Workspace becomes Inactive only after the configured active-project window,
+   re-evaluated on the 30-second tick; no page reload is needed at any step.
+4. Open **Plugins → DSH Power Suite → Active & recent** and change the windows:
+   setting Finished Session retention to 1 hour should drop a finished row older
+   than one hour from the card (rows 4 → 3), and reverting to 2 hours should
+   restore it (3 → 4); setting Active project retention to 1 day should move
+   projects whose last activity is older than a day into Inactive (e.g. Active
+   8 → 5, Inactive 6 → 9), and reverting to 7 days restores 8/6. The hints show
+   the current values (`Currently 2 hours…`, `Currently 7 days…`).
+5. Fold **Active Projects**: its sections disappear, the chevron flips, and the
    state survives a page reload; unfold it again.
-5. Rest a pointer on a card row: the hover card shows Workspace (title and
-   path), Status with its time, Last active absolute time, and the subagent
-   count when present; the card does not take the pointer.
-6. If a listed Session delegated to subagents, its row shows a disclosure
+6. Rest a pointer on a card row: the hover card's title is the Workspace name,
+   with the full wrapped workspace path, Status with its time, Last active
+   absolute time, and the running subagent count when present; the card does not
+   take the pointer, and the row has no native tooltip.
+7. If a listed Session delegated to subagents, its row shows a disclosure
    chevron at the far right: expanding reveals the child rows indented under the
    parent with the branch lines (the trunk is centered under the parent's dot
    and stops at the last child's tick), each opens its own Session, and
    collapsing hides the child rows again.
-7. Check the card header geometry: the toggle block, **View all**, and the
-   header chevron share one 30 px height and corner radius.
-8. Collapse the sidebar: the card is hidden and no custom node shows in the rail;
-   widen it: the card and buckets return.
-9. Use the native Workspaces search, a Workspace context menu, the add-workspace
-   flow, and drag reordering while the feature is mounted: none of them target
-   the card or the bucket headers, and no row is lost.
-10. Run `npm run check`; it stays green (syntax, package manifest, Markdown
+8. Check the alignment: the header pulse (while running) or sparkle (when idle),
+   the green unread dot, and the white session-type icon of a top-level row are
+   centred on one glyph column, the header title starts on the row-title column,
+   and the header chevron centre lines up with every row arrow centre (rows
+   without children reserve the same column).
+9. Check the glyph states: a running row shows the shell loading indicator; a
+   finished, unopened row shows the green done dot; after opening that Session
+   (from here or elsewhere) the row shows the white `deepseek-fill` icon and a
+   subagent row shows the white `robot-2-line` icon, until a new run and
+   completion restore the green dot. Check that hovering the row body and the
+   arrow highlights only the hovered part, and that the card body scrolls with a
+   hidden scrollbar.
+10. Check the card header geometry: the toggle block, **View all**, and the
+    header chevron share one 30 px height and corner radius.
+11. Collapse the sidebar: the card is hidden and no custom node shows in the rail;
+    widen it: the card and buckets return.
+12. Use the native Workspaces search, a Workspace context menu, the add-workspace
+    flow, and drag reordering while the feature is mounted: none of them target
+    the card or the bucket headers, and no row is lost.
+13. Run `npm run check`; it stays green (syntax, package manifest, Markdown
     links, and the node tests).
 
 See [verification.md](verification.md) for the recorded evidence.

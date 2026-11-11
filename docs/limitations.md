@@ -37,9 +37,12 @@
 - **The native grouping mode decides how much applies.** The **WorkSpace** and
   **Workspace Tree** modes give the Active/Inactive buckets real group sections;
   **In one list** has no Workspace sections, so only the summary card applies.
-- **Activity uses a retention window, not a running-only marker.** A Workspace
-  stays Active for 12 hours (`DW_ACTIVE_WINDOW_MS`) after its last Session
-  activity; the constant has no setting UI.
+- **Activity uses configurable retention windows, not a running-only marker.**
+  A finished Session stays in the card for the Finished-Session retention window
+  (1/2/6/12/24 hours, default 2 hours) and a project stays Active for the
+  Active-project retention window (1/3/7/14/30 days, default 7 days). Both are
+  Host-wide settings edited on the suite's Plugins page; there is no per-browser
+  override. Running Sessions are always listed and always Active regardless.
 - **Durations are live-observation only.** The card shows an exact run duration
   only when the run started while this page was open; otherwise it shows the
   relative last-activity time. A hidden tab throttles the once-per-second refresh.
@@ -57,13 +60,24 @@
   feature render nothing; the native browser is unaffected.
 - **Per-browser fold state.** `power-suite.dynamic-workspaces.folds` lives in
   `localStorage`; the card's open/closed state is not persisted.
-- **Client-side only.** No Host route serves the buckets or card; data comes from
-  the browser's Session, status, and Workspace stores, so a change from another
-  device can lag one snapshot.
-- **Some row detail is hover-only.** A card row shows only its status dot, title,
-  and time; the Workspace title and path, Status detail, absolute Last active
-  time, and the running subagent count appear in the row's hover card, which
-  does not capture the pointer (and is unavailable on touch-only input).
+- **Client-side derivation, Host-owned windows.** No Host route serves the
+  buckets or card; data comes from the browser's Session, status, and Workspace
+  stores, so a change from another device can lag one snapshot. The two
+  retention windows come from the shared settings route: the page that changes
+  them re-derives immediately, while other open browsers read the new value on
+  their next settings read (page load).
+- **Some row detail is hover-only.** A card row shows only its leading glyph,
+  title, and time, and carries no native `title` tooltip; the Workspace name,
+  full wrapped workspace path, Status detail, absolute Last active time, and the
+  running subagent count appear only in the row's hover card, which does not
+  capture the pointer (and is unavailable on touch-only input).
+- **The read state is page-local.** A finished, unread Session shows the green
+  done dot until it is opened (which acknowledges it and swaps in the white
+  session-type icon). The acknowledgement lives in the page, so a reload forgets
+  it for every row except the Session currently open in the main view; a new run
+  clears the acknowledgement for that Session anyway.
+- **The card body hides its scrollbar.** Wheel and trackpad scrolling work, but
+  the scrollbar itself is suppressed to match the native sidebar surfaces.
 
 ## Prompt history
 
@@ -86,16 +100,19 @@
   re-measures in one animation frame on window resize (which also covers zoom
   and DPI changes), scroll, composer height, sidebar width, and native-rail
   changes; the rail is hidden while the Session has no sent prompts.
-- **Overflow is deliberately quiet.** The mark column hides its scrollbar (wheel
-  or trackpad still scrolls it). The hover card line-clamps long prompts to six
-  lines instead of scrolling; the full prompt stays in the mark's accessible
+- **Overflow is deliberately quiet.** A long history caps the rail at
+  `min(available band, 420 px)`; the ticks scroll inside that frame with a
+  hidden scrollbar and 24 px fade masks at the top and bottom, and the magnifier
+  stays pinned at the rail's foot. The hover card line-clamps long prompts to
+  six lines instead of scrolling; the full prompt stays in the mark's accessible
   name.
-- **Search card placement.** The card opens directly below the magnifier,
-  right-aligned to the ticks, and the rail reserves its estimated height while
-  open so the magnifier cannot slide. When there is no room below, the card
-  clamps above the composer. There is no close (x) button: a blank pointer press
-  outside the card or Escape closes it and clears the filter (Escape returns
-  focus to the magnifier).
+- **Search card placement.** With room above the composer, the card opens
+  directly below the pinned 20 x 22 magnifier with its right edge on the rail
+  column. When the button is close to the composer or the rail is long, the card
+  flips to the magnifier's left, 8 px from the button, and is clamped above the
+  composer. Opening the search never moves the button. There is no close (x)
+  button: a blank pointer press outside the card or Escape closes it and clears
+  the filter (Escape returns focus to the magnifier).
 - **Current Session only.** The rail does not cross Sessions or Workspaces;
   there is no global prompt history.
 
@@ -129,6 +146,19 @@
   matching native context/trigger row using the message time recorded for this
   browser. Trajectory/raw exports still contain it. A future Chat DOM that
   exposes the source kind on the trigger row would replace this shim.
+
+## Settings page
+
+- **README hidden while the section is mounted.** The bundle page's
+  auto-rendered package README document (`[data-detail-document]`) is hidden only
+  while the suite's settings section is on screen and restored on unmount; the
+  behaviour does not change other plugin pages or the repository README.
+- **Fixed option sets.** The Host accepts only the listed retention windows
+  (1/2/6/12/24 hours and 1/3/7/14/30 days); an unknown value is rejected and the
+  stored value is kept.
+- **Shared, one document.** Settings are Host-owned (schema version 2); there is
+  no per-browser or per-device override. Version-1 files migrate to the default
+  windows on read.
 
 ## Localization and theming
 

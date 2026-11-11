@@ -27,15 +27,21 @@ keep their preset. **Follow the global default** clears the override.
 In the sidebar's expanded Workspaces browser, the **Running & recent** card
 sits above the native header and the Workspace list is split into **Active
 Projects** and **Inactive Projects**. A Workspace is Active while one of its
-Sessions is running or was active in the last 12 hours.
+Sessions is running or was active inside the Active-project retention window
+(default 7 days). The card's header shows a blue pulsing dot while a listed
+Session is running and the white sparkle icon when nothing runs.
 
 - Fold a bucket with its right-edge header chevron; the state is remembered in
   this browser.
 - Click a card row to open that Session. **View all {count}** expands past the
   first five rows.
-- Rest the pointer on a row for its hover detail: Workspace title and path,
-  Status with its time, absolute Last active time, and the running subagent
-  count.
+- The leading glyph tells the read state: a running spinner while the Session
+  runs, a green dot for a finished but unopened Session, then a white session
+  icon once it has been opened (a new run makes the next completion green
+  again).
+- Rest the pointer on a row for its hover detail: the Workspace name, full
+  workspace path, Status with its time, absolute Last active time, and the
+  running subagent count.
 - A parent Session with delegated subagent Sessions shows a chevron at its far
   right: expanding it lists the children indented under the parent, and clicking
   one opens that child Session.
@@ -57,9 +63,11 @@ top, with a short horizontal divider separating the two groups. Hover or
 keyboard-focus a tick to read the full prompt and its time in a card to the
 left; click it (or press Enter) to copy the text into the composer draft, with a
 small **Copied to input** chip near the rail. The **Search** button below the
-ticks opens a filter card directly below it; a blank click outside the card or
-Escape closes it and clears the filter. The rail is absent while the Session has
-no sent prompts.
+ticks stays put and opens a filter card directly below it, or to its left when
+there is no room above the composer; a blank click outside the card or Escape
+closes it and clears the filter. A long history scrolls inside the rail while
+the search button stays at its foot. The rail is absent while the Session has no
+sent prompts.
 
 ## Draft attachments
 
@@ -80,9 +88,15 @@ turn starts.
 
 ## Settings
 
-The Plugins detail page for the bundle carries the suite's settings. The first
-setting is the prompt-history modifier; its label reflects the current platform
-(⌘ on macOS, Ctrl on Windows/Linux).
+The Plugins detail page for the bundle carries the suite's settings in two
+groups. **Prompt history** holds the shortcut modifier (⌘ on macOS, Ctrl on
+Windows/Linux). **Active & recent** holds the two retention windows: Finished
+Session retention (1/2/6/12/24 hours, default 2 hours) and Active project
+retention (1/3/7/14/30 days, default 7 days); each row's hint shows the current
+value. The package README that the Plugins page normally renders above the
+configuration is hidden on this page while the controls are shown. Changes
+apply immediately to this page's card and buckets and are shared with every
+browser on its next load.
 
 ## Feature references
 

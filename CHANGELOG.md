@@ -11,9 +11,9 @@ All notable changes to this repository are documented here. The format follows
 - Dynamic Workspaces: the native sidebar Workspaces browser gains **Active
   Projects** and **Inactive Projects** buckets plus a **Running & recent** card
   above the native header. A Workspace is Active while one of its Sessions is
-  running or was active inside the 12-hour retention window; buckets reorder live
-  in both directions, fold independently with persisted state, and hide in rail
-  mode. The card lists running Sessions with the shell's own status dot and
+  running or was active inside the configurable Active-project retention window;
+  buckets reorder live in both directions, fold independently with persisted
+  state, and hide in rail mode. The card lists running Sessions with the shell's own status dot and
   observed durations, keeps recently finished Sessions for the same window,
   nests recent direct subagent Sessions under their parent behind a disclosure
   chevron (indented under a guide line, each opening its own Session), and opens
@@ -36,6 +36,13 @@ All notable changes to this repository are documented here. The format follows
   `{ seq, text, at }` for every prompt, where `at` is the Session event time in
   epoch milliseconds or `null` when the event has no usable time. The rail shows
   mark and hover-card times from it; the keyboard recall is unchanged.
+- Configurable Dynamic Workspaces windows: the settings document moves to schema
+  version 2 with two new Host-backed fields — Finished Session retention
+  (`recentSessionMinutes`, 1/2/6/12/24 hours, default 2 hours) and Active
+  project retention (`activeProjectDays`, 1/3/7/14/30 days, default 7 days) —
+  edited under a new **Active & recent** group on the bundle's Plugins page.
+  Version-1 files migrate to the default windows, and running Sessions ignore
+  both windows.
 
 ### Changed
 
@@ -49,18 +56,38 @@ All notable changes to this repository are documented here. The format follows
   surfaces.
 - Prompt-history rail now matches the native turn rail: right-aligned 20 x 2 px
   tick marks on the native column (60 % width at rest, growing on hover, brand
-  hairline on keyboard focus), a horizontal 24 x 1 px divider, a native-style
-  line-clamped preview card, and a search card directly below the magnifier with
-  its right edge on the tick column, no close button, and outside-click
-  dismissal. The rail hides its scrollbars while staying wheel-scrollable.
-- Dynamic Workspaces card refinement: Session rows are single-line (status dot,
+  hairline on keyboard focus), a horizontal 32 x 1 px divider, a native-style
+  line-clamped preview card, and a pinned 20 x 22 px magnifier whose centre sits
+  on the tick column. The search card opens directly below the magnifier with
+  its right edge on the column, or flips to the magnifier's left (8 px away)
+  when there is no room above the composer; it has no close button and dismisses
+  on a blank outside click or Escape. A long history caps the rail at
+  `min(available band, 420 px)`, scrolls its ticks behind 24 px fade masks with
+  hidden scrollbars, and keeps the search button pinned at the foot.
+- Dynamic Workspaces card header: the leading indicator now has two states — a
+  blue pulsing business-primary dot while any listed Session is running, and the
+  white `sparkling-line` icon when everything is complete — both centred on the
+  row glyph column.
+- The bundle's Plugins page shows only the suite's real controls while its
+  settings section is mounted: the auto-rendered package README document above
+  the configuration is hidden and restored on unmount, and the section now
+  carries the **Prompt history** group plus the **Active & recent** group with
+  the two retention rows.
+- Dynamic Workspaces card refinement: Session rows are single-line (glyph,
   title, time) with disclosure chevrons at the far right; the Workspace title
   and path, Status, absolute Last active time, and running subagent count moved
-  into a native-style hover card that does not capture the pointer. The header
-  toggle, **View all**, and header chevron share one 30 px height and corner
-  radius; bucket chevrons sit at the far right; the subagent connector trunk is
-  centered under the parent's status indicator and stops at the last child's
-  tick.
+  into a native-style hover card that does not capture the pointer. The leading
+  glyph has three states — shell loading indicator while running, green done dot
+  for an unread completion, and a white session-type icon (RemixIcon
+  `deepseek-fill` for main rows, `robot-2-line` for subagent rows) once the
+  Session has been opened and the completion acknowledged; a new run re-enables
+  the green dot, and acknowledgements are page-local. The hover card's title is
+  the Workspace name with the full wrapped path, rows carry no native tooltips,
+  the card body hides its scrollbar, and the row body and disclosure arrow
+  highlight independently. The header toggle, **View all**, and header chevron
+  share one 30 px height and corner radius; bucket chevrons sit at the far
+  right; the subagent connector trunk is centered under the parent's status
+  indicator and stops at the last child's tick.
 
 ## [0.1.1] - 2026-11-11
 
