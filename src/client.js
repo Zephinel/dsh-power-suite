@@ -8766,7 +8766,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (value === null || isDynamicValue(value)) continue
         push('data', `[${attr.name}="${cssString(value)}"]`, 0.7)
       }
-      const id = typeof source.id === 'string' ? source.id : ''
+      let id = typeof source.id === 'string' ? source.id : ''
+      if (id.length === 0) {
+        const idAttr = attrs.find((item) => item !== null && typeof item === 'object' && item.name === 'id')
+        if (idAttr !== undefined) {
+          const idValue = sanitizeAttributeValue('id', idAttr.value)
+          if (idValue !== null) id = idValue
+        }
+      }
       if (id.length > 0 && !isDynamicValue(id)) push('id', `#${cssIdentifier(id)}`, 0.88)
       const labelValue = attrValue('aria-label')
       if (labelValue !== null) push('label', `[aria-label="${cssString(labelValue)}"]`, 0.8)
@@ -9279,7 +9286,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           if (tag.length === 0 || elementTag === tag) list.push(element)
         }
         if (list.length === 0) continue
-        if (list.length > 1) return 'ambiguous'
+        const generic = candidate.kind === 'tag' || candidate.kind === 'path' || candidate.kind === 'role'
+        if (list.length > 1) {
+          if (generic) continue
+          return 'ambiguous'
+        }
         unique = list[0]
         break
       }
@@ -9404,12 +9415,16 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     /**
-     * The first element of an event's composed path.
+     * The event target element. The target is preferred over `composedPath()[0]`
+     * because the DOM retargets a Shadow DOM hit to its host, which is exactly
+     * the selectable boundary this feature documents.
      * @param {object} event - DOM event.
      * @returns {Element | null} the event target element.
      */
     function annotationEventElement(event) {
       if (event === null || typeof event !== 'object') return null
+      const target = annotationDomElement(event.target)
+      if (target !== null) return target
       if (typeof event.composedPath === 'function') {
         const path = event.composedPath()
         if (Array.isArray(path)) {
@@ -9419,7 +9434,28 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           }
         }
       }
-      return annotationDomElement(event.target)
+      return null
+    }
+
+    /**
+     * Retarget one node inside a Shadow DOM to its host element.
+     * @param {Element | null} node - node to retarget.
+     * @returns {Element | null} the outermost host element.
+     */
+    function annotationShadowHost(node) {
+      let current = node
+      let depth = 0
+      while (current !== null && depth < 8) {
+        const root = typeof current.getRootNode === 'function' ? current.getRootNode() : null
+        if (root !== null && root !== undefined && root !== document
+          && root.host !== null && root.host !== undefined && root.host !== document) {
+          current = annotationDomElement(root.host)
+          depth += 1
+          continue
+        }
+        break
+      }
+      return current
     }
 
     /** @returns {{ width: number, height: number }} the current viewport size. */
@@ -9675,7 +9711,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @returns {Element | null} the chain's start element.
      */
     function annotationStartNode(target) {
-      const node = annotationDomElement(target)
+      const shadowHost = annotationShadowHost(annotationDomElement(target))
+      const node = shadowHost === null ? annotationDomElement(target) : shadowHost
       if (node === null) return null
       if (typeof node.closest !== 'function') return null
       if (node.closest('[data-psa-own]') !== null) return null
@@ -10608,13 +10645,21 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
 
       /**
-       * Handle window resize with a trailing debounce.
+       * Handle window resize with a trailing debounce. Runs for the whole
+       * plugin lifetime: the launcher must stay clamped inside the viewport even
+       * when the mode is off (the rail/layout work only applies while active).
        * @returns {void}
        */
-      function onResize() {
+      function onInstalledResize() {
         if (resizeTimer !== null) window.clearTimeout(resizeTimer)
         resizeTimer = window.setTimeout(() => {
           resizeTimer = null
+          const current = snapshot()
+          const launcherPosition = clampLauncherPosition(current.launcherPosition, annotationViewport(), ANNOTATION_LAUNCHER_SIZE)
+          if (launcherPosition.x !== current.launcherPosition.x || launcherPosition.y !== current.launcherPosition.y) {
+            publish({ launcherPosition })
+            persistLauncherPosition(launcherPosition)
+          }
           if (!isActive()) return
           updateLayout()
           scheduleGeometry()
@@ -10729,7 +10774,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         listen('pointermove', onPointerMove, { capture: true, passive: true })
         listen('wheel', onWheel, { capture: true, passive: true })
         listen('scroll', onScroll, { capture: true, passive: true })
-        listen('resize', onResize, { capture: false, passive: true })
         listen('keydown', onKeyDown, { capture: true, passive: false })
         listen('keyup', onKeyUp, { capture: true, passive: true })
         listen('blur', onWindowBlur, { capture: false, passive: true })
@@ -10789,7 +10833,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
         feedbackTimer = null
         dispatch({ type: 'feedback', feedback: null })
-        feedback(t('feedback.modeOff'))
       }
 
       /** Toggle annotation mode. @returns {void} */
@@ -11132,8 +11175,13 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         dispatch({ type: 'session', sessionId })
       }
 
+      // The launcher must obey the viewport for the whole plugin lifetime, not
+      // only while the annotation mode is active.
+      window.addEventListener('resize', onInstalledResize, { passive: true })
+
       /** Tear everything down (plugin unmount). @returns {void} */
       function dispose() {
+        window.removeEventListener('resize', onInstalledResize)
         uninstallPageListeners()
         disconnectFrameObserver()
         clearTimers()
@@ -11781,7 +11829,16 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       }, MODIFIER_CHOICES.map((choice) => React.createElement('option', { key: choice, value: choice }, t(`modifier.${choice}`)))))
       const message = snapshot.state.feedback === null ? '' : snapshot.state.feedback.text
       return React.createElement('div', { className: 'psa-rail-section' },
-        React.createElement('div', { className: 'psa-status-line psa-status-strong' }, t('settings.title')),
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+          React.createElement('button', {
+            type: 'button',
+            className: 'psa-icon-btn',
+            'data-psa-own': '',
+            'aria-label': t('rail.back'),
+            title: t('rail.back'),
+            onClick: () => controller.backView()
+          }, AnnotationChevron('left')),
+          React.createElement('span', { className: 'psa-status-line psa-status-strong' }, t('settings.title'))),
         field('settings.passThrough', 'data-psa-setting-passthrough', 'passThroughModifier', settings.passThroughModifier),
         field('settings.multi', 'data-psa-setting-multi', 'multiModifier', settings.multiModifier),
         React.createElement('div', {
