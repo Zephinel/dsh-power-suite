@@ -24,10 +24,10 @@ Current evidence (2026-11-11, Node 24.22.2):
 
 - `npm test`: **49 tests, 49 passed, 0 failed**.
 - `npm run check`: passed.
-- `npm run pack:check`: **46 files** (0.2.0 tarball), including `src/`,
-  `locale/`, `docs/` (with the Dynamic Workspaces and prompt-history rail
-  captures), `cordis.patch.yml`, `icon.png`, and the standard repository
-  files.
+- `npm run pack:check`: **47 files** (0.2.0 tarball), including `src/`,
+  `locale/`, `docs/` (with the Dynamic Workspaces, hover-detail, and
+  prompt-history rail captures), `cordis.patch.yml`, `icon.png`, and the standard
+  repository files.
 - Host tests cover the read-vs-event cache race, silent-subagent timing, continue
   content-type/state/in-flight validation, the non-human source fields, and the
   prompt-history timestamp fold (`at` from a finite event time, `null`
@@ -80,13 +80,28 @@ These were exercised in the Web GUI during development:
   restored afterwards) the route served `{ seq, text, at }` and the preview of
   that iteration showed prompt times; the timestamp fold is also covered by the
   node tests.
-- The prompt-history rail was verified live after its redesign: the rail's
-  right edge and top align below the native turn rail's marks, it showed 8
+- The prompt-history rail was verified live after its second refinement round:
+  the prompt ticks sit on the native turn-rail column (our mark right edge 2529
+  equals the native tick right edge), resting at 60 % width with the 90 % hover
+  growth and the brand hairline on keyboard focus; the horizontal 24 x 1 px
+  divider is right-aligned between the native rail and the first tick; no
+  scrollbar is visible while the mark column still wheel-scrolls. It showed 8
   marks for the development Session and 65 marks for a long-session test; the
-  hover card showed the full prompt text and its `11-07` time; clicking a mark
-  copied the exact prompt into the Lexical draft; the search card filtered to
-  `Showing 4 of 65`; no console errors were reported and `node --check
-  src/client.js` plus `node --test test/*.test.js` stayed green.
+  native-style hover card showed the full prompt text and its time; clicking a
+  mark copied the exact prompt into the Lexical draft. The search card opens
+  directly below the magnifier (6 px gap) with its right edge on the tick column
+  (2529), contains 0 buttons, and a blank pointer press outside closed it and
+  cleared the filter with all 65 marks restored; `Showing N of M` filtered
+  correctly. No console errors were reported and `node --check src/client.js`
+  plus `node --test test/*.test.js` stayed green.
+- The Dynamic Workspaces card was verified live after its refinement: rows are
+  single-line (dot, title, time) with disclosure chevrons at the far right; the
+  hover card shows Workspace (title + path), Status with time, Last active as an
+  absolute timestamp, and the running subagent count; header toggle, **View
+  all**, and header chevron all measure 30 px with the same 12 px corner radius;
+  bucket chevrons sit at the far right after the count; and the subagent
+  connector trunk is centered under the parent's status indicator (dot center
+  x = 35, trunk x = 35) with short branches and no dangling end.
 
 The manual checks are evidence for the behavior described in the feature docs;
 they are not a substitute for the automated gate above.
@@ -112,6 +127,7 @@ from the card.
 
 The live surfaces are captured in
 [assets/dynamic-workspaces.png](assets/dynamic-workspaces.png),
+[assets/dynamic-workspaces-hover.png](assets/dynamic-workspaces-hover.png),
 [assets/prompt-history-preview.png](assets/prompt-history-preview.png), and
 [assets/prompt-history-search.png](assets/prompt-history-search.png), embedded
 in their feature references.

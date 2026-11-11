@@ -32,47 +32,59 @@ send, so your own new prompt is recallable immediately.
 ## History rail
 
 A fixed vertical rail sits at the right edge of the conversation, directly
-**below** the native **Session history** turn rail and right-aligned in the same
-column. A short vertical divider (the 1 x 14 px line in that column) separates
-the two groups. The composer dock slot only supplies the Session-scoped hooks:
-the component renders nothing in the composer flow — no horizontal card and no
-Conversation History bar — and portals its fixed rail and cards to the page
-body. The rail is absent while the Session has no sent prompts.
+**below** the native **Session history** turn rail and sharing its column. A
+horizontal divider (a 24 x 1 px line, right-aligned on that column) separates
+the native rail from the prompt marks. The composer dock slot only supplies the
+Session-scoped hooks: the component renders nothing in the composer flow — no
+horizontal card and no Conversation History bar — and portals its fixed rail and
+cards to the page body. The rail is absent while the Session has no sent
+prompts.
 
 ![Prompt-history rail below the native turn rail, with a full-text preview card](assets/prompt-history-preview.png)
 
-- **Marks**: one small tick button per prompt at a fixed pitch, newest at the
-  top and oldest at the bottom. The marks scroll inside the rail's own frame
-  with a hidden scrollbar when there are more than fit. The group is labelled
-  **Prompt history**, and each mark's accessible name carries the action and
-  the prompt text (`Copy prompt #N: …`), so the visible tick never hides what
-  the mark stands for.
+- **Marks**: the prompts are native-style tick marks — 20 x 2 px, radius 2,
+  right-aligned on the native turn-rail column, resting at 60 % width
+  (`scaleX(0.6)`) in the border colour. Hovering a mark grows it to 90 % and
+  switches it to the tertiary label colour; keyboard focus keeps the native
+  hairline treatment (a brand-coloured tick at full width with a 20 px ring on
+  the right edge). The marks have a fixed pitch, newest at the top, oldest at
+  the bottom. The rail has no visible scrollbar but still scrolls with the wheel
+  or trackpad when there are more prompts than fit. Each mark's accessible name
+  carries the action and the prompt text (`Copy prompt #N: …`), so the visible
+  tick never hides what the mark stands for.
 - **Hover or keyboard focus**: a preview card opens to the **left** of the rail
-  with the full prompt text (scrollable when long) and, when the Host reports
-  it, the prompt's time. Moving the pointer from a mark into the card keeps it
-  open; scrolling the page or resizing dismisses it.
+  in the native preview style: at most 300 px wide, 10 x 12 px padding,
+  `radius-lg`, background layer 1, the panel elevation, no border and no
+  scrollbar. The prompt text is line-clamped to six lines (the full text stays
+  in the mark's accessible name); the prompt's time is shown under it when the
+  Host reports it. The card fades in over 120 ms, stays open while the pointer
+  travels into it, and closes on scroll, resize, or shortly after leaving.
 - **Click to copy**: clicking a mark (or pressing Enter on a focused one) puts
   the prompt into the composer draft, focuses the composer editor, and shows a
   quiet fixed **Copied to input** chip beside the rail for about two seconds —
   no layout shift.
-- **Search**: the magnifier button below the marks opens a floating search card
-  to the **left** of the rail with an input. Matching is a case-insensitive
-  substring over the prompt text; the card reports **Showing {count} of
-  {total}** while filtering (and the prompt count otherwise), and shows
-  **No matching prompts** when nothing matches. The clear (×) control resets the
-  filter and keeps the card open; Escape clears the filter, closes the card, and
-  returns focus to the magnifier. The rail shows the filtered marks meanwhile.
+- **Search**: the magnifier button sits below the marks. It opens a card
+  **directly below the button**, right-aligned to the rail's ticks (up to 300 px
+  wide), in the same native card style with an input. Matching is a
+  case-insensitive substring over the prompt text; the card reports
+  **Showing {count} of {total}** and shows **No matching prompts** when nothing
+  matches. There is no close (×) button: a blank pointer press outside the card
+  dismisses it and clears the filter, and Escape does the same and returns focus
+  to the magnifier. While the card is open the rail reserves its height so the
+  magnifier cannot slide, and the card clamps above the composer when there is
+  no room below.
 - **Placement**: the rail measures the conversation's scroll surface, its
   composer seat, and the native turn rail's marks, then sits below the native
   rail when at least 90 px of room is available; otherwise it falls back to the
   vertical middle of the usable scrollport. Its bottom always stays above the
   composer. It re-measures in one animation frame on window resize, scroll,
   composer-height changes, sidebar-width changes, and the native rail
-  appearing/loading (plus a short settle delay).
+  appearing/loading, with a follow-up measurement after a short settle delay.
 
-The preview card over the rail:
+The rail with the search card open (it hangs directly below the magnifier, right
+edge aligned to the ticks):
 
-![Prompt-history rail with the floating search card showing a filtered count](assets/prompt-history-search.png)
+![Prompt-history rail with the search card open below the magnifier](assets/prompt-history-search.png)
 
 The rail and the keyboard recall share one source, so both see the same
 human-only prompts and the same 500-entry cap. The rail refetches per Session
@@ -80,7 +92,7 @@ and again when a turn finishes (the send that just completed appears then);
 switching Sessions also clears the search and copied state. The Host fold
 carries each prompt's event time, but it is served only after the plugin/Host
 code is reloaded (a normal Host restart does that too); until then `at` is
-absent, mark and card times are hidden, and everything else keeps working.
+absent, card times are hidden, and everything else keeps working.
 
 ## Multi-line prompts
 

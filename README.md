@@ -11,7 +11,7 @@ shows one plugin whose inventory grows with the suite.
 |---|---|
 | [Session artifacts](docs/session-artifacts.md) | An **Artifacts** card in the right Sidebar's Start page listing the current Session's created and delivered files, with native open, download, and LAN link copy. |
 | [Workspace presets](docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions created in that Workspace. |
-| [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header that nests subagent Sessions under their parent. |
+| [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with single-line rows, right-edge disclosure chevrons, a row hover detail (workspace, status, last active), and nested subagent Sessions. |
 | [Prompt history](docs/prompt-history.md) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; a right-edge rail lists them newest first with a hover full-text preview, an inline search, and click-to-copy. Plain arrows keep their original behavior. |
 | [Draft attachments](docs/draft-attachments.md) | Attachments in a draft (pasted images, dropped or picked files) survive switching Sessions and coming back, for the page lifetime; the shell only persists the draft text. |
 | [Interrupted sessions](docs/interrupted-sessions.md) | Sessions cut off by a restart carry an amber mark left of the title, a hover-only Continue action with a row mask, and a play-shaped composer submit control. |
@@ -23,8 +23,8 @@ New in 0.2.0:
   Active/Inactive buckets follow the running and recent Sessions live, fold
   independently with persisted state, and hide in rail mode, while a **Running &
   recent** card above the native header lists running and recently finished
-  Sessions, nests delegated subagent Sessions under their parent, and opens any
-  row.
+  Sessions as single-line rows, nests delegated subagent Sessions under their
+  parent, opens any row, and shows workspace/status/last-active detail on hover.
 - **Prompt history preview** — a vertical rail at the conversation's right edge
   shows the current Session's prompts newest first as tick marks, with the full
   prompt on hover, an inline search, and click-to-copy into the draft.

@@ -60,6 +60,10 @@
 - **Client-side only.** No Host route serves the buckets or card; data comes from
   the browser's Session, status, and Workspace stores, so a change from another
   device can lag one snapshot.
+- **Some row detail is hover-only.** A card row shows only its status dot, title,
+  and time; the Workspace title and path, Status detail, absolute Last active
+  time, and the running subagent count appear in the row's hover card, which
+  does not capture the pointer (and is unavailable on touch-only input).
 
 ## Prompt history
 
@@ -82,6 +86,16 @@
   re-measures in one animation frame on window resize (which also covers zoom
   and DPI changes), scroll, composer height, sidebar width, and native-rail
   changes; the rail is hidden while the Session has no sent prompts.
+- **Overflow is deliberately quiet.** The mark column hides its scrollbar (wheel
+  or trackpad still scrolls it). The hover card line-clamps long prompts to six
+  lines instead of scrolling; the full prompt stays in the mark's accessible
+  name.
+- **Search card placement.** The card opens directly below the magnifier,
+  right-aligned to the ticks, and the rail reserves its estimated height while
+  open so the magnifier cannot slide. When there is no room below, the card
+  clamps above the composer. There is no close (x) button: a blank pointer press
+  outside the card or Escape closes it and clears the filter (Escape returns
+  focus to the magnifier).
 - **Current Session only.** The rail does not cross Sessions or Workspaces;
   there is no global prompt history.
 

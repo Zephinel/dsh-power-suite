@@ -29,12 +29,16 @@ sits above the native header and the Workspace list is split into **Active
 Projects** and **Inactive Projects**. A Workspace is Active while one of its
 Sessions is running or was active in the last 12 hours.
 
-- Fold a bucket with its header chevron; the state is remembered in this browser.
+- Fold a bucket with its right-edge header chevron; the state is remembered in
+  this browser.
 - Click a card row to open that Session. **View all {count}** expands past the
   first five rows.
-- A parent Session with delegated subagent Sessions shows a chevron: expanding
-  it lists the children indented under the parent, and clicking one opens that
-  child Session; collapsing shows the child count.
+- Rest the pointer on a row for its hover detail: Workspace title and path,
+  Status with its time, absolute Last active time, and the running subagent
+  count.
+- A parent Session with delegated subagent Sessions shows a chevron at its far
+  right: expanding it lists the children indented under the parent, and clicking
+  one opens that child Session.
 - A finished Session stays in the card as `done` for the retention window instead
   of disappearing on the stop.
 - In the collapsed rail, the card is hidden; widening the sidebar restores it.
@@ -48,13 +52,14 @@ prompts. Plain ↑/↓ keep their original behavior. Change the modifier in the
 plugin settings (⌘/Ctrl, ⌥/Alt, Ctrl, Shift, or Off).
 
 Below the native turn rail at the conversation's right edge, a vertical rail
-lists the current Session's prompts as tick marks, newest at the top, with each
-prompt's time when the Host reports one. Hover or keyboard-focus a mark to read
-the full prompt in a card to the left; click it (or press Enter) to copy the text
-into the composer draft, with a small **Copied to input** chip near the rail. The
-rail's **Search** button below the marks opens a compact filter card; Escape
-closes it, and the clear (×) button resets the filter. The rail is absent while
-the Session has no sent prompts.
+lists the current Session's prompts as small native-style ticks, newest at the
+top, with a short horizontal divider separating the two groups. Hover or
+keyboard-focus a tick to read the full prompt and its time in a card to the
+left; click it (or press Enter) to copy the text into the composer draft, with a
+small **Copied to input** chip near the rail. The **Search** button below the
+ticks opens a filter card directly below it; a blank click outside the card or
+Escape closes it and clears the filter. The rail is absent while the Session has
+no sent prompts.
 
 ## Draft attachments
 

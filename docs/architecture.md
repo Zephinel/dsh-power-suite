@@ -90,12 +90,14 @@ status, and Workspace stores, inserts a summary card above the native Workspaces
 header and two bucket headers into the native `[role="tree"]`, and writes flex
 `order` values on the native group sections to band Active Projects above
 Inactive Projects. Inside the card, running, recent, and direct subagent
-Sessions are derived from the same stores: subagent rows nest under their parent
-with a disclosure toggle, and a parent counts as active while a direct child
-runs. A `MutationObserver` on the sidebar reconciles the foreign nodes after
-native re-renders; unload removes them and restores the inline styles. The
-native browser keeps owning every row, menu, search, drag, and dialog. See
-[dynamic-workspaces.md](dynamic-workspaces.md).
+Sessions are derived from the same stores: rows are single-line (dot, title,
+time) with disclosure chevrons at the far right, subagent rows nest under their
+parent, and each row's workspace path, status, last-active time, and subagent
+count live in a native-style hover card that does not capture the pointer. A
+parent counts as active while a direct child runs. A `MutationObserver` on the
+sidebar reconciles the foreign nodes after native re-renders; unload removes them
+and restores the inline styles. The native browser keeps owning every row, menu,
+search, drag, and dialog. See [dynamic-workspaces.md](dynamic-workspaces.md).
 
 ### Prompt history rail
 
@@ -106,11 +108,15 @@ elements. The rail is a fixed 28 px column at the Conversation's right edge,
 directly below the native turn rail (detected by geometry: the tiny buttons near
 the scroll surface's right edge, with no native class names), separated by a
 short divider and falling back to the vertical middle of the scrollport when
-there is no room below. It lists prompts newest first as tick marks, portals the
-full-text hover card and the on-demand search card to the document body, and
-copies a clicked prompt through the Session input's `setDraft`. Placement is
-re-measured in one animation frame on resize, scroll, composer height, sidebar
-width, and native-rail changes. Registration id
+there is no room below. Its marks reuse the native turn-rail tick style
+(20 x 2 px, 60 % width at rest, 90 % on hover, right-aligned on the native
+column), with a horizontal 24 x 1 divider and no visible scrollbar. The
+full-text hover card follows the native preview card style (line-clamped, panel
+elevation) and the on-demand search card hangs directly below the magnifier,
+right-aligned to the ticks; both are portaled to the document body, as is the
+copy confirmation chip. A clicked prompt is copied through the Session input's
+`setDraft`. Placement is re-measured in one animation frame on resize, scroll,
+composer height, sidebar width, and native-rail changes. Registration id
 `power-suite.prompt-history-preview`, order 100, locale namespace
 `powerSuitePromptHistoryPreview`.
 

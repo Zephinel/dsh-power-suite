@@ -7,6 +7,10 @@ reordering, and dialogs keep working because their nodes are never touched.
 
 ![Sidebar running-session card and active/inactive project buckets](assets/dynamic-workspaces.png)
 
+The row hover detail (Workspace, Status, Last active, subagent count):
+
+![Card row hover detail with workspace, status, last active and subagent count](assets/dynamic-workspaces-hover.png)
+
 ## What it adds
 
 - **Active Projects / Inactive Projects buckets** — the native Workspace
@@ -38,8 +42,8 @@ break; it is a code constant and has no settings UI. Inactive means no accounted
 Session is running and none was active inside the window.
 
 - A parent Session whose own turn has closed still counts while a delegated
-  **direct subagent** runs; its card row appends the child count while the nested
-  list is collapsed. A finished subagent alone does not end the parent's task.
+  **direct subagent** runs; the hover card names the running subagent count. A
+  finished subagent alone does not end the parent's task.
 - Sessions that no Workspace accounts for form the native ungrouped section; it
   follows the same rule and its card rows read `Ungrouped`.
 - Blank and archived Sessions are ignored when accounting activity: an archived
@@ -60,35 +64,39 @@ The card sits directly above the native **Workspaces** section header, below the
 sidebar's panel tabs. It starts expanded.
 
 - **Header**: a green pulsing dot, the title **Running & recent**, a count badge
-  with the number of listed rows, and a chevron that folds the body. The pulse
-  uses `corner-shape: round` so it stays a true circle under the shell's
+  with the number of listed rows, and the disclosure controls. The pulse uses
+  `corner-shape: round` so it stays a true circle under the shell's
   superellipse corner shape, and reduced-motion preferences stop its animation.
-  The header row and its controls stay one visual height: the toggle and the
-  **View all** link are both 30 px tall (the toggle via `6px 8px` padding on an
-  18 px line, the link via `height: 30px`), so hovering either gives the same
-  highlight height, and the row's own `2px` padding keeps it inside the card.
-- **Rows**: running Sessions first, then recently finished Sessions inside the
-  same 12-hour window, each group newest activity first. A running row uses the
+  The toggle block, the **View all** link, and the header chevron are all 30 px
+  tall with the same corner radius (12 px in the shell), so their hover
+  highlights line up; the chevron is the rightmost control and folds the body.
+- **Rows**: a Session row is **one line**: status dot, title, and time, with a
+  disclosure chevron at the far right when the Session has subagent children.
+  Running Sessions come first, then recently finished Sessions inside the same
+  12-hour window, each group newest activity first. A running row uses the
   shell's own `StateDot` with `state: "ongoing"` as its loading glyph — no
-  bespoke spinner — and a thin animated bar that marks it as live (static under
-  reduced motion). Its right side shows the **observed run duration** once the
-  run started while this page has been open; for a run that was already going
-  when the page loaded it falls back to the relative last-activity time. A
-  finished row uses the shell's green `StateDot state: "done"`, a relative time,
-  and a second line that includes **· done**.
-- **Second line**: the Workspace label (the durable title, else the directory
-  basename, else **Untitled project**); **Ungrouped** when no Workspace claims
-  the Session.
+  bespoke spinner — and its right side shows the **observed run duration** once
+  the run started while this page has been open; for a run that was already
+  going when the page loaded it falls back to the relative last-activity time. A
+  finished row uses the shell's green `StateDot state: "done"` and a relative
+  time. The Workspace is not printed under the row any more; it lives in the
+  hover card below.
+- **Hover detail**: resting on a row for about a quarter second opens a
+  native-style card beside it with the Session title, **Workspace** (the
+  durable title and its path), **Status** (`Running`/`Finished` plus the observed
+  or relative time), **Last active** (absolute `YYYY-MM-DD HH:MM`), and the
+  subagent count when it has one. The card does not capture the pointer and
+  hides shortly after the pointer leaves; clicking still opens the Session.
 - **Nested subagents**: a parent row with running or recently active direct
-  subagent Sessions gets a per-parent disclosure chevron on its left. Expanding
-  it shows the children indented deeper beneath the parent (`26px` left margin
-  plus `14px` inner padding), connected by a thin vertical trunk with
-  one short horizontal tick per child; the trunk is masked below the last
-  child's tick, so no dangling line hangs under the group. Each child has its
-  own status dot, title, and relative time. Collapsing the parent appends
-  **· {count} subagents** to its second line. Each parent folds independently;
-  the card header still folds the whole list.
-- **Click**: opens that Session in the native conversation surface.
+  subagent Sessions gets a per-parent disclosure chevron at its far right.
+  Expanding it shows the children indented deeper beneath the parent, connected
+  by a thin vertical trunk that is centered under the parent's status indicator
+  (the dot column) with one short horizontal branch to each child's indicator;
+  the trunk is masked below the last child's tick, so no dangling line hangs
+  under the group. Each child has its own status dot, title, and relative time.
+  Each parent folds independently; the card header still folds the whole list.
+- **Click**: clicking a parent row opens that Session; clicking a child row
+  opens the child Session. The disclosure chevron is a separate control.
 - **Five-row default**: with more than five top-level rows the header also shows
   **View all {count}**; **Show less** returns to the first five (children stay
   inside their parent row and do not count against the limit). The body scrolls,
@@ -104,11 +112,11 @@ rows, it stays for the retention window, and then it leaves the card. This is th
 
 ## Collapsing the buckets
 
-Each bucket header is a button with a chevron, the uppercase label, and the
-Workspace count. Folding a bucket hides that bucket's native sections with an
-inline `display: none`; the native nodes stay alive, so their menus, hover
-states, and drag state survive. The chevron flips and the header keeps its
-`aria-expanded` state.
+Each bucket header is a button with the uppercase label, the Workspace count,
+and a chevron at the far right. Folding a bucket hides that bucket's native
+sections with an inline `display: none`; the native nodes stay alive, so their
+menus, hover states, and drag state survive. The chevron flips and the header
+keeps its `aria-expanded` state.
 
 The two fold states persist in `localStorage` under
 `power-suite.dynamic-workspaces.folds`:
@@ -215,18 +223,22 @@ Manual checks on the running DSH Web GUI:
    30-second tick; no page reload is needed at any step.
 4. Fold **Active Projects**: its sections disappear, the chevron flips, and the
    state survives a page reload; unfold it again.
-5. If a listed Session delegated to subagents, its row shows a disclosure
-   chevron: expanding reveals the child rows indented under the parent with the
-   guide line (the trunk stops at the last child's tick), each opens its own
-   Session, and collapsing shows the child count.
-6. Check the card header geometry: the toggle and **View all** highlight heights
-   match within one row.
-7. Collapse the sidebar: the card is hidden and no custom node shows in the rail;
+5. Rest a pointer on a card row: the hover card shows Workspace (title and
+   path), Status with its time, Last active absolute time, and the subagent
+   count when present; the card does not take the pointer.
+6. If a listed Session delegated to subagents, its row shows a disclosure
+   chevron at the far right: expanding reveals the child rows indented under the
+   parent with the branch lines (the trunk is centered under the parent's dot
+   and stops at the last child's tick), each opens its own Session, and
+   collapsing hides the child rows again.
+7. Check the card header geometry: the toggle block, **View all**, and the
+   header chevron share one 30 px height and corner radius.
+8. Collapse the sidebar: the card is hidden and no custom node shows in the rail;
    widen it: the card and buckets return.
-8. Use the native Workspaces search, a Workspace context menu, the add-workspace
+9. Use the native Workspaces search, a Workspace context menu, the add-workspace
    flow, and drag reordering while the feature is mounted: none of them target
    the card or the bucket headers, and no row is lost.
-9. Run `npm run check`; it stays green (syntax, package manifest, Markdown links,
-   and the node tests).
+10. Run `npm run check`; it stays green (syntax, package manifest, Markdown
+    links, and the node tests).
 
 See [verification.md](verification.md) for the recorded evidence.

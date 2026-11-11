@@ -47,10 +47,20 @@ All notable changes to this repository are documented here. The format follows
   hover-card times are hidden instead of rendering empty, and the shared
   human-only prompt definition and 500-prompt cap stay the same on both
   surfaces.
-- Dynamic Workspaces card polish: the header toggle and **View all** control now
-  share one 30 px height so their hover highlights match; nested subagent rows
-  are indented deeper and their connector trunk stops at the last child's tick
-  instead of dangling below the group.
+- Prompt-history rail now matches the native turn rail: right-aligned 20 x 2 px
+  tick marks on the native column (60 % width at rest, growing on hover, brand
+  hairline on keyboard focus), a horizontal 24 x 1 px divider, a native-style
+  line-clamped preview card, and a search card directly below the magnifier with
+  its right edge on the tick column, no close button, and outside-click
+  dismissal. The rail hides its scrollbars while staying wheel-scrollable.
+- Dynamic Workspaces card refinement: Session rows are single-line (status dot,
+  title, time) with disclosure chevrons at the far right; the Workspace title
+  and path, Status, absolute Last active time, and running subagent count moved
+  into a native-style hover card that does not capture the pointer. The header
+  toggle, **View all**, and header chevron share one 30 px height and corner
+  radius; bucket chevrons sit at the far right; the subagent connector trunk is
+  centered under the parent's status indicator and stops at the last child's
+  tick.
 
 ## [0.1.1] - 2026-11-11
 
