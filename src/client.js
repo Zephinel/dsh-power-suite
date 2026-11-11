@@ -8402,13 +8402,13 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'collection.noteEditorTitle': '备注',
       'collection.noteEditorClose': '关闭',
       'settings.title': '设置',
-      'settings.passThrough': '穿通修饰键',
+      'settings.passThrough': '透传修饰键',
       'settings.multi': '多选修饰键',
-      'settings.field.passThrough': '穿通',
+      'settings.field.passThrough': '透传',
       'settings.field.multi': '多选',
       'settings.conflict': '{field}已改为 {value}，两个修饰键不能相同。',
       'settings.saved': '设置已保存',
-      'settings.hint': '按住穿通键可正常操作页面；按住多选键可加选元素或拖出选框。',
+      'settings.hint': '按住透传键可正常操作页面；按住多选键可加选元素或拖出选框。',
       'modifier.alt': '⌥ / Alt',
       'modifier.ctrl': 'Ctrl',
       'modifier.meta': '⌘ / Meta',
@@ -8552,7 +8552,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       if (typeof name !== 'string') return null
       const trimmed = name.trim().toLowerCase()
       if (trimmed.length === 0 || trimmed.length > 64) return null
-      if (trimmed === 'class' || trimmed === 'style') return null
+      if (trimmed === 'class' || trimmed === 'style' || trimmed === 'value') return null
       if (trimmed.startsWith('on')) return null
       if (SENSITIVE_ATTRIBUTE_NAMES.test(trimmed)) return null
       return trimmed
@@ -8652,11 +8652,17 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
     /**
      * Short display form of one Session identity.
+     *
+     * DSH Session ids carry a `session-` prefix followed by a UUID; the prefix
+     * is dropped so two Sessions never render the same `session-` stem.
      * @param {unknown} sessionId - Session identity.
-     * @returns {string} first eight characters, or an empty string.
+     * @returns {string} eight compact characters, or an empty string.
      */
     function sessionShortLabel(sessionId) {
       if (typeof sessionId !== 'string' || sessionId.length === 0) return ''
+      const bare = sessionId.startsWith('session-') ? sessionId.slice('session-'.length) : sessionId
+      const compact = bare.replace(/[^0-9A-Za-z]/g, '')
+      if (compact.length > 0) return compact.slice(0, 8)
       return sessionId.slice(0, 8)
     }
 
@@ -9282,7 +9288,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const info = liveInfo(unique)
         if (info !== null && typeof info === 'object') {
           if (info.isConnected === false) return 'missing'
-          if (typeof info.expectedText === 'string' && typeof info.textContent === 'string'
+          if (typeof info.expectedText === 'string' && info.expectedText.length > 0
+            && typeof info.textContent === 'string'
             && sanitizeText(info.textContent) !== sanitizeText(info.expectedText)) return 'changed'
         }
       }
@@ -9916,6 +9923,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         popoverPosition: null,
         popoverPinned: false,
         flashRefId: null,
+        flashRect: null,
         noteEditor: null
       })
 
@@ -10003,6 +10011,18 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
        */
       function passThroughEvent(event) {
         return snapshot().state.passThrough || modifierMatches(event, settings.passThroughModifier)
+      }
+
+      /**
+       * Apply one pass-through state to the reducer and the root cursor marker.
+       * @param {boolean} on - whether the page has native mouse semantics.
+       * @returns {void}
+       */
+      function setPassThrough(on) {
+        const active = on === true
+        if (active) document.documentElement.setAttribute('data-psa-passthrough', 'true')
+        else document.documentElement.removeAttribute('data-psa-passthrough')
+        dispatch({ type: 'passThrough', on: active })
       }
 
       /**
@@ -10392,6 +10412,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             if (rect !== null) rects.push({ id: ref.id, rect })
           }
           patch.selectionRects = rects
+          if (current.flashRefId !== null) {
+            const flashRef = current.state.collection.find((entry) => entry.id === current.flashRefId)
+            const flashNode = flashRef === undefined ? null : liveNode(flashRef)
+            patch.flashRect = flashNode !== null ? annotationRectOf(flashNode) : null
+          }
           if (current.popoverPosition !== null && current.popoverPinned === false && current.state.phase === 'selected') {
             const ref = current.state.selection[0]
             const node = ref === undefined ? null : liveNode(ref)
@@ -10480,6 +10505,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const gesture = pointer
         pointer = null
         if (gesture === null) return
+        if (gesture.boxMode && gesture.moved) {
+          if (!eventInsideOwn(event)) blockEvent(event)
+          finishMarquee(event)
+          return
+        }
         if (eventInsideOwn(event)) return
         if (passThroughEvent(event)) {
           publish({ boxRect: null })
@@ -10488,10 +10518,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         }
         if (!blockEvent(event)) return
         if (gesture.boxMode) {
-          if (gesture.moved) {
-            finishMarquee(event)
-            return
-          }
           toggleSelectionAt(event)
           return
         }
@@ -10604,7 +10630,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (!isActive()) return
         if (event.isComposing === true) return
         const wantPassThrough = modifierMatches(event, settings.passThroughModifier)
-        if (snapshot().state.passThrough !== wantPassThrough) dispatch({ type: 'passThrough', on: wantPassThrough })
+        if (snapshot().state.passThrough !== wantPassThrough) setPassThrough(wantPassThrough)
         if (event.key === 'Escape') {
           event.preventDefault()
           event.stopPropagation()
@@ -10622,7 +10648,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       function onKeyUp(event) {
         if (!isActive()) return
         const wantPassThrough = modifierMatches(event, settings.passThroughModifier)
-        if (snapshot().state.passThrough !== wantPassThrough) dispatch({ type: 'passThrough', on: wantPassThrough })
+        if (snapshot().state.passThrough !== wantPassThrough) setPassThrough(wantPassThrough)
       }
 
       /**
@@ -10631,7 +10657,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
        */
       function onWindowBlur() {
         if (!isActive()) return
-        if (snapshot().state.passThrough) dispatch({ type: 'passThrough', on: false })
+        if (snapshot().state.passThrough) setPassThrough(false)
         clearHover()
       }
 
@@ -10641,7 +10667,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
        */
       function onVisibilityChange() {
         if (document.visibilityState === 'hidden' && isActive()) {
-          if (snapshot().state.passThrough) dispatch({ type: 'passThrough', on: false })
+          if (snapshot().state.passThrough) setPassThrough(false)
           clearHover()
         }
       }
@@ -11025,6 +11051,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
        */
       function removeEntry(refId) {
         dispatch({ type: 'collectionRemove', refId })
+        if (snapshot().noteEditor !== null && snapshot().noteEditor.refId === refId) publish({ noteEditor: null })
         feedback(t('feedback.removed'))
       }
 
@@ -11032,6 +11059,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       function clearCollection() {
         if (snapshot().state.collection.length === 0) return
         dispatch({ type: 'collectionClear' })
+        if (snapshot().noteEditor !== null) publish({ noteEditor: null })
         feedback(t('feedback.cleared'))
       }
 
@@ -11055,10 +11083,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           node.scrollIntoView()
         }
         if (flashTimer !== null) window.clearTimeout(flashTimer)
-        publish({ flashRefId: refId })
+        publish({ flashRefId: refId, flashRect: annotationRectOf(node) })
         flashTimer = window.setTimeout(() => {
           flashTimer = null
-          publish({ flashRefId: null })
+          publish({ flashRefId: null, flashRect: null })
         }, 600)
         feedback(t('feedback.relocated'))
         scheduleGeometry()
@@ -11184,8 +11212,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-multi{position:fixed;box-sizing:border-box;border:1px solid var(--dsw-alias-state-business-primary);border-radius:3px}
 .psa-selection[data-psa-flash=true],.psa-multi[data-psa-flash=true]{animation:psa-flash .6s ease-out 1}
 @keyframes psa-flash{0%{box-shadow:0 0 0 6px var(--dsw-alias-state-business-primary)}100%{box-shadow:0 0 0 0 transparent}}
-@media (prefers-reduced-motion:reduce){.psa-selection[data-psa-flash=true],.psa-multi[data-psa-flash=true]{animation:none}}
+@media (prefers-reduced-motion:reduce){.psa-selection[data-psa-flash=true],.psa-multi[data-psa-flash=true],.psa-flash-outline{animation:none}}
 .psa-box{position:fixed;box-sizing:border-box;border:1px solid var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));opacity:.65}
+.psa-flash-outline{position:fixed;box-sizing:border-box;border:2px solid var(--dsw-alias-state-business-primary);border-radius:3px;animation:psa-flash .6s ease-out 1}
 .psa-rail{position:fixed;top:0;right:0;bottom:0;box-sizing:border-box;display:flex;flex-direction:column;min-height:0;background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12.5px;line-height:18px;pointer-events:auto;z-index:40}
 .psa-rail[data-psa-mode=overlay]{top:8px;right:8px;bottom:8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%))}
 .psa-rail[data-psa-collapsed=true]{align-items:center}
@@ -11398,6 +11427,15 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           'data-psa-flash': snapshot.flashRefId === item.id ? 'true' : undefined,
           'data-psa-own': '',
           style: annotationRectStyle(item.rect)
+        }))
+      }
+      if (snapshot.flashRect !== null) {
+        boxes.push(React.createElement('div', {
+          key: 'flash',
+          className: 'psa-flash-outline',
+          'data-psa-flash': snapshot.flashRefId ?? '',
+          'data-psa-own': '',
+          style: annotationRectStyle(snapshot.flashRect)
         }))
       }
       if (snapshot.boxRect !== null) {
@@ -11654,7 +11692,14 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         value: typeof entry.note === 'string' ? entry.note : '',
         placeholder: t('collection.notePlaceholder'),
         'aria-label': t('collection.notePlaceholder'),
-        onChange: (event) => controller.updateCollectionNote(entry.id, event.target.value)
+        onChange: (event) => {
+          const textarea = event.currentTarget
+          if (textarea !== null && typeof textarea === 'object') {
+            textarea.style.height = 'auto'
+            textarea.style.height = `${Math.min(textarea.scrollHeight ?? 34, 72)}px`
+          }
+          controller.updateCollectionNote(entry.id, textarea === null ? '' : textarea.value)
+        }
       }),
       React.createElement('div', { className: 'psa-entry-actions' },
         React.createElement('button', {
@@ -11734,10 +11779,18 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         value,
         onChange: (event) => controller.setModifier(fieldName, event.target.value)
       }, MODIFIER_CHOICES.map((choice) => React.createElement('option', { key: choice, value: choice }, t(`modifier.${choice}`)))))
+      const message = snapshot.state.feedback === null ? '' : snapshot.state.feedback.text
       return React.createElement('div', { className: 'psa-rail-section' },
         React.createElement('div', { className: 'psa-status-line psa-status-strong' }, t('settings.title')),
         field('settings.passThrough', 'data-psa-setting-passthrough', 'passThroughModifier', settings.passThroughModifier),
         field('settings.multi', 'data-psa-setting-multi', 'multiModifier', settings.multiModifier),
+        React.createElement('div', {
+          className: 'psa-muted',
+          'data-psa-settings-feedback': '',
+          'data-psa-own': '',
+          role: 'status',
+          'aria-live': 'polite'
+        }, message),
         React.createElement('div', { className: 'psa-muted' }, t('settings.hint')))
     }
 
