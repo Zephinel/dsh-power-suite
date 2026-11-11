@@ -4402,6 +4402,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       latestRef.current = { sessions, statuses, workspaces: workspaceSnapshot, folds }
 
       React.useEffect(() => {
+        aliveRef.current = true
         firstRenderRef.current = false
         return () => { aliveRef.current = false }
       }, [])
@@ -4485,6 +4486,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         let observer = null
         let observedTarget = null
         let retry = null
+        aliveRef.current = true
 
         const ensureObserver = () => {
           const sidebar = document.querySelector('[data-slot="sidebar"]')
@@ -4696,6 +4698,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'copied': 'Copied to input',
       'empty.filtered': 'No matching prompts',
       'footer.count': '{count} prompts',
+      'footer.countOne': '{count} prompt',
       'footer.filtered': 'Showing {count} of {total}'
     }
     const PROMPT_HISTORY_PREVIEW_ZH = {
@@ -4708,6 +4711,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'copied': '已复制到输入框',
       'empty.filtered': '没有匹配的历史提示',
       'footer.count': '共 {count} 条历史提示',
+      'footer.countOne': '共 1 条历史提示',
       'footer.filtered': '显示 {count} / {total} 条'
     }
 
@@ -4727,6 +4731,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psp-time{white-space:nowrap}
 .psp-copy{display:inline-flex;align-items:center;color:var(--dsw-alias-label-tertiary);opacity:0;transition:opacity .12s ease}
 .psp-row:hover .psp-copy,.psp-row:focus-visible .psp-copy{opacity:1;color:var(--dsw-alias-label-secondary)}
+.psp-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .psp-searchrow{display:flex;align-items:center;gap:6px;padding:5px 10px;border-top:1px solid var(--dsw-alias-border-l1)}
 .psp-searchrow:focus-within{background:var(--dsw-alias-bg-layer-2)}
 .psp-searchrow-icon{flex:none;color:var(--dsw-alias-label-tertiary)}
@@ -4951,7 +4956,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                 className: 'psp-row',
                 'data-psp-row': '',
                 'data-psp-index': String(ordinal),
-                'aria-label': t('row.aria', { index: ordinal }),
+                title: t('row.aria', { index: ordinal }),
                 onClick: () => copyPrompt(prompt.text),
                 onMouseEnter: (event) => showPreview(prompt, ordinal, event.currentTarget),
                 onMouseLeave: scheduleHidePreview,
@@ -4962,7 +4967,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               React.createElement('span', { className: 'psp-text' }, prompt.text),
               React.createElement('span', { className: 'psp-meta' },
                 time === null ? null : React.createElement('span', { className: 'psp-time', title: time.title }, time.label),
-                React.createElement('span', { className: 'psp-copy' }, RemixGlyph(REMIX_FILE_COPY_LINE, 13)))))
+                React.createElement('span', { className: 'psp-copy' }, RemixGlyph(REMIX_FILE_COPY_LINE, 13))),
+              // The action hint is part of the button's accessible name without
+              // replacing the visible prompt text screen readers would otherwise lose.
+              React.createElement('span', { className: 'psp-sr' }, t('row.aria', { index: ordinal }))))
           }))
 
       const footerRight = copied
@@ -4990,7 +4998,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         React.createElement('span', { className: 'psp-foot-count' },
           needle.length > 0
             ? t('footer.filtered', { count: rows.length, total: prompts.length })
-            : t('footer.count', { count: prompts.length })),
+            : t(prompts.length === 1 ? 'footer.countOne' : 'footer.count', { count: prompts.length })),
         footerRight)
 
       const searchRow = searchOpen

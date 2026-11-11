@@ -74,6 +74,20 @@ These were exercised in the Web GUI during development:
 The manual checks are evidence for the behavior described in the feature docs;
 they are not a substitute for the automated gate above.
 
+An independent read-only verification pass (separate agent, own browser
+session) then re-ran the live checks against this checkout: it returned PASS for
+all three additions (buckets and fold persistence, the running & recent card
+including nested subagent rows and row opening, and the preview panel including
+timestamps, hover popover, copy-to-draft, and search) with no blocker or major
+defect. Its minor findings were fixed before the final gate: the preview row
+keeps its prompt text in the accessible name (action hint moved to a hidden
+span), the footer count is singular-aware, and the dynamic-Workspaces effects
+re-arm the liveness flag on remount. Residual risks it explicitly could not
+exercise: elapsing the full 12-hour retention window, the alternate View-options
+grouping modes, the empty-card state, and screen-reader behavior with a real
+assistive technology; the archived-row exclusion is covered by code inspection
+plus an observed reload where an archived Session disappeared from the card.
+
 The two new live surfaces are captured in
 [assets/dynamic-workspaces.png](assets/dynamic-workspaces.png) and
 [assets/prompt-history-preview.png](assets/prompt-history-preview.png) and
