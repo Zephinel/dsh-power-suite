@@ -8,9 +8,10 @@ Suite**, and use the plugin's own settings section for the shortcut modifier.
 Open the right Sidebar's Start page and choose **Artifacts**. The panel lists
 files this Session created or delivered, plus the images and files you attached
 to your own prompts. Image rows show a 40 px rounded thumbnail by default (other
-files keep a file icon), and the **All / Generated / Provided** pills above the
-list filter it client-side with per-pill counts (`{shown} of {total}` while
-filtered; an empty filter shows **No artifacts in this filter**).
+files keep a file icon). The **filter dropdown at the header's right edge,
+immediately left of Refresh**, offers **All / Generated / Provided** with their
+counts and filters the list client-side (`{shown} of {total}` while filtered; an
+empty filter shows **No artifacts in this filter**).
 
 - **Open** previews a generated file through the native document preview;
   a provided attachment opens its inline URL in a new tab.

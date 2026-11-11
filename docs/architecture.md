@@ -59,8 +59,13 @@ verified file read with a magic-byte sniff, all with the same no-store,
 `nosniff`, and sandbox-CSP headers as the raw route and with typed
 400/404/413/499/503 failures. A composition without the attachment service omits
 provided rows. The browser renders a 40 px lazy thumbnail for every image
-artifact and a custom All/Generated/Provided segmented filter that works purely
-client-side over the loaded list.
+artifact and a custom All/Generated/Provided dropdown filter in the panel header
+(right of the count, immediately left of Refresh) that works purely client-side
+over the loaded list: a `filter-line` trigger with the option label/count and a
+rotating caret, a themed right-aligned `menu`/`menuitemradio` popup with counts
+and a check on the selected option, focus moved to the selected option on open,
+outside-press/Escape dismissal with focus returned to the trigger, and an
+All reset on Session change.
 
 ### Prompt history
 

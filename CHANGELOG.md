@@ -87,6 +87,13 @@ All notable changes to this repository are documented here. The format follows
   the configuration is hidden and restored on unmount, and the section now
   carries the **Prompt history** group plus the **Active & recent** group with
   the two retention rows.
+- The Artifacts source filter is a custom dropdown in the panel header,
+  immediately left of Refresh: a `filter-line` funnel trigger with the current
+  option label/count and a rotating caret opens a themed, right-aligned
+  `menu`/`menuitemradio` popup listing All/Generated/Provided with their counts
+  and a check on the selected option (focus moves to the selected option on
+  open; outside press or Escape closes; Escape returns focus to the trigger).
+  The segmented pill bar and its markup are gone.
 - Prompt-history rail polish: copying a prompt is now silent (the confirmation
   chip, check icon, and animation are gone while the exact draft text and
   composer focus remain), and the pinned search magnifier is centred on the

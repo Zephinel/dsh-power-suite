@@ -24,10 +24,10 @@ Current evidence (2026-11-11, Node 24.22.2):
 
 - `npm test`: **56 tests, 56 passed, 0 failed**.
 - `npm run check`: passed.
-- `npm run pack:check`: **48 files** (0.2.0 tarball), including `src/`,
-  `locale/`, `docs/` (with the Artifacts panel/Quick Look, Dynamic Workspaces,
-  hover-detail, and prompt-history rail captures), `cordis.patch.yml`,
-  `icon.png`, and the standard repository files.
+- `npm run pack:check`: **49 files** (0.2.0 tarball), including `src/`,
+  `locale/`, `docs/` (with the Artifacts panel/filter-menu/Quick Look, Dynamic
+  Workspaces, hover-detail, and prompt-history rail captures),
+  `cordis.patch.yml`, `icon.png`, and the standard repository files.
 - Host tests cover the read-vs-event cache race, silent-subagent timing, continue
   content-type/state/in-flight validation, the non-human source fields, the
   prompt-history timestamp fold (`at` from a finite event time, `null`
@@ -64,10 +64,18 @@ These were exercised in the Web GUI during development:
   thumbnails loaded (`naturalWidth > 0`, rendered 40–42 px) as 40 px rounded
   lazy thumbnails; the sample provided row was
   `image/webp 1248x624 14406 B prompt 25` with sha256
-  `3669…bafa`. The segmented filter read All 29 / Generated 2 / Provided 27 and
-  showed `2 of 29 artifacts` and `27 of 29 artifacts`; filtering triggered 0
-  list-route fetches, and the empty-filtered state was verified against a
-  mocked payload. The attachment route answered GET and HEAD with
+  `3669…bafa`. The source filter was later re-checked as the header dropdown:
+  with 31 visible rows the trigger read "All 31" with the `filter-line` funnel
+  icon and sat immediately left of Refresh (trigger rect x≈2434–2520, width 86;
+  Refresh x≈2522, width 24); the menu opened right-aligned to the trigger
+  (right 2520 = trigger right), 206×104, listing All 31 / Generated 2 /
+  Provided 29 with All checked and focused. Choosing Provided showed 29 rows,
+  the trigger read "Provided 29", the header count read "29 of 31 artifacts",
+  and the menu closed; an outside press closed it, Escape closed it and returned
+  focus to the trigger, and choosing All restored 31 rows and "31 artifacts". No
+  segmented-control elements remain (`.dsa-filters` / `.dsa-filter` count 0), and
+  filtering triggered 0 list-route fetches; the empty-filtered state was
+  verified against a mocked payload. The attachment route answered GET and HEAD with
   `200 image/webp`, `content-length: 14406`, `x-content-type-options: nosniff`
   and `content-security-policy: sandbox; default-src 'none'`; the response
   sha256 matched the attachment id. A tampered width answered `404`, missing
@@ -192,6 +200,7 @@ from the card.
 
 The live surfaces are captured in
 [assets/artifacts-panel.png](assets/artifacts-panel.png),
+[assets/artifacts-filter-menu.png](assets/artifacts-filter-menu.png),
 [assets/artifacts-quicklook.png](assets/artifacts-quicklook.png),
 [assets/dynamic-workspaces.png](assets/dynamic-workspaces.png),
 [assets/dynamic-workspaces-hover.png](assets/dynamic-workspaces-hover.png),

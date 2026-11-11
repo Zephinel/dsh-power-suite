@@ -91,16 +91,28 @@ instead.
 
 ## Source filter
 
-A segmented pill row above the list filters the current panel client-side:
+A custom dropdown in the panel header — immediately left of **Refresh** —
+filters the list client-side. The trigger uses the Remix **`filter-line`**
+funnel icon, the current option label, that option's count, and a caret that
+rotates while the menu is open. Its hover and expanded states use theme tokens
+and the trigger keeps a focus ring.
 
-- **All**, **Generated**, and **Provided**, each pill carrying its count;
-- selecting one filters the visible rows without re-reading the Session log (no
-  list-route request);
+![Artifacts source-filter dropdown open with counts and a check](assets/artifacts-filter-menu.png)
+
+- the menu is themed, opens right-aligned under the trigger with a short
+  fade/slide entry (disabled under reduced motion), and lists **All**,
+  **Generated**, and **Provided** with their counts;
+- the selected option carries a check (`role="menu"` with
+  `role="menuitemradio"` + `aria-checked`); opening the menu moves focus to the
+  selected option, an outside press or Escape closes it, and Escape returns
+  focus to the trigger;
+- selecting an option filters the visible rows without re-reading the Session
+  log (no list-route request);
 - the header count switches to `{shown} of {total} artifacts` while a filtered
   view is active, and a filter whose result set is empty shows
   **No artifacts in this filter**;
-- the selected pill has a pressed style, and a different Session resets the
-  filter to All so a filter cannot hide every new row.
+- a different Session resets the filter to All, so a filter cannot hide every
+  new row.
 
 Opening reuses DSH's own file preview instead of baking another renderer into
 this feature: the right Sidebar owns rendering, reloads, open-in-app on the
