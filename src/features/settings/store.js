@@ -2,17 +2,22 @@
  * Suite settings: the durable preference document the Plugins page edits.
  *
  * Scope is deliberately small: the suite owns only preferences that change its
- * browser behavior, not per-Session or per-Workspace state. The first field is
- * the prompt-history shortcut modifier. A missing, unreadable, or malformed
- * file reads as the defaults, so a broken preference can never disable a
- * feature silently at load time.
+ * browser behavior, not per-Session or per-Workspace state. The document holds
+ * the prompt-history shortcut modifier and the two Dynamic Workspaces windows:
+ * how long a finished Session stays in the Running & recent card, and how long
+ * a project stays in Active Projects before it becomes inactive. A missing,
+ * unreadable, or malformed file reads as the defaults, so a broken preference
+ * can never disable a feature silently at load time.
  */
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 /** Store schema version; bump when the shape changes. */
-export const SETTINGS_VERSION = 1
+export const SETTINGS_VERSION = 2
+
+/** Version 1 (modifier-only) files are still accepted and upgraded on read. */
+const SETTINGS_VERSION_1 = 1
 
 /** Region of `$DSH_HOME` the suite owns for its own files. */
 export const SETTINGS_DIRECTORY = 'dsh-power-suite'
@@ -26,12 +31,34 @@ export const PROMPT_HISTORY_MODIFIERS = ['primary', 'alt', 'ctrl', 'shift', 'off
 /** Field carrying the prompt-history shortcut modifier. */
 export const PROMPT_HISTORY_MODIFIER_FIELD = 'promptHistoryModifier'
 
+/** Field carrying the finished-Session retention window, in minutes. */
+export const RECENT_SESSION_FIELD = 'recentSessionMinutes'
+
+/** Field carrying the Active Projects retention window, in days. */
+export const ACTIVE_PROJECT_FIELD = 'activeProjectDays'
+
+/** Accepted finished-Session retention windows, in minutes. */
+export const RECENT_SESSION_MINUTES = [60, 120, 360, 720, 1440]
+
+/** Accepted Active Projects retention windows, in days. */
+export const ACTIVE_PROJECT_DAYS = [1, 3, 7, 14, 30]
+
+/** Default finished-Session retention window in minutes. */
+export const DEFAULT_RECENT_SESSION_MINUTES = 120
+
+/** Default Active Projects retention window in days. */
+export const DEFAULT_ACTIVE_PROJECT_DAYS = 7
+
 /**
  * Fresh default settings.
- * @returns {{ promptHistoryModifier: string }} defaults.
+ * @returns {{ promptHistoryModifier: string, recentSessionMinutes: number, activeProjectDays: number }} defaults.
  */
 export function defaultSettings() {
-  return { promptHistoryModifier: 'primary' }
+  return {
+    promptHistoryModifier: 'primary',
+    recentSessionMinutes: DEFAULT_RECENT_SESSION_MINUTES,
+    activeProjectDays: DEFAULT_ACTIVE_PROJECT_DAYS
+  }
 }
 
 /**
@@ -53,9 +80,29 @@ export function isPromptHistoryModifier(value) {
 }
 
 /**
+ * Whether a value is an accepted finished-Session retention window.
+ * @param {unknown} value - candidate.
+ * @returns {boolean} whether it is accepted.
+ */
+export function isRecentSessionMinutes(value) {
+  return typeof value === 'number' && RECENT_SESSION_MINUTES.includes(value)
+}
+
+/**
+ * Whether a value is an accepted Active Projects retention window.
+ * @param {unknown} value - candidate.
+ * @returns {boolean} whether it is accepted.
+ */
+export function isActiveProjectDays(value) {
+  return typeof value === 'number' && ACTIVE_PROJECT_DAYS.includes(value)
+}
+
+/**
  * Parse one persisted settings file.
+ * Version 1 files carry only the shortcut modifier and upgrade to defaults for
+ * the window fields.
  * @param {unknown} text - file contents.
- * @returns {{ promptHistoryModifier: string }} settings with defaults for absent fields.
+ * @returns {{ promptHistoryModifier: string, recentSessionMinutes: number, activeProjectDays: number }} settings with defaults for absent fields.
  */
 export function parseSettings(text) {
   if (typeof text !== 'string' || text.length === 0) return defaultSettings()
@@ -65,19 +112,27 @@ export function parseSettings(text) {
   } catch {
     return defaultSettings()
   }
-  if (!isRecord(value) || value.version !== SETTINGS_VERSION || !isRecord(value.settings)) {
+  if (!isRecord(value)
+    || (value.version !== SETTINGS_VERSION && value.version !== SETTINGS_VERSION_1)
+    || !isRecord(value.settings)) {
     return defaultSettings()
   }
   const settings = defaultSettings()
   if (isPromptHistoryModifier(value.settings[PROMPT_HISTORY_MODIFIER_FIELD])) {
     settings.promptHistoryModifier = value.settings[PROMPT_HISTORY_MODIFIER_FIELD]
   }
+  if (isRecentSessionMinutes(value.settings[RECENT_SESSION_FIELD])) {
+    settings.recentSessionMinutes = value.settings[RECENT_SESSION_FIELD]
+  }
+  if (isActiveProjectDays(value.settings[ACTIVE_PROJECT_FIELD])) {
+    settings.activeProjectDays = value.settings[ACTIVE_PROJECT_FIELD]
+  }
   return settings
 }
 
 /**
  * Serialize settings as the file format.
- * @param {{ promptHistoryModifier: string }} settings - settings.
+ * @param {{ promptHistoryModifier: string, recentSessionMinutes: number, activeProjectDays: number }} settings - settings.
  * @returns {string} file contents ending in one newline.
  */
 export function serializeSettings(settings) {
@@ -95,13 +150,28 @@ export function validatePatch(patch) {
   if (fields.length === 0) return { ok: false, message: 'patch is empty' }
   const value = {}
   for (const field of fields) {
-    if (field !== PROMPT_HISTORY_MODIFIER_FIELD) {
-      return { ok: false, message: `unknown setting "${field}"` }
+    if (field === PROMPT_HISTORY_MODIFIER_FIELD) {
+      if (!isPromptHistoryModifier(patch[field])) {
+        return { ok: false, message: `invalid value for "${field}"` }
+      }
+      value[field] = patch[field]
+      continue
     }
-    if (!isPromptHistoryModifier(patch[field])) {
-      return { ok: false, message: `invalid value for "${field}"` }
+    if (field === RECENT_SESSION_FIELD) {
+      if (!isRecentSessionMinutes(patch[field])) {
+        return { ok: false, message: `invalid value for "${field}"` }
+      }
+      value[field] = patch[field]
+      continue
     }
-    value[field] = patch[field]
+    if (field === ACTIVE_PROJECT_FIELD) {
+      if (!isActiveProjectDays(patch[field])) {
+        return { ok: false, message: `invalid value for "${field}"` }
+      }
+      value[field] = patch[field]
+      continue
+    }
+    return { ok: false, message: `unknown setting "${field}"` }
   }
   return { ok: true, value }
 }

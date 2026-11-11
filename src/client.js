@@ -2602,8 +2602,14 @@ window.__ModuleLoader__.load({
     /** Modifier choices accepted by the Host and shown on the page. */
     const PROMPT_HISTORY_MODIFIERS = ['primary', 'alt', 'ctrl', 'shift', 'off']
 
+    /** Finished-Session retention windows accepted by the Host, in minutes. */
+    const RECENT_SESSION_MINUTES = [60, 120, 360, 720, 1440]
+
+    /** Active Projects retention windows accepted by the Host, in days. */
+    const ACTIVE_PROJECT_DAYS = [1, 3, 7, 14, 30]
+
     /** Defaults used before the Host answers and by a deployment without the route. */
-    const DEFAULT_SETTINGS = { promptHistoryModifier: 'primary' }
+    const DEFAULT_SETTINGS = { promptHistoryModifier: 'primary', recentSessionMinutes: 120, activeProjectDays: 7 }
 
     const SETTINGS_EN = {
       'history.group': 'Prompt history',
@@ -2623,6 +2629,22 @@ window.__ModuleLoader__.load({
       'shortcut.shift.mac': '⇧ + ↑ / ↓',
       'shortcut.shift.other': 'Shift + ↑ / ↓',
       'shortcut.off': 'Off',
+      'dynamic.group': 'Active & recent',
+      'dynamic.groupHint': 'Choose how long a finished Session stays in the Running & recent card, and how long a project stays in Active Projects after its last activity. Running Sessions are always listed and count as active.',
+      'recent.label': 'Finished Session retention',
+      'recent.current': 'Currently {value}. Finished Sessions leave the card after this window.',
+      'recent.60': '1 hour',
+      'recent.120': '2 hours',
+      'recent.360': '6 hours',
+      'recent.720': '12 hours',
+      'recent.1440': '24 hours',
+      'active.label': 'Active project retention',
+      'active.current': 'Currently {value}. After this window the project moves to Inactive Projects.',
+      'active.1': '1 day',
+      'active.3': '3 days',
+      'active.7': '7 days',
+      'active.14': '14 days',
+      'active.30': '30 days',
       'settings.loading': 'Loading settings…',
       'settings.unavailable': 'Settings are unavailable. The default shortcut stays active.',
       'settings.error': 'Could not save the setting. Try again.'
@@ -2645,6 +2667,22 @@ window.__ModuleLoader__.load({
       'shortcut.shift.mac': '⇧ + ↑ / ↓',
       'shortcut.shift.other': 'Shift + ↑ / ↓',
       'shortcut.off': '已关闭',
+      'dynamic.group': '活跃与最近',
+      'dynamic.groupHint': '设置完成会话留在「进行中与最近活跃」卡片里的时长，以及项目最后一次活动后保留在活跃项目分组里的时长。进行中的会话始终显示并计为活跃。',
+      'recent.label': '完成会话保留时长',
+      'recent.current': '当前：{value}。超过后完成的会话从卡片移除。',
+      'recent.60': '1 小时',
+      'recent.120': '2 小时',
+      'recent.360': '6 小时',
+      'recent.720': '12 小时',
+      'recent.1440': '24 小时',
+      'active.label': '活跃项目保留时长',
+      'active.current': '当前：{value}。超过后项目归入非活跃项目。',
+      'active.1': '1 天',
+      'active.3': '3 天',
+      'active.7': '7 天',
+      'active.14': '14 天',
+      'active.30': '30 天',
       'settings.loading': '正在读取设置…',
       'settings.unavailable': '设置暂不可用，快捷键保持默认。',
       'settings.error': '保存设置失败，请重试。'
@@ -2700,8 +2738,15 @@ window.__ModuleLoader__.load({
      */
     function knownSettings(raw) {
       const settings = {}
-      if (raw !== null && typeof raw === 'object' && PROMPT_HISTORY_MODIFIERS.includes(raw.promptHistoryModifier)) {
+      if (raw === null || typeof raw !== 'object') return settings
+      if (PROMPT_HISTORY_MODIFIERS.includes(raw.promptHistoryModifier)) {
         settings.promptHistoryModifier = raw.promptHistoryModifier
+      }
+      if (RECENT_SESSION_MINUTES.includes(raw.recentSessionMinutes)) {
+        settings.recentSessionMinutes = raw.recentSessionMinutes
+      }
+      if (ACTIVE_PROJECT_DAYS.includes(raw.activeProjectDays)) {
+        settings.activeProjectDays = raw.activeProjectDays
       }
       return settings
     }
@@ -2840,6 +2885,7 @@ window.__ModuleLoader__.load({
 .dps-settings-head{display:flex;flex-direction:column;gap:3px}
 .dps-settings-title{margin:0;font-size:15px;font-weight:600;line-height:22px}
 .dps-settings-hint{margin:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
+.dps-settings-group{display:flex;flex-direction:column;gap:10px;padding-top:14px;border-top:1px solid var(--dsw-alias-border-l1)}
 .dps-settings-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 16px;padding:14px 16px;border-radius:16px;background:var(--dsw-alias-bg-module-platform,var(--dsw-alias-bg-layer-2));box-shadow:0 1px 2px rgb(0 0 0 / 3%)}
 .dps-settings-copy{min-width:0}
 .dps-settings-label{font-size:13px;font-weight:500;line-height:20px}
@@ -2873,17 +2919,42 @@ window.__ModuleLoader__.load({
       const locked = !ready || saving
       const current = snapshot.value.promptHistoryModifier
       const currentText = shortcutText(t, current)
+      const currentRecent = snapshot.value.recentSessionMinutes
+      const currentActive = snapshot.value.activeProjectDays
+      const pageRef = React.useRef(null)
+
+      // The bundle page draws the package README above this configuration
+      // section. The suite's settings surface is self-contained, so the
+      // document is hidden while the section is mounted and restored on unmount.
+      React.useEffect(() => {
+        const page = pageRef.current
+        if (!(page instanceof HTMLElement)) return undefined
+        const config = page.closest('[data-plugin-config]')
+        const sections = config?.parentElement
+        if (!(sections instanceof HTMLElement)) return undefined
+        const hidden = []
+        for (const child of Array.from(sections.children)) {
+          if (child instanceof HTMLElement && child.hasAttribute('data-detail-document')) {
+            hidden.push({ element: child, display: child.style.display })
+            child.style.display = 'none'
+          }
+        }
+        return () => {
+          for (const entry of hidden) entry.element.style.display = entry.display
+        }
+      }, [])
 
       /**
-       * Persist one modifier choice.
-       * @param {string} mode - modifier mode.
+       * Persist one settings patch.
+       * @param {object} patch - recognized fields to write.
+       * @param {string} field - field the patch changes.
        * @returns {void}
        */
-      function choose(mode) {
-        if (locked || mode === current) return
+      function choosePatch(patch, field) {
+        if (locked || patch[field] === snapshot.value[field]) return
         setSaving(true)
         setFailed(false)
-        saveSettings({ promptHistoryModifier: mode }).then((accepted) => {
+        saveSettings(patch).then((accepted) => {
           setSaving(false)
           if (!accepted) setFailed(true)
         })
@@ -2898,7 +2969,7 @@ window.__ModuleLoader__.load({
         note = t('settings.unavailable')
       }
 
-      const options = PROMPT_HISTORY_MODIFIERS.map((mode) => React.createElement('label', {
+      const modifierOptions = PROMPT_HISTORY_MODIFIERS.map((mode) => React.createElement('label', {
         key: mode,
         className: 'dps-choice-option',
         'data-selected': mode === current ? 'true' : undefined
@@ -2909,11 +2980,41 @@ window.__ModuleLoader__.load({
         value: mode,
         checked: mode === current,
         disabled: locked,
-        onChange: () => choose(mode)
+        onChange: () => choosePatch({ promptHistoryModifier: mode }, 'promptHistoryModifier')
       }),
       React.createElement('span', { className: 'dps-choice-text' }, t(`modifier.${mode}`))))
 
-      return React.createElement('section', { className: 'dps-settings' },
+      const recentOptions = RECENT_SESSION_MINUTES.map((minutes) => React.createElement('label', {
+        key: minutes,
+        className: 'dps-choice-option',
+        'data-selected': minutes === currentRecent ? 'true' : undefined
+      },
+      React.createElement('input', {
+        type: 'radio',
+        name: 'dsh-power-suite-recent-session-window',
+        value: String(minutes),
+        checked: minutes === currentRecent,
+        disabled: locked,
+        onChange: () => choosePatch({ recentSessionMinutes: minutes }, 'recentSessionMinutes')
+      }),
+      React.createElement('span', { className: 'dps-choice-text' }, t(`recent.${minutes}`))))
+
+      const activeOptions = ACTIVE_PROJECT_DAYS.map((days) => React.createElement('label', {
+        key: days,
+        className: 'dps-choice-option',
+        'data-selected': days === currentActive ? 'true' : undefined
+      },
+      React.createElement('input', {
+        type: 'radio',
+        name: 'dsh-power-suite-active-project-window',
+        value: String(days),
+        checked: days === currentActive,
+        disabled: locked,
+        onChange: () => choosePatch({ activeProjectDays: days }, 'activeProjectDays')
+      }),
+      React.createElement('span', { className: 'dps-choice-text' }, t(`active.${days}`))))
+
+      return React.createElement('section', { className: 'dps-settings', ref: pageRef },
         React.createElement('style', null, SETTINGS_CSS),
         React.createElement('div', { className: 'dps-settings-head' },
           React.createElement('h3', { className: 'dps-settings-title' }, t('history.group')),
@@ -2924,7 +3025,25 @@ window.__ModuleLoader__.load({
             React.createElement('p', { className: 'dps-settings-hint' }, t('history.current', { shortcut: currentText }))),
           React.createElement('fieldset', { className: 'dps-choice', disabled: locked },
             React.createElement('legend', { className: 'dps-visually-hidden' }, t('history.label')),
-            options)),
+            modifierOptions)),
+        React.createElement('div', { className: 'dps-settings-group' },
+          React.createElement('div', { className: 'dps-settings-head' },
+            React.createElement('h3', { className: 'dps-settings-title' }, t('dynamic.group')),
+            React.createElement('p', { className: 'dps-settings-hint' }, t('dynamic.groupHint'))),
+          React.createElement('div', { className: 'dps-settings-row' },
+            React.createElement('div', { className: 'dps-settings-copy' },
+              React.createElement('div', { className: 'dps-settings-label' }, t('recent.label')),
+              React.createElement('p', { className: 'dps-settings-hint' }, t('recent.current', { value: t(`recent.${currentRecent}`) }))),
+            React.createElement('fieldset', { className: 'dps-choice', disabled: locked },
+              React.createElement('legend', { className: 'dps-visually-hidden' }, t('recent.label')),
+              recentOptions)),
+          React.createElement('div', { className: 'dps-settings-row' },
+            React.createElement('div', { className: 'dps-settings-copy' },
+              React.createElement('div', { className: 'dps-settings-label' }, t('active.label')),
+              React.createElement('p', { className: 'dps-settings-hint' }, t('active.current', { value: t(`active.${currentActive}`) }))),
+            React.createElement('fieldset', { className: 'dps-choice', disabled: locked },
+              React.createElement('legend', { className: 'dps-visually-hidden' }, t('active.label')),
+              activeOptions))),
         note === null ? null : React.createElement('p', {
           className: 'dps-settings-note',
           role: 'status',
@@ -3747,15 +3866,30 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** Highest number of rows the summary card lists before "view all". */
     const DW_PANEL_LIMIT = 5
 
+    /** Minutes a finished Session stays in the card by default. */
+    const DW_DEFAULT_RECENT_MINUTES = 120
+
+    /** Days a project stays Active by default. */
+    const DW_DEFAULT_ACTIVE_DAYS = 7
+
     /**
-     * Retention window for the Active bucket and the summary card.
-     *
-     * A Workspace stays Active, and a finished Session stays listed in the
-     * summary card, for this long after its last activity. Without the window
-     * a project drops into Inactive the instant its turn ends, which loses the
-     * "I left it here so I can find it" affordance the buckets exist for.
+     * The two retention windows the settings document controls, in
+     * milliseconds. A finished Session stays in the summary card for
+     * `recentMs`; a project stays in Active Projects for `activeMs` after its
+     * last activity. Running Sessions ignore both windows.
+     * @param {object} settings - current settings value.
+     * @returns {{ recentMs: number, activeMs: number }} window lengths.
      */
-    const DW_ACTIVE_WINDOW_MS = 12 * 60 * 60 * 1000
+    function dwWindows(settings) {
+      const value = settings !== null && typeof settings === 'object' ? settings : {}
+      const minutes = RECENT_SESSION_MINUTES.includes(value.recentSessionMinutes)
+        ? value.recentSessionMinutes
+        : DW_DEFAULT_RECENT_MINUTES
+      const days = ACTIVE_PROJECT_DAYS.includes(value.activeProjectDays)
+        ? value.activeProjectDays
+        : DW_DEFAULT_ACTIVE_DAYS
+      return { recentMs: minutes * 60 * 1000, activeMs: days * 24 * 60 * 60 * 1000 }
+    }
 
     // Remix Icon paths (Apache-2.0, https://remixicon.com), inlined here so the
     // activity card needs no icon package at runtime.
@@ -3847,7 +3981,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-panel-chevron:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
 .psd-panel-chevron:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-panel-chevron[aria-expanded='false'] .psd-chevron{transform:rotate(-90deg)}
+.psd-indicator{flex:none;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
 .psd-spark{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
+.psd-pulse{position:relative;flex:none;width:8px;height:8px;border-radius:50%;corner-shape:round;background:var(--dsw-alias-state-business-primary)}
+.psd-pulse::after{content:'';position:absolute;inset:-4px;border-radius:50%;corner-shape:round;border:1px solid var(--dsw-alias-state-business-primary);opacity:.45;animation:psd-pulse 2s var(--ds-ease-in-out,ease) infinite}
+@keyframes psd-pulse{0%{transform:scale(.7);opacity:.6}70%{transform:scale(1.25);opacity:0}100%{transform:scale(1.25);opacity:0}}
+@media (prefers-reduced-motion: reduce){.psd-pulse::after{animation:none}}
 .psd-panel-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary)}
 .psd-count{flex:none;min-width:18px;padding:0 6px;box-sizing:border-box;border-radius:var(--dsw-radius-xs,4px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-size:11px;line-height:18px;text-align:center;font-variant-numeric:tabular-nums}
 .psd-panel-link{flex:none;appearance:none;display:inline-flex;align-items:center;box-sizing:border-box;height:30px;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;line-height:18px;padding:0 8px;border-radius:var(--dsw-radius-md,8px);cursor:pointer;white-space:nowrap}
@@ -4064,12 +4203,13 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @param {readonly object[]} workspaces - Workspace rows.
      * @param {Function} t - namespace-bound translate.
      * @param {number} now - current epoch milliseconds.
+     * @param {number} recentMs - finished-Session retention window.
      * @returns {Array<object>} recently finished rows, newest first.
      */
-    function dwRecentRows(list, statuses, workspaces, t, now, runningParents, archived) {
+    function dwRecentRows(list, statuses, workspaces, t, now, runningParents, archived, recentMs) {
       const rows = []
       if (list === null || typeof list !== 'object' || list.byId === undefined || !Array.isArray(list.ids)) return rows
-      const cutoff = now - DW_ACTIVE_WINDOW_MS
+      const cutoff = now - recentMs
       for (const id of list.ids) {
         const summary = list.byId[id]
         if (summary === undefined || summary.blank === true || summary.origin === 'subagent') continue
@@ -4099,9 +4239,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @param {Map | undefined} statuses - live status snapshot.
      * @param {readonly object[]} workspaces - Workspace rows.
      * @param {number} now - current epoch milliseconds.
+     * @param {number} activeMs - Active Projects retention window.
      * @returns {{ rows: Array<object>, workspaceOf: Map<string, string> }} activity facts.
      */
-    function dwActiveSessions(list, statuses, workspaces, now, archived) {
+    function dwActiveSessions(list, statuses, workspaces, now, archived, activeMs) {
       const workspaceOf = new Map()
       for (const workspace of workspaces) {
         for (const id of workspace.sessionIds ?? []) workspaceOf.set(id, workspace.workspaceId)
@@ -4111,7 +4252,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         return { rows, workspaceOf }
       }
       const runningParents = dwRunningSubagentParents(list, statuses)
-      const cutoff = now - DW_ACTIVE_WINDOW_MS
+      const cutoff = now - activeMs
       for (const id of list.ids) {
         const summary = list.byId[id]
         if (summary === undefined || summary.blank === true || summary.origin === 'subagent') continue
@@ -4232,13 +4373,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @param {object} list - Session list state.
      * @param {Map | undefined} statuses - live status snapshot.
      * @param {number} now - current epoch milliseconds.
+     * @param {number} recentMs - finished-Session retention window.
      * @param {Set<string>} archived - archived Session ids.
      * @returns {Map<string, Array<object>>} parent id → child rows, newest first.
      */
-    function dwSubagentChildren(list, statuses, now, archived) {
+    function dwSubagentChildren(list, statuses, now, archived, recentMs) {
       const children = new Map()
       if (list === null || typeof list !== 'object' || list.byId === undefined || !Array.isArray(list.ids)) return children
-      const cutoff = now - DW_ACTIVE_WINDOW_MS
+      const cutoff = now - recentMs
       for (const id of list.ids) {
         const summary = list.byId[id]
         if (summary === undefined || summary.origin !== 'subagent' || summary.blank === true) continue
@@ -4274,6 +4416,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       } = props
       const visible = expanded && !showAll ? rows.slice(0, DW_PANEL_LIMIT) : rows
       const canExpand = rows.length > DW_PANEL_LIMIT
+      const anyRunning = rows.some((row) => row.state === 'running')
 
       // Hover detail card for one row: the row itself only carries the title,
       // state and time; the workspace and other facts live in the card.
@@ -4308,7 +4451,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           'aria-label': expanded ? t('panel.collapse') : t('panel.expand'),
           onClick: onToggle
         },
-        React.createElement('span', { className: 'psd-spark', 'aria-hidden': true }, RemixGlyph(DW_SPARKLING_LINE, 14)),
+        React.createElement('span', { className: 'psd-indicator', 'aria-hidden': true },
+          anyRunning
+            ? React.createElement('span', { className: 'psd-pulse' })
+            : React.createElement('span', { className: 'psd-spark' }, RemixGlyph(DW_SPARKLING_LINE, 14))),
         React.createElement('span', { className: 'psd-panel-title' }, t('panel.title')),
         React.createElement('span', { className: 'psd-count' }, t('count', { count: rows.length })))
       ]
@@ -4488,6 +4634,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const sessions = props.useSessions((state) => state)
       const statuses = props.useSessionStatus((state) => state)
       const workspaceSnapshot = props.useWorkspaces((state) => state)
+      const settings = React.useSyncExternalStore(subscribeSettings, settingsSnapshot, settingsSnapshot)
+      const windows = dwWindows(settings.value)
 
       const [mounts, setMounts] = React.useState(null)
       const [groupCounts, setGroupCounts] = React.useState({ active: 0, inactive: 0 })
@@ -4509,9 +4657,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const workspaces = workspaceSnapshot?.items ?? []
       const archivedIds = new Set(workspaceSnapshot?.archivedSessionIds ?? [])
       const runningRows = dwRunningRows(sessions, statuses, workspaces, t, runningParents, archivedIds)
-      const recentRows = dwRecentRows(sessions, statuses, workspaces, t, now, runningParents, archivedIds)
+      const recentRows = dwRecentRows(sessions, statuses, workspaces, t, now, runningParents, archivedIds, windows.recentMs)
       const panelRows = runningRows.concat(recentRows)
-      const childrenByParent = dwSubagentChildren(sessions, statuses, now, archivedIds)
+      const childrenByParent = dwSubagentChildren(sessions, statuses, now, archivedIds, windows.recentMs)
       const runningIds = new Set(runningRows.map((row) => row.id))
       const durations = new Map()
       for (const id of runningIds) {
@@ -4526,7 +4674,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (!runningIds.has(id)) durationsRef.current.delete(id)
       }
 
-      latestRef.current = { sessions, statuses, workspaces: workspaceSnapshot, folds }
+      latestRef.current = { sessions, statuses, workspaces: workspaceSnapshot, folds, windows }
 
       // A finished Session's green mark is an unread signal: opening that
       // Session (from this card or anywhere else) acknowledges it, and a new
@@ -4567,7 +4715,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           latest.statuses,
           workspaces,
           Date.now(),
-          new Set(latest.workspaces?.archivedSessionIds ?? [])
+          new Set(latest.workspaces?.archivedSessionIds ?? []),
+          latest.windows.activeMs
         )
         const activeIds = new Set()
         const recencyByWorkspace = new Map()
@@ -4713,7 +4862,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
       React.useEffect(() => {
         scheduleApply()
-      }, [sessions, statuses, workspaceSnapshot, folds, scheduleApply])
+      }, [sessions, statuses, workspaceSnapshot, folds, windows.activeMs, windows.recentMs, scheduleApply])
 
       React.useEffect(() => {
         if (!panelExpanded || runningRows.length === 0) return undefined
