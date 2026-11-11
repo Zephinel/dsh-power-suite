@@ -8326,7 +8326,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'modifier.meta': '⌘ / Meta',
       'modifier.shift': '⇧ / Shift',
       'feedback.modeOn': 'Annotation mode on',
-      'feedback.modeOff': 'Annotation mode off',
       'feedback.inserted': 'Inserted into the current session composer (not sent)',
       'feedback.insertFailed': 'Could not insert into the composer',
       'feedback.noComposer': 'Open a session before inserting a reference',
@@ -8414,7 +8413,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'modifier.meta': '⌘ / Meta',
       'modifier.shift': '⇧ / Shift',
       'feedback.modeOn': '已进入标注模式',
-      'feedback.modeOff': '已退出标注模式',
       'feedback.inserted': '已插入当前会话输入框（不会发送）',
       'feedback.insertFailed': '无法插入输入框',
       'feedback.noComposer': '打开一个会话后可以插入引用',
@@ -9270,6 +9268,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const tag = typeof expectedTag === 'string' ? expectedTag.trim().toLowerCase() : ''
       const ordered = Array.isArray(candidates) ? candidates.slice().sort((left, right) => (right?.reliability ?? 0) - (left?.reliability ?? 0)) : []
       let unique = null
+      let genericMatch = null
       for (const candidate of ordered) {
         if (candidate === null || typeof candidate !== 'object' || typeof candidate.value !== 'string' || candidate.value.length === 0) continue
         let matches
@@ -9288,23 +9287,39 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (list.length === 0) continue
         const generic = candidate.kind === 'tag' || candidate.kind === 'path' || candidate.kind === 'role'
         if (list.length > 1) {
+          // A generic locator matching several elements cannot identify one; a stable
+          // locator matching several is a genuine ambiguity.
           if (generic) continue
           return 'ambiguous'
+        }
+        if (generic) {
+          // Remember the first generic hit, but keep looking for a stable identity.
+          if (genericMatch === null) genericMatch = list[0]
+          continue
         }
         unique = list[0]
         break
       }
-      if (unique === null) return 'missing'
       if (typeof liveInfo === 'function') {
-        const info = liveInfo(unique)
-        if (info !== null && typeof info === 'object') {
-          if (info.isConnected === false) return 'missing'
-          if (typeof info.expectedText === 'string' && info.expectedText.length > 0
-            && typeof info.textContent === 'string'
-            && sanitizeText(info.textContent) !== sanitizeText(info.expectedText)) return 'changed'
+        const probe = unique === null ? genericMatch : unique
+        if (probe !== null) {
+          const info = liveInfo(probe)
+          if (info !== null && typeof info === 'object') {
+            if (info.isConnected === false) return 'missing'
+            const expected = typeof info.expectedText === 'string' ? info.expectedText : ''
+            const actual = typeof info.textContent === 'string' ? info.textContent : ''
+            if (unique === null) {
+              // Generic-only identity must be corroborated by the captured text summary;
+              // an icon-only control has none, so a same-position replacement reads as gone.
+              if (expected.length === 0) return 'missing'
+              return sanitizeText(actual) === sanitizeText(expected) ? 'resolved' : 'changed'
+            }
+            if (expected.length > 0 && sanitizeText(actual) !== sanitizeText(expected)) return 'changed'
+          }
         }
       }
-      return 'resolved'
+      if (unique !== null) return 'resolved'
+      return genericMatch === null ? 'missing' : 'resolved'
     }
 
     /**
@@ -9982,15 +9997,16 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       let geometryFrame = null
       /** Resize debounce timer. */
       let resizeTimer = null
-      /** Frame inline-style observer and its debounce. */
+      /** Frame inline-style observer, the element it watches, and its debounce. */
       let frameObserver = null
+      let observedFrame = null
       let frameObserverTimer = null
       /** Feedback auto-dismiss timer. */
       let feedbackTimer = null
       /** Re-locate flash timer. */
       let flashTimer = null
-      /** Suppresses the click that follows a launcher drag. */
-      let suppressLauncherClick = false
+      /** Until timestamp for the click that follows a launcher drag. */
+      let suppressLauncherClickUntil = 0
       /** Ref id the current popover was placed for. */
       let popoverRefId = null
       /** Monotonic hover token. */
@@ -10303,7 +10319,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           if (frame.getAttribute('data-psa-frame') !== 'true') frame.setAttribute('data-psa-frame', 'true')
           const padding = mode === 'shrink' ? `${railWidth}px` : ''
           if (frame.style.paddingRight !== padding) frame.style.paddingRight = padding
-          const railProperty = mode === 'shrink' ? `${railWidth}px` : `${railWidth}px`
+          const railProperty = `${railWidth}px`
           if (frame.style.getPropertyValue('--psa-rail-width') !== railProperty) frame.style.setProperty('--psa-rail-width', railProperty)
           observeFrame(frame)
         }
@@ -10337,7 +10353,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
        * @returns {void}
        */
       function observeFrame(frame) {
-        if (frameObserver !== null) return
+        if (frameObserver !== null && observedFrame === frame) return
+        if (frameObserver !== null) {
+          frameObserver.disconnect()
+          frameObserver = null
+        }
+        observedFrame = frame
         if (typeof MutationObserver !== 'function') return
         frameObserver = new MutationObserver(() => {
           if (frameObserverTimer !== null) window.clearTimeout(frameObserverTimer)
@@ -10360,6 +10381,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           frameObserver.disconnect()
           frameObserver = null
         }
+        observedFrame = null
       }
 
       /**
@@ -10804,35 +10826,85 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         flashTimer = null
       }
 
-      /** Turn annotation mode on: markers, layout, listeners. @returns {void} */
+      /**
+       * Remove every layout marker this mode added, restoring the frame exactly.
+       * Shared by normal deactivation, activation rollback, and plugin disposal.
+       * @returns {void}
+       */
+      function restoreAnnotationLayout() {
+        const frame = annotationLayoutFrame()
+        document.documentElement.removeAttribute('data-psa-active')
+        document.documentElement.removeAttribute('data-psa-passthrough')
+        if (frame === null) return
+        frame.removeAttribute('data-psa-frame')
+        frame.style.paddingRight = ''
+        frame.style.removeProperty('--psa-rail-width')
+      }
+
+      /**
+       * Turn annotation mode on: markers, layout, listeners.
+       *
+       * Activation touches page-level state (root attribute, frame padding, window
+       * listeners). If any step throws, every one of those is rolled back before the
+       * error leaves this function, so the page can never keep blockers or padding
+       * from a half-applied mode.
+       * @returns {void}
+       */
       function activate() {
         if (isActive()) return
         document.documentElement.setAttribute('data-psa-active', 'true')
-        installPageListeners()
-        dispatch({ type: 'activate' })
-        updateLayout()
+        try {
+          installPageListeners()
+          dispatch({ type: 'activate' })
+          updateLayout()
+        } catch (error) {
+          try {
+            dispatch({ type: 'deactivate' })
+          } catch {
+            // The rollback below does not depend on the reducer.
+          }
+          uninstallPageListeners()
+          disconnectFrameObserver()
+          clearTimers()
+          restoreAnnotationLayout()
+          throw error
+        }
         feedback(t('feedback.modeOn'))
       }
 
       /** Turn annotation mode off and restore the exact original layout. @returns {void} */
       function deactivate() {
-        if (!isActive()) return
-        dispatch({ type: 'deactivate' })
-        uninstallPageListeners()
-        disconnectFrameObserver()
-        clearHover()
-        publish({ boxRect: null, popoverPosition: null, popoverPinned: false, hoverRect: null, noteEditor: null })
-        const frame = annotationLayoutFrame()
-        document.documentElement.removeAttribute('data-psa-active')
-        document.documentElement.removeAttribute('data-psa-passthrough')
-        if (frame !== null) {
-          frame.removeAttribute('data-psa-frame')
-          frame.style.paddingRight = ''
-          frame.style.removeProperty('--psa-rail-width')
+        if (!isActive()) {
+          // Defensive cleanup: no state says "active", but an interrupted activation or a
+          // foreign removal could still have page-level leftovers. None of these calls
+          // depend on the reducer, so they are always safe.
+          uninstallPageListeners()
+          disconnectFrameObserver()
+          restoreAnnotationLayout()
+          return
         }
-        if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
-        feedbackTimer = null
-        dispatch({ type: 'feedback', feedback: null })
+        try {
+          dispatch({ type: 'deactivate' })
+        } finally {
+          // Layout restoration and listener removal come first and unconditionally; the
+          // UI-state refresh below is best effort.
+          uninstallPageListeners()
+          disconnectFrameObserver()
+          restoreAnnotationLayout()
+          if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
+          feedbackTimer = null
+          try {
+            clearHover()
+          } catch {
+            // A throwing subscriber must not keep page markers alive.
+          }
+          try {
+            publish({ boxRect: null, popoverPosition: null, popoverPinned: false, hoverRect: null, noteEditor: null })
+            dispatch({ type: 'feedback', feedback: null })
+          } catch {
+            // Snapshot refresh is cosmetic once the layout is restored.
+          }
+        }
       }
 
       /** Toggle annotation mode. @returns {void} */
@@ -10853,7 +10925,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const originX = event.clientX
         const originY = event.clientY
         let moved = false
-        suppressLauncherClick = false
+        suppressLauncherClickUntil = 0
         /** @param {PointerEvent} moveEvent - pointermove. @returns {void} */
         const onMove = (moveEvent) => {
           const dx = moveEvent.clientX - originX
@@ -10875,7 +10947,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           window.removeEventListener('pointerup', onUp, true)
           publish({ launcherDragging: false })
           if (!moved) return
-          suppressLauncherClick = true
+          suppressLauncherClickUntil = Date.now() + 600
           persistLauncherPosition(snapshot().launcherPosition)
         }
         window.addEventListener('pointermove', onMove, true)
@@ -10887,9 +10959,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
        * @returns {boolean} whether the click must be ignored.
        */
       function consumeLauncherClickSuppressed() {
-        const suppressed = suppressLauncherClick
-        suppressLauncherClick = false
-        return suppressed
+        if (Date.now() > suppressLauncherClickUntil) return false
+        suppressLauncherClickUntil = 0
+        return true
       }
 
       /**
@@ -11114,9 +11186,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       function relocateEntry(refId) {
         const ref = snapshot().state.collection.find((entry) => entry.id === refId)
         if (ref === undefined) return
-        const node = liveNode(ref)
+        const status = statusOf(ref)
+        const node = status === 'resolved' ? liveNode(ref) : null
         if (node === null) {
-          const status = statusOf(ref)
           feedback(t('feedback.relocateFailed', { status: t(`popover.status.${status}`) }), 'error')
           return
         }
@@ -11185,19 +11257,16 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         uninstallPageListeners()
         disconnectFrameObserver()
         clearTimers()
-        clearHover()
+        restoreAnnotationLayout()
         if (flashTimer !== null) window.clearTimeout(flashTimer)
         flashTimer = null
         pointer = null
         lastPick = null
         refNodes.clear()
-        const frame = annotationLayoutFrame()
-        document.documentElement.removeAttribute('data-psa-active')
-        document.documentElement.removeAttribute('data-psa-passthrough')
-        if (frame !== null) {
-          frame.removeAttribute('data-psa-frame')
-          frame.style.paddingRight = ''
-          frame.style.removeProperty('--psa-rail-width')
+        try {
+          clearHover()
+        } catch {
+          // Disposal never depends on a subscriber.
         }
         annotationBridge.inputActions = null
         annotationBridge.sessionId = null
@@ -11325,7 +11394,6 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-note-editor-textarea{box-sizing:border-box;width:100%;min-height:96px;max-height:220px;padding:5px 7px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
 .psa-feedback{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:56;max-width:min(520px,calc(100vw - 48px));padding:7px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 8px 24px rgb(0 0 0 / 18%));color:var(--dsw-alias-label-secondary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:none}
 .psa-feedback[data-psa-kind=error]{color:var(--dsw-alias-state-error-primary)}
-.psa-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 `
 
     /**
@@ -12034,7 +12102,13 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         return () => style.remove()
       }, 'power-suite: ui annotation stylesheet')
       ctx.effect(() => {
-        annotationController = createAnnotationController(t, ctx)
+        try {
+          annotationController = createAnnotationController(t, ctx)
+        } catch (error) {
+          // The guard must not wedge this factory into a "installed" state with no controller.
+          annotationInstalled = false
+          throw error
+        }
         return () => {
           if (annotationController !== null) annotationController.dispose()
           annotationController = null
