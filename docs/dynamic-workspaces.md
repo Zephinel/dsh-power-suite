@@ -63,8 +63,10 @@ sidebar's panel tabs. It starts expanded.
   with the number of listed rows, and a chevron that folds the body. The pulse
   uses `corner-shape: round` so it stays a true circle under the shell's
   superellipse corner shape, and reduced-motion preferences stop its animation.
-  The header row and its toggle use symmetric padding (`2px` and `6px 8px`), so
-  the hover highlight sits inside the card instead of hanging past the label.
+  The header row and its controls stay one visual height: the toggle and the
+  **View all** link are both 30 px tall (the toggle via `6px 8px` padding on an
+  18 px line, the link via `height: 30px`), so hovering either gives the same
+  highlight height, and the row's own `2px` padding keeps it inside the card.
 - **Rows**: running Sessions first, then recently finished Sessions inside the
   same 12-hour window, each group newest activity first. A running row uses the
   shell's own `StateDot` with `state: "ongoing"` as its loading glyph — no
@@ -79,9 +81,11 @@ sidebar's panel tabs. It starts expanded.
   the Session.
 - **Nested subagents**: a parent row with running or recently active direct
   subagent Sessions gets a per-parent disclosure chevron on its left. Expanding
-  it shows the children indented beneath the parent, connected by a thin
-  vertical trunk with one short horizontal tick per child, each with its own
-  status dot, title, and relative time. Collapsing the parent appends
+  it shows the children indented deeper beneath the parent (`26px` left margin
+  plus `14px` inner padding), connected by a thin vertical trunk with
+  one short horizontal tick per child; the trunk is masked below the last
+  child's tick, so no dangling line hangs under the group. Each child has its
+  own status dot, title, and relative time. Collapsing the parent appends
   **· {count} subagents** to its second line. Each parent folds independently;
   the card header still folds the whole list.
 - **Click**: opens that Session in the native conversation surface.
@@ -213,13 +217,16 @@ Manual checks on the running DSH Web GUI:
    state survives a page reload; unfold it again.
 5. If a listed Session delegated to subagents, its row shows a disclosure
    chevron: expanding reveals the child rows indented under the parent with the
-   guide line, each opens its own Session, and collapsing shows the child count.
-6. Collapse the sidebar: the card is hidden and no custom node shows in the rail;
+   guide line (the trunk stops at the last child's tick), each opens its own
+   Session, and collapsing shows the child count.
+6. Check the card header geometry: the toggle and **View all** highlight heights
+   match within one row.
+7. Collapse the sidebar: the card is hidden and no custom node shows in the rail;
    widen it: the card and buckets return.
-7. Use the native Workspaces search, a Workspace context menu, the add-workspace
+8. Use the native Workspaces search, a Workspace context menu, the add-workspace
    flow, and drag reordering while the feature is mounted: none of them target
    the card or the bucket headers, and no row is lost.
-8. Run `npm run check`; it stays green (syntax, package manifest, Markdown links,
+9. Run `npm run check`; it stays green (syntax, package manifest, Markdown links,
    and the node tests).
 
 See [verification.md](verification.md) for the recorded evidence.

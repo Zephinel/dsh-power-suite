@@ -12,7 +12,8 @@ shows one plugin whose inventory grows with the suite.
 | [Session artifacts](docs/session-artifacts.md) | An **Artifacts** card in the right Sidebar's Start page listing the current Session's created and delivered files, with native open, download, and LAN link copy. |
 | [Workspace presets](docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions created in that Workspace. |
 | [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header that nests subagent Sessions under their parent. |
-| [Prompt history](docs/prompt-history.md) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; an always-visible panel above the composer lists them newest first with a hover full-text preview, an inline search, and click-to-copy. Plain arrows keep their original behavior. |
+| [Prompt history](docs/prompt-history.md) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; a right-edge rail lists them newest first with a hover full-text preview, an inline search, and click-to-copy. Plain arrows keep their original behavior. |
+| [Draft attachments](docs/draft-attachments.md) | Attachments in a draft (pasted images, dropped or picked files) survive switching Sessions and coming back, for the page lifetime; the shell only persists the draft text. |
 | [Interrupted sessions](docs/interrupted-sessions.md) | Sessions cut off by a restart carry an amber mark left of the title, a hover-only Continue action with a row mask, and a play-shaped composer submit control. |
 | [Settings](docs/settings.md) | The bundle's Plugins page carries its own configuration section; the prompt-history modifier is the first setting. |
 
@@ -24,12 +25,15 @@ New in 0.2.0:
   recent** card above the native header lists running and recently finished
   Sessions, nests delegated subagent Sessions under their parent, and opens any
   row.
-- **Prompt history preview** — an always-visible panel above the composer shows
-  the current Session's prompts newest first, with the full prompt on hover, an
-  inline search, and click-to-copy into the draft.
+- **Prompt history preview** — a vertical rail at the conversation's right edge
+  shows the current Session's prompts newest first as tick marks, with the full
+  prompt on hover, an inline search, and click-to-copy into the draft.
+- **Draft attachment memory** — attachments in a draft survive switching
+  Sessions and coming back for the page lifetime, even though the shell only
+  persists the draft's text and reference chips.
 - **Per-prompt timestamps** — the prompt-history route now returns each prompt's
-  Session event time (`at`, or `null` when the log has none), so the preview can
-  show row times while the keyboard recall keeps working unchanged.
+  Session event time (`at`, or `null` when the log has none), so the rail and its
+  hover card can show times while the keyboard recall keeps working unchanged.
 
 The same plugin adds a shared **hover preview** to Artifacts rows and the native
 Workspace files tree: Markdown, highlighted code, images, audio/video, PDF, and

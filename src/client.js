@@ -5383,7 +5383,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const { sessionId, useInput } = props
       const attachmentIds = useInput((state) => state.attachmentIds)
       const phase = useInput((state) => state.phase)
-      const draft = useInput((state) => state.draft)
       const previousAttachments = React.useRef(attachmentIds.length)
 
       // Capture every browser File the composer admits while this Session is
@@ -5493,7 +5492,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         }
       }, [sessionId])
 
-      void draft
       return null
     }
 

@@ -24,19 +24,21 @@ Current evidence (2026-11-11, Node 24.22.2):
 
 - `npm test`: **49 tests, 49 passed, 0 failed**.
 - `npm run check`: passed.
-- `npm run pack:check`: **44 files** (0.2.0 tarball), including `src/`,
-  `locale/`, `docs/` (with the two new captures), `cordis.patch.yml`,
-  `icon.png`, and the standard repository files.
+- `npm run pack:check`: **46 files** (0.2.0 tarball), including `src/`,
+  `locale/`, `docs/` (with the Dynamic Workspaces and prompt-history rail
+  captures), `cordis.patch.yml`, `icon.png`, and the standard repository
+  files.
 - Host tests cover the read-vs-event cache race, silent-subagent timing, continue
   content-type/state/in-flight validation, the non-human source fields, and the
   prompt-history timestamp fold (`at` from a finite event time, `null`
   otherwise) with the 500-prompt cap unchanged.
-- Neither new surface adds a Host route: Dynamic Workspaces derives its buckets
-  and summary card from the browser's Session, status, and Workspace stores, and
-  the prompt-history preview shares the existing `api/prompt-history.list`
-  payload. The preview's data coverage is the shared fold tests; Dynamic
-  Workspaces is client-only with no `node:test` suite of its own, so the syntax
-  gate and the live checks below cover it.
+- None of the browser-only features adds a Host route: Dynamic Workspaces
+  derives its buckets and summary card from the browser's Session, status, and
+  Workspace stores; the prompt-history rail shares the existing
+  `api/prompt-history.list` payload; draft attachment memory writes nothing to
+  the Host or storage. Their data coverage is the shared fold tests where a
+  route is involved; the rest is client-only with no `node:test` suite of its
+  own, so the syntax gate and the live checks below cover them.
 - The root-package reinstall was verified after a Host restart: the Loader row
   `include:power-suite` reports `fiberPhase: active` from the new repository
   root path.
@@ -64,31 +66,52 @@ These were exercised in the Web GUI during development:
   live in both directions using a throwaway Session; the running & recent card
   (including the retention linger, with nested subagent rows visible in the
   capture), rail hide/restore, and coexistence with the native Workspaces search
-  all passed.
-- Prompt history preview on the same Host: the always-visible panel, its hover
-  full-text popover, and per-row timestamps are shown in the capture below. After
-  the Host plugin was reloaded (profile recomposition, with the profile patch
-  restored afterwards) the route served `{ seq, text, at }` and the preview
-  rendered the row times; the timestamp fold is also covered by the node tests.
+  all passed. The later card refinements were re-checked live: the header toggle
+  and **View all** control both measure 30 px, the subagent connector trunk is
+  masked below the last child's tick, and the child indent is the deeper
+  `26px + 14px`.
+- Draft attachment memory was verified live on the same Host: the shell round
+  trip was first reproduced as text restored / image lost, then the feature
+  restored the attached image after switching away and back. Removing the
+  attachment explicitly after a restore was not resurrected on the next round
+  trip, and the draft stayed clean around the test.
+- Prompt history timestamps were verified live on the running Host: after the
+  Host plugin was reloaded (profile recomposition, with the profile patch
+  restored afterwards) the route served `{ seq, text, at }` and the preview of
+  that iteration showed prompt times; the timestamp fold is also covered by the
+  node tests.
+- The prompt-history rail was verified live after its redesign: the rail's
+  right edge and top align below the native turn rail's marks, it showed 8
+  marks for the development Session and 65 marks for a long-session test; the
+  hover card showed the full prompt text and its `11-07` time; clicking a mark
+  copied the exact prompt into the Lexical draft; the search card filtered to
+  `Showing 4 of 65`; no console errors were reported and `node --check
+  src/client.js` plus `node --test test/*.test.js` stayed green.
 
 The manual checks are evidence for the behavior described in the feature docs;
 they are not a substitute for the automated gate above.
 
 An independent read-only verification pass (separate agent, own browser
-session) then re-ran the live checks against this checkout: it returned PASS for
-all three additions (buckets and fold persistence, the running & recent card
-including nested subagent rows and row opening, and the preview panel including
-timestamps, hover popover, copy-to-draft, and search) with no blocker or major
-defect. Its minor findings were fixed before the final gate: the preview row
-keeps its prompt text in the accessible name (action hint moved to a hidden
-span), the footer count is singular-aware, and the dynamic-Workspaces effects
-re-arm the liveness flag on remount. Residual risks it explicitly could not
-exercise: elapsing the full 12-hour retention window, the alternate View-options
-grouping modes, the empty-card state, and screen-reader behavior with a real
-assistive technology; the archived-row exclusion is covered by code inspection
-plus an observed reload where an archived Session disappeared from the card.
+session) re-ran the live checks against this checkout and returned PASS for the
+three additions as they stood at that time (buckets and fold persistence, the
+running & recent card including nested subagent rows and row opening, and the
+then-current prompt-history panel including timestamps, hover popover,
+copy-to-draft, and search) with no blocker or major defect. Its minor findings
+were fixed before the final gate: the history surface keeps its prompt text in
+the accessible name (the action hint moved to a hidden span), the footer count is
+singular-aware, and the dynamic-Workspaces effects re-arm the liveness flag on
+remount. Because the prompt-history surface has since been redesigned as the
+right-edge rail, that pass's preview evidence applies to the earlier panel
+design; the final rail's live verification is recorded above. Residual risks the
+pass
+explicitly could not exercise: elapsing the full 12-hour retention window, the
+alternate View-options grouping modes, the empty-card state, and screen-reader
+behavior with a real assistive technology; the archived-row exclusion is covered
+by code inspection plus an observed reload where an archived Session disappeared
+from the card.
 
-The two new live surfaces are captured in
-[assets/dynamic-workspaces.png](assets/dynamic-workspaces.png) and
-[assets/prompt-history-preview.png](assets/prompt-history-preview.png) and
-embedded in their feature references.
+The live surfaces are captured in
+[assets/dynamic-workspaces.png](assets/dynamic-workspaces.png),
+[assets/prompt-history-preview.png](assets/prompt-history-preview.png), and
+[assets/prompt-history-search.png](assets/prompt-history-search.png), embedded
+in their feature references.

@@ -1,6 +1,6 @@
 # Usage
 
-All six features ship in one plugin. Open the Plugins page, select **DSH Power
+All seven features ship in one plugin. Open the Plugins page, select **DSH Power
 Suite**, and use the plugin's own settings section for the shortcut modifier.
 
 ## Session artifacts
@@ -47,13 +47,23 @@ In the composer, press the configured modifier + ↑/↓ to recall previously se
 prompts. Plain ↑/↓ keep their original behavior. Change the modifier in the
 plugin settings (⌘/Ctrl, ⌥/Alt, Ctrl, Shift, or Off).
 
-Above the composer, an always-visible preview lists the current Session's
-prompts newest first with their `#N` index and, when available, their time.
-Hover (or keyboard-focus) a row to read the full prompt in a floating card; click
-it to copy the text into the composer draft (the footer confirms with **Copied to
-input**). The footer's **Search** button reveals an inline search field that
-filters by substring; Escape closes it, and the clear (×) button resets the
-filter. The whole preview is hidden while the Session has no sent prompts.
+Below the native turn rail at the conversation's right edge, a vertical rail
+lists the current Session's prompts as tick marks, newest at the top, with each
+prompt's time when the Host reports one. Hover or keyboard-focus a mark to read
+the full prompt in a card to the left; click it (or press Enter) to copy the text
+into the composer draft, with a small **Copied to input** chip near the rail. The
+rail's **Search** button below the marks opens a compact filter card; Escape
+closes it, and the clear (×) button resets the filter. The rail is absent while
+the Session has no sent prompts.
+
+## Draft attachments
+
+Pasted images, dropped files, and files chosen with the picker stay with the
+draft when you switch to another Session and come back, because the plugin
+remembers the browser files for the page lifetime. The shell itself only
+persists the draft text. A page reload still loses the attachments, sending the
+draft clears the memory, and removing every attachment explicitly (after they
+were restored) stops them from coming back.
 
 ## Interrupted sessions
 
@@ -75,5 +85,6 @@ setting is the prompt-history modifier; its label reflects the current platform
 - [Workspace presets](workspace-default-presets.md)
 - [Dynamic workspaces](dynamic-workspaces.md)
 - [Prompt history](prompt-history.md)
+- [Draft attachments](draft-attachments.md)
 - [Interrupted sessions](interrupted-sessions.md)
 - [Settings](settings.md)

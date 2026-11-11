@@ -18,7 +18,8 @@ src/index.js            Host entry (Node)
 src/client.js           Browser entry (DSH module loader)
 ├─ Artifacts panel + right-Sidebar guide card
 ├─ Workspace preset context-menu submenu
-├─ Composer prompt-history keys + docked preview panel
+├─ Composer prompt-history keys + right-edge history rail
+├─ Draft attachment memory seat (invisible)
 ├─ Dynamic Workspaces buckets + running & recent Sessions card
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
 ├─ Plugins-page settings section
@@ -96,15 +97,37 @@ native re-renders; unload removes them and restores the inline styles. The
 native browser keeps owning every row, menu, search, drag, and dialog. See
 [dynamic-workspaces.md](dynamic-workspaces.md).
 
-### Prompt history preview
+### Prompt history rail
 
-A `conversation.input.dock` registration renders the always-visible preview
-above the composer, sharing the prompt-history fetch with the keyboard seat. It
-lists prompts newest first, portals a full-text hover card to the document body,
-filters client-side with an on-demand inline search, and copies a clicked prompt
-through the Session input's `setDraft`. Registration id
+A `conversation.input.dock` registration supplies the Session-scoped hooks
+(`sessionId`, `useInput`, `inputActions`, `t`), but the component renders nothing
+in the composer flow: its visible surfaces are body-portaled, fixed-position
+elements. The rail is a fixed 28 px column at the Conversation's right edge,
+directly below the native turn rail (detected by geometry: the tiny buttons near
+the scroll surface's right edge, with no native class names), separated by a
+short divider and falling back to the vertical middle of the scrollport when
+there is no room below. It lists prompts newest first as tick marks, portals the
+full-text hover card and the on-demand search card to the document body, and
+copies a clicked prompt through the Session input's `setDraft`. Placement is
+re-measured in one animation frame on resize, scroll, composer height, sidebar
+width, and native-rail changes. Registration id
 `power-suite.prompt-history-preview`, order 100, locale namespace
 `powerSuitePromptHistoryPreview`.
+
+### Draft attachment memory
+
+An invisible Seat in `conversation.input.overlay` (id
+`power-suite.draft-attachments`) works around a shell limitation: the shell
+persists a Session draft's text and reference chips, but browser-owned
+attachment Files live only in the mounted input controller. While a Session's
+composer is mounted, the Seat captures Files from paste, drop, and picker events
+(<= 20 files per Session, <= 8 Sessions, page lifetime) and, when the Session is
+shown again with no attachment restored by the shell, re-introduces them through
+the composer's own paste intake using a synthetic `ClipboardEvent` with a
+`DataTransfer`. The cache clears on send and on explicit removal of every
+restored attachment. No Host route and no storage writes: this is a page-lifetime
+workaround, so a reload cannot restore Files. See
+[draft-attachments.md](draft-attachments.md).
 
 ### Slots used
 
@@ -114,8 +137,8 @@ through the Session input's `setDraft`. Registration id
 | `sidebarRightTabs.register` | Artifacts guide card on the Start page |
 | `contextMenu.icon` | Workspace menu icon |
 | `contextMenus.register` (`workspace`) | Default agent preset submenu |
-| `conversation.input.overlay` | Renderless prompt-history keyboard seat |
-| `conversation.input.dock` | Prompt-history preview above the composer |
+| `conversation.input.overlay` | Renderless prompt-history keyboard seat and draft-attachment memory seat |
+| `conversation.input.dock` | Session hooks for the body-portaled prompt-history rail |
 | `shell.overlay` | Frame-wide seat that augments the native Workspaces sidebar |
 | `plugins.bundle.config` | Plugin settings page |
 | `sidebar.session.row.leading` | Interrupted-session badge |

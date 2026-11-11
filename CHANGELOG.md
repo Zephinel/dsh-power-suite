@@ -18,15 +18,24 @@ All notable changes to this repository are documented here. The format follows
   nests recent direct subagent Sessions under their parent behind a disclosure
   chevron (indented under a guide line, each opening its own Session), and opens
   a Session from any row.
-- Prompt-history preview: an always-visible panel docked above the composer
-  lists the current Session's sent prompts newest first behind a short divider,
-  with the full prompt in a hover/floating card, an inline search revealed from
-  the footer, and click-to-copy into the composer draft with a short
-  confirmation. It renders nothing while the Session has no sent prompts.
+- Prompt-history rail: a vertical rail at the conversation's right edge, below
+  the native turn rail and separated from it by a short divider, lists the
+  current Session's sent prompts newest first as tick marks. Hover or keyboard
+  focus shows the full prompt in a card to the left, click copies it into the
+  composer draft with a quiet confirmation, and a search button below the marks
+  reveals a floating substring filter. The rail appears only while the Session
+  has sent prompts.
+- Draft attachment memory: browser-owned attachments in a draft (pasted images,
+  dropped or picked files) are remembered per Session and re-introduced through
+  the composer's own paste intake when the Session is shown again, so switching
+  away and back no longer restores the text while silently dropping the files.
+  The cache is page-lifetime (8 Sessions / 20 files), clears on send and on
+  explicit removal of every restored attachment, and never attempts
+  persistence.
 - Per-prompt timestamps: `GET /api/prompt-history.list` now returns
   `{ seq, text, at }` for every prompt, where `at` is the Session event time in
-  epoch milliseconds or `null` when the event has no usable time. The preview
-  shows row times from it; the keyboard recall is unchanged.
+  epoch milliseconds or `null` when the event has no usable time. The rail shows
+  mark and hover-card times from it; the keyboard recall is unchanged.
 
 ### Changed
 
@@ -34,10 +43,14 @@ All notable changes to this repository are documented here. The format follows
   inserts sibling nodes and inline flex order only, so native search, context
   menus, add-workspace flow, drag reordering, and dialogs keep working, and
   unloading restores the surface.
-- The browser tolerates a Host that predates the timestamp field: row times and
-  the hover timestamp are hidden instead of rendering empty, and the shared
+- The browser tolerates a Host that predates the timestamp field: rail and
+  hover-card times are hidden instead of rendering empty, and the shared
   human-only prompt definition and 500-prompt cap stay the same on both
   surfaces.
+- Dynamic Workspaces card polish: the header toggle and **View all** control now
+  share one 30 px height so their hover highlights match; nested subagent rows
+  are indented deeper and their connector trunk stops at the last child's tick
+  instead of dangling below the group.
 
 ## [0.1.1] - 2026-11-11
 

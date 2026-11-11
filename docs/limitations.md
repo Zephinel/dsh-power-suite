@@ -65,15 +65,44 @@
 
 - **Timestamps need the upgraded Host code.** The route carries `at` once the
   plugin/Host code is reloaded (a normal Host restart also reloads it); against
-  an older Host the preview hides its row times and hover timestamp but keeps
+  an older Host the rail hides mark times and hover timestamps but keeps
   working.
 - **Search filters what was served.** The inline search matches only the newest
   500 prompts the Host returned for the Session.
-- **Refresh points.** The preview refetches on a Session switch and when a turn
+- **Refresh points.** The rail refetches on a Session switch and when a turn
   finishes; a prompt sent from another device while this page is idle appears
   after the next send, turn completion, or page reload.
-- **Copy replaces the draft.** Clicking a preview row replaces the whole draft
+- **Copy replaces the draft.** Clicking a rail mark replaces the whole draft
   text, exactly like a keyboard recall.
+- **Rail placement is measured, not owned by the native shell.** The rail is a
+  fixed-position column placed against the Conversation's right edge. The native
+  turn rail is recognised by geometry (small buttons near the scroll surface's
+  right edge), not by a class name, so an unusual native layout can move the
+  rail to its fallback: the vertical middle of the usable scrollport. Placement
+  re-measures in one animation frame on window resize (which also covers zoom
+  and DPI changes), scroll, composer height, sidebar width, and native-rail
+  changes; the rail is hidden while the Session has no sent prompts.
+- **Current Session only.** The rail does not cross Sessions or Workspaces;
+  there is no global prompt history.
+
+## Draft attachments
+
+- **Page lifetime only.** The cache holds browser `File` objects in memory; a
+  page reload, a new tab, or another device cannot restore them.
+- **Only captured intake paths.** Files are remembered from the composer's
+  paste, drop, and file-picker events while that Session is mounted; files
+  attached through another surface, or while the composer is unmounted, are not
+  remembered.
+- **Removal semantics.** Sending the draft, or removing every attachment after
+  a restore, clears that Session's cache. Removing only some attachments does
+  not update the cache: a later round trip re-pastes the remembered set,
+  including the removed file.
+- **Fixed caps.** At most 20 files per Session and 8 Sessions at once; older
+  files and the least recently active Session are evicted. There is no setting.
+- **Shell DOM dependency.** Restore addresses the Session occurrence, composer
+  region, and Lexical editor by data attributes and dispatches a synthetic
+  paste; if the shell changes that intake path the restore silently stops while
+  the draft text is unaffected.
 
 ## Raw artifacts and implicit continuation
 

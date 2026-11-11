@@ -2,9 +2,9 @@
 
 A DSH Power Suite feature with two surfaces over the same Session history. The
 configured modifier + **↑ / ↓** in the composer walks through the prompts you
-already sent in this Session, shell-style. Above the composer, an always-visible
-**preview panel** lists the same prompts newest first, with a full-text hover
-preview, an inline search, and click-to-copy. Both read the Session log, so
+already sent in this Session, shell-style. A vertical **history rail** at the
+conversation's right edge lists the same prompts as tick marks, with a full-text
+hover preview, an inline search, and click-to-copy. Both read the Session log, so
 prompts from earlier pages of a long Session are included.
 
 The keyboard shortcut defaults to ⌘ on macOS and Ctrl on Windows and Linux; the
@@ -29,51 +29,58 @@ The first ⌘↑ is consumed even if the history is still loading; the recall la
 as soon as it arrives. History refreshes when the Session changes and after a
 send, so your own new prompt is recallable immediately.
 
-## Preview panel
+## History rail
 
-An always-visible panel is docked above the composer, between the conversation
-and the input card: a short centered divider separates it from the conversation,
-then the prompt history card follows at the composer's width. The panel is
-registered through the `conversation.input.dock` slot (registration id
-`power-suite.prompt-history-preview`) and renders nothing while the Session has
-not sent a prompt yet. There is no collapsed bar and no time-range select.
+A fixed vertical rail sits at the right edge of the conversation, directly
+**below** the native **Session history** turn rail and right-aligned in the same
+column. A short vertical divider (the 1 x 14 px line in that column) separates
+the two groups. The composer dock slot only supplies the Session-scoped hooks:
+the component renders nothing in the composer flow — no horizontal card and no
+Conversation History bar — and portals its fixed rail and cards to the page
+body. The rail is absent while the Session has no sent prompts.
 
-![Prompt history preview with hover preview and search](assets/prompt-history-preview.png)
+![Prompt-history rail below the native turn rail, with a full-text preview card](assets/prompt-history-preview.png)
 
-- **Rows**: the Session's prompts newest first. Each row carries the `#N` reverse
-  index (the newest prompt has the highest number), the prompt text clamped to
-  two lines, and — when the Host reports a timestamp — the time: `HH:MM` for
-  today, `MM-DD` for this year, `YYYY-MM-DD` for older dates, with the full local
-  date and time on hover. A copy glyph fades in on hover or keyboard focus.
-- **Full prompt on hover**: resting on a row (or keyboard-focusing it) opens a
-  floating popover with the whole prompt and, when available, its full
-  timestamp. The popover is portaled to the page body so the composer layer
-  cannot clip it, anchors above or below the row, scrolls when the text is long,
-  and stays open while the pointer travels into it; scrolling the page or
-  resizing dismisses it.
-- **Search on demand**: the footer's **Search** button reveals an inline search
-  field under the list. Matching is a case-insensitive substring over the prompt
-  text; the footer switches to **Showing {count} of {total}** and **No matching
-  prompts** appears when nothing matches. The search row stays open when the
-  field loses focus; the clear (×) control resets the filter, and Escape clears
-  it and closes the search row.
-- **Click to copy**: clicking a row (or pressing Enter on a focused one) puts the
-  prompt into the composer draft, focuses the composer editor, and shows
-  **Copied to input** in the footer for about two seconds. The draft is replaced
-  as a whole, like a keyboard recall.
-- **Footer**: `{count} prompts` by default, or the filtered count while
-  searching.
-- **Scroll**: the list is capped at `min(340px, 40vh)` and scrolls, so it stays
-  compact above the composer.
+- **Marks**: one small tick button per prompt at a fixed pitch, newest at the
+  top and oldest at the bottom. The marks scroll inside the rail's own frame
+  with a hidden scrollbar when there are more than fit. The group is labelled
+  **Prompt history**, and each mark's accessible name carries the action and
+  the prompt text (`Copy prompt #N: …`), so the visible tick never hides what
+  the mark stands for.
+- **Hover or keyboard focus**: a preview card opens to the **left** of the rail
+  with the full prompt text (scrollable when long) and, when the Host reports
+  it, the prompt's time. Moving the pointer from a mark into the card keeps it
+  open; scrolling the page or resizing dismisses it.
+- **Click to copy**: clicking a mark (or pressing Enter on a focused one) puts
+  the prompt into the composer draft, focuses the composer editor, and shows a
+  quiet fixed **Copied to input** chip beside the rail for about two seconds —
+  no layout shift.
+- **Search**: the magnifier button below the marks opens a floating search card
+  to the **left** of the rail with an input. Matching is a case-insensitive
+  substring over the prompt text; the card reports **Showing {count} of
+  {total}** while filtering (and the prompt count otherwise), and shows
+  **No matching prompts** when nothing matches. The clear (×) control resets the
+  filter and keeps the card open; Escape clears the filter, closes the card, and
+  returns focus to the magnifier. The rail shows the filtered marks meanwhile.
+- **Placement**: the rail measures the conversation's scroll surface, its
+  composer seat, and the native turn rail's marks, then sits below the native
+  rail when at least 90 px of room is available; otherwise it falls back to the
+  vertical middle of the usable scrollport. Its bottom always stays above the
+  composer. It re-measures in one animation frame on window resize, scroll,
+  composer-height changes, sidebar-width changes, and the native rail
+  appearing/loading (plus a short settle delay).
 
-The preview and the keyboard recall share one source, so both see the same
-human-only prompts and the same 500-entry cap. The preview refetches per Session
+The preview card over the rail:
+
+![Prompt-history rail with the floating search card showing a filtered count](assets/prompt-history-search.png)
+
+The rail and the keyboard recall share one source, so both see the same
+human-only prompts and the same 500-entry cap. The rail refetches per Session
 and again when a turn finishes (the send that just completed appears then);
-switching Sessions also clears the search and the copied state. The Host fold
-carries each prompt's event time; it is served once the plugin/Host code is
-reloaded (a normal Host restart does that too). A Host that has not picked up
-this version omits `at`: the row times and the popover timestamp are then hidden
-and everything else keeps working.
+switching Sessions also clears the search and copied state. The Host fold
+carries each prompt's event time, but it is served only after the plugin/Host
+code is reloaded (a normal Host restart does that too); until then `at` is
+absent, mark and card times are hidden, and everything else keeps working.
 
 ## Multi-line prompts
 
@@ -95,8 +102,8 @@ position.
   never appears: it is logged with a different source kind.
 - At most the 500 most recent prompts are served.
 - Every entry also records the event's sequence number and, when the log has
-  one, the event time. The preview shows that time next to the row and in its
-  hover card; the keyboard recall ignores it.
+  one, the event time. The rail shows that time in the hover card; the keyboard
+  recall ignores it.
 
 ## Keys
 
@@ -124,8 +131,8 @@ cookie and Host/Origin fence as the rest of the GUI:
 `seq` is the Session event sequence and `at` is that event's time in epoch
 milliseconds, or `null` when the recorded event has no usable time. A Host built
 before timestamps existed omits `at` entirely (it still sends `seq` and `text`):
-the keyboard recall ignores it in every case, and the preview hides its row
-times and hover timestamp when no prompt has one.
+the keyboard recall ignores it in every case, and the rail hides mark and card
+times when no prompt has one.
 
 The fold keeps only `user/message` events whose recorded source kind is
 `user`, joins their text blocks, and skips blank results. Injected user-role
@@ -136,15 +143,15 @@ context is logged with a different source kind, so it never becomes a prompt.
 - **Current Session only.** History does not cross Sessions or Workspaces;
   there is no global shell history.
 - **Send-time refresh.** A prompt sent from another device while this page sits
-  idle appears after the next send or page reload; the preview refreshes on a
+  idle appears after the next send or page reload; the rail refreshes on a
   Session switch and on a finished turn.
-- **Replacement, not insertion.** Recalling or clicking a preview row replaces
-  the whole draft text and drops inline reference chips (`@file`, session
+- **Replacement, not insertion.** Recalling or clicking a rail mark replaces the
+  whole draft text and drops inline reference chips (`@file`, session
   references); pending attachments are untouched.
 - **Text only.** Attachment-only prompts never enter the list.
-- **Same 500-entry cap on both surfaces.** The preview and the keyboard recall
-  see the same newest 500 prompts; search filters only what was served.
+- **Same 500-entry cap on both surfaces.** The rail and the keyboard recall see
+  the same newest 500 prompts; search filters only what was served.
 - **Timestamps need the matching Host.** Upgrading the package's browser code
   against a Host that still runs the old route keeps everything working without
-  row times; reload the Host plugin (or restart the Host) after upgrading so
-  `at` is served.
+  mark and card times; reload the Host plugin (or restart the Host) after
+  upgrading so `at` is served.
