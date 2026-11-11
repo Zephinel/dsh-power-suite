@@ -33,6 +33,23 @@ window.__ModuleLoader__.load({
   id: '@rexxin/dsh-power-suite',
   factory: (require) => {
     const React = require('react')
+    const ReactDOM = require('react-dom')
+    // The shell seeds this module into every Web bundle; keep the feature
+    // declarative when a foreign host omits it instead of failing to load.
+    const uiPrimitives = (() => {
+      try {
+        return require('@deepseek-ai/dsh-client-ui-primitives')
+      } catch {
+        return {}
+      }
+    })()
+    /** The shell's own state/loading indicator, with a static fallback dot. */
+    const StateDot = typeof uiPrimitives.StateDot === 'function'
+      ? uiPrimitives.StateDot
+      : ({ size }) => React.createElement('span', {
+        'aria-hidden': true,
+        style: { display: 'inline-block', width: size ?? 10, height: size ?? 10, borderRadius: '50%', background: 'currentColor', opacity: 0.45 }
+      })
 
     /** This feature's copy namespace. */
     const NS = 'sessionArtifacts'
@@ -2344,11 +2361,11 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Read one Session's prompt history from the Host.
+     * Read one Session's prompt history entries from the Host.
      * @param {string} sessionId - Session identity.
-     * @returns {Promise<string[]>} prompt texts oldest first; empty on failure.
+     * @returns {Promise<Array<{ seq: number, text: string, at?: number }>>} prompts oldest first; empty on failure.
      */
-    async function readPromptHistory(sessionId) {
+    async function readPromptHistoryEntries(sessionId) {
       try {
         const response = await fetch(`${appUrl(PROMPT_HISTORY_ROUTE)}?sessionId=${encodeURIComponent(sessionId)}`, {
           credentials: 'same-origin',
@@ -2359,14 +2376,27 @@ window.__ModuleLoader__.load({
         if (value === null || typeof value !== 'object' || !Array.isArray(value.prompts)) return []
         const prompts = []
         for (const entry of value.prompts) {
-          if (entry !== null && typeof entry === 'object' && typeof entry.text === 'string' && entry.text.length > 0) {
-            prompts.push(entry.text)
-          }
+          if (entry === null || typeof entry !== 'object' || typeof entry.text !== 'string' || entry.text.length === 0) continue
+          const prompt = { seq: typeof entry.seq === 'number' ? entry.seq : 0, text: entry.text }
+          // The Host may report the prompt's epoch-ms `at`; older Hosts omit it,
+          // in which case the preview simply hides every timestamp surface.
+          if (typeof entry.at === 'number' && Number.isFinite(entry.at)) prompt.at = entry.at
+          prompts.push(prompt)
         }
         return prompts
       } catch {
         return []
       }
+    }
+
+    /**
+     * Read one Session's prompt history from the Host.
+     * @param {string} sessionId - Session identity.
+     * @returns {Promise<string[]>} prompt texts oldest first; empty on failure.
+     */
+    async function readPromptHistory(sessionId) {
+      const prompts = await readPromptHistoryEntries(sessionId)
+      return prompts.map((prompt) => prompt.text)
     }
 
     /**
@@ -3701,6 +3731,1356 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
     //#endregion
 
+    //#region feature: dynamic workspaces
+    /** Copy namespace for the dynamic Workspace buckets and the running panel. */
+    const DW_NS = 'dynamicWorkspaces'
+
+    /** Seat identity of the frame-wide seat that owns this feature's DOM work. */
+    const DW_SEAT = 'power-suite.dynamic-workspaces'
+
+    /** Attribute marking every sidebar DOM node this feature owns, for cleanup. */
+    const DW_ATTR = 'data-psd'
+
+    /** localStorage key holding the two bucket fold states. */
+    const DW_FOLD_KEY = 'power-suite.dynamic-workspaces.folds'
+
+    /** Highest number of rows the summary card lists before "view all". */
+    const DW_PANEL_LIMIT = 5
+
+    /**
+     * Retention window for the Active bucket and the summary card.
+     *
+     * A Workspace stays Active, and a finished Session stays listed in the
+     * summary card, for this long after its last activity. Without the window
+     * a project drops into Inactive the instant its turn ends, which loses the
+     * "I left it here so I can find it" affordance the buckets exist for.
+     */
+    const DW_ACTIVE_WINDOW_MS = 12 * 60 * 60 * 1000
+
+    const DW_EN = {
+      'panel.title': 'Running & recent',
+      'panel.viewAll': 'View all {count}',
+      'panel.showLess': 'Show less',
+      'panel.collapse': 'Collapse recent sessions',
+      'panel.expand': 'Expand recent sessions',
+      'panel.open': 'Open {title}',
+      'panel.done': 'done',
+      'panel.children': '{count} subagents',
+      'panel.expandChildren': 'Show subagents of {title}',
+      'panel.collapseChildren': 'Hide subagents of {title}',
+      'panel.empty.title': 'No running sessions',
+      'panel.empty.hint': 'Sessions in progress across every Workspace appear here.',
+      'count': '{count}',
+      'group.active': 'Active Projects',
+      'group.inactive': 'Inactive Projects',
+      'group.toggleActive': 'Toggle active projects',
+      'group.toggleInactive': 'Toggle inactive projects',
+      'group.untitled': 'Untitled project',
+      'group.ungrouped': 'Ungrouped',
+      'time.now': 'now',
+      'time.min': '{n}min',
+      'time.hour': '{n}h',
+      'time.day': '{n}d',
+      'duration.seconds': '{s}s',
+      'duration.minutes': '{m}m {s}s',
+      'duration.hours': '{h}h {m}m'
+    }
+    const DW_ZH = {
+      'panel.title': '进行中与最近活跃',
+      'panel.viewAll': '查看全部 {count}',
+      'panel.showLess': '收起',
+      'panel.collapse': '收起最近活跃的 Session',
+      'panel.expand': '展开最近活跃的 Session',
+      'panel.open': '打开 {title}',
+      'panel.done': '已完成',
+      'panel.children': '{count} 个子代理',
+      'panel.expandChildren': '展开 {title} 的子代理',
+      'panel.collapseChildren': '收起 {title} 的子代理',
+      'panel.empty.title': '没有进行中的 Session',
+      'panel.empty.hint': '所有 Workspace 中正在进行的 Session 会汇总在这里。',
+      'count': '{count}',
+      'group.active': '活跃项目',
+      'group.inactive': '非活跃项目',
+      'group.toggleActive': '收起或展开活跃项目',
+      'group.toggleInactive': '收起或展开非活跃项目',
+      'group.untitled': '未命名项目',
+      'group.ungrouped': '未分组',
+      'time.now': '刚刚',
+      'time.min': '{n}分钟',
+      'time.hour': '{n}小时',
+      'time.day': '{n}天',
+      'duration.seconds': '{s}秒',
+      'duration.minutes': '{m}分 {s}秒',
+      'duration.hours': '{h}小时 {m}分'
+    }
+
+    const DW_CSS = `
+.psd-panel-slot{flex:none;min-width:0;display:block}
+.psd-panel{margin:2px 8px 6px;border:0.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);overflow:hidden}
+.psd-panel-head{display:flex;align-items:center;gap:2px;padding:2px}
+.psd-panel-toggle{appearance:none;display:flex;align-items:center;gap:8px;flex:1;min-width:0;padding:6px 8px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;font-weight:600;text-align:left;cursor:pointer}
+.psd-panel-toggle:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.psd-panel-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psd-pulse{position:relative;flex:none;width:8px;height:8px;border-radius:50%;corner-shape:round;background:var(--dsw-alias-state-success-primary)}
+.psd-pulse::after{content:'';position:absolute;inset:-4px;border-radius:50%;corner-shape:round;border:1px solid var(--dsw-alias-state-success-primary);opacity:.45;animation:psd-pulse 2s var(--ds-ease-in-out,ease) infinite}
+.psd-panel-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary)}
+.psd-count{flex:none;min-width:18px;padding:0 6px;box-sizing:border-box;border-radius:var(--dsw-radius-xs,4px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-size:11px;line-height:18px;text-align:center;font-variant-numeric:tabular-nums}
+.psd-panel-link{flex:none;appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;line-height:18px;padding:2px 4px;border-radius:var(--dsw-radius-xs,4px);cursor:pointer;white-space:nowrap}
+.psd-panel-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.psd-panel-link:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.psd-chevron{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);transition:transform 160ms var(--ds-ease-in-out,ease)}
+.psd-panel-toggle[aria-expanded='false'] .psd-chevron{transform:rotate(-90deg)}
+.psd-panel-body{position:relative;display:flex;flex-direction:column;padding:0 4px 5px;max-height:min(46cqh,320px);overflow-y:auto;overscroll-behavior:contain}
+.psd-panel-empty{padding:6px 10px 8px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:17px;display:flex;flex-direction:column;gap:2px}
+.psd-panel-empty strong{color:var(--dsw-alias-label-secondary);font-weight:500}
+.psd-item{display:flex;flex-direction:column;min-width:0}
+.psd-run{display:flex;align-items:stretch;min-width:0;border-radius:var(--dsw-radius-md,8px)}
+.psd-run:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.psd-run-toggle{appearance:none;flex:none;width:18px;min-height:26px;margin:2px 0 0;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.psd-run-toggle:hover{color:var(--dsw-alias-label-primary)}
+.psd-run-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psd-run-toggle .psd-chevron{transition:transform 160ms var(--ds-ease-in-out,ease)}
+.psd-run-toggle[aria-expanded='false'] .psd-chevron{transform:rotate(-90deg)}
+.psd-run-toggle-spacer{flex:none;width:18px}
+.psd-run-main{appearance:none;display:flex;flex:1;min-width:0;flex-direction:column;padding:5px 7px 7px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-run-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psd-children{position:relative;display:flex;flex-direction:column;gap:1px;margin:0 0 4px 15px;padding-left:11px;border-left:1px solid var(--dsw-alias-border-l2)}
+.psd-child{position:relative;appearance:none;display:flex;align-items:center;gap:7px;min-width:0;padding:3px 7px 3px 4px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;text-align:left;cursor:pointer}
+.psd-child::before{content:'';position:absolute;left:-12px;top:50%;width:10px;height:1px;background:var(--dsw-alias-border-l2);pointer-events:none}
+.psd-child:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.psd-child:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psd-child-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
+.psd-child-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.psd-child-time{flex:none;color:var(--dsw-alias-label-tertiary);font-size:10.5px;line-height:16px;font-variant-numeric:tabular-nums}
+.psd-run-head{display:flex;align-items:center;gap:8px;min-width:0}
+.psd-run-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
+.psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
+.psd-run[data-state='done'] .psd-run-where{color:var(--dsw-alias-label-tertiary)}
+.psd-run-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary);font-size:13px;line-height:19px}
+.psd-run-time{flex:none;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:17px;font-variant-numeric:tabular-nums}
+.psd-run-where{margin-top:1px;padding-left:21px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.psd-run-bar{position:relative;height:1.5px;margin:5px 0 0 21px;border-radius:1px;background:var(--dsw-alias-bg-layer-3);overflow:hidden}
+.psd-run-bar::after{content:'';position:absolute;top:0;bottom:0;width:42%;border-radius:1px;background:linear-gradient(90deg,transparent,var(--dsw-alias-state-business-primary),transparent);animation:psd-flow 1.8s var(--ds-ease-in-out,ease) infinite}
+.psd-group-header{flex:none;display:block;margin:3px 0 0}
+.psd-group-header[data-group='inactive']{margin-top:10px;padding-top:3px;border-top:0.5px solid var(--dsw-alias-border-l1)}
+.psd-group-toggle{appearance:none;display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;padding:4px 8px 4px 10px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;line-height:16px;font-weight:600;letter-spacing:.02em;text-align:left;cursor:pointer}
+.psd-group-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
+.psd-group-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psd-group-toggle[aria-expanded='false'] .psd-chevron{transform:rotate(-90deg)}
+.psd-group-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase}
+.psd-group-count{flex:none;min-width:16px;padding:0 5px;border-radius:var(--dsw-radius-xs,4px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font-size:10px;line-height:16px;text-align:center;font-variant-numeric:tabular-nums;font-weight:500}
+@keyframes psd-pulse{0%{transform:scale(.7);opacity:.6}70%{transform:scale(1.25);opacity:0}100%{transform:scale(1.25);opacity:0}}
+@keyframes psd-flow{0%{transform:translateX(-110%)}100%{transform:translateX(250%)}}
+@media (prefers-reduced-motion: reduce){.psd-pulse::after{animation:none}.psd-run-bar::after{animation:none;width:100%;background:var(--dsw-alias-state-business-primary)}}
+`
+
+    /**
+     * Format a running duration for the summary card.
+     * @param {number} ms - elapsed milliseconds.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {string} compact duration.
+     */
+    function dwFormatDuration(ms, t) {
+      const total = Math.max(0, Math.floor(Number.isFinite(ms) ? ms / 1000 : 0))
+      const hours = Math.floor(total / 3600)
+      const minutes = Math.floor((total % 3600) / 60)
+      const seconds = total % 60
+      if (hours > 0) return t('duration.hours', { h: hours, m: minutes })
+      if (minutes > 0) return t('duration.minutes', { m: minutes, s: seconds })
+      return t('duration.seconds', { s: seconds })
+    }
+
+    /**
+     * Format a coarse relative distance for Session rows.
+     * @param {number} ms - elapsed milliseconds.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {string} relative label.
+     */
+    function dwFormatRelative(ms, t) {
+      const total = Math.max(0, Math.floor(Number.isFinite(ms) ? ms / 1000 : 0))
+      if (total < 60) return t('time.now')
+      const minutes = Math.floor(total / 60)
+      if (minutes < 60) return t('time.min', { n: minutes })
+      const hours = Math.floor(minutes / 60)
+      if (hours < 24) return t('time.hour', { n: hours })
+      return t('time.day', { n: Math.floor(hours / 24) })
+    }
+
+    /**
+     * Display label of one Workspace: durable title, then directory basename.
+     * @param {object} workspace - WorkspaceView row.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {string} label.
+     */
+    function dwWorkspaceLabel(workspace, t) {
+      if (workspace === null || typeof workspace !== 'object') return t('group.untitled')
+      const title = typeof workspace.title === 'string' ? workspace.title.trim() : ''
+      if (title.length > 0) return title
+      const path = typeof workspace.path === 'string' ? workspace.path.replace(/[\\/]+$/, '') : ''
+      const parts = path.split(/[\\/]/)
+      const base = parts.length > 0 ? parts[parts.length - 1] : ''
+      return base.length > 0 ? base : t('group.untitled')
+    }
+
+    /**
+     * Whether one Session currently counts as running.
+     *
+     * The live Session-status snapshot is authoritative once it knows the row;
+     * the list summary's running bit is the fallback while the status baseline
+     * is still in flight.
+     * @param {string} sessionId - Session identity.
+     * @param {object} summary - Session list summary, if any.
+     * @param {Map | undefined} statuses - live status snapshot.
+     * @returns {boolean} whether the Session is running.
+     */
+    function dwSessionRunning(sessionId, summary, statuses) {
+      if (statuses !== undefined && statuses !== null && typeof statuses.get === 'function') {
+        const status = statuses.get(sessionId)
+        if (status !== undefined && status !== null && typeof status.running === 'boolean') return status.running
+      }
+      return summary !== undefined && summary !== null && summary.running === true
+    }
+
+    /**
+     * Count the running direct subagent children of each Session.
+     *
+     * A parent whose own turn has closed is still working while a delegated
+     * child runs, so the card and the buckets must not treat that parent as
+     * finished — a finished child is not a finished task.
+     * @param {object} list - Session list state.
+     * @param {Map | undefined} statuses - live status snapshot.
+     * @returns {Map<string, number>} parent id → running direct children.
+     */
+    function dwRunningSubagentParents(list, statuses) {
+      const parents = new Map()
+      if (list === null || typeof list !== 'object' || list.byId === undefined || !Array.isArray(list.ids)) return parents
+      for (const id of list.ids) {
+        const summary = list.byId[id]
+        if (summary === undefined || summary.origin !== 'subagent' || summary.blank === true) continue
+        if (!dwSessionRunning(id, summary, statuses)) continue
+        const parentId = typeof summary.parentId === 'string' ? summary.parentId : ''
+        if (parentId.length === 0) continue
+        parents.set(parentId, (parents.get(parentId) ?? 0) + 1)
+      }
+      return parents
+    }
+
+    /**
+     * Workspace display label for one Session: its owning Workspace's label,
+     * or the ungrouped fallback when no Workspace accounts for it.
+     * @param {string} sessionId - Session identity.
+     * @param {readonly object[]} workspaces - Workspace rows.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {string} workspace label.
+     */
+    function dwSessionWorkspaceLabel(sessionId, workspaces, t) {
+      for (const candidate of workspaces) {
+        if (Array.isArray(candidate.sessionIds) && candidate.sessionIds.includes(sessionId)) {
+          return dwWorkspaceLabel(candidate, t)
+        }
+      }
+      return t('group.ungrouped')
+    }
+
+    /**
+     * Derive the running Session rows shown by the summary card, newest first.
+     * @param {object} list - Session list state.
+     * @param {Map | undefined} statuses - live status snapshot.
+     * @param {readonly object[]} workspaces - Workspace rows.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {Array<object>} running rows.
+     */
+    function dwRunningRows(list, statuses, workspaces, t, runningParents, archived) {
+      const rows = []
+      if (list === null || typeof list !== 'object' || list.byId === undefined || !Array.isArray(list.ids)) return rows
+      for (const id of list.ids) {
+        const summary = list.byId[id]
+        if (summary === undefined || summary.blank === true || summary.origin === 'subagent') continue
+        if (archived.has(id)) continue
+        const own = dwSessionRunning(id, summary, statuses)
+        const subagents = runningParents.get(id) ?? 0
+        if (!own && subagents === 0) continue
+        rows.push({
+          id,
+          title: typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0 ? summary.displayTitle : id,
+          workspace: dwSessionWorkspaceLabel(id, workspaces, t),
+          updatedAt: typeof summary.updatedAt === 'number' ? summary.updatedAt : Date.now(),
+          subagents,
+          state: 'running'
+        })
+      }
+      rows.sort((left, right) => right.updatedAt - left.updatedAt)
+      return rows
+    }
+
+    /**
+     * Derive the recently finished Session rows the card keeps after a stop.
+     *
+     * The card is the "find it again" surface, so a Session sits here for the
+     * retention window after its last activity instead of vanishing the moment
+     * its turn closes.
+     * @param {object} list - Session list state.
+     * @param {Map | undefined} statuses - live status snapshot.
+     * @param {readonly object[]} workspaces - Workspace rows.
+     * @param {Function} t - namespace-bound translate.
+     * @param {number} now - current epoch milliseconds.
+     * @returns {Array<object>} recently finished rows, newest first.
+     */
+    function dwRecentRows(list, statuses, workspaces, t, now, runningParents, archived) {
+      const rows = []
+      if (list === null || typeof list !== 'object' || list.byId === undefined || !Array.isArray(list.ids)) return rows
+      const cutoff = now - DW_ACTIVE_WINDOW_MS
+      for (const id of list.ids) {
+        const summary = list.byId[id]
+        if (summary === undefined || summary.blank === true || summary.origin === 'subagent') continue
+        if (archived.has(id)) continue
+        if (dwSessionRunning(id, summary, statuses) || runningParents.has(id)) continue
+        const updatedAt = typeof summary.updatedAt === 'number' ? summary.updatedAt : 0
+        if (updatedAt < cutoff) continue
+        rows.push({
+          id,
+          title: typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0 ? summary.displayTitle : id,
+          workspace: dwSessionWorkspaceLabel(id, workspaces, t),
+          updatedAt,
+          subagents: 0,
+          state: 'done'
+        })
+      }
+      rows.sort((left, right) => right.updatedAt - left.updatedAt)
+      return rows
+    }
+
+    /**
+     * Sessions that keep a Workspace Active: running now, or last active
+     * inside the retention window.
+     * @param {object} list - Session list state.
+     * @param {Map | undefined} statuses - live status snapshot.
+     * @param {readonly object[]} workspaces - Workspace rows.
+     * @param {number} now - current epoch milliseconds.
+     * @returns {{ rows: Array<object>, workspaceOf: Map<string, string> }} activity facts.
+     */
+    function dwActiveSessions(list, statuses, workspaces, now, archived) {
+      const workspaceOf = new Map()
+      for (const workspace of workspaces) {
+        for (const id of workspace.sessionIds ?? []) workspaceOf.set(id, workspace.workspaceId)
+      }
+      const rows = []
+      if (list === null || typeof list !== 'object' || list.byId === undefined || !Array.isArray(list.ids)) {
+        return { rows, workspaceOf }
+      }
+      const runningParents = dwRunningSubagentParents(list, statuses)
+      const cutoff = now - DW_ACTIVE_WINDOW_MS
+      for (const id of list.ids) {
+        const summary = list.byId[id]
+        if (summary === undefined || summary.blank === true || summary.origin === 'subagent') continue
+        if (archived.has(id)) continue
+        const running = dwSessionRunning(id, summary, statuses) || runningParents.has(id)
+        const updatedAt = typeof summary.updatedAt === 'number' ? summary.updatedAt : 0
+        if (!running && updatedAt < cutoff) continue
+        rows.push({ id, running, updatedAt })
+      }
+      return { rows, workspaceOf }
+    }
+
+    /**
+     * Read the persisted bucket fold states, degrading to expanded.
+     * @returns {{ active: boolean, inactive: boolean }} fold states.
+     */
+    function dwReadFolds() {
+      try {
+        const raw = window.localStorage.getItem(DW_FOLD_KEY)
+        if (raw === null) return { active: false, inactive: false }
+        const value = JSON.parse(raw)
+        return { active: value?.active === true, inactive: value?.inactive === true }
+      } catch {
+        return { active: false, inactive: false }
+      }
+    }
+
+    /**
+     * Persist the bucket fold states.
+     * @param {{ active: boolean, inactive: boolean }} folds - fold states.
+     * @returns {void}
+     */
+    function dwWriteFolds(folds) {
+      try {
+        window.localStorage.setItem(DW_FOLD_KEY, JSON.stringify({ active: folds.active, inactive: folds.inactive }))
+      } catch {
+        // A storage-denied browser keeps the in-memory state only.
+      }
+    }
+
+    /**
+     * Find the live geometry this feature augments.
+     *
+     * The native browser keeps owning `sidebar.workspaces`; this feature only
+     * inserts two sibling nodes into it (a summary slot above the header and
+     * one bucket header inside the list) and sets flex order on the native
+     * group sections. Anchors are the slot wrapper and the tree role, so a
+     * native re-render never needs matching hashed class names.
+     * @returns {object | null} mount refs, or null while the expanded browser is absent.
+     */
+    function dwFindMounts() {
+      const wrapper = document.querySelector('[data-slot="sidebar.workspaces"]')
+      if (!(wrapper instanceof HTMLElement)) return null
+      const root = wrapper.firstElementChild
+      if (!(root instanceof HTMLElement)) return null
+      const list = root.querySelector('[role="tree"]')
+      const existingPanel = root.querySelector(`:scope > [${DW_ATTR}="panel"]`)
+      if (!(list instanceof HTMLElement)) {
+        // Rail state keeps the panel node but hides it until the column widens.
+        if (existingPanel instanceof HTMLElement) existingPanel.style.display = 'none'
+        return null
+      }
+      let panel = existingPanel
+      if (!(panel instanceof HTMLElement)) {
+        panel = document.createElement('div')
+        panel.setAttribute(DW_ATTR, 'panel')
+        panel.className = 'psd-panel-slot'
+        root.insertBefore(panel, root.firstElementChild)
+      }
+      panel.style.display = ''
+      let activeHeader = list.querySelector(`:scope > [${DW_ATTR}="group"][data-group="active"]`)
+      if (!(activeHeader instanceof HTMLElement)) {
+        activeHeader = document.createElement('div')
+        activeHeader.setAttribute(DW_ATTR, 'group')
+        activeHeader.dataset.group = 'active'
+        activeHeader.className = 'psd-group-header'
+        list.appendChild(activeHeader)
+      }
+      let inactiveHeader = list.querySelector(`:scope > [${DW_ATTR}="group"][data-group="inactive"]`)
+      if (!(inactiveHeader instanceof HTMLElement)) {
+        inactiveHeader = document.createElement('div')
+        inactiveHeader.setAttribute(DW_ATTR, 'group')
+        inactiveHeader.dataset.group = 'inactive'
+        inactiveHeader.className = 'psd-group-header'
+        list.appendChild(inactiveHeader)
+      }
+      if (list.style.display !== 'flex') list.style.display = 'flex'
+      if (list.style.flexDirection !== 'column') list.style.flexDirection = 'column'
+      return { wrapper, root, list, panel, activeHeader, inactiveHeader }
+    }
+
+    /**
+     * The 12px disclosure chevron.
+     * @returns {object} React element.
+     */
+    function DwChevron() {
+      return React.createElement('svg', {
+        width: 12,
+        height: 12,
+        viewBox: '0 0 24 24',
+        fill: 'none',
+        stroke: 'currentColor',
+        strokeWidth: 2.2,
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+        'aria-hidden': true,
+        focusable: 'false'
+      }, React.createElement('path', { d: 'm6 9 6 6 6-6' }))
+    }
+
+    /**
+     * Direct subagent Sessions grouped under their parent Session.
+     *
+     * Only recent children (running now or last active inside the retention
+     * window) are returned: a parent accumulates subagent Sessions over time,
+     * and the card is about the current work. Subagent Sessions never render
+     * as top-level card rows.
+     * @param {object} list - Session list state.
+     * @param {Map | undefined} statuses - live status snapshot.
+     * @param {number} now - current epoch milliseconds.
+     * @param {Set<string>} archived - archived Session ids.
+     * @returns {Map<string, Array<object>>} parent id → child rows, newest first.
+     */
+    function dwSubagentChildren(list, statuses, now, archived) {
+      const children = new Map()
+      if (list === null || typeof list !== 'object' || list.byId === undefined || !Array.isArray(list.ids)) return children
+      const cutoff = now - DW_ACTIVE_WINDOW_MS
+      for (const id of list.ids) {
+        const summary = list.byId[id]
+        if (summary === undefined || summary.origin !== 'subagent' || summary.blank === true) continue
+        if (archived.has(id)) continue
+        const parentId = typeof summary.parentId === 'string' ? summary.parentId : ''
+        if (parentId.length === 0) continue
+        const running = dwSessionRunning(id, summary, statuses)
+        const updatedAt = typeof summary.updatedAt === 'number' ? summary.updatedAt : 0
+        if (!running && updatedAt < cutoff) continue
+        const row = {
+          id,
+          title: typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0 ? summary.displayTitle : id,
+          updatedAt,
+          state: running ? 'running' : 'done'
+        }
+        const siblings = children.get(parentId)
+        if (siblings === undefined) children.set(parentId, [row])
+        else siblings.push(row)
+      }
+      for (const rows of children.values()) rows.sort((left, right) => right.updatedAt - left.updatedAt)
+      return children
+    }
+
+    /**
+     * Render the running-Sessions summary card.
+     * @param {object} props - component props.
+     * @returns {object} React element.
+     */
+    function DynamicRunningPanel(props) {
+      const {
+        t, rows, expanded, showAll, now, durations, childrenByParent, collapsedParents,
+        onToggle, onToggleAll, onToggleChildren, onOpen
+      } = props
+      const visible = expanded && !showAll ? rows.slice(0, DW_PANEL_LIMIT) : rows
+      const canExpand = rows.length > DW_PANEL_LIMIT
+      const head = [
+        React.createElement('button', {
+          key: 'toggle',
+          type: 'button',
+          className: 'psd-panel-toggle',
+          'aria-expanded': expanded,
+          'aria-label': expanded ? t('panel.collapse') : t('panel.expand'),
+          onClick: onToggle
+        },
+        React.createElement('span', { className: 'psd-pulse', 'aria-hidden': true }),
+        React.createElement('span', { className: 'psd-panel-title' }, t('panel.title')),
+        React.createElement('span', { className: 'psd-count' }, t('count', { count: rows.length })),
+        React.createElement('span', { className: 'psd-chevron' }, React.createElement(DwChevron, null)))
+      ]
+      if (expanded && canExpand) {
+        head.push(React.createElement('button', {
+          key: 'all',
+          type: 'button',
+          className: 'psd-panel-link',
+          onClick: onToggleAll
+        }, showAll ? t('panel.showLess') : t('panel.viewAll', { count: rows.length })))
+      }
+      const children = [React.createElement('div', { key: 'head', className: 'psd-panel-head' }, head)]
+      if (expanded) {
+        const body = []
+        if (rows.length === 0) {
+          body.push(React.createElement('div', { key: 'empty', className: 'psd-panel-empty' },
+            React.createElement('strong', null, t('panel.empty.title')),
+            React.createElement('span', null, t('panel.empty.hint'))))
+        } else {
+          for (const row of visible) {
+            const running = row.state === 'running'
+            const duration = durations.get(row.id)
+            const time = running
+              ? (duration === undefined || duration.observed !== true
+                  ? dwFormatRelative(now - row.updatedAt, t)
+                  : dwFormatDuration(now - duration.at, t))
+              : dwFormatRelative(now - row.updatedAt, t)
+            const rowChildren = childrenByParent.get(row.id) ?? []
+            const collapsed = collapsedParents.has(row.id)
+            const hasChildren = rowChildren.length > 0
+            const where = running ? row.workspace : `${row.workspace} · ${t('panel.done')}`
+            const detail = hasChildren && collapsed
+              ? `${where} · ${t('panel.children', { count: rowChildren.length })}`
+              : where
+            body.push(React.createElement('div', {
+              key: row.id,
+              className: 'psd-item',
+              'data-state': row.state
+            },
+            React.createElement('div', { className: 'psd-run', 'data-state': row.state },
+              hasChildren
+                ? React.createElement('button', {
+                  type: 'button',
+                  className: 'psd-run-toggle',
+                  'aria-expanded': !collapsed,
+                  'aria-label': t(collapsed ? 'panel.expandChildren' : 'panel.collapseChildren', { title: row.title }),
+                  onClick: () => onToggleChildren(row.id)
+                }, React.createElement('span', { className: 'psd-chevron' }, React.createElement(DwChevron, null)))
+                : React.createElement('span', { className: 'psd-run-toggle-spacer', 'aria-hidden': true }),
+              React.createElement('button', {
+                type: 'button',
+                className: 'psd-run-main',
+                title: row.title,
+                'aria-label': t('panel.open', { title: row.title }),
+                onClick: () => onOpen(row.id)
+              },
+              React.createElement('span', { className: 'psd-run-head' },
+                React.createElement(StateDot, { state: running ? 'ongoing' : 'done', size: 14, className: 'psd-run-glyph' }),
+                React.createElement('span', { className: 'psd-run-title' }, row.title),
+                React.createElement('span', { className: 'psd-run-time' }, time)),
+              React.createElement('span', { className: 'psd-run-where' }, detail),
+              running ? React.createElement('span', { className: 'psd-run-bar', 'aria-hidden': true }) : null)),
+            hasChildren && !collapsed
+              ? React.createElement('div', { className: 'psd-children' }, rowChildren.map((child) => React.createElement('button', {
+                key: child.id,
+                type: 'button',
+                className: 'psd-child',
+                'data-state': child.state,
+                title: child.title,
+                'aria-label': t('panel.open', { title: child.title }),
+                onClick: () => onOpen(child.id)
+              },
+              React.createElement('span', { className: 'psd-child-glyph' },
+                React.createElement(StateDot, { state: child.state === 'running' ? 'ongoing' : 'done', size: 10 })),
+              React.createElement('span', { className: 'psd-child-title' }, child.title),
+              React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t)))))
+              : null))
+          }
+        }
+        children.push(React.createElement('div', { key: 'body', className: 'psd-panel-body' }, body))
+      }
+      return React.createElement('div', { className: 'psd-panel' }, children)
+    }
+
+    /**
+     * The bucket header rendered into the native tree as a foreign child node.
+     * @param {object} props - component props.
+     * @returns {object} React element.
+     */
+    function DynamicGroupHeader(props) {
+      const { t, group, count, collapsed, onToggle } = props
+      return React.createElement('button', {
+        type: 'button',
+        className: 'psd-group-toggle',
+        'aria-expanded': !collapsed,
+        'aria-label': t(group === 'active' ? 'group.toggleActive' : 'group.toggleInactive'),
+        onClick: onToggle
+      },
+      React.createElement('span', { className: 'psd-chevron' }, React.createElement(DwChevron, null)),
+      React.createElement('span', { className: 'psd-group-label' }, t(group === 'active' ? 'group.active' : 'group.inactive')),
+      React.createElement('span', { className: 'psd-group-count' }, t('count', { count })))
+    }
+
+    /**
+     * Invisible seat that owns the dynamic-Workspace DOM augmentation.
+     *
+     * The native browser is never replaced: this seat portals a summary card
+     * above its header and one bucket header into its list, then keeps the
+     * native group sections ordered and folded through flex order. Every
+     * native row behavior (menus, search, add, drag, dialogs) keeps working
+     * because those nodes are untouched.
+     * @param {object} props - standard slot props plus this feature's t/uiWorkspace.
+     * @returns {object | null} portal group.
+     */
+    function DynamicWorkspaceSeat(props) {
+      const { t, uiWorkspace } = props
+      const sessions = props.useSessions((state) => state)
+      const statuses = props.useSessionStatus((state) => state)
+      const workspaceSnapshot = props.useWorkspaces((state) => state)
+
+      const [mounts, setMounts] = React.useState(null)
+      const [groupCounts, setGroupCounts] = React.useState({ active: 0, inactive: 0 })
+      const [folds, setFolds] = React.useState(dwReadFolds)
+      const [panelExpanded, setPanelExpanded] = React.useState(true)
+      const [showAll, setShowAll] = React.useState(false)
+      const [collapsedParents, setCollapsedParents] = React.useState(() => new Set())
+      const [now, setNow] = React.useState(() => Date.now())
+
+      const mountsRef = React.useRef(null)
+      const latestRef = React.useRef(null)
+      const aliveRef = React.useRef(true)
+      const applyScheduledRef = React.useRef(false)
+      const durationsRef = React.useRef(new Map())
+      const firstRenderRef = React.useRef(true)
+
+      const runningParents = dwRunningSubagentParents(sessions, statuses)
+      const workspaces = workspaceSnapshot?.items ?? []
+      const archivedIds = new Set(workspaceSnapshot?.archivedSessionIds ?? [])
+      const runningRows = dwRunningRows(sessions, statuses, workspaces, t, runningParents, archivedIds)
+      const recentRows = dwRecentRows(sessions, statuses, workspaces, t, now, runningParents, archivedIds)
+      const panelRows = runningRows.concat(recentRows)
+      const childrenByParent = dwSubagentChildren(sessions, statuses, now, archivedIds)
+      const runningIds = new Set(runningRows.map((row) => row.id))
+      const durations = new Map()
+      for (const id of runningIds) {
+        let entry = durationsRef.current.get(id)
+        if (entry === undefined) {
+          entry = { at: Date.now(), observed: firstRenderRef.current !== true }
+          durationsRef.current.set(id, entry)
+        }
+        durations.set(id, entry)
+      }
+      for (const id of [...durationsRef.current.keys()]) {
+        if (!runningIds.has(id)) durationsRef.current.delete(id)
+      }
+
+      latestRef.current = { sessions, statuses, workspaces: workspaceSnapshot, folds }
+
+      React.useEffect(() => {
+        firstRenderRef.current = false
+        return () => { aliveRef.current = false }
+      }, [])
+
+      const applyGrouping = React.useCallback(() => {
+        const refs = mountsRef.current
+        const latest = latestRef.current
+        if (refs === null || latest === null) return
+        if (!(refs.list instanceof HTMLElement) || refs.activeHeader.isConnected !== true) return
+        const workspaces = latest.workspaces?.items ?? []
+        const activity = dwActiveSessions(
+          latest.sessions,
+          latest.statuses,
+          workspaces,
+          Date.now(),
+          new Set(latest.workspaces?.archivedSessionIds ?? [])
+        )
+        const activeIds = new Set()
+        const recencyByWorkspace = new Map()
+        let ungroupedActive = false
+        for (const row of activity.rows) {
+          const workspaceId = activity.workspaceOf.get(row.id)
+          if (workspaceId === undefined) {
+            ungroupedActive = true
+            continue
+          }
+          activeIds.add(workspaceId)
+          recencyByWorkspace.set(workspaceId, Math.max(recencyByWorkspace.get(workspaceId) ?? 0, row.updatedAt))
+        }
+        const sections = []
+        let domIndex = 0
+        for (const child of Array.from(refs.list.children)) {
+          if (child === refs.activeHeader || child === refs.inactiveHeader) continue
+          if (!(child instanceof HTMLElement)) continue
+          const row = child.querySelector('[data-row-key^="workspace:"]')
+          if (row === null) { domIndex += 1; continue }
+          const key = row.getAttribute('data-row-key') ?? ''
+          const workspaceId = key.slice('workspace:'.length)
+          const active = workspaceId.length === 0 ? ungroupedActive : activeIds.has(workspaceId)
+          sections.push({ element: child, active, domIndex, recency: recencyByWorkspace.get(workspaceId) ?? 0 })
+          domIndex += 1
+        }
+        const activeSections = sections.filter((section) => section.active)
+        const inactiveSections = sections.filter((section) => !section.active)
+        activeSections.sort((left, right) => (right.recency - left.recency) || (left.domIndex - right.domIndex))
+        const ordered = [...activeSections, ...inactiveSections]
+        ordered.forEach((section, index) => {
+          section.element.style.order = String((section.active ? 100 : 5001) + index)
+        })
+        for (const section of sections) {
+          const collapsed = section.active ? latest.folds.active : latest.folds.inactive
+          section.element.style.display = collapsed ? 'none' : ''
+        }
+        refs.activeHeader.style.order = '0'
+        refs.inactiveHeader.style.order = '5000'
+        const empty = sections.length === 0
+        refs.activeHeader.style.display = empty ? 'none' : ''
+        refs.inactiveHeader.style.display = empty ? 'none' : ''
+        const counts = { active: activeSections.length, inactive: inactiveSections.length }
+        if (aliveRef.current) {
+          setGroupCounts((previous) => (
+            previous.active === counts.active && previous.inactive === counts.inactive ? previous : counts
+          ))
+        }
+      }, [setGroupCounts])
+
+      const scheduleApply = React.useCallback(() => {
+        if (applyScheduledRef.current) return
+        applyScheduledRef.current = true
+        window.requestAnimationFrame(() => {
+          applyScheduledRef.current = false
+          if (!aliveRef.current) return
+          applyGrouping()
+        })
+      }, [applyGrouping])
+
+      // Mount geometry: find the native browser, insert the foreign nodes, and
+      // keep them present across native re-renders and sidebar fold changes.
+      React.useEffect(() => {
+        let disposed = false
+        let observer = null
+        let observedTarget = null
+        let retry = null
+
+        const ensureObserver = () => {
+          const sidebar = document.querySelector('[data-slot="sidebar"]')
+          if (!(sidebar instanceof HTMLElement)) return
+          if (observer !== null && observedTarget === sidebar) return
+          if (observer !== null) observer.disconnect()
+          observedTarget = sidebar
+          observer = new MutationObserver(() => {
+            if (disposed) return
+            reconcile()
+            scheduleApply()
+          })
+          observer.observe(sidebar, { childList: true, subtree: true })
+        }
+
+        const reconcile = () => {
+          if (disposed) return
+          const refs = dwFindMounts()
+          if (refs === null) {
+            if (mountsRef.current !== null) {
+              mountsRef.current = null
+              setMounts(null)
+            }
+            ensureObserver()
+            return
+          }
+          const previous = mountsRef.current
+          mountsRef.current = refs
+          ensureObserver()
+          if (previous === null
+            || previous.panel !== refs.panel
+            || previous.list !== refs.list
+            || previous.activeHeader !== refs.activeHeader
+            || previous.inactiveHeader !== refs.inactiveHeader) {
+            setMounts({
+              panel: refs.panel,
+              list: refs.list,
+              activeHeader: refs.activeHeader,
+              inactiveHeader: refs.inactiveHeader
+            })
+          }
+          scheduleApply()
+        }
+
+        reconcile()
+        retry = window.setInterval(() => {
+          if (disposed) return
+          const current = mountsRef.current
+          if (current === null || current.panel.isConnected !== true) reconcile()
+        }, 500)
+        return () => {
+          disposed = true
+          aliveRef.current = false
+          window.clearInterval(retry)
+          if (observer !== null) observer.disconnect()
+          const refs = mountsRef.current
+          mountsRef.current = null
+          if (refs !== null) {
+            if (refs.panel instanceof HTMLElement) refs.panel.remove()
+            if (refs.activeHeader instanceof HTMLElement) refs.activeHeader.remove()
+            if (refs.inactiveHeader instanceof HTMLElement) refs.inactiveHeader.remove()
+            if (refs.list instanceof HTMLElement) {
+              refs.list.style.display = ''
+              refs.list.style.flexDirection = ''
+              for (const child of Array.from(refs.list.children)) {
+                if (!(child instanceof HTMLElement)) continue
+                child.style.order = ''
+                child.style.display = ''
+              }
+            }
+          }
+          setMounts(null)
+        }
+      }, [scheduleApply])
+
+      React.useEffect(() => {
+        scheduleApply()
+      }, [sessions, statuses, workspaceSnapshot, folds, scheduleApply])
+
+      React.useEffect(() => {
+        if (!panelExpanded || runningRows.length === 0) return undefined
+        const timer = window.setInterval(() => setNow(Date.now()), 1000)
+        return () => window.clearInterval(timer)
+      }, [panelExpanded, runningRows.length])
+
+      // Retention-window tick: a Workspace leaves Active and a finished row
+      // leaves the card when its window expires, even with no new data events.
+      React.useEffect(() => {
+        const timer = window.setInterval(() => {
+          setNow(Date.now())
+          scheduleApply()
+        }, 30000)
+        return () => window.clearInterval(timer)
+      }, [scheduleApply])
+
+      if (mounts === null) return null
+      const portal = []
+      portal.push(ReactDOM.createPortal(React.createElement(DynamicRunningPanel, {
+        t,
+        rows: panelRows,
+        expanded: panelExpanded,
+        showAll,
+        now,
+        durations,
+        childrenByParent,
+        collapsedParents,
+        onToggle: () => setPanelExpanded((value) => !value),
+        onToggleAll: () => setShowAll((value) => !value),
+        onToggleChildren: (id) => setCollapsedParents((value) => {
+          const next = new Set(value)
+          if (next.has(id)) next.delete(id)
+          else next.add(id)
+          return next
+        }),
+        onOpen: (id) => {
+          try {
+            if (uiWorkspace !== null && uiWorkspace !== undefined && typeof uiWorkspace.openSession === 'function') {
+              uiWorkspace.openSession(id)
+            }
+          } catch {
+            // A stale row is dropped by the next snapshot; a rejected open is not fatal.
+          }
+        }
+      }), mounts.panel, 'running-panel'))
+      if (mounts.activeHeader.isConnected) {
+        portal.push(ReactDOM.createPortal(React.createElement(DynamicGroupHeader, {
+          t,
+          group: 'active',
+          count: groupCounts.active,
+          collapsed: folds.active,
+          onToggle: () => setFolds((value) => {
+            const next = { ...value, active: !value.active }
+            dwWriteFolds(next)
+            return next
+          })
+        }), mounts.activeHeader, 'active-header'))
+      }
+      if (mounts.inactiveHeader.isConnected) {
+        portal.push(ReactDOM.createPortal(React.createElement(DynamicGroupHeader, {
+          t,
+          group: 'inactive',
+          count: groupCounts.inactive,
+          collapsed: folds.inactive,
+          onToggle: () => setFolds((value) => {
+            const next = { ...value, inactive: !value.inactive }
+            dwWriteFolds(next)
+            return next
+          })
+        }), mounts.inactiveHeader, 'inactive-header'))
+      }
+      return React.createElement(React.Fragment, null, portal)
+    }
+
+    /**
+     * Register the dynamic-Workspace seat, its dictionaries, and its styles.
+     * @param {object} ctx - client root context.
+     * @returns {void}
+     */
+    function installDynamicWorkspaces(ctx) {
+      const t = ctx.locale.bind(DW_NS)
+      ctx.effect(() => ctx.locale.register(DW_NS, { en: DW_EN, zh: DW_ZH }), 'power-suite: dynamic-workspaces dictionaries')
+      ctx.effect(() => {
+        const style = document.createElement('style')
+        style.setAttribute(DW_ATTR, 'style')
+        style.textContent = DW_CSS
+        document.head.appendChild(style)
+        return () => { style.remove() }
+      }, 'power-suite: dynamic-workspaces styles')
+      ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+        name: 'shell.overlay',
+        id: DW_SEAT
+      }, (props) => React.createElement(DynamicWorkspaceSeat, {
+        ...props,
+        t,
+        uiWorkspace: ctx.uiWorkspace
+      }))), 'power-suite: dynamic-workspaces seat')
+    }
+    //#endregion
+
+    //#region feature: prompt history — preview
+    /** Copy namespace of the composer-docked prompt-history preview. */
+    const PROMPT_HISTORY_PREVIEW_NS = 'powerSuitePromptHistoryPreview'
+
+    /** Registration identity of the composer-docked prompt-history preview. */
+    const PROMPT_HISTORY_PREVIEW_ID = 'power-suite.prompt-history-preview'
+
+    // Remix Icon path data (Apache-2.0, https://remixicon.com), inlined here so
+    // this feature needs no icon package at runtime.
+    const REMIX_SEARCH_LINE = 'M18.031 16.6168L22.3137 20.8995L20.8995 22.3137L16.6168 18.031C15.0769 19.263 13.124 20 11 20C6.032 20 2 15.968 2 11C2 6.032 6.032 2 11 2C15.968 2 20 6.032 20 11C20 13.124 19.263 15.0769 18.031 16.6168ZM16.0247 15.8748C17.2475 14.6146 18 12.8956 18 11C18 7.1325 14.8675 4 11 4C7.1325 4 4 7.1325 4 11C4 14.8675 7.1325 18 11 18C12.8956 18 14.6146 17.2475 15.8748 16.0247L16.0247 15.8748Z'
+    const REMIX_FILE_COPY_LINE = 'M6.9998 6V3C6.9998 2.44772 7.44752 2 7.9998 2H19.9998C20.5521 2 20.9998 2.44772 20.9998 3V17C20.9998 17.5523 20.5521 18 19.9998 18H16.9998V20.9991C16.9998 21.5519 16.5499 22 15.993 22H4.00666C3.45059 22 3 21.5554 3 20.9991L3.0026 7.00087C3.0027 6.44811 3.45264 6 4.00942 6H6.9998ZM5.00242 8L5.00019 20H14.9998V8H5.00242ZM8.9998 6H16.9998V16H18.9998V4H8.9998V6Z'
+    const REMIX_CLOSE_LINE = 'M11.9997 10.5865L16.9495 5.63672L18.3637 7.05093L13.4139 12.0007L18.3637 16.9504L16.9495 18.3646L11.9997 13.4149L7.04996 18.3646L5.63574 16.9504L10.5855 12.0007L5.63574 7.05093L7.04996 5.63672L11.9997 10.5865Z'
+
+    /**
+     * React DOM bridge for the full-prompt popover portal.
+     *
+     * The composer dock lives inside the shell's fixed composer layer, so a
+     * hover preview must leave the dock and portal to the document body. The
+     * bridge itself is required once at the top of this module.
+     */
+
+    /** Copy for the prompt-history preview. */
+    const PROMPT_HISTORY_PREVIEW_EN = {
+      'search.placeholder': 'Search prompts',
+      'search.aria': 'Search prompt history',
+      'search.open': 'Search',
+      'search.clear': 'Clear search',
+      'list.aria': 'Prompt history',
+      'row.aria': 'Copy prompt #{index} to the input',
+      'copied': 'Copied to input',
+      'empty.filtered': 'No matching prompts',
+      'footer.count': '{count} prompts',
+      'footer.filtered': 'Showing {count} of {total}'
+    }
+    const PROMPT_HISTORY_PREVIEW_ZH = {
+      'search.placeholder': '搜索历史提示',
+      'search.aria': '搜索历史提示',
+      'search.open': '搜索',
+      'search.clear': '清除搜索',
+      'list.aria': '历史提示',
+      'row.aria': '复制第 {index} 条提示到输入框',
+      'copied': '已复制到输入框',
+      'empty.filtered': '没有匹配的历史提示',
+      'footer.count': '共 {count} 条历史提示',
+      'footer.filtered': '显示 {count} / {total} 条'
+    }
+
+    const PROMPT_HISTORY_PREVIEW_CSS = `
+.psp-root{box-sizing:border-box;width:100%;max-width:var(--dsh-composer-card-max-width,760px);align-self:center;margin:0 auto;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}
+.psp-divider{width:48px;height:1px;margin:4px auto 8px;border-radius:1px;background:var(--dsw-alias-border-l2)}
+.psp-card{position:relative;box-sizing:border-box;display:flex;flex-direction:column;min-width:0;overflow:hidden;border:1px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-shadow-lv2,none)}
+.psp-body{min-height:0}
+.psp-list{display:flex;flex-direction:column;gap:1px;max-height:min(340px,40vh);margin:0;padding:4px 6px;overflow:auto;overscroll-behavior:contain;list-style:none}
+.psp-item{min-width:0}
+.psp-row{position:relative;box-sizing:border-box;display:flex;align-items:flex-start;gap:8px;width:100%;margin:0;padding:6px 8px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-primary);font:inherit;text-align:left;cursor:pointer}
+.psp-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.psp-row:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-1px}
+.psp-index{flex:none;min-width:32px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:20px;font-variant-numeric:tabular-nums}
+.psp-text{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;word-break:break-word;font-size:12.5px;line-height:20px}
+.psp-meta{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex:none;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:20px;font-variant-numeric:tabular-nums}
+.psp-time{white-space:nowrap}
+.psp-copy{display:inline-flex;align-items:center;color:var(--dsw-alias-label-tertiary);opacity:0;transition:opacity .12s ease}
+.psp-row:hover .psp-copy,.psp-row:focus-visible .psp-copy{opacity:1;color:var(--dsw-alias-label-secondary)}
+.psp-searchrow{display:flex;align-items:center;gap:6px;padding:5px 10px;border-top:1px solid var(--dsw-alias-border-l1)}
+.psp-searchrow:focus-within{background:var(--dsw-alias-bg-layer-2)}
+.psp-searchrow-icon{flex:none;color:var(--dsw-alias-label-tertiary)}
+.psp-searchrow-input{flex:1;min-width:0;height:24px;margin:0;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;outline:none}
+.psp-searchrow-input::placeholder{color:var(--dsw-alias-label-tertiary)}
+.psp-searchclear{box-sizing:border-box;flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.psp-searchclear:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
+.psp-searchclear:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.psp-empty{padding:18px 12px;text-align:center;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
+.psp-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 12px 8px;border-top:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}
+.psp-foot-count{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.psp-searchbtn{display:inline-flex;align-items:center;gap:4px;flex:none;height:22px;padding:0 6px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;line-height:16px;cursor:pointer}
+.psp-searchbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
+.psp-searchbtn:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.psp-copied{display:inline-flex;align-items:center;gap:4px;flex:none;white-space:nowrap;font-size:11px;line-height:16px;color:var(--dsw-alias-state-success-primary)}
+.psp-popover{position:fixed;z-index:1000;box-sizing:border-box;overflow:auto;padding:9px 11px;border:1px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-overlay,var(--dsw-alias-bg-layer-1));box-shadow:var(--dsw-shadow-lv3,none);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12.5px;line-height:20px;overscroll-behavior:contain}
+.psp-popover-text{white-space:pre-wrap;word-break:break-word}
+.psp-popover-time{margin-top:5px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}
+@media (prefers-reduced-motion:no-preference){.psp-copied{animation:psp-copied-in .16s ease-out}}
+@media (prefers-reduced-motion:reduce){.psp-copy{transition:none}}
+@keyframes psp-copied-in{from{opacity:0}to{opacity:1}}
+`
+
+    /**
+     * Focus the Lexical editor of the composer occurrence that owns `element`.
+     * @param {object | null} element - node rendered inside the composer occurrence.
+     * @returns {void}
+     */
+    function focusPromptHistoryComposer(element) {
+      const region = element !== null && typeof element.closest === 'function'
+        ? element.closest('[data-conversation-region="composer"]')
+        : null
+      const scope = region ?? document
+      const editor = scope.querySelector('[data-lexical-editor="true"]')
+      if (editor instanceof HTMLElement) editor.focus()
+    }
+
+    /**
+     * Display labels for one prompt timestamp.
+     * @param {number} at - epoch milliseconds.
+     * @returns {{ label: string, title: string }} compact time and full hover title.
+     */
+    function promptHistoryTimeLabels(at) {
+      const date = new Date(at)
+      const now = new Date()
+      const pad = (value) => String(value).padStart(2, '0')
+      const monthDay = `${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+      const fullDay = `${date.getFullYear()}-${monthDay}`
+      let label = `${pad(date.getHours())}:${pad(date.getMinutes())}`
+      if (date.toDateString() !== now.toDateString()) label = date.getFullYear() === now.getFullYear() ? monthDay : fullDay
+      return { label, title: date.toLocaleString() }
+    }
+
+    /**
+     * Prompt-history preview (requirement 3).
+     *
+     * An always-visible panel docked above the composer
+     * (`conversation.input.dock`): a short centered divider, then this
+     * Session's sent prompts newest first, a footer with the prompt count and
+     * an inline search toggle. Hovering or focusing a row shows the full
+     * prompt in a document-level popover; clicking the row (or pressing Enter
+     * on a focused one) copies it into the composer draft. Renders nothing
+     * until the Session has at least one sent prompt.
+     * @param {object} props - dock seat props plus the injected locale seat.
+     * @returns {object | null} the dock, or nothing without prompt history.
+     */
+    function PromptHistoryPreview(props) {
+      const { sessionId, useInput, inputActions } = props
+      const t = typeof props.t === 'function' ? props.t : (key) => key
+      const phase = useInput((state) => state.phase)
+      const [snapshot, setSnapshot] = React.useState({ sessionId: null, status: 'idle', prompts: [] })
+      const [query, setQuery] = React.useState('')
+      const [searchOpen, setSearchOpen] = React.useState(false)
+      const [copied, setCopied] = React.useState(false)
+      const [reloadKey, setReloadKey] = React.useState(0)
+      const [preview, setPreview] = React.useState(null)
+      const rootRef = React.useRef(null)
+      const searchRef = React.useRef(null)
+      const copiedTimer = React.useRef(null)
+      const previewTimer = React.useRef(null)
+
+      const prompts = snapshot.sessionId === sessionId && snapshot.status === 'ready' ? snapshot.prompts : []
+
+      // One request per Session and per finished turn. The per-effect guard
+      // drops a response that resolves after a switch or a newer reload.
+      React.useEffect(() => {
+        let active = true
+        const target = sessionId
+        setSnapshot((current) => current.sessionId === target && current.status === 'ready'
+          ? current
+          : { sessionId: target, status: 'loading', prompts: [] })
+        readPromptHistoryEntries(target).then((next) => {
+          if (!active) return
+          setSnapshot({ sessionId: target, status: 'ready', prompts: next })
+        })
+        return () => { active = false }
+      }, [sessionId, reloadKey])
+
+      // Switching Sessions starts the reading surface over.
+      React.useEffect(() => {
+        setQuery('')
+        setSearchOpen(false)
+        setCopied(false)
+        setPreview(null)
+      }, [sessionId])
+
+      // A finished turn can have appended a prompt; refetch once input is plain again.
+      const previousPhase = React.useRef(phase)
+      React.useEffect(() => {
+        const before = previousPhase.current
+        previousPhase.current = phase
+        if (before !== 'plain' && phase === 'plain') setReloadKey((value) => value + 1)
+      }, [phase])
+
+      React.useEffect(() => () => {
+        if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current)
+        if (previewTimer.current !== null) window.clearTimeout(previewTimer.current)
+      }, [])
+
+      // The popover uses viewport coordinates; scrolling or resizing invalidates
+      // its anchor, so close it instead of leaving it at a stale position.
+      React.useEffect(() => {
+        if (preview === null) return undefined
+        const dismiss = () => setPreview(null)
+        document.addEventListener('scroll', dismiss, true)
+        window.addEventListener('resize', dismiss)
+        return () => {
+          document.removeEventListener('scroll', dismiss, true)
+          window.removeEventListener('resize', dismiss)
+        }
+      }, [preview])
+
+      // Revealing the search row moves the caret there without touching the composer.
+      React.useEffect(() => {
+        if (!searchOpen) return
+        const input = searchRef.current
+        if (input instanceof HTMLElement) input.focus()
+      }, [searchOpen])
+
+      /**
+       * Put one prompt into the composer draft and acknowledge briefly.
+       * @param {string} text - prompt text.
+       * @returns {void}
+       */
+      function copyPrompt(text) {
+        cancelHidePreview()
+        inputActions.setDraft(text)
+        focusPromptHistoryComposer(rootRef.current)
+        setPreview(null)
+        setCopied(true)
+        if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current)
+        copiedTimer.current = window.setTimeout(() => {
+          copiedTimer.current = null
+          setCopied(false)
+        }, 2000)
+      }
+
+      /**
+       * Anchor the full-prompt popover to one row and show it.
+       * @param {object} prompt - the row's prompt entry.
+       * @param {number} ordinal - reverse index shown on the row.
+       * @param {object} element - the row button.
+       * @returns {void}
+       */
+      function showPreview(prompt, ordinal, element) {
+        cancelHidePreview()
+        const rect = element.getBoundingClientRect()
+        const gap = 8
+        const width = Math.max(220, Math.min(rect.width - 12, 560))
+        const left = Math.max(8, Math.min(rect.left + 4, window.innerWidth - width - 8))
+        const spaceAbove = Math.round(rect.top - gap - 8)
+        const spaceBelow = Math.round(window.innerHeight - rect.bottom - gap - 8)
+        const above = spaceAbove >= 160 || spaceBelow < 160
+        const maxHeight = Math.max(80, Math.min(320, Math.round(window.innerHeight * 0.5), above ? spaceAbove : spaceBelow))
+        const time = typeof prompt.at === 'number' ? promptHistoryTimeLabels(prompt.at).title : ''
+        setPreview({
+          text: prompt.text,
+          time,
+          style: above
+            ? { left, bottom: window.innerHeight - rect.top + gap, width, maxHeight }
+            : { left, top: rect.bottom + gap, width, maxHeight }
+        })
+      }
+
+      /** Hide the full-prompt popover after a short pointer trip toward it. */
+      function scheduleHidePreview() {
+        if (previewTimer.current !== null) window.clearTimeout(previewTimer.current)
+        previewTimer.current = window.setTimeout(() => {
+          previewTimer.current = null
+          setPreview(null)
+        }, 160)
+      }
+
+      /** Cancel a scheduled hide, e.g. when the pointer reaches the popover. */
+      function cancelHidePreview() {
+        if (previewTimer.current !== null) {
+          window.clearTimeout(previewTimer.current)
+          previewTimer.current = null
+        }
+      }
+
+      if (prompts.length === 0) return null
+
+      const style = React.createElement('style', null, PROMPT_HISTORY_PREVIEW_CSS)
+
+      const needle = query.trim().toLowerCase()
+      const rows = []
+      for (let index = prompts.length - 1; index >= 0; index -= 1) {
+        const prompt = prompts[index]
+        if (needle.length > 0 && !prompt.text.toLowerCase().includes(needle)) continue
+        rows.push({ prompt, ordinal: index + 1 })
+      }
+
+      const list = rows.length === 0
+        ? React.createElement('div', { className: 'psp-empty' }, t('empty.filtered'))
+        : React.createElement('ul', { className: 'psp-list', 'aria-label': t('list.aria') },
+          rows.map(({ prompt, ordinal }) => {
+            const time = typeof prompt.at === 'number' ? promptHistoryTimeLabels(prompt.at) : null
+            return React.createElement('li', { key: String(ordinal), className: 'psp-item' },
+              React.createElement('button', {
+                type: 'button',
+                className: 'psp-row',
+                'data-psp-row': '',
+                'data-psp-index': String(ordinal),
+                'aria-label': t('row.aria', { index: ordinal }),
+                onClick: () => copyPrompt(prompt.text),
+                onMouseEnter: (event) => showPreview(prompt, ordinal, event.currentTarget),
+                onMouseLeave: scheduleHidePreview,
+                onFocus: (event) => showPreview(prompt, ordinal, event.currentTarget),
+                onBlur: scheduleHidePreview
+              },
+              React.createElement('span', { className: 'psp-index' }, `#${ordinal}`),
+              React.createElement('span', { className: 'psp-text' }, prompt.text),
+              React.createElement('span', { className: 'psp-meta' },
+                time === null ? null : React.createElement('span', { className: 'psp-time', title: time.title }, time.label),
+                React.createElement('span', { className: 'psp-copy' }, RemixGlyph(REMIX_FILE_COPY_LINE, 13)))))
+          }))
+
+      const footerRight = copied
+        ? React.createElement('span', { className: 'psp-copied', role: 'status' },
+          RemixGlyph(REMIX_CHECK_LINE, 13),
+          React.createElement('span', null, t('copied')))
+        : React.createElement('button', {
+          type: 'button',
+          className: 'psp-searchbtn',
+          'aria-expanded': searchOpen ? 'true' : 'false',
+          'data-psp-search-toggle': '',
+          onClick: () => {
+            if (searchOpen) {
+              setQuery('')
+              setSearchOpen(false)
+              return
+            }
+            setSearchOpen(true)
+          }
+        },
+        RemixGlyph(REMIX_SEARCH_LINE, 13),
+        React.createElement('span', null, t('search.open')))
+
+      const footer = React.createElement('div', { className: 'psp-foot' },
+        React.createElement('span', { className: 'psp-foot-count' },
+          needle.length > 0
+            ? t('footer.filtered', { count: rows.length, total: prompts.length })
+            : t('footer.count', { count: prompts.length })),
+        footerRight)
+
+      const searchRow = searchOpen
+        ? React.createElement('div', { className: 'psp-searchrow' },
+          RemixGlyph(REMIX_SEARCH_LINE, 13, 'psp-searchrow-icon'),
+          React.createElement('input', {
+            ref: searchRef,
+            type: 'text',
+            className: 'psp-searchrow-input',
+            value: query,
+            placeholder: t('search.placeholder'),
+            'aria-label': t('search.aria'),
+            autoComplete: 'off',
+            spellCheck: false,
+            onChange: (event) => setQuery(event.target.value),
+            onKeyDown: (event) => {
+              if (event.key !== 'Escape') return
+              event.preventDefault()
+              event.stopPropagation()
+              setQuery('')
+              setSearchOpen(false)
+            }
+          }),
+          React.createElement('button', {
+            type: 'button',
+            className: 'psp-searchclear',
+            title: t('search.clear'),
+            'aria-label': t('search.clear'),
+            onClick: () => {
+              setQuery('')
+              const input = searchRef.current
+              if (input instanceof HTMLElement) input.focus()
+            }
+          }, RemixGlyph(REMIX_CLOSE_LINE, 12)))
+        : null
+
+      const card = React.createElement('div', {
+        className: 'psp-card',
+        role: 'region',
+        'aria-label': t('list.aria')
+      },
+      React.createElement('div', { className: 'psp-body' }, list),
+      footer,
+      searchRow)
+
+      const popover = preview === null ? null : ReactDOM.createPortal(
+        React.createElement('div', {
+          className: 'psp-popover',
+          role: 'tooltip',
+          'aria-hidden': 'true',
+          style: preview.style,
+          onMouseEnter: cancelHidePreview,
+          onMouseLeave: () => setPreview(null)
+        },
+        React.createElement('div', { className: 'psp-popover-text' }, preview.text),
+        preview.time.length === 0 ? null : React.createElement('div', { className: 'psp-popover-time' }, preview.time)),
+        document.body)
+
+      return React.createElement('div', {
+        className: 'psp-root',
+        ref: rootRef,
+        'data-psp-preview': 'docked'
+      },
+      style,
+      React.createElement('div', { className: 'psp-divider', 'aria-hidden': 'true' }),
+      card,
+      popover)
+    }
+
+    /**
+     * Register the composer-docked prompt-history preview.
+     * @param {object} ctx - client root context.
+     * @returns {void}
+     */
+    function installPromptHistoryPreview(ctx) {
+      const t = ctx.locale.bind(PROMPT_HISTORY_PREVIEW_NS)
+      ctx.effect(() => ctx.locale.register(PROMPT_HISTORY_PREVIEW_NS, {
+        en: PROMPT_HISTORY_PREVIEW_EN,
+        zh: PROMPT_HISTORY_PREVIEW_ZH
+      }), 'power-suite: prompt-history preview dictionaries')
+      ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
+        name: 'conversation.input.dock',
+        id: PROMPT_HISTORY_PREVIEW_ID,
+        order: 100,
+        locale: PROMPT_HISTORY_PREVIEW_NS,
+        inject: () => ({ t })
+      }, PromptHistoryPreview)), 'power-suite: prompt-history preview dock')
+    }
+    //#endregion
+
     //#region plugin
     /**
      * The page type and its Start-guide card.
@@ -3740,6 +5120,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       installWorkspacePresetMenu(ctx)
       installWorkspacePresetRouting(ctx)
       installPromptHistory(ctx)
+      installPromptHistoryPreview(ctx)
+      installDynamicWorkspaces(ctx)
       installInterruptedSessions(ctx)
       installQuickLook(ctx)
       installSettingsPage(ctx)
