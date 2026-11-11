@@ -4824,6 +4824,65 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
     }
 
+    /** localStorage key holding acknowledged completed Sessions and their baselines. */
+    const DW_ACK_KEY = 'dsh-power-suite.acked-sessions'
+
+    /** Schema version of the persisted acknowledgement document. */
+    const DW_ACK_VERSION = 1
+
+    /**
+     * Timestamp tolerance before a running Session counts as genuinely new
+     * activity. `updatedAt` can move for metadata-only reasons; a baseline only
+     * clears when the Session advanced by more than this window.
+     */
+    const DW_ACK_TOLERANCE_MS = 1000
+
+    /**
+     * Read the persisted acknowledgement baselines: Session id → the
+     * `summary.updatedAt` observed when the user last opened that completed
+     * Session. Corrupt, missing, or storage-denied documents read as empty.
+     * @returns {Map<string, number>} baselines.
+     */
+    function dwReadAckedBaselines() {
+      const baselines = new Map()
+      try {
+        const raw = window.localStorage.getItem(DW_ACK_KEY)
+        if (raw === null) return baselines
+        const value = JSON.parse(raw)
+        const source = value !== null && typeof value === 'object' && value.acked !== null && typeof value.acked === 'object'
+          ? value.acked
+          : null
+        if (source === null) return baselines
+        for (const [id, at] of Object.entries(source)) {
+          if (typeof id !== 'string' || id.length === 0) continue
+          if (typeof at !== 'number' || !Number.isFinite(at) || at < 0) continue
+          baselines.set(id, at)
+        }
+      } catch {
+        // A corrupt document or a storage-denied browser starts empty.
+      }
+      return baselines
+    }
+
+    /**
+     * Persist the acknowledgement baselines under the versioned document.
+     * @param {Map<string, number>} baselines - Session id → acknowledged updatedAt.
+     * @returns {void}
+     */
+    function dwWriteAckedBaselines(baselines) {
+      try {
+        const acked = {}
+        for (const [id, at] of baselines) {
+          if (typeof id !== 'string' || id.length === 0) continue
+          if (typeof at !== 'number' || !Number.isFinite(at) || at < 0) continue
+          acked[id] = at
+        }
+        window.localStorage.setItem(DW_ACK_KEY, JSON.stringify({ version: DW_ACK_VERSION, acked }))
+      } catch {
+        // A storage-denied browser keeps the in-memory state only.
+      }
+    }
+
     /**
      * Find the live geometry this feature augments.
      *
@@ -5337,7 +5396,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const [panelExpanded, setPanelExpanded] = React.useState(true)
       const [showAll, setShowAll] = React.useState(false)
       const [collapsedParents, setCollapsedParents] = React.useState(() => new Set())
-      const [ackedSessions, setAckedSessions] = React.useState(() => new Set())
+      const [ackedBaselines, setAckedBaselines] = React.useState(dwReadAckedBaselines)
       const [now, setNow] = React.useState(() => Date.now())
 
       const mountsRef = React.useRef(null)
@@ -5432,27 +5491,50 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
       latestRef.current = { sessions, statuses, workspaces: workspaceSnapshot, folds, windows }
 
-      // A finished Session's green mark is an unread signal: opening that
-      // Session (from this card or anywhere else) acknowledges it, and a new
-      // run clears the acknowledgement so the next completion is visible.
+      // A finished Session's green mark is an unread signal. The acknowledgement
+      // is a persisted Session id → acknowledged `summary.updatedAt` baseline:
+      // opening the Session raises the baseline, and only genuinely newer
+      // activity clears it again. A transient "running" status with an unchanged
+      // timestamp must never clear it, and the baseline survives remount/HMR and
+      // page reloads because it is written to localStorage.
       React.useEffect(() => {
-        if (sessions === null || typeof sessions !== 'object' || !Array.isArray(sessions.ids)) return
-        const running = new Set()
-        const current = new Set()
-        for (const id of sessions.ids) {
-          const summary = sessions.byId?.[id]
-          if (summary === undefined) continue
-          if (dwSessionRunning(id, summary, statuses)) running.add(id)
-          if ((summary.retainedBy?.mainView ?? 0) > 0) current.add(id)
-        }
-        setAckedSessions((previous) => {
+        if (sessions === null || typeof sessions !== 'object' || !Array.isArray(sessions.ids) || sessions.ids.length === 0) return
+        setAckedBaselines((previous) => {
           let changed = false
-          const next = new Set(previous)
-          for (const id of running) if (next.delete(id)) changed = true
-          for (const id of current) if (!next.has(id)) { next.add(id); changed = true }
+          const next = new Map(previous)
+          for (const id of sessions.ids) {
+            const summary = sessions.byId?.[id]
+            if (summary === undefined) continue
+            const updatedAt = typeof summary.updatedAt === 'number' && Number.isFinite(summary.updatedAt) ? summary.updatedAt : 0
+            const baseline = previous.get(id)
+            if ((summary.retainedBy?.mainView ?? 0) > 0) {
+              if (baseline === undefined || updatedAt > baseline) {
+                next.set(id, updatedAt)
+                changed = true
+              }
+              continue
+            }
+            if (baseline === undefined) continue
+            if (dwSessionRunning(id, summary, statuses) && updatedAt > baseline + DW_ACK_TOLERANCE_MS) {
+              next.delete(id)
+              changed = true
+            }
+          }
+          // Keep the document bounded: drop ids no longer in the catalog. A
+          // loading/empty snapshot never prunes, so acks are not lost at startup.
+          for (const id of previous.keys()) {
+            if (sessions.byId?.[id] === undefined) {
+              next.delete(id)
+              changed = true
+            }
+          }
           return changed ? next : previous
         })
       }, [sessions, statuses])
+
+      React.useEffect(() => {
+        dwWriteAckedBaselines(ackedBaselines)
+      }, [ackedBaselines])
 
       React.useEffect(() => {
         aliveRef.current = true
@@ -5647,7 +5729,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         durations,
         childrenByParent,
         collapsedParents,
-        acked: ackedSessions,
+        acked: ackedBaselines,
         interruptedT,
         onNewSession: openNewSession,
         onToggle: () => setPanelExpanded((value) => !value),
