@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Power Suite · 中断任务继续 Demo</title>
+<style>
+  :root{
+    --bg:#eef1f5;
+    --surface:#ffffff;
+    --surface-soft:#f7f8fa;
+    --line:#e4e7ec;
+    --text:#1f2328;
+    --muted:#69707d;
+    --faint:#8b93a1;
+    --accent:#2f6fed;
+    --user:#e8efff;
+    --user-border:#d7e2ff;
+    --warn:#b7791f;
+    --ok:#1f8a55;
+    --danger:#b33a3a;
+    --shadow:0 20px 60px rgba(26,35,50,.12),0 3px 10px rgba(26,35,50,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:
+      radial-gradient(900px 420px at 15% -8%,#ffffff 0%,rgba(255,255,255,0) 60%),
+      radial-gradient(700px 380px at 90% 0%,#e7ecf7 0%,rgba(231,236,247,0) 65%),
+      var(--bg);
+    color:var(--text);
+    font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:1280px;margin:0 auto;padding:34px 28px 50px}
+  .masthead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:22px}
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);font-weight:600}
+  h1{font-size:23px;line-height:1.25;margin:6px 0 8px;letter-spacing:-.01em}
+  .lede{margin:0;color:var(--muted);max-width:700px}
+  .lede code{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:#fff;border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+  .tools{display:flex;gap:8px;flex:none}
+  button{font:inherit}
+  .ghost{
+    appearance:none;border:1px solid var(--line);background:rgba(255,255,255,.72);color:var(--muted);
+    border-radius:9px;padding:8px 13px;cursor:pointer;backdrop-filter:blur(8px);
+  }
+  .ghost:hover{color:var(--text);background:#fff}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media (max-width:980px){.grid{grid-template-columns:1fr}}
+  .demo-card{
+    background:var(--surface);border:1px solid rgba(225,229,236,.9);border-radius:16px;box-shadow:var(--shadow);
+    overflow:hidden;display:flex;flex-direction:column;
+  }
+  .demo-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 18px;border-bottom:1px solid var(--line);background:linear-gradient(#fff,#fbfcfe)}
+  .tag{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;letter-spacing:.01em}
+  .tag .dot{width:7px;height:7px;border-radius:50%}
+  .tag.before .dot{background:#c9c2b2;box-shadow:0 0 0 4px rgba(201,194,178,.18)}
+  .tag.after .dot{background:#3ea36d;box-shadow:0 0 0 4px rgba(62,163,109,.15)}
+  .head-note{font-size:11.5px;color:var(--faint)}
+  .chat{flex:none;height:300px;overflow:auto;padding:18px 20px 6px;background:var(--surface-soft)}
+  .chat::-webkit-scrollbar{width:10px}
+  .chat::-webkit-scrollbar-thumb{background:#d9dee7;border-radius:10px;border:3px solid var(--surface-soft)}
+  .msg{max-width:82%;margin:0 0 14px;display:flex;flex-direction:column;gap:5px}
+  .msg.user{margin-left:auto;align-items:flex-end}
+  .bubble{font-size:13.5px;line-height:1.65;padding:10px 14px;border-radius:12px;white-space:pre-wrap}
+  .msg.user .bubble{background:var(--user);border:1px solid var(--user-border);color:#25324d;border-bottom-right-radius:5px}
+  .msg.assistant .bubble{background:#fff;border:1px solid var(--line);color:var(--text);border-bottom-left-radius:5px}
+  .meta{font-size:11px;color:var(--faint);display:flex;gap:8px;align-items:center}
+  .meta .actions{opacity:.65}
+  .stopped{display:flex;align-items:center;gap:10px;margin:2px 0 12px;color:var(--faint);font-size:12px}
+  .stopped .line{height:1px;background:var(--line);flex:1}
+  .runrow{display:flex;gap:10px;align-items:center;padding:6px 0 12px;color:var(--faint);font-size:12px}
+  .runrow .arrow{font-family:ui-monospace,Menlo,monospace;color:#a3abb8}
+  .spacer{height:8px}
+  .composer{margin:0 16px 14px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(25,32,45,.05)}
+  .composer .ph{flex:1;color:#a3abb8;font-size:13px}
+  .composer .send{width:28px;height:28px;border-radius:50%;background:#1f2328;color:#fff;display:grid;place-items:center;font-size:13px}
+  .composer .send.play{background:#1f2328;font-size:10px;padding-left:2px}
+  .continue-wrap{margin:0 20px 16px;display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px dashed #d6dce6;border-radius:10px;background:rgba(255,255,255,.75)}
+  .continue-wrap .hint{font-size:11.5px;color:var(--faint);flex:1}
+  .primary{
+    appearance:none;border:0;border-radius:9px;padding:9px 15px;background:#25324d;color:#fff;cursor:pointer;
+    font-size:13px;font-weight:600;box-shadow:0 4px 12px rgba(37,50,77,.22);display:inline-flex;align-items:center;gap:7px;
+  }
+  .primary:hover{background:#1e293f}
+  .primary:disabled{opacity:.45;cursor:default;box-shadow:none}
+  .primary .ic{font-size:10px;transform:translateX(.5px)}
+  .continuation-marker{display:none;align-items:center;gap:8px;color:#87909e;font-size:12px;margin:0 0 14px;padding:2px 2px 2px 4px}
+  .continuation-marker.show{display:flex}
+  .continuation-marker .spin{width:12px;height:12px;border-radius:50%;border:1.8px solid #dbe1ea;border-top-color:#69707d;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hidden-context{display:none;margin:0 0 14px;border:1px dashed #d6dce6;border-radius:9px;padding:8px 11px;color:#8c95a3;font-size:11.5px;background:#fbfcfe}
+  .hidden-context.show{display:flex;align-items:center;gap:8px}
+  .hidden-context .eye{opacity:.7}
+  .result{margin-top:auto;border-top:1px solid var(--line);padding:13px 18px;background:#fff;display:flex;gap:10px;align-items:flex-start}
+  .result .icon{width:17px;height:17px;flex:none;margin-top:1px}
+  .result.bad .icon{color:var(--danger)}
+  .result.good .icon{color:var(--ok)}
+  .result .copy{font-size:12px;color:var(--muted);line-height:1.6}
+  .result .copy strong{color:var(--text);font-weight:600}
+  .result .copy code{font:11px ui-monospace,Menlo,monospace;background:#f4f6f9;border:1px solid var(--line);border-radius:4px;padding:0 4px}
+  .after .chat{position:relative}
+  .callout{position:relative;display:none;margin:2px 0 14px;padding-left:13px;border-left:2px solid #d7e2ff;color:#87909e;font-size:11.5px}
+  .callout.show{display:block}
+  .footer-note{margin:18px 2px 0;color:var(--faint);font-size:11.5px;display:flex;gap:8px;align-items:flex-start}
+  .footer-note .mini{width:15px;height:15px;border-radius:50%;border:1px solid #cfd6e1;color:#8b93a1;display:grid;place-items:center;font-size:10px;flex:none;margin-top:1px}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="masthead">
+    <div>
+      <div class="eyebrow">DSH Power Suite · interrupted sessions</div>
+      <h1>继续任务时，用户不该看到自己的“假发言”</h1>
+      <p class="lede">点击 <code>Continue</code> 后，Host 以非人类来源的 context 消息唤醒新的 turn；Chat 不插入用户气泡，内部注入行也被隐藏。下面是两种行为并排对比。</p>
+    </div>
+    <div class="tools">
+      <button class="ghost" id="reset">重置对比</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="demo-card" id="card-before">
+      <header class="demo-head">
+        <span class="tag before"><span class="dot"></span>改前 · 显式提示</span>
+        <span class="head-note">会写入一条用户消息</span>
+      </header>
+      <div class="chat" id="chat-before">
+        <div class="msg user"><div class="bubble">把当前 Power suite 改成更加规范标准的仓库。要使用 git。</div><div class="meta">01:49</div></div>
+        <div class="stopped"><span>Stopped</span><span class="line"></span><span>01:59</span></div>
+        <div class="runrow"><span class="arrow">›</span><span>Ran commands, called tools, updated the plan</span></div>
+        <div class="spacer"></div>
+      </div>
+      <div class="continue-wrap" id="actions-before">
+        <span class="hint">继续会以一条可见的用户消息触发。</span>
+        <button class="primary" id="continue-before"><span class="ic">▶</span>Continue</button>
+      </div>
+      <div class="result bad">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
+        <div class="copy"><strong>用户气泡被写入 transcript。</strong> transcript 里多出一条 <code>Continue the interrupted task.</code>，看起来像用户本人说的。</div>
+      </div>
+    </section>
+
+    <section class="demo-card after" id="card-after">
+      <header class="demo-head">
+        <span class="tag after"><span class="dot"></span>改后 · 隐式继续</span>
+        <span class="head-note">不新增用户消息</span>
+      </header>
+      <div class="chat" id="chat-after">
+        <div class="msg user"><div class="bubble">把当前 Power suite 改成更加规范标准的仓库。要使用 git。</div><div class="meta">01:49</div></div>
+        <div class="stopped"><span>Stopped</span><span class="line"></span><span>01:59</span></div>
+        <div class="runrow"><span class="arrow">›</span><span>Ran commands, called tools, updated the plan</span></div>
+        <div class="continuation-marker" id="marker-after"><span class="spin"></span><span>继续任务中…</span></div>
+        <div class="callout show" id="callout-after">这里没有用户气泡：继续动作只产生一条隐藏的 context 消息。</div>
+        <div class="spacer"></div>
+      </div>
+      <div class="continue-wrap" id="actions-after">
+        <span class="hint">继续通过 Host 的隐式 context 消息触发。</span>
+        <button class="primary" id="continue-after"><span class="ic">▶</span>Continue</button>
+      </div>
+      <div class="result good">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16 9.5"/></svg>
+        <div class="copy"><strong>不新增用户消息。</strong> 模型收到 user-role 的继续指令，但 Chat 不渲染用户气泡；source 为 <code>power-suite-continue</code>，prompt history 也会忽略它。</div>
+      </div>
+    </section>
+  </main>
+
+  <p class="footer-note"><span class="mini">i</span><span>为便于对比，Continue 按钮直接放在演示卡内（真实界面里它在 Session 行悬停时出现）。Demo 只模拟 Chat 呈现；真实 Session 的原始日志 / Trajectory 中仍会记录这条 context 消息，因为 DSH 内核需要一个 user-role 输入来启动 turn。</span></p>
+</div>
+
+<script>
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  function addMessage(panel, role, text, meta) {
+    const chat = panel.querySelector('.chat');
+    const el = document.createElement('div');
+    el.className = 'msg ' + role;
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = text;
+    el.appendChild(bubble);
+    if (meta) {
+      const m = document.createElement('div');
+      m.className = 'meta';
+      m.textContent = meta;
+      el.appendChild(m);
+    }
+    chat.appendChild(el);
+    chat.scrollTop = chat.scrollHeight;
+    return el;
+  }
+
+  async function runBefore() {
+    const card = document.getElementById('card-before');
+    const button = document.getElementById('continue-before');
+    if (button.disabled) return;
+    button.disabled = true;
+    document.getElementById('actions-before').querySelector('.hint').textContent = '已发送可见用户消息…';
+    await wait(180);
+    addMessage(card, 'user', 'Continue the interrupted task.', '01:59');
+    await wait(620);
+    addMessage(card, 'assistant', '继续处理仓库规范化：先补上标准文件，再运行检查。', '02:00');
+  }
+
+  async function runAfter() {
+    const card = document.getElementById('card-after');
+    const button = document.getElementById('continue-after');
+    if (button.disabled) return;
+    button.disabled = true;
+    document.getElementById('actions-after').querySelector('.hint').textContent = '已隐式继续，未新增用户消息…';
+    const marker = document.getElementById('marker-after');
+    marker.classList.add('show');
+    await wait(320);
+    await wait(380);
+    marker.classList.remove('show');
+    addMessage(card, 'assistant', '继续处理仓库规范化：先补上标准文件，再运行检查。', '02:00');
+    document.getElementById('callout-after').textContent = '已隐式继续：没有新增用户消息。';
+  }
+
+  document.getElementById('continue-before').addEventListener('click', runBefore);
+  document.getElementById('continue-after').addEventListener('click', runAfter);
+  document.getElementById('reset').addEventListener('click', () => {
+    for (const id of ['card-before', 'card-after']) {
+      const card = document.getElementById(id);
+      for (const el of card.querySelectorAll('.dyn')) el.remove();
+      // Restore the two simulated bubbles by reloading the page for a clean demo.
+    }
+    location.reload();
+  });
+</script>
+</body>
+</html>

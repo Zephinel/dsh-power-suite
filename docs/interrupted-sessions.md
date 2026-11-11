@@ -123,6 +123,13 @@ as its own row in the sidebar.
 
 ## Implicit continuation
 
+![Side-by-side demo: explicit user prompt vs hidden continuation](demo/implicit-continue-before.png)
+
+A self-contained interactive demo is at
+[demo/implicit-continue.html](demo/implicit-continue.html): click **Continue**
+in both panels to compare the old visible prompt with the implicit path.
+
+
 Clicking **Continue** no longer writes a human-looking prompt into the
 transcript. The browser calls `POST /api/power-suite.continue`; the Host uses
 the Session controller's prompt command with an explicit message source
