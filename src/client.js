@@ -3825,7 +3825,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-pulse::after{content:'';position:absolute;inset:-4px;border-radius:50%;corner-shape:round;border:1px solid var(--dsw-alias-state-success-primary);opacity:.45;animation:psd-pulse 2s var(--ds-ease-in-out,ease) infinite}
 .psd-panel-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary)}
 .psd-count{flex:none;min-width:18px;padding:0 6px;box-sizing:border-box;border-radius:var(--dsw-radius-xs,4px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-size:11px;line-height:18px;text-align:center;font-variant-numeric:tabular-nums}
-.psd-panel-link{flex:none;appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;line-height:18px;padding:2px 4px;border-radius:var(--dsw-radius-xs,4px);cursor:pointer;white-space:nowrap}
+.psd-panel-link{flex:none;appearance:none;display:inline-flex;align-items:center;box-sizing:border-box;height:30px;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;line-height:18px;padding:0 8px;border-radius:var(--dsw-radius-xs,4px);cursor:pointer;white-space:nowrap}
 .psd-panel-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .psd-panel-link:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psd-chevron{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);transition:transform 160ms var(--ds-ease-in-out,ease)}
@@ -3844,9 +3844,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run-toggle-spacer{flex:none;width:18px}
 .psd-run-main{appearance:none;display:flex;flex:1;min-width:0;flex-direction:column;padding:5px 7px 7px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-run-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
-.psd-children{position:relative;display:flex;flex-direction:column;gap:1px;margin:0 0 4px 15px;padding-left:11px;border-left:1px solid var(--dsw-alias-border-l2)}
+.psd-children{position:relative;display:flex;flex-direction:column;gap:1px;margin:0 0 4px 26px;padding-left:14px;border-left:1px solid var(--dsw-alias-border-l2)}
 .psd-child{position:relative;appearance:none;display:flex;align-items:center;gap:7px;min-width:0;padding:3px 7px 3px 4px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;text-align:left;cursor:pointer}
-.psd-child::before{content:'';position:absolute;left:-12px;top:50%;width:10px;height:1px;background:var(--dsw-alias-border-l2);pointer-events:none}
+.psd-child::before{content:'';position:absolute;left:-15px;top:50%;width:12px;height:1px;background:var(--dsw-alias-border-l2);pointer-events:none}
+.psd-child:last-child::after{content:'';position:absolute;left:-15px;top:calc(50% + 1px);bottom:-1px;width:2px;background:var(--dsw-alias-bg-layer-1);pointer-events:none}
 .psd-child:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-child:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-child-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
@@ -4676,96 +4677,85 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     // Remix Icon path data (Apache-2.0, https://remixicon.com), inlined here so
     // this feature needs no icon package at runtime.
     const REMIX_SEARCH_LINE = 'M18.031 16.6168L22.3137 20.8995L20.8995 22.3137L16.6168 18.031C15.0769 19.263 13.124 20 11 20C6.032 20 2 15.968 2 11C2 6.032 6.032 2 11 2C15.968 2 20 6.032 20 11C20 13.124 19.263 15.0769 18.031 16.6168ZM16.0247 15.8748C17.2475 14.6146 18 12.8956 18 11C18 7.1325 14.8675 4 11 4C7.1325 4 4 7.1325 4 11C4 14.8675 7.1325 18 11 18C12.8956 18 14.6146 17.2475 15.8748 16.0247L16.0247 15.8748Z'
-    const REMIX_FILE_COPY_LINE = 'M6.9998 6V3C6.9998 2.44772 7.44752 2 7.9998 2H19.9998C20.5521 2 20.9998 2.44772 20.9998 3V17C20.9998 17.5523 20.5521 18 19.9998 18H16.9998V20.9991C16.9998 21.5519 16.5499 22 15.993 22H4.00666C3.45059 22 3 21.5554 3 20.9991L3.0026 7.00087C3.0027 6.44811 3.45264 6 4.00942 6H6.9998ZM5.00242 8L5.00019 20H14.9998V8H5.00242ZM8.9998 6H16.9998V16H18.9998V4H8.9998V6Z'
     const REMIX_CLOSE_LINE = 'M11.9997 10.5865L16.9495 5.63672L18.3637 7.05093L13.4139 12.0007L18.3637 16.9504L16.9495 18.3646L11.9997 13.4149L7.04996 18.3646L5.63574 16.9504L10.5855 12.0007L5.63574 7.05093L7.04996 5.63672L11.9997 10.5865Z'
 
     /**
-     * React DOM bridge for the full-prompt popover portal.
+     * React DOM bridge for the rail portal.
      *
-     * The composer dock lives inside the shell's fixed composer layer, so a
-     * hover preview must leave the dock and portal to the document body. The
-     * bridge itself is required once at the top of this module.
+     * The composer dock lives inside the shell's fixed composer layer, so the
+     * rail must leave the dock and portal to the document body. The bridge
+     * itself is required once at the top of this module.
      */
 
-    /** Copy for the prompt-history preview. */
+    /** Copy for the prompt-history rail. */
     const PROMPT_HISTORY_PREVIEW_EN = {
+      'search.open': 'Search',
       'search.placeholder': 'Search prompts',
       'search.aria': 'Search prompt history',
-      'search.open': 'Search',
       'search.clear': 'Clear search',
       'list.aria': 'Prompt history',
-      'row.aria': 'Copy prompt #{index} to the input',
+      'mark.aria': 'Copy prompt #{index}: {text}',
       'copied': 'Copied to input',
       'empty.filtered': 'No matching prompts',
-      'footer.count': '{count} prompts',
-      'footer.countOne': '{count} prompt',
-      'footer.filtered': 'Showing {count} of {total}'
+      'count.all': '{count} prompts',
+      'count.filtered': 'Showing {count} of {total}'
     }
     const PROMPT_HISTORY_PREVIEW_ZH = {
+      'search.open': '搜索',
       'search.placeholder': '搜索历史提示',
       'search.aria': '搜索历史提示',
-      'search.open': '搜索',
       'search.clear': '清除搜索',
       'list.aria': '历史提示',
-      'row.aria': '复制第 {index} 条提示到输入框',
+      'mark.aria': '复制第 {index} 条提示：{text}',
       'copied': '已复制到输入框',
       'empty.filtered': '没有匹配的历史提示',
-      'footer.count': '共 {count} 条历史提示',
-      'footer.countOne': '共 1 条历史提示',
-      'footer.filtered': '显示 {count} / {total} 条'
+      'count.all': '共 {count} 条历史提示',
+      'count.filtered': '显示 {count} / {total}'
     }
 
     const PROMPT_HISTORY_PREVIEW_CSS = `
-.psp-root{box-sizing:border-box;width:100%;max-width:var(--dsh-composer-card-max-width,760px);align-self:center;margin:0 auto;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}
-.psp-divider{width:48px;height:1px;margin:4px auto 8px;border-radius:1px;background:var(--dsw-alias-border-l2)}
-.psp-card{position:relative;box-sizing:border-box;display:flex;flex-direction:column;min-width:0;overflow:hidden;border:1px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-shadow-lv2,none)}
-.psp-body{min-height:0}
-.psp-list{display:flex;flex-direction:column;gap:1px;max-height:min(340px,40vh);margin:0;padding:4px 6px;overflow:auto;overscroll-behavior:contain;list-style:none}
-.psp-item{min-width:0}
-.psp-row{position:relative;box-sizing:border-box;display:flex;align-items:flex-start;gap:8px;width:100%;margin:0;padding:6px 8px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-primary);font:inherit;text-align:left;cursor:pointer}
-.psp-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.psp-row:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-1px}
-.psp-index{flex:none;min-width:32px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:20px;font-variant-numeric:tabular-nums}
-.psp-text{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;word-break:break-word;font-size:12.5px;line-height:20px}
-.psp-meta{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex:none;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:20px;font-variant-numeric:tabular-nums}
-.psp-time{white-space:nowrap}
-.psp-copy{display:inline-flex;align-items:center;color:var(--dsw-alias-label-tertiary);opacity:0;transition:opacity .12s ease}
-.psp-row:hover .psp-copy,.psp-row:focus-visible .psp-copy{opacity:1;color:var(--dsw-alias-label-secondary)}
+.psp-rail{position:fixed;z-index:60;display:flex;flex-direction:column;align-items:center;box-sizing:border-box;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:16px}
+.psp-rail-divider{flex:none;width:1px;height:14px;margin:1px 0 5px;border-radius:1px;background:var(--dsw-alias-border-l2)}
+.psp-marks{flex:1 1 auto;width:100%;min-height:0;display:flex;flex-direction:column;align-items:center;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none}
+.psp-marks::-webkit-scrollbar{display:none;width:0;height:0}
+.psp-mark{box-sizing:border-box;flex:none;display:flex;align-items:center;justify-content:center;width:100%;height:10px;margin:0;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-radius:4px}
+.psp-mark-tick{width:14px;height:2px;border-radius:1px;background:var(--dsw-alias-label-tertiary);opacity:.75;transition:width .12s ease,opacity .12s ease,background-color .12s ease}
+.psp-mark:hover .psp-mark-tick,.psp-mark:focus-visible .psp-mark-tick{width:18px;opacity:1;background:var(--dsw-alias-label-secondary)}
+.psp-mark:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-1px}
+.psp-search-toggle{box-sizing:border-box;flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:22px;margin-top:3px;padding:0;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.psp-search-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
+.psp-search-toggle[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.psp-search-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.psp-rail-card{position:fixed;z-index:61;box-sizing:border-box;overflow:auto;padding:9px 11px;border:1px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-overlay,var(--dsw-alias-bg-layer-1));box-shadow:var(--dsw-shadow-lv3,none);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12.5px;line-height:20px;overscroll-behavior:contain}
+.psp-rail-card-text{white-space:pre-wrap;word-break:break-word}
+.psp-rail-card-time{margin-top:5px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}
+.psp-copied{position:fixed;z-index:62;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;padding:3px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-overlay,var(--dsw-alias-bg-layer-1));box-shadow:var(--dsw-shadow-lv2,none);color:var(--dsw-alias-state-success-primary);font-family:inherit;font-size:11px;line-height:16px}
+.psp-search-card{position:fixed;z-index:61;display:flex;flex-direction:column;gap:5px;box-sizing:border-box;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-overlay,var(--dsw-alias-bg-layer-1));box-shadow:var(--dsw-shadow-lv3,none);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:16px}
+.psp-search-row{display:flex;align-items:center;gap:6px}
+.psp-search-icon{flex:none;color:var(--dsw-alias-label-tertiary)}
+.psp-search-input{flex:1;min-width:0;height:22px;margin:0;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;outline:none}
+.psp-search-input::placeholder{color:var(--dsw-alias-label-tertiary)}
+.psp-search-clear{box-sizing:border-box;flex:none;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.psp-search-clear:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
+.psp-search-clear:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.psp-search-count{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:15px}
+.psp-search-empty{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:15px}
 .psp-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-.psp-searchrow{display:flex;align-items:center;gap:6px;padding:5px 10px;border-top:1px solid var(--dsw-alias-border-l1)}
-.psp-searchrow:focus-within{background:var(--dsw-alias-bg-layer-2)}
-.psp-searchrow-icon{flex:none;color:var(--dsw-alias-label-tertiary)}
-.psp-searchrow-input{flex:1;min-width:0;height:24px;margin:0;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;outline:none}
-.psp-searchrow-input::placeholder{color:var(--dsw-alias-label-tertiary)}
-.psp-searchclear{box-sizing:border-box;flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
-.psp-searchclear:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
-.psp-searchclear:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
-.psp-empty{padding:18px 12px;text-align:center;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
-.psp-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 12px 8px;border-top:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}
-.psp-foot-count{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.psp-searchbtn{display:inline-flex;align-items:center;gap:4px;flex:none;height:22px;padding:0 6px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;line-height:16px;cursor:pointer}
-.psp-searchbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
-.psp-searchbtn:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
-.psp-copied{display:inline-flex;align-items:center;gap:4px;flex:none;white-space:nowrap;font-size:11px;line-height:16px;color:var(--dsw-alias-state-success-primary)}
-.psp-popover{position:fixed;z-index:1000;box-sizing:border-box;overflow:auto;padding:9px 11px;border:1px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-overlay,var(--dsw-alias-bg-layer-1));box-shadow:var(--dsw-shadow-lv3,none);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12.5px;line-height:20px;overscroll-behavior:contain}
-.psp-popover-text{white-space:pre-wrap;word-break:break-word}
-.psp-popover-time{margin-top:5px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}
 @media (prefers-reduced-motion:no-preference){.psp-copied{animation:psp-copied-in .16s ease-out}}
-@media (prefers-reduced-motion:reduce){.psp-copy{transition:none}}
+@media (prefers-reduced-motion:reduce){.psp-mark-tick{transition:none}}
 @keyframes psp-copied-in{from{opacity:0}to{opacity:1}}
 `
 
     /**
-     * Focus the Lexical editor of the composer occurrence that owns `element`.
-     * @param {object | null} element - node rendered inside the composer occurrence.
+     * Focus the Lexical editor of the Conversation that owns `sessionId`.
+     * @param {string} sessionId - Session identity.
      * @returns {void}
      */
-    function focusPromptHistoryComposer(element) {
-      const region = element !== null && typeof element.closest === 'function'
-        ? element.closest('[data-conversation-region="composer"]')
-        : null
-      const scope = region ?? document
-      const editor = scope.querySelector('[data-lexical-editor="true"]')
+    function focusPromptHistoryComposer(sessionId) {
+      const occurrence = promptHistoryOccurrence(sessionId)
+      const scope = occurrence ?? document
+      const composer = scope.querySelector('[data-conversation-region="composer"]')
+      const editor = (composer ?? scope).querySelector('[data-lexical-editor="true"]')
       if (editor instanceof HTMLElement) editor.focus()
     }
 
@@ -4786,17 +4776,145 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     /**
-     * Prompt-history preview (requirement 3).
+     * Find the Conversation occurrence that owns `sessionId`.
+     * @param {string} sessionId - Session identity.
+     * @returns {Element | null} the occurrence body, when rendered.
+     */
+    function promptHistoryOccurrence(sessionId) {
+      const occurrences = document.querySelectorAll('[data-conversation-session]')
+      let fallback = null
+      for (const node of occurrences) {
+        if (fallback === null) fallback = node
+        if (node.getAttribute('data-conversation-session') === sessionId) return node
+      }
+      return fallback
+    }
+
+    /**
+     * The Conversation's scroll surface.
+     * @param {string} sessionId - Session identity.
+     * @returns {Element | null} the scroll surface.
+     */
+    function promptHistoryScrollSurface(sessionId) {
+      const occurrence = promptHistoryOccurrence(sessionId)
+      const scope = occurrence ?? document
+      return scope.querySelector('[data-conversation-scroll]') ?? document.querySelector('[data-conversation-scroll]')
+    }
+
+    /**
+     * The Conversation's composer seat (the live top edge of the composer).
+     * @param {string} sessionId - Session identity.
+     * @returns {Element | null} the composer seat.
+     */
+    function promptHistoryComposerSeat(sessionId) {
+      const occurrence = promptHistoryOccurrence(sessionId)
+      const scope = occurrence ?? document
+      return scope.querySelector('[data-conversation-region="composer"]') ?? document.querySelector('[data-conversation-region="composer"]')
+    }
+
+    /**
+     * Bounding box of the native Turn navigation marks, found by geometry.
      *
-     * An always-visible panel docked above the composer
-     * (`conversation.input.dock`): a short centered divider, then this
-     * Session's sent prompts newest first, a footer with the prompt count and
-     * an inline search toggle. Hovering or focusing a row shows the full
-     * prompt in a document-level popover; clicking the row (or pressing Enter
-     * on a focused one) copies it into the composer draft. Renders nothing
-     * until the Session has at least one sent prompt.
+     * The native rail exposes no stable class name; its marks are the tiny,
+     * fixed-width buttons stacked near the scroll surface's right edge.
+     * @param {Element} scroll - Conversation scroll surface.
+     * @returns {{ right: number, bottom: number } | null} the rail box.
+     */
+    function promptHistoryTurnRailBox(scroll) {
+      const scrollRect = scroll.getBoundingClientRect()
+      const buttons = scroll.querySelectorAll('button')
+      let right = 0
+      let bottom = 0
+      let count = 0
+      for (const button of buttons) {
+        const rect = button.getBoundingClientRect()
+        if (rect.width <= 0 || rect.height <= 0) continue
+        if (rect.width > 44 || rect.height > 24) continue
+        if (rect.right < scrollRect.right - 64 || rect.right > scrollRect.right + 8) continue
+        if (rect.top < scrollRect.top - 8 || rect.bottom > scrollRect.bottom + 8) continue
+        count += 1
+        right = Math.max(right, rect.right)
+        bottom = Math.max(bottom, rect.bottom)
+      }
+      return count === 0 ? null : { right, bottom }
+    }
+
+    /**
+     * Measure the fixed rail's frame against the Conversation's right edge.
+     *
+     * The rail sits in the native turn rail's column: directly below it when
+     * there is room (a short divider between them), otherwise at the vertical
+     * middle of the usable scrollport. Its bottom stops above the composer.
+     * @param {string} sessionId - Session identity.
+     * @returns {object | null} viewport geometry, or null before the Conversation mounts.
+     */
+    function measurePromptHistoryRail(sessionId) {
+      const scroll = promptHistoryScrollSurface(sessionId)
+      if (scroll === null) return null
+      const scrollRect = scroll.getBoundingClientRect()
+      if (scrollRect.width <= 0 || scrollRect.height <= 0) return null
+      const composer = promptHistoryComposerSeat(sessionId)
+      const composerTop = composer === null ? Math.min(scrollRect.bottom, window.innerHeight) : composer.getBoundingClientRect().top
+      const bottomLimit = Math.min(composerTop, window.innerHeight) - 16
+      const turnRail = promptHistoryTurnRailBox(scroll)
+      let top = null
+      if (turnRail !== null && bottomLimit - (turnRail.bottom + 10) >= 90) top = turnRail.bottom + 10
+      if (top === null) {
+        // No room below the native rail (or no native rail): fall back to the
+        // vertical middle of the scrollport and keep the rail usable.
+        top = Math.max(scrollRect.top + 16, Math.round(scrollRect.top + (bottomLimit - scrollRect.top) / 2))
+      }
+      if (bottomLimit - top < 90) top = Math.max(scrollRect.top + 8, bottomLimit - 90)
+      return {
+        top: Math.round(top),
+        right: Math.round(window.innerWidth - (turnRail === null ? scrollRect.right - 12 : turnRail.right)),
+        width: 28,
+        maxHeight: Math.round(Math.max(90, bottomLimit - top)),
+        cardMaxHeight: Math.round(Math.max(120, Math.min(320, bottomLimit - scrollRect.top - 16))),
+        composerTop: Math.round(composerTop)
+      }
+    }
+
+    /**
+     * Whether two rail measurements describe the same frame.
+     * @param {object | null} left - previous geometry.
+     * @param {object | null} right - next geometry.
+     * @returns {boolean} whether a re-render can be skipped.
+     */
+    function samePromptHistoryLayout(left, right) {
+      if (left === null || right === null) return left === right
+      return left.top === right.top &&
+        left.right === right.right &&
+        left.width === right.width &&
+        left.maxHeight === right.maxHeight &&
+        left.cardMaxHeight === right.cardMaxHeight &&
+        left.composerTop === right.composerTop
+    }
+
+    /**
+     * Compress and bound one prompt for a mark's accessible name.
+     * @param {string} text - prompt text.
+     * @returns {string} single-line text safe for an aria name.
+     */
+    function accessiblePromptText(text) {
+      const compact = text.replace(/\s+/g, ' ').trim()
+      return compact.length > 140 ? `${compact.slice(0, 140)}…` : compact
+    }
+
+    /**
+     * Prompt-history rail (requirement 3, corrected right-edge design).
+     *
+     * The composer dock registration is only a session-scoped data seat: this
+     * component renders nothing in the composer flow and portals a fixed rail
+     * to the document body. The rail sits in the Conversation's right-edge
+     * column directly below the native Turn navigation, separated from it by a
+     * short divider. It lists this Session's sent prompts as fixed-pitch tick
+     * marks (newest at top), previews a mark's full text to its left on hover
+     * or focus, copies it into the composer draft on click or Enter, and
+     * reveals a floating search card from the rail's search button. Renders
+     * nothing until the Session has at least one sent prompt.
      * @param {object} props - dock seat props plus the injected locale seat.
-     * @returns {object | null} the dock, or nothing without prompt history.
+     * @returns {object | null} a document-body portal, or nothing.
      */
     function PromptHistoryPreview(props) {
       const { sessionId, useInput, inputActions } = props
@@ -4805,11 +4923,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const [snapshot, setSnapshot] = React.useState({ sessionId: null, status: 'idle', prompts: [] })
       const [query, setQuery] = React.useState('')
       const [searchOpen, setSearchOpen] = React.useState(false)
-      const [copied, setCopied] = React.useState(false)
+      const [copied, setCopied] = React.useState(null)
       const [reloadKey, setReloadKey] = React.useState(0)
       const [preview, setPreview] = React.useState(null)
-      const rootRef = React.useRef(null)
+      const [layout, setLayout] = React.useState(null)
       const searchRef = React.useRef(null)
+      const toggleRef = React.useRef(null)
       const copiedTimer = React.useRef(null)
       const previewTimer = React.useRef(null)
 
@@ -4834,7 +4953,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       React.useEffect(() => {
         setQuery('')
         setSearchOpen(false)
-        setCopied(false)
+        setCopied(null)
         setPreview(null)
       }, [sessionId])
 
@@ -4851,8 +4970,49 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (previewTimer.current !== null) window.clearTimeout(previewTimer.current)
       }, [])
 
-      // The popover uses viewport coordinates; scrolling or resizing invalidates
-      // its anchor, so close it instead of leaving it at a stale position.
+      // Keep the fixed rail glued to the Conversation's right-edge rail column.
+      // One rAF-coalesced measurement serves resizes, composer height changes,
+      // sidebar width changes, scrolling, and the native rail appearing/loading.
+      React.useEffect(() => {
+        let frame = 0
+        let disposed = false
+        const schedule = () => {
+          if (disposed || frame !== 0) return
+          frame = window.requestAnimationFrame(() => {
+            frame = 0
+            if (disposed) return
+            const next = measurePromptHistoryRail(sessionId)
+            setLayout((current) => (samePromptHistoryLayout(current, next) ? current : next))
+          })
+        }
+        schedule()
+        const scroll = promptHistoryScrollSurface(sessionId)
+        const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null
+        if (resizeObserver !== null) {
+          if (scroll !== null) resizeObserver.observe(scroll)
+          const composer = promptHistoryComposerSeat(sessionId)
+          if (composer !== null) resizeObserver.observe(composer)
+        }
+        const mutationObserver = typeof MutationObserver === 'function' ? new MutationObserver(schedule) : null
+        if (mutationObserver !== null) mutationObserver.observe(scroll ?? document.body, { childList: true, subtree: true })
+        window.addEventListener('resize', schedule)
+        if (scroll !== null) scroll.addEventListener('scroll', schedule, { passive: true })
+        document.addEventListener('scroll', schedule, true)
+        const settle = window.setTimeout(schedule, 300)
+        return () => {
+          disposed = true
+          window.clearTimeout(settle)
+          if (frame !== 0) window.cancelAnimationFrame(frame)
+          if (resizeObserver !== null) resizeObserver.disconnect()
+          if (mutationObserver !== null) mutationObserver.disconnect()
+          window.removeEventListener('resize', schedule)
+          if (scroll !== null) scroll.removeEventListener('scroll', schedule)
+          document.removeEventListener('scroll', schedule, true)
+        }
+      }, [sessionId, prompts.length])
+
+      // The preview card uses viewport coordinates; scrolling or resizing
+      // invalidates its anchor, so close it instead of leaving it stale.
       React.useEffect(() => {
         if (preview === null) return undefined
         const dismiss = () => setPreview(null)
@@ -4864,7 +5024,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         }
       }, [preview])
 
-      // Revealing the search row moves the caret there without touching the composer.
+      // Revealing the search card moves the caret there without touching the composer.
       React.useEffect(() => {
         if (!searchOpen) return
         const input = searchRef.current
@@ -4872,51 +5032,58 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }, [searchOpen])
 
       /**
-       * Put one prompt into the composer draft and acknowledge briefly.
-       * @param {string} text - prompt text.
+       * Put one prompt into the composer draft and confirm briefly near the rail.
+       * @param {object} prompt - the rail mark's prompt entry.
+       * @param {object} element - the mark button.
        * @returns {void}
        */
-      function copyPrompt(text) {
+      function copyPrompt(prompt, element) {
         cancelHidePreview()
-        inputActions.setDraft(text)
-        focusPromptHistoryComposer(rootRef.current)
+        inputActions.setDraft(prompt.text)
+        focusPromptHistoryComposer(sessionId)
         setPreview(null)
-        setCopied(true)
+        const rect = element.getBoundingClientRect()
+        const top = layout === null
+          ? Math.max(8, rect.top)
+          : Math.max(layout.top, Math.min(rect.top + rect.height / 2 - 14, layout.top + layout.maxHeight - 36))
+        setCopied(Math.round(top))
         if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current)
         copiedTimer.current = window.setTimeout(() => {
           copiedTimer.current = null
-          setCopied(false)
+          setCopied(null)
         }, 2000)
       }
 
       /**
-       * Anchor the full-prompt popover to one row and show it.
-       * @param {object} prompt - the row's prompt entry.
-       * @param {number} ordinal - reverse index shown on the row.
-       * @param {object} element - the row button.
+       * Anchor the full-text preview card to one mark.
+       * @param {object} prompt - the mark's prompt entry.
+       * @param {number} ordinal - reverse index shown to assistive tech.
+       * @param {object} element - the mark button.
        * @returns {void}
        */
       function showPreview(prompt, ordinal, element) {
         cancelHidePreview()
+        if (layout === null) return
         const rect = element.getBoundingClientRect()
-        const gap = 8
-        const width = Math.max(220, Math.min(rect.width - 12, 560))
-        const left = Math.max(8, Math.min(rect.left + 4, window.innerWidth - width - 8))
-        const spaceAbove = Math.round(rect.top - gap - 8)
-        const spaceBelow = Math.round(window.innerHeight - rect.bottom - gap - 8)
-        const above = spaceAbove >= 160 || spaceBelow < 160
-        const maxHeight = Math.max(80, Math.min(320, Math.round(window.innerHeight * 0.5), above ? spaceAbove : spaceBelow))
-        const time = typeof prompt.at === 'number' ? promptHistoryTimeLabels(prompt.at).title : ''
+        const width = Math.max(220, Math.min(360, Math.round(window.innerWidth * 0.36)))
+        // Keep the card fully above the composer even for marks at the rail's
+        // bottom; the card scrolls internally when the prompt is long.
+        const topLimit = Math.max(8, layout.composerTop - 8 - layout.cardMaxHeight)
+        const top = Math.round(Math.max(8, Math.min(rect.top - 10, topLimit)))
+        const time = typeof prompt.at === 'number' ? promptHistoryTimeLabels(prompt.at) : null
         setPreview({
+          ordinal,
           text: prompt.text,
-          time,
-          style: above
-            ? { left, bottom: window.innerHeight - rect.top + gap, width, maxHeight }
-            : { left, top: rect.bottom + gap, width, maxHeight }
+          time: time === null ? '' : time.label,
+          timeTitle: time === null ? '' : time.title,
+          top,
+          right: layout.right + layout.width + 10,
+          width,
+          maxHeight: layout.cardMaxHeight
         })
       }
 
-      /** Hide the full-prompt popover after a short pointer trip toward it. */
+      /** Hide the preview card after a short pointer trip toward it. */
       function scheduleHidePreview() {
         if (previewTimer.current !== null) window.clearTimeout(previewTimer.current)
         previewTimer.current = window.setTimeout(() => {
@@ -4925,7 +5092,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         }, 160)
       }
 
-      /** Cancel a scheduled hide, e.g. when the pointer reaches the popover. */
+      /** Cancel a scheduled hide, e.g. when the pointer reaches the preview card. */
       function cancelHidePreview() {
         if (previewTimer.current !== null) {
           window.clearTimeout(previewTimer.current)
@@ -4933,143 +5100,147 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         }
       }
 
-      if (prompts.length === 0) return null
-
-      const style = React.createElement('style', null, PROMPT_HISTORY_PREVIEW_CSS)
+      if (prompts.length === 0 || layout === null) return null
 
       const needle = query.trim().toLowerCase()
-      const rows = []
+      const marks = []
       for (let index = prompts.length - 1; index >= 0; index -= 1) {
         const prompt = prompts[index]
         if (needle.length > 0 && !prompt.text.toLowerCase().includes(needle)) continue
-        rows.push({ prompt, ordinal: index + 1 })
+        marks.push({ prompt, ordinal: index + 1 })
       }
 
-      const list = rows.length === 0
-        ? React.createElement('div', { className: 'psp-empty' }, t('empty.filtered'))
-        : React.createElement('ul', { className: 'psp-list', 'aria-label': t('list.aria') },
-          rows.map(({ prompt, ordinal }) => {
-            const time = typeof prompt.at === 'number' ? promptHistoryTimeLabels(prompt.at) : null
-            return React.createElement('li', { key: String(ordinal), className: 'psp-item' },
-              React.createElement('button', {
-                type: 'button',
-                className: 'psp-row',
-                'data-psp-row': '',
-                'data-psp-index': String(ordinal),
-                title: t('row.aria', { index: ordinal }),
-                onClick: () => copyPrompt(prompt.text),
-                onMouseEnter: (event) => showPreview(prompt, ordinal, event.currentTarget),
-                onMouseLeave: scheduleHidePreview,
-                onFocus: (event) => showPreview(prompt, ordinal, event.currentTarget),
-                onBlur: scheduleHidePreview
-              },
-              React.createElement('span', { className: 'psp-index' }, `#${ordinal}`),
-              React.createElement('span', { className: 'psp-text' }, prompt.text),
-              React.createElement('span', { className: 'psp-meta' },
-                time === null ? null : React.createElement('span', { className: 'psp-time', title: time.title }, time.label),
-                React.createElement('span', { className: 'psp-copy' }, RemixGlyph(REMIX_FILE_COPY_LINE, 13))),
-              // The action hint is part of the button's accessible name without
-              // replacing the visible prompt text screen readers would otherwise lose.
-              React.createElement('span', { className: 'psp-sr' }, t('row.aria', { index: ordinal }))))
-          }))
+      const style = React.createElement('style', null, PROMPT_HISTORY_PREVIEW_CSS)
+      const railStyle = { top: layout.top, right: layout.right, width: layout.width, maxHeight: layout.maxHeight }
 
-      const footerRight = copied
-        ? React.createElement('span', { className: 'psp-copied', role: 'status' },
-          RemixGlyph(REMIX_CHECK_LINE, 13),
-          React.createElement('span', null, t('copied')))
-        : React.createElement('button', {
-          type: 'button',
-          className: 'psp-searchbtn',
-          'aria-expanded': searchOpen ? 'true' : 'false',
-          'data-psp-search-toggle': '',
-          onClick: () => {
-            if (searchOpen) {
-              setQuery('')
-              setSearchOpen(false)
-              return
-            }
-            setSearchOpen(true)
-          }
-        },
-        RemixGlyph(REMIX_SEARCH_LINE, 13),
-        React.createElement('span', null, t('search.open')))
-
-      const footer = React.createElement('div', { className: 'psp-foot' },
-        React.createElement('span', { className: 'psp-foot-count' },
-          needle.length > 0
-            ? t('footer.filtered', { count: rows.length, total: prompts.length })
-            : t(prompts.length === 1 ? 'footer.countOne' : 'footer.count', { count: prompts.length })),
-        footerRight)
-
-      const searchRow = searchOpen
-        ? React.createElement('div', { className: 'psp-searchrow' },
-          RemixGlyph(REMIX_SEARCH_LINE, 13, 'psp-searchrow-icon'),
-          React.createElement('input', {
-            ref: searchRef,
-            type: 'text',
-            className: 'psp-searchrow-input',
-            value: query,
-            placeholder: t('search.placeholder'),
-            'aria-label': t('search.aria'),
-            autoComplete: 'off',
-            spellCheck: false,
-            onChange: (event) => setQuery(event.target.value),
-            onKeyDown: (event) => {
-              if (event.key !== 'Escape') return
-              event.preventDefault()
-              event.stopPropagation()
-              setQuery('')
-              setSearchOpen(false)
-            }
-          }),
-          React.createElement('button', {
-            type: 'button',
-            className: 'psp-searchclear',
-            title: t('search.clear'),
-            'aria-label': t('search.clear'),
-            onClick: () => {
-              setQuery('')
-              const input = searchRef.current
-              if (input instanceof HTMLElement) input.focus()
-            }
-          }, RemixGlyph(REMIX_CLOSE_LINE, 12)))
-        : null
-
-      const card = React.createElement('div', {
-        className: 'psp-card',
-        role: 'region',
+      const rail = React.createElement('div', {
+        className: 'psp-rail',
+        'data-psp-rail': '',
+        style: railStyle
+      },
+      React.createElement('div', {
+        className: 'psp-rail-divider',
+        'data-psp-rail-divider': '',
+        'aria-hidden': 'true'
+      }),
+      React.createElement('div', {
+        className: 'psp-marks',
+        role: 'group',
         'aria-label': t('list.aria')
       },
-      React.createElement('div', { className: 'psp-body' }, list),
-      footer,
-      searchRow)
-
-      const popover = preview === null ? null : ReactDOM.createPortal(
-        React.createElement('div', {
-          className: 'psp-popover',
-          role: 'tooltip',
-          'aria-hidden': 'true',
-          style: preview.style,
-          onMouseEnter: cancelHidePreview,
-          onMouseLeave: () => setPreview(null)
-        },
-        React.createElement('div', { className: 'psp-popover-text' }, preview.text),
-        preview.time.length === 0 ? null : React.createElement('div', { className: 'psp-popover-time' }, preview.time)),
-        document.body)
-
-      return React.createElement('div', {
-        className: 'psp-root',
-        ref: rootRef,
-        'data-psp-preview': 'docked'
+      marks.map(({ prompt, ordinal }) => React.createElement('button', {
+        key: String(ordinal),
+        type: 'button',
+        className: 'psp-mark',
+        'data-psp-mark': '',
+        'data-psp-index': String(ordinal),
+        onClick: (event) => copyPrompt(prompt, event.currentTarget),
+        onMouseEnter: (event) => showPreview(prompt, ordinal, event.currentTarget),
+        onMouseLeave: scheduleHidePreview,
+        onFocus: (event) => showPreview(prompt, ordinal, event.currentTarget),
+        onBlur: scheduleHidePreview
       },
-      style,
-      React.createElement('div', { className: 'psp-divider', 'aria-hidden': 'true' }),
-      card,
-      popover)
+      // The accessible name carries the action and the prompt text, so the
+      // visible tick never hides what the mark stands for.
+      React.createElement('span', { className: 'psp-sr' }, t('mark.aria', { index: ordinal, text: accessiblePromptText(prompt.text) })),
+      React.createElement('span', { className: 'psp-mark-tick', 'aria-hidden': 'true' })))),
+      React.createElement('button', {
+        ref: toggleRef,
+        type: 'button',
+        className: 'psp-search-toggle',
+        'data-psp-search-toggle': '',
+        'aria-expanded': searchOpen ? 'true' : 'false',
+        'aria-label': t('search.open'),
+        title: t('search.open'),
+        onClick: () => {
+          setPreview(null)
+          if (searchOpen) {
+            setQuery('')
+            setSearchOpen(false)
+            return
+          }
+          setSearchOpen(true)
+        }
+      }, RemixGlyph(REMIX_SEARCH_LINE, 13)))
+
+      const previewCard = preview === null ? null : React.createElement('div', {
+        className: 'psp-rail-card',
+        'data-psp-preview-card': '',
+        role: 'tooltip',
+        'aria-hidden': 'true',
+        style: { top: preview.top, right: preview.right, width: preview.width, maxHeight: preview.maxHeight },
+        onMouseEnter: cancelHidePreview,
+        onMouseLeave: () => setPreview(null)
+      },
+      React.createElement('div', { className: 'psp-rail-card-text' }, preview.text),
+      preview.time === ''
+        ? null
+        : React.createElement('div', { className: 'psp-rail-card-time', title: preview.timeTitle }, preview.time))
+
+      const searchTop = Math.round(Math.max(8, Math.min(layout.top + layout.maxHeight - 92, window.innerHeight - 148)))
+      const searchCard = searchOpen ? React.createElement('div', {
+        className: 'psp-search-card',
+        'data-psp-search-card': '',
+        style: { top: searchTop, right: layout.right + layout.width + 10, width: 268 },
+        onKeyDown: (event) => {
+          if (event.key !== 'Escape') return
+          event.preventDefault()
+          event.stopPropagation()
+          setQuery('')
+          setSearchOpen(false)
+          const toggle = toggleRef.current
+          if (toggle instanceof HTMLElement) toggle.focus()
+        }
+      },
+      React.createElement('div', { className: 'psp-search-row' },
+        RemixGlyph(REMIX_SEARCH_LINE, 13, 'psp-search-icon'),
+        React.createElement('input', {
+          ref: searchRef,
+          type: 'text',
+          className: 'psp-search-input',
+          value: query,
+          placeholder: t('search.placeholder'),
+          'aria-label': t('search.aria'),
+          autoComplete: 'off',
+          spellCheck: false,
+          onChange: (event) => setQuery(event.target.value)
+        }),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psp-search-clear',
+          title: t('search.clear'),
+          'aria-label': t('search.clear'),
+          onClick: () => {
+            setQuery('')
+            const input = searchRef.current
+            if (input instanceof HTMLElement) input.focus()
+          }
+        }, RemixGlyph(REMIX_CLOSE_LINE, 12))),
+      React.createElement('div', { className: 'psp-search-count' },
+        needle.length > 0
+          ? t('count.filtered', { count: marks.length, total: prompts.length })
+          : t('count.all', { count: prompts.length })),
+      needle.length > 0 && marks.length === 0
+        ? React.createElement('div', { className: 'psp-search-empty' }, t('empty.filtered'))
+        : null)
+        : null
+
+      const copiedChip = copied === null ? null : React.createElement('div', {
+        className: 'psp-copied',
+        'data-psp-copied': '',
+        role: 'status',
+        style: { top: copied, right: layout.right + layout.width + 10 }
+      },
+      RemixGlyph(REMIX_CHECK_LINE, 13),
+      React.createElement('span', null, t('copied')))
+
+      return ReactDOM.createPortal(
+        React.createElement(React.Fragment, null, style, rail, previewCard, searchCard, copiedChip),
+        document.body)
     }
 
     /**
-     * Register the composer-docked prompt-history preview.
+     * Register the prompt-history rail's session-scoped data seat.
      * @param {object} ctx - client root context.
      * @returns {void}
      */
@@ -5086,6 +5257,257 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         locale: PROMPT_HISTORY_PREVIEW_NS,
         inject: () => ({ t })
       }, PromptHistoryPreview)), 'power-suite: prompt-history preview dock')
+    }
+    //#endregion
+
+    //#region feature: draft attachment memory
+    /**
+     * Draft attachment memory.
+     *
+     * The shell persists a Session draft's semantic text (and reference chips)
+     * per Session, but browser-owned attachment objects (pasted images, dropped
+     * or picked files) live only in the mounted input controller: switching to
+     * another Session and back restores the words and silently drops the
+     * images/attachments. This feature keeps the browser Files for each Session
+     * while the page stays open and re-introduces them through the composer's
+     * own file-intake path (a synthetic paste with the cached Files) when the
+     * Session is shown again and the shell restored no attachments.
+     *
+     * It is a page-lifetime workaround, not persistence: a page reload still
+     * cannot bring back a File object the browser did not keep.
+     */
+
+    /** Seat identity of the invisible session-scoped capture/restore seat. */
+    const DAM_SEAT = 'power-suite.draft-attachments'
+
+    /** Sessions whose draft attachments are remembered at once. */
+    const DAM_MAX_SESSIONS = 8
+
+    /** Files remembered for one Session. */
+    const DAM_MAX_FILES = 20
+
+    /** Session id → { files: File[], restored: boolean, seq: number }. */
+    const damMemory = new Map()
+
+    /**
+     * Escape one Session id for a quoted attribute selector.
+     * @param {string} value - Session identity.
+     * @returns {string} selector-safe value.
+     */
+    function damSelectorValue(value) {
+      const css = globalThis.CSS
+      if (css !== undefined && css !== null && typeof css.escape === 'function') return css.escape(value)
+      return String(value).replace(/["\\]/g, '\\$&')
+    }
+
+    /**
+     * Remember browser Files attached to one Session's draft.
+     * @param {string} sessionId - Session identity.
+     * @param {readonly File[]} files - browser files from paste, drop, or picker.
+     * @returns {void}
+     */
+    function damRemember(sessionId, files) {
+      if (!Array.isArray(files) || files.length === 0) return
+      let entry = damMemory.get(sessionId)
+      if (entry === undefined) {
+        entry = { files: [], restored: false, seq: 0 }
+        damMemory.set(sessionId, entry)
+      }
+      for (const file of files) {
+        if (!(file instanceof File)) continue
+        const duplicate = entry.files.some((known) => (
+          known.name === file.name && known.size === file.size && known.lastModified === file.lastModified
+        ))
+        if (!duplicate) entry.files.push(file)
+      }
+      while (entry.files.length > DAM_MAX_FILES) entry.files.shift()
+      entry.restored = false
+      entry.seq = Date.now()
+      while (damMemory.size > DAM_MAX_SESSIONS) {
+        let oldestKey
+        let oldestSeq = Number.POSITIVE_INFINITY
+        for (const [key, value] of damMemory) {
+          if (value.seq < oldestSeq) {
+            oldestSeq = value.seq
+            oldestKey = key
+          }
+        }
+        if (oldestKey === undefined) break
+        damMemory.delete(oldestKey)
+      }
+    }
+
+    /**
+     * Drop every remembered file for one Session (draft sent or cleared).
+     * @param {string} sessionId - Session identity.
+     * @returns {void}
+     */
+    function damForget(sessionId) {
+      damMemory.delete(sessionId)
+    }
+
+    /**
+     * Re-introduce remembered Files through the composer's paste intake.
+     * @param {string} sessionId - Session identity.
+     * @param {readonly File[]} files - remembered browser files.
+     * @returns {boolean} whether a paste event was dispatched.
+     */
+    function damInject(sessionId, files) {
+      if (files.length === 0) return false
+      const scoped = document.querySelector(`[data-conversation-session="${damSelectorValue(sessionId)}"]`)
+      if (!(scoped instanceof HTMLElement)) return false
+      const composer = scoped.querySelector('[data-conversation-region="composer"]')
+      if (!(composer instanceof HTMLElement)) return false
+      const editor = composer.querySelector('[data-lexical-editor="true"]')
+      if (!(editor instanceof HTMLElement)) return false
+      if (typeof DataTransfer !== 'function' || typeof ClipboardEvent !== 'function') return false
+      let data
+      try {
+        data = new DataTransfer()
+        for (const file of files) data.items.add(file)
+      } catch {
+        return false
+      }
+      const event = new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })
+      editor.dispatchEvent(event)
+      return true
+    }
+
+    /**
+     * Invisible per-Session seat that captures draft Files and puts them back
+     * after a Session round-trip.
+     * @param {object} props - session-scoped slot props.
+     * @returns {null} no DOM.
+     */
+    function DraftAttachmentSeat(props) {
+      const { sessionId, useInput } = props
+      const attachmentIds = useInput((state) => state.attachmentIds)
+      const phase = useInput((state) => state.phase)
+      const draft = useInput((state) => state.draft)
+      const previousAttachments = React.useRef(attachmentIds.length)
+
+      // Capture every browser File the composer admits while this Session is
+      // mounted, before the shell's own intake consumes it.
+      React.useEffect(() => {
+        if (typeof sessionId !== 'string' || sessionId.length === 0) return undefined
+        const inComposer = (node) => (node instanceof Element ? node.closest('[data-conversation-region="composer"]') : null) !== null
+        const inThisSession = (node) => {
+          if (!(node instanceof Element)) return false
+          const scoped = node.closest('[data-conversation-session]')
+          if (scoped !== null) return scoped.getAttribute('data-conversation-session') === sessionId
+          // A picker input appended outside the conversation still belongs to
+          // the one mounted composer of this Session.
+          return document.querySelector(`[data-conversation-session="${damSelectorValue(sessionId)}"]`) !== null
+        }
+        const remember = (files) => {
+          if (files === undefined || files === null) return
+          const list = []
+          for (const file of files) if (file instanceof File) list.push(file)
+          damRemember(sessionId, list)
+        }
+        const onPaste = (event) => {
+          if (!inComposer(event.target) || !inThisSession(event.target)) return
+          const data = event.clipboardData
+          if (data === null) return
+          const files = []
+          for (const item of data.items) {
+            if (item.kind !== 'file') continue
+            const file = item.getAsFile()
+            if (file !== null) files.push(file)
+          }
+          remember(files)
+        }
+        const onDrop = (event) => {
+          if (!inComposer(event.target) || !inThisSession(event.target)) return
+          const transfer = event.dataTransfer
+          if (transfer !== null) remember(transfer.files)
+        }
+        const onChange = (event) => {
+          const target = event.target
+          if (!(target instanceof HTMLInputElement) || target.type !== 'file') return
+          if (!inComposer(target) || !inThisSession(target)) return
+          remember(target.files)
+        }
+        document.addEventListener('paste', onPaste, true)
+        document.addEventListener('drop', onDrop, true)
+        document.addEventListener('change', onChange, true)
+        return () => {
+          document.removeEventListener('paste', onPaste, true)
+          document.removeEventListener('drop', onDrop, true)
+          document.removeEventListener('change', onChange, true)
+        }
+      }, [sessionId])
+
+      // Restore after a round-trip: the shell brings the words back first; if
+      // no attachment came back with them, feed the remembered Files through
+      // the composer's own paste path.
+      React.useEffect(() => {
+        if (typeof sessionId !== 'string' || sessionId.length === 0) return undefined
+        const entry = damMemory.get(sessionId)
+        if (entry === undefined || entry.files.length === 0 || entry.restored === true) return undefined
+        if (phase !== 'plain') return undefined
+        if (attachmentIds.length > 0) {
+          entry.restored = true
+          return undefined
+        }
+        let cancelled = false
+        let attempts = 0
+        let timer = null
+        const attempt = () => {
+          if (cancelled) return
+          if (damInject(sessionId, entry.files)) {
+            entry.restored = true
+            return
+          }
+          attempts += 1
+          if (attempts < 20) timer = window.setTimeout(attempt, 100)
+        }
+        timer = window.setTimeout(attempt, 80)
+        return () => {
+          cancelled = true
+          if (timer !== null) window.clearTimeout(timer)
+        }
+      }, [sessionId, phase, attachmentIds.length])
+
+      // Forget the cache when the draft leaves through a send (or is cleared),
+      // and reset the restored guard so a second round-trip restores again.
+      React.useEffect(() => {
+        const previous = previousAttachments.current
+        previousAttachments.current = attachmentIds.length
+        if (phase !== 'plain') {
+          damForget(sessionId)
+          return
+        }
+        const entry = damMemory.get(sessionId)
+        if (entry !== undefined && entry.restored === true && previous > 0 && attachmentIds.length === 0) {
+          // Every attachment was removed by the human; do not resurrect them.
+          damForget(sessionId)
+        }
+      }, [attachmentIds.length, phase, sessionId])
+
+      React.useEffect(() => {
+        if (typeof sessionId !== 'string') return undefined
+        return () => {
+          const entry = damMemory.get(sessionId)
+          if (entry !== undefined) entry.restored = false
+        }
+      }, [sessionId])
+
+      void draft
+      return null
+    }
+
+    /**
+     * Register the invisible draft-attachment capture/restore seat.
+     * @param {object} ctx - client root context.
+     * @returns {void}
+     */
+    function installDraftAttachmentMemory(ctx) {
+      ctx.effect(() => ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({
+        name: 'conversation.input.overlay',
+        id: DAM_SEAT,
+        order: 20
+      }, DraftAttachmentSeat)), 'power-suite: draft attachment memory seat')
     }
     //#endregion
 
@@ -5129,6 +5551,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       installWorkspacePresetRouting(ctx)
       installPromptHistory(ctx)
       installPromptHistoryPreview(ctx)
+      installDraftAttachmentMemory(ctx)
       installDynamicWorkspaces(ctx)
       installInterruptedSessions(ctx)
       installQuickLook(ctx)
