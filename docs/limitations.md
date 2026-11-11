@@ -197,6 +197,15 @@
 - **Workspace membership is required.** A Session not accounted to a Workspace
   shows **No project workspace**; subagent Sessions resolve through their parent
   chain but are not project rows of their own.
+- **A Workspace without a usable Session cannot show the project page.** Clicking
+  such a Workspace opens the native blank Hero, where the shell renders no
+  conversation view tabs; the page appears only after that Workspace has a
+  Session. Archived Sessions do not count as usable.
+- **The sidebar open affordance is the title text, not the leading icon.** The
+  leading icon doubles as the native fold chevron on hover, so clicking it folds
+  or expands the Workspace group; the title/folder text is what opens the project
+  page. The sidebar entry also ignores drags and modified or non-primary clicks by
+  design, leaving drag reordering and open-in-new-tab gestures native.
 - **Coarse statuses.** A turn that closed without a recognized reason is reported
   as stopped, not as completed or failed.
 - **Localization.** The Project view ships English and Chinese copy; live checks

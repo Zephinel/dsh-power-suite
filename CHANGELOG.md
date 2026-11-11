@@ -69,7 +69,13 @@ All notable changes to this repository are documented here. The format follows
   newest first with status filters, session filter, include-jobs toggle, search,
   expandable nested job rows, live elapsed time, and Show-more paging; Settings
   edits the Workspace default preset and shows the grouping windows read-only
-  plus path actions. The new authenticated `GET /api/power-suite.project` route
+  plus path actions. Clicking a Workspace's title/folder area in the sidebar
+  opens that Workspace's project page: the current Session is reused when it
+  belongs to the Workspace, otherwise the newest non-blank non-archived Session
+  is opened and the Project tab is activated (bounded retry, matched by localized
+  label); the native chevron fold, row context menu, New Session button, Session
+  rows, drags, and modified clicks keep their behavior, and the header switcher
+  remains a secondary entry. The new authenticated `GET /api/power-suite.project` route
   serves one snapshot (workspaceId or sessionId, newest 20 Sessions, 10 s cache
   with `refresh=1`, `no-store`), and the pure folds live in
   `src/features/project-view/fold.js`.

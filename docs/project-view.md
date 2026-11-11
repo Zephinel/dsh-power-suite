@@ -9,9 +9,50 @@ It appears in the conversation header's view switcher next to **Chat**,
 **Trajectory**, and **Statistics**; selecting it replaces the conversation body,
 and switching away unmounts it cleanly (no leftover roots or styles).
 
+The **primary entry** is the sidebar: clicking a Workspace's title/folder area
+opens that Workspace's project page directly (see
+[Open from the sidebar](#open-from-the-sidebar)). The header view switcher stays
+as the secondary entry — for switching back, or for opening the view on a Session
+whose Workspace row is not at hand.
+
 The view is read-only for project facts and Session logs. Its one write path is
 the Workspace's default agent preset, which reuses the existing workspace-presets
 routes.
+
+## Open from the sidebar
+
+![Clicking a Workspace row in the sidebar opens its Project page](assets/project-workspace-entry.png)
+
+Clicking a **Workspace row's title/folder area** in the sidebar opens that
+Workspace's Project page on the existing four-tab conversation view:
+
+- If the Session currently in the conversation belongs to that Workspace, it is
+  **reused without navigation**; the Project view is simply selected.
+- Otherwise the **newest non-blank, non-archived Session** of the Workspace (by
+  `updatedAt`) is opened, and the Project view tab is activated. Activation is
+  matched by the localized **Project** / **项目** label (never by tab position)
+  and retried for at most **2.5 s**, waiting until the newly opened Session owns
+  the header; it is cancelled when another activation starts or the feature
+  unmounts.
+- A Workspace with **no usable Session** falls back to the native
+  `openWorkspace` blank Hero. The shell renders no conversation view tabs there,
+  so the project page cannot appear until that Workspace has a Session.
+
+Native sidebar behavior is intentionally preserved:
+
+- the **leading chevron** still folds/expands the Workspace group — the leading
+  icon doubles as the fold chevron on hover, and the **title text** is the open
+  affordance;
+- the row's **context menu** and **New Session** button keep their own behavior;
+- **Session rows** still open their Session with its own view;
+- **drags** (movement past a small slop threshold or a `dragstart`) and
+  **modified or non-primary clicks** (⌘/Ctrl/⇧/Alt, secondary buttons) are
+  ignored, so drag reordering and open-in-new-tab gestures stay native.
+
+The entry is one document-level capture click handler with pointer/drag tracking
+and full cleanup: HMR/remount cannot stack handlers (live listener inspection
+showed exactly one capture listener per type before and after a reload), and each
+click leaves exactly one project root.
 
 ## Overview
 
@@ -165,7 +206,8 @@ plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-
 ```
 
 The Host half registers the route; the browser half registers the conversation
-view. Restart the Host process after upgrading the package's Host JavaScript.
+view and the sidebar Workspace-row entry. Restart the Host process after
+upgrading the package's Host JavaScript.
 
 Implementation: Host route and cache
 [`src/features/project-view/host.js`](../src/features/project-view/host.js), pure

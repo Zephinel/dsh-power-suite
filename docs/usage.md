@@ -104,10 +104,17 @@ turn starts.
 
 ## Project view
 
-Open a Session and choose **Project** in the conversation header's view switcher
-(next to **Chat**, **Trajectory**, and **Statistics**). The conversation body
-switches to the Workspace's project dashboard; the other views keep working and
-switching back restores Chat.
+**Click a Workspace's title/folder area in the sidebar** to open its Project
+page. The current Session is reused when it belongs to that Workspace; otherwise
+the Workspace's newest non-blank Session is opened and the Project view is
+selected automatically. A Workspace with no usable Session opens the blank Hero
+instead (the page needs a Session to exist). The leading chevron still folds the
+Workspace group, and the row's context menu, New Session button, Session rows,
+drags, and modified clicks keep their native behavior.
+
+The conversation header's view switcher (**Chat / Trajectory / Project /
+Statistics**) remains the secondary entry, for switching back or opening the
+view on the current Session's Workspace.
 
 - **Overview** — project header (Active/Inactive, path, created/last active,
   Open Workspace, New Session, refresh, more menu with Copy project path), four

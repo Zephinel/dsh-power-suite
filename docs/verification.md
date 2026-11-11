@@ -24,8 +24,8 @@ Current evidence (2026-11-11, Node 24.22.2):
 
 - `npm test`: **73 tests, 73 passed, 0 failed**.
 - `npm run check`: passed (`14 modules, 7 test files`).
-- `npm run pack:check`: **56 files** (0.2.0 tarball), including `src/`,
-  `locale/`, `docs/` (with the Project view, Artifacts
+- `npm run pack:check`: **57 files** (0.2.0 tarball), including `src/`,
+  `locale/`, `docs/` (with the Project view, sidebar-entry, Artifacts
   panel/filter-menu/Quick Look, Dynamic Workspaces, hover-detail, and
   prompt-history rail captures), `cordis.patch.yml`, `icon.png`, and the
   standard repository files.
@@ -231,6 +231,7 @@ by code inspection plus an observed reload where an archived Session disappeared
 from the card.
 
 The live surfaces are captured in
+[assets/project-workspace-entry.png](assets/project-workspace-entry.png),
 [assets/project-overview.png](assets/project-overview.png),
 [assets/project-sessions.png](assets/project-sessions.png),
 [assets/project-runs.png](assets/project-runs.png),

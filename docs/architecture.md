@@ -210,14 +210,25 @@ workaround, so a reload cannot restore Files. See
 
 The one conversation-body surface: a native `conversation.view` registration
 (id `power-suite-project`, order 20, locale namespace `powerSuiteProjectView`,
-custom `psv-` token CSS). It appears in the conversation header's view switcher
-next to Chat/Trajectory/Statistics and replaces the conversation body while
-selected; the registration receives the Session id, locale `t`, workspace
+custom `psv-` token CSS). Its primary entry is a click on a sidebar Workspace
+row's title; it also appears in the conversation header's view switcher next to
+Chat/Trajectory/Statistics and replaces the conversation body while selected.
+The registration receives the Session id, locale `t`, workspace
 navigation helpers, the shell `sessions` listing, the existing workspace-preset
 read/write helpers, and the shared clipboard helper. Internally it has four tabs
 (Overview / Sessions / Runs / Settings), polls
 `GET /api/power-suite.project` every 15 s while open, keeps a running turn's
 elapsed time live on a timer, and pages Runs by 60 rows with **Show more**.
+A separate document-level capture click handler turns a plain click on a sidebar
+Workspace title/folder area into "open this Workspace's project page": the current
+Session is reused when it belongs to the Workspace, otherwise the newest
+non-blank, non-archived Session is opened and the Project tab is activated by its
+localized label with a bounded 2.5 s retry. The native fold chevron, row context
+menu, New Session button, Session rows, drags, and modified/non-primary clicks
+stay native; the Workspace service is resolved lazily through
+`ctx.get('workspaces')` (the plugin loads without a Workspace UI), and the effect
+cleanup removes every listener and cancels a pending activation so HMR cannot
+stack handlers.
 
 The Host route resolves a Workspace from `workspaceId` or from a `sessionId`
 (direct membership → durable parent chain → canonical cwd), measures the newest
