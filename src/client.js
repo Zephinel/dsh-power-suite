@@ -192,12 +192,12 @@ window.__ModuleLoader__.load({
 @media (prefers-reduced-motion: reduce){.dsa-refresh[data-loading=true] svg{animation:none}}
 .dsa-header-tools{display:inline-flex;align-items:center;gap:2px;flex:none}
 .dsa-filter-wrap{position:relative;flex:none}
-.dsa-filter-trigger{appearance:none;display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 6px 0 8px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
+.dsa-filter-trigger{appearance:none;display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 6px 0 8px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;line-height:18px;cursor:pointer}
 .dsa-filter-trigger:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dsa-filter-trigger[aria-expanded=true]{background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-primary)}
 .dsa-filter-trigger:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .dsa-filter-trigger-label{white-space:nowrap}
-.dsa-filter-trigger-count{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
+.dsa-filter-trigger-count{color:var(--dsw-alias-label-tertiary);font-size:11.5px;line-height:16px;font-variant-numeric:tabular-nums}
 .dsa-filter-caret{display:inline-flex;align-items:center;color:var(--dsw-alias-label-tertiary);transition:transform .16s ease}
 .dsa-filter-trigger[aria-expanded=true] .dsa-filter-caret{transform:rotate(180deg)}
 .dsa-filter-menu{position:absolute;z-index:40;top:calc(100% + 6px);right:0;min-width:196px;padding:4px;border-radius:12px;border:1px solid var(--dsw-alias-border-l2,transparent);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%));display:flex;flex-direction:column;gap:2px;animation:dsa-menu-in .12s ease-out}
@@ -2277,10 +2277,10 @@ window.__ModuleLoader__.load({
             'data-filter': filter,
             onClick: () => setFilterOpen((value) => !value)
           },
-          RemixGlyph(REMIX_FILTER_LINE, 13),
+          RemixGlyph(REMIX_FILTER_LINE, 12),
           React.createElement('span', { className: 'dsa-filter-trigger-label' }, t(`filter.${filter}`)),
           React.createElement('span', { className: 'dsa-filter-trigger-count' }, filterCounts[filter]),
-          React.createElement('span', { className: 'dsa-filter-caret' }, RemixGlyph(REMIX_ARROW_DOWN_S_LINE, 13))),
+          React.createElement('span', { className: 'dsa-filter-caret' }, RemixGlyph(REMIX_ARROW_DOWN_S_LINE, 11))),
           filterMenu)
         : null
 
@@ -2296,7 +2296,7 @@ window.__ModuleLoader__.load({
             title: t('list.refresh'),
             'aria-label': t('list.refresh'),
             'data-loading': phase === 'loading' ? 'true' : undefined
-          }, RemixGlyph(REMIX_REFRESH_LINE, 15))))
+          }, RemixGlyph(REMIX_REFRESH_LINE, 14))))
 
       if (phase === 'error') {
         return React.createElement('div', { className: 'dsa-root' },
