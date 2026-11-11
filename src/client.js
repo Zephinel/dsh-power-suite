@@ -9422,6 +9422,27 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     const ANNOTATION_LAUNCHER_SIZE = 44
 
     /**
+     * Clamp the launcher for the current layout. While a rail is visible the
+     * launcher must stay in the main area and never sit under the rail strip (it
+     * would cover the rail footer actions); when the mode is off the whole
+     * viewport is available again.
+     * @param {{ x: number, y: number } | null} pos - desired position.
+     * @param {{ width: number, height: number }} viewport - viewport size.
+     * @param {number} [reservedRight] - visible rail strip width, default 0.
+     * @returns {{ x: number, y: number }} clamped position.
+     */
+    function clampLauncherForLayout(pos, viewport, reservedRight) {
+      const clamped = clampLauncherPosition(pos, viewport, ANNOTATION_LAUNCHER_SIZE)
+      const reserved = typeof reservedRight === 'number' && Number.isFinite(reservedRight) && reservedRight > 0
+        ? reservedRight
+        : 0
+      if (reserved === 0) return clamped
+      const width = viewport !== null && typeof viewport === 'object' && typeof viewport.width === 'number' ? viewport.width : 0
+      const maxX = Math.max(8, Math.round(width - reserved - ANNOTATION_LAUNCHER_SIZE - 8))
+      return { x: Math.min(clamped.x, maxX), y: clamped.y }
+    }
+
+    /**
      * Resolve one event target (or node) to an Element.
      * @param {unknown} target - event target or node.
      * @returns {Element | null} the element, when available.
@@ -10327,7 +10348,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           if (frame.style.getPropertyValue('--psa-rail-width') !== railProperty) frame.style.setProperty('--psa-rail-width', railProperty)
           observeFrame(frame)
         }
-        const launcherPosition = clampLauncherPosition(current.launcherPosition, size, ANNOTATION_LAUNCHER_SIZE)
+        const launcherPosition = clampLauncherForLayout(current.launcherPosition, size, isActive() ? railWidth : 0)
         const patch = { railWidth, layoutMode: mode, launcherPosition }
         if (current.state.phase === 'selected' && current.selectionRects.length > 0 && current.popoverPosition !== null && current.popoverPinned === false) {
           const ref = current.state.selection[0]
@@ -10681,7 +10702,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         resizeTimer = window.setTimeout(() => {
           resizeTimer = null
           const current = snapshot()
-          const launcherPosition = clampLauncherPosition(current.launcherPosition, annotationViewport(), ANNOTATION_LAUNCHER_SIZE)
+          const launcherPosition = clampLauncherForLayout(current.launcherPosition, annotationViewport(), isActive() ? current.railWidth : 0)
           if (launcherPosition.x !== current.launcherPosition.x || launcherPosition.y !== current.launcherPosition.y) {
             publish({ launcherPosition })
             persistLauncherPosition(launcherPosition)
@@ -10903,7 +10924,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             // A throwing subscriber must not keep page markers alive.
           }
           try {
-            publish({ boxRect: null, popoverPosition: null, popoverPinned: false, hoverRect: null, noteEditor: null })
+            publish({
+              boxRect: null,
+              popoverPosition: null,
+              popoverPinned: false,
+              hoverRect: null,
+              noteEditor: null,
+              launcherPosition: clampLauncherPosition(snapshot().launcherPosition, annotationViewport(), ANNOTATION_LAUNCHER_SIZE)
+            })
             dispatch({ type: 'feedback', feedback: null })
           } catch {
             // Snapshot refresh is cosmetic once the layout is restored.
@@ -10938,10 +10966,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           moved = true
           publish({ launcherDragging: true })
           publish({
-            launcherPosition: clampLauncherPosition(
+            launcherPosition: clampLauncherForLayout(
               { x: start.x + dx, y: start.y + dy },
               annotationViewport(),
-              ANNOTATION_LAUNCHER_SIZE
+              isActive() ? snapshot().railWidth : 0
             )
           })
         }
