@@ -9269,6 +9269,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const ordered = Array.isArray(candidates) ? candidates.slice().sort((left, right) => (right?.reliability ?? 0) - (left?.reliability ?? 0)) : []
       let unique = null
       let genericMatch = null
+      const hasStableCandidate = ordered.some((candidate) => candidate !== null && typeof candidate === 'object'
+        && (candidate.kind === 'data' || candidate.kind === 'id' || candidate.kind === 'label'))
       for (const candidate of ordered) {
         if (candidate === null || typeof candidate !== 'object' || typeof candidate.value !== 'string' || candidate.value.length === 0) continue
         let matches
@@ -9309,9 +9311,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             const expected = typeof info.expectedText === 'string' ? info.expectedText : ''
             const actual = typeof info.textContent === 'string' ? info.textContent : ''
             if (unique === null) {
-              // Generic-only identity must be corroborated by the captured text summary;
-              // an icon-only control has none, so a same-position replacement reads as gone.
-              if (expected.length === 0) return 'missing'
+              // A ref whose stable identity disappeared must be corroborated by the
+              // captured text summary; with none (icon-only) a same-position
+              // replacement reads as gone. A ref that never had a stable candidate
+              // (anonymous icon-only control) still resolves on its unique generic hit.
+              if (expected.length === 0) return hasStableCandidate ? 'missing' : 'resolved'
               return sanitizeText(actual) === sanitizeText(expected) ? 'resolved' : 'changed'
             }
             if (expected.length > 0 && sanitizeText(actual) !== sanitizeText(expected)) return 'changed'
