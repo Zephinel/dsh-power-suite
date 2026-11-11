@@ -3757,6 +3757,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      */
     const DW_ACTIVE_WINDOW_MS = 12 * 60 * 60 * 1000
 
+    // Remix Icon paths (Apache-2.0, https://remixicon.com), inlined here so the
+    // activity card needs no icon package at runtime.
+    const DW_DEEPSEEK_FILL = 'M23.7493 4.92674C23.5053 4.80721 23.4103 5.0349 23.2676 5.15064C23.2193 5.18858 23.1777 5.23791 23.137 5.28155C22.7804 5.66482 22.3643 5.91527 21.8215 5.88492C21.0261 5.84128 20.348 6.09173 19.7484 6.7027C19.6207 5.94942 19.197 5.49975 18.553 5.21135C18.2154 5.06146 17.8739 4.91156 17.6385 4.58522C17.473 4.35374 17.4285 4.0957 17.3452 3.84145C17.2932 3.68777 17.2403 3.53028 17.0644 3.50372C16.8733 3.47337 16.7986 3.63464 16.7239 3.76935C16.4232 4.31959 16.3077 4.92674 16.3182 5.54149C16.3446 6.92274 16.9263 8.0232 18.0801 8.80687C18.2116 8.89605 18.2456 8.98707 18.204 9.11802C18.1255 9.38741 18.0319 9.64931 17.9487 9.9187C17.8967 10.0914 17.8181 10.1293 17.6347 10.0534C17.0011 9.78784 16.4534 9.39508 15.9701 8.91878C15.1493 8.1219 14.4069 7.24157 13.481 6.55281C13.2634 6.39151 13.0469 6.24162 12.8217 6.09932C11.8769 5.1772 12.9457 4.42015 13.1925 4.33097C13.4516 4.23801 13.2823 3.91544 12.4463 3.91924C11.6112 3.92304 10.8461 4.20385 9.87196 4.57763C9.72921 4.63455 9.54598 4.73128 9.4256 4.70855C8.54132 4.54158 7.62304 4.50363 6.66308 4.61178C4.8567 4.8148 3.4135 5.67241 2.35237 7.13714C1.07845 8.89605 0.778651 10.8959 1.1456 12.9829C1.53147 15.1801 2.64839 17.0016 4.36587 18.4246C6.14576 19.8989 8.19617 20.6218 10.535 20.4832C11.9555 20.4016 13.5377 20.2101 15.3214 18.694C15.7715 18.9179 16.2434 19.0071 17.0275 19.0754C17.6309 19.1323 18.2116 19.0451 18.6617 18.952C19.3663 18.8022 19.3172 18.1476 19.0628 18.0261C16.9973 17.0604 17.4502 17.4532 17.0379 17.1363C18.0876 15.8879 19.6699 14.592 20.2884 10.395C20.3367 10.061 20.295 9.85235 20.2884 9.58102C20.2847 9.41782 20.3216 9.35331 20.5088 9.33437C21.0261 9.2755 21.5283 9.13318 21.9898 8.8771C23.3281 8.14278 23.8571 6.93799 23.9848 5.49216C24.0037 5.27207 23.981 5.04248 23.7493 4.92674ZM12.0983 17.937C10.0962 16.3565 9.12577 15.8366 8.72484 15.8594C8.35024 15.8802 8.41745 16.3109 8.49968 16.5918C8.58577 16.8688 8.6983 17.0604 8.85626 17.3033C8.96501 17.4645 9.03978 17.7055 8.7475 17.8838C8.10252 18.2861 6.98184 17.7492 6.92886 17.7226C5.62465 16.9523 4.5342 15.9333 3.76532 14.5407C3.02385 13.1993 2.59259 11.7611 2.52166 10.2261C2.50275 9.85419 2.61151 9.72324 2.97846 9.65689C3.46173 9.56771 3.96109 9.54877 4.44436 9.61891C6.48717 9.9187 8.22638 10.837 9.68379 12.2886C10.5161 13.1177 11.1459 14.1062 11.7947 15.072C12.4841 16.0985 13.2265 17.0756 14.1714 17.8762C14.5042 18.1571 14.7709 18.3715 15.0253 18.529C14.2575 18.6144 12.9749 18.6333 12.0983 17.937ZM13.0573 11.7383C13.0573 11.5732 13.1887 11.4423 13.3542 11.4423C13.3911 11.4423 13.4252 11.4499 13.4554 11.4613C13.4961 11.4764 13.5339 11.4992 13.5633 11.5333C13.6162 11.5846 13.6465 11.6605 13.6465 11.7383C13.6465 11.9034 13.515 12.0343 13.3504 12.0343C13.1849 12.0343 13.0573 11.9034 13.0573 11.7383ZM16.0373 13.2752C15.8463 13.353 15.6552 13.4213 15.4718 13.4288C15.1871 13.4421 14.8759 13.3264 14.7066 13.1841C14.4447 12.964 14.2575 12.8406 14.1779 12.4536C14.1448 12.2886 14.1638 12.0343 14.1931 11.8882C14.2612 11.5732 14.1855 11.3721 13.9652 11.1881C13.7846 11.0382 13.5566 10.9984 13.3051 10.9984C13.2114 10.9984 13.1253 10.9566 13.061 10.9224C12.9561 10.8693 12.87 10.7384 12.9523 10.5771C12.9787 10.5259 13.1065 10.3988 13.1367 10.376C13.4772 10.1806 13.8706 10.2451 14.2347 10.3912C14.5723 10.5296 14.8267 10.7839 15.1936 11.1425C15.5691 11.5771 15.6363 11.6985 15.8501 12.0229C16.0184 12.279 16.1726 12.5408 16.2775 12.8406C16.3409 13.0266 16.2586 13.1802 16.0373 13.2752Z'
+    const DW_ROBOT_2_LINE = 'M13.5 2C13.5 2.44425 13.3069 2.84339 13 3.11805V5H18C19.6569 5 21 6.34315 21 8V18C21 19.6569 19.6569 21 18 21H6C4.34315 21 3 19.6569 3 18V8C3 6.34315 4.34315 5 6 5H11V3.11805C10.6931 2.84339 10.5 2.44425 10.5 2C10.5 1.17157 11.1716 0.5 12 0.5C12.8284 0.5 13.5 1.17157 13.5 2ZM6 7C5.44772 7 5 7.44772 5 8V18C5 18.5523 5.44772 19 6 19H18C18.5523 19 19 18.5523 19 18V8C19 7.44772 18.5523 7 18 7H13H11H6ZM2 10H0V16H2V10ZM22 10H24V16H22V10ZM9 14.5C9.82843 14.5 10.5 13.8284 10.5 13C10.5 12.1716 9.82843 11.5 9 11.5C8.17157 11.5 7.5 12.1716 7.5 13C7.5 13.8284 8.17157 14.5 9 14.5ZM15 14.5C15.8284 14.5 16.5 13.8284 16.5 13C16.5 12.1716 15.8284 11.5 15 11.5C14.1716 11.5 13.5 12.1716 13.5 13C13.5 13.8284 14.1716 14.5 15 14.5Z'
+
     const DW_EN = {
       'panel.title': 'Running & recent',
       'panel.viewAll': 'View all {count}',
@@ -3849,12 +3854,13 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-panel-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .psd-panel-link:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psd-chevron{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);transition:transform 160ms var(--ds-ease-in-out,ease)}
-.psd-panel-body{position:relative;display:flex;flex-direction:column;padding:0 4px 5px;max-height:min(46cqh,320px);overflow-y:auto;overscroll-behavior:contain}
+.psd-panel-body{position:relative;display:flex;flex-direction:column;padding:0 4px 5px;max-height:min(46cqh,320px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none}
+.psd-panel-body::-webkit-scrollbar{display:none;width:0;height:0}
 .psd-panel-empty{padding:6px 10px 8px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:17px;display:flex;flex-direction:column;gap:2px}
 .psd-panel-empty strong{color:var(--dsw-alias-label-secondary);font-weight:500}
 .psd-item{display:flex;flex-direction:column;min-width:0}
 .psd-run{display:flex;align-items:center;gap:2px;min-width:0;min-height:28px;padding:0 4px 0 7px;border-radius:var(--dsw-radius-md,8px)}
-.psd-run:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.psd-run-main:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .psd-run-toggle{appearance:none;position:relative;z-index:1;flex:none;width:24px;height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .psd-run-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-run-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
@@ -3874,11 +3880,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-child-time{flex:none;color:var(--dsw-alias-label-tertiary);font-size:10.5px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-run-head{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
 .psd-run-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
+.psd-run-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
+.psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
 .psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
 .psd-run-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary);font-size:13px;line-height:19px}
 .psd-run-time{flex:none;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:17px;font-variant-numeric:tabular-nums}
 .psd-hovercard{position:fixed;z-index:1000;box-sizing:border-box;width:300px;max-height:320px;overflow:hidden;padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,var(--dsw-shadow-lv2,none));color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;pointer-events:none}
 .psd-hovercard-title{font-size:13px;line-height:19px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.psd-hovercard-path{margin-top:2px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:15px;white-space:normal;word-break:break-all;overflow-wrap:anywhere;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
 .psd-hovercard-row{display:flex;gap:6px;margin-top:6px;min-width:0}
 .psd-hovercard-key{flex:none;min-width:62px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}
 .psd-hovercard-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px}
@@ -4261,7 +4270,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      */
     function DynamicRunningPanel(props) {
       const {
-        t, rows, expanded, showAll, now, durations, childrenByParent, collapsedParents,
+        t, rows, expanded, showAll, now, durations, childrenByParent, collapsedParents, acked,
         onToggle, onToggleAll, onToggleChildren, onOpen
       } = props
       const visible = expanded && !showAll ? rows.slice(0, DW_PANEL_LIMIT) : rows
@@ -4349,7 +4358,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               React.createElement('button', {
                 type: 'button',
                 className: 'psd-run-main',
-                title: row.title,
                 'aria-label': t('panel.open', { title: row.title }),
                 onClick: () => onOpen(row.id),
                 onMouseEnter: (event) => showHover(row, event.currentTarget),
@@ -4358,7 +4366,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                 onBlur: hideHover
               },
               React.createElement('span', { className: 'psd-run-head' },
-                React.createElement(StateDot, { state: running ? 'ongoing' : 'done', size: 14, className: 'psd-run-glyph' }),
+                running
+                  ? React.createElement(StateDot, { state: 'ongoing', size: 14, className: 'psd-run-glyph' })
+                  : !acked.has(row.id)
+                    ? React.createElement(StateDot, { state: 'done', size: 14, className: 'psd-run-glyph' })
+                    : React.createElement('span', { className: 'psd-run-brand', 'aria-hidden': true },
+                      RemixGlyph(DW_DEEPSEEK_FILL, 14, undefined, 0.82)),
                 React.createElement('span', { className: 'psd-run-title' }, row.title),
                 React.createElement('span', { className: 'psd-run-time' }, time))),
               hasChildren
@@ -4376,7 +4389,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                 type: 'button',
                 className: 'psd-child',
                 'data-state': child.state,
-                title: child.title,
                 'aria-label': t('panel.open', { title: child.title }),
                 onClick: () => onOpen(child.id),
                 onMouseEnter: (event) => showHover({
@@ -4391,7 +4403,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                 onBlur: hideHover
               },
               React.createElement('span', { className: 'psd-child-glyph' },
-                React.createElement(StateDot, { state: child.state === 'running' ? 'ongoing' : 'done', size: 10 })),
+                child.state === 'running'
+                  ? React.createElement(StateDot, { state: 'ongoing', size: 10 })
+                  : !acked.has(child.id)
+                    ? React.createElement(StateDot, { state: 'done', size: 10 })
+                    : React.createElement('span', { className: 'psd-child-brand', 'aria-hidden': true },
+                      RemixGlyph(DW_ROBOT_2_LINE, 12))),
               React.createElement('span', { className: 'psd-child-title' }, child.title),
               React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t)))))
               : null))
@@ -4417,11 +4434,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           'aria-hidden': true,
           style: { top: cardTop, left: cardLeft }
         },
-        React.createElement('div', { className: 'psd-hovercard-title' }, row.title),
-        React.createElement('div', { className: 'psd-hovercard-row' },
-          React.createElement('span', { className: 'psd-hovercard-key' }, t('hover.workspace')),
-          React.createElement('span', { className: 'psd-hovercard-value', title: row.workspacePath || row.workspace },
-            row.workspacePath.length === 0 ? row.workspace : `${row.workspace} · ${row.workspacePath}`)),
+        React.createElement('div', { className: 'psd-hovercard-title' }, row.workspace),
+        row.workspacePath.length === 0
+          ? null
+          : React.createElement('div', { className: 'psd-hovercard-path' }, row.workspacePath),
         React.createElement('div', { className: 'psd-hovercard-row' },
           React.createElement('span', { className: 'psd-hovercard-key' }, t('hover.status')),
           React.createElement('span', { className: 'psd-hovercard-value' },
@@ -4480,6 +4496,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const [panelExpanded, setPanelExpanded] = React.useState(true)
       const [showAll, setShowAll] = React.useState(false)
       const [collapsedParents, setCollapsedParents] = React.useState(() => new Set())
+      const [ackedSessions, setAckedSessions] = React.useState(() => new Set())
       const [now, setNow] = React.useState(() => Date.now())
 
       const mountsRef = React.useRef(null)
@@ -4511,6 +4528,28 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
 
       latestRef.current = { sessions, statuses, workspaces: workspaceSnapshot, folds }
+
+      // A finished Session's green mark is an unread signal: opening that
+      // Session (from this card or anywhere else) acknowledges it, and a new
+      // run clears the acknowledgement so the next completion is visible.
+      React.useEffect(() => {
+        if (sessions === null || typeof sessions !== 'object' || !Array.isArray(sessions.ids)) return
+        const running = new Set()
+        const current = new Set()
+        for (const id of sessions.ids) {
+          const summary = sessions.byId?.[id]
+          if (summary === undefined) continue
+          if (dwSessionRunning(id, summary, statuses)) running.add(id)
+          if ((summary.retainedBy?.mainView ?? 0) > 0) current.add(id)
+        }
+        setAckedSessions((previous) => {
+          let changed = false
+          const next = new Set(previous)
+          for (const id of running) if (next.delete(id)) changed = true
+          for (const id of current) if (!next.has(id)) { next.add(id); changed = true }
+          return changed ? next : previous
+        })
+      }, [sessions, statuses])
 
       React.useEffect(() => {
         aliveRef.current = true
@@ -4704,6 +4743,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         durations,
         childrenByParent,
         collapsedParents,
+        acked: ackedSessions,
         onToggle: () => setPanelExpanded((value) => !value),
         onToggleAll: () => setShowAll((value) => !value),
         onToggleChildren: (id) => setCollapsedParents((value) => {
@@ -4820,9 +4860,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
     const PROMPT_HISTORY_PREVIEW_CSS = `
 .psp-rail{position:fixed;z-index:60;display:flex;flex-direction:column;align-items:center;box-sizing:border-box;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:16px;pointer-events:auto}
-.psp-rail-divider{flex:none;align-self:flex-end;width:24px;height:1px;margin:2px 0 6px;border-radius:1px;background:var(--dsw-alias-border-l3,var(--dsw-alias-border-l2))}
+.psp-rail-divider{flex:none;align-self:flex-end;width:32px;height:1px;margin:2px 0 6px;border-radius:1px;background:var(--dsw-alias-border-l3,var(--dsw-alias-border-l2))}
 .psp-marks{flex:1 1 auto;width:100%;min-height:0;display:flex;flex-direction:column;align-items:stretch;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none}
 .psp-marks::-webkit-scrollbar{display:none;width:0;height:0}
+.psp-marks[data-fade-top=true]{mask-image:linear-gradient(#0000 0,#000 24px 100%)}
+.psp-marks[data-fade-bottom=true]{mask-image:linear-gradient(#000 0 calc(100% - 24px),#0000 100%)}
+.psp-marks[data-fade-top=true][data-fade-bottom=true]{mask-image:linear-gradient(#0000 0,#000 24px calc(100% - 24px),#0000 100%)}
 .psp-mark{position:relative;box-sizing:border-box;flex:none;width:100%;height:10px;margin:0;padding:0;border:0;border-radius:8px;background:0 0;cursor:pointer}
 .psp-mark::before{content:"";position:absolute;top:50%;right:0;width:20px;height:2px;border-radius:2px;background:var(--dsw-alias-border-l4);transform-origin:100%;transform:translateY(-50%) scaleX(.6);transition:transform .14s,background-color .14s}
 .psp-mark:hover::before{background:var(--dsw-alias-label-tertiary);transform:translateY(-50%) scaleX(.9)}
@@ -4831,7 +4874,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psp-mark:focus-visible{outline:none}
 .psp-mark:focus-visible::before{background:var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));transform:translateY(-50%) scaleX(1)}
 .psp-mark:focus-visible::after{content:"";position:absolute;inset:0 0 0 auto;width:20px;border-radius:inherit;outline:1px solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-1px}
-.psp-search-toggle{box-sizing:border-box;flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:22px;margin-top:3px;padding:0;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.psp-search-toggle{box-sizing:border-box;flex:none;align-self:flex-end;display:inline-flex;align-items:center;justify-content:center;width:20px;height:22px;margin-top:3px;padding:0;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .psp-search-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
 .psp-search-toggle[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psp-search-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
@@ -5032,9 +5075,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const [reloadKey, setReloadKey] = React.useState(0)
       const [preview, setPreview] = React.useState(null)
       const [layout, setLayout] = React.useState(null)
+      const [fades, setFades] = React.useState({ top: false, bottom: false })
+      const [searchAnchor, setSearchAnchor] = React.useState(null)
       const searchRef = React.useRef(null)
       const searchCardRef = React.useRef(null)
       const toggleRef = React.useRef(null)
+      const marksRef = React.useRef(null)
       const copiedTimer = React.useRef(null)
       const previewTimer = React.useRef(null)
 
@@ -5083,6 +5129,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         let frame = 0
         let disposed = false
         let followUp = 0
+        let lateSettle = 0
         const measure = () => {
           const next = measurePromptHistoryRail(sessionId)
           setLayout((current) => (samePromptHistoryLayout(current, next) ? current : next))
@@ -5101,6 +5148,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               followUp = 0
               if (!disposed) measure()
             }, 240)
+            // Sidebar width transitions can outlast one follow-up frame.
+            if (lateSettle !== 0) window.clearTimeout(lateSettle)
+            lateSettle = window.setTimeout(() => {
+              lateSettle = 0
+              if (!disposed) measure()
+            }, 700)
           })
         }
         schedule()
@@ -5122,6 +5175,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           window.clearTimeout(settle)
           if (frame !== 0) window.cancelAnimationFrame(frame)
           if (followUp !== 0) window.clearTimeout(followUp)
+          if (lateSettle !== 0) window.clearTimeout(lateSettle)
           if (resizeObserver !== null) resizeObserver.disconnect()
           if (mutationObserver !== null) mutationObserver.disconnect()
           window.removeEventListener('resize', schedule)
@@ -5145,10 +5199,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
       // Revealing the search card moves the caret there without touching the composer.
       React.useEffect(() => {
-        if (!searchOpen) return
+        if (!searchOpen || searchAnchor === null) return
         const input = searchRef.current
         if (input instanceof HTMLElement) input.focus()
-      }, [searchOpen])
+      }, [searchOpen, searchAnchor])
 
       // A blank pointer press outside the search card and its toggle dismisses
       // the search and clears the filter; rail marks stay clickable.
@@ -5168,6 +5222,72 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         document.addEventListener('pointerdown', onPointerDown, true)
         return () => document.removeEventListener('pointerdown', onPointerDown, true)
       }, [searchOpen])
+
+      // The tick ladder mirrors the native turn rail: scrollable ends get fade
+      // masks, and the search button below never moves.
+      React.useEffect(() => {
+        const marks = marksRef.current
+        if (marks === null) return undefined
+        let frame = 0
+        const update = () => {
+          frame = 0
+          const top = marks.scrollTop > 1
+          const bottom = marks.scrollTop < marks.scrollHeight - marks.clientHeight - 1
+          setFades((current) => (current.top === top && current.bottom === bottom ? current : { top, bottom }))
+        }
+        const schedule = () => {
+          if (frame !== 0) return
+          frame = window.requestAnimationFrame(update)
+        }
+        schedule()
+        marks.addEventListener('scroll', schedule, { passive: true })
+        const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null
+        if (observer !== null) observer.observe(marks)
+        return () => {
+          if (frame !== 0) window.cancelAnimationFrame(frame)
+          marks.removeEventListener('scroll', schedule)
+          if (observer !== null) observer.disconnect()
+        }
+      }, [layout, prompts.length, query])
+
+      // The search card never moves the rail: it hangs below the fixed toggle
+      // when there is room, otherwise it flips to the toggle's left and is
+      // clamped above the composer. Re-anchored on resize/filter changes.
+      React.useEffect(() => {
+        if (!searchOpen) {
+          setSearchAnchor(null)
+          return undefined
+        }
+        let frame = 0
+        const place = () => {
+          if (frame !== 0) return
+          frame = window.requestAnimationFrame(() => {
+            frame = 0
+            const toggle = toggleRef.current
+            if (toggle === null) return
+            const rect = toggle.getBoundingClientRect()
+            const estimate = 84
+            const composerTop = layout === null ? window.innerHeight : layout.composerTop
+            const next = composerTop - rect.bottom - 8 >= estimate
+              ? { mode: 'below', top: Math.round(rect.bottom + 6), right: layout === null ? 12 : layout.right }
+              : {
+                mode: 'left',
+                top: Math.round(Math.max(8, Math.min(rect.top + rect.height / 2 - estimate / 2, composerTop - 8 - estimate))),
+                right: Math.round(window.innerWidth - (rect.left - 8))
+              }
+            setSearchAnchor((current) => (current !== null && current.mode === next.mode && current.top === next.top && current.right === next.right ? current : next))
+          })
+        }
+        place()
+        const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(place) : null
+        if (observer !== null && toggleRef.current !== null) observer.observe(toggleRef.current)
+        window.addEventListener('resize', place)
+        return () => {
+          if (frame !== 0) window.cancelAnimationFrame(frame)
+          if (observer !== null) observer.disconnect()
+          window.removeEventListener('resize', place)
+        }
+      }, [searchOpen, layout, query, prompts.length])
 
       /**
        * Put one prompt into the composer draft and confirm briefly near the rail.
@@ -5247,14 +5367,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         marks.push({ prompt, ordinal: index + 1 })
       }
 
-      // Opening the search reserves its card's room at the rail's foot so the
-      // card appears directly below the button instead of over it.
-      const SEARCH_CARD_ESTIMATE = 78
-      const railMaxHeight = searchOpen ? Math.max(90, layout.maxHeight - SEARCH_CARD_ESTIMATE - 8) : layout.maxHeight
+      // The rail caps its height like the native turn rail so a long history
+      // scrolls its ticks internally while the search button stays pinned and
+      // reachable at the rail's foot.
+      const railMaxHeight = Math.min(layout.maxHeight, 420)
       const style = React.createElement('style', null, PROMPT_HISTORY_PREVIEW_CSS)
-      // While the search is open the rail keeps its reduced height so its
-      // search button cannot slide up as the filtered mark list shrinks.
-      const railStyle = { top: layout.top, right: layout.right, width: layout.width, maxHeight: railMaxHeight, height: searchOpen ? railMaxHeight : undefined }
+      const railStyle = { top: layout.top, right: layout.right, width: layout.width, maxHeight: railMaxHeight }
 
       const rail = React.createElement('div', {
         className: 'psp-rail',
@@ -5267,9 +5385,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         'aria-hidden': 'true'
       }),
       React.createElement('div', {
+        ref: marksRef,
         className: 'psp-marks',
         role: 'group',
-        'aria-label': t('list.aria')
+        'aria-label': t('list.aria'),
+        'data-fade-top': fades.top ? 'true' : undefined,
+        'data-fade-bottom': fades.bottom ? 'true' : undefined
       },
       marks.map(({ prompt, ordinal }) => React.createElement('button', {
         key: String(ordinal),
@@ -5319,15 +5440,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         ? null
         : React.createElement('div', { className: 'psp-rail-card-time', title: preview.timeTitle }, preview.time))
 
-      // The search card hangs directly below the search button with its right
-      // edge aligned to the rail's ticks; when the rail leaves no room below,
-      // it is clamped above the composer instead of overlapping it.
-      const searchTop = Math.round(Math.max(layout.top, Math.min(layout.top + railMaxHeight + 6, layout.composerTop - 8 - SEARCH_CARD_ESTIMATE)))
-      const searchCard = searchOpen ? React.createElement('div', {
+      // The card hangs below the fixed toggle when there is room, otherwise it
+      // flips to the toggle's left; the toggle itself never moves.
+      const searchCard = searchOpen && searchAnchor !== null ? React.createElement('div', {
         ref: searchCardRef,
         className: 'psp-search-card',
         'data-psp-search-card': '',
-        style: { top: searchTop, right: layout.right },
+        'data-psp-search-mode': searchAnchor.mode,
+        style: { top: searchAnchor.top, right: searchAnchor.right },
         onKeyDown: (event) => {
           if (event.key !== 'Escape') return
           event.preventDefault()
