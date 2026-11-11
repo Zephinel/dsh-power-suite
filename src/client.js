@@ -548,9 +548,51 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Copy an image by selecting a hidden `<img>` and issuing the legacy copy
+     * command. Works on insecure origins where the async clipboard is missing;
+     * the clipboard receives HTML containing the image, so rich editors paste it
+     * as an image while plain-text targets may only see the alt text.
+     * @param {string} url - inline image URL.
+     * @param {string} name - display name used as alt text.
+     * @returns {Promise<boolean>} whether the copy command succeeded.
+     */
+    async function copyImageViaSelection(url, name) {
+      const host = document.createElement('div')
+      host.setAttribute('contenteditable', 'true')
+      host.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;'
+      const image = document.createElement('img')
+      image.src = url
+      image.alt = name
+      host.appendChild(image)
+      document.body.appendChild(host)
+      try {
+        await new Promise((resolve) => {
+          if (image.complete) resolve()
+          else {
+            image.onload = resolve
+            image.onerror = resolve
+          }
+        })
+        if (!image.complete || image.naturalWidth === 0) return false
+        const range = document.createRange()
+        range.selectNodeContents(host)
+        const selection = window.getSelection()
+        if (selection === null) return false
+        selection.removeAllRanges()
+        selection.addRange(range)
+        host.focus()
+        const copied = document.execCommand('copy')
+        selection.removeAllRanges()
+        return copied
+      } finally {
+        host.remove()
+      }
+    }
+
+    /**
      * Copy one artifact's content to the clipboard: text verbatim, images as a
      * picture when the async clipboard and ClipboardItem exist, otherwise the
-     * inline URL as a graceful fallback.
+     * legacy HTML-image clipboard path, then the inline URL as a last resort.
      * @param {object} artifact - row from the list response.
      * @param {string | null} origin - Host LAN origin for the inline URL.
      * @returns {Promise<boolean>} whether something was copied.
@@ -573,20 +615,28 @@ window.__ModuleLoader__.load({
           return false
         }
       }
+      let imageBlob = null
       try {
         if (navigator.clipboard !== undefined && typeof ClipboardItem === 'function') {
-          const blob = await response.blob()
-          const png = blob.type === 'image/png' ? blob : await imageBlobToPng(blob)
+          imageBlob = await response.blob()
+          const png = imageBlob.type === 'image/png' ? imageBlob : await imageBlobToPng(imageBlob)
           if (png !== null) {
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
             return true
           }
         }
       } catch {
+        // Fall through to the legacy/URL fallbacks.
+      }
+      // Plain-HTTP LAN pages have no async clipboard API. Selecting a hidden
+      // image and running the legacy copy command still puts the image markup
+      // on the clipboard, which rich editors paste as the picture itself.
+      try {
+        if (await copyImageViaSelection(url, artifact.name)) return true
+      } catch {
         // Fall through to the URL fallback.
       }
-      // Plain-HTTP LAN pages have no async clipboard API; copying the inline
-      // URL is the only paste-able representation left.
+      // Last resort: the inline URL is at least paste-able as text.
       return copyText(url)
     }
 
