@@ -22,13 +22,13 @@ npm run pack:check
 
 Current evidence (2026-11-11, Node 24.22.2):
 
-- `npm test`: **73 tests, 73 passed, 0 failed**.
-- `npm run check`: passed (`14 modules, 7 test files`).
-- `npm run pack:check`: **57 files** (0.2.0 tarball), including `src/`,
-  `locale/`, `docs/` (with the standalone Project page, Artifacts
-  panel/filter-menu/Quick Look, Dynamic Workspaces, hover-detail, and
-  prompt-history rail captures), `cordis.patch.yml`, `icon.png`, and the
-  standard repository files.
+- `npm test`: **109 tests, 109 passed, 0 failed, 0 skipped**.
+- `npm run check`: passed (`14 modules, 8 test files`).
+- `npm run pack:check`: **58 files** (0.3.0 tarball) before the annotation
+  captures below are added (63 with them), including `src/`, `locale/`, `docs/`
+  (with the standalone Project page, Artifacts panel/filter-menu/Quick Look,
+  Dynamic Workspaces, hover-detail, and prompt-history rail captures),
+  `cordis.patch.yml`, `icon.png`, and the standard repository files.
 - Host tests cover the read-vs-event cache race, silent-subagent timing, continue
   content-type/state/in-flight validation, the non-human source fields, the
   prompt-history timestamp fold (`at` from a finite event time, `null`
@@ -41,7 +41,9 @@ Current evidence (2026-11-11, Node 24.22.2):
   buckets and summary card from the browser's Session, status, and Workspace
   stores; the prompt-history rail shares the existing
   `api/prompt-history.list` payload; draft attachment memory writes nothing to
-  the Host or storage. The Project view is the exception — its
+  the Host or storage; the UI element annotation mode adds no Host surface at all
+  and is covered by its own pure-model suite plus the live acceptance harness
+  below. The Project view is the exception — its
   `GET /api/power-suite.project` route and its pure folds are covered by the
   project-view test suite. The remaining client-only surfaces have no
   `node:test` suite of their own, so the syntax gate and the live checks below
@@ -57,6 +59,116 @@ prompts; subagent detection was checked against real local Session logs: the par
 `session-bd41197f-48fd-4065-a4f8-5545510cc86e` (main turn completed, two child
 sessions left with open crash tails) returned `interrupted: true,
 subagent: true`; two completed control Sessions stayed `interrupted: false`.
+
+## UI element annotation acceptance
+
+Date: 2026-11-11. The feature is browser-only
+([ui-annotation.md](ui-annotation.md)), so its acceptance run uses the real DSH
+Web GUI instead of a Host test: `test/browser/annotation.e2e.mjs` (Node 22 or
+newer; this run used Node 24.22.2; dependency-free) launches headless Google
+Chrome with a throwaway profile, opens the GUI served by the launchd service
+`com.rexxin.dsh-web`, and injects this checkout's `src/client.js` through the
+page's module loader before the shell loads. The installed checkout, the user
+profile, the launchd service, and the GUI's existing Sessions are untouched. The
+harness creates or reuses blank Sessions through the native New Session control
+and prints every touched `data-conversation-session` id for cleanup, drives every
+interaction with real CDP mouse and keyboard input at 1728 x 900, collects page
+errors (`Runtime.exceptionThrown` and error-level console calls), and exits 0 only
+when the smoke checks and all nine scenarios pass with no page errors.
+
+Run:
+
+```bash
+node test/browser/annotation.e2e.mjs    # smoke + 9 scenarios + screenshots
+```
+
+Automated gates on this tree:
+
+- `npm test`: **109 tests, 109 passed, 0 failed, 0 skipped** — the 73 existing
+  tests plus 36 annotation model tests, deterministic across repeated runs.
+- `node --check src/client.js`: passed.
+- `npm run check`: passed (`14 modules, 8 test files`).
+- `npm run pack:check`: **63 files** in the 0.3.0 tarball, including the five
+  annotation captures.
+
+Acceptance result: **9/9 scenarios PASS, 0 page errors** on the final build
+(`src/client.js` md5 `7fddd574ca5b630af752eec3e2870eb2`, the launcher
+rail-avoidance fix). The full-suite run made scenarios 1-7 PASS; scenario 8 hit
+a known harness-side late-run CDP input timeout and scenario 9 cascaded, so an
+immediate `--from 8` rerun on the same build was used to confirm scenarios 8 and
+9. The timeout is a documented harness limitation in `test/browser/README.md`,
+not a product signal.
+
+| # | Scenario | Result |
+|---|---|---|
+| 1 | Activate mode via a real launcher click: shrink + rail; native New Session blocked | PASS — markers set, rail and frame padding both 200 px at 1728 x 900, inline grid untouched; the blocked real click reached 0 native handler hits (2 `preventDefault`) and the session/view stayed unchanged |
+| 2 | Alt pass-through: native New Session works, native context menu not prevented | PASS — plain right-click blocked with 0 bubble events; Alt right-click reached the bubble listener once with `defaultPrevented = false`; `html[data-psa-passthrough]` only while held |
+| 3 | Wheel scrolling works, shortcuts not consumed, Esc ladder steps out | PASS — a wheel scroll moved the native region 0 → 320 with 0 `preventDefault`; Meta+K, Control+L, and plain letters arrived unprevented; the Esc ladder stepped out |
+| 4 | Multi-select via Shift+click; collection add/update/note/remove | PASS — 3 Shift+clicks produced 3 multi outlines; add-all de-duplicated and updated on re-add; inline note edit and remove worked |
+| 5 | Batch insert: order, existing draft preserved, not sent, composer focused | PASS — pre-existing draft verbatim, one ordered block per entry, no message sent, composer focused |
+| 6 | Session scope: stale target marked + cross-session entries skipped, no DOM mutation | PASS — a truly removed target reads `missing` and inserts the explicit `Status:` line; leaving the conversation scopes every entry `other`, disables batch insert and shows the cross-session notice; returning recomputes every entry `current`; no DOM change outside the composer |
+| 7 | Exit mode: markers/padding cleaned, native clicks work again, launcher stays | PASS — markers/padding/grid restored, 0 overlay nodes, one inactive launcher, native clicks work |
+| 8 | Launcher drag clamp, viewport resize, scroll stability, reload default + position memory | PASS — the drag never toggled the mode and clamped with the 8 px margin (drag from `(1676, 848)`); the 1000 x 700 override clamps the launcher to `(748, 648)` inside the viewport; wheel scrolling did not move it; reload starts with the mode off and the position restored |
+| 9 | Collection view keeps the frame/rail geometry; exit restores the baseline layout | PASS — opening/closing the collection kept frame padding at 200 px and the canvas at 1248 px, and the rail stayed in the right strip; exit restored the 1448 px canvas baseline and the inline grid |
+
+Created/reused blank Session ids for cleanup:
+`session-1057e23c-2776-41dc-921f-5f77566c6e3b` and
+`session-5eec2763-0a91-460e-b559-08a8c3a98d13`. The full suite took about 6-8
+minutes and `--shots-only` about 35 seconds on this deployment.
+
+Additional independent live checks (Lead, same injected build): PASS on mode
+activation (shrink + rail), blocked native clicks (the 280 px sidebar did not
+collapse and the selection/popover opened; New Session on the start page did not
+create a Session), Alt pass-through (the sidebar collapsed natively 280 → 56 px
+and `html[data-psa-passthrough]` was present only while held), launcher clamping
+after a real 1000 x 700 viewport override, and exit restore (`padding-right`
+empty, markers removed, 0 overlay nodes, byte-identical inline grid string,
+launcher `aria-pressed=false`, 0 page errors).
+
+Screenshots (1728 x 900 originals; sidebar titles and chat content masked before
+capture; embedded in [ui-annotation.md](ui-annotation.md)):
+
+- [annotation-idle.png](assets/annotation-idle.png) — the launcher only, mode off.
+- [annotation-mode.png](assets/annotation-mode.png) — mode on: the page shrunk by
+  the 200 px rail in the freed right strip, with the launcher clamped just left of
+  the rail.
+- [annotation-selection.png](assets/annotation-selection.png) — a highlighted
+  native control with its popover (locator, Target · Resolved, note, Quick
+  reference / Add to collection).
+- [annotation-collection.png](assets/annotation-collection.png) — the collection
+  view in the rail: three ordered rows with inline notes and the footer actions.
+- [annotation-inserted.png](assets/annotation-inserted.png) — the ordered batch
+  request inserted into the composer, not sent.
+
+Known evidence limits:
+
+- Native context-menu visuals are not observable in headless Chrome; the
+  assertion is the event-level `preventDefault`/bubble oracle.
+- This DSH build keeps one blank draft Session at a time, so a blank → blank
+  Session switch is unreachable from the UI. Cross-session scope was verified by
+  unmounting/remounting the composer seat plus the true-removal stale case. An
+  in-place control replacement that keeps the same stable `data-*` identity (the
+  sidebar collapse toggle carries `data-sidebar-toggle` in both states) resolves
+  as the same control; the harness records it as evidence instead of failing.
+- Wheel scrolling was asserted on the nearest native scrollable region because a
+  blank Session's conversation is empty; the run also asserts that no wheel event
+  is prevented.
+- Headless Chrome occasionally swallows the native `resize` event for
+  `Emulation.setDeviceMetricsOverride`; the harness retries with a real second
+  override and falls back to one synthetic resize only when zero native events
+  arrive. A long full-suite run can also hit a late-run CDP input timeout; an
+  immediate `--from 8` rerun on the same build confirmed scenarios 8 and 9. The
+  Lead independently verified the product clamps with real input.
+- The run creates blank Sessions in the live GUI and does not exercise a
+  human-authored conversation, a second device/browser, screen readers, or the
+  Chinese UI end to end (the ZH label conventions are covered by unit tests and
+  the strings reviewed in code). Screenshots are evidence from one run, not a
+  substitute for the automated gate.
+- The product boundaries this run does not move are documented in
+  [ui-annotation.md](ui-annotation.md#host-boundaries): Shadow DOM internals are
+  not inspectable (only the host is selectable), cross-origin iframe contents are
+  not selectable, native input/textarea/contenteditable values are never read,
+  and canvas-rendered content has no DOM target.
 
 ## Manual UI checks
 
@@ -255,6 +367,11 @@ The live surfaces are captured in
 [assets/dynamic-workspaces.png](assets/dynamic-workspaces.png),
 [assets/dynamic-workspaces-hover.png](assets/dynamic-workspaces-hover.png),
 [assets/prompt-history-preview.png](assets/prompt-history-preview.png),
-[assets/prompt-history-search.png](assets/prompt-history-search.png), and
-[assets/settings-page.png](assets/settings-page.png), embedded in their feature
-references.
+[assets/prompt-history-search.png](assets/prompt-history-search.png),
+[assets/settings-page.png](assets/settings-page.png),
+[assets/annotation-idle.png](assets/annotation-idle.png),
+[assets/annotation-mode.png](assets/annotation-mode.png),
+[assets/annotation-selection.png](assets/annotation-selection.png),
+[assets/annotation-collection.png](assets/annotation-collection.png), and
+[assets/annotation-inserted.png](assets/annotation-inserted.png), embedded in
+their feature references.

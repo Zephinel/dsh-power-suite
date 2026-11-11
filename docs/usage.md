@@ -1,7 +1,9 @@
 # Usage
 
-All seven features ship in one plugin. Open the Plugins page, select **DSH Power
-Suite**, and use the plugin's own settings section for the shortcut modifier.
+All eight features ship in one plugin. Open the Plugins page, select **DSH Power
+Suite**, and use the plugin's own settings section for the Host-side preferences
+(the prompt-history modifier and the two retention windows). The annotation
+mode's own two modifiers are changed inside its rail, not on that page.
 
 ## Session artifacts
 
@@ -85,6 +87,52 @@ closes it and clears the filter. A long history scrolls inside the rail while
 the search button stays at its foot. The rail is absent while the Session has no
 sent prompts.
 
+## UI element annotation
+
+A round launcher button sits at the bottom-right of the page. Click it to turn
+the annotation mode on and off; drag it anywhere in the viewport if it covers
+something (a drag never toggles the mode, and the position is remembered). While
+the mode is on, the page narrows to make room for a right rail; on a narrow
+window the rail floats over the right edge instead, and its collapse control
+reduces it to a strip. Exit with the rail's exit control, the launcher, or Esc.
+
+- Hover the page to outline the element a click would select, then click it: the
+  highlight stays and a small note popover opens next to the element. It names
+  the element, summarizes its locator, shows whether it still resolves, and
+  offers **↑ / ↓** to move to a parent element or back down when the chosen
+  granularity is wrong.
+- Type the requested change in the **note** field. **Quick reference** inserts
+  this one annotation into the current Session's composer at the caret, keeping
+  the existing draft and without sending. **Add to collection** parks the element
+  in the rail's collection instead.
+- Hold **Shift** (the default multi-select modifier) to add or remove elements
+  without reopening the popover while more than one stays selected, or drag while
+  holding it to draw a selection box. A plain drag never draws a box. With
+  several elements selected, the rail shows **Add {count} to collection** and
+  **Clear selection**.
+- Hold **Alt / Option** (the default pass-through modifier) to use the page
+  normally: left clicks perform their real action and right clicks open the
+  native menu. Releasing the modifier returns to annotation; the mode never fakes
+  a click.
+- **Collection** in the rail lists saved elements in order with their notes: edit
+  a note inline, remove or clear entries, re-locate an element (scrolls to it and
+  flashes it), or **Insert all into composer** to hand all current annotations to
+  the model as one numbered request. Entries from another Session stay visible
+  but are skipped by the batch. Re-adding the same element updates its note and
+  position instead of creating a duplicate.
+- Esc steps back one layer at a time: close the note editor or popover, clear the
+  selection, leave the collection or settings view, then turn the mode off.
+- The two modifiers are changed in the rail's **settings** view and stored in
+  this browser. They must differ; a conflicting choice moves the other modifier
+  to a different key and the view explains what changed.
+
+Clicking while annotating does not trigger the page: native controls such as
+**New session** are selected, not activated. The feature only inserts text; it
+never edits the page's content elements, never reads typed values, and never
+sends the message. A selection, note, or collection entry does not survive a
+page reload; the two modifiers, the launcher position, and the rail's collapsed
+state do.
+
 ## Draft attachments
 
 Pasted images, dropped files, and files chosen with the picker stay with the
@@ -145,7 +193,9 @@ retention (1/3/7/14/30 days, default 7 days); each row's hint shows the current
 value. The package README that the Plugins page normally renders above the
 configuration is hidden on this page while the controls are shown. Changes
 apply immediately to this page's card and buckets and are shared with every
-browser on its next load.
+browser on its next load. The UI element annotation modifiers are separate
+browser-local settings inside its rail settings view; they are not part of this
+page.
 
 ## Feature references
 
@@ -153,6 +203,7 @@ browser on its next load.
 - [Workspace presets](workspace-default-presets.md)
 - [Dynamic workspaces](dynamic-workspaces.md)
 - [Prompt history](prompt-history.md)
+- [UI element annotation](ui-annotation.md)
 - [Draft attachments](draft-attachments.md)
 - [Interrupted sessions](interrupted-sessions.md)
 - [Settings](settings.md)

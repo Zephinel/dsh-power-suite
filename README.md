@@ -16,7 +16,22 @@ shows one plugin whose inventory grows with the suite.
 | [Project view](docs/project-view.md) | A **standalone full-window Project page** opened by clicking a Workspace in the sidebar, with Overview stats, Sessions, Runs with expandable turn/job records, and Workspace settings; Esc/back returns to the untouched conversation. |
 | [Draft attachments](docs/draft-attachments.md) | Attachments in a draft (pasted images, dropped or picked files) survive switching Sessions and coming back, for the page lifetime; the shell only persists the draft text. |
 | [Interrupted sessions](docs/interrupted-sessions.md) | Sessions cut off by a restart carry an amber mark left of the title, a hover-only Continue action with a row mask, and a play-shaped composer submit control. |
+| [UI element annotation](docs/ui-annotation.md) | A floating launcher toggles a point-and-click annotation mode in which the page makes room for a narrow right rail instead of being covered; hovering outlines the element a click would select, a note popover records the requested change, and one localized reference or one ordered batch is inserted into the current composer without sending — with multi-select, marquee, ancestor adjustment, and a hold-to-pass-through modifier. |
 | [Settings](docs/settings.md) | The bundle's Plugins page carries its own configuration section: the prompt-history modifier plus the two Dynamic Workspaces retention windows (finished Sessions and Active projects). |
+
+New in 0.3.0:
+
+- **UI element annotation** — a round launcher toggles a point-and-click
+  annotation mode in which the page makes room for a narrow right rail instead
+  of being covered: hovering outlines the element a click would select, and a
+  compact popover records a note and inserts a structured plain-text reference
+  into the current composer through the shell's own insertion API, without
+  sending. Selection is isolated from the page (clicking a native control never
+  triggers it), the multi-select modifier toggles elements or draws a marquee,
+  holding the pass-through modifier restores real native left and right clicks,
+  and the collection keeps ordered session-scoped entries with per-entry notes,
+  de-duplication, re-locate, stale/ambiguous status markers, and one ordered
+  batch insert request.
 
 New in 0.2.0:
 
