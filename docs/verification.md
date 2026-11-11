@@ -22,25 +22,30 @@ npm run pack:check
 
 Current evidence (2026-11-11, Node 24.22.2):
 
-- `npm test`: **56 tests, 56 passed, 0 failed**.
-- `npm run check`: passed.
-- `npm run pack:check`: **49 files** (0.2.0 tarball), including `src/`,
-  `locale/`, `docs/` (with the Artifacts panel/filter-menu/Quick Look, Dynamic
-  Workspaces, hover-detail, and prompt-history rail captures),
-  `cordis.patch.yml`, `icon.png`, and the standard repository files.
+- `npm test`: **73 tests, 73 passed, 0 failed**.
+- `npm run check`: passed (`14 modules, 7 test files`).
+- `npm run pack:check`: **56 files** (0.2.0 tarball), including `src/`,
+  `locale/`, `docs/` (with the Project view, Artifacts
+  panel/filter-menu/Quick Look, Dynamic Workspaces, hover-detail, and
+  prompt-history rail captures), `cordis.patch.yml`, `icon.png`, and the
+  standard repository files.
 - Host tests cover the read-vs-event cache race, silent-subagent timing, continue
   content-type/state/in-flight validation, the non-human source fields, the
   prompt-history timestamp fold (`at` from a finite event time, `null`
-  otherwise) with the 500-prompt cap unchanged, and the settings store (schema
+  otherwise) with the 500-prompt cap unchanged, the settings store (schema
   version 2 with the two retention windows, version-1 migration to the default
-  windows, and patch validation for unknown/invalid fields).
-- None of the browser-only features adds a Host route: Dynamic Workspaces
-  derives its buckets and summary card from the browser's Session, status, and
-  Workspace stores; the prompt-history rail shares the existing
+  windows, and patch validation for unknown/invalid fields), and the Project view
+  folds and route (turn status map, job association, the 40/200/24 caps, stats
+  and recent-activity derivation, parameter validation and cache behavior).
+- Most browser features add no Host route: Dynamic Workspaces derives its
+  buckets and summary card from the browser's Session, status, and Workspace
+  stores; the prompt-history rail shares the existing
   `api/prompt-history.list` payload; draft attachment memory writes nothing to
-  the Host or storage. Their data coverage is the shared fold tests where a
-  route is involved; the rest is client-only with no `node:test` suite of its
-  own, so the syntax gate and the live checks below cover them.
+  the Host or storage. The Project view is the exception — its
+  `GET /api/power-suite.project` route and its pure folds are covered by the
+  project-view test suite. The remaining client-only surfaces have no
+  `node:test` suite of their own, so the syntax gate and the live checks below
+  cover them.
 - The root-package reinstall was verified after a Host restart: the Loader row
   `include:power-suite` reports `fiberPhase: active` from the new repository
   root path.
@@ -173,6 +178,21 @@ These were exercised in the Web GUI during development:
   count; and the subagent connector trunk is centered under the parent's status
   indicator (dot center x = 35, trunk x = 35) with short branches and no
   dangling end.
+- The Project view was verified live: the conversation view switcher showed
+  **Chat / Trajectory / Project / Statistics**, and the Project view resolved one
+  project root. The Overview stat cards matched the route JSON exactly —
+  **1 / 18 / 67 / 10m 44s** (average 644104 ms) — the Sessions tab showed chips
+  **5 / 1 / 2 / 0** with working title search, and Runs showed **59** rows
+  (Running 1, Completed 55, Interrupted 3). Expanding **Turn 16** revealed
+  **24 of 31** job rows, a running turn's live elapsed changed from **8m 37s**
+  to **11m 22s**, and **Show more** paged the list by 60. Settings showed the
+  preset roster, saved a preset with the **Saved** toast, and **Copy project
+  path** reached the clipboard. Keyboard arrows moved between tabs, switching
+  away and back unmounted/remounted cleanly (0 roots/styles then 1/1), and there
+  were no console exceptions. Route probes: `sessionId` 200, `workspaceId` 200
+  (cached response 78 ms), empty `workspaceId` + `sessionId` 200 (falls back to
+  the Session), unknown Workspace 404, no parameters 400, `cache-control:
+  no-store` on every response.
 - The settings page and the configurable windows were verified live: the
   **DSH Power Suite** Plugins page shows exactly three setting rows (Shortcut
   modifier, Finished Session retention, Active project retention) with the
@@ -184,7 +204,7 @@ These were exercised in the Web GUI during development:
   (Active 8 → 5, Inactive 6 → 9) and reverting to 7 days restored 8/6. The Host
   route persisted `{ promptHistoryModifier, recentSessionMinutes,
   activeProjectDays }` with `"version": 2`, and the raw document read back from
-  the route matched. `npm test` then reported 56/56 passing.
+  the route matched. `npm test` passed (final gate: 73/73).
 
 The manual checks are evidence for the behavior described in the feature docs;
 they are not a substitute for the automated gate above.
@@ -211,6 +231,10 @@ by code inspection plus an observed reload where an archived Session disappeared
 from the card.
 
 The live surfaces are captured in
+[assets/project-overview.png](assets/project-overview.png),
+[assets/project-sessions.png](assets/project-sessions.png),
+[assets/project-runs.png](assets/project-runs.png),
+[assets/project-settings.png](assets/project-settings.png),
 [assets/artifacts-panel.png](assets/artifacts-panel.png),
 [assets/artifacts-filter-menu.png](assets/artifacts-filter-menu.png),
 [assets/artifacts-quicklook.png](assets/artifacts-quicklook.png),

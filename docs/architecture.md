@@ -14,6 +14,7 @@ src/index.js            Host entry (Node)
 ├─ features/interrupted-sessions/host.js GET  /api/power-suite.interrupted
 │                                        POST /api/power-suite.continue
 ├─ features/settings/host.js             GET/POST /api/power-suite.settings
+├─ features/project-view/host.js         GET  /api/power-suite.project
 └─ ctx.effect(...)                       every registration lives with the plugin
 
 src/client.js           Browser entry (DSH module loader)
@@ -25,6 +26,7 @@ src/client.js           Browser entry (DSH module loader)
 ├─ Dynamic Workspaces buckets + running & recent Sessions card
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
 ├─ Plugins-page settings section
+├─ Project conversation view (Overview / Sessions / Runs / Settings)
 └─ Shared hover Quick Look for generated/provided Artifacts rows and native Workspace file rows
 ```
 
@@ -120,13 +122,16 @@ re-reads.
 `src/client.js` is loaded by `window.__ModuleLoader__.load`. Its `apply`
 registers slots, tab types, context menus, and the plugin settings surface
 through the injected client services (`slots`, `locale`,
-`sidebarRight`, `sidebarRightTabs`, `contextMenus`, `remote`, `uiWorkspace`).
+`sidebarRight`, `sidebarRightTabs`, `contextMenus`, `remote`, `uiWorkspace`,
+`sessions`).
 
 The client talks to the Host only over the authenticated routes above; it never
 imports Host code. Feature copy is registered through per-feature locale
 namespaces (`sessionArtifacts`, `workspacePresets`, `dynamicWorkspaces`,
-`powerSuitePromptHistoryPreview`, `powerSuiteInterrupted`, `powerSuiteSettings`)
-so the en/zh dictionaries stay aligned.
+`powerSuitePromptHistoryPreview`, `powerSuiteInterrupted`, `powerSuiteSettings`,
+`powerSuiteProjectView`) so the en/zh dictionaries stay aligned. The client
+entry also injects the shell's `sessions` listing service for the Project view's
+session navigation and preset roster.
 
 ### Dynamic Workspaces
 
@@ -201,6 +206,32 @@ restored attachment. No Host route and no storage writes: this is a page-lifetim
 workaround, so a reload cannot restore Files. See
 [draft-attachments.md](draft-attachments.md).
 
+### Project view
+
+The one conversation-body surface: a native `conversation.view` registration
+(id `power-suite-project`, order 20, locale namespace `powerSuiteProjectView`,
+custom `psv-` token CSS). It appears in the conversation header's view switcher
+next to Chat/Trajectory/Statistics and replaces the conversation body while
+selected; the registration receives the Session id, locale `t`, workspace
+navigation helpers, the shell `sessions` listing, the existing workspace-preset
+read/write helpers, and the shared clipboard helper. Internally it has four tabs
+(Overview / Sessions / Runs / Settings), polls
+`GET /api/power-suite.project` every 15 s while open, keeps a running turn's
+elapsed time live on a timer, and pages Runs by 60 rows with **Show more**.
+
+The Host route resolves a Workspace from `workspaceId` or from a `sessionId`
+(direct membership → durable parent chain → canonical cwd), measures the newest
+20 accounted non-archived Sessions (concurrency 4, fork-inherited event prefix
+sliced, unreadable logs skipped into `warnings[]`), and folds each log with the
+pure helpers in `project-view/fold.js`: turn/start..turn/end runs, the coarse
+status map, and job association by exact tool-call id → time containment →
+nearest preceding turn. Caps are 40 runs per Session, 200 runs total, and 24 job
+rows per run (with the full `jobCount` kept). A 10 s in-memory snapshot cache
+(keyed by Workspace id + `updatedAt` + member count, at most 30 snapshots) absorbs
+the browser poll, `refresh=1` bypasses it, and every response is
+`cache-control: no-store`; missing parameters answer `400`, unknown/unaccounted
+Workspaces `404`.
+
 ### Hover Quick Look
 
 One hover card serves the Artifacts panel and the native workspace-files list. Row
@@ -231,6 +262,7 @@ leave the content invisible.
 | `contextMenus.register` (`workspace`) | Default agent preset submenu |
 | `conversation.input.overlay` | Renderless prompt-history keyboard seat and draft-attachment memory seat |
 | `conversation.input.dock` | Session hooks for the body-portaled prompt-history rail |
+| `conversation.view` | Project conversation view (`power-suite-project`, order 20) |
 | `shell.overlay` | Frame-wide seat that augments the native Workspaces sidebar |
 | `plugins.bundle.config` | Plugin settings page |
 | `sidebar.session.row.leading` | Interrupted-session badge |

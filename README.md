@@ -13,6 +13,7 @@ shows one plugin whose inventory grows with the suite.
 | [Workspace presets](docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions created in that Workspace. |
 | [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with single-line rows, right-edge disclosure chevrons, unread completions marked green until opened, a row hover detail (workspace, status, last active), nested subagent Sessions, and configurable retention windows. |
 | [Prompt history](docs/prompt-history.md) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; a right-edge rail lists them newest first with a hover full-text preview, an inline search, and click-to-copy. Plain arrows keep their original behavior. |
+| [Project view](docs/project-view.md) | A native **Project** conversation view (next to Chat/Trajectory/Statistics) with Overview stats, Sessions, Runs with expandable turn/job records, and Workspace settings. |
 | [Draft attachments](docs/draft-attachments.md) | Attachments in a draft (pasted images, dropped or picked files) survive switching Sessions and coming back, for the page lifetime; the shell only persists the draft text. |
 | [Interrupted sessions](docs/interrupted-sessions.md) | Sessions cut off by a restart carry an amber mark left of the title, a hover-only Continue action with a row mask, and a play-shaped composer submit control. |
 | [Settings](docs/settings.md) | The bundle's Plugins page carries its own configuration section: the prompt-history modifier plus the two Dynamic Workspaces retention windows (finished Sessions and Active projects). |
@@ -41,6 +42,11 @@ New in 0.2.0:
 - **Draft attachment memory** — attachments in a draft survive switching
   Sessions and coming back for the page lifetime, even though the shell only
   persists the draft's text and reference chips.
+- **Project view** — a native conversation tab that turns the current Workspace
+  into a project dashboard: four stat cards, a Sessions browser, a Runs history
+  whose turns expand into their nested job records with live elapsed time, and
+  Workspace settings (default agent preset, read-only grouping windows, path
+  actions).
 - **Per-prompt timestamps** — the prompt-history route now returns each prompt's
   Session event time (`at`, or `null` when the log has none), so the rail and its
   hover card can show times while the keyboard recall keeps working unchanged.

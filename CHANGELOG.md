@@ -60,6 +60,20 @@ All notable changes to this repository are documented here. The format follows
   Version-1 files migrate to the default windows, and running Sessions ignore
   both windows.
 
+- Project view: a native `conversation.view` tab (`power-suite-project`, order
+  20) next to Chat/Trajectory/Statistics that turns the current Workspace into a
+  project dashboard. Overview carries the project header, four stat cards
+  (running Sessions, completed today, total runs, average completed duration),
+  a Session preview, the honest grouping/archiving explainer, and a recent
+  activity feed; Sessions offers status chips and title search; Runs lists turns
+  newest first with status filters, session filter, include-jobs toggle, search,
+  expandable nested job rows, live elapsed time, and Show-more paging; Settings
+  edits the Workspace default preset and shows the grouping windows read-only
+  plus path actions. The new authenticated `GET /api/power-suite.project` route
+  serves one snapshot (workspaceId or sessionId, newest 20 Sessions, 10 s cache
+  with `refresh=1`, `no-store`), and the pure folds live in
+  `src/features/project-view/fold.js`.
+
 ### Fixed
 
 - Hover Quick Look no longer opens as an empty card: it always receives an

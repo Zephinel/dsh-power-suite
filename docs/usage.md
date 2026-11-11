@@ -102,6 +102,29 @@ continuation is implicit — it does not appear as a user message in the
 transcript, while the composer submit control uses a play icon until the new
 turn starts.
 
+## Project view
+
+Open a Session and choose **Project** in the conversation header's view switcher
+(next to **Chat**, **Trajectory**, and **Statistics**). The conversation body
+switches to the Workspace's project dashboard; the other views keep working and
+switching back restores Chat.
+
+- **Overview** — project header (Active/Inactive, path, created/last active,
+  Open Workspace, New Session, refresh, more menu with Copy project path), four
+  stat cards (Running sessions, Completed today, Total runs, Avg duration), a
+  six-Session preview, the grouping/archiving explainer, and recent activity.
+- **Sessions** — All/Running/Completed/Interrupted chips with counts, title
+  search, and click-to-open rows (run count, relative update, Subagent marker).
+- **Runs** — turns newest first with Running/Completed/Interrupted/Stopped/Failed
+  chips and counts, a Session filter, an **Include jobs** toggle, and search.
+  Expand a turn to see its nested job rows (kind, label, status, duration,
+  detail); a running turn shows live elapsed time. **Show more** pages by 60, and
+  a capped snapshot says how many measured runs are shown.
+- **Settings** — change the Workspace's default agent preset (Follow global
+  default, Standard, PTC, Minimal, Cordis) with a Saved acknowledgement, read the
+  grouping windows (edit them on the Plugins page), and copy/open the workspace
+  path.
+
 ## Settings
 
 The Plugins detail page for the bundle carries the suite's settings in two

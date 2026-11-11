@@ -170,6 +170,39 @@
   paste; if the shell changes that intake path the restore silently stops while
   the draft text is unaffected.
 
+## Project view
+
+- **Sample-bounded statistics.** The Project view measures at most the **20
+  newest Sessions** of the Workspace. Stats and Runs carry only what those logs
+  recorded; when the cap hits, `stats.truncated` is set and the Overview notes
+  `Measured from the newest N sessions`.
+- **Ranking fallback can miss sessions.** Session selection prefers projection
+  cache hints (last-prompt time); on a cold composition without them it falls
+  back to creation order, so an old-but-recently-active Session can fall outside
+  the measured sample.
+- **Runs and jobs are capped.** At most 40 runs per Session and 200 runs total
+  are carried; an expanded turn shows at most 24 job rows while keeping the full
+  job count, and the UI states `Showing X of Y jobs`. Job-to-turn association is
+  a heuristic when the exact tool call cannot be matched.
+- **First loads and refreshes are slow on large logs.** A first or forced refresh
+  took roughly 1.7–4.6 s on a five-Session repository. The Host keeps a 10 s
+  snapshot cache for the browser's 15 s poll; manual refresh bypasses it and pays
+  the read cost again. Unreadable Session logs are skipped with a warning.
+- **No virtualization.** Runs grow by **Show more** in batches of 60, so a very
+  long project keeps all rendered rows in the DOM.
+- **Archived only, no archiving controls.** Archived Sessions are excluded from
+  the project snapshot; the view cannot archive or unarchive. Automatic
+  archiving is not implemented anywhere — Inactive is only a window
+  classification.
+- **Workspace membership is required.** A Session not accounted to a Workspace
+  shows **No project workspace**; subagent Sessions resolve through their parent
+  chain but are not project rows of their own.
+- **Coarse statuses.** A turn that closed without a recognized reason is reported
+  as stopped, not as completed or failed.
+- **Localization.** The Project view ships English and Chinese copy; live checks
+  ran against the English GUI, so the Chinese strings are code-reviewed but not
+  live-exercised.
+
 ## Raw artifacts and implicit continuation
 
 - The raw/preview routes accept any owner-authorized absolute path (the same
