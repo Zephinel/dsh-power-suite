@@ -1,6 +1,6 @@
 /**
  * Prompt history: the pure fold that turns a Session's raw event log into the
- * texts a human sent to it, oldest first.
+ * texts a human sent to it, oldest first, with each event's epoch-ms time.
  *
  * Only `user/message` events whose recorded source kind is `user` count.
  * Injected user-role context (instructions, runtime context, skill catalogs)
@@ -49,14 +49,20 @@ export function promptTextOfEvent(event) {
  * Fold a complete Session log into its human prompt history.
  * @param {readonly object[]} events - raw session events in ascending seq order.
  * @param {number} limit - most recent prompts to keep.
- * @returns {Array<{ seq: number, text: string }>} prompts, oldest first.
+ * @returns {Array<{ seq: number, text: string, at: number | null }>} prompts,
+ *   oldest first; `at` is the event's epoch-ms time, or null when it has none.
  */
 export function collectPromptHistory(events, limit = MAX_PROMPTS) {
   const prompts = []
   if (!Array.isArray(events)) return prompts
   for (const event of events) {
     const text = promptTextOfEvent(event)
-    if (text !== null) prompts.push({ seq: typeof event.seq === 'number' ? event.seq : 0, text })
+    if (text === null) continue
+    prompts.push({
+      seq: typeof event.seq === 'number' ? event.seq : 0,
+      text,
+      at: Number.isFinite(event.time) ? event.time : null
+    })
   }
   return prompts.length > limit ? prompts.slice(-limit) : prompts
 }
