@@ -1,6 +1,6 @@
 {
   "name": "@rexxin/dsh-power-suite",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "One DeepSeek Harness Web plugin that adds session artifacts, per-Workspace default agent presets, composer prompt history, interrupted-session recovery, and their settings.",
@@ -45,7 +45,7 @@
   },
   "icon": "./icon.png",
   "scripts": {
-    "check": "node scripts/check.mjs",
+    "check": "node scripts/check.mjs && npm run pack:check",
     "test": "node --test test/*.test.js",
     "pack:check": "npm pack --dry-run --json"
   },

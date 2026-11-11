@@ -156,15 +156,17 @@ async function handleRaw(ctx, request) {
   if (info.type !== 'file') {
     return sendJson(400, { code: 'bad-request', message: 'Artifact is not a regular file' })
   }
-  const kind = artifactKind(name)
+  // The URL parameter is a display/download name only. The media type must come
+  // from the actual path so a caller cannot turn a text file into executable
+  // HTML/SVG by renaming it.
+  const kind = artifactKind(path.basename(rawPath))
   const headers = {
     'content-type': kind.mime,
     'content-disposition': contentDisposition(disposition, name),
     'cache-control': 'private, no-store',
-    'x-content-type-options': 'nosniff'
+    'x-content-type-options': 'nosniff',
+    'content-security-policy': artifactContentSecurityPolicy()
   }
-  const csp = artifactContentSecurityPolicy(kind.mime)
-  if (csp !== undefined) headers['content-security-policy'] = csp
   if (request.method === 'HEAD') {
     if (typeof info.size === 'number') headers['content-length'] = String(info.size)
     return new Response(null, { status: 200, headers })
@@ -221,8 +223,9 @@ async function handlePreview(ctx, request) {
   if (info.type !== 'file') {
     return sendJson(400, { code: 'bad-request', message: 'Artifact is not a regular file' })
   }
-  const kind = artifactKind(name)
-  const previewKind = previewKindOf(name)
+  const actualName = path.basename(rawPath)
+  const kind = artifactKind(actualName)
+  const previewKind = previewKindOf(actualName)
   const descriptor = {
     path: rawPath,
     name,

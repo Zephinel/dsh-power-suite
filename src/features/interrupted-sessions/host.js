@@ -20,6 +20,7 @@ import {
   isInterruptedEnd,
   lastEventTime,
   lastTurnEndTime,
+  lastTurnStartTime,
   lastTurnState,
   subagentInterruptionAfter
 } from './turns.js'
@@ -61,7 +62,7 @@ function agentRunning(ctx, sessionId) {
  * @returns {object} the wire value.
  */
 function toWire(value) {
-  const { lastEndTime, lastEventTime: eventTime, interruptedAt, ...wire } = value
+  const { lastStartTime, lastEndTime, lastEventTime: eventTime, interruptedAt, ...wire } = value
   return wire
 }
 
@@ -88,7 +89,11 @@ function sendError(status, code, message) {
  * @param {Request} request - authenticated request.
  * @returns {Promise<Response>} accepted acknowledgement or a typed failure.
  */
-async function handleContinue(ctx, request) {
+async function handleContinue(ctx, request, readEffective, inFlight) {
+  const contentType = (request.headers.get('content-type') ?? '').toLowerCase()
+  if (!contentType.startsWith('application/json')) {
+    return sendError(415, 'bad-media-type', 'content-type must be application/json')
+  }
   let body
   try {
     body = await request.json()
@@ -105,7 +110,18 @@ async function handleContinue(ctx, request) {
   if (controller === undefined || typeof controller?.commands?.prompt !== 'function') {
     return sendError(503, 'continue-unavailable', 'Session controller is unavailable')
   }
+  if (inFlight.has(sessionId)) {
+    return sendError(409, 'continue-in-flight', 'A continuation is already being admitted')
+  }
+  inFlight.add(sessionId)
   try {
+    const state = await readEffective(sessionId)
+    if (state.running === true) {
+      return sendError(409, 'session-busy', 'The Session is running; cannot continue it')
+    }
+    if (state.interrupted !== true) {
+      return sendError(409, 'session-not-interrupted', 'The Session does not need continuation')
+    }
     await controller.commands.prompt({
       requestId: randomUUID(),
       sessionId,
@@ -125,6 +141,8 @@ async function handleContinue(ctx, request) {
       return sendError(400, 'bad-request', typeof error.message === 'string' ? error.message : 'Invalid continue request')
     }
     return sendError(500, 'continue-failed', typeof error?.message === 'string' ? error.message : 'Could not continue the Session')
+  } finally {
+    inFlight.delete(sessionId)
   }
   return sendJson(200, { accepted: true })
 }
@@ -137,6 +155,8 @@ async function handleContinue(ctx, request) {
 export function installInterruptedSessions(ctx) {
   const cache = new Map()
   const derived = new Map()
+  const epochs = new Map()
+  let derivedVersion = 0
   const lineage = {
     at: 0,
     promise: null,
@@ -166,6 +186,7 @@ export function installInterruptedSessions(ctx) {
   async function readBase(sessionId) {
     const cached = cache.get(sessionId)
     if (cached !== undefined) return cached
+    const startEpoch = epochs.get(sessionId) ?? 0
     const snapshot = await ctx.sessionQuery.readSession(sessionId)
     const state = lastTurnState(snapshot.events)
     const running = agentRunning(ctx, sessionId)
@@ -173,12 +194,16 @@ export function installInterruptedSessions(ctx) {
     const eventTime = lastEventTime(snapshot.events)
     const value = {
       ...described,
+      lastStartTime: lastTurnStartTime(snapshot.events),
       lastEndTime: lastTurnEndTime(snapshot.events),
       lastEventTime: eventTime,
       interruptedAt: described.interrupted ? eventTime : null
     }
-    remember(sessionId, value)
-    return value
+    // A live event may have landed while readSession was awaiting. Never let
+    // that older snapshot replace the newer event-handler value in the cache.
+    if ((epochs.get(sessionId) ?? 0) === startEpoch) remember(sessionId, value)
+    const live = cache.get(sessionId)
+    return live ?? value
   }
 
   /**
@@ -232,21 +257,27 @@ export function installInterruptedSessions(ctx) {
     if (base.running === true || base.interrupted === true) return base
     const cached = derived.get(sessionId)
     if (cached !== undefined && Date.now() - cached.at < DERIVED_TTL_MS) return cached.value
+    const startVersion = derivedVersion
     let value = base
     try {
       const graph = await loadLineage()
       const children = graph.childrenByParent.get(sessionId) ?? []
-      const parentEnd = base.lastEndTime
       for (const childId of children) {
         const child = await readEffective(childId, new Set(seen))
         if (child.interrupted !== true) continue
-        const childAt = typeof child.interruptedAt === 'number' ? child.interruptedAt : child.lastEventTime
-        if (!subagentInterruptionAfter(parentEnd, true, child.running === true, childAt)) continue
+        if (!subagentInterruptionAfter(
+          base.lastStartTime,
+          base.lastEndTime,
+          true,
+          child.running === true,
+          child.lastStartTime,
+          child.lastEventTime
+        )) continue
         value = {
           ...base,
           interrupted: true,
           reason: typeof child.reason === 'string' ? child.reason : 'interrupted',
-          interruptedAt: childAt,
+          interruptedAt: child.lastStartTime ?? child.lastEventTime,
           subagent: true
         }
         break
@@ -254,7 +285,7 @@ export function installInterruptedSessions(ctx) {
     } catch {
       // Without lineage, fall back to the Session's own turn state.
     }
-    derived.set(sessionId, { at: Date.now(), value })
+    if (derivedVersion === startVersion) derived.set(sessionId, { at: Date.now(), value })
     return value
   }
 
@@ -262,6 +293,8 @@ export function installInterruptedSessions(ctx) {
     if (session === null || typeof session !== 'object' || typeof session.id !== 'string') return
     if (event === null || typeof event !== 'object') return
     const time = typeof event.time === 'number' ? event.time : null
+    epochs.set(session.id, (epochs.get(session.id) ?? 0) + 1)
+    derivedVersion += 1
     const previous = cache.get(session.id)
     if (event.type === 'turn/start') {
       remember(session.id, {
@@ -270,6 +303,7 @@ export function installInterruptedSessions(ctx) {
         turn: event.data?.turn ?? null,
         reason: null,
         open: true,
+        lastStartTime: time ?? previous?.lastStartTime ?? null,
         lastEndTime: previous?.lastEndTime ?? null,
         lastEventTime: time,
         interruptedAt: null
@@ -283,6 +317,7 @@ export function installInterruptedSessions(ctx) {
         turn: null,
         reason: typeof ending?.kind === 'string' ? ending.kind : null,
         open: false,
+        lastStartTime: previous?.lastStartTime ?? null,
         lastEndTime: time ?? previous?.lastEndTime ?? null,
         lastEventTime: time,
         interruptedAt: interrupted ? time : null
@@ -293,11 +328,12 @@ export function installInterruptedSessions(ctx) {
   }), 'power-suite: interrupted cache')
 
 
+  const continueInFlight = new Set()
   ctx.effect(() => ctx.connection.fetch.register({
     path: CONTINUE_ROUTE,
     methods: ['POST'],
     requestBody: 'buffered',
-    fetch: (request) => handleContinue(ctx, request)
+    fetch: (request) => handleContinue(ctx, request, readEffective, continueInFlight)
   }), `power-suite: continue POST ${CONTINUE_ROUTE}`)
 
   ctx.effect(() => ctx.connection.fetch.register({
@@ -313,7 +349,9 @@ export function installInterruptedSessions(ctx) {
       const refresh = url.searchParams.get('refresh') === '1'
       if (refresh) {
         cache.delete(sessionId)
+        epochs.set(sessionId, (epochs.get(sessionId) ?? 0) + 1)
         derived.clear()
+        derivedVersion += 1
         lineage.at = 0
       }
       let value

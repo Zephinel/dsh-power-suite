@@ -14,9 +14,10 @@ continued without hunting for the right message.
 - Opening that Session turns the composer's send control into a **play triangle**
   (`play-fill`). Pressing it with an empty draft continues the interrupted task;
   typing a draft first sends that draft normally instead.
-- Continuing sends a visible user message — `Continue the interrupted task.`
-  (`继续完成被中断的任务。` in the Chinese UI) — and clears the mark optimistically
-  while the new turn starts.
+- Continuing is **implicit**: it does not add a user bubble to the transcript.
+  The browser asks the Host to start the next turn with a non-human context
+  source; the plugin hides the native context/trigger row correlated with that
+  request, and clears the mark while the new turn starts.
 
 ## When a Session counts as interrupted
 
@@ -44,25 +45,29 @@ Host:
   `{ sessionId, interrupted, running, turn, reason, open }` for one Session.
   It reads the Session log through `ctx.sessionQuery.readSession()` on the first
   ask and caches the answer per Session; `session/event` `turn/start` and
-  `turn/end` events keep the cache current. `&refresh=1` recomputes.
+  `turn/end` events keep the cache current and an event epoch prevents a slow
+  read from caching an older snapshot over a newer event. `&refresh=1` recomputes.
+- `POST /api/power-suite.continue` — admits one implicit continuation after
+  checking JSON content type, the Session's current interruption state, and a
+  per-Session in-flight lock; duplicate requests get `409`.
 - Registered in [`src/features/interrupted-sessions/host.js`](../src/features/interrupted-sessions/host.js);
   the pure fold lives in [`turns.js`](../src/features/interrupted-sessions/turns.js).
 
 Browser:
 
-- `sidebar.session.row.leading` — the default-visible warning mark (the row
-  status cell left of the title, which only renders for idle rows).
+- `sidebar.session.row.leading` — the default-visible warning mark for idle rows.
+- A row decorator covers rows whose native status still says running: it inserts
+  the warning into the native leading span and hides the stale spinner.
 - `sidebar.workspaces.session.row.action` — the hover-only Continue pill.
 - `conversation.input.overlay` — a renderless seat for the open Conversation
-  that marks the shell, swaps the submit glyph, enables the empty submit while
-  interrupted, intercepts its click, consumes a pending Continue request from a
-  row action, and runs the continue submission through the composer's own
-  `inputActions`.
+  that marks the shell, swaps the submit glyph, and starts the Host continuation
+  route; it no longer submits a draft prompt.
 - Interruption reads are shared in one small client store, fetched two at a time
-  and cached per Session. Mounted rows keep their Session fresh: the state is
-  re-read when the Conversation opens, on window focus or page visibility, and
-  every 25 seconds while a watched row is mounted, so a stale mark cannot
-  outlive a Host-side change or a page reload.
+  and cached per Session. Every visible Session row is discovered independently
+  of its leading slot. The state is re-read when the Conversation opens, on
+  window focus or page visibility, on `connection/reset`/`online`, and every
+  20 seconds; a forced refresh keeps the current ready value visible instead of
+  downgrading it to loading.
 
 ## Icons
 
@@ -76,15 +81,15 @@ The plugin does not depend on the icon package or network at runtime.
   the Host; after that the cache answers, and live turn boundaries keep it
   fresh. After a Host restart the first sidebar pass pays that cost once per
   listed Session.
-- **Idle rows only.** The leading seat renders only while the row's primary
-  status is idle, so a Session with running work or an unread completion shows
-  its own status instead.
-- **Blank and archived rows** are not marked (they do not render the leading
-  seat).
+- **Blank and archived rows** are not marked.
 - **Draft safety.** The composer only auto-continues when the draft is empty; it
   never overwrites something the user typed.
-- **Visible prompt.** Continuing adds an ordinary user message to the transcript;
-  there is no hidden continuation channel.
+- **Raw log.** The implicit continuation is still a durable `user/message` with
+  source kind `power-suite-continue`; it is hidden from Chat via the native
+  context/trigger rendering, but Trajectory/raw exports can show it.
+- **Trigger correlation.** A turn-trigger card is hidden when its recorded time
+  falls inside a recent continuation window for this browser. This is a UI
+  compatibility shim until Chat exposes the source kind on the trigger row.
 
 ## Automatic refresh after a Host restart
 
@@ -116,9 +121,10 @@ looks `completed` even though the delegated work was cut off.
 The route folds known child Sessions (`header.parentSession`) too:
 
 - a child that is **still running** is live work, not an interruption;
-- a child whose last turn ended before the parent's latest `turn/end` is old;
-- a child that was interrupted (or has an open crash tail) **after** the
-  parent's latest completed turn marks the parent as interrupted;
+- a child whose turn started during the parent's latest turn, or whose last
+  event is newer than the parent's latest `turn/end`, belongs to that work;
+- a child that was interrupted (or has an open crash tail) while belonging to
+  the parent's latest turn marks the parent as interrupted;
 - the badge tooltip distinguishes a delegated-subagent interruption, and
   Continue resumes the parent Session (the subagent is not a visible Session).
 
@@ -142,9 +148,11 @@ the Session controller's prompt command with an explicit message source
 
 - the transcript shows no user bubble for the continuation;
 - prompt history ignores it (only `source.kind: "user"` messages are recalled);
-- the intercepted row is hidden by the plugin, so the continuation appears
-  implicit; the model still receives a user-role instruction and starts a new
-  turn.
+- the native context/trigger row is hidden by the plugin, so the continuation
+  appears implicit; the model still receives a user-role instruction and starts
+  a new turn. The route is rejected when the Session is running or not
+  interrupted, and a per-Session in-flight lock rejects duplicate Continue
+  clicks.
 
 If the Host composition does not expose the Session controller, the route
 returns `continue-unavailable` and the badge stays; the browser repulls the

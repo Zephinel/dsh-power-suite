@@ -29,6 +29,18 @@
 - The sidebar cache updates from live session events and a periodic refresh;
   a very recent change from another device can lag by one poll interval.
 
+## Raw artifacts and implicit continuation
+
+- The raw/preview routes accept any owner-authorized absolute path (the same
+  authority as the native `/api/file`); they are not scoped to a Session's
+  artifact list because the native Workspace files tree uses them too. The
+  response media type comes from the real path, and every raw response is
+  sandboxed with `default-src 'none'`.
+- Continue is a durable `user/message` with a non-human source; Chat hides the
+  matching native context/trigger row using the message time recorded for this
+  browser. Trajectory/raw exports still contain it. A future Chat DOM that
+  exposes the source kind on the trigger row would replace this shim.
+
 ## Localization and theming
 
 - UI copy ships in English and Chinese; other locales fall back to English.

@@ -12,14 +12,18 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
     steps:
       - name: Check out
         uses: actions/checkout@v4
 
-      - name: Set up Node 24
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: ${{ matrix.node }}
 
       - name: Check and test
         run: npm run check

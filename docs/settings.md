@@ -9,8 +9,8 @@ The bundle carries its own configuration section on its **Plugins** page:
    shortcut setting, then the component rows and source facts.
 
 The page replaces the auto-rendered README that previously filled the middle of
-the page: the package no longer ships a root `README.md`, so there is no separate
-"Details" block. Suite documentation lives in `docs/`.
+the page. The repository ships a root `README.md` for the project itself; suite
+reference documentation lives in `docs/`.
 
 ## Prompt history shortcut
 

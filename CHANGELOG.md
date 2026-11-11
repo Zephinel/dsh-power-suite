@@ -4,7 +4,7 @@ All notable changes to this repository are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.1] - 2026-11-11
 
 ### Fixed
 
@@ -17,6 +17,23 @@ All notable changes to this repository are documented here. The format follows
 - After a reconnect, an interrupted Session no longer keeps the native green
   "running" spinner until opened: the plugin decorates rows whose native status
   is stale, replacing the spinner with the amber interruption mark.
+- Forced badge refreshes keep the current ready value until the new answer
+  arrives; they no longer flash every interrupted mark through `loading`.
+- The Host interruption cache uses per-Session event epochs so a slow log read
+  cannot overwrite a newer turn event; prompt history requests are generation-
+  scoped so a slow Session cannot write into another Session.
+- Subagent interruption timing now uses the child's turn start as well as its
+  last event, covering children that go silent before a Host restart.
+- Continue validates JSON content type, current interruption/running state, and
+  per-Session in-flight admission; duplicates are rejected instead of queued.
+- Raw artifact media type comes from the real path and every raw response uses
+  the native sandbox/default-src-none CSP; the implicit continuation context and
+  correlated turn-trigger row are hidden in Chat.
+- Quick Look fixes: single-quoted code strings highlight correctly, the preview
+  cache is bounded with a TTL, and sidebar/chat observers are scoped to relevant
+  mutations.
+- CI now covers Node 22 and 24, `npm run check` includes the pack gate, and the
+  package/version/CHANGELOG are synced at 0.1.1.
 - **Continue** is now implicit: it resumes through a non-human context source
   instead of inserting a visible "Continue the interrupted task." user prompt.
   The continuation row is hidden, prompt history ignores it, and a missing

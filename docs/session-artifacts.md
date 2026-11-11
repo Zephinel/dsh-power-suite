@@ -151,7 +151,7 @@ This feature ships inside [DSH Power Suite](overview.md); install the suite:
 plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-suite
 ```
 
-The Host half serves the two routes; the browser half registers the page type
+The Host half serves the list, raw, and preview routes; the browser half registers the page type
 and its guide card. Restart the Host process after upgrading the package's
 JavaScript.
 

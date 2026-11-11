@@ -395,17 +395,14 @@ export function contentDisposition(type, name) {
 }
 
 /**
- * Whether the browser may run a directly opened document on its own origin.
+ * Content-Security-Policy for a raw artifact response.
  *
- * Artifacts are untrusted model output served from the application origin, so
- * scripts and styles stay available but the document gets an opaque origin: it
- * cannot read the application's cookies, storage, or same-origin APIs.
- * @param {string} mime - the response media type.
- * @returns {string | undefined} the CSP value for documents that need one.
+ * Artifacts are untrusted output served from the application origin. Match the
+ * Host's native `/api/file` policy: every response is sandboxed with no external
+ * loads or scripts, so a directly opened HTML/SVG artifact cannot execute on the
+ * application origin. `<img>` consumers ignore the policy for their own loads.
+ * @returns {string} the CSP value.
  */
-export function artifactContentSecurityPolicy(mime) {
-  if (mime.startsWith('text/html') || mime.startsWith('image/svg+xml')) {
-    return 'sandbox allow-scripts allow-popups allow-forms allow-modals allow-downloads'
-  }
-  return undefined
+export function artifactContentSecurityPolicy() {
+  return "sandbox; default-src 'none'"
 }

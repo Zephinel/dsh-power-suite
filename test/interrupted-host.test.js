@@ -10,7 +10,7 @@ import { installInterruptedSessions } from '../src/features/interrupted-sessions
  * @param {Set<string>} [options.running] - live running Session ids.
  * @returns {{ ctx: object, route: Function, emit: Function }} the context.
  */
-function makeContext({ logs, parents, running = new Set(), controller }) {
+function makeContext({ logs, parents, running = new Set(), controller, readSession }) {
   const events = {}
   const routes = new Map()
   const ctx = {
@@ -33,6 +33,7 @@ function makeContext({ logs, parents, running = new Set(), controller }) {
     },
     sessionQuery: {
       async readSession(sessionId) {
+        if (typeof readSession === 'function') return readSession(sessionId)
         const log = logs.get(sessionId)
         if (log === undefined) {
           const error = new Error('Session not found')
@@ -206,4 +207,104 @@ test('the continue route rejects empty prompts', async () => {
     body: JSON.stringify({ sessionId: 'session-parent', prompt: '   ' })
   }))
   assert.equal(response.status, 400)
+})
+
+
+test('a silent child that started during the parent turn marks the parent', async () => {
+  const logs = new Map([
+    ['session-parent', [turnStart(1, 1000), turnEnd(1, 2000, 'completed')]],
+    ['child-silent', [turnStart(1, 1500)]]
+  ])
+  const parents = new Map([['session-parent', null], ['child-silent', 'session-parent']])
+  const { route } = makeContext({ logs, parents })
+  const payload = await read(route, 'session-parent')
+  assert.equal(payload.interrupted, true)
+  assert.equal(payload.subagent, true)
+})
+
+test('a read that resolves after a newer turn/end does not cache the stale snapshot', async () => {
+  let resolveRead
+  const readSession = (sessionId) => new Promise((resolve) => {
+    resolveRead = () => resolve({
+      session: { id: sessionId },
+      // Deliberately stale: open turn with no end yet.
+      events: [turnStart(1, 1000)]
+    })
+  })
+  const logs = new Map([['session-parent', [turnStart(1, 1000)]]])
+  const parents = new Map([['session-parent', null]])
+  const { route, emit } = makeContext({ logs, parents, readSession })
+  const pending = read(route, 'session-parent')
+  await new Promise((resolve) => setTimeout(resolve, 5))
+  // The turn completes while readSession is still awaiting.
+  emit('session-parent', turnEnd(1, 2000, 'completed'))
+  resolveRead()
+  const payload = await pending
+  assert.equal(payload.interrupted, false)
+  assert.equal(payload.open, false)
+})
+
+
+test('the continue route requires application/json', async () => {
+  const controller = { commands: { async prompt() { return { accepted: true } } } }
+  const logs = new Map([['session-parent', [turnStart(1, 1000), turnEnd(1, 2000, 'interrupted')]]])
+  const parents = new Map([['session-parent', null]])
+  const { continueRoute } = makeContext({ logs, parents, controller })
+  const response = await continueRoute.fetch(new Request('http://localhost/api/power-suite.continue', {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain' },
+    body: JSON.stringify({ sessionId: 'session-parent', prompt: 'continue' })
+  }))
+  assert.equal(response.status, 415)
+})
+
+test('the continue route refuses a Session that is not interrupted', async () => {
+  const calls = []
+  const controller = { commands: { async prompt(request) { calls.push(request); return { accepted: true } } } }
+  const logs = new Map([['session-parent', [turnStart(1, 1000), turnEnd(1, 2000, 'completed')]]])
+  const parents = new Map([['session-parent', null]])
+  const { continueRoute } = makeContext({ logs, parents, controller })
+  const response = await continueRoute.fetch(new Request('http://localhost/api/power-suite.continue', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: 'session-parent', prompt: 'continue' })
+  }))
+  assert.equal(response.status, 409)
+  assert.equal((await response.json()).code, 'session-not-interrupted')
+  assert.equal(calls.length, 0)
+})
+
+test('the continue route refuses a running Session', async () => {
+  const controller = { commands: { async prompt() { return { accepted: true } } } }
+  const logs = new Map([['session-parent', [turnStart(1, 1000)]]])
+  const parents = new Map([['session-parent', null]])
+  const { continueRoute } = makeContext({ logs, parents, controller, running: new Set(['session-parent']) })
+  const response = await continueRoute.fetch(new Request('http://localhost/api/power-suite.continue', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: 'session-parent', prompt: 'continue' })
+  }))
+  assert.equal(response.status, 409)
+  assert.equal((await response.json()).code, 'session-busy')
+})
+
+test('a second concurrent continue is rejected while the first is admitting', async () => {
+  let release
+  const admitted = new Promise((resolve) => { release = resolve })
+  const controller = { commands: { async prompt() { await admitted; return { accepted: true } } } }
+  const logs = new Map([['session-parent', [turnStart(1, 1000), turnEnd(1, 2000, 'interrupted')]]])
+  const parents = new Map([['session-parent', null]])
+  const { continueRoute } = makeContext({ logs, parents, controller })
+  const request = () => continueRoute.fetch(new Request('http://localhost/api/power-suite.continue', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: 'session-parent', prompt: 'continue' })
+  }))
+  const first = request()
+  await new Promise((resolve) => setTimeout(resolve, 5))
+  const second = await request()
+  assert.equal(second.status, 409)
+  assert.equal((await second.json()).code, 'continue-in-flight')
+  release()
+  assert.equal((await first).status, 200)
 })

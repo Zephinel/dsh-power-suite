@@ -22,11 +22,13 @@ npm run pack:check
 
 Current evidence (2026-11-11, Node 24.22.2):
 
-- `npm test`: **42 tests, 42 passed, 0 failed**.
+- `npm test`: **48 tests, 48 passed, 0 failed**.
 - `npm run check`: passed.
-- `npm run pack:check`: **38 files** (0.1.0 tarball), including `src/`,
+- `npm run pack:check`: **41 files** (0.1.1 tarball), including `src/`,
   `locale/`, `docs/`, `cordis.patch.yml`, `icon.png`, and the standard
   repository files.
+- Host tests cover the read-vs-event cache race, silent-subagent timing, continue
+  content-type/state/in-flight validation, and the non-human source fields.
 - The root-package reinstall was verified after a Host restart: the Loader row
   `include:power-suite` reports `fiberPhase: active` from the new repository
   root path.

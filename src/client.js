@@ -623,7 +623,7 @@ window.__ModuleLoader__.load({
         add('"(?:\\\\.|[^"\\\\\\n])*"', 'string')
       } else {
         const template = language === 'js' || language === 'ts' ? '|`(?:\\\\.|[^`\\\\])*`' : ''
-        add('"(?:\\\\.|[^"\\\\\\n])*"|\'(?:\\\\.|[^\'\\\\\\n])*\'"' + template, 'string')
+        add('"(?:\\\\.|[^"\\\\\\n])*"|\'(?:\\\\.|[^\'\\\\\\n])*\'' + template, 'string')
       }
       if (language === 'python') add('@[A-Za-z_][\\w.]*', 'decorator')
       if (language === 'shell') add('\\$\\{[^}]*\\}|\\$[A-Za-z_][\\w]*|\\$[0-9@#?$!*-]', 'variable')
@@ -951,6 +951,8 @@ window.__ModuleLoader__.load({
     const QUICKLOOK_MIN_WIDTH = 380
     const QUICKLOOK_MAX_WIDTH = 800
     const QUICKLOOK_MIN_HEIGHT = 280
+    const QUICKLOOK_CACHE_LIMIT = 120
+    const QUICKLOOK_CACHE_TTL_MS = 30000
     const QUICKLOOK_ROW_EXIT_FALLBACK = 1000
     const QUICKLOOK_CARD_EXIT_DELAY = 300
 
@@ -1609,7 +1611,10 @@ window.__ModuleLoader__.load({
      */
     async function requestQuickLookData(entry) {
       const cached = quickLookState.cache.get(entry.path)
-      if (cached !== undefined) return cached
+      if (cached !== undefined) {
+        if (Date.now() - cached.at < QUICKLOOK_CACHE_TTL_MS) return cached.data
+        quickLookState.cache.delete(entry.path)
+      }
       if (quickLookState.abort !== null) quickLookState.abort.abort()
       const controller = new AbortController()
       quickLookState.abort = controller
@@ -1623,7 +1628,11 @@ window.__ModuleLoader__.load({
         })
         if (!response.ok) throw new Error('HTTP ' + response.status)
         const data = await response.json()
-        quickLookState.cache.set(entry.path, data)
+        if (quickLookState.cache.size >= QUICKLOOK_CACHE_LIMIT && !quickLookState.cache.has(entry.path)) {
+          const oldest = quickLookState.cache.keys().next().value
+          if (oldest !== undefined) quickLookState.cache.delete(oldest)
+        }
+        quickLookState.cache.set(entry.path, { data, at: Date.now() })
         return data
       } catch {
         return undefined
@@ -2377,7 +2386,7 @@ window.__ModuleLoader__.load({
       const draft = useInput((state) => state.draft)
       const phase = useInput((state) => state.phase)
       const browsing = React.useRef({ index: null, saved: '', recalled: null })
-      const history = React.useRef({ prompts: [], ready: false, loading: null })
+      const history = React.useRef({ prompts: [], ready: false, loading: null, sessionId: null, generation: 0 })
       const anchor = React.useRef(null)
       const latest = React.useRef({ draft, phase, sessionId })
       latest.current.draft = draft
@@ -2386,23 +2395,40 @@ window.__ModuleLoader__.load({
 
       const load = React.useCallback(() => {
         const target = sessionId
-        if (history.current.loading !== null) return history.current.loading
+        const state = history.current
+        if (state.sessionId !== target) return Promise.resolve(state.prompts)
+        if (state.loading !== null) return state.loading
+        const generation = state.generation
         const task = readPromptHistory(target).then((prompts) => {
-          history.current.loading = null
-          if (prompts.length > 0 || !history.current.ready) {
-            history.current.prompts = prompts
-            history.current.ready = true
+          // A stale response from a previous Session must never write into the
+          // new Session's cache, even if it resolves after the switch.
+          const current = history.current
+          if (current.generation !== generation || current.sessionId !== target) return current.prompts
+          current.loading = null
+          if (prompts.length > 0 || !current.ready) {
+            current.prompts = prompts
+            current.ready = true
           }
-          return history.current.prompts
+          return current.prompts
+        }, () => {
+          const current = history.current
+          if (current.generation !== generation || current.sessionId !== target) return current.prompts
+          current.loading = null
+          return current.prompts
         })
-        history.current.loading = task
+        state.loading = task
         return task
       }, [sessionId])
 
       React.useEffect(() => {
-        history.current = { prompts: [], ready: false, loading: null }
+        const generation = history.current.generation + 1
+        history.current = { prompts: [], ready: false, loading: null, sessionId, generation }
         browsing.current = { index: null, saved: '', recalled: null }
         load()
+        return () => {
+          // Invalidate any response that arrives after this Session unmounts.
+          history.current.generation += 1
+        }
       }, [sessionId, load])
 
       React.useEffect(() => {
@@ -2968,7 +2994,8 @@ window.__ModuleLoader__.load({
       version: 0,
       queue: [],
       active: 0,
-      maxActive: 2
+      maxActive: 2,
+      inflight: new Set()
     }
 
     /**
@@ -3039,7 +3066,13 @@ window.__ModuleLoader__.load({
       const existing = interruptedStore.records.get(sessionId)
       if (existing !== undefined && !force) return
       if (existing?.status === 'loading' && !force) return
-      setInterruptedRecord(sessionId, { status: 'loading', interrupted: false })
+      if (interruptedStore.inflight.has(sessionId)) return
+      interruptedStore.inflight.add(sessionId)
+      // A forced refresh must not downgrade a known-good badge to loading:
+      // keep the current record visible until the new answer replaces it.
+      if (existing === undefined) {
+        setInterruptedRecord(sessionId, { status: 'loading', interrupted: false })
+      }
       interruptedStore.queue.push({ sessionId, force, refreshHost })
       drainInterruptedQueue()
     }
@@ -3054,6 +3087,7 @@ window.__ModuleLoader__.load({
         interruptedStore.active += 1
         loadInterrupted(job.sessionId, job.force, job.refreshHost).finally(() => {
           interruptedStore.active -= 1
+          interruptedStore.inflight.delete(job.sessionId)
           drainInterruptedQueue()
         })
       }
@@ -3088,7 +3122,10 @@ window.__ModuleLoader__.load({
           subagent: payload?.subagent === true
         })
       } catch {
-        setInterruptedRecord(sessionId, { status: 'error', interrupted: false })
+        const existing = interruptedRecord(sessionId)
+        if (existing === null || existing.status !== 'ready') {
+          setInterruptedRecord(sessionId, { status: 'error', interrupted: false })
+        }
       }
     }
 
@@ -3179,7 +3216,42 @@ window.__ModuleLoader__.load({
     const continueRuntime = { current: null, pending: false }
 
     /** Services captured at install time for row actions and DOM decoration. */
-    const interruptedRuntime = { uiWorkspace: null, t: null }
+    const interruptedRuntime = { uiWorkspace: null, t: null, hideContinuationRows: null, continueTimes: [] }
+
+    /** localStorage key: when this browser sent an implicit continuation. */
+    const CONTINUE_TIMES_KEY = 'dsh-power-suite.continue-times'
+
+    /**
+     * Read the recent implicit-continuation timestamps.
+     * @returns {number[]} epoch milliseconds, pruned to the last ten minutes.
+     */
+    function loadContinueTimes() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(CONTINUE_TIMES_KEY) ?? '[]')
+        if (!Array.isArray(parsed)) return []
+        const cutoff = Date.now() - 10 * 60 * 1000
+        return parsed.filter((value) => typeof value === 'number' && Number.isFinite(value) && value >= cutoff)
+      } catch {
+        return []
+      }
+    }
+
+    /**
+     * Remember one implicit continuation so its turn-trigger row can be hidden
+     * after the React tree renders it (and after a page reload).
+     * @param {number} at - epoch milliseconds when the request was sent.
+     * @returns {void}
+     */
+    function rememberContinueTime(at) {
+      const cutoff = Date.now() - 10 * 60 * 1000
+      interruptedRuntime.continueTimes = [...interruptedRuntime.continueTimes, at]
+        .filter((value) => value >= cutoff)
+      try {
+        localStorage.setItem(CONTINUE_TIMES_KEY, JSON.stringify(interruptedRuntime.continueTimes))
+      } catch {
+        // Storage may be unavailable; the in-memory value still applies.
+      }
+    }
 
     /**
      * Start continuing one Session from a row action.
@@ -3214,7 +3286,6 @@ html[data-input-modality="keyboard"] [data-row-key^="session:"][data-power-suite
 .dps-row-continue{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px 0 5px;border:0;border-radius:var(--dsw-radius-sm,4px);background:color-mix(in srgb,var(--dsw-alias-label-primary) 8%,transparent);color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:1;cursor:pointer;flex:none}
 .dps-row-continue:hover{background:color-mix(in srgb,var(--dsw-alias-label-primary) 14%,transparent);color:var(--dsw-alias-label-primary)}
 .dps-row-continue:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
-[class*="_contextRow"]:has([data-context-source="power-suite-continue"]){display:none!important}
 [data-row-key^="session:"][data-power-suite-interrupted] > span:first-child > svg{display:none!important}
 html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] button[class$="_primary"]>svg{display:none!important}
 html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] button[class$="_primary"]::before{content:"";display:block;width:16px;height:16px;background-color:currentColor;-webkit-mask:${PLAY_MASK} center/contain no-repeat;mask:${PLAY_MASK} center/contain no-repeat}
@@ -3236,6 +3307,24 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       shape.setAttribute('d', REMIX_WARNING_FILL)
       svg.appendChild(shape)
       return svg
+    }
+
+    /**
+     * Fetch interruption state for every Session row currently in the sidebar.
+     * Running rows do not mount the custom leading slot, so without this walk
+     * they would never get a record and the stale-spinner replacement could not
+     * run after a reconnect.
+     * @returns {void}
+     */
+    function discoverInterruptedRows() {
+      for (const row of document.querySelectorAll('[data-row-key^="session:"]')) {
+        const key = row.getAttribute('data-row-key')
+        if (key === null) continue
+        const sessionId = key.slice('session:'.length)
+        if (sessionId.length === 0) continue
+        if (interruptedStore.records.has(sessionId) || interruptedStore.inflight.has(sessionId)) continue
+        ensureInterrupted(sessionId)
+      }
     }
 
     /**
@@ -3374,6 +3463,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (now.draft.trim() !== '') return false
         if (continueRuntime.pending === true) return false
         const target = now.sessionId
+        const sentAt = Date.now()
         continueRuntime.pending = true
         fetch(appUrl(CONTINUE_ROUTE), {
           method: 'POST',
@@ -3386,10 +3476,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           })
         }).then((response) => {
           if (!response.ok) throw new Error(`HTTP ${response.status}`)
+          rememberContinueTime(sentAt)
+          interruptedRuntime.hideContinuationRows?.()
           markInterrupted(target, false)
           window.setTimeout(() => refreshInterrupted(target), 2500)
         }).catch(() => {
           refreshInterrupted(target)
+          if (typeof now.inputActions?.notify === 'function') {
+            now.inputActions.notify('error', now.t('continue.failed'))
+          }
         }).finally(() => {
           continueRuntime.pending = false
         })
@@ -3472,6 +3567,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const t = ctx.locale.bind(INTERRUPTED_NS)
       interruptedRuntime.uiWorkspace = ctx.uiWorkspace
       interruptedRuntime.t = t
+      interruptedRuntime.continueTimes = loadContinueTimes()
       ctx.effect(() => ctx.locale.register(INTERRUPTED_NS, { en: INTERRUPTED_EN, zh: INTERRUPTED_ZH }), 'power-suite: interrupted dictionaries')
       ctx.effect(() => {
         let timer = null
@@ -3479,11 +3575,23 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           if (timer !== null) return
           timer = window.setTimeout(() => {
             timer = null
+            discoverInterruptedRows()
             syncInterruptedRows()
           }, 80)
         }
+        const touchesSessionRow = (records) => records.some((record) => {
+          const target = record.target
+          if (target instanceof Element && target.closest('[data-row-key^="session:"]') !== null) return true
+          for (const node of record.addedNodes) {
+            if (!(node instanceof Element)) continue
+            if (node.matches('[data-row-key^="session:"]') || node.querySelector('[data-row-key^="session:"]') !== null) return true
+          }
+          return false
+        })
         const unsubscribe = subscribeInterrupted(schedule)
-        const observer = new MutationObserver(schedule)
+        const observer = new MutationObserver((records) => {
+          if (touchesSessionRow(records)) schedule()
+        })
         observer.observe(document.body, { childList: true, subtree: true })
         schedule()
         return () => {
@@ -3513,26 +3621,56 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         return typeof dispose === 'function' ? dispose : undefined
       }, 'power-suite: interrupted connection reset')
       ctx.effect(() => {
-        // The implicit continuation is a context injection, not a human
-        // prompt. Hide only that producer's row so the transcript stays clean.
-        let frame = null
-        const hide = () => {
-          frame = null
-          for (const source of document.querySelectorAll('[data-context-source="power-suite-continue"]')) {
-            const row = source.closest('[class*="_contextRow"]')
-            if (row instanceof HTMLElement) row.style.display = 'none'
+        /**
+         * The injected context producer renders as a native ContextInjectionRow.
+         * Its source label is the element text; `data-context-source` itself is a
+         * boolean marker. Hide the smallest ancestor that contains both the label
+         * and the injection body, without depending on hashed CSS-module classes.
+         * @param {Element} source - the `[data-context-source]` element.
+         * @returns {void}
+         */
+        const hideOne = (source) => {
+          if ((source.textContent ?? '').trim() !== 'power-suite-continue') return
+          const body = source.closest('[data-context-injection-body]')
+          if (body === null) {
+            const trigger = source.closest('[data-turn-trigger]')
+            if (trigger instanceof HTMLElement) trigger.style.display = 'none'
+            return
+          }
+          let row = source.parentElement
+          while (row !== null && !row.contains(body)) row = row.parentElement
+          if (row instanceof HTMLElement) row.style.display = 'none'
+        }
+        const hideOneTrigger = (section) => {
+          const time = section.querySelector('time[datetime]')
+          const at = time === null ? Number.NaN : Date.parse(time.getAttribute('datetime') ?? '')
+          if (Number.isNaN(at)) return
+          // A continuation starts immediately after its request; hide only the
+          // turn-trigger card correlated with one of our recent requests.
+          if (interruptedRuntime.continueTimes.some((sentAt) => at >= sentAt - 1500 && at <= sentAt + 20000)) {
+            section.style.display = 'none'
           }
         }
-        const schedule = () => {
-          if (frame !== null) return
-          frame = window.requestAnimationFrame(hide)
+        const hideIn = (node) => {
+          if (!(node instanceof Element)) return
+          if (node.hasAttribute('data-context-source')) hideOne(node)
+          for (const source of node.querySelectorAll('[data-context-source]')) hideOne(source)
+          if (node.matches('section[data-turn-trigger]')) hideOneTrigger(node)
+          for (const trigger of node.querySelectorAll('section[data-turn-trigger]')) hideOneTrigger(trigger)
         }
-        schedule()
-        const observer = new MutationObserver(schedule)
+        const scan = () => hideIn(document.body)
+        interruptedRuntime.hideContinuationRows = scan
+        scan()
+        const observer = new MutationObserver((records) => {
+          for (const record of records) {
+            for (const added of record.addedNodes) hideIn(added)
+            hideIn(record.target)
+          }
+        })
         observer.observe(document.body, { childList: true, subtree: true })
         return () => {
           observer.disconnect()
-          if (frame !== null) window.cancelAnimationFrame(frame)
+          if (interruptedRuntime.hideContinuationRows === scan) interruptedRuntime.hideContinuationRows = null
         }
       }, 'power-suite: hide implicit continuation rows')
       ctx.effect(() => {

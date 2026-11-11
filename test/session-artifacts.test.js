@@ -210,6 +210,6 @@ test('hover previews pick a surface per artifact type', () => {
     contentDisposition('attachment', '报告 "Q3".pdf'),
     'attachment; filename="__ _Q3_.pdf"; filename*=UTF-8\'\'%E6%8A%A5%E5%91%8A%20%22Q3%22.pdf'
   )
-  assert.match(artifactContentSecurityPolicy('text/html; charset=utf-8'), /sandbox/)
-  assert.equal(artifactContentSecurityPolicy('application/pdf'), undefined)
+  assert.equal(artifactContentSecurityPolicy('text/html; charset=utf-8'), "sandbox; default-src 'none'")
+  assert.equal(artifactContentSecurityPolicy(), "sandbox; default-src 'none'")
 })

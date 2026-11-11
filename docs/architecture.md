@@ -61,8 +61,8 @@ re-reads.
 ## Browser half
 
 `src/client.js` is loaded by `window.__ModuleLoader__.load`. Its `apply`
-registers slots, tab types, context menus, commands, and the plugin settings
-surface through the injected client services (`slots`, `locale`,
+registers slots, tab types, context menus, and the plugin settings surface
+through the injected client services (`slots`, `locale`,
 `sidebarRight`, `sidebarRightTabs`, `contextMenus`, `remote`, `uiWorkspace`).
 
 The client talks to the Host only over the authenticated routes above; it never
@@ -81,7 +81,6 @@ locale namespace so en/zh dictionaries stay aligned.
 | `plugins.bundle.config` | Plugin settings page |
 | `sidebar.session.row.leading` | Interrupted-session badge |
 | `sidebar.workspaces.session.row.action` | Continue action |
-| `sidebar.session.row.hover` | Row mask for the Continue seat |
 
 ## Invariants
 
