@@ -6690,7 +6690,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     const PROJECT_VIEW_CSS = `
-.psv-page{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);animation:psv-page-in .14s ease-out}
+.psv-page{position:fixed;top:0;left:0;z-index:200;display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);animation:psv-page-in .14s ease-out}
 .psv-page .psv-root{flex:1 1 auto;min-height:0}
 .psv-page-bar{flex:none;display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
 .psv-page-back{width:30px;height:30px;flex:none}
@@ -8133,19 +8133,134 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
     }
 
+    /** Fallback page area used before the first measurement lands. */
+    function fallbackProjectPageArea() {
+      return { left: 0, top: 0, width: Math.max(0, window.innerWidth), height: Math.max(0, window.innerHeight) }
+    }
+
+    /**
+     * Measure the content area right of the left Workspaces sidebar.
+     *
+     * The sidebar slot (`[data-slot="sidebar"]`, the same shell contract the
+     * suite's other decorations use) renders as `display: contents`; its first
+     * element child is the docked box that owns the visible width. A zero-width
+     * or absent sidebar (hidden/rail-less layout) puts the page at the viewport
+     * left edge instead. The page always ends at the viewport's right edge, so an
+     * open right sidebar and the history rails stay covered.
+     * @returns {{ left: number, top: number, width: number, height: number }} page geometry.
+     */
+    function measureProjectPageArea() {
+      const viewportWidth = Math.max(0, window.innerWidth)
+      const viewportHeight = Math.max(0, window.innerHeight)
+      const slot = document.querySelector('[data-slot="sidebar"]')
+      let sidebarRight = 0
+      if (slot !== null) {
+        let box = slot
+        let rect = box.getBoundingClientRect()
+        if (!(rect.width > 0) && slot.firstElementChild !== null) {
+          box = slot.firstElementChild
+          rect = box.getBoundingClientRect()
+        }
+        if (rect.width > 0) sidebarRight = Math.round(rect.right)
+      }
+      const left = Math.max(0, Math.min(sidebarRight, viewportWidth))
+      return {
+        left,
+        top: 0,
+        width: Math.max(0, viewportWidth - left),
+        height: viewportHeight
+      }
+    }
+
+    /**
+     * Keep the page aligned with the content area right of the left sidebar.
+     *
+     * Re-measures through one rAF-coalesced callback driven by a ResizeObserver
+     * on the sidebar slot, its docked child, and their container (expand,
+     * rail/collapse, hide), plus window resize and a scoped MutationObserver for
+     * a replaced sidebar subtree. A light interval only covers CSS transitions
+     * that resize without observer callbacks; state updates are identity-guarded
+     * so it cannot re-render needlessly. Everything is cleaned up on close.
+     * @param {boolean} open - whether the page is open.
+     * @returns {{ left: number, top: number, width: number, height: number }} current page geometry.
+     */
+    function useProjectPageArea(open) {
+      const [area, setArea] = React.useState(() => fallbackProjectPageArea())
+      React.useEffect(() => {
+        if (!open) return undefined
+        let disposed = false
+        let frame = null
+        const apply = () => {
+          frame = null
+          if (disposed) return
+          const next = measureProjectPageArea()
+          setArea((previous) => previous.left === next.left
+            && previous.top === next.top
+            && previous.width === next.width
+            && previous.height === next.height
+            ? previous
+            : next)
+        }
+        const schedule = () => {
+          if (frame === null) frame = window.requestAnimationFrame(apply)
+        }
+        schedule()
+        const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null
+        const observed = new Set()
+        const observeSidebar = () => {
+          if (observer === null) return
+          const slot = document.querySelector('[data-slot="sidebar"]')
+          for (const target of [slot, slot?.firstElementChild ?? null, slot?.parentElement ?? null]) {
+            if (target === null || observed.has(target)) continue
+            observed.add(target)
+            observer.observe(target)
+          }
+          const body = document.body
+          if (body !== null && !observed.has(body)) {
+            observed.add(body)
+            observer.observe(body)
+          }
+        }
+        observeSidebar()
+        const mutation = typeof MutationObserver === 'function' && typeof document.body !== 'undefined'
+          ? new MutationObserver(() => {
+            observeSidebar()
+            schedule()
+          })
+          : null
+        const mutationRoot = document.querySelector('[data-slot="sidebar"]')?.parentElement ?? document.body
+        if (mutation !== null && mutationRoot !== null) {
+          mutation.observe(mutationRoot, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] })
+        }
+        window.addEventListener('resize', schedule)
+        const interval = window.setInterval(schedule, 500)
+        return () => {
+          disposed = true
+          if (frame !== null) window.cancelAnimationFrame(frame)
+          if (observer !== null) observer.disconnect()
+          if (mutation !== null) mutation.disconnect()
+          window.removeEventListener('resize', schedule)
+          window.clearInterval(interval)
+        }
+      }, [open])
+      return area
+    }
+
     /**
      * Invisible seat that owns the standalone Project page: it listens for the
      * sidebar entry's window event, keeps the open Workspace, and renders one
-     * full-window page instance for it. Switching Workspace updates the same
-     * instance (its data hook aborts stale requests), while Esc or the close
+     * page instance over the content area right of the left sidebar (which stays
+     * visible and interactive). Switching Workspace from that sidebar updates
+     * this same instance (its data hook aborts stale requests); Esc or the close
      * control unmounts it and returns to the untouched conversation, composer,
-     * and sidebars.
+     * and sidebar state.
      * @param {object} props - slot props plus the bound locale, client context, and workspace navigation.
      * @returns {object | null} the page, or null while closed.
      */
     function ProjectPageSeat({ t, ctx, uiWorkspace, ...props }) {
       const [target, setTarget] = React.useState(null)
       const open = target !== null
+      const area = useProjectPageArea(open)
       const close = React.useCallback(() => setTarget(null), [])
       React.useEffect(() => {
         const onOpen = (event) => {
@@ -8186,9 +8301,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         className: 'psv-page',
         'data-psv-page': '',
         'data-workspace': target.workspaceId,
+        'data-area-left': String(area.left),
         role: 'dialog',
-        'aria-modal': 'true',
-        'aria-label': t('page.label')
+        'aria-label': t('page.label'),
+        style: {
+          left: `${area.left}px`,
+          top: `${area.top}px`,
+          width: `${area.width}px`,
+          height: `${area.height}px`
+        }
       }, psv(ProjectPage, pageProps))
     }
     //#endregion
