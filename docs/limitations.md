@@ -21,9 +21,14 @@
 - **Provided rows need the attachment service.** A Host composition without the
   durable attachment store omits provided rows entirely instead of showing
   broken ones, and compositions without that service cannot serve their bytes.
-- **Provided generic files are icons, not previews.** Only images get the 40 px
-  thumbnail; provided audio/video/PDF/Office files show the file icon and have no
-  hover Quick Look (their Open hands the file to a browser tab).
+- **Only images get a list thumbnail.** Non-image provided files show the file
+  icon in the list. Quick Look previews provided images, media, and text-like
+  files, but provided PDF/Office/archive files show its unavailable state.
+- **Provided text preview is a read-only fetch.** Text-like provided files are
+  fetched from the attachment route and clipped at 64 KiB; they do not go through
+  the workspace-files preview pipeline, and relative links (including images
+  referenced inside provided Markdown) cannot resolve because an attachment has
+  no workspace path.
 - **Dedupe keeps the newest occurrence.** One row per attachment id; re-pasting
   the same image moves it to the top and updates its prompt ordinal, and the
   older occurrence is not listed again.
@@ -32,9 +37,12 @@
 - Raw workspace downloads and provided attachment responses are capped at
   64 MiB; text previews read the first 16 KiB and report truncation, and the
   attachment route rejects tampered metadata with `400`/`404`.
-- The hover preview supports image, audio/video, PDF, HTML, and text/Markdown;
-  unknown binaries show an unavailable state. It applies to generated/workspace
-  rows only, never to provided attachments.
+- The hover preview supports image, audio/video, PDF, HTML, and text/Markdown
+  for generated/workspace rows, and images, media, and text-like provided
+  attachments; unknown binaries show an unavailable state. A card with no saved
+  resize opens at its explicit 570 x 360 px default so content is visible
+  immediately (a user-resized size wins), and it appears only for the Artifacts
+  panel and the native workspace-files list.
 
 ## Interrupted sessions
 

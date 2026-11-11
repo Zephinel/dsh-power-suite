@@ -44,6 +44,19 @@ All notable changes to this repository are documented here. The format follows
   Version-1 files migrate to the default windows, and running Sessions ignore
   both windows.
 
+### Fixed
+
+- Hover Quick Look no longer opens as an empty card: it always receives an
+  explicit height (570 x 360 default, clamped to the viewport, with a remembered
+  or user-resized size still winning) and its content layer no longer depends on
+  an inline opacity style or a finished animation, so generated Markdown/code/
+  image content is visible on the first hover.
+- Provided attachments now have a Quick Look: provided images and media render
+  through the verified attachment route, text-like provided files are fetched
+  read-only and clipped at 64 KiB with a truncation note, other provided types
+  show the unavailable state, and the card's Open/Download use the attachment
+  URLs.
+
 ### Changed
 
 - The shipped Workspaces browser is augmented rather than replaced: the plugin
@@ -129,6 +142,19 @@ All notable changes to this repository are documented here. The format follows
   instead of inserting a visible "Continue the interrupted task." user prompt.
   The continuation row is hidden, prompt history ignores it, and a missing
   Session controller leaves the badge in place.
+
+### Fixed
+
+- Hover Quick Look no longer opens as an empty card: it always receives an
+  explicit height (570 x 360 default, clamped to the viewport, with a remembered
+  or user-resized size still winning) and its content layer no longer depends on
+  an inline opacity style or a finished animation, so generated Markdown/code/
+  image content is visible on the first hover.
+- Provided attachments now have a Quick Look: provided images and media render
+  through the verified attachment route, text-like provided files are fetched
+  read-only and clipped at 64 KiB with a truncation note, other provided types
+  show the unavailable state, and the card's Open/Download use the attachment
+  URLs.
 
 ### Changed
 

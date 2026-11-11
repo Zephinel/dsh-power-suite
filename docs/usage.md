@@ -16,9 +16,13 @@ filtered; an empty filter shows **No artifacts in this filter**).
   a provided attachment opens its inline URL in a new tab.
 - **Download** saves the file through the plugin's raw or attachment route.
 - **Copy link** copies the authenticated LAN URL.
-- Hover a generated row for the Quick Look preview; drag the bottom-left grip to
-  resize, double-click it to reset the size, and click anywhere outside to
-  dismiss. Provided attachments have no Quick Look.
+- Hover a row for the Quick Look preview — generated rows get the workspace
+  pipeline (Markdown/code/images/media/PDF/HTML), provided rows get images and
+  media through the verified attachment route and text-like files clipped at
+  64 KiB (other provided types show the unavailable state). The card opens at a
+  570 x 360 default so content is visible immediately; drag the bottom-left grip
+  to resize, double-click it to reset the size, and click anywhere outside to
+  dismiss.
 
 Missing files are filtered out.
 

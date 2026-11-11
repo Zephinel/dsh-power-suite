@@ -190,13 +190,26 @@ window.__ModuleLoader__.load({
 .dsa-refresh[data-loading=true] svg{animation:dsa-spin .9s linear infinite}
 @keyframes dsa-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){.dsa-refresh[data-loading=true] svg{animation:none}}
-.dsa-filters{flex:none;align-self:flex-start;display:inline-flex;align-items:center;gap:2px;margin:0 14px 8px;padding:2px;border-radius:10px;background:var(--dsw-alias-bg-layer-2)}
-.dsa-filter{appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;cursor:pointer;padding:3px 10px;border-radius:8px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.dsa-filter:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dsa-filter:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
-.dsa-filter[data-selected=true]{background:var(--dsw-alias-bg-layer-4,var(--dsw-alias-bg-layer-3));color:var(--dsw-alias-label-primary);font-weight:500}
-.dsa-filter-count{color:var(--dsw-alias-label-tertiary);font-size:11px;font-variant-numeric:tabular-nums}
-.dsa-filter[data-selected=true] .dsa-filter-count{color:var(--dsw-alias-label-secondary)}
+.dsa-header-tools{display:inline-flex;align-items:center;gap:2px;flex:none}
+.dsa-filter-wrap{position:relative;flex:none}
+.dsa-filter-trigger{appearance:none;display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 6px 0 8px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
+.dsa-filter-trigger:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dsa-filter-trigger[aria-expanded=true]{background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-primary)}
+.dsa-filter-trigger:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.dsa-filter-trigger-label{white-space:nowrap}
+.dsa-filter-trigger-count{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
+.dsa-filter-caret{display:inline-flex;align-items:center;color:var(--dsw-alias-label-tertiary);transition:transform .16s ease}
+.dsa-filter-trigger[aria-expanded=true] .dsa-filter-caret{transform:rotate(180deg)}
+.dsa-filter-menu{position:absolute;z-index:40;top:calc(100% + 6px);right:0;min-width:196px;padding:4px;border-radius:12px;border:1px solid var(--dsw-alias-border-l2,transparent);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%));display:flex;flex-direction:column;gap:2px;animation:dsa-menu-in .12s ease-out}
+@keyframes dsa-menu-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+@media (prefers-reduced-motion: reduce){.dsa-filter-menu{animation:none}}
+.dsa-filter-option{appearance:none;display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;padding:6px 8px;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;line-height:18px;text-align:left;cursor:pointer}
+.dsa-filter-option:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dsa-filter-option:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.dsa-filter-option[aria-checked=true]{background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-primary);font-weight:500}
+.dsa-filter-option-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsa-filter-option-count{color:var(--dsw-alias-label-tertiary);font-size:11px;font-variant-numeric:tabular-nums}
+.dsa-filter-check{flex:none;display:inline-flex;align-items:center;color:var(--dsw-alias-state-business-primary)}
 .dsa-list{list-style:none;margin:0;padding:0 8px 8px;overflow:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:2px}
 .dsa-row{display:flex;align-items:center;gap:10px;padding:8px 8px;border-radius:var(--dsw-radius-lg,10px);min-width:0}
 .dsa-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
@@ -238,6 +251,8 @@ window.__ModuleLoader__.load({
     // panel needs no icon package at runtime.
     const REMIX_AI_GENERATE_3D_LINE = 'M15.1416 2.81836L13.1016 3.94824L12 3.31055L4.5 7.65234V7.6582L12 12V20.6895L19.5 16.3467V11.5L21.5 10.3291V17.5L12 23L2.5 17.5V6.5L12 1L15.1416 2.81836ZM18.5293 2.31934C18.7059 1.8935 19.2943 1.89349 19.4707 2.31934L19.7236 2.93066C20.1556 3.97346 20.9615 4.80618 21.9746 5.25684L22.6924 5.57617C23.1026 5.75901 23.1026 6.3562 22.6924 6.53906L21.9326 6.87695C20.9449 7.31624 20.1534 8.11944 19.7139 9.12793L19.4668 9.69336C19.2864 10.1075 18.7137 10.1075 18.5332 9.69336L18.2871 9.12793C17.8476 8.11929 17.0552 7.31628 16.0674 6.87695L15.3076 6.53906C14.8974 6.35622 14.8974 5.75899 15.3076 5.57617L16.0254 5.25684C17.0385 4.80618 17.8445 3.97348 18.2764 2.93066L18.5293 2.31934Z'
     const REMIX_REFRESH_LINE = 'M5.46257 4.43262C7.21556 2.91688 9.5007 2 12 2C17.5228 2 22 6.47715 22 12C22 14.1361 21.3302 16.1158 20.1892 17.7406L17 12H20C20 7.58172 16.4183 4 12 4C9.84982 4 7.89777 4.84827 6.46023 6.22842L5.46257 4.43262ZM18.5374 19.5674C16.7844 21.0831 14.4993 22 12 22C6.47715 22 2 17.5228 2 12C2 9.86386 2.66979 7.88416 3.8108 6.25944L7 12H4C4 16.4183 7.58172 20 12 20C14.1502 20 16.1022 19.1517 17.5398 17.7716L18.5374 19.5674Z'
+    const REMIX_FILTER_LINE = 'M21 4V6H20L15 13.5V22H9V13.5L4 6H3V4H21ZM6.4037 6L11 12.8944V20H13V12.8944L17.5963 6H6.4037Z'
+    const REMIX_ARROW_DOWN_S_LINE = 'M12 13.1714L16.9497 8.22168L18.3639 9.63589L11.9999 15.9999L5.63599 9.63589L7.0502 8.22168L12 13.1714Z'
     const REMIX_FILE_LINE = 'M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z'
     const REMIX_BOOK_OPEN_LINE = 'M13 21V23H11V21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H9C10.1947 3 11.2671 3.52375 12 4.35418C12.7329 3.52375 13.8053 3 15 3H21C21.5523 3 22 3.44772 22 4V20C22 20.5523 21.5523 21 21 21H13ZM20 19V5H15C13.8954 5 13 5.89543 13 7V19H20ZM11 19V7C11 5.89543 10.1046 5 9 5H4V19H11Z'
     const REMIX_DOWNLOAD_LINE = 'M3 19H21V21H3V19ZM13 13.1716L19.0711 7.1005L20.4853 8.51472L12 17L3.51472 8.51472L4.92893 7.1005L11 13.1716V2H13V13.1716Z'
@@ -2096,6 +2111,9 @@ window.__ModuleLoader__.load({
       const [reload, setReload] = React.useState(0)
       const [copiedPath, setCopiedPath] = React.useState(null)
       const [filter, setFilter] = React.useState('all')
+      const [filterOpen, setFilterOpen] = React.useState(false)
+      const filterWrapRef = React.useRef(null)
+      const filterMenuRef = React.useRef(null)
 
       React.useEffect(() => {
         let active = true
@@ -2142,7 +2160,33 @@ window.__ModuleLoader__.load({
       // every new row.
       React.useEffect(() => {
         setFilter('all')
+        setFilterOpen(false)
       }, [sessionId])
+
+      // The dropdown closes on any outside press and on Escape; opening it moves
+      // focus to the selected option so the menu is usable without a pointer.
+      React.useEffect(() => {
+        if (!filterOpen) return undefined
+        const onPointerDown = (event) => {
+          const wrap = filterWrapRef.current
+          if (wrap !== null && event.target instanceof Node && wrap.contains(event.target)) return
+          setFilterOpen(false)
+        }
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape') return
+          setFilterOpen(false)
+          const trigger = filterWrapRef.current?.querySelector('.dsa-filter-trigger')
+          if (trigger instanceof HTMLElement) trigger.focus()
+        }
+        document.addEventListener('pointerdown', onPointerDown, true)
+        document.addEventListener('keydown', onKeyDown)
+        const selected = filterMenuRef.current?.querySelector('[aria-checked="true"]')
+        if (selected instanceof HTMLElement) selected.focus()
+        return () => {
+          document.removeEventListener('pointerdown', onPointerDown, true)
+          document.removeEventListener('keydown', onKeyDown)
+        }
+      }, [filterOpen])
 
       /**
        * Copy one artifact's LAN link and acknowledge briefly on its row.
@@ -2195,38 +2239,64 @@ window.__ModuleLoader__.load({
       else if (artifacts.length === 1) countText = t('list.countOne')
       else countText = t('list.count', { count: artifacts.length })
 
-      const header = React.createElement('header', { className: 'dsa-header' },
-        React.createElement('span', { className: 'dsa-count' }, phase === 'ready' ? countText : ''),
-        React.createElement('button', {
-          type: 'button',
-          className: 'dsa-refresh',
-          onClick: () => setReload((value) => value + 1),
-          disabled: phase === 'loading',
-          title: t('list.refresh'),
-          'aria-label': t('list.refresh'),
-          'data-loading': phase === 'loading' ? 'true' : undefined
-        }, RemixGlyph(REMIX_REFRESH_LINE, 15)))
-
-      // A segmented source filter: filtering is purely client-side, so it never
-      // re-reads the Session log. Counts describe the whole list; the selected
-      // option's count is separate from the header's shown/total count.
-      const filterBar = artifacts.length > 0
+      // A custom source-filter dropdown: filtering is purely client-side, so it
+      // never re-reads the Session log. Counts describe the whole list; the
+      // selected option's count is separate from the header's shown/total count.
+      const filterMenu = filterOpen
         ? React.createElement('div', {
-          className: 'dsa-filters',
-          role: 'group',
-          'aria-label': t('filter.label')
+          className: 'dsa-filter-menu',
+          role: 'menu',
+          'aria-label': t('filter.label'),
+          ref: filterMenuRef
         }, FILTER_OPTIONS.map((option) => React.createElement('button', {
           key: option,
           type: 'button',
-          className: 'dsa-filter',
+          role: 'menuitemradio',
+          'aria-checked': filter === option,
+          className: 'dsa-filter-option',
           'data-filter': option,
-          'data-selected': filter === option ? 'true' : undefined,
-          'aria-pressed': filter === option,
-          onClick: () => setFilter(option)
+          onClick: () => {
+            setFilter(option)
+            setFilterOpen(false)
+          }
         },
-        React.createElement('span', null, t(`filter.${option}`)),
-        React.createElement('span', { className: 'dsa-filter-count' }, filterCounts[option]))))
+        React.createElement('span', { className: 'dsa-filter-option-label' }, t(`filter.${option}`)),
+        React.createElement('span', { className: 'dsa-filter-option-count' }, filterCounts[option]),
+        filter === option ? React.createElement('span', { className: 'dsa-filter-check' }, RemixGlyph(REMIX_CHECK_LINE, 14)) : null)))
         : null
+
+      const filterTrigger = artifacts.length > 0
+        ? React.createElement('div', { className: 'dsa-filter-wrap', ref: filterWrapRef },
+          React.createElement('button', {
+            type: 'button',
+            className: 'dsa-filter-trigger',
+            'aria-haspopup': 'menu',
+            'aria-expanded': filterOpen,
+            title: t('filter.label'),
+            'aria-label': t('filter.label'),
+            'data-filter': filter,
+            onClick: () => setFilterOpen((value) => !value)
+          },
+          RemixGlyph(REMIX_FILTER_LINE, 13),
+          React.createElement('span', { className: 'dsa-filter-trigger-label' }, t(`filter.${filter}`)),
+          React.createElement('span', { className: 'dsa-filter-trigger-count' }, filterCounts[filter]),
+          React.createElement('span', { className: 'dsa-filter-caret' }, RemixGlyph(REMIX_ARROW_DOWN_S_LINE, 13))),
+          filterMenu)
+        : null
+
+      const header = React.createElement('header', { className: 'dsa-header' },
+        React.createElement('span', { className: 'dsa-count' }, phase === 'ready' ? countText : ''),
+        React.createElement('div', { className: 'dsa-header-tools' },
+          filterTrigger,
+          React.createElement('button', {
+            type: 'button',
+            className: 'dsa-refresh',
+            onClick: () => setReload((value) => value + 1),
+            disabled: phase === 'loading',
+            title: t('list.refresh'),
+            'aria-label': t('list.refresh'),
+            'data-loading': phase === 'loading' ? 'true' : undefined
+          }, RemixGlyph(REMIX_REFRESH_LINE, 15))))
 
       if (phase === 'error') {
         return React.createElement('div', { className: 'dsa-root' },
@@ -2319,7 +2389,6 @@ window.__ModuleLoader__.load({
       return React.createElement('div', { className: 'dsa-root' },
         panelStyle(),
         header,
-        filterBar,
         body,
         artifacts.length > 0 ? React.createElement('footer', { className: 'dsa-footer' }, t('footer.note')) : null)
     }

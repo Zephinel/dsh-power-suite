@@ -43,9 +43,13 @@ New in 0.2.0:
   Session event time (`at`, or `null` when the log has none), so the rail and its
   hover card can show times while the keyboard recall keeps working unchanged.
 
-The same plugin adds a shared **hover preview** to Artifacts rows and the native
-Workspace files tree: Markdown, highlighted code, images, audio/video, PDF, and
-HTML, with drag-to-resize and animated switching.
+The same plugin adds a shared **hover preview** to Artifacts rows (generated
+files plus provided images and text-like attachments) and the native Workspace
+files tree: Markdown, highlighted code, images, audio/video, PDF, and HTML, with
+drag-to-resize and animated switching. The card opens at a 570 x 360 default so
+its content is visible on the first hover.
+
+![Quick Look card showing rendered Markdown content](docs/assets/artifacts-quicklook.png)
 
 ![Artifacts card in the Start guide](docs/assets/artifacts-guide.png)
 

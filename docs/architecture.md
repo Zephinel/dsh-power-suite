@@ -25,7 +25,7 @@ src/client.js           Browser entry (DSH module loader)
 ├─ Dynamic Workspaces buckets + running & recent Sessions card
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
 ├─ Plugins-page settings section
-└─ Shared hover Quick Look for generated Artifacts rows and native Workspace file rows
+└─ Shared hover Quick Look for generated/provided Artifacts rows and native Workspace file rows
 ```
 
 ## Host half
@@ -179,6 +179,26 @@ the composer's own paste intake using a synthetic `ClipboardEvent` with a
 restored attachment. No Host route and no storage writes: this is a page-lifetime
 workaround, so a reload cannot restore Files. See
 [draft-attachments.md](draft-attachments.md).
+
+### Hover Quick Look
+
+One hover card serves the Artifacts panel and the native workspace-files list. Row
+hover detection accepts both `data-artifact-path` (generated/workspace rows) and
+`data-artifact-provided` (provided rows); a provided entry carries its
+`attachmentId`, recorded media type/bytes/dimensions, and attachment-route
+inline/download URLs. Workspace files fetch their descriptor from the
+`api/session-artifacts.preview` route; provided images and media render through
+the verified attachment route, provided text-like files are fetched read-only and
+clipped at 64 KiB, and other provided types show the unavailable state. The card's
+Open/Download controls reuse the originating row's actions, so provided rows use
+their attachment URLs.
+
+`positionQuickLook` always assigns an explicit card height — the default 570 x 360
+px (clamped to the viewport, overridden by a remembered/resized size) — because
+the content layers are absolutely positioned inside the body and a height-less
+card collapsed to header and footer. Layer mounting no longer relies on an inline
+opacity style or an animation finishing, so a throttled/canceled animation cannot
+leave the content invisible.
 
 ### Slots used
 

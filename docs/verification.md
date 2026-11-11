@@ -24,10 +24,10 @@ Current evidence (2026-11-11, Node 24.22.2):
 
 - `npm test`: **56 tests, 56 passed, 0 failed**.
 - `npm run check`: passed.
-- `npm run pack:check`: **47 files** (0.2.0 tarball), including `src/`,
-  `locale/`, `docs/` (with the Dynamic Workspaces, hover-detail, and
-  prompt-history rail captures), `cordis.patch.yml`, `icon.png`, and the standard
-  repository files.
+- `npm run pack:check`: **48 files** (0.2.0 tarball), including `src/`,
+  `locale/`, `docs/` (with the Artifacts panel/Quick Look, Dynamic Workspaces,
+  hover-detail, and prompt-history rail captures), `cordis.patch.yml`,
+  `icon.png`, and the standard repository files.
 - Host tests cover the read-vs-event cache race, silent-subagent timing, continue
   content-type/state/in-flight validation, the non-human source fields, the
   prompt-history timestamp fold (`at` from a finite event time, `null`
@@ -77,6 +77,15 @@ These were exercised in the Web GUI during development:
 - Hover Quick Look on Artifacts rows and native Workspace files: Markdown,
   highlighted code, images, PDF/HTML, resize persistence, outside-click
   dismissal, animated switching.
+- Quick Look content fix and provided-row preview: hovering the generated
+  `verification.md` row opened a card of **570 x 360** px with a **232 px** body,
+  and the rendered `.dsa-md` Markdown showed its "Verification / This file
+  records the checks…" text immediately (no manual resize needed). Hovering a
+  provided image row (`sha256:23ce…`, `image/webp` 1714 x 490, 30 KB) opened the
+  same 570 x 360 card; the image element reported `naturalWidth = 1714` and was
+  rendered 568 x 162 inside the 232 px body. Both cards showed working
+  Open/Download controls (provided rows through the attachment route), and there
+  were 0 console errors.
 - Settings page: shortcut modifier selection and persistence.
 - Workspace preset menu and routing.
 - Interrupted-session badge, Continue action, and composer play control.
@@ -183,6 +192,7 @@ from the card.
 
 The live surfaces are captured in
 [assets/artifacts-panel.png](assets/artifacts-panel.png),
+[assets/artifacts-quicklook.png](assets/artifacts-quicklook.png),
 [assets/dynamic-workspaces.png](assets/dynamic-workspaces.png),
 [assets/dynamic-workspaces-hover.png](assets/dynamic-workspaces-hover.png),
 [assets/prompt-history-preview.png](assets/prompt-history-preview.png),

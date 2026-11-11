@@ -75,7 +75,7 @@ claim them).
 
 | Action | Generated / delivered rows | Provided attachment rows |
 |---|---|---|
-| **Open** | Opens the file in the right Sidebar's native document preview — the same workspace-files + document-preview pipeline the Files browser uses — through a `dsh-resource://file/session/<sessionId>/<path>` address. Images, PDFs, Office documents, Markdown, code, and HTML get the existing renderers. If no preview type claims the address, it falls back to the raw-file URL in a new tab. | Opens the attachment's inline URL in a **new browser tab**. It never uses the native workspace preview (the bytes are not workspace files) and has no Quick Look. |
+| **Open** | Opens the file in the right Sidebar's native document preview — the same workspace-files + document-preview pipeline the Files browser uses — through a `dsh-resource://file/session/<sessionId>/<path>` address. Images, PDFs, Office documents, Markdown, code, and HTML get the existing renderers. If no preview type claims the address, it falls back to the raw-file URL in a new tab. | Opens the attachment's inline URL in a **new browser tab**. It never uses the native workspace preview (the bytes are not workspace files). |
 | **Download** | Raw URL with `Content-Disposition: attachment`; the browser saves the file and the operating system owns the open-with choice. | The attachment route with `disposition=attachment` and the stored file name; same browser save behavior. |
 | **Copy link** | Copies the LAN URL of the file, built from the Host's bound listener address, so another device paired with this DSH can open it directly. | Copies the attachment's inline LAN URL, including its metadata parameters, so a paired device can fetch it. |
 
@@ -114,15 +114,14 @@ Open directly.
 
 ## Hover preview (Quick Look)
 
-The hover preview applies to generated/delivered rows (and the native Workspace
-files browser); provided attachment rows intentionally have no Quick Look — they
-open in a tab from their own action.
+![Quick Look card showing rendered Markdown content](assets/artifacts-quicklook.png)
 
 Resting the pointer on an artifact row for about 420 ms opens a floating preview
-card to the left of the panel, modeled on macOS Quick Look. The same card also
-works in the **native Workspace files browser**: hovering a file row in the files
-page or beside a docked preview shows it too, so the feature is an enhancement to
-the built-in files surface rather than an artifacts-only one.
+card to the left of the panel, modeled on macOS Quick Look. Both generated and
+**provided** rows participate, and the same card also works in the **native
+Workspace files browser**: hovering a file row in the files page or beside a
+docked preview shows it too, so the feature is an enhancement to the built-in
+files surface rather than an artifacts-only one.
 
 - **Markdown** renders with headings, paragraphs, lists, blockquotes, tables,
   links, inline code, and fenced code blocks instead of showing source text;
@@ -135,6 +134,14 @@ the built-in files surface rather than an artifacts-only one.
 - images render inline, audio/video get native controls, PDFs render in a frame,
   and HTML renders in a script-blocked sandboxed frame;
 - anything else shows “No preview available”;
+- **provided attachments** preview too, through the verified attachment route:
+  provided images render inline and provided audio/video get native controls;
+  text-like provided files (text MIME types and JSON/XML/YAML/JavaScript/
+  TypeScript/code/markdown extensions) are fetched read-only from the
+  attachment route and clipped at **64 KiB** with a truncation note; other
+  provided files (PDF/Office/archives, for example) show **No preview available**.
+  The attachment route supplies the bytes, so a provided row's card **Open** and
+  **Download** reuse the row's attachment-URL actions;
 - the footer repeats the size and offers an icon-only **Open** button (the same
   book-open icon as the row action, opening through the row's native action)
   plus Download.
@@ -175,13 +182,18 @@ is opacity-only, so the card is hit-testable the moment it appears.
 Drag the grip in the bottom-left corner to resize the card (the right edge stays
 anchored while the width grows leftwards). The geometry is based on the Dex
 extension popup panel: **570px** default width, **380px** minimum, **800px**
-maximum, **280px** minimum height, always clamped to the viewport. Double-click
-the grip to forget the stored size and return to the default, content-sized box
-(width 570, height by content up to 560). The surface uses its visual language
-too — 20px radius, panel shadow, 16/20px header padding, 32px icon action
-buttons, and a 28px rounded resize grip — plus a 160ms entrance animation. The
-size is remembered in `localStorage` and reused for later previews on both
-surfaces; dragging pauses the auto-dismiss so the card cannot vanish mid-resize.
+maximum, and a **360px** default height (280px minimum), always clamped to the
+viewport. The card always receives an explicit height — the content layers are
+absolutely positioned inside the body — so a first hover with no saved resize
+shows its markup/image content immediately instead of collapsing to the header
+and footer; a user-resized height still wins. Double-click the grip to forget the
+stored size and return to the 570 x 360 default. The surface uses its visual
+language too — 20px radius, panel shadow, 16/20px header padding, 32px icon
+action buttons, and a 28px rounded resize grip — plus a 160ms entrance
+animation whose visibility never depends on the animation finishing (a
+throttled or canceled animation leaves the layer visible). The size is
+remembered in `localStorage` and reused for later previews on both surfaces;
+dragging pauses the auto-dismiss so the card cannot vanish mid-resize.
 
 The card reads at most one bounded window per file and caches the result for the
 page lifetime. It is a preview only: the row actions still own opening,
@@ -249,9 +261,17 @@ region, tests [`test/session-artifacts.test.js`](../test/session-artifacts.test.
 - **Provided rows need the attachment service.** A Host composition without the
   durable attachment store omits them entirely; they are never shown as broken
   rows.
-- **Generic provided files are icons, not previews.** Only images get a
-  thumbnail; provided audio/video/PDF/office files render the file icon, and
-  provided rows have no Quick Look (Open hands the file to a browser tab).
+- **Only images get a list thumbnail.** Non-image provided files render the file
+  icon in the list; Quick Look still previews provided images/media and
+  text-like files, but provided PDF/Office/archive files show the unavailable
+  state in the card (Open hands them to a browser tab).
+- **Provided text preview is a fetch, not the workspace pipeline.** Text-like
+  provided files are read read-only from the attachment route and clipped at
+  64 KiB (no workspace path, relative links, or Workspace-files preview
+  features), and Markdown with relative image links cannot resolve those images.
+- **Card default height.** Without a saved resize the hover card opens at
+  570 x 360 px (clamped to the viewport) so its content is visible immediately;
+  a user-resized size still wins.
 - **Dedupe keeps the newest occurrence.** One row per attachment id; re-pasting
   the same image moves that row to the top and updates its prompt ordinal, and
   the older occurrence is not listed again.
