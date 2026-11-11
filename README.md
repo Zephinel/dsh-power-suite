@@ -11,9 +11,9 @@ shows one plugin whose inventory grows with the suite.
 |---|---|
 | [Session artifacts](docs/session-artifacts.md) | An **Artifacts** card in the right Sidebar's Start page listing the current Session's created and delivered files **and the images/files the user attached to their prompts**, with 40 px image thumbnails, an All/Generated/Provided dropdown filter in the panel header, native open, download, copy content (text verbatim; images as a real clipboard picture in a secure context, with an HTML-image fallback on plain HTTP), and LAN link copy. |
 | [Workspace presets](docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions created in that Workspace. |
-| [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with single-line rows, right-edge disclosure chevrons, unread completions marked green until opened, a row hover detail (workspace, status, last active), nested subagent Sessions, and configurable retention windows. |
+| [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with single-line rows, right-edge disclosure chevrons, persistent read marks (unread completions marked green until opened, surviving reloads), row hover actions (interrupted Continue, same-directory New session), a row hover detail, nested subagent Sessions, and configurable retention windows. |
 | [Prompt history](docs/prompt-history.md) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; a right-edge rail lists them newest first with a hover full-text preview, an inline search, and click-to-copy. Plain arrows keep their original behavior. |
-| [Project view](docs/project-view.md) | A **standalone Project page** (content area right of the sidebar) opened by clicking a Workspace, with Overview stats, Sessions, Runs with expandable turn/job records, and Workspace settings; the sidebar stays interactive for switching, and Esc/back returns to the untouched conversation. |
+| [Project view](docs/project-view.md) | A **standalone Project page** (content area right of the sidebar) opened by clicking a Workspace, with Overview stats, Sessions, Runs with expandable turn/job records, and Workspace settings; the sidebar stays interactive for switching, the page hides the prompt-history rail and keeps one top-bar Refresh, and Esc/back returns to the untouched conversation. |
 | [Draft attachments](docs/draft-attachments.md) | Attachments in a draft (pasted images, dropped or picked files) survive switching Sessions and coming back, for the page lifetime; the shell only persists the draft text. |
 | [Interrupted sessions](docs/interrupted-sessions.md) | Sessions cut off by a restart carry an amber mark left of the title, a hover-only Continue action with a row mask, and a play-shaped composer submit control. |
 | [Settings](docs/settings.md) | The bundle's Plugins page carries its own configuration section: the prompt-history modifier plus the two Dynamic Workspaces retention windows (finished Sessions and Active projects). |
@@ -49,6 +49,14 @@ New in 0.2.0:
   whose turns expand into their nested job records with live elapsed time, and
   Workspace settings (default agent preset, read-only grouping windows, path
   actions).
+- **Project page polish** — while the Project page is open it hides the
+  body-portaled prompt-history rail and keeps a single top-bar Refresh (the old
+  tab-bar/header refresh buttons are gone); closing restores the rail
+  immediately.
+- **Persistent card read marks** — the activity card's acknowledgements are
+  stored per browser and survive HMR/reloads; a transient running flag no longer
+  resurrects the green unread dot, while genuine new activity (and the retention
+  window) still applies.
 - **Per-prompt timestamps** — the prompt-history route now returns each prompt's
   Session event time (`at`, or `null` when the log has none), so the rail and its
   hover card can show times while the keyboard recall keeps working unchanged.

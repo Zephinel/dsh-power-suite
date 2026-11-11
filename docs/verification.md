@@ -24,11 +24,12 @@ Current evidence (2026-11-11, Node 24.22.2):
 
 - `npm test`: **73 tests, 73 passed, 0 failed**.
 - `npm run check`: passed (`14 modules, 7 test files`).
-- `npm run pack:check`: **58 files** (0.2.0 tarball), including `src/`,
-  `locale/`, `docs/` (with the Project page/sidebar switch, activity-card
-  actions, Artifacts panel/filter-menu/Quick Look, Dynamic Workspaces,
-  hover-detail, and prompt-history rail captures), `cordis.patch.yml`,
-  `icon.png`, and the standard repository files.
+- `npm run pack:check`: **62 files** (0.2.0 tarball), including `src/`,
+  `locale/`, `docs/` (with the Project page/rail states/sidebar switch,
+  activity-card actions and acknowledgement states, Artifacts
+  panel/filter-menu/Quick Look, Dynamic Workspaces, hover-detail, and
+  prompt-history rail captures), `cordis.patch.yml`, `icon.png`, and the standard
+  repository files.
 - Host tests cover the read-vs-event cache race, silent-subagent timing, continue
   content-type/state/in-flight validation, the non-human source fields, the
   prompt-history timestamp fold (`at` from a finite event time, `null`
@@ -211,6 +212,19 @@ These were exercised in the Web GUI during development:
   probes from the earlier iteration still hold: `sessionId` 200, `workspaceId`
   200 (cached response 78 ms), empty `workspaceId` + `sessionId` 200, unknown
   Workspace 404, no parameters 400, `cache-control: no-store` on every response.
+- The Project page's prompt-history-rail handling and single refresh were
+  verified live: while the page was open the document root carried
+  `data-power-suite-project-page="true"`, the rail and its divider/eyebrow
+  surfaces had `display: none`, were not hit-testable, and far-right hit tests
+  resolved inside `[data-psv-page]`; after Esc/back the marker was removed and
+  the rail's display, rectangle, divider, and magnifier returned, with hover
+  preview/search/copy working again. The document contained exactly one
+  `button[aria-label="Refresh"]` (the page top bar) and a single top-bar click
+  issued exactly one `workspaceId=…&refresh=1` request with the busy spin; the
+  tab-bar and project-header card refresh buttons were gone (the header keeps
+  Open Workspace, New Session, and the More menu with Refresh/Copy project
+  path). HMR set and removed the attribute correctly (rail hidden while open,
+  restored after reload), and there were 0 console errors.
 - The activity-card row actions were verified live: the fixed trailing cluster
   `[Continue (interrupted only)] [New session] [chevron]` sits in 22 px
   reserved slots before the chevron; the title/time rectangle was unchanged
@@ -229,6 +243,23 @@ These were exercised in the Web GUI during development:
   verified with a controlled interrupt state; Continue was not clicked in order
   to avoid sending a real continuation. No live child-interrupted case exists.
   HMR showed a single panel/row/button set and there were 0 console errors.
+- The persisted card acknowledgements were verified live: a completed row showed
+  the green dot at 12:28:21, was opened at 12:28:40 (white type icon plus an
+  acknowledgement entry), and stayed white while polled every 30 s through +180 s
+  — the green dot never returned. A client HMR remount and a full page reload
+  both kept `localStorage['dsh-power-suite.acked-sessions']` and the white icon;
+  the Lead-side reload check independently confirmed the persisted document
+  survived and the acked row rendered the brand icon. Controlled baselines
+  exercised the branches: a running-but-not-open Session with a baseline equal
+  to or newer than its activity kept the ack, an ancient baseline cleared it
+  after HMR (leaving other entries untouched), and a corrupt/missing document
+  fell back to empty then rewrote valid versioned JSON. The unread direction
+  still works (removing an ack brought the green dot back, and an unacked child
+  row showed its dot). Running dots, white glyphs, hover card, row actions, and
+  the retention removal were unchanged, with 0 console errors. Gaps: a real
+  momentary `running` flip and a genuine new user turn were not force-injected;
+  the keep/clear paths were exercised with controlled baselines and the real form
+  is reasoned from the shared `updatedAt` metric.
 - The settings page and the configurable windows were verified live: the
   **DSH Power Suite** Plugins page shows exactly three setting rows (Shortcut
   modifier, Finished Session retention, Active project retention) with the
@@ -273,6 +304,10 @@ The live surfaces are captured in
 [assets/card-row-actions.png](assets/card-row-actions.png),
 [assets/card-interrupted.png](assets/card-interrupted.png),
 [assets/card-child-actions.png](assets/card-child-actions.png),
+[assets/card-acknowledged.png](assets/card-acknowledged.png),
+[assets/card-unread-dot.png](assets/card-unread-dot.png),
+[assets/project-page-rail-hidden.png](assets/project-page-rail-hidden.png),
+[assets/project-page-rail-restored.png](assets/project-page-rail-restored.png),
 [assets/artifacts-panel.png](assets/artifacts-panel.png),
 [assets/artifacts-filter-menu.png](assets/artifacts-filter-menu.png),
 [assets/artifacts-quicklook.png](assets/artifacts-quicklook.png),

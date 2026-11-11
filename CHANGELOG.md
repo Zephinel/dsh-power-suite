@@ -94,6 +94,21 @@ All notable changes to this repository are documented here. The format follows
   read-only and clipped at 64 KiB with a truncation note, other provided types
   show the unavailable state, and the card's Open/Download use the attachment
   URLs.
+- While the Project page is open it now hides the body-portaled prompt-history
+  rail (pin, divider, hover preview card, search card, magnifier) via the root
+  marker `data-power-suite-project-page="true"`; closing with Esc/back or
+  unmounting removes the marker and restores the rail immediately. The page also
+  keeps exactly one Refresh control in its top bar (the tab-bar and
+  project-header-card refresh buttons were removed; the More menu keeps Refresh
+  and Copy project path).
+- Running & recent read marks now persist per browser in
+  `localStorage['dsh-power-suite.acked-sessions']` (`{version: 1, acked: {id:
+  updatedAt}}`, guarded read/write). Opening a finished Session raises its
+  acknowledgement baseline; a running-but-not-open Session clears it only when
+  `updatedAt` advanced more than 1000 ms past the baseline, so transient running
+  flags no longer resurrect the green unread dot — acks survive HMR and reloads,
+  are shared by rows and subagent children, are pruned only against a non-empty
+  catalog, and the retention window still removes completed rows.
 
 ### Changed
 

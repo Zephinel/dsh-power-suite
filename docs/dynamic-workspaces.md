@@ -96,9 +96,30 @@ sidebar's panel tabs. It starts expanded.
   dot for the white session-type icon — the RemixIcon `deepseek-fill` glyph on
   main rows and `robot-2-line` on subagent rows, drawn at 14 px / 12 px in the
   primary label colour. Opening a Session from this card or anywhere else
-  acknowledges it; a new run clears the acknowledgement, so its next completion
-  shows the green dot again. The Workspace is not printed under the row any
-  more; it lives in the hover card below.
+  acknowledges it; the acknowledgement is **persisted per browser** and keeps
+  the green dot away until genuine new activity arrives (see *Read
+  acknowledgements* below). The Workspace is not printed under the row any more;
+  it lives in the hover card below.
+- **Read acknowledgements**: read marks persist in
+  `localStorage['dsh-power-suite.acked-sessions']` as
+  `{ "version": 1, "acked": { "<sessionId>": <acknowledged updatedAt> } }`
+  (guarded read/write: missing, corrupt, or storage-denied → empty, then rewritten
+  as valid versioned JSON). Opening a finished Session (it is open in the main
+  view) raises its baseline to the newer `updatedAt`. A Session that is merely
+  *running* but **not open** clears its acknowledgement only when its
+  `updatedAt` advanced by more than **1000 ms** past the baseline — a transient
+  running flag with unchanged activity no longer resurrects the green dot, while
+  a genuine new turn does. Entries are pruned only against a non-empty Session
+  catalog; rows and nested subagent children share the same map. Acks survive
+  seat remounts, client HMR, and a full page reload, and the green-dot *unread*
+  direction still works when an acknowledgement is intentionally removed.
+  Completed rows still leave the card once the configurable finished-Session
+  retention window expires, so they never linger forever.
+
+![Acknowledged finished rows show the white type icon instead of the green dot](assets/card-acknowledged.png)
+
+![Unread finished rows still show the green completion dot, including child rows](assets/card-unread-dot.png)
+
 - **Row actions**: every row (main and nested subagent) carries a fixed trailing
   cluster immediately before the disclosure chevron:
   `[Continue (interrupted only)] [New session] [chevron]`. The two action slots
@@ -259,6 +280,12 @@ The native **View options** menu picks how Sessions are grouped:
   own last activity aged out) its children are not exposed either, and
   delegations below the direct child are not walked. A finished subagent does
   not by itself finish the parent's task.
+- **Read marks are per browser.** Acks are stored in this browser/profile's
+  `localStorage`; another device or profile has its own read marks. With storage
+  denied, the map lives in memory only for the page lifetime. The 1000 ms
+  tolerance deliberately favors keeping an ack: a real new turn that moves
+  `updatedAt` by more than one second clears it, while metadata-only bumps do
+  not.
 - **Row actions are hover/focus-revealed.** The Continue and New session slots
   are reserved but hidden until the row is hovered or keyboard-focused; a
   touch-only device has no hover, so those row actions are not reachable there

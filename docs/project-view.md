@@ -15,8 +15,8 @@ returns to the conversation exactly as it was.
   with its own top bar above the unchanged four tabs:
   **Overview / Sessions / Runs / Settings**.
 - **Top bar**: a back/close chevron, the project title, the **Active /
-  Inactive** badge, and a refresh control. **Esc** and the back control both
-  close the page.
+  Inactive** badge, and the page's **single refresh control**. **Esc** and the
+  back control both close the page.
 - **Closing** restores the conversation, current Session, composer draft,
   selected conversation view, and both sidebar states; opening and closing never
   navigate.
@@ -35,7 +35,19 @@ doubles as the native fold chevron on hover, so it still folds/expands the
 Workspace group.
 
 While the page is open it **covers the composer and input box, the right
-sidebar, and the conversation history rails by design**. The **left Workspaces
+sidebar, and the conversation history rails by design**, and it **hides the
+body-portaled prompt-history rail** (pin, hover preview card, search card,
+divider and magnifier). The seat marks the document root with
+`data-power-suite-project-page="true"`; CSS hides
+`[data-psp-rail]`, `[data-psp-preview-card]`, `[data-psp-search-card]`,
+`[data-psp-rail-divider]`, and `[data-psp-search-toggle]` while it is set.
+Closing, Esc, the back control, or unmounting removes the marker and restores the
+rail immediately; its hover preview, search, and copy keep working afterwards.
+
+![The Project page with the prompt-history rail hidden](assets/project-page-rail-hidden.png)
+
+![The prompt-history rail restored after closing the page](assets/project-page-rail-restored.png)
+ The **left Workspaces
 sidebar stays visible and interactive**: the page's geometry follows the
 sidebar's docked box, so clicking another Workspace in it switches the page in
 place, and folding/expanding the sidebar re-measures the page. There is no
@@ -91,8 +103,10 @@ it is cleaned up when the page closes. The page is no longer modal
 
 - **Project header**: workspace folder icon, title (or **Untitled project**), an
   **Active / Inactive** badge, the workspace path, `Created …` and
-  `Last active …`, plus **Open Workspace**, **New Session**, a refresh control,
-  and a more-actions menu with **Refresh** and **Copy project path**.
+  `Last active …`, plus **Open Workspace**, **New Session**, and a more-actions
+  menu with **Refresh** and **Copy project path**. Refresh is also available from
+  the page's single top-bar control; the header card itself has no refresh
+  button (the old tab-bar/header refresh buttons were removed).
   Active means a Session of the Workspace is running, or its last activity is
   inside the Active-project window.
 - **Stat cards**: **Running sessions**, **Completed today**, **Total runs**, and
@@ -163,9 +177,9 @@ timestamp is in its tooltip), the duration, tool-call count, and job count.
 The page fetches one Workspace snapshot by id:
 
 - `GET /api/power-suite.project?workspaceId=<id>` on mount, then every 15 s while
-  open; a window `focus` event also refreshes it. The manual refresh control
-  re-fetches with `refresh=1` (a single request per click, bypassing the Host's
-  cache).
+  open; a window `focus` event also refreshes it. The page's single top-bar
+  refresh control re-fetches with `refresh=1` (one request per click, bypassing
+  the Host's cache with the busy spin).
 - A workspace switch cancels the previous request (`AbortController`), so a slow
   response for the old Workspace can never overwrite the new page.
 - Loading, error (with retry), and empty states are handled; a `404

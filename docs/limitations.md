@@ -120,11 +120,20 @@
   full wrapped workspace path, Status detail, absolute Last active time, and the
   running subagent count appear only in the row's hover card, which does not
   capture the pointer (and is unavailable on touch-only input).
-- **The read state is page-local.** A finished, unread Session shows the green
-  done dot until it is opened (which acknowledges it and swaps in the white
-  session-type icon). The acknowledgement lives in the page, so a reload forgets
-  it for every row except the Session currently open in the main view; a new run
-  clears the acknowledgement for that Session anyway.
+- **Read marks persist per browser, with a tolerance.** A finished, unread
+  Session shows the green done dot until it is opened (which stores an
+  acknowledgement baseline in this browser's
+  `localStorage['dsh-power-suite.acked-sessions']` and swaps in the white
+  session-type icon). Acks survive HMR and page reloads and are shared by rows
+  and their nested subagent children. A running-but-not-open Session clears the
+  acknowledgement only when its `updatedAt` advanced by more than **1000 ms**
+  past the baseline — transient `running` flags with unchanged activity keep the
+  read mark, while a genuine new turn clears it. Because of that tolerance a
+  very small genuine change (under one second of recorded activity) could keep a
+  stale ack; metadata-only bumps cannot. With storage denied the map lives in
+  memory only for the page lifetime, and another browser/profile has its own read
+  marks. The finished-session retention window still removes completed rows from
+  the card regardless of acknowledgement.
 - **The card body hides its scrollbar.** Wheel and trackpad scrolling work, but
   the scrollbar itself is suppressed to match the native sidebar surfaces.
 
@@ -200,6 +209,14 @@
   Workspace there switches the same page instance in place; there is no separate
   in-page Workspace picker. Open Workspace, New Session, and Session-list clicks
   close the page first and then navigate.
+- **The prompt-history rail is hidden while the page is open.** The root marker
+  `data-power-suite-project-page="true"` hides the rail, its divider, hover card,
+  search card, and magnifier; closing (Esc/back/unmount) removes the marker and
+  restores them immediately. This is intentional so the full-height page has the
+  right edge to itself.
+- **There is exactly one Refresh control.** It sits in the page's top bar; the
+  header card's and tab bar's own refresh buttons were removed (the More menu
+  keeps a Refresh menu item plus Copy project path).
 - **The page is Workspace-scoped.** It is opened by Workspace id (not by Session)
   and a stale/unknown Workspace renders the **Workspace not found** empty state;
   closing and refreshing the sidebar is the recovery path. Sessions are reached

@@ -53,8 +53,9 @@ Session is running and the white sparkle icon when nothing runs.
   first five rows.
 - The leading glyph tells the read state: a running spinner while the Session
   runs, a green dot for a finished but unopened Session, then a white session
-  icon once it has been opened (a new run makes the next completion green
-  again).
+  icon once it has been opened. Read marks persist across reloads in this
+  browser, so the green dot only returns after genuinely new activity; a run
+  whose activity did not advance past the 1 s tolerance no longer resurrects it.
 - Rest the pointer on a row for its hover detail: the Workspace name, full
   workspace path, Status with its time, absolute Last active time, and the
   running subagent count. The card sits outside the sidebar and never covers the
@@ -120,10 +121,12 @@ behavior.
 
 The page starts at the left sidebar's right edge and fills the rest of the
 window, so it covers the composer/input box, the right sidebar, and the history
-rails while the **left Workspaces sidebar stays visible and clickable** — click
-another Workspace there to switch the page in place (folding the sidebar
-re-measures the page; there is no shell control to hide it, and if it is absent
-the page fills the viewport). **Esc** or the page's back control closes it and
+rails (including the prompt-history rail, which is hidden while the page is open
+and restored on close) while the **left Workspaces sidebar stays visible and
+clickable** — click another Workspace there to switch the page in place (folding
+the sidebar re-measures the page; there is no shell control to hide it, and if it
+is absent the page fills the viewport). The page's **single Refresh control** is
+in its top bar. **Esc** or the page's back control closes it and
 restores the conversation, current Session, draft, selected view, and sidebar
 states exactly. **Open Workspace**, **New Session**, and clicking a Session in
 the page's lists close the page first and then navigate; refresh, Copy project
