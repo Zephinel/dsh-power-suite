@@ -96,6 +96,8 @@ window.__ModuleLoader__.load({
       'action.open': 'Open',
       'action.download': 'Download',
       'action.copy': 'Copy link',
+      'action.copyContent': 'Copy content',
+      'action.copyImage': 'Copy image',
       'action.copied': 'Copied',
       'footer.note': 'Open previews the file in the right Sidebar. Download saves the file so the system can hand it to a local app.',
       'preview.loading': 'Loading preview…',
@@ -129,6 +131,8 @@ window.__ModuleLoader__.load({
       'action.open': '打开',
       'action.download': '下载',
       'action.copy': '复制链接',
+      'action.copyContent': '复制内容',
+      'action.copyImage': '复制图片',
       'action.copied': '已复制',
       'footer.note': '「打开」在右侧边栏中预览；「下载」保存文件后由系统交给本地应用。',
       'preview.loading': '正在加载预览…',
@@ -276,6 +280,7 @@ window.__ModuleLoader__.load({
     const REMIX_BOOK_OPEN_LINE = 'M13 21V23H11V21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H9C10.1947 3 11.2671 3.52375 12 4.35418C12.7329 3.52375 13.8053 3 15 3H21C21.5523 3 22 3.44772 22 4V20C22 20.5523 21.5523 21 21 21H13ZM20 19V5H15C13.8954 5 13 5.89543 13 7V19H20ZM11 19V7C11 5.89543 10.1046 5 9 5H4V19H11Z'
     const REMIX_DOWNLOAD_LINE = 'M3 19H21V21H3V19ZM13 13.1716L19.0711 7.1005L20.4853 8.51472L12 17L3.51472 8.51472L4.92893 7.1005L11 13.1716V2H13V13.1716Z'
     const REMIX_CHECK_LINE = 'M9.9997 15.1709L19.1921 5.97852L20.6063 7.39273L9.9997 17.9993L3.63574 11.6354L5.04996 10.2212L9.9997 15.1709Z'
+    const REMIX_FILE_COPY_LINE = 'M6.9998 6V3C6.9998 2.44772 7.44752 2 7.9998 2H19.9998C20.5521 2 20.9998 2.44772 20.9998 3V17C20.9998 17.5523 20.5521 18 19.9998 18H16.9998V20.9991C16.9998 21.5519 16.5499 22 15.993 22H4.00666C3.45059 22 3 21.5554 3 20.9991L3.0026 7.00087C3.0027 6.44811 3.45264 6 4.00942 6H6.9998ZM5.00242 8L5.00019 20H14.9998V8H5.00242ZM8.9998 6H16.9998V16H18.9998V4H8.9998V6Z'
     const REMIX_LINK = 'M18.3638 15.5355L16.9496 14.1213L18.3638 12.7071C20.3164 10.7545 20.3164 7.58866 18.3638 5.63604C16.4112 3.68341 13.2453 3.68341 11.2927 5.63604L9.87849 7.05025L8.46428 5.63604L9.87849 4.22182C12.6122 1.48815 17.0443 1.48815 19.778 4.22182C22.5117 6.95549 22.5117 11.3876 19.778 14.1213L18.3638 15.5355ZM15.5353 18.364L14.1211 19.7782C11.3875 22.5118 6.95531 22.5118 4.22164 19.7782C1.48797 17.0445 1.48797 12.6123 4.22164 9.87868L5.63585 8.46446L7.05007 9.87868L5.63585 11.2929C3.68323 13.2455 3.68323 16.4113 5.63585 18.364C7.58847 20.3166 10.7543 20.3166 12.7069 18.364L14.1211 16.9497L15.5353 18.364ZM14.8282 7.75736L16.2425 9.17157L9.17139 16.2426L7.75717 14.8284L14.8282 7.75736Z'
 
     /**
@@ -495,6 +500,94 @@ window.__ModuleLoader__.load({
      */
     function isImageArtifact(artifact) {
       return typeof artifact.mime === 'string' && artifact.mime.startsWith('image/')
+    }
+
+    /**
+     * Classify one artifact for content copying: text can be copied verbatim,
+     * images are copied as a picture when the browser allows it, anything else
+     * has no meaningful clipboard representation.
+     * @param {object} artifact - row from the list response.
+     * @returns {'text' | 'image' | 'none'} the content kind.
+     */
+    function artifactContentKind(artifact) {
+      const mime = typeof artifact.mime === 'string' ? artifact.mime : ''
+      if (mime.startsWith('image/')) return 'image'
+      if (mime.startsWith('text/')
+        || /^(?:application\/(?:json|xml|javascript|typescript|rtf|x-yaml|x-sh|x-httpd-php))/.test(mime)
+        || /\.(?:md|markdown|txt|log|csv|tsv|json|ya?ml|xml|js|mjs|cjs|ts|tsx|jsx|css|scss|sass|sh|bash|zsh|py|go|rs|java|rb|php|html?|sql|diff|patch|ini|toml|cfg|conf)$/i.test(artifact.name)) {
+        return 'text'
+      }
+      return 'none'
+    }
+
+    /**
+     * Convert an image blob to PNG so the clipboard can take it.
+     * @param {Blob} blob - source image bytes.
+     * @returns {Promise<Blob | null>} PNG bytes, or null when conversion fails.
+     */
+    async function imageBlobToPng(blob) {
+      try {
+        const bitmap = await createImageBitmap(blob)
+        const canvas = document.createElement('canvas')
+        canvas.width = bitmap.width
+        canvas.height = bitmap.height
+        const context = canvas.getContext('2d')
+        if (context === null) return null
+        context.drawImage(bitmap, 0, 0)
+        bitmap.close?.()
+        return await new Promise((resolve) => {
+          try {
+            canvas.toBlob((png) => resolve(png), 'image/png')
+          } catch {
+            resolve(null)
+          }
+        })
+      } catch {
+        return null
+      }
+    }
+
+    /**
+     * Copy one artifact's content to the clipboard: text verbatim, images as a
+     * picture when the async clipboard and ClipboardItem exist, otherwise the
+     * inline URL as a graceful fallback.
+     * @param {object} artifact - row from the list response.
+     * @param {string | null} origin - Host LAN origin for the inline URL.
+     * @returns {Promise<boolean>} whether something was copied.
+     */
+    async function copyArtifactContent(artifact, origin) {
+      const kind = artifactContentKind(artifact)
+      if (kind === 'none') return false
+      const url = artifactUrl(artifact, 'inline', origin)
+      let response
+      try {
+        response = await fetch(url, { credentials: 'same-origin' })
+      } catch {
+        return false
+      }
+      if (!response.ok) return false
+      if (kind === 'text') {
+        try {
+          return await copyText(await response.text())
+        } catch {
+          return false
+        }
+      }
+      try {
+        if (navigator.clipboard !== undefined && typeof ClipboardItem === 'function') {
+          const blob = await response.blob()
+          const png = blob.type === 'image/png' ? blob : await imageBlobToPng(blob)
+          if (png !== null) {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
+            return true
+          }
+        }
+      } catch {
+        // Fall through to the URL fallback.
+      }
+      // Plain-HTTP LAN pages have no async clipboard API; copying the inline
+      // URL is the only paste-able representation left.
+      return copyText(url)
     }
 
     /**
@@ -2129,6 +2222,7 @@ window.__ModuleLoader__.load({
       const [failure, setFailure] = React.useState('')
       const [reload, setReload] = React.useState(0)
       const [copiedPath, setCopiedPath] = React.useState(null)
+      const [copiedContentKey, setCopiedContentKey] = React.useState(null)
       const [filter, setFilter] = React.useState('all')
       const [filterOpen, setFilterOpen] = React.useState(false)
       const filterWrapRef = React.useRef(null)
@@ -2219,6 +2313,22 @@ window.__ModuleLoader__.load({
           setCopiedPath(key)
           window.setTimeout(() => {
             setCopiedPath((current) => (current === key ? null : current))
+          }, 1600)
+        })
+      }
+
+      /**
+       * Copy one artifact's content and acknowledge briefly on its row.
+       * @param {object} artifact - the row.
+       * @returns {void}
+       */
+      function onCopyContent(artifact) {
+        const key = artifactKey(artifact)
+        copyArtifactContent(artifact, payload?.origin ?? null).then((copied) => {
+          if (!copied) return
+          setCopiedContentKey(key)
+          window.setTimeout(() => {
+            setCopiedContentKey((current) => (current === key ? null : current))
           }, 1600)
         })
       }
@@ -2335,6 +2445,7 @@ window.__ModuleLoader__.load({
       const rows = shownArtifacts.map((artifact) => {
         const key = artifactKey(artifact)
         const provided = artifact.provided === true
+        const contentKind = artifactContentKind(artifact)
         const facts = provided
           ? [t('meta.provided')]
           : [artifact.presented === true ? t('meta.presented') : t('meta.generated'), t('meta.turn', { turn: artifact.turn })]
@@ -2379,6 +2490,18 @@ window.__ModuleLoader__.load({
             href: artifactUrl(artifact, 'attachment', origin),
             download: artifact.name
           }, RemixGlyph(REMIX_DOWNLOAD_LINE, 16)),
+          contentKind === 'none' ? null : React.createElement('button', {
+            type: 'button',
+            className: 'dsa-action',
+            title: copiedContentKey === key
+              ? t('action.copied')
+              : t(contentKind === 'image' ? 'action.copyImage' : 'action.copyContent'),
+            'aria-label': copiedContentKey === key
+              ? t('action.copied')
+              : t(contentKind === 'image' ? 'action.copyImage' : 'action.copyContent'),
+            onClick: () => onCopyContent(artifact),
+            'data-copied': copiedContentKey === key ? 'true' : undefined
+          }, RemixGlyph(copiedContentKey === key ? REMIX_CHECK_LINE : REMIX_FILE_COPY_LINE, 16)),
           React.createElement('button', {
             type: 'button',
             className: 'dsa-action',
