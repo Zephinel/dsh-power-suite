@@ -16,6 +16,9 @@ empty filter shows **No artifacts in this filter**).
 - **Open** previews a generated file through the native document preview;
   a provided attachment opens its inline URL in a new tab.
 - **Download** saves the file through the plugin's raw or attachment route.
+- **Copy content** copies text files verbatim; for images it copies the picture
+  as PNG where the async clipboard exists (HTTPS/localhost), otherwise the
+  inline image URL. Other binaries have no Copy content button.
 - **Copy link** copies the authenticated LAN URL.
 - Hover a row for the Quick Look preview — generated rows get the workspace
   pipeline (Markdown/code/images/media/PDF/HTML), provided rows get images and

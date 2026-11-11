@@ -57,7 +57,8 @@ subagent: true`; two completed control Sessions stayed `interrupted: false`.
 
 These were exercised in the Web GUI during development:
 
-- Artifacts panel: list, Open/Download/Copy actions, missing files hidden.
+- Artifacts panel: list, Open / Download / Copy content / Copy link actions,
+  missing files hidden.
 - Session artifacts after the provided-attachment extension: the list route
   returned 29 rows (2 generated + 27 provided, folded from 28 pasted image
   blocks minus one duplicate attachment id), and all 27 provided-image
@@ -79,9 +80,17 @@ These were exercised in the Web GUI during development:
   `200 image/webp`, `content-length: 14406`, `x-content-type-options: nosniff`
   and `content-security-policy: sandbox; default-src 'none'`; the response
   sha256 matched the attachment id. A tampered width answered `404`, missing
-  metadata answered `400`. Provided Open/Download/Copy worked, generated rows
-  kept their raw route, native preview, and Quick Look unchanged, and there were
-  0 console errors.
+  metadata answered `400`. Provided Open/Download/Copy content/Copy link
+  worked, generated rows kept their raw route, native preview, and Quick Look
+  unchanged, and there were 0 console errors.
+- Copy content was verified live: on the generated `verification.md` row the
+  button showed its check acknowledgement and pasting into the composer yielded
+  text beginning `# Verification` (the exact file content); on a provided
+  screenshot row the image action read Copy image and showed the check through
+  the URL fallback on the plain-HTTP LAN deployment (async clipboard and
+  `ClipboardItem` are unavailable outside a secure context). The refreshed panel
+  capture shows the row's four actions
+  ([assets/artifacts-panel.png](assets/artifacts-panel.png)).
 - Hover Quick Look on Artifacts rows and native Workspace files: Markdown,
   highlighted code, images, PDF/HTML, resize persistence, outside-click
   dismissal, animated switching.

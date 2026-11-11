@@ -25,6 +25,20 @@ All notable changes to this repository are documented here. The format follows
   into the composer draft, and a search button below the marks reveals a
   floating substring filter. The rail appears only while the Session
   has sent prompts.
+- Artifacts for user-provided attachments: the Artifacts card now also lists the
+  images and files the human attached to their prompts (human `user/message`
+  image/file blocks only, deduped by attachment id with the newest occurrence
+  winning and a 1-based prompt ordinal), served by the new verified
+  `GET|HEAD /api/session-artifacts.attachment` route with the same
+  no-store/nosniff/sandbox-CSP headers. Every image artifact shows a 40 px
+  rounded lazy thumbnail, and the panel header carries an All/Generated/Provided
+  source-filter dropdown with per-option counts.
+- Copy content row action: each Artifacts row gains a Copy content button
+  between Download and Copy link. Text-like artifacts are fetched through their
+  inline URL and copied verbatim; images are copied as a PNG clipboard item when
+  the async clipboard exists, otherwise the inline image URL is copied as the
+  fallback; other binaries have no content action. A successful copy shows the
+  row's check acknowledgement for 1.6 s.
 - Draft attachment memory: browser-owned attachments in a draft (pasted images,
   dropped or picked files) are remembered per Session and re-introduced through
   the composer's own paste intake when the Session is shown again, so switching
@@ -149,19 +163,6 @@ All notable changes to this repository are documented here. The format follows
   instead of inserting a visible "Continue the interrupted task." user prompt.
   The continuation row is hidden, prompt history ignores it, and a missing
   Session controller leaves the badge in place.
-
-### Fixed
-
-- Hover Quick Look no longer opens as an empty card: it always receives an
-  explicit height (570 x 360 default, clamped to the viewport, with a remembered
-  or user-resized size still winning) and its content layer no longer depends on
-  an inline opacity style or a finished animation, so generated Markdown/code/
-  image content is visible on the first hover.
-- Provided attachments now have a Quick Look: provided images and media render
-  through the verified attachment route, text-like provided files are fetched
-  read-only and clipped at 64 KiB with a truncation note, other provided types
-  show the unavailable state, and the card's Open/Download use the attachment
-  URLs.
 
 ### Changed
 

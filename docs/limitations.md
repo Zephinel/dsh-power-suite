@@ -37,6 +37,14 @@
 - Raw workspace downloads and provided attachment responses are capped at
   64 MiB; text previews read the first 16 KiB and report truncation, and the
   attachment route rejects tampered metadata with `400`/`404`.
+- **Image clipboard bytes need a secure context.** Copy content puts real image
+  bytes on the clipboard only when the async Clipboard API and `ClipboardItem`
+  exist (HTTPS or localhost). On a plain-HTTP LAN page the action falls back to
+  copying the inline image URL, which is paste-able but is not the image itself.
+- **Text copy reads the whole file first.** Copy content fetches the complete
+  artifact text into memory before writing the clipboard (bounded by the raw and
+  attachment route limits); binaries with no text/picture representation (PDF,
+  Office, archives, and similar) have no Copy content action at all.
 - The hover preview supports image, audio/video, PDF, HTML, and text/Markdown
   for generated/workspace rows, and images, media, and text-like provided
   attachments; unknown binaries show an unavailable state. A card with no saved

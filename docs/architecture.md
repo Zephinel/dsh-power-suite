@@ -67,6 +67,19 @@ and a check on the selected option, focus moved to the selected option on open,
 outside-press/Escape dismissal with focus returned to the trigger, and an
 All reset on Session change.
 
+Each row's actions are Open, Download, Copy content, and Copy link. Copy content
+classifies the artifact by media type and extension into **text** (text mime
+types, JSON/XML/YAML/JavaScript application types, and common
+markdown/text/code/config extensions), **image**, or **none** (no button). Text
+is fetched through the row's inline URL — the raw route for workspace files, the
+verified attachment route for provided files — and copied verbatim with the
+existing clipboard helper (async Clipboard API, legacy `execCommand` fallback).
+Images are fetched the same way; a PNG `ClipboardItem` write is attempted when
+the async clipboard exists (secure context), with non-PNG images converted
+through `createImageBitmap` + canvas, otherwise the inline image URL is copied
+as the fallback. Failures leave no acknowledgement; a successful copy shows the
+row's check state for 1.6 s.
+
 ### Prompt history
 
 The route reads the Session log rather than the loaded chat window, so prompts
