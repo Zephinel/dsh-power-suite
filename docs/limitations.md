@@ -120,20 +120,32 @@
   full wrapped workspace path, Status detail, absolute Last active time, and the
   running subagent count appear only in the row's hover card, which does not
   capture the pointer (and is unavailable on touch-only input).
-- **Read marks persist per browser, with a tolerance.** A finished, unread
-  Session shows the green done dot until it is opened (which stores an
-  acknowledgement baseline in this browser's
-  `localStorage['dsh-power-suite.acked-sessions']` and swaps in the white
-  session-type icon). Acks survive HMR and page reloads and are shared by rows
-  and their nested subagent children. A running-but-not-open Session clears the
-  acknowledgement only when its `updatedAt` advanced by more than **1000 ms**
-  past the baseline — transient `running` flags with unchanged activity keep the
-  read mark, while a genuine new turn clears it. Because of that tolerance a
-  very small genuine change (under one second of recorded activity) could keep a
-  stale ack; metadata-only bumps cannot. With storage denied the map lives in
-  memory only for the page lifetime, and another browser/profile has its own read
-  marks. The finished-session retention window still removes completed rows from
-  the card regardless of acknowledgement.
+- **Read marks are shared per DSH profile, within a cap.** Acks live in the
+  Host's `$DSH_HOME/dsh-power-suite/read-acks.json` and sync to every browser of
+  that profile; the per-browser `localStorage['dsh-power-suite.acked-sessions']`
+  document is only a cache/offline path, so another DSH profile keeps its own
+  marks. The document is capped at **1000** entries (oldest baselines drop) and
+  the client merges maxima only — there is no unread-removal API, so a baseline
+  can only move forward (a genuinely newer result makes the green dot return on
+  every device). Without the route (older Host) the browser stays local-only;
+  with storage denied too, the map lives in memory for the page lifetime. A row
+  is derived as read when its baseline is within **1000 ms** of the current
+  activity, so a very small genuine change could keep a stale ack; metadata-only
+  bumps cannot. The two Host routes need a plugin reload / Host recompose after
+  upgrading, and old local marks are uploaded once when DSH is first opened with
+  the new Host.
+- **Times favor true activity only on this card.** The session-activity route
+  depends on the shipped projection-cache document layout
+  (`record.rows.timeContext.val.lastMessageTime`) and reads no Session logs; a
+  changed cache layout falls back to catalog times. The **native sidebar keeps
+  the catalog last-prompt times** regardless, so sidebar times can disagree with
+  the card for long runs. After the window expires, retention arithmetic still
+  removes completed rows.
+- **The rainbow ring is decoration for the current row only.** Only the Session
+  open in the main view is ringed; merely-running and unopened completed rows are
+  not. The animated ring needs Chromium's `@property` — other engines render a
+  static ring — and reduced-motion preferences also disable the animation. It is
+  `pointer-events: none` and does not change row geometry.
 - **The card body hides its scrollbar.** Wheel and trackpad scrolling work, but
   the scrollbar itself is suppressed to match the native sidebar surfaces.
 

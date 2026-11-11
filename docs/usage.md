@@ -53,9 +53,22 @@ Session is running and the white sparkle icon when nothing runs.
   first five rows.
 - The leading glyph tells the read state: a running spinner while the Session
   runs, a green dot for a finished but unopened Session, then a white session
-  icon once it has been opened. Read marks persist across reloads in this
-  browser, so the green dot only returns after genuinely new activity; a run
-  whose activity did not advance past the 1 s tolerance no longer resurrects it.
+  icon once it has been opened. Read marks are now **shared through the Host**,
+  so they persist across reloads and appear the same in every browser of the DSH
+  profile; a click is only needed on a genuinely new result (the 1 s tolerance
+  prevents transient status flags from resurrecting the green dot). The marks
+  live in the Host's `read-acks.json`; a browser with the new Host keeps its old
+  local marks by opening DSH once, which uploads them.
+- The row of the Session the main conversation currently shows gets a faint
+  **rainbow ring** plus glow; it follows whichever Session you open (from the
+  card, the sidebar, or anywhere else) and disappears when that row leaves the
+  card. Merely-running or unopened rows are not ringed. Reduced-motion users see
+  a static ring.
+- Times on the card use the Host's **true last-activity** timestamps, not the
+  catalog's last-prompt time, so a turn that ran for hours shows its real
+  completion age and stays in the recent window instead of vanishing on stop.
+  (The native sidebar keeps its own catalog times.) The two Host routes behind
+  these marks/times need the plugin reloaded / Host recomposed after upgrading.
 - Rest the pointer on a row for its hover detail: the Workspace name, full
   workspace path, Status with its time, absolute Last active time, and the
   running subagent count. The card sits outside the sidebar and never covers the

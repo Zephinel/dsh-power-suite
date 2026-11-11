@@ -22,11 +22,11 @@ npm run pack:check
 
 Current evidence (2026-11-11, Node 24.22.2):
 
-- `npm test`: **73 tests, 73 passed, 0 failed**.
-- `npm run check`: passed (`14 modules, 7 test files`).
-- `npm run pack:check`: **62 files** (0.2.0 tarball), including `src/`,
+- `npm test`: **89 tests, 89 passed, 0 failed**.
+- `npm run check`: passed (`17 modules, 9 test files`).
+- `npm run pack:check`: **71 files** (0.2.0 tarball), including `src/`,
   `locale/`, `docs/` (with the Project page/rail states/sidebar switch,
-  activity-card actions and acknowledgement states, Artifacts
+  activity-card actions/acknowledgement/activity/current-ring states, Artifacts
   panel/filter-menu/Quick Look, Dynamic Workspaces, hover-detail, and
   prompt-history rail captures), `cordis.patch.yml`, `icon.png`, and the standard
   repository files.
@@ -243,24 +243,38 @@ These were exercised in the Web GUI during development:
   verified with a controlled interrupt state; Continue was not clicked in order
   to avoid sending a real continuation. No live child-interrupted case exists.
   HMR showed a single panel/row/button set and there were 0 console errors.
-- The persisted card acknowledgements were verified live: a completed row showed
-  the green dot at 12:28:21, was opened at 12:28:40 (white type icon plus an
-  acknowledgement entry), and stayed white while polled every 30 s through +180 s
-  — the green dot never returned. A client HMR remount and a full page reload
-  both kept `localStorage['dsh-power-suite.acked-sessions']` and the white icon;
-  the Lead-side reload check independently confirmed the persisted document
-  survived and the acked row rendered the brand icon. Controlled baselines
-  exercised the branches: a running-but-not-open Session with a baseline equal
-  to or newer than its activity kept the ack, an ancient baseline cleared it
-  after HMR (leaving other entries untouched), and a corrupt/missing document
-  fell back to empty then rewrote valid versioned JSON. The unread direction
-  still works (removing an ack brought the green dot back, and an unacked child
-  row showed its dot). Running dots, white glyphs, hover card, row actions, and
-  the retention removal were unchanged, with 0 console errors. Gaps: a real
-  momentary `running` flip and a genuine new user turn were not force-injected;
-  the keep/clear paths were exercised with controlled baselines and the real form
-  is reasoned from the shared `updatedAt` metric.
-- The settings page and the configurable windows were verified live: the
+- Host-shared read acknowledgements were verified live: `GET
+  /api/power-suite.read-acks` answered `200` with `cache-control: no-store` and
+  the live-synced baselines; `POST` merged and kept per-id maxima and answered
+  `200`, with `415` for a non-JSON content type, `400` for a malformed body, and
+  `413` for an oversized one. Simulating a new device (wiped `localStorage` plus a
+  reload) restored every Host-shared acknowledgement as white icons with no
+  clicks; a controlled stale baseline showed green while the route was blocked
+  and cleared after the Host merge; both directions (read → unread and
+  unread → read) worked across contexts, and HMR kept one poll per ~32 s window
+  with 0 console errors.
+- Host last-activity timestamps were verified live: the
+  `api/power-suite.session-activity` route answered `200`/`no-store` for 394
+  catalogued Sessions and mapped `session-442a0000…` to `1794423139036`
+  (13:52:19, the expected completion time). With the route blocked the card
+  showed 3 rows and the long-running Session was missing; after unblocking it
+  showed 4 rows with `# 实现任务：DSH Power Suite ·` at 27 min, and opening it
+  worked; its children showed 29/34/35 min, the Workspace stayed Active, and one
+  row correctly turned green because its true activity exceeded the old baseline
+  (the derived-read model doing its job). HMR kept one fetch per poll window and
+  there were 0 console errors.
+- The current-chat rainbow ring was verified live: exactly one ring rendered with
+  two running animations (angle moving 281° → 234° and the hue drift over 1.6 s),
+  and it moved as different Sessions were opened — across completed and running
+  rows, from the sidebar, onto a nested child row and back. Row rectangles did not
+  change (`239 × 28` main rows), the hover card stayed outside the panel, and the
+  row actions/chevron were unaffected. Dark theme and `prefers-reduced-motion`
+  were verified (static ring under reduced motion), HMR kept one ring/panel, and
+  there were 0 console errors.
+- The earlier page-local acknowledgement evidence is superseded by the
+  Host-shared model above: the old behaviour (a reload forgetting read marks and
+  a transient running flag clearing them) was the defect this round fixed.
+- The settings page and the configurable windows were verified live:- The settings page and the configurable windows were verified live: the
   **DSH Power Suite** Plugins page shows exactly three setting rows (Shortcut
   modifier, Finished Session retention, Active project retention) with the
   defaults checked (120 minutes / 7 days), and the package README document above
@@ -271,7 +285,7 @@ These were exercised in the Web GUI during development:
   (Active 8 → 5, Inactive 6 → 9) and reverting to 7 days restored 8/6. The Host
   route persisted `{ promptHistoryModifier, recentSessionMinutes,
   activeProjectDays }` with `"version": 2`, and the raw document read back from
-  the route matched. `npm test` passed (final gate: 73/73).
+  the route matched. `npm test` passed (final gate: 89/89).
 
 The manual checks are evidence for the behavior described in the feature docs;
 they are not a substitute for the automated gate above.
@@ -306,6 +320,12 @@ The live surfaces are captured in
 [assets/card-child-actions.png](assets/card-child-actions.png),
 [assets/card-acknowledged.png](assets/card-acknowledged.png),
 [assets/card-unread-dot.png](assets/card-unread-dot.png),
+[assets/card-shared-ack.png](assets/card-shared-ack.png),
+[assets/card-activity-before.png](assets/card-activity-before.png),
+[assets/card-activity-after.png](assets/card-activity-after.png),
+[assets/card-current-glow.png](assets/card-current-glow.png),
+[assets/card-current-glow-dark.png](assets/card-current-glow-dark.png),
+[assets/card-current-glow-reduced.png](assets/card-current-glow-reduced.png),
 [assets/project-page-rail-hidden.png](assets/project-page-rail-hidden.png),
 [assets/project-page-rail-restored.png](assets/project-page-rail-restored.png),
 [assets/artifacts-panel.png](assets/artifacts-panel.png),

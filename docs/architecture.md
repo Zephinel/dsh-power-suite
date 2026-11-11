@@ -15,6 +15,8 @@ src/index.js            Host entry (Node)
 │                                        POST /api/power-suite.continue
 ├─ features/settings/host.js             GET/POST /api/power-suite.settings
 ├─ features/project-view/host.js         GET  /api/power-suite.project
+├─ features/read-acks/host.js            GET/POST /api/power-suite.read-acks
+├─ features/session-activity/host.js     GET  /api/power-suite.session-activity
 └─ ctx.effect(...)                       every registration lives with the plugin
 
 src/client.js           Browser entry (DSH module loader)
@@ -85,6 +87,39 @@ paste the picture, plain-text targets may receive nothing/alt); only then does
 it copy the inline image URL as text. Failures leave no acknowledgement; a
 successful copy shows the row's check state for 1.6 s.
 
+### Read acknowledgements
+
+A durable Host document (`$DSH_HOME/dsh-power-suite/read-acks.json`, schema
+version 1, `{ acked: { sessionId: acknowledgedUpdatedAt } }`) is shared by every
+browser of the profile. The store sanitizes ids (≤200 chars) and finite positive
+baselines, merges per id with `Math.max` (monotonic, no removal verb), caps the
+document at 1000 entries (oldest baselines drop), and writes atomically
+(temporary sibling + rename, `0600`, serialized chain). One authenticated route
+serves it: `GET /api/power-suite.read-acks` → `{ acked }`;
+`POST /api/power-suite.read-acks` with `application/json` (≤64 KiB) merges and
+returns the merged document (`415` non-JSON, `413` too large, `400` malformed
+entries); every response is `no-store`. The browser keeps a `localStorage` copy
+as a cache, syncs on mount/focus/visibility/30 s, migrates old local marks with a
+one-time POST, and pushes raised baselines with a 250 ms debounce. Read state is
+derived at render (`baseline >= activity - 1000 ms`); there is no running-based
+clearing.
+
+### Session activity timestamps
+
+The client session-list `updatedAt` is the catalog last-prompt time, which is
+stale after long turns. A read-only authenticated route,
+`GET /api/power-suite.session-activity`, returns
+`{ sessions: { sessionId: lastActivityAt } }` across the catalogued corpus
+(subagents included) with a 5 s in-memory TTL and `no-store`; a listing failure
+answers an empty map with `200`. Values are computed without reading Session
+logs: the optional wire projection is tried, then the per-record
+projection-cache document `storages/session_projcache/sessions/<id>.json` is read
+directly for `record.rows.timeContext.val.lastMessageTime` (mtime-guarded), then
+header `updatedAt`/`createdAt`, taking the max. The browser folds the map in as
+`effectiveUpdatedAt = max(summary.updatedAt, activity[id])` for card
+retention/order/time, bucket recency, child timestamps, and read-baseline
+raising.
+
 ### Prompt history
 
 The route reads the Session log rather than the loaded chat window, so prompts
@@ -153,7 +188,16 @@ a blue pulsing business-primary dot while any listed Session runs and the white
 RemixIcon `sparkling-line` when nothing runs, horizontally centred on the same
 glyph column as the row glyphs and followed by the title on the row-title
 column; the header chevron shares one right-edge centre column with the row
-disclosure arrows. The leading glyph has
+disclosure arrows. Card state is Host-backed: read baselines sync through
+`api/power-suite.read-acks`, and card retention/times use the Host
+`api/power-suite.session-activity` map where the catalog time is stale (native
+sidebar times stay catalog-based). The row of the Session currently open in the
+main view (`retainedBy.mainView > 0`) carries `.psd-run-current` /
+`aria-current="true"` with a rainbow conic-gradient ring (`.psd-child-ring` on
+nested children): a 2 px mask-composite pseudo-element with a soft glow,
+animated by Chromium's `@property --psd-ring-angle` (3.2 s rotation plus a 14 s
+hue drift), static under reduced motion and on engines without `@property`,
+`pointer-events: none`, with no layout shift. The leading glyph has
 three states: the shell loading indicator while running, the green done dot while
 a completion is unread, and a white session-type icon (RemixIcon `deepseek-fill`
 for main rows, `robot-2-line` for subagent rows) once the Session has been opened

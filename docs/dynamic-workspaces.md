@@ -100,25 +100,15 @@ sidebar's panel tabs. It starts expanded.
   the green dot away until genuine new activity arrives (see *Read
   acknowledgements* below). The Workspace is not printed under the row any more;
   it lives in the hover card below.
-- **Read acknowledgements**: read marks persist in
-  `localStorage['dsh-power-suite.acked-sessions']` as
-  `{ "version": 1, "acked": { "<sessionId>": <acknowledged updatedAt> } }`
-  (guarded read/write: missing, corrupt, or storage-denied → empty, then rewritten
-  as valid versioned JSON). Opening a finished Session (it is open in the main
-  view) raises its baseline to the newer `updatedAt`. A Session that is merely
-  *running* but **not open** clears its acknowledgement only when its
-  `updatedAt` advanced by more than **1000 ms** past the baseline — a transient
-  running flag with unchanged activity no longer resurrects the green dot, while
-  a genuine new turn does. Entries are pruned only against a non-empty Session
-  catalog; rows and nested subagent children share the same map. Acks survive
-  seat remounts, client HMR, and a full page reload, and the green-dot *unread*
-  direction still works when an acknowledgement is intentionally removed.
-  Completed rows still leave the card once the configurable finished-Session
-  retention window expires, so they never linger forever.
+- **Read acknowledgements**: read marks are **shared through the Host** and
+  cached per browser (see *Shared read acknowledgements* below). Opening a
+  finished Session raises its baseline; a row is read while
+  `baseline >= updatedAt - 1000 ms`, with no running-status input, so a transient
+  running flag can no longer resurrect the green dot. Rows and nested subagent
+  children share the same baselines, and completed rows still leave the card
+  once the finished-Session retention window expires.
 
-![Acknowledged finished rows show the white type icon instead of the green dot](assets/card-acknowledged.png)
-
-![Unread finished rows still show the green completion dot, including child rows](assets/card-unread-dot.png)
+![Read marks restored on a fresh browser profile from the Host-shared document](assets/card-shared-ack.png)
 
 - **Row actions**: every row (main and nested subagent) carries a fixed trailing
   cluster immediately before the disclosure chevron:
@@ -190,6 +180,103 @@ sidebar's panel tabs. It starts expanded.
 Finished rows deliberately linger: a stop moves the Session below the running
 rows, it stays for the retention window, and then it leaves the card. This is the
 "find it again" behavior the card exists for.
+
+## Shared read acknowledgements
+
+Read state is Host-owned and shared by every browser of the DSH profile. The
+Host feature (`src/features/read-acks/`) keeps a durable document:
+
+```text
+$DSH_HOME/dsh-power-suite/read-acks.json
+{
+  "version": 1,
+  "acked": { "<sessionId>": <acknowledged updatedAt> }
+}
+```
+
+- Entries are sanitized (string ids up to 200 chars, finite positive baselines),
+  merged per id with `Math.max` (monotonic — there is no unread-removal verb),
+  capped at **1000** entries (oldest baselines drop first), and written
+  atomically with a serialized chain and `0600` mode.
+- `GET|POST /api/power-suite.read-acks` — authenticated exact route: `GET`
+  returns `{ acked }`; `POST` with `application/json` (≤64 KiB) merges the
+  posted entries and returns the merged document. Errors: `415` for a non-JSON
+  content type, `413` above the body limit, `400` for malformed ids/baselines.
+  Every response is `cache-control: no-store`.
+- The browser keeps `localStorage['dsh-power-suite.acked-sessions']` as a fast,
+  offline cache. On mount it reads the Host document and merges the per-id
+  maxima, sends a one-time migration POST (uploading old local marks), then
+  re-syncs every **30 s** and on window focus/visibility; newly raised baselines
+  are pushed with a **250 ms** debounce. A missing route (a Host without the new
+  feature) degrades silently to local-only behavior.
+- Read state is derived at render: read iff
+  `baseline >= updatedAt - 1000 ms`. The old “running clears the ack” branch is
+  gone, so momentary status flags cannot flip a row; genuinely newer activity
+  exceeds the baseline and the unread dot returns on every device.
+- Both new routes need a **Host plugin recompose** (reload the plugin / restart
+  the Host process) to appear; no DSH restart is needed. After upgrading, open
+  DSH once per machine to upload that browser's old local acks.
+
+## Accurate activity timestamps
+
+The session list's `updatedAt` is the catalog **last-prompt** time, not last
+activity: a turn that ran for hours looked hours old the second it stopped, so
+the card's retention window dropped it immediately (and every relative time was
+wrong). The feature adds a read-only Host route and folds its values into the
+card's clock:
+
+- `GET /api/power-suite.session-activity` — authenticated, read-only; returns
+  `{ sessions: { "<sessionId>": <lastActivityAt> } }` for the whole catalogued
+  corpus (subagents included), with a 5 s in-memory TTL and
+  `cache-control: no-store`. A listing failure answers an empty map with `200`
+  so the client silently keeps its own timestamps.
+- The value is computed **without reading Session logs**: the optional wire
+  projection is tried first, then the per-record projection-cache document
+  (`storages/session_projcache/sessions/<id>.json`) is read directly for
+  `record.rows.timeContext.val.lastMessageTime` (mtime-guarded; `timeContext`
+  has no wire view in this runtime), then the header's `updatedAt`/`createdAt`;
+  the max wins.
+- The browser fetches the map on the existing card sync cadence (mount, focus,
+  visibility, 30 s — no extra timer) and uses
+  `effectiveUpdatedAt = max(summary.updatedAt, activity[id])` for the recent-row
+  cutoff/order/time, running-row order/time, Active/Inactive recency, nested
+  child timestamps, and the read-baseline raise. Missing route → summary
+  timestamps as before.
+
+![The card before the activity route: the long-running Session has vanished after its stop](assets/card-activity-before.png)
+
+![The same workspace after the route: the long run is listed with its true completion age and opens](assets/card-activity-after.png)
+
+## Current-chat ring
+
+The row for the Session the main conversation currently shows gets a rainbow
+ring so it is identifiable at a glance:
+
+- **Semantics**: the current Session is the first client summary with
+  `retainedBy.mainView > 0` — the same source the read-baseline effect trusts.
+  Exactly that row gets `.psd-run-current` and `aria-current="true"`; a nested
+  subagent child gets `.psd-child-current` plus an absolute `.psd-child-ring`
+  span (the child wrapper's pseudo-elements already draw the tree connectors).
+  The ring moves immediately when a Session is opened from the card, sidebar, or
+  anywhere else, supports child rows, and disappears when the row leaves the
+  card. Merely-running or unopened completed rows are intentionally **not**
+  highlighted.
+- **Visual**: a 2 px conic-gradient rainbow ring hugs the row's rounded
+  rectangle with a soft `drop-shadow` glow, drawn by a mask-composite
+  pseudo-element (`pointer-events: none`, behind the content). A CSS `@property
+  --psd-ring-angle` rotates the gradient over 3.2 s, and a 14 s `hue-rotate`
+  drift keeps the colours moving. `prefers-reduced-motion: reduce` disables both
+  animations and leaves a static ring. Light and dark themes are both legible,
+  the row rectangle does not change (no layout shift), and the card body gets
+  2 px top clearance so a first-row ring is not clipped.
+- **Engine support**: the animated ring relies on Chromium's `@property`;
+  other engines fall back to a static ring.
+
+![The current-chat rainbow ring on the activity card](assets/card-current-glow.png)
+
+![The rainbow ring in the dark theme](assets/card-current-glow-dark.png)
+
+![Reduced motion leaves a static rainbow ring](assets/card-current-glow-reduced.png)
 
 ## Collapsing the buckets
 
@@ -280,12 +367,27 @@ The native **View options** menu picks how Sessions are grouped:
   own last activity aged out) its children are not exposed either, and
   delegations below the direct child are not walked. A finished subagent does
   not by itself finish the parent's task.
-- **Read marks are per browser.** Acks are stored in this browser/profile's
-  `localStorage`; another device or profile has its own read marks. With storage
-  denied, the map lives in memory only for the page lifetime. The 1000 ms
+- **Read marks are shared per DSH profile.** Acks live in the Host's
+  `read-acks.json` and sync to every browser on that profile (30 s poll, focus/
+  visibility); the per-browser `localStorage` copy is only a cache/offline path.
+  Another DSH profile has its own marks. The document is capped at 1000 entries
+  and merging is maxima-only (no unread-removal API), so a baseline can only move
+  forward. Without the route (older Host) the browser stays local-only; with
+  storage denied too, the map lives in memory for the page lifetime. The 1000 ms
   tolerance deliberately favors keeping an ack: a real new turn that moves
   `updatedAt` by more than one second clears it, while metadata-only bumps do
   not.
+- **Activity timestamps depend on the projection cache.** The session-activity
+  route derives last activity from the shipped per-record projection-cache
+  document (`record.rows.timeContext.val.lastMessageTime`), with header
+  timestamps as fallback and no Session-log reads. A changed DSH cache layout
+  makes the route fall back to catalog times; the native sidebar itself keeps the
+  catalog (last-prompt) times regardless — only this card prefers the true
+  activity value. The route needs a Host plugin recompose after upgrading.
+- **The current-chat ring is an enhancement, not state.** Only the row of the
+  Session open in the main view is ringed; merely-running and unopened completed
+  rows are not. The animated ring needs Chromium's `@property`; other engines
+  show a static ring. Reduced-motion users get the static ring too.
 - **Row actions are hover/focus-revealed.** The Continue and New session slots
   are reserved but hidden until the row is hovered or keyboard-focused; a
   touch-only device has no hover, so those row actions are not reachable there

@@ -82,6 +82,26 @@ All notable changes to this repository are documented here. The format follows
   with `refresh=1`, `no-store`), and the pure folds live in
   `src/features/project-view/fold.js`.
 
+- Host-shared read acknowledgements: a durable
+  `$DSH_HOME/dsh-power-suite/read-acks.json` document (schema v1, sanitized,
+  per-id max-merge, 1000-entry cap, atomic writes) is served by an authenticated
+  `GET/POST /api/power-suite.read-acks` route; every browser of the profile syncs
+  the same baselines (local cache + 30 s/focus/visibility sync, one-time
+  migration of old local marks, 250 ms debounced push). Read state is derived as
+  `baseline >= activity - 1000 ms`, so a transient status flag can no longer
+  resurrect a stale green dot.
+- True last-activity timestamps for the activity card: a read-only
+  `GET /api/power-suite.session-activity` route reports the catalog's real last
+  activity (from the projection-cache document, without replaying Session logs,
+  5 s TTL), and the card uses `max(catalog updatedAt, activity)` for retention,
+  ordering, relative times, bucket recency, child rows, and read-baseline raising
+  — long turns no longer look stale the moment they stop (the native sidebar keeps
+  catalog times).
+- Current-chat rainbow ring: the card marks the Session open in the main view
+  with a 2 px conic-gradient ring plus soft glow (`@property` rotation + hue
+  drift, static under reduced motion), `pointer-events: none`, no layout shift,
+  and the same highlight on nested child rows.
+
 ### Fixed
 
 - Hover Quick Look no longer opens as an empty card: it always receives an
