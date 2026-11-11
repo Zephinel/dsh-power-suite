@@ -1,10 +1,15 @@
 # Session artifacts
 
 A DSH Power Suite feature: one **Artifacts** card in the right Sidebar's Start
-page that lists every file the current Session created or delivered, with
-actions that work from whatever device is viewing the page.
+page that lists every file the current Session created or delivered **plus the
+images and files the user attached to their own prompts**, with actions that
+work from whatever device is viewing the page.
 
 ## What it shows
+
+The list merges two sources, newest event first.
+
+### Generated and delivered files
 
 An artifact is defined the same way the Host's own deliverables bookkeeping
 defines it:
@@ -24,13 +29,55 @@ The list does not scan the workspace and does not guess: shell output that the
 model never writes through a file tool or delivers with `present` is not an
 artifact of this list.
 
+### User-provided attachments
+
+The Session log also records what the human attached to their prompts. The fold
+reads those references and turns them into **Provided** rows:
+
+- only `user/message` events whose recorded source kind is `user` count, so
+  injected user-role context (instructions, runtime context, skill catalogs) and
+  the `agent/inbox/spliced` duplicate of every human message are ignored;
+- only `image` and `file` content blocks with an attachment id count; text and
+  reference-chip blocks do not;
+- a row carries the attachment id, a display name (stored name, else a
+  media-type-based fallback, else `file`), the stored media type for images,
+  recorded dimensions and byte size, and a 1-based **prompt ordinal** — the
+  human message it arrived with;
+- rows are de-duplicated by attachment id, with the **newest occurrence**
+  winning, so re-pasting the same image moves it to the top instead of listing it
+  twice;
+- the Host adds the live size/existence of each stored object; a row whose bytes
+  cannot be located is omitted from the panel like a missing generated file (the
+  list route still reports it with `missing: true`);
+- a Host composition without the durable attachment service simply omits
+  Provided rows instead of showing broken ones.
+
+Provided and generated rows are merged and sorted by event sequence, so the
+list stays one newest-first timeline. The panel row meta reads
+`Provided · prompt N · size` for provided rows and
+`Generated`/`Delivered · turn N · size` for generated ones.
+
+## Thumbnails
+
+Every image artifact renders a **40 px rounded thumbnail** by default — provided
+images through the attachment route, workspace images through the raw route.
+Thumbnails load lazily (`loading="lazy"`, async decoding) and, if the image
+cannot be decoded, fall back to the plain file icon. Non-image rows (and
+provided generic files) show the file icon instead; every thumbnail action still
+belongs to the row (Open/Download/Copy).
+
 ## Actions
 
-| Action | Behaviour |
-|---|---|
-| **Open** | Opens the file in the right Sidebar's native document preview — the same workspace-files + document-preview pipeline the Files browser uses — through a `dsh-resource://file/session/<sessionId>/<path>` address. Images, PDFs, Office documents, Markdown, code, and HTML get the existing renderers. If no preview type claims the address, it falls back to the raw-file URL in a new tab. |
-| **Download** | Raw URL with `Content-Disposition: attachment`; the browser saves the file and the operating system owns the open-with choice. |
-| **Copy link** | Copies the LAN URL of the file, built from the Host's bound listener address, so another device paired with this DSH can open it directly. |
+Actions are per source. Generated/delivered rows keep the workspace-file actions;
+provided attachments use the attachment route because their bytes live in the
+attachment store, not in the workspace (so the native workspace preview cannot
+claim them).
+
+| Action | Generated / delivered rows | Provided attachment rows |
+|---|---|---|
+| **Open** | Opens the file in the right Sidebar's native document preview — the same workspace-files + document-preview pipeline the Files browser uses — through a `dsh-resource://file/session/<sessionId>/<path>` address. Images, PDFs, Office documents, Markdown, code, and HTML get the existing renderers. If no preview type claims the address, it falls back to the raw-file URL in a new tab. | Opens the attachment's inline URL in a **new browser tab**. It never uses the native workspace preview (the bytes are not workspace files) and has no Quick Look. |
+| **Download** | Raw URL with `Content-Disposition: attachment`; the browser saves the file and the operating system owns the open-with choice. | The attachment route with `disposition=attachment` and the stored file name; same browser save behavior. |
+| **Copy link** | Copies the LAN URL of the file, built from the Host's bound listener address, so another device paired with this DSH can open it directly. | Copies the attachment's inline LAN URL, including its metadata parameters, so a paired device can fetch it. |
 
 The actions render as icon buttons with their label as tooltip and accessible
 name: an open book for Open, a download arrow for Download, and a chain for Copy link
@@ -38,7 +85,22 @@ name: an open book for Open, a download arrow for Download, and a chain for Copy
 inlined [Remix Icon](https://remixicon.com) paths (Apache-2.0); the Artifacts
 guide card uses `ai-generate-3d-line` for the feature itself. The panel header's
 Refresh control is likewise an icon button (rotating while a reload is in
-flight).
+flight). The panel footer's "Open previews the file in the right Sidebar"
+sentence describes generated/workspace rows; provided attachments open a tab
+instead.
+
+## Source filter
+
+A segmented pill row above the list filters the current panel client-side:
+
+- **All**, **Generated**, and **Provided**, each pill carrying its count;
+- selecting one filters the visible rows without re-reading the Session log (no
+  list-route request);
+- the header count switches to `{shown} of {total} artifacts` while a filtered
+  view is active, and a filter whose result set is empty shows
+  **No artifacts in this filter**;
+- the selected pill has a pressed style, and a different Session resets the
+  filter to All so a filter cannot hide every new row.
 
 Opening reuses DSH's own file preview instead of baking another renderer into
 this feature: the right Sidebar owns rendering, reloads, open-in-app on the
@@ -51,6 +113,10 @@ Download is the zero-install hand-off, and the browser's download bubble offers
 Open directly.
 
 ## Hover preview (Quick Look)
+
+The hover preview applies to generated/delivered rows (and the native Workspace
+files browser); provided attachment rows intentionally have no Quick Look — they
+open in a tab from their own action.
 
 Resting the pointer on an artifact row for about 420 ms opens a floating preview
 card to the left of the panel, modeled on macOS Quick Look. The same card also
@@ -123,25 +189,41 @@ downloading, and copying the link.
 
 ## Routes
 
-Both routes are exact Fetch routes on Connection's authenticated API channel,
-so they sit behind the same browser cookie and Host/Origin fence as the rest of
-the GUI. Only the owner Peer reaches them.
+All routes are exact Fetch routes on Connection's authenticated API channel, so
+they sit behind the same browser cookie and Host/Origin fence as the rest of the
+GUI. Only the owner Peer reaches them.
 
 - `GET /api/session-artifacts.list?sessionId=<id>` — folds the Session log and
-  returns `{ sessionId, origin, workspaceRoot, artifacts }`. Each artifact
-  carries `path`, `name`, `presented`, `generated`, `tool`, `turn`, `seq`,
-  `mime`, `previewable`, `size`, and `missing`.
+  returns `{ sessionId, origin, workspaceRoot, artifacts }`, newest first.
+  Generated rows carry `path`, `name`, `presented`, `generated`, `tool`, `turn`,
+  `seq`, `mime`, `previewable`, `size`, and `missing`; provided rows carry
+  `provided: true`, `attachmentId`, `name`, `mediaType` (images), `width`,
+  `height`, `bytes`, `promptOrdinal`, `seq`, `mime`, `previewable`, `size`, and
+  `missing`.
 - `GET|HEAD /api/session-artifacts.raw?path=<absolute path>&disposition=inline|attachment&name=<filename>`
-  — serves the file bytes, bounded to 64 MiB per response. It backs Download,
-  Copy link, and the Open fallback; the native preview reads files through the
-  workspace-files Remote instead.
+  — serves a workspace file's bytes, bounded to 64 MiB per response. It backs
+  Download, Copy link, and the Open fallback for generated rows; the native
+  preview reads files through the workspace-files Remote instead.
+- `GET|HEAD /api/session-artifacts.attachment?attachmentId=<id>&name=<filename>&mediaType=<mime>&bytes=<n>&width=<n>&height=<n>&disposition=inline|attachment`
+  — serves one provided attachment's **verified** bytes. The query repeats the
+  durable reference and its recorded metadata (never a host path); images go
+  through the attachment store's verified image read and report the stored media
+  type, while generic files stream through the verified file read with the type
+  sniffed from the bytes when the name does not say it. It supports `HEAD`, sets
+  an RFC 5987 `Content-Disposition` for non-ASCII names, and answers `400` for
+  missing/invalid metadata, `404` for a reference or bytes that fail
+  verification (a tampered width/size lands here), `413` above 64 MiB, `499`
+  when the request aborts, and `503` when the Host composition has no attachment
+  service.
 - `GET /api/session-artifacts.preview?path=<absolute path>&name=<filename>`
-  — one hover-card descriptor: `{ path, name, mime, size, previewable, kind }`
-  plus `{ text, truncated }` for text kinds. Text reads are capped at 16 KiB.
+  — one hover-card descriptor for a workspace file: `{ path, name, mime, size,
+  previewable, kind }` plus `{ text, truncated }` for text kinds. Text reads are
+  capped at 16 KiB.
 
-Documents are served with `X-Content-Type-Options: nosniff` and a sandbox CSP
-for HTML/SVG, so artifact scripts run in an opaque origin and cannot read the
-application's cookies, storage, or same-origin APIs.
+Document and attachment responses are served with
+`X-Content-Type-Options: nosniff` and a sandbox CSP, so artifact scripts run in
+an opaque origin and cannot read the application's cookies, storage, or
+same-origin APIs.
 
 ## Install
 
@@ -151,9 +233,9 @@ This feature ships inside [DSH Power Suite](overview.md); install the suite:
 plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-suite
 ```
 
-The Host half serves the list, raw, and preview routes; the browser half registers the page type
-and its guide card. Restart the Host process after upgrading the package's
-JavaScript.
+The Host half serves the list, raw, preview, and attachment routes; the browser
+half registers the page type, its guide card, the thumbnails, and the source
+filter. Restart the Host process after upgrading the package's JavaScript.
 
 Implementation: Host entry [`src/features/session-artifacts/host.js`](../src/features/session-artifacts/host.js),
 pure fold [`artifact-index.js`](../src/features/session-artifacts/artifact-index.js),
@@ -163,7 +245,21 @@ region, tests [`test/session-artifacts.test.js`](../test/session-artifacts.test.
 ## Limits
 
 - **Current Session only** — subagent Sessions and other Sessions are not
-  listed.
+  listed. User-provided attachments are limited to this Session's human prompts.
+- **Provided rows need the attachment service.** A Host composition without the
+  durable attachment store omits them entirely; they are never shown as broken
+  rows.
+- **Generic provided files are icons, not previews.** Only images get a
+  thumbnail; provided audio/video/PDF/office files render the file icon, and
+  provided rows have no Quick Look (Open hands the file to a browser tab).
+- **Dedupe keeps the newest occurrence.** One row per attachment id; re-pasting
+  the same image moves that row to the top and updates its prompt ordinal, and
+  the older occurrence is not listed again.
+- **Thumbnails are lazy.** An image thumbnail is only fetched when its row
+  scrolls near the viewport; a failed image falls back to the file icon.
+- **Verified attachment bytes.** The attachment route re-reads the recorded
+  media type/size/dimensions through the store; a tampered query is rejected
+  (`404`/`400`) instead of serving bytes under a false identity.
 - **Loaded from the Session log** — exact reads replay the whole log on each
   panel open. Very large Sessions fan out per open; the list reports what the
   log recorded, not a filesystem scan.

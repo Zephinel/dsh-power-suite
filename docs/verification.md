@@ -22,7 +22,7 @@ npm run pack:check
 
 Current evidence (2026-11-11, Node 24.22.2):
 
-- `npm test`: **50 tests, 50 passed, 0 failed**.
+- `npm test`: **56 tests, 56 passed, 0 failed**.
 - `npm run check`: passed.
 - `npm run pack:check`: **47 files** (0.2.0 tarball), including `src/`,
   `locale/`, `docs/` (with the Dynamic Workspaces, hover-detail, and
@@ -58,6 +58,22 @@ subagent: true`; two completed control Sessions stayed `interrupted: false`.
 These were exercised in the Web GUI during development:
 
 - Artifacts panel: list, Open/Download/Copy actions, missing files hidden.
+- Session artifacts after the provided-attachment extension: the list route
+  returned 29 rows (2 generated + 27 provided, folded from 28 pasted image
+  blocks minus one duplicate attachment id), and all 27 provided-image
+  thumbnails loaded (`naturalWidth > 0`, rendered 40–42 px) as 40 px rounded
+  lazy thumbnails; the sample provided row was
+  `image/webp 1248x624 14406 B prompt 25` with sha256
+  `3669…bafa`. The segmented filter read All 29 / Generated 2 / Provided 27 and
+  showed `2 of 29 artifacts` and `27 of 29 artifacts`; filtering triggered 0
+  list-route fetches, and the empty-filtered state was verified against a
+  mocked payload. The attachment route answered GET and HEAD with
+  `200 image/webp`, `content-length: 14406`, `x-content-type-options: nosniff`
+  and `content-security-policy: sandbox; default-src 'none'`; the response
+  sha256 matched the attachment id. A tampered width answered `404`, missing
+  metadata answered `400`. Provided Open/Download/Copy worked, generated rows
+  kept their raw route, native preview, and Quick Look unchanged, and there were
+  0 console errors.
 - Hover Quick Look on Artifacts rows and native Workspace files: Markdown,
   highlighted code, images, PDF/HTML, resize persistence, outside-click
   dismissal, animated switching.
@@ -86,9 +102,10 @@ These were exercised in the Web GUI during development:
   the prompt ticks sit on the native turn-rail column, resting at 60 % width
   with the 90 % hover growth and the brand hairline on keyboard focus; the
   horizontal divider is now 32 x 1 px and its right edge (2541) equals the rail
-  right edge. The 20 x 22 px magnifier sits right-aligned with its SVG centre at
-  x = 2531.5 against a tick-column centre of x = 2531, and its measured rect is
-  identical before and after opening the search
+  right edge. The 20 x 22 px magnifier now overhangs the rail edge by 4 px so
+  its SVG centre (x = 2535 at rail right 2541; 1383 at 1389) equals
+  `markRight - 6`, the centre of the visible resting tick, and its measured rect
+  is identical before and after opening the search
   (`{x: 2521, y: 836, w: 20, h: 22}`), so the button is pinned. In the roomy
   case the search card hangs directly below it with right edge 2541; in the
   left-fallback case the card's right edge is 2513 = `toggle.x - 8` and its
@@ -96,7 +113,9 @@ These were exercised in the Web GUI during development:
   313 px while 65 marks scrolled inside it behind hidden scrollbars and the fade
   masks; no scrollbar is visible anywhere in the rail. The hover card showed the
   full prompt text and its time; clicking a mark copied the exact prompt into the
-  Lexical draft; 0 buttons exist inside the search card, and a blank pointer
+  Lexical draft **silently** — the confirmation chip is gone
+  (`[data-psp-copied]` count 0, no animation) while the draft text matched; 0
+  buttons exist inside the search card, and a blank pointer
   press outside (or Escape) closed it and cleared the filter with all 65 marks
   restored; `Showing N of M` filtered correctly. No console errors were
   reported and `node --check src/client.js` plus `node --test test/*.test.js`
@@ -136,7 +155,7 @@ These were exercised in the Web GUI during development:
   (Active 8 → 5, Inactive 6 → 9) and reverting to 7 days restored 8/6. The Host
   route persisted `{ promptHistoryModifier, recentSessionMinutes,
   activeProjectDays }` with `"version": 2`, and the raw document read back from
-  the route matched. `npm test` then reported 50/50 passing.
+  the route matched. `npm test` then reported 56/56 passing.
 
 The manual checks are evidence for the behavior described in the feature docs;
 they are not a substitute for the automated gate above.
@@ -156,11 +175,14 @@ design; the final rail's live verification is recorded above. Residual risks the
 pass
 explicitly could not exercise: elapsing the longest retention windows (24 hours
 and 30 days), the alternate View-options grouping modes, the empty-card state,
-and screen-reader behavior with a real assistive technology; the archived-row exclusion is covered
+and screen-reader behavior with a real assistive technology; the provided-row and
+source-filter copy was exercised only in the English UI (the Chinese strings were
+reviewed in code); the archived-row exclusion is covered
 by code inspection plus an observed reload where an archived Session disappeared
 from the card.
 
 The live surfaces are captured in
+[assets/artifacts-panel.png](assets/artifacts-panel.png),
 [assets/dynamic-workspaces.png](assets/dynamic-workspaces.png),
 [assets/dynamic-workspaces-hover.png](assets/dynamic-workspaces-hover.png),
 [assets/prompt-history-preview.png](assets/prompt-history-preview.png),

@@ -5,7 +5,8 @@ The suite is one DSH bundle with two halves that share no runtime code:
 ```
 src/index.js            Host entry (Node)
 ├─ features/session-artifacts/host.js    GET  /api/session-artifacts.list
-│                                        GET  /api/session-artifacts.raw
+│                                        GET|HEAD /api/session-artifacts.raw
+│                                        GET|HEAD /api/session-artifacts.attachment
 │                                        GET  /api/session-artifacts.preview
 ├─ features/workspace-presets/host.js    GET  /api/workspace-presets.get
 │                                        POST /api/workspace-presets.set
@@ -16,14 +17,15 @@ src/index.js            Host entry (Node)
 └─ ctx.effect(...)                       every registration lives with the plugin
 
 src/client.js           Browser entry (DSH module loader)
-├─ Artifacts panel + right-Sidebar guide card
+├─ Artifacts panel (generated + provided rows, thumbnails, source filter)
+│  + right-Sidebar guide card
 ├─ Workspace preset context-menu submenu
 ├─ Composer prompt-history keys + right-edge history rail
 ├─ Draft attachment memory seat (invisible)
 ├─ Dynamic Workspaces buckets + running & recent Sessions card
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
 ├─ Plugins-page settings section
-└─ Shared hover Quick Look for Artifacts rows and native Workspace file rows
+└─ Shared hover Quick Look for generated Artifacts rows and native Workspace file rows
 ```
 
 ## Host half
@@ -39,12 +41,26 @@ GUI. JSON responses are `no-store`.
 
 ### Session artifacts
 
-Artifacts are derived from the session log: successful `write`, `edit`, and
-`str_replace_editor` calls plus files delivered with `present`. The Host streams
-and folds the log, resolves paths, and returns a list plus raw/preview routes.
-The raw route serves file bytes (with a 64 MiB cap) and the preview route
-returns a descriptor plus a bounded 16 KiB text window. Missing files are
-marked `missing: true` in the payload; the panel hides them.
+The list merges two folds of the Session log. Generated/delivered artifacts come
+from successful `write`, `edit`, and `str_replace_editor` calls plus files
+delivered with `present`; **user-provided attachments** come from the image and
+file blocks of human `user/message` events (source kind `user` only), deduped by
+attachment id with the newest occurrence winning and carrying a 1-based prompt
+ordinal. Both kinds are sorted newest-first by event sequence and live sizes are
+resolved through the filesystem; missing rows keep `missing: true` in the payload
+and the panel hides them.
+
+The workspace-file raw route serves bytes (64 MiB cap) and the preview route
+returns a hover descriptor plus a bounded 16 KiB text window. The separate
+`GET|HEAD /api/session-artifacts.attachment` route serves provided attachments
+from the durable attachment store: images through the verified image read (stored
+media type/dimensions/byte size are re-checked), generic files through the
+verified file read with a magic-byte sniff, all with the same no-store,
+`nosniff`, and sandbox-CSP headers as the raw route and with typed
+400/404/413/499/503 failures. A composition without the attachment service omits
+provided rows. The browser renders a 40 px lazy thumbnail for every image
+artifact and a custom All/Generated/Provided segmented filter that works purely
+client-side over the loaded list.
 
 ### Prompt history
 
@@ -142,9 +158,9 @@ foot. The full-text hover card follows the native preview card style
 (line-clamped, panel elevation). The search card opens directly below the pinned
 magnifier (right edge on the rail column) or, with no room above the composer,
 to the magnifier's left (right edge 8 px from the button), clamped above the
-composer; both cards are portaled to the document body, as is the copy
-confirmation chip. A clicked prompt is copied through the Session input's
-`setDraft`. Placement is re-measured in one animation frame on resize, scroll,
+composer; both cards are portaled to the document body. A clicked prompt is
+copied silently through the Session input's `setDraft` — exact draft text and
+composer focus, with no confirmation chip, icon, or animation. Placement is re-measured in one animation frame on resize, scroll,
 composer height, sidebar width, and native-rail changes. Registration id
 `power-suite.prompt-history-preview`, order 100, locale namespace
 `powerSuitePromptHistoryPreview`.

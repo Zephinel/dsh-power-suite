@@ -63,12 +63,14 @@ prompts.
   Host reports it. The card fades in over 120 ms, stays open while the pointer
   travels into it, and closes on scroll, resize, or shortly after leaving.
 - **Click to copy**: clicking a mark (or pressing Enter on a focused one) puts
-  the prompt into the composer draft, focuses the composer editor, and shows a
-  quiet fixed **Copied to input** chip beside the rail for about two seconds —
-  no layout shift.
-- **Search**: the magnifier is a 20 x 22 px button below the marks, right-aligned
-  so the magnifier's centre lines up with the tick column. It stays pinned when
-  the search opens — the button does not move or hide. The card appears
+  the prompt into the composer draft and focuses the composer editor. The copy
+  is **silent**: there is no confirmation chip, check icon, or animation, and
+  nothing moves.
+- **Search**: the magnifier is a 20 x 22 px button below the marks, aligned on
+  the **visible resting tick column**: it overhangs the rail's right edge by
+  4 px, so the SVG/button centre sits at `railRight - 6`, the centre of the
+  20 px tick at `scaleX(0.6)`. It stays pinned when the search opens — the
+  button does not move or hide. The card appears
   **directly below the button** (its right edge on the rail column, up to 300 px
   wide) when there is room above the composer; when the button sits close to the
   composer or the rail is long, the card instead opens **to the left of the

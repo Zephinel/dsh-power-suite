@@ -21,9 +21,9 @@ All notable changes to this repository are documented here. The format follows
 - Prompt-history rail: a vertical rail at the conversation's right edge, below
   the native turn rail and separated from it by a short divider, lists the
   current Session's sent prompts newest first as tick marks. Hover or keyboard
-  focus shows the full prompt in a card to the left, click copies it into the
-  composer draft with a quiet confirmation, and a search button below the marks
-  reveals a floating substring filter. The rail appears only while the Session
+  focus shows the full prompt in a card to the left, click copies it silently
+  into the composer draft, and a search button below the marks reveals a
+  floating substring filter. The rail appears only while the Session
   has sent prompts.
 - Draft attachment memory: browser-owned attachments in a draft (pasted images,
   dropped or picked files) are remembered per Session and re-introduced through
@@ -58,7 +58,8 @@ All notable changes to this repository are documented here. The format follows
   tick marks on the native column (60 % width at rest, growing on hover, brand
   hairline on keyboard focus), a horizontal 32 x 1 px divider, a native-style
   line-clamped preview card, and a pinned 20 x 22 px magnifier whose centre sits
-  on the tick column. The search card opens directly below the magnifier with
+  on the visible resting tick column (the toggle overhangs the rail edge by
+  4 px). The search card opens directly below the magnifier with
   its right edge on the column, or flips to the magnifier's left (8 px away)
   when there is no room above the composer; it has no close button and dismisses
   on a blank outside click or Escape. A long history caps the rail at
@@ -73,6 +74,11 @@ All notable changes to this repository are documented here. The format follows
   the configuration is hidden and restored on unmount, and the section now
   carries the **Prompt history** group plus the **Active & recent** group with
   the two retention rows.
+- Prompt-history rail polish: copying a prompt is now silent (the confirmation
+  chip, check icon, and animation are gone while the exact draft text and
+  composer focus remain), and the pinned search magnifier is centred on the
+  visible resting tick column — the 20 x 22 px toggle overhangs the rail edge by
+  4 px so its centre equals `railRight - 6`.
 - Dynamic Workspaces card refinement: Session rows are single-line (glyph,
   title, time) with disclosure chevrons at the far right; the Workspace title
   and path, Status, absolute Last active time, and running subagent count moved

@@ -6,13 +6,19 @@ Suite**, and use the plugin's own settings section for the shortcut modifier.
 ## Session artifacts
 
 Open the right Sidebar's Start page and choose **Artifacts**. The panel lists
-files this Session created or delivered.
+files this Session created or delivered, plus the images and files you attached
+to your own prompts. Image rows show a 40 px rounded thumbnail by default (other
+files keep a file icon), and the **All / Generated / Provided** pills above the
+list filter it client-side with per-pill counts (`{shown} of {total}` while
+filtered; an empty filter shows **No artifacts in this filter**).
 
-- **Open** previews the file through the native document preview.
-- **Download** saves the file through the plugin's raw route.
-- **Copy link** copies the authenticated raw URL (LAN-friendly).
-- Hover a row for the Quick Look preview; drag the bottom-left grip to resize,
-  double-click it to reset the size, and click anywhere outside to dismiss.
+- **Open** previews a generated file through the native document preview;
+  a provided attachment opens its inline URL in a new tab.
+- **Download** saves the file through the plugin's raw or attachment route.
+- **Copy link** copies the authenticated LAN URL.
+- Hover a generated row for the Quick Look preview; drag the bottom-left grip to
+  resize, double-click it to reset the size, and click anywhere outside to
+  dismiss. Provided attachments have no Quick Look.
 
 Missing files are filtered out.
 
@@ -61,10 +67,10 @@ Below the native turn rail at the conversation's right edge, a vertical rail
 lists the current Session's prompts as small native-style ticks, newest at the
 top, with a short horizontal divider separating the two groups. Hover or
 keyboard-focus a tick to read the full prompt and its time in a card to the
-left; click it (or press Enter) to copy the text into the composer draft, with a
-small **Copied to input** chip near the rail. The **Search** button below the
-ticks stays put and opens a filter card directly below it, or to its left when
-there is no room above the composer; a blank click outside the card or Escape
+left; click it (or press Enter) to copy the text into the composer draft — the
+copy is silent, with no confirmation chip or animation. The **Search** button
+below the ticks stays put and opens a filter card directly below it, or to its
+left when there is no room above the composer; a blank click outside the card or Escape
 closes it and clears the filter. A long history scrolls inside the rail while
 the search button stays at its foot. The rail is absent while the Session has no
 sent prompts.

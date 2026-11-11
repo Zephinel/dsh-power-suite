@@ -12,14 +12,29 @@
 
 ## Session artifacts
 
-- Artifacts are inferred from successful `write`, `edit`,
+- Generated artifacts are inferred from successful `write`, `edit`,
   `str_replace_editor`, and `present` activity. Files created by other means
-  (for example a shell command) are not discovered.
-- Missing files are hidden rather than shown as disabled rows.
-- Raw downloads are capped at 64 MiB; text previews read the first 16 KiB and
-  report truncation.
+  (for example a shell command) are not discovered. User-provided rows cover
+  only the image/file blocks of this Session's human prompts.
+- Missing files (generated or provided) are hidden rather than shown as
+  disabled rows; the list route still reports them with `missing: true`.
+- **Provided rows need the attachment service.** A Host composition without the
+  durable attachment store omits provided rows entirely instead of showing
+  broken ones, and compositions without that service cannot serve their bytes.
+- **Provided generic files are icons, not previews.** Only images get the 40 px
+  thumbnail; provided audio/video/PDF/Office files show the file icon and have no
+  hover Quick Look (their Open hands the file to a browser tab).
+- **Dedupe keeps the newest occurrence.** One row per attachment id; re-pasting
+  the same image moves it to the top and updates its prompt ordinal, and the
+  older occurrence is not listed again.
+- **Thumbnails are lazy.** An image thumbnail is fetched only when its row nears
+  the viewport; an image that fails to decode falls back to the file icon.
+- Raw workspace downloads and provided attachment responses are capped at
+  64 MiB; text previews read the first 16 KiB and report truncation, and the
+  attachment route rejects tampered metadata with `400`/`404`.
 - The hover preview supports image, audio/video, PDF, HTML, and text/Markdown;
-  unknown binaries show an unavailable state.
+  unknown binaries show an unavailable state. It applies to generated/workspace
+  rows only, never to provided attachments.
 
 ## Interrupted sessions
 
@@ -162,7 +177,10 @@
 
 ## Localization and theming
 
-- UI copy ships in English and Chinese; other locales fall back to English.
+- UI copy ships in English and Chinese; other locales fall back to English. The
+  artifacts extension's new Provided/filter copy was reviewed in both languages
+  but the live checks ran against the English UI only, so the Chinese strings
+  are not live-exercised.
 - The UI uses DSH theme tokens. Reduced-motion preferences disable preview
   animations.
 - Hover preview geometry is remembered per browser in `localStorage`; it does
