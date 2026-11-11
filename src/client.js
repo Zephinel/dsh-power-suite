@@ -2899,6 +2899,8 @@ window.__ModuleLoader__.load({
 
     /** Host route reporting one Session's last-turn state. */
     const INTERRUPTED_ROUTE = 'api/power-suite.interrupted'
+    /** Host route resuming one Session through a non-human context message. */
+    const CONTINUE_ROUTE = 'api/power-suite.continue'
 
     const INTERRUPTED_EN = {
       'badge.aria': 'Task interrupted',
@@ -2906,7 +2908,9 @@ window.__ModuleLoader__.load({
       'badge.title.subagent': 'A delegated subagent task was interrupted. Hover this session to continue it.',
       'continue.label': 'Continue',
       'continue.aria': 'Continue the interrupted task',
-      'continue.prompt': 'Continue the interrupted task.'
+      'continue.prompt': 'Continue the interrupted task.',
+      'continue.summary': 'Continue interrupted task',
+      'continue.failed': 'Could not continue the task. Try again.'
     }
     const INTERRUPTED_ZH = {
       'badge.aria': '任务被中断',
@@ -2914,7 +2918,9 @@ window.__ModuleLoader__.load({
       'badge.title.subagent': '委派的子任务被中断，悬停此会话可继续。',
       'continue.label': '继续',
       'continue.aria': '继续被中断的任务',
-      'continue.prompt': '继续完成被中断的任务。'
+      'continue.prompt': '继续完成被中断的任务。',
+      'continue.summary': '继续被中断的任务',
+      'continue.failed': '继续任务失败，请重试。'
     }
 
     // Remix Icon path data (Apache-2.0, https://remixicon.com), inlined so the
@@ -3170,7 +3176,7 @@ window.__ModuleLoader__.load({
     const continueRequest = { pending: null }
 
     /** The mounted composer's continue handler, if a Conversation is open. */
-    const continueRuntime = { current: null }
+    const continueRuntime = { current: null, pending: false }
 
     /** Services captured at install time for row actions. */
     const interruptedRuntime = { uiWorkspace: null }
@@ -3208,6 +3214,7 @@ html[data-input-modality="keyboard"] [data-row-key^="session:"][data-power-suite
 .dps-row-continue{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px 0 5px;border:0;border-radius:var(--dsw-radius-sm,4px);background:color-mix(in srgb,var(--dsw-alias-label-primary) 8%,transparent);color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:1;cursor:pointer;flex:none}
 .dps-row-continue:hover{background:color-mix(in srgb,var(--dsw-alias-label-primary) 14%,transparent);color:var(--dsw-alias-label-primary)}
 .dps-row-continue:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+[class*="_contextRow"]:has([data-context-source="power-suite-continue"]){display:none!important}
 html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] button[class$="_primary"]>svg{display:none!important}
 html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] button[class$="_primary"]::before{content:"";display:block;width:16px;height:16px;background-color:currentColor;-webkit-mask:${PLAY_MASK} center/contain no-repeat;mask:${PLAY_MASK} center/contain no-repeat}
 `
@@ -3290,16 +3297,27 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (now.interrupted !== true) return false
         if (now.phase !== 'plain') return false
         if (now.draft.trim() !== '') return false
-        now.inputActions.setDraft(now.t('continue.prompt'))
+        if (continueRuntime.pending === true) return false
         const target = now.sessionId
-        window.setTimeout(() => {
-          const after = latest.current
-          if (after.sessionId !== target) return
-          if (after.phase !== 'plain') return
-          after.inputActions.submit()
-        }, 0)
-        markInterrupted(target, false)
-        window.setTimeout(() => refreshInterrupted(target), 2500)
+        continueRuntime.pending = true
+        fetch(appUrl(CONTINUE_ROUTE), {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({
+            sessionId: target,
+            prompt: now.t('continue.prompt'),
+            summary: now.t('continue.summary')
+          })
+        }).then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`)
+          markInterrupted(target, false)
+          window.setTimeout(() => refreshInterrupted(target), 2500)
+        }).catch(() => {
+          refreshInterrupted(target)
+        }).finally(() => {
+          continueRuntime.pending = false
+        })
         return true
       }, [])
 
@@ -3399,6 +3417,29 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const dispose = ctx.on('connection/reset', () => refreshAllInterrupted())
         return typeof dispose === 'function' ? dispose : undefined
       }, 'power-suite: interrupted connection reset')
+      ctx.effect(() => {
+        // The implicit continuation is a context injection, not a human
+        // prompt. Hide only that producer's row so the transcript stays clean.
+        let frame = null
+        const hide = () => {
+          frame = null
+          for (const source of document.querySelectorAll('[data-context-source="power-suite-continue"]')) {
+            const row = source.closest('[class*="_contextRow"]')
+            if (row instanceof HTMLElement) row.style.display = 'none'
+          }
+        }
+        const schedule = () => {
+          if (frame !== null) return
+          frame = window.requestAnimationFrame(hide)
+        }
+        schedule()
+        const observer = new MutationObserver(schedule)
+        observer.observe(document.body, { childList: true, subtree: true })
+        return () => {
+          observer.disconnect()
+          if (frame !== null) window.cancelAnimationFrame(frame)
+        }
+      }, 'power-suite: hide implicit continuation rows')
       ctx.effect(() => {
         const tag = document.createElement('style')
         tag.dataset.powerSuiteCss = 'interrupted'

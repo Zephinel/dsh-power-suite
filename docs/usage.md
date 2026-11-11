@@ -31,9 +31,10 @@ plugin settings (⌘/Ctrl, ⌥/Alt, Ctrl, Shift, or Off).
 ## Interrupted sessions
 
 A Session whose last turn was cut off by a Host restart shows an amber mark
-left of its title. Hover the row and choose **Continue** to send the
-continuation prompt; the composer submit control uses a play icon while the
-session is interrupted.
+left of its title. Hover the row and choose **Continue** to resume it; the
+continuation is implicit — it does not appear as a user message in the
+transcript, while the composer submit control uses a play icon until the new
+turn starts.
 
 ## Settings
 

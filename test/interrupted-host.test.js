@@ -10,9 +10,9 @@ import { installInterruptedSessions } from '../src/features/interrupted-sessions
  * @param {Set<string>} [options.running] - live running Session ids.
  * @returns {{ ctx: object, route: Function, emit: Function }} the context.
  */
-function makeContext({ logs, parents, running = new Set() }) {
+function makeContext({ logs, parents, running = new Set(), controller }) {
   const events = {}
-  let route = null
+  const routes = new Map()
   const ctx = {
     effect: (fn) => {
       const dispose = fn()
@@ -22,10 +22,11 @@ function makeContext({ logs, parents, running = new Set() }) {
       events[name] = handler
       return () => {}
     },
+    get: (name) => (name === 'sessionController' ? controller : undefined),
     connection: {
       fetch: {
         register: (definition) => {
-          route = definition
+          routes.set(definition.path, definition)
           return () => {}
         }
       }
@@ -56,7 +57,8 @@ function makeContext({ logs, parents, running = new Set() }) {
   installInterruptedSessions(ctx)
   return {
     ctx,
-    route,
+    route: routes.get('/api/power-suite.interrupted'),
+    continueRoute: routes.get('/api/power-suite.continue'),
     emit: (sessionId, event) => {
       if (typeof events['session/event'] === 'function') events['session/event']({ id: sessionId }, event)
     }
@@ -149,4 +151,59 @@ test('a child event invalidates the parent-derived value', async () => {
   emit('child-a', turnEnd(1, 3000, 'aborted', 'disposed', 11))
   logs.set('child-a', [turnStart(1, 2500, 10), turnEnd(1, 3000, 'aborted', 'disposed', 11)])
   assert.equal((await read(route, 'session-parent')).interrupted, true)
+})
+
+
+test('the continue route resumes through a non-human context source', async () => {
+  const calls = []
+  const controller = {
+    commands: {
+      async prompt(request, source) {
+        calls.push({ request, source })
+        return { accepted: true }
+      }
+    }
+  }
+  const logs = new Map([['session-parent', [turnStart(1, 1000), turnEnd(1, 2000, 'interrupted')]]])
+  const parents = new Map([['session-parent', null]])
+  const { continueRoute } = makeContext({ logs, parents, controller })
+  const response = await continueRoute.fetch(new Request('http://localhost/api/power-suite.continue', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: 'session-parent', prompt: 'Continue the interrupted task.', summary: 'Continue task' })
+  }))
+  assert.equal(response.status, 200)
+  assert.deepEqual(await response.json(), { accepted: true })
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].request.sessionId, 'session-parent')
+  assert.equal(calls[0].request.mode, 'queue')
+  assert.deepEqual(calls[0].request.content, [{ type: 'text', text: 'Continue the interrupted task.' }])
+  assert.equal(calls[0].source.kind, 'power-suite-continue')
+  assert.equal(calls[0].source.form, 'notice')
+  assert.equal(calls[0].source.summary, 'Continue task')
+})
+
+test('the continue route fails cleanly without a session controller', async () => {
+  const logs = new Map([['session-parent', [turnStart(1, 1000)]]])
+  const parents = new Map([['session-parent', null]])
+  const { continueRoute } = makeContext({ logs, parents })
+  const response = await continueRoute.fetch(new Request('http://localhost/api/power-suite.continue', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: 'session-parent', prompt: 'continue' })
+  }))
+  assert.equal(response.status, 503)
+  assert.equal((await response.json()).code, 'continue-unavailable')
+})
+
+test('the continue route rejects empty prompts', async () => {
+  const logs = new Map([['session-parent', []]])
+  const parents = new Map([['session-parent', null]])
+  const { continueRoute } = makeContext({ logs, parents })
+  const response = await continueRoute.fetch(new Request('http://localhost/api/power-suite.continue', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: 'session-parent', prompt: '   ' })
+  }))
+  assert.equal(response.status, 400)
 })

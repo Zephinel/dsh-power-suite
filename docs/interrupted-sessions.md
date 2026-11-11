@@ -119,3 +119,21 @@ The route folds known child Sessions (`header.parentSession`) too:
 
 Nested delegations are followed recursively; a subagent Session is never shown
 as its own row in the sidebar.
+
+
+## Implicit continuation
+
+Clicking **Continue** no longer writes a human-looking prompt into the
+transcript. The browser calls `POST /api/power-suite.continue`; the Host uses
+the Session controller's prompt command with an explicit message source
+(`power-suite-continue`, form `notice`), so:
+
+- the transcript shows no user bubble for the continuation;
+- prompt history ignores it (only `source.kind: "user"` messages are recalled);
+- the intercepted row is hidden by the plugin, so the continuation appears
+  implicit; the model still receives a user-role instruction and starts a new
+  turn.
+
+If the Host composition does not expose the Session controller, the route
+returns `continue-unavailable` and the badge stays; the browser repulls the
+interruption state instead of pretending success.

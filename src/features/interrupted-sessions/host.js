@@ -13,6 +13,7 @@
  * after the parent's latest `turn/end` marks the parent as interrupted.
  */
 
+import { randomUUID } from 'node:crypto'
 import {
   INTERRUPTED_ROUTE,
   describeInterruption,
@@ -22,6 +23,9 @@ import {
   lastTurnState,
   subagentInterruptionAfter
 } from './turns.js'
+
+/** Authenticated route that resumes an interrupted Session implicitly. */
+export const CONTINUE_ROUTE = '/api/power-suite.continue'
 
 /** Cache bound: the route is asked per listed Session, including old ones. */
 const MAX_CACHED = 2000
@@ -59,6 +63,70 @@ function agentRunning(ctx, sessionId) {
 function toWire(value) {
   const { lastEndTime, lastEventTime: eventTime, interruptedAt, ...wire } = value
   return wire
+}
+
+/**
+ * Reject a continue request with a stable JSON error.
+ * @param {number} status - HTTP status.
+ * @param {string} code - stable error code.
+ * @param {string} message - human-readable message.
+ * @returns {Response} the response.
+ */
+function sendError(status, code, message) {
+  return sendJson(status, { code, message })
+}
+
+/**
+ * Resume an interrupted Session without recording a human-authored prompt.
+ *
+ * The Session-controller command path accepts an explicit message source, so
+ * this continuation is stored as context with source kind
+ * `power-suite-continue`; Chat renders it as a context row and prompt history
+ * ignores it. The browser hides that internal row, leaving the continuation
+ * implicit while the model still receives a user-role instruction.
+ * @param {object} ctx - Host context.
+ * @param {Request} request - authenticated request.
+ * @returns {Promise<Response>} accepted acknowledgement or a typed failure.
+ */
+async function handleContinue(ctx, request) {
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return sendError(400, 'bad-request', 'JSON body is required')
+  }
+  if (body === null || typeof body !== 'object') return sendError(400, 'bad-request', 'JSON object is required')
+  const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : ''
+  const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : ''
+  const summary = typeof body.summary === 'string' ? body.summary.trim() : ''
+  if (sessionId.length === 0 || sessionId.length > 200) return sendError(400, 'bad-request', 'sessionId is required')
+  if (prompt.length === 0 || prompt.length > 1000) return sendError(400, 'bad-request', 'prompt must be 1..1000 characters')
+  const controller = ctx.get('sessionController')
+  if (controller === undefined || typeof controller?.commands?.prompt !== 'function') {
+    return sendError(503, 'continue-unavailable', 'Session controller is unavailable')
+  }
+  try {
+    await controller.commands.prompt({
+      requestId: randomUUID(),
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text: prompt }]
+    }, {
+      kind: 'power-suite-continue',
+      form: 'notice',
+      summary: summary.length > 0 ? summary.slice(0, 120) : 'Continue interrupted task'
+    })
+  } catch (error) {
+    const code = error !== null && typeof error === 'object' ? error.code : undefined
+    if (code === 'session/not-found' || code === 'SESSION_QUERY_SESSION_NOT_FOUND') {
+      return sendError(404, 'session-not-found', 'Session not found')
+    }
+    if (code === 'session/invalid-time-zone' || code === 'gateway/bad-request') {
+      return sendError(400, 'bad-request', typeof error.message === 'string' ? error.message : 'Invalid continue request')
+    }
+    return sendError(500, 'continue-failed', typeof error?.message === 'string' ? error.message : 'Could not continue the Session')
+  }
+  return sendJson(200, { accepted: true })
 }
 
 /**
@@ -224,6 +292,13 @@ export function installInterruptedSessions(ctx) {
     if (event.type === 'subagent/descriptor') lineage.at = 0
   }), 'power-suite: interrupted cache')
 
+
+  ctx.effect(() => ctx.connection.fetch.register({
+    path: CONTINUE_ROUTE,
+    methods: ['POST'],
+    requestBody: 'buffered',
+    fetch: (request) => handleContinue(ctx, request)
+  }), `power-suite: continue POST ${CONTINUE_ROUTE}`)
 
   ctx.effect(() => ctx.connection.fetch.register({
     path: INTERRUPTED_ROUTE,

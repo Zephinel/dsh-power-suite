@@ -14,6 +14,10 @@ All notable changes to this repository are documented here. The format follows
 - Parent Sessions whose delegated subagent was interrupted after the parent's
   last completed turn are now marked interrupted, including nested
   delegations; a live child remains live work.
+- **Continue** is now implicit: it resumes through a non-human context source
+  instead of inserting a visible "Continue the interrupted task." user prompt.
+  The continuation row is hidden, prompt history ignores it, and a missing
+  Session controller leaves the badge in place.
 
 ### Changed
 

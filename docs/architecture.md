@@ -11,6 +11,7 @@ src/index.js            Host entry (Node)
 │                                        POST /api/workspace-presets.set
 ├─ features/prompt-history/host.js       GET  /api/prompt-history.list
 ├─ features/interrupted-sessions/host.js GET  /api/power-suite.interrupted
+│                                        POST /api/power-suite.continue
 ├─ features/settings/host.js             GET/POST /api/power-suite.settings
 └─ ctx.effect(...)                       every registration lives with the plugin
 
