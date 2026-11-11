@@ -63,6 +63,7 @@ window.__ModuleLoader__.load({
     /** Authenticated exact routes registered by the Host half. */
     const LIST_ROUTE = 'api/session-artifacts.list'
     const RAW_ROUTE = 'api/session-artifacts.raw'
+    const ATTACHMENT_ROUTE = 'api/session-artifacts.attachment'
     const PREVIEW_ROUTE = 'api/session-artifacts.preview'
 
     /** The bundle's npm package name: configuration slot key and settings identity. */
@@ -75,15 +76,23 @@ window.__ModuleLoader__.load({
       'tab.title': 'Artifacts',
       'list.count': '{count} artifacts',
       'list.countOne': '1 artifact',
+      'list.countOf': '{shown} of {total} artifacts',
       'list.refresh': 'Refresh',
       'list.loading': 'Loading…',
       'list.empty.title': 'No artifacts yet',
       'list.empty.hint': 'Files this session writes, or delivers with present, appear here.',
+      'list.empty.filtered': 'No artifacts in this filter',
       'list.error.title': 'Could not load artifacts',
       'list.retry': 'Retry',
+      'filter.label': 'Artifact source',
+      'filter.all': 'All',
+      'filter.generated': 'Generated',
+      'filter.provided': 'Provided',
       'meta.presented': 'Delivered',
       'meta.generated': 'Generated',
+      'meta.provided': 'Provided',
       'meta.turn': 'turn {turn}',
+      'meta.prompt': 'prompt {prompt}',
       'action.open': 'Open',
       'action.download': 'Download',
       'action.copy': 'Copy link',
@@ -100,15 +109,23 @@ window.__ModuleLoader__.load({
       'tab.title': '产物',
       'list.count': '{count} 个产物',
       'list.countOne': '1 个产物',
+      'list.countOf': '显示 {shown} / 共 {total} 个产物',
       'list.refresh': '刷新',
       'list.loading': '加载中…',
       'list.empty.title': '还没有产物',
       'list.empty.hint': '本会话写入的文件，或用 present 交付的文件会出现在这里。',
+      'list.empty.filtered': '此筛选下没有产物',
       'list.error.title': '产物加载失败',
       'list.retry': '重试',
+      'filter.label': '产物来源',
+      'filter.all': '全部',
+      'filter.generated': '生成',
+      'filter.provided': '用户提供',
       'meta.presented': '已交付',
       'meta.generated': '已生成',
+      'meta.provided': '用户提供',
       'meta.turn': '第 {turn} 轮',
+      'meta.prompt': '第 {prompt} 条提示',
       'action.open': '打开',
       'action.download': '下载',
       'action.copy': '复制链接',
@@ -173,10 +190,18 @@ window.__ModuleLoader__.load({
 .dsa-refresh[data-loading=true] svg{animation:dsa-spin .9s linear infinite}
 @keyframes dsa-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){.dsa-refresh[data-loading=true] svg{animation:none}}
+.dsa-filters{flex:none;align-self:flex-start;display:inline-flex;align-items:center;gap:2px;margin:0 14px 8px;padding:2px;border-radius:10px;background:var(--dsw-alias-bg-layer-2)}
+.dsa-filter{appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;cursor:pointer;padding:3px 10px;border-radius:8px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.dsa-filter:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dsa-filter:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.dsa-filter[data-selected=true]{background:var(--dsw-alias-bg-layer-4,var(--dsw-alias-bg-layer-3));color:var(--dsw-alias-label-primary);font-weight:500}
+.dsa-filter-count{color:var(--dsw-alias-label-tertiary);font-size:11px;font-variant-numeric:tabular-nums}
+.dsa-filter[data-selected=true] .dsa-filter-count{color:var(--dsw-alias-label-secondary)}
 .dsa-list{list-style:none;margin:0;padding:0 8px 8px;overflow:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:2px}
 .dsa-row{display:flex;align-items:center;gap:10px;padding:8px 8px;border-radius:var(--dsw-radius-lg,10px);min-width:0}
 .dsa-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dsa-icon{flex:none;width:16px;height:16px;color:var(--dsw-alias-label-tertiary);display:flex;align-items:center;justify-content:center}
+.dsa-thumb{flex:none;display:block;width:40px;height:40px;border-radius:8px;object-fit:cover;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2,transparent)}
 .dsa-main{flex:1;min-width:0}
 .dsa-name{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsa-meta{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -274,6 +299,31 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * One artifact row's leading glyph: an image thumbnail for image artifacts
+     * (lazily loaded and rounded), the generic file outline otherwise. A
+     * thumbnail that fails to load falls back to the outline so a row never
+     * shows a broken-image glyph.
+     * @param {{ artifact: object, origin: string | null }} props - row and Host origin.
+     * @returns {object} the img or icon element.
+     */
+    function ArtifactGlyph(props) {
+      const { artifact, origin } = props
+      const [failed, setFailed] = React.useState(false)
+      if (!isImageArtifact(artifact) || failed) {
+        return React.createElement('span', { className: 'dsa-icon' }, FileIcon())
+      }
+      return React.createElement('img', {
+        className: 'dsa-thumb',
+        src: artifactUrl(artifact, 'inline', origin),
+        alt: '',
+        loading: 'lazy',
+        decoding: 'async',
+        draggable: false,
+        onError: () => setFailed(true)
+      })
+    }
+
+    /**
      * The empty state's glyph: an open tray.
      * @returns {object} the SVG element.
      */
@@ -342,6 +392,75 @@ window.__ModuleLoader__.load({
       const encode = (segment) => encodeURIComponent(segment).replace(/%3A/gi, ':')
       const normalized = path.replace(/\\/g, '/').replace(/^(?:\.\/)+/, '')
       return `dsh-resource://file/session/${encode(sessionId)}/${normalized.split('/').map(encode).join('/')}`
+    }
+
+    /**
+     * Build one user-provided attachment URL, preferring the Host's LAN origin
+     * for links shared with another device.
+     *
+     * The query repeats the durable reference fields the Session log recorded
+     * (never a host path); the Host's attachment store verifies the object
+     * against them before serving any bytes.
+     * @param {object} artifact - provided row from the list response.
+     * @param {'inline' | 'attachment'} disposition - inline rendering or download.
+     * @param {string | null} origin - absolute origin reported by the Host.
+     * @returns {string} the URL.
+     */
+    function attachmentUrl(artifact, disposition, origin) {
+      let base = appUrl(ATTACHMENT_ROUTE)
+      if (typeof origin === 'string' && origin.length > 0) {
+        try {
+          const lanBase = new URL('api/session-artifacts.attachment', origin.endsWith('/') ? origin : `${origin}/`)
+          base = lanBase.href
+        } catch {
+          base = appUrl(ATTACHMENT_ROUTE)
+        }
+      }
+      const url = new URL(base)
+      url.searchParams.set('attachmentId', artifact.attachmentId)
+      if (typeof artifact.name === 'string' && artifact.name.length > 0) {
+        url.searchParams.set('name', artifact.name)
+      }
+      if (typeof artifact.mediaType === 'string' && artifact.mediaType.length > 0) {
+        url.searchParams.set('mediaType', artifact.mediaType)
+      }
+      if (typeof artifact.bytes === 'number') url.searchParams.set('bytes', String(artifact.bytes))
+      if (typeof artifact.width === 'number') url.searchParams.set('width', String(artifact.width))
+      if (typeof artifact.height === 'number') url.searchParams.set('height', String(artifact.height))
+      url.searchParams.set('disposition', disposition)
+      return url.href
+    }
+
+    /**
+     * Build the current source URL for one artifact row: workspace files use the
+     * raw path route, user-provided attachments use the attachment route.
+     * @param {object} artifact - row from the list response.
+     * @param {'inline' | 'attachment'} disposition - inline rendering or download.
+     * @param {string | null} origin - absolute origin reported by the Host.
+     * @returns {string} the URL.
+     */
+    function artifactUrl(artifact, disposition, origin) {
+      return artifact.provided === true
+        ? attachmentUrl(artifact, disposition, origin)
+        : rawUrl(artifact, disposition, origin)
+    }
+
+    /**
+     * Stable identity of one artifact row (a workspace path or an attachment id).
+     * @param {object} artifact - row from the list response.
+     * @returns {string} the row key.
+     */
+    function artifactKey(artifact) {
+      return artifact.provided === true ? String(artifact.attachmentId) : artifact.path
+    }
+
+    /**
+     * Whether one artifact row renders an image thumbnail.
+     * @param {object} artifact - row from the list response.
+     * @returns {boolean} true when the Host reports an image media type.
+     */
+    function isImageArtifact(artifact) {
+      return typeof artifact.mime === 'string' && artifact.mime.startsWith('image/')
     }
 
     /**
@@ -1904,6 +2023,9 @@ window.__ModuleLoader__.load({
     }
     //#endregion
     //#region panel
+    /** Artifact source filters, in display order. */
+    const FILTER_OPTIONS = ['all', 'generated', 'provided']
+
     /**
      * Render the artifact list for one Session.
      * @param {{ sessionId: string, t: Function }} props - Session scope and copy.
@@ -1916,6 +2038,7 @@ window.__ModuleLoader__.load({
       const [failure, setFailure] = React.useState('')
       const [reload, setReload] = React.useState(0)
       const [copiedPath, setCopiedPath] = React.useState(null)
+      const [filter, setFilter] = React.useState('all')
 
       React.useEffect(() => {
         let active = true
@@ -1958,19 +2081,42 @@ window.__ModuleLoader__.load({
         }
       }, [sessionId, reload])
 
+      // A different Session starts from the whole list, so a filter cannot hide
+      // every new row.
+      React.useEffect(() => {
+        setFilter('all')
+      }, [sessionId])
+
       /**
        * Copy one artifact's LAN link and acknowledge briefly on its row.
        * @param {object} artifact - the row.
        * @returns {void}
        */
       function onCopy(artifact) {
-        copyText(rawUrl(artifact, 'inline', payload?.origin ?? null)).then((copied) => {
+        copyText(artifactUrl(artifact, 'inline', payload?.origin ?? null)).then((copied) => {
           if (!copied) return
-          setCopiedPath(artifact.path)
+          const key = artifactKey(artifact)
+          setCopiedPath(key)
           window.setTimeout(() => {
-            setCopiedPath((current) => (current === artifact.path ? null : current))
+            setCopiedPath((current) => (current === key ? null : current))
           }, 1600)
         })
+      }
+
+      /**
+       * Open one artifact: workspace files through the right Sidebar's preview,
+       * provided attachments through their inline URL (their bytes live in the
+       * attachment store, not the workspace, so the native file preview cannot
+       * claim them).
+       * @param {object} artifact - the row.
+       * @returns {void}
+       */
+      function onOpen(artifact) {
+        if (artifact.provided === true) {
+          window.open(attachmentUrl(artifact, 'inline', payload?.origin ?? null), '_blank', 'noopener,noreferrer')
+          return
+        }
+        openArtifactPreview(sidebarRight, sessionId, artifact, payload?.origin ?? null)
       }
 
       // Artifacts that no longer exist cannot be opened or downloaded; the
@@ -1979,9 +2125,18 @@ window.__ModuleLoader__.load({
       const artifacts = (payload !== null && Array.isArray(payload.artifacts) ? payload.artifacts : [])
         .filter((artifact) => artifact.missing !== true)
       const origin = payload !== null && typeof payload.origin === 'string' ? payload.origin : null
-      const countText = artifacts.length === 1
-        ? t('list.countOne')
-        : t('list.count', { count: artifacts.length })
+      // "Generated" filters the session's own workspace artifacts (written or
+      // delivered); provided rows are the attachments the user supplied.
+      const generatedCount = artifacts.filter((artifact) => artifact.provided !== true).length
+      const providedCount = artifacts.length - generatedCount
+      const filterCounts = { all: artifacts.length, generated: generatedCount, provided: providedCount }
+      const shownArtifacts = filter === 'all'
+        ? artifacts
+        : artifacts.filter((artifact) => (filter === 'provided' ? artifact.provided === true : artifact.provided !== true))
+      let countText
+      if (filter !== 'all') countText = t('list.countOf', { shown: shownArtifacts.length, total: artifacts.length })
+      else if (artifacts.length === 1) countText = t('list.countOne')
+      else countText = t('list.count', { count: artifacts.length })
 
       const header = React.createElement('header', { className: 'dsa-header' },
         React.createElement('span', { className: 'dsa-count' }, phase === 'ready' ? countText : ''),
@@ -1994,6 +2149,27 @@ window.__ModuleLoader__.load({
           'aria-label': t('list.refresh'),
           'data-loading': phase === 'loading' ? 'true' : undefined
         }, RemixGlyph(REMIX_REFRESH_LINE, 15)))
+
+      // A segmented source filter: filtering is purely client-side, so it never
+      // re-reads the Session log. Counts describe the whole list; the selected
+      // option's count is separate from the header's shown/total count.
+      const filterBar = artifacts.length > 0
+        ? React.createElement('div', {
+          className: 'dsa-filters',
+          role: 'group',
+          'aria-label': t('filter.label')
+        }, FILTER_OPTIONS.map((option) => React.createElement('button', {
+          key: option,
+          type: 'button',
+          className: 'dsa-filter',
+          'data-filter': option,
+          'data-selected': filter === option ? 'true' : undefined,
+          'aria-pressed': filter === option,
+          onClick: () => setFilter(option)
+        },
+        React.createElement('span', null, t(`filter.${option}`)),
+        React.createElement('span', { className: 'dsa-filter-count' }, filterCounts[option]))))
+        : null
 
       if (phase === 'error') {
         return React.createElement('div', { className: 'dsa-root' },
@@ -2010,21 +2186,27 @@ window.__ModuleLoader__.load({
             }, t('list.retry'))))
       }
 
-      const rows = artifacts.map((artifact) => {
-        const facts = [
-          artifact.presented === true ? t('meta.presented') : t('meta.generated'),
-          t('meta.turn', { turn: artifact.turn })
-        ]
+      const rows = shownArtifacts.map((artifact) => {
+        const key = artifactKey(artifact)
+        const provided = artifact.provided === true
+        const facts = provided
+          ? [t('meta.provided')]
+          : [artifact.presented === true ? t('meta.presented') : t('meta.generated'), t('meta.turn', { turn: artifact.turn })]
+        if (provided && typeof artifact.promptOrdinal === 'number') {
+          facts.push(t('meta.prompt', { prompt: artifact.promptOrdinal }))
+        }
         if (typeof artifact.size === 'number') facts.push(formatBytes(artifact.size))
         return React.createElement('li', {
           className: 'dsa-row',
-          key: artifact.path,
-          'data-artifact-path': artifact.path,
+          key,
+          ...(provided
+            ? { 'data-artifact-provided': 'true', 'data-artifact-attachment-id': artifact.attachmentId }
+            : { 'data-artifact-path': artifact.path }),
           'data-artifact-name': artifact.name
         },
-        React.createElement('span', { className: 'dsa-icon' }, FileIcon()),
+        React.createElement(ArtifactGlyph, { artifact, origin }),
         React.createElement('div', { className: 'dsa-main' },
-          React.createElement('div', { className: 'dsa-name', title: artifact.path }, artifact.name),
+          React.createElement('div', { className: 'dsa-name', title: provided ? artifact.name : artifact.path }, artifact.name),
           React.createElement('div', { className: 'dsa-meta' }, facts.join(' · ')),
           artifact.description ? React.createElement('div', { className: 'dsa-desc' }, artifact.description) : null),
         React.createElement('div', { className: 'dsa-actions' },
@@ -2033,23 +2215,23 @@ window.__ModuleLoader__.load({
             className: 'dsa-action',
             title: t('action.open'),
             'aria-label': t('action.open'),
-            onClick: () => openArtifactPreview(sidebarRight, sessionId, artifact, origin)
+            onClick: () => onOpen(artifact)
           }, RemixGlyph(REMIX_BOOK_OPEN_LINE, 16)),
           React.createElement('a', {
             className: 'dsa-action',
             title: t('action.download'),
             'aria-label': t('action.download'),
-            href: rawUrl(artifact, 'attachment', origin),
+            href: artifactUrl(artifact, 'attachment', origin),
             download: artifact.name
           }, RemixGlyph(REMIX_DOWNLOAD_LINE, 16)),
           React.createElement('button', {
             type: 'button',
             className: 'dsa-action',
-            title: copiedPath === artifact.path ? t('action.copied') : t('action.copy'),
-            'aria-label': copiedPath === artifact.path ? t('action.copied') : t('action.copy'),
+            title: copiedPath === key ? t('action.copied') : t('action.copy'),
+            'aria-label': copiedPath === key ? t('action.copied') : t('action.copy'),
             onClick: () => onCopy(artifact),
-            'data-copied': copiedPath === artifact.path ? 'true' : undefined
-          }, RemixGlyph(copiedPath === artifact.path ? REMIX_CHECK_LINE : REMIX_LINK, 16))))
+            'data-copied': copiedPath === key ? 'true' : undefined
+          }, RemixGlyph(copiedPath === key ? REMIX_CHECK_LINE : REMIX_LINK, 16))))
       })
 
       let body
@@ -2060,6 +2242,10 @@ window.__ModuleLoader__.load({
           React.createElement('div', { className: 'dsa-empty-icon' }, TrayIcon()),
           React.createElement('div', { className: 'dsa-empty-title' }, t('list.empty.title')),
           React.createElement('div', { className: 'dsa-empty-hint' }, t('list.empty.hint')))
+      } else if (shownArtifacts.length === 0) {
+        body = React.createElement('div', { className: 'dsa-empty' },
+          React.createElement('div', { className: 'dsa-empty-icon' }, TrayIcon()),
+          React.createElement('div', { className: 'dsa-empty-title' }, t('list.empty.filtered')))
       } else {
         body = React.createElement('ul', { className: 'dsa-list' }, rows)
       }
@@ -2067,6 +2253,7 @@ window.__ModuleLoader__.load({
       return React.createElement('div', { className: 'dsa-root' },
         panelStyle(),
         header,
+        filterBar,
         body,
         artifacts.length > 0 ? React.createElement('footer', { className: 'dsa-footer' }, t('footer.note')) : null)
     }
@@ -4991,7 +5178,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'search.aria': 'Search prompt history',
       'list.aria': 'Prompt history',
       'mark.aria': 'Copy prompt #{index}: {text}',
-      'copied': 'Copied to input',
       'empty.filtered': 'No matching prompts',
       'count.filtered': 'Showing {count} of {total}'
     }
@@ -5001,7 +5187,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'search.aria': '搜索历史提示',
       'list.aria': '历史提示',
       'mark.aria': '复制第 {index} 条提示：{text}',
-      'copied': '已复制到输入框',
       'empty.filtered': '没有匹配的历史提示',
       'count.filtered': '显示 {count} / {total}'
     }
@@ -5022,14 +5207,13 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psp-mark:focus-visible{outline:none}
 .psp-mark:focus-visible::before{background:var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));transform:translateY(-50%) scaleX(1)}
 .psp-mark:focus-visible::after{content:"";position:absolute;inset:0 0 0 auto;width:20px;border-radius:inherit;outline:1px solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-1px}
-.psp-search-toggle{box-sizing:border-box;flex:none;align-self:flex-end;display:inline-flex;align-items:center;justify-content:center;width:20px;height:22px;margin-top:3px;padding:0;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.psp-search-toggle{box-sizing:border-box;flex:none;align-self:flex-end;display:inline-flex;align-items:center;justify-content:center;width:20px;height:22px;margin-top:3px;margin-right:-4px;padding:0;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .psp-search-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
 .psp-search-toggle[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psp-search-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psp-rail-card{position:fixed;z-index:61;box-sizing:border-box;overflow:hidden;padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,none);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}
 .psp-rail-card-text{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:6;overflow:hidden;white-space:pre-wrap;word-break:break-word;font:var(--dsw-font-xs-strong-13,inherit);font-family:inherit;font-size:13px;font-weight:500;line-height:20px}
 .psp-rail-card-time{margin-top:4px;color:var(--dsw-alias-label-caption,var(--dsw-alias-label-tertiary));font:var(--dsw-font-xxs-12,inherit);font-family:inherit;font-size:12px;line-height:18px}
-.psp-copied{position:fixed;z-index:62;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;padding:3px 8px;border:0;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,none);color:var(--dsw-alias-state-success-primary);font-family:inherit;font-size:11px;line-height:16px}
 .psp-search-card{position:fixed;z-index:61;display:flex;flex-direction:column;gap:4px;box-sizing:border-box;overflow:hidden;width:min(300px,calc(100vw - 40px));padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,none);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:16px}
 .psp-search-row{display:flex;align-items:center;gap:6px}
 .psp-search-icon{flex:none;color:var(--dsw-alias-label-tertiary)}
@@ -5038,10 +5222,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psp-search-count{color:var(--dsw-alias-label-caption,var(--dsw-alias-label-tertiary));font-family:inherit;font-size:11px;line-height:15px}
 .psp-search-empty{color:var(--dsw-alias-label-tertiary);font-family:inherit;font-size:11px;line-height:15px}
 .psp-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-@media (prefers-reduced-motion:no-preference){.psp-rail-card{animation:psp-rail-card-in .12s ease-out}.psp-copied{animation:psp-copied-in .16s ease-out}}
+@media (prefers-reduced-motion:no-preference){.psp-rail-card{animation:psp-rail-card-in .12s ease-out}}
 @media (prefers-reduced-motion:reduce){.psp-mark::before{transition:none}}
 @keyframes psp-rail-card-in{from{opacity:0;transform:translateX(4px)}to{opacity:1;transform:none}}
-@keyframes psp-copied-in{from{opacity:0}to{opacity:1}}
 `
 
     /**
@@ -5219,7 +5402,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const [snapshot, setSnapshot] = React.useState({ sessionId: null, status: 'idle', prompts: [] })
       const [query, setQuery] = React.useState('')
       const [searchOpen, setSearchOpen] = React.useState(false)
-      const [copied, setCopied] = React.useState(null)
       const [reloadKey, setReloadKey] = React.useState(0)
       const [preview, setPreview] = React.useState(null)
       const [layout, setLayout] = React.useState(null)
@@ -5229,7 +5411,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const searchCardRef = React.useRef(null)
       const toggleRef = React.useRef(null)
       const marksRef = React.useRef(null)
-      const copiedTimer = React.useRef(null)
       const previewTimer = React.useRef(null)
 
       const prompts = snapshot.sessionId === sessionId && snapshot.status === 'ready' ? snapshot.prompts : []
@@ -5253,7 +5434,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       React.useEffect(() => {
         setQuery('')
         setSearchOpen(false)
-        setCopied(null)
         setPreview(null)
       }, [sessionId])
 
@@ -5266,7 +5446,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }, [phase])
 
       React.useEffect(() => () => {
-        if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current)
         if (previewTimer.current !== null) window.clearTimeout(previewTimer.current)
       }, [])
 
@@ -5438,26 +5617,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }, [searchOpen, layout, query, prompts.length])
 
       /**
-       * Put one prompt into the composer draft and confirm briefly near the rail.
+       * Put one prompt into the composer draft.
        * @param {object} prompt - the rail mark's prompt entry.
-       * @param {object} element - the mark button.
        * @returns {void}
        */
-      function copyPrompt(prompt, element) {
+      function copyPrompt(prompt) {
         cancelHidePreview()
         inputActions.setDraft(prompt.text)
         focusPromptHistoryComposer(sessionId)
         setPreview(null)
-        const rect = element.getBoundingClientRect()
-        const top = layout === null
-          ? Math.max(8, rect.top)
-          : Math.max(layout.top, Math.min(rect.top + rect.height / 2 - 14, layout.top + layout.maxHeight - 36))
-        setCopied(Math.round(top))
-        if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current)
-        copiedTimer.current = window.setTimeout(() => {
-          copiedTimer.current = null
-          setCopied(null)
-        }, 2000)
       }
 
       /**
@@ -5546,7 +5714,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         className: 'psp-mark',
         'data-psp-mark': '',
         'data-psp-index': String(ordinal),
-        onClick: (event) => copyPrompt(prompt, event.currentTarget),
+        onClick: (event) => copyPrompt(prompt),
         onMouseEnter: (event) => showPreview(prompt, ordinal, event.currentTarget),
         onMouseLeave: scheduleHidePreview,
         onFocus: (event) => showPreview(prompt, ordinal, event.currentTarget),
@@ -5626,17 +5794,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         : null)
         : null
 
-      const copiedChip = copied === null ? null : React.createElement('div', {
-        className: 'psp-copied',
-        'data-psp-copied': '',
-        role: 'status',
-        style: { top: copied, right: layout.right + layout.width + 10 }
-      },
-      RemixGlyph(REMIX_CHECK_LINE, 13),
-      React.createElement('span', null, t('copied')))
-
       return ReactDOM.createPortal(
-        React.createElement(React.Fragment, null, style, rail, previewCard, searchCard, copiedChip),
+        React.createElement(React.Fragment, null, style, rail, previewCard, searchCard),
         document.body)
     }
 

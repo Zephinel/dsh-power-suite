@@ -19,6 +19,9 @@ export const LIST_ROUTE = '/api/session-artifacts.list'
 /** Authenticated exact route serving one artifact's bytes. */
 export const RAW_ROUTE = '/api/session-artifacts.raw'
 
+/** Authenticated exact route serving one user-provided attachment's bytes. */
+export const ATTACHMENT_ROUTE = '/api/session-artifacts.attachment'
+
 /** Authenticated exact route serving one artifact's hover-preview descriptor. */
 export const PREVIEW_ROUTE = '/api/session-artifacts.preview'
 
@@ -197,6 +200,92 @@ function upsertArtifact(artifacts, artifactPath, fact) {
 }
 
 /**
+ * Sort artifact rows newest event first, with the file name as a stable tie-break.
+ * @param {Array<object>} artifacts - rows carrying numeric `seq` and a `name`.
+ * @returns {Array<object>} the same array, sorted in place.
+ */
+export function sortArtifactsNewestFirst(artifacts) {
+  return artifacts.sort((left, right) => {
+    if (right.seq !== left.seq) return right.seq - left.seq
+    return left.name.localeCompare(right.name)
+  })
+}
+
+/**
+ * Keep a recorded number only when it can describe an attachment.
+ * @param {unknown} value - recorded metadata.
+ * @returns {number | undefined} a finite non-negative number, or undefined.
+ */
+function attachmentNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+/**
+ * Display name for one provided attachment, with a media-type-based fallback.
+ * @param {unknown} name - recorded display name.
+ * @param {unknown} mediaType - recorded media type.
+ * @returns {string} a non-empty display name.
+ */
+function attachmentName(name, mediaType) {
+  if (typeof name === 'string' && name.trim().length > 0) return name
+  if (typeof mediaType === 'string' && mediaType.startsWith('image/')) {
+    const extension = mediaType === 'image/jpeg' ? 'jpg' : mediaType.slice('image/'.length)
+    return `image.${extension}`
+  }
+  return 'file'
+}
+
+/**
+ * Fold the user-provided attachments of one Session log.
+ *
+ * Only `user/message` events whose source kind is `user` count: injected
+ * user-role context (instructions, runtime context, skill catalogs) is logged as
+ * user messages too, and `agent/inbox/spliced` duplicates every human message,
+ * so either would double count. Each human message gets a 1-based ordinal for
+ * the panel's "prompt N" label. Identical attachment ids collapse onto their
+ * most recent occurrence, so re-pasting the same image moves it to the top
+ * instead of listing it twice.
+ * @param {readonly object[]} events - raw session events in ascending seq order.
+ * @returns {Array<object>} provided rows, newest event first.
+ */
+export function foldUserAttachments(events) {
+  const provided = new Map()
+  let promptOrdinal = 0
+  for (const event of events) {
+    if (!isRecord(event) || event.type !== 'user/message') continue
+    const data = event.data
+    if (!isRecord(data)) continue
+    const source = data.source
+    if (!isRecord(source) || source.kind !== 'user') continue
+    promptOrdinal += 1
+    const content = data.content
+    if (!Array.isArray(content)) continue
+    for (const block of content) {
+      if (!isRecord(block)) continue
+      const attachment = block.attachment
+      if (!isRecord(attachment)) continue
+      if (block.type !== 'image' && block.type !== 'file') continue
+      if (typeof attachment.attachmentId !== 'string' || attachment.attachmentId.length === 0) continue
+      const mediaType = block.type === 'image' && typeof attachment.mediaType === 'string'
+        ? attachment.mediaType
+        : undefined
+      provided.set(attachment.attachmentId, {
+        provided: true,
+        attachmentId: attachment.attachmentId,
+        name: attachmentName(attachment.name, mediaType),
+        mediaType,
+        width: attachmentNumber(attachment.width),
+        height: attachmentNumber(attachment.height),
+        bytes: attachmentNumber(attachment.bytes),
+        promptOrdinal,
+        seq: typeof event.seq === 'number' ? event.seq : 0
+      })
+    }
+  }
+  return sortArtifactsNewestFirst([...provided.values()])
+}
+
+/**
  * Fold one Session's raw event log into its artifact list.
  *
  * Events arrive in ascending seq order. Call records are matched to their
@@ -259,10 +348,7 @@ export function foldArtifacts(events, cwd) {
       }
     }
   }
-  return [...artifacts.values()].sort((left, right) => {
-    if (right.seq !== left.seq) return right.seq - left.seq
-    return left.name.localeCompare(right.name)
-  })
+  return sortArtifactsNewestFirst([...artifacts.values()])
 }
 
 /**
