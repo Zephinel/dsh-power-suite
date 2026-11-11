@@ -18,7 +18,8 @@ src/index.js            Host entry (Node)
 src/client.js           Browser entry (DSH module loader)
 ├─ Artifacts panel + right-Sidebar guide card
 ├─ Workspace preset context-menu submenu
-├─ Composer prompt-history key handling
+├─ Composer prompt-history keys + docked preview panel
+├─ Dynamic Workspaces buckets + running & recent Sessions card
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
 ├─ Plugins-page settings section
 └─ Shared hover Quick Look for Artifacts rows and native Workspace file rows
@@ -44,6 +45,15 @@ The raw route serves file bytes (with a 64 MiB cap) and the preview route
 returns a descriptor plus a bounded 16 KiB text window. Missing files are
 marked `missing: true` in the payload; the panel hides them.
 
+### Prompt history
+
+The route reads the Session log rather than the loaded chat window, so prompts
+from earlier pages are recallable. `GET /api/prompt-history.list` folds human
+`user/message` events into oldest-first entries `{ seq, text, at }`, capped at
+500. `at` is the event's epoch-millisecond time, or `null` when the recorded
+event has no usable time; a Host that predates timestamps omits the field, and
+the browser tolerates both shapes.
+
 ### Workspace presets and settings
 
 Both features persist small JSON documents in the suite's Host storage. The
@@ -66,8 +76,35 @@ through the injected client services (`slots`, `locale`,
 `sidebarRight`, `sidebarRightTabs`, `contextMenus`, `remote`, `uiWorkspace`).
 
 The client talks to the Host only over the authenticated routes above; it never
-imports Host code. All feature copy is registered through the `sessionArtifacts`
-locale namespace so en/zh dictionaries stay aligned.
+imports Host code. Feature copy is registered through per-feature locale
+namespaces (`sessionArtifacts`, `workspacePresets`, `dynamicWorkspaces`,
+`powerSuitePromptHistoryPreview`, `powerSuiteInterrupted`, `powerSuiteSettings`)
+so the en/zh dictionaries stay aligned.
+
+### Dynamic Workspaces
+
+The one feature that augments a native surface instead of contributing a slot
+surface of its own. A `shell.overlay` seat reads the browser's Session, Session
+status, and Workspace stores, inserts a summary card above the native Workspaces
+header and two bucket headers into the native `[role="tree"]`, and writes flex
+`order` values on the native group sections to band Active Projects above
+Inactive Projects. Inside the card, running, recent, and direct subagent
+Sessions are derived from the same stores: subagent rows nest under their parent
+with a disclosure toggle, and a parent counts as active while a direct child
+runs. A `MutationObserver` on the sidebar reconciles the foreign nodes after
+native re-renders; unload removes them and restores the inline styles. The
+native browser keeps owning every row, menu, search, drag, and dialog. See
+[dynamic-workspaces.md](dynamic-workspaces.md).
+
+### Prompt history preview
+
+A `conversation.input.dock` registration renders the always-visible preview
+above the composer, sharing the prompt-history fetch with the keyboard seat. It
+lists prompts newest first, portals a full-text hover card to the document body,
+filters client-side with an on-demand inline search, and copies a clicked prompt
+through the Session input's `setDraft`. Registration id
+`power-suite.prompt-history-preview`, order 100, locale namespace
+`powerSuitePromptHistoryPreview`.
 
 ### Slots used
 
@@ -77,7 +114,9 @@ locale namespace so en/zh dictionaries stay aligned.
 | `sidebarRightTabs.register` | Artifacts guide card on the Start page |
 | `contextMenu.icon` | Workspace menu icon |
 | `contextMenus.register` (`workspace`) | Default agent preset submenu |
-| `conversation.input.overlay` | Prompt-history behavior and composer controls |
+| `conversation.input.overlay` | Renderless prompt-history keyboard seat |
+| `conversation.input.dock` | Prompt-history preview above the composer |
+| `shell.overlay` | Frame-wide seat that augments the native Workspaces sidebar |
 | `plugins.bundle.config` | Plugin settings page |
 | `sidebar.session.row.leading` | Interrupted-session badge |
 | `sidebar.workspaces.session.row.action` | Continue action |
@@ -87,6 +126,10 @@ locale namespace so en/zh dictionaries stay aligned.
 - One plugin row; features never register a second Loader entry.
 - Host routes stay under `/api/` and are authenticated.
 - Browser code uses theme tokens and native icons; no fixed palette of its own.
+- Native-surface enhancements augment the shipped DOM with sibling nodes and
+  inline `order`/`display` only; they never replace or re-render the native
+  subtree, and unload removes every inserted node and restores every touched
+  style.
 - Missing/unknown data is hidden or explained; it is never rendered as a dead
   artifact row or a fake interrupted state.
 - Pure state derivation lives in feature modules and is covered by

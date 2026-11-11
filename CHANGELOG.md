@@ -4,6 +4,41 @@ All notable changes to this repository are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-11-11
+
+### Added
+
+- Dynamic Workspaces: the native sidebar Workspaces browser gains **Active
+  Projects** and **Inactive Projects** buckets plus a **Running & recent** card
+  above the native header. A Workspace is Active while one of its Sessions is
+  running or was active inside the 12-hour retention window; buckets reorder live
+  in both directions, fold independently with persisted state, and hide in rail
+  mode. The card lists running Sessions with the shell's own status dot and
+  observed durations, keeps recently finished Sessions for the same window,
+  nests recent direct subagent Sessions under their parent behind a disclosure
+  chevron (indented under a guide line, each opening its own Session), and opens
+  a Session from any row.
+- Prompt-history preview: an always-visible panel docked above the composer
+  lists the current Session's sent prompts newest first behind a short divider,
+  with the full prompt in a hover/floating card, an inline search revealed from
+  the footer, and click-to-copy into the composer draft with a short
+  confirmation. It renders nothing while the Session has no sent prompts.
+- Per-prompt timestamps: `GET /api/prompt-history.list` now returns
+  `{ seq, text, at }` for every prompt, where `at` is the Session event time in
+  epoch milliseconds or `null` when the event has no usable time. The preview
+  shows row times from it; the keyboard recall is unchanged.
+
+### Changed
+
+- The shipped Workspaces browser is augmented rather than replaced: the plugin
+  inserts sibling nodes and inline flex order only, so native search, context
+  menus, add-workspace flow, drag reordering, and dialogs keep working, and
+  unloading restores the surface.
+- The browser tolerates a Host that predates the timestamp field: row times and
+  the hover timestamp are hidden instead of rendering empty, and the shared
+  human-only prompt definition and 500-prompt cap stay the same on both
+  surfaces.
+
 ## [0.1.1] - 2026-11-11
 
 ### Fixed

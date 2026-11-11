@@ -11,7 +11,8 @@ inventory grows with the suite.
 |---|---|---|
 | Session artifacts (`session-artifacts`) | An **Artifacts** card in the right Sidebar's Start page that lists the current Session's created and delivered files, with in-browser open, download, and LAN link copy. | [session-artifacts.md](session-artifacts.md) |
 | Workspace presets (`workspace-presets`) | A Workspace context-menu submenu that sets the default agent preset for new Sessions created in that Workspace. | [workspace-default-presets.md](workspace-default-presets.md) |
-| Prompt history (`prompt-history`) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; plain arrows keep their original behavior. The modifier is ⌘/Ctrl, Option/Alt, Ctrl, Shift, or Off. | [prompt-history.md](prompt-history.md) |
+| Dynamic Workspaces (`dynamic-workspaces`) | The native Workspaces browser is augmented with **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header that nests subagent Sessions under their parent. | [dynamic-workspaces.md](dynamic-workspaces.md) |
+| Prompt history (`prompt-history`) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; plain arrows keep their original behavior. An always-visible panel above the composer lists the same prompts newest first with a hover full-text preview, an inline search, per-prompt timestamps, and click-to-copy. | [prompt-history.md](prompt-history.md) |
 | Settings (`settings`) | The bundle's own configuration section on its Plugins page; the prompt-history modifier is the first setting. | [settings.md](settings.md) |
 | Interrupted sessions (`interrupted-sessions`) | Sessions whose last turn was cut off by a restart get an amber mark left of the title, a hover-only Continue action under a row mask, and a play-shaped submit control in the composer. | [interrupted-sessions.md](interrupted-sessions.md) |
 

@@ -1,6 +1,6 @@
 # Usage
 
-All five features ship in one plugin. Open the Plugins page, select **DSH Power
+All six features ship in one plugin. Open the Plugins page, select **DSH Power
 Suite**, and use the plugin's own settings section for the shortcut modifier.
 
 ## Session artifacts
@@ -22,11 +22,38 @@ Right-click a Workspace in the Sidebar and choose **Default agent preset**.
 The choice applies to new Sessions created in that Workspace; existing Sessions
 keep their preset. **Follow the global default** clears the override.
 
+## Dynamic workspaces
+
+In the sidebar's expanded Workspaces browser, the **Running & recent** card
+sits above the native header and the Workspace list is split into **Active
+Projects** and **Inactive Projects**. A Workspace is Active while one of its
+Sessions is running or was active in the last 12 hours.
+
+- Fold a bucket with its header chevron; the state is remembered in this browser.
+- Click a card row to open that Session. **View all {count}** expands past the
+  first five rows.
+- A parent Session with delegated subagent Sessions shows a chevron: expanding
+  it lists the children indented under the parent, and clicking one opens that
+  child Session; collapsing shows the child count.
+- A finished Session stays in the card as `done` for the retention window instead
+  of disappearing on the stop.
+- In the collapsed rail, the card is hidden; widening the sidebar restores it.
+- In the native **In one list** grouping there are no Workspace sections, so only
+  the card applies.
+
 ## Prompt history
 
 In the composer, press the configured modifier + ↑/↓ to recall previously sent
 prompts. Plain ↑/↓ keep their original behavior. Change the modifier in the
 plugin settings (⌘/Ctrl, ⌥/Alt, Ctrl, Shift, or Off).
+
+Above the composer, an always-visible preview lists the current Session's
+prompts newest first with their `#N` index and, when available, their time.
+Hover (or keyboard-focus) a row to read the full prompt in a floating card; click
+it to copy the text into the composer draft (the footer confirms with **Copied to
+input**). The footer's **Search** button reveals an inline search field that
+filters by substring; Escape closes it, and the clear (×) button resets the
+filter. The whole preview is hidden while the Session has no sent prompts.
 
 ## Interrupted sessions
 
@@ -46,6 +73,7 @@ setting is the prompt-history modifier; its label reflects the current platform
 
 - [Session artifacts](session-artifacts.md)
 - [Workspace presets](workspace-default-presets.md)
+- [Dynamic workspaces](dynamic-workspaces.md)
 - [Prompt history](prompt-history.md)
 - [Interrupted sessions](interrupted-sessions.md)
 - [Settings](settings.md)
