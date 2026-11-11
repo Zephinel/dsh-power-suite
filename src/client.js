@@ -6397,11 +6397,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     //#endregion
 
     //#region feature: project view
-    /** Copy namespace of the Project conversation view. */
+    /** Copy namespace of the standalone Project page. */
     const PROJECT_VIEW_NS = 'powerSuiteProjectView'
 
-    /** Registration identity of the Project conversation view tab. */
-    const PROJECT_VIEW_ID = 'power-suite-project'
+    /** Invisible shell.overlay seat that owns the standalone page. */
+    const PROJECT_PAGE_SEAT_ID = 'power-suite.project-page'
+
+    /** Window event that asks the seat to open one Workspace's Project page. */
+    const PROJECT_PAGE_EVENT = 'power-suite:open-project'
 
     /** Host route serving one Workspace's project snapshot. */
     const PROJECT_ROUTE = 'api/power-suite.project'
@@ -6428,11 +6431,13 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     const PsvChevronDown = 'M12 13.1716L6.34315 7.51472L4.92893 8.92893L12 16L19.0711 8.92893L17.6569 7.51472L12 13.1716Z'
     const PsvChevronRight = 'M13.1716 12L7.51472 17.6569L8.92893 19.0711L16 12L8.92893 4.92893L7.51472 6.34315L13.1716 12Z'
     const PsvActivityLine = 'M11 2V6.5L15.5 9L11 11.5V22H9V11.5L4.5 9L9 6.5V2H11ZM13 2H18V4H13V2ZM13 6H20V8H13V6ZM13 10H18V12H13V10Z'
+    const PsvChevronLeftLine = 'M10.8284 12L16.4853 17.6569L15.0711 19.0711L8 12L15.0711 4.92893L16.4853 6.34315L10.8284 12Z'
 
-    /** Copy for the Project conversation view. */
+    /** Copy for the standalone Project page. */
     const PROJECT_VIEW_EN = {
-      'view.label': 'Project',
       'tabs.label': 'Project sections',
+      'page.close': 'Close project page',
+      'page.label': 'Project page',
       'tab.overview': 'Overview',
       'tab.sessions': 'Sessions',
       'tab.runs': 'Runs',
@@ -6440,8 +6445,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'state.loading': 'Loading project…',
       'state.error': 'Could not load this project.',
       'state.retry': 'Retry',
-      'state.empty.title': 'No project workspace',
-      'state.empty.hint': 'This Session is not accounted to a Workspace, so there is no project to show.',
+      'state.empty.title': 'Workspace not found',
+      'state.empty.hint': 'This Workspace is no longer in the registry. Close the page and refresh the sidebar.',
       'header.titleFallback': 'Untitled project',
       'header.active': 'Active',
       'header.inactive': 'Inactive',
@@ -6557,8 +6562,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'preset.cordis': 'Cordis'
     }
     const PROJECT_VIEW_ZH = {
-      'view.label': '项目',
       'tabs.label': '项目分区',
+      'page.close': '关闭项目页',
+      'page.label': '项目页',
       'tab.overview': '项目概览',
       'tab.sessions': '会话管理',
       'tab.runs': '运行记录',
@@ -6566,8 +6572,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'state.loading': '正在加载项目…',
       'state.error': '无法加载项目数据。',
       'state.retry': '重试',
-      'state.empty.title': '没有关联的项目',
-      'state.empty.hint': '当前会话不属于任何工作区，因此没有可显示的项目视图。',
+      'state.empty.title': '找不到工作区',
+      'state.empty.hint': '该工作区已不在注册表中。请关闭页面并刷新侧边栏。',
       'header.titleFallback': '未命名项目',
       'header.active': '活跃',
       'header.inactive': '非活跃',
@@ -6684,6 +6690,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     const PROJECT_VIEW_CSS = `
+.psv-page{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);animation:psv-page-in .14s ease-out}
+.psv-page .psv-root{flex:1 1 auto;min-height:0}
+.psv-page-bar{flex:none;display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
+.psv-page-back{width:30px;height:30px;flex:none}
+.psv-page-title{min-width:0;font-size:15px;font-weight:600;line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psv-page-spacer{flex:1 1 auto}
+@keyframes psv-page-in{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.psv-page{animation:none}}
 .psv-root{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;height:100%;box-sizing:border-box;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px;overflow:hidden;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-1))}
 .psv-tabbar{flex:none;display:flex;align-items:center;gap:8px;padding:8px 24px 0;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
 .psv-tabs{display:flex;align-items:center;gap:2px;min-width:0;overflow-x:auto;scrollbar-width:none}
@@ -6983,31 +6997,35 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     /**
-     * Fetch the Host project snapshot for one Session and keep it warm.
+     * Fetch the Host project snapshot for one Workspace and keep it warm.
      *
-     * The Session id is the only key: the Host resolves its Workspace (including
-     * a subagent's accounted parent). Polling refreshes silently; a manual
-     * refresh sets the refresh flag and asks the Host to bypass its own cache.
-     * @param {string} sessionId - current Session identity.
+     * The Workspace id is the only key. Polling refreshes silently; a manual
+     * refresh sets the refresh flag and asks the Host to bypass its cache.
+     * A Workspace switch aborts the previous request and drops its snapshot, so
+     * a slower earlier answer can never overwrite the newer Workspace's data.
+     * @param {string | null} workspaceId - Workspace identity to measure.
      * @returns {{ state: object, refreshing: boolean, refresh: Function }} snapshot state.
      */
-    function usePsvProject(sessionId) {
-      const [state, setState] = React.useState({ status: 'loading', sessionId: null, snapshot: null, error: null })
+    function usePsvProject(workspaceId) {
+      const [state, setState] = React.useState({ status: 'loading', workspaceId: null, snapshot: null, error: null })
       const [nonce, setNonce] = React.useState(0)
       const [refreshing, setRefreshing] = React.useState(false)
       const manualRef = React.useRef(false)
       React.useEffect(() => {
+        if (typeof workspaceId !== 'string' || workspaceId.length === 0) {
+          setState({ status: 'loading', workspaceId: null, snapshot: null, error: null })
+          return undefined
+        }
         let disposed = false
         const controller = new AbortController()
         let inFlight = false
-        let loaded = false
         const load = async (manual) => {
           if (inFlight) return
           inFlight = true
           if (manual) setRefreshing(true)
           try {
             const suffix = manual ? '&refresh=1' : ''
-            const response = await fetch(appUrl(`${PROJECT_ROUTE}?sessionId=${encodeURIComponent(sessionId)}${suffix}`), {
+            const response = await fetch(appUrl(`${PROJECT_ROUTE}?workspaceId=${encodeURIComponent(workspaceId)}${suffix}`), {
               signal: controller.signal,
               credentials: 'same-origin',
               headers: { accept: 'application/json' }
@@ -7021,8 +7039,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                   body = null
                 }
                 if (body !== null && typeof body === 'object' && body.code === 'workspace-not-found') {
-                  loaded = true
-                  if (!disposed) setState({ status: 'empty', sessionId, snapshot: null, error: null })
+                  if (!disposed) setState({ status: 'empty', workspaceId, snapshot: null, error: null })
                   return
                 }
               }
@@ -7030,22 +7047,21 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             }
             const snapshot = await response.json()
             if (disposed) return
-            loaded = true
-            setState({ status: 'ready', sessionId, snapshot, error: null })
+            setState({ status: 'ready', workspaceId, snapshot, error: null })
           } catch (error) {
             if (disposed || controller.signal.aborted) return
             const message = error instanceof Error && error.message.length > 0 ? error.message : 'request failed'
-            setState((previous) => previous.snapshot !== null && previous.sessionId === sessionId
+            setState((previous) => previous.snapshot !== null && previous.workspaceId === workspaceId
               ? { ...previous, status: 'ready' }
-              : { status: 'error', sessionId, snapshot: null, error: message })
+              : { status: 'error', workspaceId, snapshot: null, error: message })
           } finally {
             inFlight = false
             if (!disposed) setRefreshing(false)
           }
         }
-        setState((previous) => previous.sessionId === sessionId && previous.snapshot !== null
+        setState((previous) => previous.workspaceId === workspaceId && previous.snapshot !== null
           ? previous
-          : { status: 'loading', sessionId, snapshot: null, error: null })
+          : { status: 'loading', workspaceId, snapshot: null, error: null })
         const manual = manualRef.current
         manualRef.current = false
         load(manual)
@@ -7058,7 +7074,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           window.clearInterval(timer)
           window.removeEventListener('focus', onFocus)
         }
-      }, [sessionId, nonce])
+      }, [workspaceId, nonce])
       const refresh = React.useCallback(() => {
         manualRef.current = true
         setNonce((value) => value + 1)
@@ -7792,27 +7808,46 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     //#endregion
 
     /**
-     * The native Conversation View tab body.
-     * @param {object} props - plugin-provided services, locale, and slot props.
-     * @returns {object} the Project view element.
+     * The standalone Project page body: the four-tab project detail rendered
+     * inside the fixed page surface the seat positions over the conversation
+     * column. Every navigation action closes the page afterwards so the user
+     * lands on the Session/Workspace the action opened instead of on a page
+     * hiding the change.
+     * @param {object} props - page services, Workspace target, and close callback.
+     * @returns {object} the Project page element.
      */
-    function ProjectView(props) {
+    function ProjectPage(props) {
       const t = props.t
-      const sessionId = typeof props.sessionId === 'string' ? props.sessionId : ''
-      const { state, refreshing, refresh } = usePsvProject(sessionId)
+      const workspaceId = typeof props.workspaceId === 'string' ? props.workspaceId : ''
+      const { state, refreshing, refresh } = usePsvProject(workspaceId)
       const sessionsSnapshot = usePsvSessions(props.sessionsSource)
       const now = usePsvNow(15000)
       const [tab, setTab] = React.useState('overview')
       const snapshot = state.snapshot
-      const nav = props.nav
-      const openSession = React.useCallback((id) => {
-        try {
-          nav.openSession(id)
-        } catch (error) {
-          console.warn('[power-suite] open session failed', error)
+      const close = props.onClose
+      const navigation = React.useMemo(() => {
+        const run = (action) => {
+          try {
+            action()
+          } catch (error) {
+            console.warn('[power-suite] project page navigation failed', error)
+          }
         }
-      }, [nav])
-      const openViewAll = React.useCallback(() => setTab('sessions'), [])
+        return {
+          openSession: (sessionId) => {
+            run(() => props.uiWorkspace.openSession(sessionId))
+            close()
+          },
+          openWorkspace: (id) => {
+            run(() => { void props.uiWorkspace.openWorkspace(id) })
+            close()
+          },
+          startSession: (id) => {
+            run(() => props.uiWorkspace.startSession(id))
+            close()
+          }
+        }
+      }, [close, props.uiWorkspace])
       const settingsValue = React.useSyncExternalStore(subscribeSettings, settingsSnapshot, settingsSnapshot)
       const tabs = [
         { id: 'overview', key: 'tab.overview' },
@@ -7834,6 +7869,37 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const target = tabRefs.current[next]
         if (target instanceof HTMLElement) target.focus()
       }
+      const project = snapshot !== null && snapshot !== undefined ? snapshot.project : null
+      const pageTitle = project !== null && typeof project.title === 'string' && project.title.length > 0
+        ? project.title
+        : (typeof props.workspaceTitle === 'string' && props.workspaceTitle.length > 0
+          ? props.workspaceTitle
+          : t('header.titleFallback'))
+      const pageBar = psv('div', { className: 'psv-page-bar' },
+        psv('button', {
+          type: 'button',
+          className: 'psv-iconbtn psv-page-back',
+          'aria-label': t('page.close'),
+          title: t('page.close'),
+          onClick: close
+        }, RemixGlyph(PsvChevronLeftLine, 18)),
+        psv('span', { className: 'psv-page-title', title: pageTitle }, pageTitle),
+        project !== null && project.state !== undefined
+          ? psv('span', { className: 'psv-badge', 'data-state': project.state === 'active' ? 'active' : 'inactive' },
+            psv('span', { className: 'psv-badge-dot', 'aria-hidden': 'true' }),
+            project.state === 'active' ? t('header.active') : t('header.inactive'))
+          : null,
+        psv('span', { className: 'psv-page-spacer' }),
+        psv('div', { className: 'psv-tabbar-actions' },
+          psv('button', {
+            type: 'button',
+            className: 'psv-iconbtn',
+            'aria-label': t('action.refresh'),
+            title: t('action.refresh'),
+            'data-busy': refreshing ? 'true' : undefined,
+            disabled: refreshing,
+            onClick: refresh
+          }, RemixGlyph(REMIX_REFRESH_LINE, 15))))
       const tabBar = psv('div', { className: 'psv-tabbar' },
         psv('div', { className: 'psv-tabs', role: 'tablist', 'aria-label': t('tabs.label'), onKeyDown: onTabKeyDown },
           tabs.map((entry, index) => psv('button', {
@@ -7868,7 +7934,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       } else if (state.status === 'empty') {
         content = psv('div', { className: 'psv-card psv-state' },
           psv('span', { className: 'psv-state-title' }, t('state.empty.title')),
-          psv('span', { className: 'psv-state-body' }, t('state.empty.hint')))
+          psv('span', { className: 'psv-state-body' }, t('state.empty.hint')),
+          psv('button', { type: 'button', className: 'psv-btn', onClick: close }, t('page.close')))
       } else if (state.status === 'error') {
         content = psv('div', { className: 'psv-card psv-state' },
           psv('span', { className: 'psv-state-title' }, t('state.error')),
@@ -7883,18 +7950,18 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             t,
             now,
             settings: settingsValue,
-            onOpenSession: openSession,
-            onViewAll: openViewAll
+            onOpenSession: navigation.openSession,
+            onViewAll: () => setTab('sessions')
           })
         } else if (tab === 'sessions') {
-          panel = psv(PsvSessionsTab, { snapshot, sessionsSnapshot, t, now, onOpenSession: openSession })
+          panel = psv(PsvSessionsTab, { snapshot, sessionsSnapshot, t, now, onOpenSession: navigation.openSession })
         } else if (tab === 'runs') {
           panel = psv(PsvRunsTab, { snapshot, sessionsSnapshot, t, now })
         } else {
           panel = psv(PsvSettingsTab, {
             snapshot,
             t,
-            nav,
+            nav: navigation,
             presetRoster: props.presetRoster,
             presetRead: props.presetRead,
             presetWrite: props.presetWrite,
@@ -7905,7 +7972,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           psv(PsvProjectHeader, {
             project: snapshot.project,
             copy: props.copy,
-            nav,
+            nav: navigation,
             refresh,
             refreshing,
             t
@@ -7918,6 +7985,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
       return psv('div', { className: 'psv-root', 'data-psv-root': '' },
         psv('style', null, PROJECT_VIEW_CSS),
+        pageBar,
         tabBar,
         psv('div', { className: 'psv-scroll' }, content))
     }
@@ -7928,25 +7996,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
     /** Pointer movement above this many CSS pixels counts as a drag, not a click. */
     const PROJECT_WORKSPACE_DRAG_SLOP = 6
-
-    /** How long one Workspace activation retries the Project view tab. */
-    const PROJECT_VIEW_ACTIVATION_TIMEOUT_MS = 2500
-
-    /** Clicks one activation issues at most before it only watches the header. */
-    const PROJECT_VIEW_ACTIVATION_CLICKS = 6
-
-    /**
-     * Current main conversation Session id, read from the resident occurrence.
-     * The shell exposes no public "current Session" getter here, and the
-     * occurrence is the same DOM contract the suite's other decorations use.
-     * @returns {string | null} the Session id, or null while no Conversation is mounted.
-     */
-    function projectCurrentSession() {
-      const occurrence = document.querySelector('[data-conversation-session]')
-      if (occurrence === null) return null
-      const value = occurrence.getAttribute('data-conversation-session')
-      return typeof value === 'string' && value.length > 0 ? value : null
-    }
 
     /**
      * Whether one click target belongs to a control the native Workspace row
@@ -7962,79 +8011,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     /**
-     * Candidate display labels of the registered Project view tab. The shell
-     * renders the registered label from this namespace, so the current locale
-     * wins; the literals are a fallback for a locale mismatch.
-     * @param {Function} t - namespace-bound translate.
-     * @returns {string[]} labels to match.
-     */
-    function projectViewTabLabels(t) {
-      const labels = []
-      for (const value of [t('view.label'), 'Project', '项目']) {
-        if (typeof value === 'string' && value.length > 0 && !labels.includes(value)) labels.push(value)
-      }
-      return labels
-    }
-
-    /**
-     * Find the conversation header's Project view tab by its text label, never
-     * by position, so a reordered or folded View roster still resolves.
-     * @param {Function} t - namespace-bound translate.
-     * @returns {HTMLElement | null} the tab button.
-     */
-    function projectViewTabButton(t) {
-      const labels = projectViewTabLabels(t)
-      const tabs = [...document.querySelectorAll('[role="tab"]')]
-      const scoped = tabs.filter((tab) => tab.closest('[class*="viewTabs"]') !== null)
-      const pool = scoped.length > 0 ? scoped : tabs
-      for (const tab of pool) {
-        const text = tab.textContent === null ? '' : tab.textContent.trim()
-        if (labels.includes(text)) return tab
-      }
-      return null
-    }
-
-    /**
-     * Activate the Project view tab for the Session the caller just opened.
-     *
-     * The header re-renders asynchronously after a Session switch, so the tab
-     * can appear late; this retries for a bounded window, waits until the
-     * expected Session owns the header, and clicks at most a few times before
-     * only watching. The shell owns and persists the per-Session view choice.
-     * @param {Function} t - namespace-bound translate.
-     * @param {string | null} expectedSessionId - Session the header must show first.
-     * @returns {Function} cancellation.
-     */
-    function projectActivateView(t, expectedSessionId) {
-      const deadline = Date.now() + PROJECT_VIEW_ACTIVATION_TIMEOUT_MS
-      let timer = null
-      let clicks = 0
-      const tick = () => {
-        timer = null
-        const current = projectCurrentSession()
-        if (expectedSessionId === null || current === expectedSessionId) {
-          const tab = projectViewTabButton(t)
-          if (tab !== null) {
-            if (tab.getAttribute('aria-selected') === 'true') return
-            if (clicks < PROJECT_VIEW_ACTIVATION_CLICKS) {
-              clicks += 1
-              tab.click()
-            }
-          }
-        }
-        if (Date.now() < deadline) timer = window.setTimeout(tick, 80)
-      }
-      tick()
-      return () => {
-        if (timer !== null) window.clearTimeout(timer)
-        timer = null
-      }
-    }
-
-    /**
-     * The Client Workspace service, read lazily because this view does not
-     * otherwise declare it as a hard dependency: a deployment whose Workspace
-     * UI is absent must still load the rest of the suite.
+     * The Client Workspace service, read lazily because this feature does not
+     * declare it as a hard dependency: a deployment whose Workspace UI is
+     * absent must still load the rest of the suite.
      * @param {object} ctx - client root context.
      * @returns {object | undefined} the Workspace service.
      */
@@ -8048,68 +8027,19 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     /**
-     * Open one Workspace's Project page: keep the current Session when it
-     * already belongs to that Workspace, otherwise open the newest non-blank
-     * Session (newest `updatedAt` first, archived excluded), falling back to a
-     * blank Workspace Session when none exists; then activate the view.
-     * @param {object} ctx - client root context.
-     * @param {Function} t - namespace-bound translate.
-     * @param {string} workspaceId - Workspace named by the row key.
-     * @returns {Function} activation cancellation.
-     */
-    function projectOpenWorkspace(ctx, t, workspaceId) {
-      const sessions = ctx.sessions?.list?.getSnapshot?.()
-      const workspaces = projectWorkspacesService(ctx)?.list?.getSnapshot?.()
-      const ui = ctx.uiWorkspace
-      if (sessions === null || sessions === undefined || workspaces === null || workspaces === undefined) return () => {}
-      if (ui === null || ui === undefined || typeof ui.openSession !== 'function' || typeof ui.openWorkspace !== 'function') return () => {}
-      const workspace = Array.isArray(workspaces.items)
-        ? workspaces.items.find((item) => item !== null && typeof item === 'object' && item.workspaceId === workspaceId)
-        : undefined
-      if (workspace === undefined || !Array.isArray(workspace.sessionIds)) return () => {}
-      const archived = new Set(Array.isArray(workspaces.archivedSessionIds) ? workspaces.archivedSessionIds : [])
-      const byId = sessions.byId !== null && typeof sessions.byId === 'object' ? sessions.byId : {}
-      const members = workspace.sessionIds
-        .filter((id) => typeof id === 'string' && !archived.has(id) && byId[id] !== undefined)
-        .map((id) => byId[id])
-      members.sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0))
-      const current = projectCurrentSession()
-      let targetSessionId = null
-      try {
-        if (current !== null && workspace.sessionIds.includes(current)) {
-          targetSessionId = current
-        } else {
-          const preferred = members.find((row) => row.blank !== true) ?? members[0]
-          if (preferred !== undefined && typeof preferred.id === 'string') {
-            targetSessionId = preferred.id
-            ui.openSession(preferred.id)
-          } else {
-            const opening = ui.openWorkspace(workspaceId)
-            if (opening !== null && typeof opening === 'object' && typeof opening.catch === 'function') opening.catch(() => {})
-          }
-        }
-      } catch (error) {
-        console.warn('[power-suite] opening a Workspace project failed', error)
-        return () => {}
-      }
-      return projectActivateView(t, targetSessionId)
-    }
-
-    /**
      * Install the sidebar Workspace-row entry: one document-level capture click
      * handler that turns a plain click on a Workspace row (title/folder area)
-     * into "open this Workspace's Project page". Chevron folds, row action
-     * buttons, Session rows, drags, modified clicks, and non-primary buttons
-     * stay fully native. The effect cleanup removes every listener and cancels
-     * a pending activation, so HMR/remount cannot stack handlers.
+     * into opening this Workspace's standalone Project page. Chevron folds, row
+     * action buttons, Session rows, drags, modified clicks, and non-primary
+     * buttons stay fully native. Opening the page changes neither the current
+     * Session nor the conversation view: the handler only dispatches
+     * PROJECT_PAGE_EVENT and the shell.overlay seat reacts to it.
      * @param {object} ctx - client root context.
      * @returns {Function} cleanup.
      */
     function installProjectWorkspaceEntry(ctx) {
-      const t = ctx.locale.bind(PROJECT_VIEW_NS)
       let pressed = null
       let dragged = false
-      let cancelActivation = () => {}
       const resetPress = () => {
         pressed = null
         dragged = false
@@ -8149,12 +8079,21 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (workspaceId.length === 0) return
         // Keep the native row behavior when the services this feature needs are
         // absent, instead of swallowing the click for nothing.
-        if (ctx.sessions?.list === undefined || ctx.uiWorkspace === undefined) return
-        if (projectWorkspacesService(ctx)?.list === undefined) return
+        if (ctx.uiWorkspace === undefined) return
+        const workspacesService = projectWorkspacesService(ctx)
+        if (workspacesService?.list === undefined) return
+        let known = false
+        try {
+          const snapshot = workspacesService.list.getSnapshot()
+          const items = snapshot !== null && snapshot !== undefined && Array.isArray(snapshot.items) ? snapshot.items : []
+          known = items.some((item) => item !== null && typeof item === 'object' && item.workspaceId === workspaceId)
+        } catch {
+          known = false
+        }
+        if (!known) return
         event.preventDefault()
         event.stopPropagation()
-        cancelActivation()
-        cancelActivation = projectOpenWorkspace(ctx, t, workspaceId)
+        window.dispatchEvent(new CustomEvent(PROJECT_PAGE_EVENT, { detail: { workspaceId } }))
       }
       document.addEventListener('pointerdown', onPointerDown, true)
       document.addEventListener('pointermove', onPointerMove, true)
@@ -8165,14 +8104,99 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         document.removeEventListener('pointermove', onPointerMove, true)
         document.removeEventListener('dragstart', onDragStart, true)
         document.removeEventListener('click', onClick, true)
-        cancelActivation()
-        cancelActivation = () => {}
       }
     }
     //#endregion
 
+    //#region feature: project view — standalone page
     /**
-     * Register the Project conversation view and its locale dictionaries.
+     * Resolve one Workspace's display title from the live Workspace snapshot so
+     * the page top bar can show it before its own snapshot loads. Fail-soft: a
+     * missing Workspace service or row just yields null and the page falls back
+     * to the loaded snapshot's title.
+     * @param {object} ctx - client root context.
+     * @param {string} workspaceId - Workspace identity.
+     * @returns {string | null} the title, or null when unavailable.
+     */
+    function projectWorkspaceTitle(ctx, workspaceId) {
+      const workspaces = projectWorkspacesService(ctx)
+      if (workspaces?.list === undefined) return null
+      try {
+        const snapshot = workspaces.list.getSnapshot()
+        const items = snapshot !== null && snapshot !== undefined && Array.isArray(snapshot.items) ? snapshot.items : []
+        const workspace = items.find((item) => item !== null && typeof item === 'object' && item.workspaceId === workspaceId)
+        return workspace !== undefined && typeof workspace.title === 'string' && workspace.title.length > 0
+          ? workspace.title
+          : null
+      } catch {
+        return null
+      }
+    }
+
+    /**
+     * Invisible seat that owns the standalone Project page: it listens for the
+     * sidebar entry's window event, keeps the open Workspace, and renders one
+     * full-window page instance for it. Switching Workspace updates the same
+     * instance (its data hook aborts stale requests), while Esc or the close
+     * control unmounts it and returns to the untouched conversation, composer,
+     * and sidebars.
+     * @param {object} props - slot props plus the bound locale, client context, and workspace navigation.
+     * @returns {object | null} the page, or null while closed.
+     */
+    function ProjectPageSeat({ t, ctx, uiWorkspace, ...props }) {
+      const [target, setTarget] = React.useState(null)
+      const open = target !== null
+      const close = React.useCallback(() => setTarget(null), [])
+      React.useEffect(() => {
+        const onOpen = (event) => {
+          const workspaceId = event?.detail?.workspaceId
+          if (typeof workspaceId !== 'string' || workspaceId.length === 0) return
+          setTarget({ workspaceId, title: projectWorkspaceTitle(ctx, workspaceId) })
+        }
+        window.addEventListener(PROJECT_PAGE_EVENT, onOpen)
+        return () => window.removeEventListener(PROJECT_PAGE_EVENT, onOpen)
+      }, [ctx])
+      React.useEffect(() => {
+        if (!open) return undefined
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape') return
+          event.preventDefault()
+          event.stopPropagation()
+          close()
+        }
+        window.addEventListener('keydown', onKeyDown, true)
+        return () => window.removeEventListener('keydown', onKeyDown, true)
+      }, [open, close])
+      if (target === null) return null
+      const pageProps = {
+        ...props,
+        t,
+        uiWorkspace,
+        onClose: close,
+        workspaceId: target.workspaceId,
+        workspaceTitle: target.title,
+        sessionsSource: ctx.sessions?.list,
+        copy: copyText,
+        presetRoster: () => readPresetRoster(ctx),
+        presetRead: (workspaceId, signal) => readWorkspacePreset(workspaceId, signal),
+        presetWrite: (workspaceId, preset) => writeWorkspacePreset(workspaceId, preset),
+        presetName: (preset) => presetDisplayName(t, preset)
+      }
+      return psv('div', {
+        className: 'psv-page',
+        'data-psv-page': '',
+        'data-workspace': target.workspaceId,
+        role: 'dialog',
+        'aria-modal': 'true',
+        'aria-label': t('page.label')
+      }, psv(ProjectPage, pageProps))
+    }
+    //#endregion
+
+    /**
+     * Register the standalone Project page seat, its sidebar entry, and its
+     * locale dictionaries. The conversation view registration is intentionally
+     * gone: Project is a page of its own, opened from a Workspace row.
      * @param {object} ctx - client root context.
      * @returns {void}
      */
@@ -8182,29 +8206,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         en: PROJECT_VIEW_EN,
         zh: PROJECT_VIEW_ZH
       }), 'power-suite: project view dictionaries')
-      const nav = {
-        openSession: (sessionId) => ctx.uiWorkspace.openSession(sessionId),
-        openWorkspace: (workspaceId) => ctx.uiWorkspace.openWorkspace(workspaceId),
-        startSession: (workspaceId) => ctx.uiWorkspace.startSession(workspaceId)
-      }
-      ctx.effect(() => ctx.slots.inject('conversation.view', () => ctx.slots.register({
-        name: 'conversation.view',
-        id: PROJECT_VIEW_ID,
-        order: 20,
-        locale: PROJECT_VIEW_NS,
-        label: () => t('view.label'),
-        inject: (sessionId) => ({
-          sessionId,
-          t,
-          nav,
-          sessionsSource: ctx.sessions?.list,
-          copy: copyText,
-          presetRoster: () => readPresetRoster(ctx),
-          presetRead: (workspaceId, signal) => readWorkspacePreset(workspaceId, signal),
-          presetWrite: (workspaceId, preset) => writeWorkspacePreset(workspaceId, preset),
-          presetName: (preset) => presetDisplayName(t, preset)
-        })
-      }, ProjectView)), 'power-suite: project view tab')
+      ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+        name: 'shell.overlay',
+        id: PROJECT_PAGE_SEAT_ID
+      }, (props) => React.createElement(ProjectPageSeat, {
+        ...props,
+        t,
+        ctx,
+        uiWorkspace: ctx.uiWorkspace
+      }))), 'power-suite: project page seat')
       ctx.effect(() => installProjectWorkspaceEntry(ctx), 'power-suite: project view workspace entry')
     }
     //#endregion
