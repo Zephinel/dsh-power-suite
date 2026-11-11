@@ -1087,6 +1087,7 @@ window.__ModuleLoader__.load({
     const QUICKLOOK_MIN_WIDTH = 380
     const QUICKLOOK_MAX_WIDTH = 800
     const QUICKLOOK_MIN_HEIGHT = 280
+    const QUICKLOOK_DEFAULT_HEIGHT = 360
     const QUICKLOOK_CACHE_LIMIT = 120
     const QUICKLOOK_CACHE_TTL_MS = 30000
     const QUICKLOOK_ROW_EXIT_FALLBACK = 1000
@@ -1267,6 +1268,29 @@ window.__ModuleLoader__.load({
         const path = artifact.getAttribute('data-artifact-path')
         return { element: artifact, path, name: artifact.getAttribute('data-artifact-name') ?? basenameOf(path) }
       }
+      const provided = target.closest('li[data-artifact-provided="true"]')
+      if (provided !== null && provided.getAttribute('data-artifact-attachment-id') !== null) {
+        const attachment = {
+          attachmentId: provided.getAttribute('data-artifact-attachment-id'),
+          name: provided.getAttribute('data-artifact-name') ?? '',
+          mediaType: provided.getAttribute('data-artifact-media-type') ?? ''
+        }
+        const bytes = Number(provided.getAttribute('data-artifact-bytes'))
+        if (Number.isFinite(bytes)) attachment.bytes = bytes
+        const width = Number(provided.getAttribute('data-artifact-width'))
+        if (Number.isFinite(width)) attachment.width = width
+        const height = Number(provided.getAttribute('data-artifact-height'))
+        if (Number.isFinite(height)) attachment.height = height
+        const name = attachment.name.length > 0 ? attachment.name : basenameOf(attachment.attachmentId)
+        return {
+          element: provided,
+          provided: true,
+          attachment,
+          name,
+          inlineUrl: attachmentUrl(attachment, 'inline', null),
+          downloadUrl: attachmentUrl(attachment, 'attachment', null)
+        }
+      }
       const file = target.closest('li[data-files-entry="file"][data-files-path]')
       if (file !== null && file.closest('[data-files-navigator]') !== null) {
         const path = file.getAttribute('data-files-path')
@@ -1367,9 +1391,7 @@ window.__ModuleLoader__.load({
         const pointer = quickLookState.lastPointer
         if (pointer !== null) {
           const under = document.elementFromPoint(pointer.x, pointer.y)
-          const underRow = under instanceof Element
-            ? under.closest('li[data-artifact-path], li[data-files-entry="file"][data-files-path]')
-            : null
+          const underRow = under instanceof Element ? quickLookRowAt(under)?.element ?? null : null
           if (underRow !== row) return
         }
         if (quickLookState.card === null) openQuickLook(entry)
@@ -1404,22 +1426,19 @@ window.__ModuleLoader__.load({
       const maxHeight = viewportHeight - 32
       const minHeight = Math.min(QUICKLOOK_MIN_HEIGHT, maxHeight)
       const height = saved === null
-        ? null
+        ? Math.max(minHeight, Math.min(QUICKLOOK_DEFAULT_HEIGHT, maxHeight))
         : Math.max(minHeight, Math.min(saved.height, maxHeight))
       let left = rect.left - width - 14
       if (left < 8) left = Math.min(rect.right + 14, viewportWidth - width - 8)
       left = Math.max(8, left)
-      const top = Math.max(8, Math.min(rect.top - 12, viewportHeight - (height ?? 480) - 8))
+      const top = Math.max(8, Math.min(rect.top - 12, viewportHeight - height - 8))
       card.style.left = Math.round(left) + 'px'
       card.style.top = Math.round(top) + 'px'
       card.style.width = Math.round(width) + 'px'
-      if (height === null) {
-        card.style.height = ''
-        card.style.maxHeight = ''
-      } else {
-        card.style.height = Math.round(height) + 'px'
-        card.style.maxHeight = 'calc(100vh - 16px)'
-      }
+      // The content layers are absolutely positioned inside the body, so the
+      // card needs an explicit height even before the user resizes it.
+      card.style.height = Math.round(height) + 'px'
+      card.style.maxHeight = 'calc(100vh - 16px)'
     }
 
     /**
@@ -1561,7 +1580,7 @@ window.__ModuleLoader__.load({
       download.className = 'dsa-quicklook-action'
       download.title = quickLookLabels.download
       download.setAttribute('aria-label', quickLookLabels.download)
-      download.href = artifactRawUrl(entry.path, entry.name, 'attachment')
+      download.href = entry.downloadUrl !== undefined ? entry.downloadUrl : artifactRawUrl(entry.path, entry.name, 'attachment')
       download.download = entry.name
       download.appendChild(quickLookSvg(REMIX_DOWNLOAD_LINE, 18))
       actions.appendChild(download)
@@ -1608,7 +1627,7 @@ window.__ModuleLoader__.load({
         return layer
       }
       if (data.kind === 'image' || data.kind === 'media') layer.classList.add('dsa-quicklook-layer-media')
-      const inlineUrl = artifactRawUrl(entry.path, entry.name, 'inline')
+      const inlineUrl = entry.inlineUrl !== undefined ? entry.inlineUrl : artifactRawUrl(entry.path, entry.name, 'inline')
       if (data.kind === 'image') {
         const image = document.createElement('img')
         image.className = 'dsa-quicklook-image'
@@ -1668,24 +1687,23 @@ window.__ModuleLoader__.load({
      */
     function mountQuickLookLayer(card, layer) {
       const body = card.querySelector('.dsa-quicklook-body')
+      if (body === null) return
       const previous = [...body.querySelectorAll('.dsa-quicklook-layer')].pop() ?? null
       for (const old of body.querySelectorAll('.dsa-quicklook-layer')) {
         if (old !== previous) old.remove()
       }
       body.replaceChildren()
       body.appendChild(layer)
-      layer.style.opacity = '0'
       if (previous !== null) body.appendChild(previous)
       const reduced = quickLookReducedMotion()
       if (reduced) {
-        layer.style.opacity = ''
         previous?.remove()
         return
       }
       if (previous === null) {
-        layer.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'ease-out' }).onfinish = () => {
-          layer.style.opacity = ''
-        }
+        // No inline opacity style: if the animation is dropped (throttled tab,
+        // canceled animation) the layer is still visible at its natural opacity.
+        layer.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'ease-out' })
         return
       }
       const direction = quickLookState.switchDirection || 1
@@ -1702,11 +1720,11 @@ window.__ModuleLoader__.load({
       const incoming = layer.animate([
         { opacity: 0, transform: 'translateY(' + (direction * 6) + 'px)' },
         { opacity: 1, transform: 'translateY(0)' }
-      ], { duration: 200, delay: 20, easing: 'cubic-bezier(0,0,0,1)', fill: 'both' })
-      incoming.onfinish = () => {
-        layer.style.opacity = ''
-        previous.remove()
-      }
+      ], { duration: 200, delay: 20, easing: 'cubic-bezier(0,0,0,1)' })
+      const dropPrevious = () => previous.remove()
+      incoming.onfinish = dropPrevious
+      // Fallback for a canceled or never-finishing animation.
+      window.setTimeout(dropPrevious, 400)
     }
 
     function renderQuickLook(entry, data) {
@@ -1741,16 +1759,55 @@ window.__ModuleLoader__.load({
      * @returns {Promise<void>} resolves after rendering or failure.
      */
     /**
+     * Build a preview descriptor for one user-provided attachment without the
+     * workspace preview route: images and media use their attachment URL, text
+     * files are fetched read-only and clipped, everything else is unavailable.
+     * @param {object} entry - provided-row hover entry.
+     * @returns {Promise<object | undefined>} descriptor, or undefined on failure.
+     */
+    async function providedQuickLookData(entry) {
+      const mime = entry.attachment.mediaType
+      const bytes = entry.attachment.bytes
+      const size = typeof bytes === 'number' ? bytes : undefined
+      if (mime.startsWith('image/')) return { mime, size, previewable: true, kind: 'image' }
+      if (mime.startsWith('video/') || mime.startsWith('audio/')) return { mime, size, previewable: true, kind: 'media' }
+      const textLike = mime.startsWith('text/')
+        || /^(?:application\/(?:json|xml|javascript|typescript|x-yaml|x-sh|x-httpd-php))/.test(mime)
+        || /\.(?:md|markdown|txt|log|csv|tsv|json|ya?ml|xml|js|mjs|cjs|ts|tsx|jsx|css|scss|sass|sh|bash|zsh|py|go|rs|java|rb|php|html?|sql|diff|patch)$/i.test(entry.name)
+      if (!textLike) {
+        return { mime: mime.length > 0 ? mime : 'application/octet-stream', size, previewable: false, kind: 'binary' }
+      }
+      try {
+        const response = await fetch(entry.inlineUrl, { credentials: 'same-origin' })
+        if (!response.ok) return undefined
+        const text = await response.text()
+        const limit = 64 * 1024
+        return {
+          mime: mime.length > 0 ? mime : 'text/plain; charset=utf-8',
+          size,
+          previewable: true,
+          kind: 'text',
+          text: text.slice(0, limit),
+          truncated: text.length > limit
+        }
+      } catch {
+        return undefined
+      }
+    }
+
+    /**
      * Fetch (or reuse) the preview descriptor for one entry.
      * @param {object} entry - hover entry.
      * @returns {Promise<object | undefined>} descriptor, or undefined on failure.
      */
     async function requestQuickLookData(entry) {
-      const cached = quickLookState.cache.get(entry.path)
+      const cacheKey = entry.provided === true ? 'attachment:' + entry.attachment.attachmentId : entry.path
+      const cached = quickLookState.cache.get(cacheKey)
       if (cached !== undefined) {
         if (Date.now() - cached.at < QUICKLOOK_CACHE_TTL_MS) return cached.data
-        quickLookState.cache.delete(entry.path)
+        quickLookState.cache.delete(cacheKey)
       }
+      if (entry.provided === true) return providedQuickLookData(entry)
       if (quickLookState.abort !== null) quickLookState.abort.abort()
       const controller = new AbortController()
       quickLookState.abort = controller
@@ -1764,11 +1821,11 @@ window.__ModuleLoader__.load({
         })
         if (!response.ok) throw new Error('HTTP ' + response.status)
         const data = await response.json()
-        if (quickLookState.cache.size >= QUICKLOOK_CACHE_LIMIT && !quickLookState.cache.has(entry.path)) {
+        if (quickLookState.cache.size >= QUICKLOOK_CACHE_LIMIT && !quickLookState.cache.has(cacheKey)) {
           const oldest = quickLookState.cache.keys().next().value
           if (oldest !== undefined) quickLookState.cache.delete(oldest)
         }
-        quickLookState.cache.set(entry.path, { data, at: Date.now() })
+        quickLookState.cache.set(cacheKey, { data, at: Date.now() })
         return data
       } catch {
         return undefined
@@ -2200,7 +2257,16 @@ window.__ModuleLoader__.load({
           className: 'dsa-row',
           key,
           ...(provided
-            ? { 'data-artifact-provided': 'true', 'data-artifact-attachment-id': artifact.attachmentId }
+            ? {
+                'data-artifact-provided': 'true',
+                'data-artifact-attachment-id': artifact.attachmentId,
+                ...typeof (artifact.mime ?? artifact.mediaType) === 'string'
+                  ? { 'data-artifact-media-type': artifact.mime ?? artifact.mediaType }
+                  : {},
+                ...typeof artifact.bytes === 'number' ? { 'data-artifact-bytes': String(artifact.bytes) } : {},
+                ...typeof artifact.width === 'number' ? { 'data-artifact-width': String(artifact.width) } : {},
+                ...typeof artifact.height === 'number' ? { 'data-artifact-height': String(artifact.height) } : {}
+              }
             : { 'data-artifact-path': artifact.path }),
           'data-artifact-name': artifact.name
         },
