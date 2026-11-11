@@ -7922,6 +7922,255 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         psv('div', { className: 'psv-scroll' }, content))
     }
 
+    //#region feature: project view — sidebar entry
+    /** Attribute-value prefix of one sidebar Workspace row. */
+    const PROJECT_WORKSPACE_ROW_PREFIX = 'workspace:'
+
+    /** Pointer movement above this many CSS pixels counts as a drag, not a click. */
+    const PROJECT_WORKSPACE_DRAG_SLOP = 6
+
+    /** How long one Workspace activation retries the Project view tab. */
+    const PROJECT_VIEW_ACTIVATION_TIMEOUT_MS = 2500
+
+    /** Clicks one activation issues at most before it only watches the header. */
+    const PROJECT_VIEW_ACTIVATION_CLICKS = 6
+
+    /**
+     * Current main conversation Session id, read from the resident occurrence.
+     * The shell exposes no public "current Session" getter here, and the
+     * occurrence is the same DOM contract the suite's other decorations use.
+     * @returns {string | null} the Session id, or null while no Conversation is mounted.
+     */
+    function projectCurrentSession() {
+      const occurrence = document.querySelector('[data-conversation-session]')
+      if (occurrence === null) return null
+      const value = occurrence.getAttribute('data-conversation-session')
+      return typeof value === 'string' && value.length > 0 ? value : null
+    }
+
+    /**
+     * Whether one click target belongs to a control the native Workspace row
+     * owns: fold chevron, row actions, generic buttons/links/editables, or a
+     * nested Session row. Those clicks must never open the Project page.
+     * @param {unknown} target - click target.
+     * @returns {boolean} whether the click stays native.
+     */
+    function projectWorkspaceRowControl(target) {
+      if (!(target instanceof Element)) return true
+      if (target.closest('[data-row-key^="session:"]') !== null) return true
+      return target.closest('[data-context-menu-trigger], button, a, input, select, textarea, [role="button"], [role="tab"], [contenteditable="true"], [class*="rowActions"], [class*="chevron"]') !== null
+    }
+
+    /**
+     * Candidate display labels of the registered Project view tab. The shell
+     * renders the registered label from this namespace, so the current locale
+     * wins; the literals are a fallback for a locale mismatch.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {string[]} labels to match.
+     */
+    function projectViewTabLabels(t) {
+      const labels = []
+      for (const value of [t('view.label'), 'Project', '项目']) {
+        if (typeof value === 'string' && value.length > 0 && !labels.includes(value)) labels.push(value)
+      }
+      return labels
+    }
+
+    /**
+     * Find the conversation header's Project view tab by its text label, never
+     * by position, so a reordered or folded View roster still resolves.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {HTMLElement | null} the tab button.
+     */
+    function projectViewTabButton(t) {
+      const labels = projectViewTabLabels(t)
+      const tabs = [...document.querySelectorAll('[role="tab"]')]
+      const scoped = tabs.filter((tab) => tab.closest('[class*="viewTabs"]') !== null)
+      const pool = scoped.length > 0 ? scoped : tabs
+      for (const tab of pool) {
+        const text = tab.textContent === null ? '' : tab.textContent.trim()
+        if (labels.includes(text)) return tab
+      }
+      return null
+    }
+
+    /**
+     * Activate the Project view tab for the Session the caller just opened.
+     *
+     * The header re-renders asynchronously after a Session switch, so the tab
+     * can appear late; this retries for a bounded window, waits until the
+     * expected Session owns the header, and clicks at most a few times before
+     * only watching. The shell owns and persists the per-Session view choice.
+     * @param {Function} t - namespace-bound translate.
+     * @param {string | null} expectedSessionId - Session the header must show first.
+     * @returns {Function} cancellation.
+     */
+    function projectActivateView(t, expectedSessionId) {
+      const deadline = Date.now() + PROJECT_VIEW_ACTIVATION_TIMEOUT_MS
+      let timer = null
+      let clicks = 0
+      const tick = () => {
+        timer = null
+        const current = projectCurrentSession()
+        if (expectedSessionId === null || current === expectedSessionId) {
+          const tab = projectViewTabButton(t)
+          if (tab !== null) {
+            if (tab.getAttribute('aria-selected') === 'true') return
+            if (clicks < PROJECT_VIEW_ACTIVATION_CLICKS) {
+              clicks += 1
+              tab.click()
+            }
+          }
+        }
+        if (Date.now() < deadline) timer = window.setTimeout(tick, 80)
+      }
+      tick()
+      return () => {
+        if (timer !== null) window.clearTimeout(timer)
+        timer = null
+      }
+    }
+
+    /**
+     * The Client Workspace service, read lazily because this view does not
+     * otherwise declare it as a hard dependency: a deployment whose Workspace
+     * UI is absent must still load the rest of the suite.
+     * @param {object} ctx - client root context.
+     * @returns {object | undefined} the Workspace service.
+     */
+    function projectWorkspacesService(ctx) {
+      if (typeof ctx.get !== 'function') return undefined
+      try {
+        return ctx.get('workspaces')
+      } catch {
+        return undefined
+      }
+    }
+
+    /**
+     * Open one Workspace's Project page: keep the current Session when it
+     * already belongs to that Workspace, otherwise open the newest non-blank
+     * Session (newest `updatedAt` first, archived excluded), falling back to a
+     * blank Workspace Session when none exists; then activate the view.
+     * @param {object} ctx - client root context.
+     * @param {Function} t - namespace-bound translate.
+     * @param {string} workspaceId - Workspace named by the row key.
+     * @returns {Function} activation cancellation.
+     */
+    function projectOpenWorkspace(ctx, t, workspaceId) {
+      const sessions = ctx.sessions?.list?.getSnapshot?.()
+      const workspaces = projectWorkspacesService(ctx)?.list?.getSnapshot?.()
+      const ui = ctx.uiWorkspace
+      if (sessions === null || sessions === undefined || workspaces === null || workspaces === undefined) return () => {}
+      if (ui === null || ui === undefined || typeof ui.openSession !== 'function' || typeof ui.openWorkspace !== 'function') return () => {}
+      const workspace = Array.isArray(workspaces.items)
+        ? workspaces.items.find((item) => item !== null && typeof item === 'object' && item.workspaceId === workspaceId)
+        : undefined
+      if (workspace === undefined || !Array.isArray(workspace.sessionIds)) return () => {}
+      const archived = new Set(Array.isArray(workspaces.archivedSessionIds) ? workspaces.archivedSessionIds : [])
+      const byId = sessions.byId !== null && typeof sessions.byId === 'object' ? sessions.byId : {}
+      const members = workspace.sessionIds
+        .filter((id) => typeof id === 'string' && !archived.has(id) && byId[id] !== undefined)
+        .map((id) => byId[id])
+      members.sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0))
+      const current = projectCurrentSession()
+      let targetSessionId = null
+      try {
+        if (current !== null && workspace.sessionIds.includes(current)) {
+          targetSessionId = current
+        } else {
+          const preferred = members.find((row) => row.blank !== true) ?? members[0]
+          if (preferred !== undefined && typeof preferred.id === 'string') {
+            targetSessionId = preferred.id
+            ui.openSession(preferred.id)
+          } else {
+            const opening = ui.openWorkspace(workspaceId)
+            if (opening !== null && typeof opening === 'object' && typeof opening.catch === 'function') opening.catch(() => {})
+          }
+        }
+      } catch (error) {
+        console.warn('[power-suite] opening a Workspace project failed', error)
+        return () => {}
+      }
+      return projectActivateView(t, targetSessionId)
+    }
+
+    /**
+     * Install the sidebar Workspace-row entry: one document-level capture click
+     * handler that turns a plain click on a Workspace row (title/folder area)
+     * into "open this Workspace's Project page". Chevron folds, row action
+     * buttons, Session rows, drags, modified clicks, and non-primary buttons
+     * stay fully native. The effect cleanup removes every listener and cancels
+     * a pending activation, so HMR/remount cannot stack handlers.
+     * @param {object} ctx - client root context.
+     * @returns {Function} cleanup.
+     */
+    function installProjectWorkspaceEntry(ctx) {
+      const t = ctx.locale.bind(PROJECT_VIEW_NS)
+      let pressed = null
+      let dragged = false
+      let cancelActivation = () => {}
+      const resetPress = () => {
+        pressed = null
+        dragged = false
+      }
+      const onPointerDown = (event) => {
+        if (event.button !== 0) {
+          resetPress()
+          return
+        }
+        pressed = { x: event.clientX, y: event.clientY }
+        dragged = false
+      }
+      const onPointerMove = (event) => {
+        if (pressed === null || dragged) return
+        if (Math.abs(event.clientX - pressed.x) > PROJECT_WORKSPACE_DRAG_SLOP
+          || Math.abs(event.clientY - pressed.y) > PROJECT_WORKSPACE_DRAG_SLOP) dragged = true
+      }
+      const onDragStart = () => {
+        dragged = true
+      }
+      const onClick = (event) => {
+        const start = pressed
+        const wasDragged = dragged
+        resetPress()
+        if (wasDragged || event.button !== 0) return
+        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
+        if (event.detail > 0 && start !== null
+          && (Math.abs(event.clientX - start.x) > PROJECT_WORKSPACE_DRAG_SLOP
+            || Math.abs(event.clientY - start.y) > PROJECT_WORKSPACE_DRAG_SLOP)) return
+        if (projectWorkspaceRowControl(event.target)) return
+        const row = event.target instanceof Element
+          ? event.target.closest(`[data-row-key^="${PROJECT_WORKSPACE_ROW_PREFIX}"]`)
+          : null
+        if (!(row instanceof HTMLElement)) return
+        const key = row.getAttribute('data-row-key') ?? ''
+        const workspaceId = key.slice(PROJECT_WORKSPACE_ROW_PREFIX.length)
+        if (workspaceId.length === 0) return
+        // Keep the native row behavior when the services this feature needs are
+        // absent, instead of swallowing the click for nothing.
+        if (ctx.sessions?.list === undefined || ctx.uiWorkspace === undefined) return
+        if (projectWorkspacesService(ctx)?.list === undefined) return
+        event.preventDefault()
+        event.stopPropagation()
+        cancelActivation()
+        cancelActivation = projectOpenWorkspace(ctx, t, workspaceId)
+      }
+      document.addEventListener('pointerdown', onPointerDown, true)
+      document.addEventListener('pointermove', onPointerMove, true)
+      document.addEventListener('dragstart', onDragStart, true)
+      document.addEventListener('click', onClick, true)
+      return () => {
+        document.removeEventListener('pointerdown', onPointerDown, true)
+        document.removeEventListener('pointermove', onPointerMove, true)
+        document.removeEventListener('dragstart', onDragStart, true)
+        document.removeEventListener('click', onClick, true)
+        cancelActivation()
+        cancelActivation = () => {}
+      }
+    }
+    //#endregion
+
     /**
      * Register the Project conversation view and its locale dictionaries.
      * @param {object} ctx - client root context.
@@ -7956,6 +8205,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           presetName: (preset) => presetDisplayName(t, preset)
         })
       }, ProjectView)), 'power-suite: project view tab')
+      ctx.effect(() => installProjectWorkspaceEntry(ctx), 'power-suite: project view workspace entry')
     }
     //#endregion
 
