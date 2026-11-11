@@ -60,19 +60,21 @@ All notable changes to this repository are documented here. The format follows
   Version-1 files migrate to the default windows, and running Sessions ignore
   both windows.
 
-- Project view: a standalone full-window page, opened by clicking a Workspace's
-  title/folder area in the sidebar (a window `power-suite:open-project` event
-  handled by a `shell.overlay` seat, `power-suite.project-page`), that turns the
-  Workspace into a project dashboard. Overview carries the project header, four stat cards
+- Project view: a standalone page covering the content area right of the left
+  Workspaces sidebar, opened by clicking a Workspace's title/folder area in the
+  sidebar (a window `power-suite:open-project` event handled by a
+  `shell.overlay` seat, `power-suite.project-page`), that turns the Workspace into
+  a project dashboard. The left sidebar stays visible and interactive, so
+  clicking another Workspace switches the page in place; Esc/back closes it. Overview carries the project header, four stat cards
   (running Sessions, completed today, total runs, average completed duration),
   a Session preview, the honest grouping/archiving explainer, and a recent
   activity feed; Sessions offers status chips and title search; Runs lists turns
   newest first with status filters, session filter, include-jobs toggle, search,
   expandable nested job rows, live elapsed time, and Show-more paging; Settings
   edits the Workspace default preset and shows the grouping windows read-only
-  plus path actions. The page fills the window (`position: fixed; inset: 0`) with
-  its own top bar (back/close, title, Active badge, refresh) over the four tabs;
-  Esc or the back control closes it and restores the conversation, Session,
+  plus path actions. The page covers the content area right of the left sidebar
+  with its own top bar (back/close, title, Active badge, refresh) over the four
+  tabs; Esc or the back control closes it and restores the conversation, Session,
   draft, selected view, and sidebars untouched. The native chevron fold, row
   context menu, New Session button, Session rows, drags, and modified clicks keep
   their behavior. The new authenticated `GET /api/power-suite.project` route
@@ -95,6 +97,19 @@ All notable changes to this repository are documented here. The format follows
 
 ### Changed
 
+- The Project page now covers only the content area right of the left Workspaces
+  sidebar (left = the sidebar's docked box right edge, width = viewport width
+  minus that edge, full height), measured and re-measured through sidebar/right-
+  sidebar toggles and window resize. The sidebar stays visible and interactive,
+  so another Workspace switches the page in place; the page still covers the
+  composer, right sidebar, and history rails, and `aria-modal` was dropped.
+- The Running & recent card gained row actions: a fixed trailing cluster with
+  **New session** (blank Session in the row's own directory, falling back to the
+  Workspace New Session) and, for interrupted rows, an amber warning badge plus a
+  **Continue** action that reuses the interrupted-session continuation flow.
+  Slots are reserved and revealed on hover/keyboard focus without layout shift;
+  the row's hover card now anchors to the activity panel's right edge so it never
+  covers the row or its buttons.
 - The shipped Workspaces browser is augmented rather than replaced: the plugin
   inserts sibling nodes and inline flex order only, so native search, context
   menus, add-workspace flow, drag reordering, and dialogs keep working, and

@@ -26,7 +26,7 @@ src/client.js           Browser entry (DSH module loader)
 ├─ Dynamic Workspaces buckets + running & recent Sessions card
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
 ├─ Plugins-page settings section
-├─ Standalone Project page seat (full-window Overview / Sessions / Runs / Settings)
+├─ Standalone Project page seat (content-area Overview / Sessions / Runs / Settings)
 └─ Shared hover Quick Look for generated/provided Artifacts rows and native Workspace file rows
 ```
 
@@ -208,16 +208,26 @@ workaround, so a reload cannot restore Files. See
 
 ### Project view
 
-A standalone full-window page, not a conversation view. An invisible
-`shell.overlay` seat (id `power-suite.project-page`, locale namespace
-`powerSuiteProjectView`, custom `psv-` token CSS) listens for the window
-CustomEvent `power-suite:open-project` (`detail.workspaceId`) and renders one
-`position: fixed; inset: 0` page over the whole window: its own top bar (back/
-close chevron, project title, Active/Inactive badge, refresh) above the unchanged
-four tabs (Overview / Sessions / Runs / Settings). Esc and the back control close
-it; opening never navigates and closing restores the conversation, current
-Session, composer draft, selected conversation view, and both sidebar states. The
-page is workspace-scoped: it fetches
+A standalone page in the content area right of the left Workspaces sidebar, not
+a conversation view. An invisible `shell.overlay` seat (id
+`power-suite.project-page`, locale namespace `powerSuiteProjectView`, custom
+`psv-` token CSS) listens for the window CustomEvent
+`power-suite:open-project` (`detail.workspaceId`) and renders one
+`position: fixed; top: 0` page with inline measured `left`/`width`/`height`: the
+left edge is the sidebar slot's docked-box right edge (`[data-slot="sidebar"]`,
+`display: contents`, first element child; zero-width/absent sidebar → 0), the
+width is the viewport width minus that edge, and the height is the viewport
+height. So the left sidebar stays visible and interactive, the page covers the
+composer/right sidebar/history rails, and clicking another Workspace switches the
+same page instance in place. Geometry is re-measured through one rAF-coalesced
+callback (ResizeObservers on the sidebar slot/docked box/container,
+MutationObserver for a replaced subtree, window resize, a 500 ms settle interval)
+with cleanup on close. The page has its own top bar (back/close chevron, project
+title, Active/Inactive badge, refresh) above the unchanged four tabs (Overview /
+Sessions / Runs / Settings); Esc and the back control close it; opening never
+navigates and closing restores the conversation, current Session, composer
+draft, selected conversation view, and both sidebar states. It is not modal
+(`aria-modal` is not set). The page is workspace-scoped: it fetches
 `GET /api/power-suite.project?workspaceId=…` (15 s poll, window-focus refresh,
 manual `refresh=1`, `AbortController` cancels stale requests on a workspace
 switch) and handles loading/error/404-empty states. Header navigation (Open

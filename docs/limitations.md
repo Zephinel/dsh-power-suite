@@ -87,6 +87,20 @@
   child is only reachable while its parent row is in the card. A finished
   subagent does not finish the parent's task by itself. Blank and archived
   Sessions are skipped too.
+- **Row actions reveal on hover or keyboard focus.** The card's Continue and
+  New session slots are reserved but hidden until a row is hovered or focused
+  with the keyboard; a touch-only device has no hover, so those row actions are
+  not reachable there (the Workspace's own New Session still is). They never
+  shift the row layout.
+- **Continue sends a real continuation request.** The interrupted-row Continue
+  action reuses the suite's continuation flow and actually asks the Host to
+  resume that Session; the badge and action were verified with a controlled
+  interrupt state because the live GUI had no genuinely interrupted Session, and
+  no live child-interrupted case was exercised.
+- **New session may fall back to the Workspace default directory.** The row
+  action creates a blank Session in that row's own `cwd`; if the directory or
+  Session creation is unavailable it falls back to the Workspace New Session, so
+  the new Session can land elsewhere than the row's directory.
 - **Parent disclosure state is per page.** Each parent's show/hide of its
   subagent children is not persisted; only the two bucket folds are.
 - **It depends on the shipped sidebar's internals** — the
@@ -172,14 +186,20 @@
 
 ## Project view
 
-- **The page is a full-window surface by design.** While open it covers the
-  composer/input box, both sidebars, and the conversation history rails; it is
-  not a bug that they are hidden. Closing with Esc or the back control restores
-  the conversation, current Session, draft, selected view, and sidebar states.
-- **Switching projects requires closing the page.** The sidebar is covered while
-  the page is open, so there is no in-page Workspace switcher: close and click
-  another Workspace. Open Workspace, New Session, and Session-list clicks close
-  the page first and then navigate.
+- **The page covers everything right of the left sidebar.** It fills the content
+  area from the Workspaces sidebar's docked right edge to the viewport right
+  edge, so the composer/input box, the right sidebar, and the conversation
+  history rails are hidden by design; the left Workspaces sidebar stays visible
+  and interactive. Closing with Esc or the back control restores the
+  conversation, current Session, draft, selected view, and sidebar states.
+- **No user-facing "hide the sidebar" control exists today.** Geometry follows
+  the shell: expanded sidebar, collapsed rail, and a zero-width/absent sidebar
+  (page fills the viewport) are all handled, but there is no suite or native
+  button to hide it on demand.
+- **Switching projects happens through the visible sidebar.** Clicking another
+  Workspace there switches the same page instance in place; there is no separate
+  in-page Workspace picker. Open Workspace, New Session, and Session-list clicks
+  close the page first and then navigate.
 - **The page is Workspace-scoped.** It is opened by Workspace id (not by Session)
   and a stale/unknown Workspace renders the **Workspace not found** empty state;
   closing and refreshing the sidebar is the recovery path. Sessions are reached

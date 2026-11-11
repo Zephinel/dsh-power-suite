@@ -99,15 +99,34 @@ sidebar's panel tabs. It starts expanded.
   acknowledges it; a new run clears the acknowledgement, so its next completion
   shows the green dot again. The Workspace is not printed under the row any
   more; it lives in the hover card below.
+- **Row actions**: every row (main and nested subagent) carries a fixed trailing
+  cluster immediately before the disclosure chevron:
+  `[Continue (interrupted only)] [New session] [chevron]`. The two action slots
+  are 22 px wide and stay reserved, hidden with opacity/`pointer-events` until the
+  row is hovered or on keyboard `focus-within`, so revealing them never shifts
+  the title or time. Both buttons stop the row's open handler; clicking the row
+  body still opens the Session.
+- **Interrupted rows**: a row whose Session is interrupted (main or child) shows
+  an amber warning badge before the title, taken from the suite's shared
+  interrupted-Session records; its **Continue** action reuses the interrupted
+  feature's continuation request (it does not open the row first).
+- **New session**: the native shell's "new chat" sprite icon (with an inlined
+  Remix fallback) creates a blank Session in **the row's own directory** using
+  the Session service, then opens it — without opening the source Session. When
+  the directory or creation is unavailable it falls back to the Workspace's
+  **New Session** flow, and an in-flight guard stops double clicks from creating
+  two Sessions.
 - **Hover detail**: the row carries no native `title` tooltip; the hover card is
   the only detail surface. Resting on a row for about a quarter second opens a
-  native-style card beside it whose **title is the Workspace name** (not the
-  Session name, which is already on the row), followed by the **full workspace
-  path** (wrapped, not truncated) and then **Status** (`Running`/`Finished` plus
-  the observed or relative time), **Last active** (absolute `YYYY-MM-DD HH:MM`),
-  and the running subagent count when there is one. The card does not capture
-  the pointer and hides shortly after the pointer leaves; clicking still opens
-  the Session.
+  native-style card whose **title is the Workspace name** (not the Session name,
+  which is already on the row), followed by the **full workspace path** (wrapped,
+  not truncated) and then **Status** (`Running`/`Finished` plus the observed or
+  relative time), **Last active** (absolute `YYYY-MM-DD HH:MM`), and the running
+  subagent count when there is one. The card is anchored to the **activity
+  panel's right edge + 10 px** (clamped to the viewport), so it sits outside the
+  sidebar and never covers the row or its action buttons; it does not capture the
+  pointer (same show/hide delays as before, dismissed by Escape, scroll, or
+  resize), and clicking the row still opens the Session.
 - **Disclosure column**: the header chevron and every row's disclosure arrow
   are horizontally centred on one right-edge column (not merely right-aligned),
   and rows without children reserve the same column with a spacer, so their
@@ -120,6 +139,10 @@ sidebar's panel tabs. It starts expanded.
 - **No body scrollbar**: the card body scrolls with the wheel or trackpad but
   hides its scrollbar (native `scrollbar-width` / WebKit rules), matching the
   native sidebar surfaces.
+![Hovering a card row reveals its New session action; the detail card sits outside the sidebar](assets/card-row-actions.png)
+
+![An interrupted card row with the amber badge and Continue action (controlled state)](assets/card-interrupted.png)
+
 - **Nested subagents**: a parent row with running or recently active direct
   subagent Sessions gets a per-parent disclosure chevron at its far right.
   Expanding it shows the children indented deeper beneath the parent, connected
@@ -128,8 +151,10 @@ sidebar's panel tabs. It starts expanded.
   the trunk is masked below the last child's tick, so no dangling line hangs
   under the group. Each child row has its own leading glyph (the same running /
   unread / acknowledged states, using the white `robot-2-line` icon when
-  acknowledged), title, and relative time. Each parent folds independently; the
-  card header still folds the whole list.
+  acknowledged), title, relative time, and the same trailing action cluster
+  (Continue when interrupted, New session).
+  ![Nested subagent rows with their own trailing actions](assets/card-child-actions.png)
+  Each parent folds independently; the card header still folds the whole list.
 - **Click**: clicking a parent row opens that Session; clicking a child row
   opens the child Session. The disclosure chevron is a separate control.
 - **Five-row default**: with more than five top-level rows the header also shows
@@ -234,6 +259,20 @@ The native **View options** menu picks how Sessions are grouped:
   own last activity aged out) its children are not exposed either, and
   delegations below the direct child are not walked. A finished subagent does
   not by itself finish the parent's task.
+- **Row actions are hover/focus-revealed.** The Continue and New session slots
+  are reserved but hidden until the row is hovered or keyboard-focused; a
+  touch-only device has no hover, so those row actions are not reachable there
+  (the Workspace's own New Session still is). The buttons never change the row
+  layout.
+- **Continue sends a real continuation.** The row's Continue action reuses the
+  interrupted-session continuation flow, so pressing it actually asks the Host to
+  resume that Session (it does not open the row first). The badge and action were
+  verified against a controlled interrupt state because the live GUI had no
+  genuinely interrupted Session; no live child-interrupted case was exercised.
+- **New session directory fallback.** The row's New session action creates a
+  blank Session in the row's own `cwd`; when that directory or creation is
+  unavailable it falls back to the Workspace's New Session flow, so the new
+  Session can land in the Workspace default directory instead.
 - **Parent disclosure state is per page.** Each parent's expanded/collapsed
   nested list is not persisted; only the two bucket folds are.
 - **Client-side derivation, no Host route.** The card and buckets read the

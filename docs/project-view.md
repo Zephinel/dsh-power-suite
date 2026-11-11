@@ -1,17 +1,19 @@
 # Project view
 
-A DSH Power Suite feature: a **standalone full-window Project page** for the
-current sidebar Workspace — the design mock's 项目详情 / 运行记录. It is not a
-conversation view tab: clicking a Workspace's title/folder area in the sidebar
-covers the whole window with a page of its own, and closing it returns to the
-conversation exactly as it was.
+A DSH Power Suite feature: a **standalone Project page** for a sidebar
+Workspace — the design mock's 项目详情 / 运行记录. It is not a conversation view
+tab: clicking a Workspace's title/folder area in the sidebar opens a page that
+fills the **content area right of the left Workspaces sidebar**, and closing it
+returns to the conversation exactly as it was.
 
 - **Opening**: a click on a sidebar Workspace title dispatches the window
   CustomEvent `power-suite:open-project` with `{ workspaceId }`; an invisible
   `shell.overlay` seat (`power-suite.project-page`) renders one page instance.
-- **Page surface**: `position: fixed; inset: 0` with the shell's token
-  background — a full-window carrier with its own top bar above the unchanged
-  four tabs: **Overview / Sessions / Runs / Settings**.
+- **Page surface**: `position: fixed; top: 0` with a measured inline
+  `left`/`width`/`height`: it starts at the left Workspaces sidebar's right edge
+  and ends at the viewport's right edge, full height. A token-background carrier
+  with its own top bar above the unchanged four tabs:
+  **Overview / Sessions / Runs / Settings**.
 - **Top bar**: a back/close chevron, the project title, the **Active /
   Inactive** badge, and a refresh control. **Esc** and the back control both
   close the page.
@@ -32,11 +34,15 @@ Workspace's project page. The click target is the title text: the leading icon
 doubles as the native fold chevron on hover, so it still folds/expands the
 Workspace group.
 
-While the page is open it **covers the composer and input box, both sidebars, and
-the conversation history rails by design** — the page fills the viewport, so the
-full-window layout applies even as those underlying surfaces change size. Closing
-returns to the conversation with the current Session, draft, selected view, and
-sidebar states untouched:
+While the page is open it **covers the composer and input box, the right
+sidebar, and the conversation history rails by design**. The **left Workspaces
+sidebar stays visible and interactive**: the page's geometry follows the
+sidebar's docked box, so clicking another Workspace in it switches the page in
+place, and folding/expanding the sidebar re-measures the page. There is no
+user-facing "hide the sidebar" control in the shell today; if the sidebar is
+absent or zero-width, the page fills the viewport. Closing returns to the
+conversation with the current Session, draft, selected view, and sidebar states
+untouched:
 
 ![The conversation restored after closing the Project page](assets/project-standalone-closed.png)
 
@@ -46,19 +52,38 @@ sidebar states untouched:
   non-primary clicks** (⌘/Ctrl/⇧/Alt, secondary buttons) are ignored, and the
   Workspace service is resolved lazily through `ctx.get('workspaces')`, so the
   plugin still loads without a Workspace UI.
+![Clicking another Workspace in the still-visible sidebar switches the page in place](assets/project-sidebar-switch.png)
+
 - **One handler, HMR-safe**: a single document-level capture click handler
   dispatches the open event, and the seat keeps exactly one
   `power-suite:open-project` listener; cleanup removes both and cancels pending
   work, so remounts cannot stack handlers (live listener inspection showed one
   capture handler and one event listener before and after a reload).
-- **No in-page workspace switcher.** The sidebar is covered while the page is
-  open, so switching projects means closing the page (Esc or back) and clicking
-  another Workspace.
+- **The left sidebar is the workspace switcher.** Clicking another Workspace in
+  the visible sidebar updates the same page instance in place (the event handler
+  swaps the target Workspace; its data hook aborts the old request), with no
+  close/reopen and no stale content. There is no separate in-page workspace
+  picker.
 - **Navigation leaves the page**: **Open Workspace**, **New Session**, and
   clicking a Session in the Overview preview or the Sessions list close the page
   first, then navigate so the user lands on the Session/Workspace just opened.
   Refresh, Copy project path, the Settings preset editor, and Runs turn/job
-  expansion stay inside the page.
+  expansion stay inside the page; switching Workspace happens through the
+  still-visible sidebar without closing.
+
+### Page geometry
+
+The page is measured, not hard-coded: its `left` is the left Workspaces sidebar's
+docked-box right edge, its `width` is the viewport width minus that left edge,
+and its `height` is the viewport height. Measured examples: expanded sidebar
+280 px → page left 280 / width 2268; collapsed rail 56 px → left 56 / width 2492;
+sidebar absent → left 0 / width 2548; a 1600×900 window with the expanded sidebar
+→ left 280 / width 1320 / height 900. Geometry is re-measured through one
+rAF-coalesced callback driven by ResizeObservers on the sidebar slot, its docked
+box, and their container, a scoped MutationObserver for a replaced sidebar
+subtree, a window `resize` listener, and a light 500 ms settle interval; all of
+it is cleaned up when the page closes. The page is no longer modal
+(`aria-modal` is not set), since the sidebar remains usable.
 
 ## Overview
 
@@ -89,8 +114,6 @@ sidebar states untouched:
 
 ## Sessions
 
-![Project page Sessions tab](assets/project-sessions.png)
-
 - Status chips **All / Running / Completed / Interrupted** with counts, and a
   title search field.
 - Rows show the title (or **Untitled session**), status chip, run count,
@@ -100,8 +123,6 @@ sidebar states untouched:
   and Sessions not accounted to this Workspace never appear.
 
 ## Runs
-
-![Project page Runs tab](assets/project-runs.png)
 
 Turns become **runs**, newest first, across the measured Sessions. Each row
 carries the Session title, `Turn N`, status, a relative start time (the exact
@@ -124,8 +145,6 @@ timestamp is in its tooltip), the duration, tool-call count, and job count.
   header notes `The newest N of M measured runs are shown.`
 
 ## Settings
-
-![Project page Settings tab](assets/project-settings.png)
 
 - **Default agent preset**: a select-style trigger and menu with **Follow global
   default** plus the available presets (for example Standard, PTC, Minimal,
@@ -236,12 +255,14 @@ folds [`fold.js`](../src/features/project-view/fold.js), browser surface
 
 ## Limits
 
-- **The page covers the whole window by design.** While open it hides the
-  composer/input, both sidebars, and the conversation history rails; that is the
-  full-window layout, not a rendering bug. Closing restores them.
-- **Switching projects requires closing the page.** The sidebar is covered while
-  the page is open, so there is no in-page Workspace switcher: close with Esc or
-  the back control, then click another Workspace.
+- **The page covers the content area, not the left sidebar.** It hides the
+  composer/input, the right sidebar, and the conversation history rails by design,
+  while the left Workspaces sidebar stays visible and interactive. There is no
+  user-facing "hide the sidebar" shell control today; if the shell ever hides it,
+  the page falls back to filling the viewport.
+- **Switching Workspace happens through the sidebar.** Clicking another
+  Workspace in the still-visible sidebar switches the page in place (one
+  instance, no close/reopen); there is no separate in-page Workspace picker.
 - **The page is Workspace-scoped.** It needs a Workspace id; a stale/unknown
   Workspace renders the **Workspace not found** empty state and asks the user to
   close and refresh the sidebar. Sessions are reached through the page's own

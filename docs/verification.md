@@ -24,11 +24,11 @@ Current evidence (2026-11-11, Node 24.22.2):
 
 - `npm test`: **73 tests, 73 passed, 0 failed**.
 - `npm run check`: passed (`14 modules, 7 test files`).
-- `npm run pack:check`: **57 files** (0.2.0 tarball), including `src/`,
-  `locale/`, `docs/` (with the standalone Project page, Artifacts
-  panel/filter-menu/Quick Look, Dynamic Workspaces, hover-detail, and
-  prompt-history rail captures), `cordis.patch.yml`, `icon.png`, and the
-  standard repository files.
+- `npm run pack:check`: **58 files** (0.2.0 tarball), including `src/`,
+  `locale/`, `docs/` (with the Project page/sidebar switch, activity-card
+  actions, Artifacts panel/filter-menu/Quick Look, Dynamic Workspaces,
+  hover-detail, and prompt-history rail captures), `cordis.patch.yml`,
+  `icon.png`, and the standard repository files.
 - Host tests cover the read-vs-event cache race, silent-subagent timing, continue
   content-type/state/in-flight validation, the non-human source fields, the
   prompt-history timestamp fold (`at` from a finite event time, `null`
@@ -179,33 +179,56 @@ These were exercised in the Web GUI during development:
   indicator (dot center x = 35, trunk x = 35) with short branches and no
   dangling end.
 - The standalone Project page was verified live: clicking a sidebar Workspace
-  title covers the window with the page, whose rectangle is `(0, 0, 2548 × 1321)`
-  — equal to `window.innerWidth/innerHeight` — in both the expanded and
-  rail-collapsed sidebar states. Hit tests at the left sidebar, the right rail,
-  the composer, and the top-left app area all resolve inside `[data-psv-page]`,
-  confirming the full-window coverage. The page's title, Active badge, and the
-  four tabs render; the current Session stayed
-  `session-c5864acd…`, a composer draft marker survived opening and closing, the
-  selected conversation view stayed Chat, and both sidebar states were preserved.
-  Esc and the back control both closed the page and restored the conversation.
-  Opening `nanobot-suite` showed its title, and `dsh-intelligenct-ui` (30
-  Sessions) showed the loading state and then its data. Two rapid open events
-  kept one instance/root with the final Workspace and no stale content. The
+  title renders the page in the content area **right of the left sidebar**. The
+  measured rectangle was `left 280 / top 0 / width 2268 / height 1321` with the
+  expanded sidebar (sidebar right edge 280), `left 56 / width 2492` in the
+  rail-collapsed state, `left 0 / width 2548` when the sidebar was hidden, and
+  `left 280 / width 1320 / height 900` after resizing the window to 1600×900 —
+  always ending at the viewport right edge. Hit tests confirmed the split: a
+  sidebar Workspace row resolved to sidebar content (not the page), while the
+  composer and the far-right rail resolved inside `[data-psv-page]`. The page's
+  title, Active badge, and the four tabs render; clicking another Workspace
+  (`nanobot-suite`) switched the page in place with one page root and no stale
+  content, the sidebar chevron still folded/expanded, and the current Session
+  stayed `session-c5864acd…` with a composer draft marker surviving open/close,
+  the selected view still Chat, and both sidebar states preserved. Esc and the
+  back control both closed the page and restored the conversation. Opening
+  `dsh-intelligenct-ui` (30 Sessions) showed the loading state and then its data;
+  two rapid open events kept one instance/root with the final Workspace. The
   conversation header switcher showed **Chat / Trajectory / Statistics** only (no
-  Project tab), and a Lead-side independent check confirmed the same. A
-  Sessions-list click closed the page and then opened that Session; Runs showed
-  **63** runs with status filters and expandable turn jobs; Settings showed a
-  preset choice (Cordis), the read-only windows, and the path actions; Copy
-  project path produced the toast and a matching paste; refresh emitted exactly
-  one `workspaceId=…&refresh=1` request; New Session and Open Workspace closed the
+  Project tab), and a Lead-side independent check confirmed the same (page
+  left == sidebar right, right == viewport, sidebar row hit the sidebar,
+  composer hit the page, in-place switch, Esc restore). A Sessions-list click
+  closed the page and then opened that Session; Runs showed **63** runs with
+  status filters and expandable turn jobs; Settings showed a preset choice
+  (Cordis), the read-only windows, and the path actions; Copy project path
+  produced the toast and a matching paste; refresh emitted exactly one
+  `workspaceId=…&refresh=1` request; New Session and Open Workspace closed the
   page and then navigated. HMR showed exactly one document capture handler and
   one `power-suite:open-project` listener before and after a reload (one
   page/root per click), with 0 console exceptions/plugin errors and 0 failed
-  responses (one unrelated native `/api/changes.summary` 404 was noted).
-  Route probes from the earlier iteration still hold: `sessionId` 200,
-  `workspaceId` 200 (cached response 78 ms), empty `workspaceId` + `sessionId`
-  200, unknown Workspace 404, no parameters 400, `cache-control: no-store` on
-  every response.
+  responses (one unrelated native `/api/changes.summary` 404 was noted). Route
+  probes from the earlier iteration still hold: `sessionId` 200, `workspaceId`
+  200 (cached response 78 ms), empty `workspaceId` + `sessionId` 200, unknown
+  Workspace 404, no parameters 400, `cache-control: no-store` on every response.
+- The activity-card row actions were verified live: the fixed trailing cluster
+  `[Continue (interrupted only)] [New session] [chevron]` sits in 22 px
+  reserved slots before the chevron; the title/time rectangle was unchanged
+  before and after hover (`left 58, top 275, width 99`), the row spanned
+  `21–260` and the cluster `188–234` with its buttons at `188–210` / `212–234`,
+  and the hover card anchored at `left 274` — outside the row's right edge 260
+  and never intersecting the row or its buttons (it is non-interactive, with
+  Esc/scroll/resize dismissal). The session itself stayed untouched when the
+  actions were used. **New session** created blank Sessions in the row's own cwd
+  as proven from persisted Host logs: the main row's cwd
+  `/Users/rexxin/Development/DSH` → a blank Session with the same cwd, and a
+  child row's `/Users/rexxin/Development/dsh-power-suite` → a blank Session with
+  that cwd; the source Sessions were never opened. No genuinely interrupted
+  Session existed in the live GUI, so the amber badge (`14 × 14` before the title
+  at `58–72`) and the **Continue** CTA (`188–210`, visible and enabled) were
+  verified with a controlled interrupt state; Continue was not clicked in order
+  to avoid sending a real continuation. No live child-interrupted case exists.
+  HMR showed a single panel/row/button set and there were 0 console errors.
 - The settings page and the configurable windows were verified live: the
   **DSH Power Suite** Plugins page shows exactly three setting rows (Shortcut
   modifier, Finished Session retention, Active project retention) with the
@@ -245,10 +268,11 @@ from the card.
 
 The live surfaces are captured in
 [assets/project-overview.png](assets/project-overview.png),
-[assets/project-sessions.png](assets/project-sessions.png),
-[assets/project-runs.png](assets/project-runs.png),
-[assets/project-settings.png](assets/project-settings.png),
+[assets/project-sidebar-switch.png](assets/project-sidebar-switch.png),
 [assets/project-standalone-closed.png](assets/project-standalone-closed.png),
+[assets/card-row-actions.png](assets/card-row-actions.png),
+[assets/card-interrupted.png](assets/card-interrupted.png),
+[assets/card-child-actions.png](assets/card-child-actions.png),
 [assets/artifacts-panel.png](assets/artifacts-panel.png),
 [assets/artifacts-filter-menu.png](assets/artifacts-filter-menu.png),
 [assets/artifacts-quicklook.png](assets/artifacts-quicklook.png),
