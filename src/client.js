@@ -4692,9 +4692,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @param {Map | undefined} statuses - live status snapshot.
      * @param {readonly object[]} workspaces - Workspace rows.
      * @param {Function} t - namespace-bound translate.
+     * @param {Map<string, number>} runningParents - parent id → running child count.
+     * @param {Set<string>} archived - archived Session ids.
+     * @param {Record<string, number>} activity - Host last-activity map.
      * @returns {Array<object>} running rows.
      */
-    function dwRunningRows(list, statuses, workspaces, t, runningParents, archived) {
+    function dwRunningRows(list, statuses, workspaces, t, runningParents, archived, activity) {
       const rows = []
       if (list === null || typeof list !== 'object' || list.byId === undefined || !Array.isArray(list.ids)) return rows
       for (const id of list.ids) {
@@ -4712,7 +4715,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           workspacePath: owner !== null && typeof owner.path === 'string' ? owner.path : '',
           workspaceId: owner !== null ? owner.workspaceId : null,
           cwd: typeof summary.cwd === 'string' && summary.cwd.length > 0 ? summary.cwd : null,
-          updatedAt: typeof summary.updatedAt === 'number' ? summary.updatedAt : Date.now(),
+          updatedAt: dwEffectiveUpdatedAt(activity, id, summary) || Date.now(),
           subagents,
           state: 'running'
         })
@@ -4733,9 +4736,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @param {Function} t - namespace-bound translate.
      * @param {number} now - current epoch milliseconds.
      * @param {number} recentMs - finished-Session retention window.
+     * @param {Record<string, number>} activity - Host last-activity map.
      * @returns {Array<object>} recently finished rows, newest first.
      */
-    function dwRecentRows(list, statuses, workspaces, t, now, runningParents, archived, recentMs) {
+    function dwRecentRows(list, statuses, workspaces, t, now, runningParents, archived, recentMs, activity) {
       const rows = []
       if (list === null || typeof list !== 'object' || list.byId === undefined || !Array.isArray(list.ids)) return rows
       const cutoff = now - recentMs
@@ -4744,7 +4748,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (summary === undefined || summary.blank === true || summary.origin === 'subagent') continue
         if (archived.has(id)) continue
         if (dwSessionRunning(id, summary, statuses) || runningParents.has(id)) continue
-        const updatedAt = typeof summary.updatedAt === 'number' ? summary.updatedAt : 0
+        const updatedAt = dwEffectiveUpdatedAt(activity, id, summary)
         if (updatedAt < cutoff) continue
         const owner = dwOwningWorkspace(id, workspaces)
         rows.push({
@@ -4771,9 +4775,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @param {readonly object[]} workspaces - Workspace rows.
      * @param {number} now - current epoch milliseconds.
      * @param {number} activeMs - Active Projects retention window.
+     * @param {Record<string, number>} activity - Host last-activity map.
      * @returns {{ rows: Array<object>, workspaceOf: Map<string, string> }} activity facts.
      */
-    function dwActiveSessions(list, statuses, workspaces, now, archived, activeMs) {
+    function dwActiveSessions(list, statuses, workspaces, now, archived, activeMs, activity) {
       const workspaceOf = new Map()
       for (const workspace of workspaces) {
         for (const id of workspace.sessionIds ?? []) workspaceOf.set(id, workspace.workspaceId)
@@ -4789,7 +4794,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (summary === undefined || summary.blank === true || summary.origin === 'subagent') continue
         if (archived.has(id)) continue
         const running = dwSessionRunning(id, summary, statuses) || runningParents.has(id)
-        const updatedAt = typeof summary.updatedAt === 'number' ? summary.updatedAt : 0
+        const updatedAt = dwEffectiveUpdatedAt(activity, id, summary)
         if (!running && updatedAt < cutoff) continue
         rows.push({ id, running, updatedAt })
       }
@@ -4853,10 +4858,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** Longest Session id the Host accepts in a read-acks document. */
     const DW_ACK_MAX_ID_LENGTH = 200
 
+    /** Authenticated Host route exposing true last-activity timestamps. */
+    const DW_ACTIVITY_ROUTE = 'api/power-suite.session-activity'
+
     /**
-     * Read the persisted acknowledgement baselines: Session id → the
-     * `summary.updatedAt` observed when the user last opened that completed
-     * Session. Corrupt, missing, or storage-denied documents read as empty.
+     * Read the persisted acknowledgement baselines: Session id → the effective
+     * `updatedAt` observed when the user last opened that completed Session
+     * (the Host activity map supersedes the stale catalog prompt time). Corrupt,
+     * missing, or storage-denied documents read as empty.
      * @returns {Map<string, number>} baselines.
      */
     function dwReadAckedBaselines() {
@@ -5022,6 +5031,58 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     /**
+     * Last observed activity for one Session.
+     *
+     * The catalog summary's `updatedAt` is the last *prompt* time, which is
+     * stale for a turn that ran for hours. The Host activity route carries the
+     * real latest model-visible activity, so the card prefers whichever is
+     * newer and falls back to the summary when the route is unavailable (older
+     * Host).
+     * @param {Record<string, number>} activity - Host activity map.
+     * @param {string} sessionId - Session identity.
+     * @param {object | undefined} summary - catalog session summary.
+     * @returns {number} effective epoch milliseconds, 0 when neither source has one.
+     */
+    function dwEffectiveUpdatedAt(activity, sessionId, summary) {
+      const summaryAt = summary !== null && typeof summary === 'object'
+        && typeof summary.updatedAt === 'number' && Number.isFinite(summary.updatedAt)
+        ? summary.updatedAt
+        : 0
+      const hostAt = activity !== null && typeof activity === 'object'
+        && typeof activity[sessionId] === 'number' && Number.isFinite(activity[sessionId])
+        ? activity[sessionId]
+        : 0
+      return Math.max(summaryAt, hostAt)
+    }
+
+    /**
+     * Read the Host-backed last-activity map. A missing route (older Host) or a
+     * transport failure reads as null and leaves summary timestamps in charge.
+     * @returns {Promise<Record<string, number> | null>} Session id → activity time, or null.
+     */
+    async function dwFetchSessionActivity() {
+      try {
+        const response = await fetch(appUrl(DW_ACTIVITY_ROUTE), {
+          credentials: 'same-origin',
+          headers: { accept: 'application/json' }
+        })
+        if (!response.ok) return null
+        const payload = await response.json()
+        const sessions = payload !== null && typeof payload === 'object' ? payload.sessions : null
+        if (sessions === null || typeof sessions !== 'object' || Array.isArray(sessions)) return null
+        const activity = {}
+        for (const [id, at] of Object.entries(sessions)) {
+          if (typeof id !== 'string' || id.length === 0) continue
+          if (typeof at !== 'number' || !Number.isFinite(at) || at <= 0) continue
+          activity[id] = at
+        }
+        return activity
+      } catch {
+        return null
+      }
+    }
+
+    /**
      * Find the live geometry this feature augments.
      *
      * The native browser keeps owning `sidebar.workspaces`; this feature only
@@ -5104,9 +5165,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @param {number} recentMs - finished-Session retention window.
      * @param {Set<string>} archived - archived Session ids.
      * @param {readonly object[]} workspaces - Workspace rows.
+     * @param {Record<string, number>} activity - Host last-activity map.
      * @returns {Map<string, Array<object>>} parent id → child rows, newest first.
      */
-    function dwSubagentChildren(list, statuses, now, archived, recentMs, workspaces) {
+    function dwSubagentChildren(list, statuses, now, archived, recentMs, workspaces, activity) {
       const children = new Map()
       if (list === null || typeof list !== 'object' || list.byId === undefined || !Array.isArray(list.ids)) return children
       const cutoff = now - recentMs
@@ -5117,7 +5179,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const parentId = typeof summary.parentId === 'string' ? summary.parentId : ''
         if (parentId.length === 0) continue
         const running = dwSessionRunning(id, summary, statuses)
-        const updatedAt = typeof summary.updatedAt === 'number' ? summary.updatedAt : 0
+        const updatedAt = dwEffectiveUpdatedAt(activity, id, summary)
         if (!running && updatedAt < cutoff) continue
         const owner = dwOwningWorkspace(id, workspaces)
         const row = {
@@ -5536,6 +5598,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const [showAll, setShowAll] = React.useState(false)
       const [collapsedParents, setCollapsedParents] = React.useState(() => new Set())
       const [ackedBaselines, setAckedBaselines] = React.useState(dwReadAckedBaselines)
+      const [sessionActivity, setSessionActivity] = React.useState({})
       const [now, setNow] = React.useState(() => Date.now())
 
       const mountsRef = React.useRef(null)
@@ -5649,10 +5712,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const runningParents = dwRunningSubagentParents(sessions, statuses)
       const workspaces = workspaceSnapshot?.items ?? []
       const archivedIds = new Set(workspaceSnapshot?.archivedSessionIds ?? [])
-      const runningRows = dwRunningRows(sessions, statuses, workspaces, t, runningParents, archivedIds)
-      const recentRows = dwRecentRows(sessions, statuses, workspaces, t, now, runningParents, archivedIds, windows.recentMs)
+      const runningRows = dwRunningRows(sessions, statuses, workspaces, t, runningParents, archivedIds, sessionActivity)
+      const recentRows = dwRecentRows(sessions, statuses, workspaces, t, now, runningParents, archivedIds, windows.recentMs, sessionActivity)
       const panelRows = runningRows.concat(recentRows)
-      const childrenByParent = dwSubagentChildren(sessions, statuses, now, archivedIds, windows.recentMs, workspaces)
+      const childrenByParent = dwSubagentChildren(sessions, statuses, now, archivedIds, windows.recentMs, workspaces, sessionActivity)
       const runningIds = new Set(runningRows.map((row) => row.id))
       const durations = new Map()
       for (const id of runningIds) {
@@ -5667,7 +5730,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (!runningIds.has(id)) durationsRef.current.delete(id)
       }
 
-      latestRef.current = { sessions, statuses, workspaces: workspaceSnapshot, folds, windows }
+      latestRef.current = { sessions, statuses, workspaces: workspaceSnapshot, folds, windows, activity: sessionActivity }
 
       // Read state is derived at render time from the acknowledged baseline:
       // opening a Session raises its baseline to the observed `updatedAt`, and a
@@ -5683,7 +5746,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           const summary = sessions.byId?.[id]
           if (summary === undefined) continue
           if ((summary.retainedBy?.mainView ?? 0) <= 0) continue
-          const updatedAt = typeof summary.updatedAt === 'number' && Number.isFinite(summary.updatedAt) ? summary.updatedAt : 0
+          const updatedAt = dwEffectiveUpdatedAt(sessionActivity, id, summary)
           const baseline = ackedBaselines.get(id)
           if (baseline !== undefined && baseline >= updatedAt) continue
           next.set(id, updatedAt)
@@ -5694,17 +5757,18 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const capped = dwCapAckedBaselines(next)
         setAckedBaselines(capped)
         scheduleAckedPush(raised)
-      }, [sessions, ackedBaselines, scheduleAckedPush])
+      }, [sessions, sessionActivity, ackedBaselines, scheduleAckedPush])
 
       React.useEffect(() => {
         dwWriteAckedBaselines(ackedBaselines)
       }, [ackedBaselines])
 
-      // Keep the local cache and the Host-shared document in sync: merge the
-      // Host document on mount, on window focus, on visibility, and every 30 s;
-      // push the merged local map once after the first successful migration and
-      // then any increased local baselines through the debounced push above.
-      // A missing route (older Host) degrades silently to local-only behavior.
+      // Keep the card's Host-backed state in sync on mount, on window focus, on
+      // visibility, and every 30 s: merge the shared read-acks document (and
+      // push the merged local map once after the first successful migration,
+      // then increased baselines through the debounced push above) and refresh
+      // the true last-activity map driving card retention/time. Missing routes
+      // (older Host) degrade silently to the local summaries.
       React.useEffect(() => {
         let disposed = false
         const sync = async () => {
@@ -5712,11 +5776,16 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           ackedSyncInFlightRef.current = true
           try {
             const hostEntries = await dwFetchReadAcks()
-            if (disposed || hostEntries === null) return
-            const merged = applyAckedHostEntries(hostEntries)
-            if (!ackedMigrationRef.current) {
-              ackedMigrationRef.current = true
-              scheduleAckedPush(dwAckedRecords(merged))
+            if (!disposed && hostEntries !== null) {
+              const merged = applyAckedHostEntries(hostEntries)
+              if (!ackedMigrationRef.current) {
+                ackedMigrationRef.current = true
+                scheduleAckedPush(dwAckedRecords(merged))
+              }
+            }
+            if (!disposed) {
+              const activity = await dwFetchSessionActivity()
+              if (!disposed && activity !== null) setSessionActivity(activity)
             }
           } finally {
             ackedSyncInFlightRef.current = false
@@ -5760,7 +5829,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           workspaces,
           Date.now(),
           new Set(latest.workspaces?.archivedSessionIds ?? []),
-          latest.windows.activeMs
+          latest.windows.activeMs,
+          latest.activity ?? {}
         )
         const activeIds = new Set()
         const recencyByWorkspace = new Map()

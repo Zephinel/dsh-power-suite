@@ -11,6 +11,7 @@ import { installInterruptedSessions } from './features/interrupted-sessions/host
 import { installProjectView } from './features/project-view/host.js'
 import { installPromptHistory } from './features/prompt-history/host.js'
 import { installReadAcks } from './features/read-acks/host.js'
+import { installSessionActivity } from './features/session-activity/host.js'
 import { installSessionArtifacts } from './features/session-artifacts/host.js'
 import { installSettings } from './features/settings/host.js'
 import { installWorkspacePresets } from './features/workspace-presets/host.js'
@@ -48,4 +49,5 @@ export function apply(ctx) {
   installSettings(ctx)
   installProjectView(ctx)
   installReadAcks(ctx)
+  installSessionActivity(ctx)
 }
