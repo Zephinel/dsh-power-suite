@@ -4409,6 +4409,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     // activity card needs no icon package at runtime.
     const DW_DEEPSEEK_FILL = 'M23.7493 4.92674C23.5053 4.80721 23.4103 5.0349 23.2676 5.15064C23.2193 5.18858 23.1777 5.23791 23.137 5.28155C22.7804 5.66482 22.3643 5.91527 21.8215 5.88492C21.0261 5.84128 20.348 6.09173 19.7484 6.7027C19.6207 5.94942 19.197 5.49975 18.553 5.21135C18.2154 5.06146 17.8739 4.91156 17.6385 4.58522C17.473 4.35374 17.4285 4.0957 17.3452 3.84145C17.2932 3.68777 17.2403 3.53028 17.0644 3.50372C16.8733 3.47337 16.7986 3.63464 16.7239 3.76935C16.4232 4.31959 16.3077 4.92674 16.3182 5.54149C16.3446 6.92274 16.9263 8.0232 18.0801 8.80687C18.2116 8.89605 18.2456 8.98707 18.204 9.11802C18.1255 9.38741 18.0319 9.64931 17.9487 9.9187C17.8967 10.0914 17.8181 10.1293 17.6347 10.0534C17.0011 9.78784 16.4534 9.39508 15.9701 8.91878C15.1493 8.1219 14.4069 7.24157 13.481 6.55281C13.2634 6.39151 13.0469 6.24162 12.8217 6.09932C11.8769 5.1772 12.9457 4.42015 13.1925 4.33097C13.4516 4.23801 13.2823 3.91544 12.4463 3.91924C11.6112 3.92304 10.8461 4.20385 9.87196 4.57763C9.72921 4.63455 9.54598 4.73128 9.4256 4.70855C8.54132 4.54158 7.62304 4.50363 6.66308 4.61178C4.8567 4.8148 3.4135 5.67241 2.35237 7.13714C1.07845 8.89605 0.778651 10.8959 1.1456 12.9829C1.53147 15.1801 2.64839 17.0016 4.36587 18.4246C6.14576 19.8989 8.19617 20.6218 10.535 20.4832C11.9555 20.4016 13.5377 20.2101 15.3214 18.694C15.7715 18.9179 16.2434 19.0071 17.0275 19.0754C17.6309 19.1323 18.2116 19.0451 18.6617 18.952C19.3663 18.8022 19.3172 18.1476 19.0628 18.0261C16.9973 17.0604 17.4502 17.4532 17.0379 17.1363C18.0876 15.8879 19.6699 14.592 20.2884 10.395C20.3367 10.061 20.295 9.85235 20.2884 9.58102C20.2847 9.41782 20.3216 9.35331 20.5088 9.33437C21.0261 9.2755 21.5283 9.13318 21.9898 8.8771C23.3281 8.14278 23.8571 6.93799 23.9848 5.49216C24.0037 5.27207 23.981 5.04248 23.7493 4.92674ZM12.0983 17.937C10.0962 16.3565 9.12577 15.8366 8.72484 15.8594C8.35024 15.8802 8.41745 16.3109 8.49968 16.5918C8.58577 16.8688 8.6983 17.0604 8.85626 17.3033C8.96501 17.4645 9.03978 17.7055 8.7475 17.8838C8.10252 18.2861 6.98184 17.7492 6.92886 17.7226C5.62465 16.9523 4.5342 15.9333 3.76532 14.5407C3.02385 13.1993 2.59259 11.7611 2.52166 10.2261C2.50275 9.85419 2.61151 9.72324 2.97846 9.65689C3.46173 9.56771 3.96109 9.54877 4.44436 9.61891C6.48717 9.9187 8.22638 10.837 9.68379 12.2886C10.5161 13.1177 11.1459 14.1062 11.7947 15.072C12.4841 16.0985 13.2265 17.0756 14.1714 17.8762C14.5042 18.1571 14.7709 18.3715 15.0253 18.529C14.2575 18.6144 12.9749 18.6333 12.0983 17.937ZM13.0573 11.7383C13.0573 11.5732 13.1887 11.4423 13.3542 11.4423C13.3911 11.4423 13.4252 11.4499 13.4554 11.4613C13.4961 11.4764 13.5339 11.4992 13.5633 11.5333C13.6162 11.5846 13.6465 11.6605 13.6465 11.7383C13.6465 11.9034 13.515 12.0343 13.3504 12.0343C13.1849 12.0343 13.0573 11.9034 13.0573 11.7383ZM16.0373 13.2752C15.8463 13.353 15.6552 13.4213 15.4718 13.4288C15.1871 13.4421 14.8759 13.3264 14.7066 13.1841C14.4447 12.964 14.2575 12.8406 14.1779 12.4536C14.1448 12.2886 14.1638 12.0343 14.1931 11.8882C14.2612 11.5732 14.1855 11.3721 13.9652 11.1881C13.7846 11.0382 13.5566 10.9984 13.3051 10.9984C13.2114 10.9984 13.1253 10.9566 13.061 10.9224C12.9561 10.8693 12.87 10.7384 12.9523 10.5771C12.9787 10.5259 13.1065 10.3988 13.1367 10.376C13.4772 10.1806 13.8706 10.2451 14.2347 10.3912C14.5723 10.5296 14.8267 10.7839 15.1936 11.1425C15.5691 11.5771 15.6363 11.6985 15.8501 12.0229C16.0184 12.279 16.1726 12.5408 16.2775 12.8406C16.3409 13.0266 16.2586 13.1802 16.0373 13.2752Z'
     const DW_ROBOT_2_LINE = 'M13.5 2C13.5 2.44425 13.3069 2.84339 13 3.11805V5H18C19.6569 5 21 6.34315 21 8V18C21 19.6569 19.6569 21 18 21H6C4.34315 21 3 19.6569 3 18V8C3 6.34315 4.34315 5 6 5H11V3.11805C10.6931 2.84339 10.5 2.44425 10.5 2C10.5 1.17157 11.1716 0.5 12 0.5C12.8284 0.5 13.5 1.17157 13.5 2ZM6 7C5.44772 7 5 7.44772 5 8V18C5 18.5523 5.44772 19 6 19H18C18.5523 19 19 18.5523 19 18V8C19 7.44772 18.5523 7 18 7H13H11H6ZM2 10H0V16H2V10ZM22 10H24V16H22V10ZM9 14.5C9.82843 14.5 10.5 13.8284 10.5 13C10.5 12.1716 9.82843 11.5 9 11.5C8.17157 11.5 7.5 12.1716 7.5 13C7.5 13.8284 8.17157 14.5 9 14.5ZM15 14.5C15.8284 14.5 16.5 13.8284 16.5 13C16.5 12.1716 15.8284 11.5 15 11.5C14.1716 11.5 13.5 12.1716 13.5 13C13.5 13.8284 14.1716 14.5 15 14.5Z'
+    const DW_NEW_CHAT_LINE = 'M6.455 19L2 22.5V4C2 2.89543 2.89543 2 4 2H20C21.1046 2 22 2.89543 22 4V18C22 19.1046 21.1046 20 20 20H6.455ZM4 4V18.385L5.763 17H20V4H4ZM11 10V7H13V10H16V12H13V15H11V12H8V10H11Z'
     const DW_SPARKLING_LINE = 'M14 4.4375C15.3462 4.4375 16.4375 3.34619 16.4375 2H17.5625C17.5625 3.34619 18.6538 4.4375 20 4.4375V5.5625C18.6538 5.5625 17.5625 6.65381 17.5625 8H16.4375C16.4375 6.65381 15.3462 5.5625 14 5.5625V4.4375ZM1 11C4.31371 11 7 8.31371 7 5H9C9 8.31371 11.6863 11 15 11V13C11.6863 13 9 15.6863 9 19H7C7 15.6863 4.31371 13 1 13V11ZM4.87601 12C6.18717 12.7276 7.27243 13.8128 8 15.124 8.72757 13.8128 9.81283 12.7276 11.124 12 9.81283 11.2724 8.72757 10.1872 8 8.87601 7.27243 10.1872 6.18717 11.2724 4.87601 12ZM17.25 14C17.25 15.7949 15.7949 17.25 14 17.25V18.75C15.7949 18.75 17.25 20.2051 17.25 22H18.75C18.75 20.2051 20.2051 18.75 22 18.75V17.25C20.2051 17.25 18.75 15.7949 18.75 14H17.25Z'
 
     const DW_EN = {
@@ -4432,6 +4433,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'hover.subagents': '{count} subagents',
       'hover.subagentsOne': '1 subagent',
       'hover.open': 'Click to open',
+      'hover.newSession': 'New session in this directory',
       'count': '{count}',
       'group.active': 'Active Projects',
       'group.inactive': 'Inactive Projects',
@@ -4468,6 +4470,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'hover.subagents': '{count} 个子代理',
       'hover.subagentsOne': '1 个子代理',
       'hover.open': '点击打开',
+      'hover.newSession': '在相同目录新建 Session',
       'count': '{count}',
       'group.active': '活跃项目',
       'group.inactive': '非活跃项目',
@@ -4523,11 +4526,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run-main{appearance:none;display:flex;flex:1;min-width:0;align-items:center;padding:4px 8px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-run-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-children{position:relative;display:flex;flex-direction:column;gap:1px;margin:0 0 4px 22px;padding-left:9px;border-left:1px solid var(--dsw-alias-border-l2)}
-.psd-child{position:relative;appearance:none;display:flex;align-items:center;gap:7px;min-width:0;padding:3px 7px 3px 4px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;text-align:left;cursor:pointer}
+.psd-child{position:relative;display:flex;align-items:center;gap:2px;min-width:0;padding:0 4px 0 0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;text-align:left}
+.psd-child-main{appearance:none;display:flex;align-items:center;gap:7px;flex:1;min-width:0;padding:3px 3px 3px 4px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-child::before{content:'';position:absolute;left:-10px;top:50%;width:14px;height:1px;background:var(--dsw-alias-border-l2);pointer-events:none}
 .psd-child:last-child::after{content:'';position:absolute;left:-10px;top:calc(50% + 1px);bottom:-1px;width:2px;background:var(--dsw-alias-bg-layer-1);pointer-events:none}
 .psd-child:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.psd-child:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psd-child-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-child-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
 .psd-child-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .psd-child-time{flex:none;color:var(--dsw-alias-label-tertiary);font-size:10.5px;line-height:16px;font-variant-numeric:tabular-nums}
@@ -4544,6 +4548,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-hovercard-row{display:flex;gap:6px;margin-top:6px;min-width:0}
 .psd-hovercard-key{flex:none;min-width:62px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}
 .psd-hovercard-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px}
+.psd-run-actions{display:flex;align-items:center;gap:2px;flex:none;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
+.psd-run:hover .psd-run-actions,.psd-run:focus-within .psd-run-actions,.psd-child:hover .psd-run-actions,.psd-child:focus-within .psd-run-actions{opacity:1;pointer-events:auto}
+.psd-row-action{appearance:none;display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
+.psd-row-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.psd-row-action:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psd-row-action[data-variant='continue']{color:var(--dsw-alias-state-warn-primary)}
+.psd-row-action[data-hidden='true']{visibility:hidden;pointer-events:none}
+.psd-interrupted{flex:none;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary)}
+@media (prefers-reduced-motion: reduce){.psd-run-actions{transition:none}}
 .psd-group-header{flex:none;display:block;margin:3px 0 0}
 .psd-group-header[data-group='inactive']{margin-top:10px;padding-top:3px;border-top:0.5px solid var(--dsw-alias-border-l1)}
 .psd-group-toggle{appearance:none;display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;padding:4px 8px 4px 10px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;line-height:16px;font-weight:600;letter-spacing:.02em;text-align:left;cursor:pointer}
@@ -4697,6 +4710,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           title: typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0 ? summary.displayTitle : id,
           workspace: owner === null ? t('group.ungrouped') : dwWorkspaceLabel(owner, t),
           workspacePath: owner !== null && typeof owner.path === 'string' ? owner.path : '',
+          workspaceId: owner !== null ? owner.workspaceId : null,
+          cwd: typeof summary.cwd === 'string' && summary.cwd.length > 0 ? summary.cwd : null,
           updatedAt: typeof summary.updatedAt === 'number' ? summary.updatedAt : Date.now(),
           subagents,
           state: 'running'
@@ -4737,6 +4752,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           title: typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0 ? summary.displayTitle : id,
           workspace: owner === null ? t('group.ungrouped') : dwWorkspaceLabel(owner, t),
           workspacePath: owner !== null && typeof owner.path === 'string' ? owner.path : '',
+          workspaceId: owner !== null ? owner.workspaceId : null,
+          cwd: typeof summary.cwd === 'string' && summary.cwd.length > 0 ? summary.cwd : null,
           updatedAt,
           subagents: 0,
           state: 'done'
@@ -4889,9 +4906,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @param {number} now - current epoch milliseconds.
      * @param {number} recentMs - finished-Session retention window.
      * @param {Set<string>} archived - archived Session ids.
+     * @param {readonly object[]} workspaces - Workspace rows.
      * @returns {Map<string, Array<object>>} parent id → child rows, newest first.
      */
-    function dwSubagentChildren(list, statuses, now, archived, recentMs) {
+    function dwSubagentChildren(list, statuses, now, archived, recentMs, workspaces) {
       const children = new Map()
       if (list === null || typeof list !== 'object' || list.byId === undefined || !Array.isArray(list.ids)) return children
       const cutoff = now - recentMs
@@ -4904,9 +4922,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const running = dwSessionRunning(id, summary, statuses)
         const updatedAt = typeof summary.updatedAt === 'number' ? summary.updatedAt : 0
         if (!running && updatedAt < cutoff) continue
+        const owner = dwOwningWorkspace(id, workspaces)
         const row = {
           id,
           title: typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0 ? summary.displayTitle : id,
+          workspaceId: owner !== null ? owner.workspaceId : null,
+          cwd: typeof summary.cwd === 'string' && summary.cwd.length > 0 ? summary.cwd : null,
           updatedAt,
           state: running ? 'running' : 'done'
         }
@@ -4919,6 +4940,74 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     /**
+     * The native shell's "new chat" sprite icon, with an inlined Remix fallback
+     * for a shell build that does not ship the symbol.
+     * @returns {object} the SVG element.
+     */
+    function DwNewChatGlyph() {
+      const sprite = document.getElementById('dsw-icon-new-chat-outline-regular')
+      if (sprite !== null) {
+        return React.createElement('svg', {
+          width: 14,
+          height: 14,
+          'data-icon': 'dsw-icon-new-chat-outline-regular',
+          'aria-hidden': true,
+          focusable: 'false'
+        }, React.createElement('use', { href: '#dsw-icon-new-chat-outline-regular' }))
+      }
+      return RemixGlyph(DW_NEW_CHAT_LINE, 14)
+    }
+
+    /**
+     * Fixed row trailing action cluster: [Continue (interrupted)] [New session].
+     *
+     * It lives inside the row, immediately before the disclosure chevron, in
+     * reserved fixed-width slots that are revealed on row hover/focus-within
+     * through opacity only, so the title/time layout never shifts. Both buttons
+     * stop the row's open handler.
+     * @param {object} props - action props.
+     * @param {Function} props.t - dynamic-Workspaces translate.
+     * @param {Function} props.interruptedT - interrupted-feature translate.
+     * @param {object} props.row - row carrying id/workspaceId/cwd.
+     * @param {boolean} props.interrupted - whether this Session was interrupted.
+     * @param {Function} props.onNewSession - create-and-open same-directory Session.
+     * @returns {object} the cluster element.
+     */
+    function DwRowActionCluster({ t, interruptedT, row, interrupted, onNewSession }) {
+      const continueLabel = interruptedT('continue.aria')
+      const newLabel = t('hover.newSession')
+      return React.createElement('span', { className: 'psd-run-actions' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psd-row-action',
+          'data-variant': 'continue',
+          'data-hidden': interrupted ? undefined : 'true',
+          disabled: !interrupted,
+          tabIndex: interrupted ? 0 : -1,
+          'aria-label': continueLabel,
+          title: continueLabel,
+          onClick: (event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            if (!interrupted) return
+            requestContinue(row.id)
+          }
+        }, React.createElement(RemixIcon, { path: REMIX_PLAY_FILL, size: 12 })),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psd-row-action',
+          'data-variant': 'new-session',
+          'aria-label': newLabel,
+          title: newLabel,
+          onClick: (event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            onNewSession(row)
+          }
+        }, React.createElement(DwNewChatGlyph)))
+    }
+
+    /**
      * Render the running-Sessions summary card.
      * @param {object} props - component props.
      * @returns {object} React element.
@@ -4926,14 +5015,44 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     function DynamicRunningPanel(props) {
       const {
         t, rows, expanded, showAll, now, durations, childrenByParent, collapsedParents, acked,
-        onToggle, onToggleAll, onToggleChildren, onOpen
+        onToggle, onToggleAll, onToggleChildren, onOpen, interruptedT, onNewSession
       } = props
       const visible = expanded && !showAll ? rows.slice(0, DW_PANEL_LIMIT) : rows
       const canExpand = rows.length > DW_PANEL_LIMIT
       const anyRunning = rows.some((row) => row.state === 'running')
+      // Card rows share the suite's interruption records; the rows also exist in
+      // the native sidebar, whose badge seats already pull them, but ensuring and
+      // watching here keeps this card correct on its own after a reconnect.
+      React.useSyncExternalStore(subscribeInterrupted, interruptedVersion, interruptedVersion)
+      const interruptedIds = []
+      for (const row of visible) {
+        interruptedIds.push(row.id)
+        if (collapsedParents.has(row.id)) continue
+        for (const child of childrenByParent.get(row.id) ?? []) interruptedIds.push(child.id)
+      }
+      const interruptedKey = interruptedIds.join('|')
+      React.useEffect(() => {
+        const unwatch = interruptedIds.map((sessionId) => {
+          ensureInterrupted(sessionId)
+          return watchInterrupted(sessionId)
+        })
+        return () => {
+          for (const dispose of unwatch) dispose()
+        }
+      }, [interruptedKey])
+      const rowInterrupted = React.useCallback((sessionId) => {
+        const record = interruptedRecord(sessionId)
+        return record !== null && record.status === 'ready' && record.interrupted === true
+      }, [])
+      const interruptedTitle = (sessionId) => {
+        const record = interruptedRecord(sessionId)
+        return record !== null && record.subagent === true ? interruptedT('badge.title.subagent') : interruptedT('badge.title')
+      }
 
       // Hover detail card for one row: the row itself only carries the title,
-      // state and time; the workspace and other facts live in the card.
+      // state and time; the workspace and other facts live in the card. The card
+      // anchors to the panel's right edge (not the row's), so it sits entirely
+      // outside the sidebar and can never cover the row's trailing actions.
       const [hover, setHover] = React.useState(null)
       const hoverTimer = React.useRef(null)
       const clearHoverTimer = () => {
@@ -4943,12 +5062,32 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         }
       }
       React.useEffect(() => () => clearHoverTimer(), [])
+      React.useEffect(() => {
+        if (hover === null) return undefined
+        const dismiss = () => setHover(null)
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape') return
+          event.preventDefault()
+          event.stopPropagation()
+          dismiss()
+        }
+        window.addEventListener('keydown', onKeyDown, true)
+        window.addEventListener('scroll', dismiss, true)
+        window.addEventListener('resize', dismiss)
+        return () => {
+          window.removeEventListener('keydown', onKeyDown, true)
+          window.removeEventListener('scroll', dismiss, true)
+          window.removeEventListener('resize', dismiss)
+        }
+      }, [hover])
       const showHover = (row, element) => {
         clearHoverTimer()
         hoverTimer.current = window.setTimeout(() => {
           if (!(element instanceof HTMLElement) || !element.isConnected) return
           const rect = element.getBoundingClientRect()
-          setHover({ row, top: Math.round(rect.top), right: Math.round(rect.right) })
+          const panel = element.closest('.psd-panel')
+          const anchorRight = panel instanceof HTMLElement ? panel.getBoundingClientRect().right : rect.right
+          setHover({ row, top: Math.round(rect.top), anchorRight: Math.round(anchorRight) })
         }, 260)
       }
       const hideHover = () => {
@@ -5008,6 +5147,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             const rowChildren = childrenByParent.get(row.id) ?? []
             const collapsed = collapsedParents.has(row.id)
             const hasChildren = rowChildren.length > 0
+            const interrupted = rowInterrupted(row.id)
             body.push(React.createElement('div', {
               key: row.id,
               className: 'psd-item',
@@ -5031,8 +5171,23 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                     ? React.createElement(StateDot, { state: 'done', size: 14, className: 'psd-run-glyph' })
                     : React.createElement('span', { className: 'psd-run-brand', 'aria-hidden': true },
                       RemixGlyph(DW_DEEPSEEK_FILL, 14, undefined, 0.82)),
+                interrupted
+                  ? React.createElement('span', {
+                    className: 'psd-interrupted',
+                    role: 'img',
+                    'aria-label': interruptedT('badge.aria'),
+                    title: interruptedTitle(row.id)
+                  }, RemixGlyph(REMIX_WARNING_FILL, 13))
+                  : null,
                 React.createElement('span', { className: 'psd-run-title' }, row.title),
                 React.createElement('span', { className: 'psd-run-time' }, time))),
+              React.createElement(DwRowActionCluster, {
+                t,
+                interruptedT,
+                row,
+                interrupted,
+                onNewSession
+              }),
               hasChildren
                 ? React.createElement('button', {
                   type: 'button',
@@ -5043,33 +5198,58 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                 }, React.createElement('span', { className: 'psd-chevron' }, React.createElement(DwChevron, null)))
                 : React.createElement('span', { className: 'psd-run-toggle-spacer', 'aria-hidden': true })),
             hasChildren && !collapsed
-              ? React.createElement('div', { className: 'psd-children' }, rowChildren.map((child) => React.createElement('button', {
-                key: child.id,
-                type: 'button',
-                className: 'psd-child',
-                'data-state': child.state,
-                'aria-label': t('panel.open', { title: child.title }),
-                onClick: () => onOpen(child.id),
-                onMouseEnter: (event) => showHover({
-                  ...row, id: child.id, title: child.title, state: child.state,
-                  updatedAt: child.updatedAt, subagents: 0
-                }, event.currentTarget),
-                onMouseLeave: hideHover,
-                onFocus: (event) => showHover({
-                  ...row, id: child.id, title: child.title, state: child.state,
-                  updatedAt: child.updatedAt, subagents: 0
-                }, event.currentTarget),
-                onBlur: hideHover
-              },
-              React.createElement('span', { className: 'psd-child-glyph' },
-                child.state === 'running'
-                  ? React.createElement(StateDot, { state: 'ongoing', size: 10 })
-                  : !acked.has(child.id)
-                    ? React.createElement(StateDot, { state: 'done', size: 10 })
-                    : React.createElement('span', { className: 'psd-child-brand', 'aria-hidden': true },
-                      RemixGlyph(DW_ROBOT_2_LINE, 12))),
-              React.createElement('span', { className: 'psd-child-title' }, child.title),
-              React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t)))))
+              ? React.createElement('div', { className: 'psd-children' }, rowChildren.map((child) => {
+                const childRow = {
+                  ...row,
+                  id: child.id,
+                  title: child.title,
+                  state: child.state,
+                  updatedAt: child.updatedAt,
+                  subagents: 0,
+                  workspaceId: child.workspaceId ?? row.workspaceId ?? null,
+                  cwd: child.cwd ?? row.cwd ?? null
+                }
+                const childInterrupted = rowInterrupted(child.id)
+                return React.createElement('div', {
+                  key: child.id,
+                  className: 'psd-child',
+                  'data-state': child.state
+                },
+                React.createElement('button', {
+                  type: 'button',
+                  className: 'psd-child-main',
+                  'aria-label': t('panel.open', { title: child.title }),
+                  onClick: () => onOpen(child.id),
+                  onMouseEnter: (event) => showHover(childRow, event.currentTarget),
+                  onMouseLeave: hideHover,
+                  onFocus: (event) => showHover(childRow, event.currentTarget),
+                  onBlur: hideHover
+                },
+                React.createElement('span', { className: 'psd-child-glyph' },
+                  child.state === 'running'
+                    ? React.createElement(StateDot, { state: 'ongoing', size: 10 })
+                    : !acked.has(child.id)
+                      ? React.createElement(StateDot, { state: 'done', size: 10 })
+                      : React.createElement('span', { className: 'psd-child-brand', 'aria-hidden': true },
+                        RemixGlyph(DW_ROBOT_2_LINE, 12))),
+                childInterrupted
+                  ? React.createElement('span', {
+                    className: 'psd-interrupted',
+                    role: 'img',
+                    'aria-label': interruptedT('badge.aria'),
+                    title: interruptedTitle(child.id)
+                  }, RemixGlyph(REMIX_WARNING_FILL, 13))
+                  : null,
+                React.createElement('span', { className: 'psd-child-title' }, child.title),
+                React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t))),
+                React.createElement(DwRowActionCluster, {
+                  t,
+                  interruptedT,
+                  row: childRow,
+                  interrupted: childInterrupted,
+                  onNewSession
+                }))
+              }))
               : null))
           }
         }
@@ -5085,7 +5265,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               : dwFormatDuration(now - duration.at, t))
           : dwFormatRelative(now - row.updatedAt, t)
         const cardTop = Math.round(Math.max(8, Math.min(hover.top - 8, window.innerHeight - 320)))
-        const cardLeft = Math.round(Math.min(hover.right + 10, window.innerWidth - 312))
+        const cardLeft = Math.round(Math.min(hover.anchorRight + 10, window.innerWidth - 300 - 8))
         children.push(React.createElement('div', {
           key: 'hover',
           className: 'psd-hovercard',
@@ -5144,7 +5324,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @returns {object | null} portal group.
      */
     function DynamicWorkspaceSeat(props) {
-      const { t, uiWorkspace } = props
+      const { t, uiWorkspace, parentSessions, interruptedT } = props
       const sessions = props.useSessions((state) => state)
       const statuses = props.useSessionStatus((state) => state)
       const workspaceSnapshot = props.useWorkspaces((state) => state)
@@ -5167,13 +5347,75 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const durationsRef = React.useRef(new Map())
       const firstRenderRef = React.useRef(true)
 
+      const newSessionInFlightRef = React.useRef(new Set())
+      /**
+       * Create a blank Session in the same directory as one card row and open it,
+       * without opening the row's own Session. Falls back to the Workspace's New
+       * Session flow when the cwd is unknown or creation fails; an in-flight set
+       * guards double clicks.
+       * @param {object} row - card row carrying id/workspaceId/cwd.
+       * @returns {void}
+       */
+      const openNewSession = React.useCallback((row) => {
+        if (row === null || typeof row !== 'object') return
+        const key = typeof row.id === 'string' ? row.id : ''
+        if (key.length > 0) {
+          if (newSessionInFlightRef.current.has(key)) return
+          newSessionInFlightRef.current.add(key)
+        }
+        let settled = false
+        const finish = () => {
+          if (settled) return
+          settled = true
+          if (key.length > 0) newSessionInFlightRef.current.delete(key)
+        }
+        const workspaceId = typeof row.workspaceId === 'string' && row.workspaceId.length > 0 ? row.workspaceId : null
+        const fallback = () => {
+          try {
+            if (workspaceId !== null && uiWorkspace !== null && uiWorkspace !== undefined && typeof uiWorkspace.startSession === 'function') {
+              uiWorkspace.startSession(workspaceId)
+            }
+          } catch {
+            // The row disappears with the next snapshot; a failed fallback is not fatal.
+          }
+          finish()
+        }
+        const cwd = typeof row.cwd === 'string' && row.cwd.length > 0 ? row.cwd : null
+        if (parentSessions === null || parentSessions === undefined || typeof parentSessions.create !== 'function'
+          || (workspaceId === null && cwd === null)) {
+          fallback()
+          return
+        }
+        const request = {}
+        if (workspaceId !== null) request.workspaceId = workspaceId
+        if (cwd !== null) request.cwd = cwd
+        Promise.resolve(parentSessions.create(request)).then((newSessionId) => {
+          if (typeof newSessionId !== 'string' || newSessionId.length === 0) {
+            fallback()
+            return
+          }
+          try {
+            if (uiWorkspace !== null && uiWorkspace !== undefined && typeof uiWorkspace.openSession === 'function') {
+              uiWorkspace.openSession(newSessionId)
+            } else {
+              fallback()
+            }
+          } catch {
+            fallback()
+          }
+          finish()
+        }, () => {
+          fallback()
+        })
+      }, [parentSessions, uiWorkspace])
+
       const runningParents = dwRunningSubagentParents(sessions, statuses)
       const workspaces = workspaceSnapshot?.items ?? []
       const archivedIds = new Set(workspaceSnapshot?.archivedSessionIds ?? [])
       const runningRows = dwRunningRows(sessions, statuses, workspaces, t, runningParents, archivedIds)
       const recentRows = dwRecentRows(sessions, statuses, workspaces, t, now, runningParents, archivedIds, windows.recentMs)
       const panelRows = runningRows.concat(recentRows)
-      const childrenByParent = dwSubagentChildren(sessions, statuses, now, archivedIds, windows.recentMs)
+      const childrenByParent = dwSubagentChildren(sessions, statuses, now, archivedIds, windows.recentMs, workspaces)
       const runningIds = new Set(runningRows.map((row) => row.id))
       const durations = new Map()
       for (const id of runningIds) {
@@ -5406,6 +5648,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         childrenByParent,
         collapsedParents,
         acked: ackedSessions,
+        interruptedT,
+        onNewSession: openNewSession,
         onToggle: () => setPanelExpanded((value) => !value),
         onToggleAll: () => setShowAll((value) => !value),
         onToggleChildren: (id) => setCollapsedParents((value) => {
@@ -5474,7 +5718,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }, (props) => React.createElement(DynamicWorkspaceSeat, {
         ...props,
         t,
-        uiWorkspace: ctx.uiWorkspace
+        uiWorkspace: ctx.uiWorkspace,
+        parentSessions: ctx.sessions,
+        interruptedT: ctx.locale.bind(INTERRUPTED_NS)
       }))), 'power-suite: dynamic-workspaces seat')
     }
     //#endregion
