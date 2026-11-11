@@ -8,6 +8,7 @@
  */
 
 import { installInterruptedSessions } from './features/interrupted-sessions/host.js'
+import { installProjectView } from './features/project-view/host.js'
 import { installPromptHistory } from './features/prompt-history/host.js'
 import { installSessionArtifacts } from './features/session-artifacts/host.js'
 import { installSettings } from './features/settings/host.js'
@@ -44,4 +45,5 @@ export function apply(ctx) {
   installPromptHistory(ctx)
   installInterruptedSessions(ctx)
   installSettings(ctx)
+  installProjectView(ctx)
 }
