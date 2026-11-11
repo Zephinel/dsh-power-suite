@@ -12072,7 +12072,12 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationBridge.draft = typeof draft === 'string' ? draft : ''
         if (annotationController !== null) annotationController.sessionChanged(annotationBridge.sessionId)
         return () => {
+          // The bridge is all-or-nothing: a session id without its Composer actions (or the
+          // reverse) would keep collection scope and insertion decisions stale after this
+          // seat unmounts (e.g. leaving the conversation for the Plugins view).
+          annotationBridge.sessionId = null
           annotationBridge.inputActions = null
+          annotationBridge.draft = ''
           if (annotationController !== null) annotationController.sessionChanged(null)
         }
       }, [sessionId, inputActions])
