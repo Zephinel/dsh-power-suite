@@ -4831,11 +4831,27 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     const DW_ACK_VERSION = 1
 
     /**
-     * Timestamp tolerance before a running Session counts as genuinely new
-     * activity. `updatedAt` can move for metadata-only reasons; a baseline only
-     * clears when the Session advanced by more than this window.
+     * Confidence window for the derived read predicate: a row is read when its
+     * acknowledged baseline is at least `updatedAt - tolerance`. `updatedAt` can
+     * move for metadata-only reasons; genuinely newer activity raises it past
+     * this window and the unread mark returns on every device.
      */
     const DW_ACK_TOLERANCE_MS = 1000
+
+    /** Authenticated Host route that shares read baselines across browsers. */
+    const DW_ACK_ROUTE = 'api/power-suite.read-acks'
+
+    /** How often the client re-reads the Host-shared document. */
+    const DW_ACK_SYNC_POLL_MS = 30000
+
+    /** Debounce before increased local baselines are pushed to the Host. */
+    const DW_ACK_PUSH_DEBOUNCE_MS = 250
+
+    /** Most entries the local cache keeps; the oldest baselines drop first. */
+    const DW_ACK_MAX_ENTRIES = 1000
+
+    /** Longest Session id the Host accepts in a read-acks document. */
+    const DW_ACK_MAX_ID_LENGTH = 200
 
     /**
      * Read the persisted acknowledgement baselines: Session id → the
@@ -4880,6 +4896,128 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         window.localStorage.setItem(DW_ACK_KEY, JSON.stringify({ version: DW_ACK_VERSION, acked }))
       } catch {
         // A storage-denied browser keeps the in-memory state only.
+      }
+    }
+
+    /**
+     * Sanitize one decoded `acked` object into plain entries the Host accepts.
+     * @param {unknown} value - candidate entries from localStorage or a Host payload.
+     * @returns {Record<string, number>} valid id → baseline entries.
+     */
+    function dwSanitizeAckEntries(value) {
+      const entries = {}
+      if (value === null || typeof value !== 'object' || Array.isArray(value)) return entries
+      for (const [id, baseline] of Object.entries(value)) {
+        if (typeof id !== 'string' || id.length === 0 || id.length > DW_ACK_MAX_ID_LENGTH) continue
+        if (typeof baseline !== 'number' || !Number.isFinite(baseline) || baseline <= 0) continue
+        entries[id] = baseline
+      }
+      return entries
+    }
+
+    /**
+     * Bound a baseline map, dropping the oldest acknowledged Sessions first.
+     * @param {Map<string, number>} baselines - baselines.
+     * @returns {Map<string, number>} the same map when already bounded, else a capped copy.
+     */
+    function dwCapAckedBaselines(baselines) {
+      if (baselines.size <= DW_ACK_MAX_ENTRIES) return baselines
+      const entries = [...baselines.entries()].sort((left, right) => (right[1] - left[1]) || left[0].localeCompare(right[0]))
+      const capped = new Map(entries.slice(0, DW_ACK_MAX_ENTRIES))
+      return capped
+    }
+
+    /**
+     * Merge Host/local entries into a baseline map per Session id.
+     * @param {Map<string, number>} baselines - current baselines.
+     * @param {Record<string, number>} entries - incoming sanitized entries.
+     * @returns {Map<string, number>} the same map when nothing changed, else the merged map.
+     */
+    function dwMergeAckedBaselines(baselines, entries) {
+      const sanitized = dwSanitizeAckEntries(entries)
+      let changed = false
+      const next = new Map(baselines)
+      for (const [id, baseline] of Object.entries(sanitized)) {
+        const previous = next.get(id)
+        if (previous !== undefined && previous >= baseline) continue
+        next.set(id, baseline)
+        changed = true
+      }
+      if (!changed) return baselines
+      return dwCapAckedBaselines(next)
+    }
+
+    /**
+     * Plain JSON object of one baseline map, for a Host POST body.
+     * @param {Map<string, number>} baselines - baselines.
+     * @returns {Record<string, number>} the entries.
+     */
+    function dwAckedRecords(baselines) {
+      const entries = {}
+      for (const [id, baseline] of baselines) entries[id] = baseline
+      return entries
+    }
+
+    /**
+     * Derived read state for one activity-card row or child.
+     *
+     * An acknowledgement only remembers the last-read `updatedAt`; a row is read
+     * while that baseline covers the row's current activity. No running-status
+     * input is involved, so a transient flag can never flip a read row back to
+     * unread.
+     * @param {Map<string, number>} baselines - acknowledged baselines.
+     * @param {string} sessionId - Session identity.
+     * @param {number | undefined} updatedAt - the row's current activity timestamp.
+     * @returns {boolean} whether the row is read.
+     */
+    function dwIsAcked(baselines, sessionId, updatedAt) {
+      if (baselines === null || baselines === undefined || typeof baselines.get !== 'function') return false
+      const baseline = baselines.get(sessionId)
+      if (typeof baseline !== 'number') return false
+      const current = typeof updatedAt === 'number' && Number.isFinite(updatedAt) ? updatedAt : 0
+      return baseline >= current - DW_ACK_TOLERANCE_MS
+    }
+
+    /**
+     * Read the Host-shared read baselines. A missing route (older Host) or a
+     * transport failure reads as null and leaves the local cache authoritative.
+     * @returns {Promise<Record<string, number> | null>} sanitized entries or null.
+     */
+    async function dwFetchReadAcks() {
+      try {
+        const response = await fetch(appUrl(DW_ACK_ROUTE), {
+          credentials: 'same-origin',
+          headers: { accept: 'application/json' }
+        })
+        if (!response.ok) return null
+        const payload = await response.json()
+        const acked = payload !== null && typeof payload === 'object' ? payload.acked : null
+        return dwSanitizeAckEntries(acked)
+      } catch {
+        return null
+      }
+    }
+
+    /**
+     * Merge local baselines into the Host document. Failures are silent so an
+     * older Host keeps the local-only behavior.
+     * @param {Record<string, number>} entries - increased local baselines.
+     * @returns {Promise<Record<string, number> | null>} the merged entries or null.
+     */
+    async function dwPostReadAcks(entries) {
+      try {
+        const response = await fetch(appUrl(DW_ACK_ROUTE), {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({ acked: entries })
+        })
+        if (!response.ok) return null
+        const payload = await response.json()
+        const acked = payload !== null && typeof payload === 'object' ? payload.acked : null
+        return dwSanitizeAckEntries(acked)
+      } catch {
+        return null
       }
     }
 
@@ -5079,6 +5217,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const visible = expanded && !showAll ? rows.slice(0, DW_PANEL_LIMIT) : rows
       const canExpand = rows.length > DW_PANEL_LIMIT
       const anyRunning = rows.some((row) => row.state === 'running')
+      const isRead = (sessionId, updatedAt) => dwIsAcked(acked, sessionId, updatedAt)
       // Card rows share the suite's interruption records; the rows also exist in
       // the native sidebar, whose badge seats already pull them, but ensuring and
       // watching here keeps this card correct on its own after a reconnect.
@@ -5226,7 +5365,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               React.createElement('span', { className: 'psd-run-head' },
                 running
                   ? React.createElement(StateDot, { state: 'ongoing', size: 14, className: 'psd-run-glyph' })
-                  : !acked.has(row.id)
+                  : !isRead(row.id, row.updatedAt)
                     ? React.createElement(StateDot, { state: 'done', size: 14, className: 'psd-run-glyph' })
                     : React.createElement('span', { className: 'psd-run-brand', 'aria-hidden': true },
                       RemixGlyph(DW_DEEPSEEK_FILL, 14, undefined, 0.82)),
@@ -5287,7 +5426,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                 React.createElement('span', { className: 'psd-child-glyph' },
                   child.state === 'running'
                     ? React.createElement(StateDot, { state: 'ongoing', size: 10 })
-                    : !acked.has(child.id)
+                    : !isRead(child.id, child.updatedAt)
                       ? React.createElement(StateDot, { state: 'done', size: 10 })
                       : React.createElement('span', { className: 'psd-child-brand', 'aria-hidden': true },
                         RemixGlyph(DW_ROBOT_2_LINE, 12))),
@@ -5406,6 +5545,45 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const durationsRef = React.useRef(new Map())
       const firstRenderRef = React.useRef(true)
 
+      // Read-state synchronization with the Host-shared document. The local
+      // localStorage cache stays authoritative for rendering; the Host merges
+      // maxima so every browser/profile sees the same acknowledgements.
+      const ackedRef = React.useRef(ackedBaselines)
+      ackedRef.current = ackedBaselines
+      const ackedPushTimerRef = React.useRef(null)
+      const ackedPendingPushRef = React.useRef(new Map())
+      const ackedSyncInFlightRef = React.useRef(false)
+      const ackedMigrationRef = React.useRef(false)
+      const applyAckedHostEntries = React.useCallback((entries) => {
+        const current = ackedRef.current
+        const next = dwMergeAckedBaselines(current, entries)
+        if (next !== current) {
+          ackedRef.current = next
+          setAckedBaselines(next)
+        }
+        return next
+      }, [])
+      const scheduleAckedPush = React.useCallback((entries) => {
+        const sanitized = dwSanitizeAckEntries(entries)
+        let added = false
+        for (const [id, baseline] of Object.entries(sanitized)) {
+          const previous = ackedPendingPushRef.current.get(id)
+          ackedPendingPushRef.current.set(id, previous === undefined ? baseline : Math.max(previous, baseline))
+          added = true
+        }
+        if (!added) return
+        if (ackedPushTimerRef.current !== null) window.clearTimeout(ackedPushTimerRef.current)
+        ackedPushTimerRef.current = window.setTimeout(() => {
+          ackedPushTimerRef.current = null
+          const payload = {}
+          for (const [id, baseline] of ackedPendingPushRef.current) payload[id] = baseline
+          ackedPendingPushRef.current = new Map()
+          void dwPostReadAcks(payload).then((merged) => {
+            if (merged !== null) applyAckedHostEntries(merged)
+          })
+        }, DW_ACK_PUSH_DEBOUNCE_MS)
+      }, [applyAckedHostEntries])
+
       const newSessionInFlightRef = React.useRef(new Set())
       /**
        * Create a blank Session in the same directory as one card row and open it,
@@ -5491,50 +5669,78 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
       latestRef.current = { sessions, statuses, workspaces: workspaceSnapshot, folds, windows }
 
-      // A finished Session's green mark is an unread signal. The acknowledgement
-      // is a persisted Session id → acknowledged `summary.updatedAt` baseline:
-      // opening the Session raises the baseline, and only genuinely newer
-      // activity clears it again. A transient "running" status with an unchanged
-      // timestamp must never clear it, and the baseline survives remount/HMR and
-      // page reloads because it is written to localStorage.
+      // Read state is derived at render time from the acknowledged baseline:
+      // opening a Session raises its baseline to the observed `updatedAt`, and a
+      // genuinely newer activity naturally exceeds that baseline again. There is
+      // no running-based clearing branch, so a transient status flag can never
+      // flip a read row back to unread.
       React.useEffect(() => {
         if (sessions === null || typeof sessions !== 'object' || !Array.isArray(sessions.ids) || sessions.ids.length === 0) return
-        setAckedBaselines((previous) => {
-          let changed = false
-          const next = new Map(previous)
-          for (const id of sessions.ids) {
-            const summary = sessions.byId?.[id]
-            if (summary === undefined) continue
-            const updatedAt = typeof summary.updatedAt === 'number' && Number.isFinite(summary.updatedAt) ? summary.updatedAt : 0
-            const baseline = previous.get(id)
-            if ((summary.retainedBy?.mainView ?? 0) > 0) {
-              if (baseline === undefined || updatedAt > baseline) {
-                next.set(id, updatedAt)
-                changed = true
-              }
-              continue
-            }
-            if (baseline === undefined) continue
-            if (dwSessionRunning(id, summary, statuses) && updatedAt > baseline + DW_ACK_TOLERANCE_MS) {
-              next.delete(id)
-              changed = true
-            }
-          }
-          // Keep the document bounded: drop ids no longer in the catalog. A
-          // loading/empty snapshot never prunes, so acks are not lost at startup.
-          for (const id of previous.keys()) {
-            if (sessions.byId?.[id] === undefined) {
-              next.delete(id)
-              changed = true
-            }
-          }
-          return changed ? next : previous
-        })
-      }, [sessions, statuses])
+        const raised = {}
+        let changed = false
+        const next = new Map(ackedBaselines)
+        for (const id of sessions.ids) {
+          const summary = sessions.byId?.[id]
+          if (summary === undefined) continue
+          if ((summary.retainedBy?.mainView ?? 0) <= 0) continue
+          const updatedAt = typeof summary.updatedAt === 'number' && Number.isFinite(summary.updatedAt) ? summary.updatedAt : 0
+          const baseline = ackedBaselines.get(id)
+          if (baseline !== undefined && baseline >= updatedAt) continue
+          next.set(id, updatedAt)
+          raised[id] = updatedAt
+          changed = true
+        }
+        if (!changed) return
+        const capped = dwCapAckedBaselines(next)
+        setAckedBaselines(capped)
+        scheduleAckedPush(raised)
+      }, [sessions, ackedBaselines, scheduleAckedPush])
 
       React.useEffect(() => {
         dwWriteAckedBaselines(ackedBaselines)
       }, [ackedBaselines])
+
+      // Keep the local cache and the Host-shared document in sync: merge the
+      // Host document on mount, on window focus, on visibility, and every 30 s;
+      // push the merged local map once after the first successful migration and
+      // then any increased local baselines through the debounced push above.
+      // A missing route (older Host) degrades silently to local-only behavior.
+      React.useEffect(() => {
+        let disposed = false
+        const sync = async () => {
+          if (disposed || ackedSyncInFlightRef.current) return
+          ackedSyncInFlightRef.current = true
+          try {
+            const hostEntries = await dwFetchReadAcks()
+            if (disposed || hostEntries === null) return
+            const merged = applyAckedHostEntries(hostEntries)
+            if (!ackedMigrationRef.current) {
+              ackedMigrationRef.current = true
+              scheduleAckedPush(dwAckedRecords(merged))
+            }
+          } finally {
+            ackedSyncInFlightRef.current = false
+          }
+        }
+        void sync()
+        const timer = window.setInterval(sync, DW_ACK_SYNC_POLL_MS)
+        const onFocus = () => { void sync() }
+        const onVisibility = () => {
+          if (document.visibilityState === 'visible') void sync()
+        }
+        window.addEventListener('focus', onFocus)
+        document.addEventListener('visibilitychange', onVisibility)
+        return () => {
+          disposed = true
+          window.clearInterval(timer)
+          window.removeEventListener('focus', onFocus)
+          document.removeEventListener('visibilitychange', onVisibility)
+          if (ackedPushTimerRef.current !== null) {
+            window.clearTimeout(ackedPushTimerRef.current)
+            ackedPushTimerRef.current = null
+          }
+        }
+      }, [applyAckedHostEntries, scheduleAckedPush])
 
       React.useEffect(() => {
         aliveRef.current = true
