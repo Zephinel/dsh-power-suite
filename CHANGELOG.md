@@ -35,10 +35,12 @@ All notable changes to this repository are documented here. The format follows
   source-filter dropdown with per-option counts.
 - Copy content row action: each Artifacts row gains a Copy content button
   between Download and Copy link. Text-like artifacts are fetched through their
-  inline URL and copied verbatim; images are copied as a PNG clipboard item when
-  the async clipboard exists, otherwise the inline image URL is copied as the
-  fallback; other binaries have no content action. A successful copy shows the
-  row's check acknowledgement for 1.6 s.
+  inline URL and copied verbatim. Images use a three-step chain: a real PNG
+  clipboard item in a secure context (HTTPS/localhost), the legacy HTML-image
+  clipboard on insecure origins (hidden `<img>` + `execCommand('copy')`, so
+  rich editors paste the picture while plain-text targets may get nothing/alt),
+  and only then the inline image URL as text. Other binaries have no content
+  action. A successful copy shows the row's check acknowledgement for 1.6 s.
 - Draft attachment memory: browser-owned attachments in a draft (pasted images,
   dropped or picked files) are remembered per Session and re-introduced through
   the composer's own paste intake when the Session is shown again, so switching

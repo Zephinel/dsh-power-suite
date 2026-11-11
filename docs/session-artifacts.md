@@ -77,13 +77,17 @@ claim them).
 |---|---|---|
 | **Open** | Opens the file in the right Sidebar's native document preview — the same workspace-files + document-preview pipeline the Files browser uses — through a `dsh-resource://file/session/<sessionId>/<path>` address. Images, PDFs, Office documents, Markdown, code, and HTML get the existing renderers. If no preview type claims the address, it falls back to the raw-file URL in a new tab. | Opens the attachment's inline URL in a **new browser tab**. It never uses the native workspace preview (the bytes are not workspace files). |
 | **Download** | Raw URL with `Content-Disposition: attachment`; the browser saves the file and the operating system owns the open-with choice. | The attachment route with `disposition=attachment` and the stored file name; same browser save behavior. |
-| **Copy content** | Text-like artifacts (text mime types, JSON/XML/YAML/JavaScript application types, and common markdown/text/code/config extensions) are fetched from the raw inline URL and their text is copied **verbatim**. Images are fetched from the raw inline URL and copied as a PNG clipboard item when the async clipboard is available; otherwise the inline image URL itself is copied. Other binaries get no Copy content button. | Same behavior through the verified attachment route's inline URL; text-like provided files are read whole and copied verbatim, provided images follow the same PNG/URL-fallback rule. |
+| **Copy content** | Text-like artifacts (text mime types, JSON/XML/YAML/JavaScript application types, and common markdown/text/code/config extensions) are fetched from the raw inline URL and their text is copied **verbatim**. Images use a three-step chain: in a secure context (HTTPS or localhost) with the async clipboard, the image is converted to PNG (`createImageBitmap` + canvas when needed) and written as an `image/png` clipboard item — a true picture; on an insecure origin a hidden `<img>` is selected and the legacy `execCommand('copy')` runs inside the click gesture, so the clipboard receives HTML containing the image (rich editors paste the picture, while plain-text-only targets may get nothing or the alt text); only if that fails is the inline image URL copied as text. Other binaries get no Copy content button. | Same behavior through the verified attachment route's inline URL; text-like provided files are read whole and copied verbatim, provided images follow the same three-step chain. |
 | **Copy link** | Copies the LAN URL of the file, built from the Host's bound listener address, so another device paired with this DSH can open it directly. | Copies the attachment's inline LAN URL, including its metadata parameters, so a paired device can fetch it. |
 
 The actions render as icon buttons with their label as tooltip and accessible
 name: an open book for Open, a download arrow for Download, a file-copy glyph for
 **Copy content** (its label reads Copy image for images), and a chain for Copy
 link; copied actions turn into a check in the success color for about 1.6 s.
+Previews and thumbnails work over plain HTTP because they only point an `<img>`
+at the inline URL — the browser loads it like any page image. **Clipboard
+writes** are what need a secure context; that is why Copy image has the HTML
+fallback for insecure origins described above.
 Copy content sits between Download and Copy link and is absent for binaries with
 no meaningful text/picture clipboard representation. The icons are
 inlined [Remix Icon](https://remixicon.com) paths (Apache-2.0); the Artifacts

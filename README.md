@@ -9,7 +9,7 @@ shows one plugin whose inventory grows with the suite.
 
 | Feature | What it adds |
 |---|---|
-| [Session artifacts](docs/session-artifacts.md) | An **Artifacts** card in the right Sidebar's Start page listing the current Session's created and delivered files **and the images/files the user attached to their prompts**, with 40 px image thumbnails, an All/Generated/Provided dropdown filter in the panel header, native open, download, copy content (text verbatim / image with fallback), and LAN link copy. |
+| [Session artifacts](docs/session-artifacts.md) | An **Artifacts** card in the right Sidebar's Start page listing the current Session's created and delivered files **and the images/files the user attached to their prompts**, with 40 px image thumbnails, an All/Generated/Provided dropdown filter in the panel header, native open, download, copy content (text verbatim; images as a real clipboard picture in a secure context, with an HTML-image fallback on plain HTTP), and LAN link copy. |
 | [Workspace presets](docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions created in that Workspace. |
 | [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with single-line rows, right-edge disclosure chevrons, unread completions marked green until opened, a row hover detail (workspace, status, last active), nested subagent Sessions, and configurable retention windows. |
 | [Prompt history](docs/prompt-history.md) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; a right-edge rail lists them newest first with a hover full-text preview, an inline search, and click-to-copy. Plain arrows keep their original behavior. |
@@ -24,7 +24,8 @@ New in 0.2.0:
   by attachment id (newest wins) and served by a verified attachment route, with
   40 px lazy thumbnails, a client-side All/Generated/Provided dropdown filter in
   the panel header, and the same open/download/copy-content/copy-link actions
-  adapted to the attachment store.
+  adapted to the attachment store (Copy image writes a real PNG item on HTTPS/
+  localhost and uses the legacy HTML-image clipboard on plain HTTP).
 - **Dynamic Workspaces** — the shipped sidebar is augmented, never replaced:
   Active/Inactive buckets follow the running and recent Sessions live, fold
   independently with persisted state, and hide in rail mode, while a **Running &

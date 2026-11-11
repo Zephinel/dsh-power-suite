@@ -37,10 +37,14 @@
 - Raw workspace downloads and provided attachment responses are capped at
   64 MiB; text previews read the first 16 KiB and report truncation, and the
   attachment route rejects tampered metadata with `400`/`404`.
-- **Image clipboard bytes need a secure context.** Copy content puts real image
-  bytes on the clipboard only when the async Clipboard API and `ClipboardItem`
-  exist (HTTPS or localhost). On a plain-HTTP LAN page the action falls back to
-  copying the inline image URL, which is paste-able but is not the image itself.
+- **A real image clipboard item needs a secure context.** Only HTTPS or
+  localhost exposes the async Clipboard API + `ClipboardItem` that Copy content
+  uses for an `image/png` item. On a plain-HTTP LAN page the action instead uses
+  the legacy HTML-image clipboard (a hidden `<img>` selected with
+  `execCommand('copy')` inside the click gesture): rich editors paste the
+  picture, while plain-text-only targets may receive nothing or just the alt
+  text. The inline image URL is copied only when that fallback fails. Preview and
+  thumbnail loading need no clipboard permission and are unaffected.
 - **Text copy reads the whole file first.** Copy content fetches the complete
   artifact text into memory before writing the clipboard (bounded by the raw and
   attachment route limits); binaries with no text/picture representation (PDF,

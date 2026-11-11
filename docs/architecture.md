@@ -74,11 +74,14 @@ markdown/text/code/config extensions), **image**, or **none** (no button). Text
 is fetched through the row's inline URL — the raw route for workspace files, the
 verified attachment route for provided files — and copied verbatim with the
 existing clipboard helper (async Clipboard API, legacy `execCommand` fallback).
-Images are fetched the same way; a PNG `ClipboardItem` write is attempted when
-the async clipboard exists (secure context), with non-PNG images converted
-through `createImageBitmap` + canvas, otherwise the inline image URL is copied
-as the fallback. Failures leave no acknowledgement; a successful copy shows the
-row's check state for 1.6 s.
+Images are fetched the same way and follow a three-step chain: a PNG
+`ClipboardItem` write when the async clipboard exists (secure context), with
+non-PNG images converted through `createImageBitmap` + canvas; on an insecure
+origin a hidden `<img>` is selected and the legacy `execCommand('copy')` runs
+inside the click gesture, putting HTML-with-image on the clipboard (rich editors
+paste the picture, plain-text targets may receive nothing/alt); only then does
+it copy the inline image URL as text. Failures leave no acknowledgement; a
+successful copy shows the row's check state for 1.6 s.
 
 ### Prompt history
 

@@ -85,11 +85,14 @@ These were exercised in the Web GUI during development:
   unchanged, and there were 0 console errors.
 - Copy content was verified live: on the generated `verification.md` row the
   button showed its check acknowledgement and pasting into the composer yielded
-  text beginning `# Verification` (the exact file content); on a provided
-  screenshot row the image action read Copy image and showed the check through
-  the URL fallback on the plain-HTTP LAN deployment (async clipboard and
-  `ClipboardItem` are unavailable outside a secure context). The refreshed panel
-  capture shows the row's four actions
+  text beginning `# Verification` (the exact file content). On a provided
+  screenshot row the image action read Copy image and showed its check
+  acknowledgement on the plain-HTTP LAN; a real keyboard paste into a temporary
+  contenteditable produced `<img src="…/api/session-artifacts.attachment?…">`
+  (the rich target received the picture), and a clipboard-types probe showed
+  only `text/html` — no bitmap, as expected on an insecure origin. The
+  secure-context `image/png` clipboard path was not exercised in this HTTP
+  deployment. The refreshed panel capture shows the row's four actions
   ([assets/artifacts-panel.png](assets/artifacts-panel.png)).
 - Hover Quick Look on Artifacts rows and native Workspace files: Markdown,
   highlighted code, images, PDF/HTML, resize persistence, outside-click
