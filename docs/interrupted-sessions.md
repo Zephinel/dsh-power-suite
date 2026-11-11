@@ -92,6 +92,11 @@ Interruption state is Host-owned but the browser caches one record per Session.
 After a DSH restart the browser may keep its old page, so a stale record used to
 survive until that row was clicked.
 
+- A row whose native status still says **running** (the shell shows a green
+  spinner and does not render the custom leading slot) is decorated directly:
+  the decoration inserts the amber warning into the native leading span and
+  hides the stale spinner, so the interrupted mark is visible immediately after
+  a reconnect instead of only after opening the Session.
 - The browser listens for the client Connection's `connection/reset` event,
   which fires whenever a new Host generation is established, and immediately
   repulls every known/watched Session. Window focus, `visibilitychange`,

@@ -3178,8 +3178,8 @@ window.__ModuleLoader__.load({
     /** The mounted composer's continue handler, if a Conversation is open. */
     const continueRuntime = { current: null, pending: false }
 
-    /** Services captured at install time for row actions. */
-    const interruptedRuntime = { uiWorkspace: null }
+    /** Services captured at install time for row actions and DOM decoration. */
+    const interruptedRuntime = { uiWorkspace: null, t: null }
 
     /**
      * Start continuing one Session from a row action.
@@ -3215,10 +3215,85 @@ html[data-input-modality="keyboard"] [data-row-key^="session:"][data-power-suite
 .dps-row-continue:hover{background:color-mix(in srgb,var(--dsw-alias-label-primary) 14%,transparent);color:var(--dsw-alias-label-primary)}
 .dps-row-continue:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 [class*="_contextRow"]:has([data-context-source="power-suite-continue"]){display:none!important}
+[data-row-key^="session:"][data-power-suite-interrupted] > span:first-child > svg{display:none!important}
 html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] button[class$="_primary"]>svg{display:none!important}
 html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] button[class$="_primary"]::before{content:"";display:block;width:16px;height:16px;background-color:currentColor;-webkit-mask:${PLAY_MASK} center/contain no-repeat;mask:${PLAY_MASK} center/contain no-repeat}
 `
     //#endregion
+
+    /**
+     * Build one standalone warning icon element for dynamically decorated rows.
+     * @returns {SVGElement} the icon.
+     */
+    function interruptedDecorBadgeIcon() {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+      svg.setAttribute('viewBox', '0 0 24 24')
+      svg.setAttribute('width', '14')
+      svg.setAttribute('height', '14')
+      svg.setAttribute('fill', 'currentColor')
+      svg.setAttribute('aria-hidden', 'true')
+      const shape = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+      shape.setAttribute('d', REMIX_WARNING_FILL)
+      svg.appendChild(shape)
+      return svg
+    }
+
+    /**
+     * Keep native Session rows visually in sync with the Host interruption state.
+     *
+     * The shell only renders the custom leading slot for idle rows; a row that
+     * the native client still believes is running renders its own green spinner
+     * and no leading slot. This decoration places the warning badge in that
+     * native leading span and hides the stale spinner, so the interrupted state
+     * is visible immediately after a reconnect rather than after opening the
+     * Session.
+     * @returns {void}
+     */
+    function syncInterruptedRows() {
+      const t = interruptedRuntime.t
+      if (t === null) return
+      for (const [sessionId, record] of interruptedStore.records) {
+        const row = document.querySelector(`[data-row-key="session:${escapeSelectorValue(sessionId)}"]`)
+        if (row === null) continue
+        const interrupted = record.status === 'ready' && record.interrupted === true
+        if (interrupted !== true) {
+          row.removeAttribute('data-power-suite-interrupted')
+          for (const badge of row.querySelectorAll('.dps-row-interrupted[data-dynamic-badge="true"]')) badge.remove()
+          continue
+        }
+        row.setAttribute('data-power-suite-interrupted', '')
+        const leading = row.firstElementChild
+        if (leading === null) continue
+        const badges = [...row.querySelectorAll('.dps-row-interrupted')]
+        const persistent = badges.find((badge) => badge.getAttribute('data-dynamic-badge') !== 'true')
+        if (persistent !== undefined) {
+          for (const badge of badges) {
+            if (badge !== persistent) badge.remove()
+          }
+          continue
+        }
+        let badge = badges[0]
+        if (badge === undefined) {
+          badge = document.createElement('span')
+          badge.className = 'dps-row-interrupted'
+          badge.setAttribute('data-dynamic-badge', 'true')
+          badge.setAttribute('role', 'img')
+          badge.setAttribute('aria-label', t('badge.aria'))
+          badge.title = record.subagent === true ? t('badge.title.subagent') : t('badge.title')
+          badge.appendChild(interruptedDecorBadgeIcon())
+          leading.insertBefore(badge, leading.firstChild)
+        }
+      }
+      for (const row of document.querySelectorAll('[data-row-key^="session:"][data-power-suite-interrupted]')) {
+        const key = row.getAttribute('data-row-key')
+        if (key === null) continue
+        const sessionId = key.slice('session:'.length)
+        const record = interruptedStore.records.get(sessionId)
+        if (record !== undefined && record.status === 'ready' && record.interrupted === true) continue
+        row.removeAttribute('data-power-suite-interrupted')
+        for (const badge of row.querySelectorAll('.dps-row-interrupted[data-dynamic-badge="true"]')) badge.remove()
+      }
+    }
 
     //#region feature: interrupted sessions — components
     /**
@@ -3396,7 +3471,27 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     function installInterruptedSessions(ctx) {
       const t = ctx.locale.bind(INTERRUPTED_NS)
       interruptedRuntime.uiWorkspace = ctx.uiWorkspace
+      interruptedRuntime.t = t
       ctx.effect(() => ctx.locale.register(INTERRUPTED_NS, { en: INTERRUPTED_EN, zh: INTERRUPTED_ZH }), 'power-suite: interrupted dictionaries')
+      ctx.effect(() => {
+        let timer = null
+        const schedule = () => {
+          if (timer !== null) return
+          timer = window.setTimeout(() => {
+            timer = null
+            syncInterruptedRows()
+          }, 80)
+        }
+        const unsubscribe = subscribeInterrupted(schedule)
+        const observer = new MutationObserver(schedule)
+        observer.observe(document.body, { childList: true, subtree: true })
+        schedule()
+        return () => {
+          unsubscribe()
+          observer.disconnect()
+          if (timer !== null) window.clearTimeout(timer)
+        }
+      }, 'power-suite: interrupted row decoration')
       ctx.effect(() => {
         const refresh = () => refreshAllInterrupted()
         const onVisibility = () => {
