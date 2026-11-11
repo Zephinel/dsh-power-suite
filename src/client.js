@@ -4510,13 +4510,24 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-panel-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .psd-panel-link:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psd-chevron{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);transition:transform 160ms var(--ds-ease-in-out,ease)}
-.psd-panel-body{position:relative;display:flex;flex-direction:column;padding:0 4px 5px;max-height:min(46cqh,320px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none}
+.psd-panel-body{position:relative;display:flex;flex-direction:column;padding:2px 4px 5px;max-height:min(46cqh,320px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none}
 .psd-panel-body::-webkit-scrollbar{display:none;width:0;height:0}
 .psd-panel-empty{padding:6px 10px 8px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:17px;display:flex;flex-direction:column;gap:2px}
 .psd-panel-empty strong{color:var(--dsw-alias-label-secondary);font-weight:500}
 .psd-item{display:flex;flex-direction:column;min-width:0}
 .psd-run{display:flex;align-items:center;gap:2px;min-width:0;min-height:28px;padding:0 0 0 7px;border-radius:var(--dsw-radius-md,8px)}
 .psd-run-main:hover{background:var(--dsw-alias-interactive-bg-hover)}
+@property --psd-ring-angle{syntax:'<angle>';inherits:false;initial-value:0deg}
+.psd-run-current{position:relative;isolation:isolate}
+.psd-run-current::before{content:'';position:absolute;inset:-2px;border-radius:calc(var(--dsw-radius-md,8px) + 2px);padding:2px;background:conic-gradient(from var(--psd-ring-angle,0deg),#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;z-index:0;filter:saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}
+.psd-run-current > *{position:relative;z-index:1}
+.psd-child-ring{content:'';position:absolute;inset:-1px;border-radius:calc(var(--dsw-radius-sm,6px) + 1px);padding:2px;background:conic-gradient(from var(--psd-ring-angle,0deg),#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;z-index:0;filter:saturate(.92) drop-shadow(0 0 4px rgba(178,150,255,.32))}
+.psd-child-current{position:relative;isolation:isolate}
+.psd-child-current > *:not(.psd-child-ring){position:relative;z-index:1}
+@keyframes psd-ring-spin{to{--psd-ring-angle:360deg}}
+@keyframes psd-ring-hue{from{filter:hue-rotate(0deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}to{filter:hue-rotate(360deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}}
+.psd-run-current::before,.psd-child-ring{animation:psd-ring-spin 3.2s linear infinite,psd-ring-hue 14s linear infinite}
+@media (prefers-reduced-motion: reduce){.psd-run-current::before,.psd-child-ring{animation:none}}
 .psd-run-toggle{appearance:none;position:relative;z-index:1;flex:none;width:24px;height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .psd-run-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-run-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
@@ -5274,12 +5285,13 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     function DynamicRunningPanel(props) {
       const {
         t, rows, expanded, showAll, now, durations, childrenByParent, collapsedParents, acked,
-        onToggle, onToggleAll, onToggleChildren, onOpen, interruptedT, onNewSession
+        onToggle, onToggleAll, onToggleChildren, onOpen, interruptedT, onNewSession, currentSessionId
       } = props
       const visible = expanded && !showAll ? rows.slice(0, DW_PANEL_LIMIT) : rows
       const canExpand = rows.length > DW_PANEL_LIMIT
       const anyRunning = rows.some((row) => row.state === 'running')
       const isRead = (sessionId, updatedAt) => dwIsAcked(acked, sessionId, updatedAt)
+      const isCurrent = (sessionId) => typeof currentSessionId === 'string' && sessionId === currentSessionId
       // Card rows share the suite's interruption records; the rows also exist in
       // the native sidebar, whose badge seats already pull them, but ensuring and
       // watching here keeps this card correct on its own after a reconnect.
@@ -5413,10 +5425,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               className: 'psd-item',
               'data-state': row.state
             },
-            React.createElement('div', { className: 'psd-run', 'data-state': row.state },
+            React.createElement('div', {
+              className: isCurrent(row.id) ? 'psd-run psd-run-current' : 'psd-run',
+              'data-state': row.state
+            },
               React.createElement('button', {
                 type: 'button',
                 className: 'psd-run-main',
+                'aria-current': isCurrent(row.id) ? 'true' : undefined,
                 'aria-label': t('panel.open', { title: row.title }),
                 onClick: () => onOpen(row.id),
                 onMouseEnter: (event) => showHover(row, event.currentTarget),
@@ -5470,14 +5486,19 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                   cwd: child.cwd ?? row.cwd ?? null
                 }
                 const childInterrupted = rowInterrupted(child.id)
+                const childCurrent = isCurrent(child.id)
                 return React.createElement('div', {
                   key: child.id,
-                  className: 'psd-child',
+                  className: childCurrent ? 'psd-child psd-child-current' : 'psd-child',
                   'data-state': child.state
                 },
+                childCurrent
+                  ? React.createElement('span', { key: 'ring', className: 'psd-child-ring', 'aria-hidden': true })
+                  : null,
                 React.createElement('button', {
                   type: 'button',
                   className: 'psd-child-main',
+                  'aria-current': childCurrent ? 'true' : undefined,
                   'aria-label': t('panel.open', { title: child.title }),
                   onClick: () => onOpen(child.id),
                   onMouseEnter: (event) => showHover(childRow, event.currentTarget),
@@ -5712,6 +5733,19 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const runningParents = dwRunningSubagentParents(sessions, statuses)
       const workspaces = workspaceSnapshot?.items ?? []
       const archivedIds = new Set(workspaceSnapshot?.archivedSessionIds ?? [])
+      // The rainbow ring marks the Session the main conversation currently shows.
+      // The client summary's `retainedBy.mainView` counter is the same source the
+      // read-baseline effect trusts, so the highlight follows every way of
+      // opening a Session (card, sidebar, elsewhere).
+      let currentSessionId = null
+      if (sessions !== null && typeof sessions === 'object' && Array.isArray(sessions.ids)) {
+        for (const id of sessions.ids) {
+          if ((sessions.byId?.[id]?.retainedBy?.mainView ?? 0) > 0) {
+            currentSessionId = id
+            break
+          }
+        }
+      }
       const runningRows = dwRunningRows(sessions, statuses, workspaces, t, runningParents, archivedIds, sessionActivity)
       const recentRows = dwRecentRows(sessions, statuses, workspaces, t, now, runningParents, archivedIds, windows.recentMs, sessionActivity)
       const panelRows = runningRows.concat(recentRows)
@@ -6006,6 +6040,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         childrenByParent,
         collapsedParents,
         acked: ackedBaselines,
+        currentSessionId,
         interruptedT,
         onNewSession: openNewSession,
         onToggle: () => setPanelExpanded((value) => !value),
