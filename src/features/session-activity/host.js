@@ -56,6 +56,12 @@ export const SESSION_ACTIVITY_ROUTE = '/api/power-suite.session-activity'
 /** Longest a cold route request waits for the one-time baseline before serving. */
 export const SEED_BASELINE_WAIT_MS = 5000
 
+/** After a seed timeout/failure, serve immediately for this bounded window. */
+export const SEED_TIMEOUT_BACKOFF_MS = 30000
+
+/** Cache-document baseline times are clamped to now + this skew. */
+export const MAX_ACTIVITY_FUTURE_SKEW_MS = 60000
+
 /** Projection-cache storage path fragments inside one harness home. */
 const PROJECTION_CACHE_PATH = ['storages', 'session_projcache', 'sessions']
 
@@ -103,12 +109,15 @@ export const ACTIVITY_EVENT_TYPES = new Set([
   'subagent/catalog', 'subagent/descriptor', 'subagent/model-selection-policy',
   'goal/change', 'todo/write',
   'approval/asked', 'approval/decided', 'approval/policy',
-  'agent-preset/selected', 'plan/mode', 'ptc-mode', 'sandbox/mode', 'model/selection', 'permission/preset',
+  'agent-preset/selected', 'plan/mode', 'sandbox/mode', 'model/selection', 'permission/preset',
   'working-directory/change', 'workspace/changes', 'deliverables/presented', 'schedule/change',
   'team/member', 'team/message/queued', 'team/message/delivered', 'team/task',
   'image/offload', 'feedback/message-put', 'feedback/message-delete', 'feedback/record',
   'agent/inbox/spliced', 'llm/retry', 'llm/retry-started',
-  'tool-workflow/agent-start', 'tool-workflow/agent-end', 'tool-workflow/run-start', 'tool-workflow/run-end'
+  'tool-workflow/agent-start', 'tool-workflow/agent-end', 'tool-workflow/run-start', 'tool-workflow/run-end',
+  // Known hook events; no emitter in this install yet, kept for forward
+  // compatibility so a future hook plugin's real activity is not under-counted.
+  'hook/invoked', 'hook/result'
 ])
 
 /**
@@ -275,7 +284,9 @@ export async function seedActivityBaseline(ctx, ledger, options = {}) {
     }
     // SessionHeader has no `updatedAt`; createdAt is the only header fallback.
     const createdAt = typeof header.createdAt === 'number' && Number.isFinite(header.createdAt) ? header.createdAt : 0
-    const at = Math.max(cached ?? 0, createdAt)
+    const known = Math.max(cached ?? 0, createdAt)
+    // A corrupt/future cache timestamp must not pin activity forever.
+    const at = known > 0 ? Math.min(known, Date.now() + MAX_ACTIVITY_FUTURE_SKEW_MS) : 0
     if (at > 0) seeds[id] = at
   }
   if (Object.keys(seeds).length > 0) ledger.record(seeds)
@@ -288,12 +299,22 @@ export async function seedActivityBaseline(ctx, ledger, options = {}) {
  * @param {object} [options] - injection points for tests.
  * @param {object} [options.ledger] - ledger handle override.
  * @param {function(string): Promise<number | null>} [options.readCachedDocument] - cache reader.
+ * @param {function(object, object): Promise<unknown>} [options.seedBaseline] - seeding function override.
+ * @param {number} [options.seedWaitMs] - bounded cold-request seed wait.
+ * @param {number} [options.seedBackoffMs] - immediate-serve window after a seed timeout/failure.
  * @returns {void}
  */
 export function installSessionActivity(ctx, options = {}) {
   const ledger = options.ledger ?? createActivityLedger(harnessHome())
+  const seedWaitMs = Number.isFinite(options.seedWaitMs) && options.seedWaitMs >= 0 ? options.seedWaitMs : SEED_BASELINE_WAIT_MS
+  const seedBackoffMs = Number.isFinite(options.seedBackoffMs) && options.seedBackoffMs >= 0 ? options.seedBackoffMs : SEED_TIMEOUT_BACKOFF_MS
+  const seedBaseline = typeof options.seedBaseline === 'function'
+    ? options.seedBaseline
+    : (hostCtx, ledgerHandle) => seedActivityBaseline(hostCtx, ledgerHandle, { readCachedDocument: options.readCachedDocument })
   let loadPromise = null
   let seedPromise = null
+  let seedSettled = false
+  let seedBackoffUntil = 0
   const ensureLoaded = () => {
     if (loadPromise === null) loadPromise = Promise.resolve(ledger.load()).catch(() => undefined)
     return loadPromise
@@ -301,22 +322,35 @@ export function installSessionActivity(ctx, options = {}) {
   const ensureSeeded = () => {
     if (seedPromise === null) {
       seedPromise = ensureLoaded()
-        .then(() => seedActivityBaseline(ctx, ledger, { readCachedDocument: options.readCachedDocument }))
-        .catch(() => undefined)
+        .then(() => seedBaseline(ctx, ledger))
+        .then(() => {
+          seedSettled = true
+          seedBackoffUntil = 0
+        })
+        .catch(() => {
+          // Listing/docs failure: keep serving the current map; back off the
+          // cold wait so a broken corpus cannot add 5 s to every request.
+          seedBackoffUntil = Date.now() + seedBackoffMs
+        })
     }
     return seedPromise
   }
-  const waitForSeeded = (maxMs = SEED_BASELINE_WAIT_MS) => new Promise((resolve) => {
-    let settled = false
-    const finish = () => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      resolve()
-    }
-    const timer = setTimeout(finish, maxMs)
-    void ensureSeeded().then(finish, finish)
-  })
+  const waitForSeeded = (maxMs = seedWaitMs) => {
+    if (seedSettled) return Promise.resolve()
+    if (Date.now() < seedBackoffUntil) return Promise.resolve()
+    return new Promise((resolve) => {
+      let settled = false
+      const finish = (timedOut) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        if (timedOut) seedBackoffUntil = Date.now() + seedBackoffMs
+        resolve()
+      }
+      const timer = setTimeout(() => finish(true), maxMs)
+      void ensureSeeded().then(() => finish(false), () => finish(true))
+    })
+  }
   ctx.effect(() => {
     void ensureSeeded()
     const stop = typeof ctx.on === 'function'

@@ -16,6 +16,7 @@ import {
 } from '../src/features/session-activity/store.js'
 import {
   ACTIVITY_EVENT_TYPES,
+  MAX_ACTIVITY_FUTURE_SKEW_MS,
   MAX_CACHE_DOCUMENT_BYTES,
   NON_ACTIVITY_EVENT_TYPES,
   SESSION_ACTIVITY_ROUTE,
@@ -175,9 +176,11 @@ test('activityFromEvent accepts committed events and ignores seeds or invalid ti
   // Spot-check the families the third review called out.
   for (const type of ['job/registered', 'job/settled', 'command/run', 'command/done', 'compaction/start',
     'compaction/end', 'subagent/descriptor', 'goal/change', 'todo/write', 'approval/decided', 'plan/mode',
-    'tool-workflow/run-start', 'tool/ptc-dispatch']) {
+    'tool-workflow/run-start', 'tool/ptc-dispatch', 'hook/invoked', 'hook/result']) {
     assert.equal(isActivityBearingEvent(type), true)
   }
+  // `ptc-mode` is a MessageSourceMap key, never a Session event.
+  assert.equal(isActivityBearingEvent('ptc-mode'), false)
   // Metadata, automation-only, seed and unknown-future/plugin types never advance.
   for (const type of [...NON_ACTIVITY_EVENT_TYPES, 'plugin:demo/metadata', 'future/unknown-event', '']) {
     assert.equal(activityFromEvent(session, { type, time: 1000 }), null)
@@ -240,6 +243,23 @@ test('the one-time baseline seeds missing Sessions, preserves newer entries, and
     assert.equal(snapshot['session-header'], 300)
     assert.equal(snapshot['session-empty'], undefined)
     await ledger.dispose()
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('baseline clamps corrupt/future cache times to now + 60 s', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-ledger-'))
+  try {
+    const ledger = createActivityLedger(home)
+    await ledger.load()
+    const { ctx } = makeContext({ records: [record({ id: 'session-future', createdAt: 100 })] })
+    const future = Date.now() + 10 * 60 * 1000
+    const before = Date.now()
+    const snapshot = await seedActivityBaseline(ctx, ledger, { readCachedDocument: async () => future })
+    const value = snapshot['session-future']
+    assert.ok(value <= Date.now() + MAX_ACTIVITY_FUTURE_SKEW_MS + 2000)
+    assert.ok(value >= before)
   } finally {
     await rm(home, { recursive: true, force: true })
   }
@@ -445,6 +465,47 @@ test('fresh install: the FIRST route request already includes baseline seeding',
   } finally {
     await rm(home, { recursive: true, force: true })
   }
+})
+
+test('seed timeout backs off, then resumes with seeded values when it settles', async () => {
+  const state = { 'session-existing': 1000 }
+  const fakeLedger = {
+    async load() {},
+    record(entries) { Object.assign(state, entries) },
+    snapshot() { return { ...state } },
+    async flush() {},
+    async dispose() {}
+  }
+  let releaseSeed
+  const seedGate = new Promise((resolve) => { releaseSeed = resolve })
+  const { ctx, routes, cleanups } = makeContext()
+  installSessionActivity(ctx, {
+    ledger: fakeLedger,
+    seedWaitMs: 200,
+    seedBackoffMs: 500,
+    seedBaseline: async () => {
+      await seedGate
+      fakeLedger.record({ 'session-seeded': 1234 })
+    }
+  })
+  const route = routes.get(SESSION_ACTIVITY_ROUTE)
+  const started = Date.now()
+  const first = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
+  const firstMs = Date.now() - started
+  assert.ok(firstMs >= 150, `first cold GET should wait for the bounded seed window (${firstMs}ms)`)
+  assert.deepEqual(await first.json(), { sessions: { 'session-existing': 1000 } })
+  // Within the backoff window the route serves the current map immediately.
+  const immediateStarted = Date.now()
+  const second = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
+  const secondMs = Date.now() - immediateStarted
+  assert.ok(secondMs < 100, `backoff GET should be fast (${secondMs}ms)`)
+  assert.deepEqual(await second.json(), { sessions: { 'session-existing': 1000 } })
+  // Background seeding finishes; the next request includes the seeded value.
+  releaseSeed()
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  const third = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
+  assert.deepEqual(await third.json(), { sessions: { 'session-existing': 1000, 'session-seeded': 1234 } })
+  await cleanups[0]()
 })
 
 test('repeated create/record/dispose lifecycles leave no torn temp state', async () => {

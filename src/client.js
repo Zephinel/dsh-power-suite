@@ -4877,8 +4877,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** Conservative byte budget for one read-acks POST batch. */
     const DW_ACK_PUSH_BATCH_BYTES = 48 * 1024
 
-    /** Ignore an empty activity response only while a known map is still fresh. */
-    const DW_ACTIVITY_EMPTY_GUARD_MS = 120000
 
     /** Most entries the local cache keeps; the oldest baselines drop first. */
     const DW_ACK_MAX_ENTRIES = 1000
@@ -5153,6 +5151,43 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * transport failure reads as null and leaves summary timestamps in charge.
      * @returns {Promise<Record<string, number> | null>} Session id → activity time, or null.
      */
+    /**
+     * Merge a fresh Host activity map monotonically: per-id max(previous, next),
+     * then prune ids no longer present in a non-empty Session catalog. A partial
+     * response, a cold-seed timeout or an HMR overlap therefore cannot drop a
+     * Session's known activity; only a catalog that no longer lists the Session
+     * removes it. An empty catalog response is left unmerged/pruned (loading or
+     * genuinely empty profile), so known entries survive until a real catalog
+     * arrives. The client bundle is an unexported module-loader closure, so this
+     * rule is not unit-tested in the node harness (stated gap).
+     * @param {Record<string, number>} previous - current client activity map.
+     * @param {Record<string, number>} incoming - Host response map.
+     * @param {readonly string[] | null} sessionIds - current Session catalog ids.
+     * @returns {Record<string, number>} merged/pruned map.
+     */
+    function dwMergeActivityMaps(previous, incoming, sessionIds) {
+      const next = {}
+      if (previous !== null && typeof previous === 'object') {
+        for (const [id, time] of Object.entries(previous)) {
+          if (typeof time === 'number' && Number.isFinite(time) && time > 0) next[id] = time
+        }
+      }
+      if (incoming !== null && typeof incoming === 'object') {
+        for (const [id, time] of Object.entries(incoming)) {
+          if (typeof time !== 'number' || !Number.isFinite(time) || time <= 0) continue
+          const current = next[id]
+          if (current === undefined || time > current) next[id] = time
+        }
+      }
+      if (Array.isArray(sessionIds) && sessionIds.length > 0) {
+        const allowed = new Set(sessionIds)
+        for (const id of Object.keys(next)) {
+          if (!allowed.has(id)) delete next[id]
+        }
+      }
+      return next
+    }
+
     async function dwFetchSessionActivity() {
       const controller = new AbortController()
       const timer = window.setTimeout(() => controller.abort(), DW_ACK_REQUEST_TIMEOUT_MS)
@@ -5723,7 +5758,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       ackedRef.current = ackedBaselines
       const ackedPushTimerRef = React.useRef(null)
       const ackedPendingPushRef = React.useRef(new Map())
-      const activityEmptyGuardUntilRef = React.useRef(0)
+      const ackedPushInFlightPromiseRef = React.useRef(null)
       const ackedPushInFlightRef = React.useRef(false)
       const ackedSyncInFlightRef = React.useRef(false)
       const ackedMigrationRef = React.useRef(false)
@@ -5743,14 +5778,19 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       // only that batch so newer acks can still sync. At most one POST is in
       // flight, and only entries that still hold the pushed value are dropped.
       const flushAckedPush = React.useCallback(() => {
-        if (ackedPushInFlightRef.current) return Promise.resolve()
+        if (ackedPushInFlightRef.current) {
+          // Awaiting the actual in-flight promise means callers can rely on
+          // "no push is in flight" once their await returns. No recursive call
+          // is involved, so this cannot deadlock.
+          return ackedPushInFlightPromiseRef.current ?? Promise.resolve()
+        }
         if (ackedPushTimerRef.current !== null) {
           window.clearTimeout(ackedPushTimerRef.current)
           ackedPushTimerRef.current = null
         }
         if (ackedPendingPushRef.current.size === 0) return Promise.resolve()
         ackedPushInFlightRef.current = true
-        return (async () => {
+        const run = (async () => {
           try {
             let rounds = 0
             while (ackedPendingPushRef.current.size > 0 && rounds < 64) {
@@ -5769,8 +5809,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             }
           } finally {
             ackedPushInFlightRef.current = false
+            ackedPushInFlightPromiseRef.current = null
           }
         })()
+        ackedPushInFlightPromiseRef.current = run
+        return run
       }, [applyAckedHostEntries])
       const scheduleAckedPush = React.useCallback((entries) => {
         const sanitized = dwSanitizeAckEntries(entries)
@@ -5942,17 +5985,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             if (!disposed) {
               const activity = await dwFetchSessionActivity()
               if (!disposed && activity !== null) {
-                // A cold/fresh Host can answer with an empty map while the
-                // ledger is still being seeded. Ignore that only briefly after
-                // mount / the last non-empty response when a known map exists;
-                // a genuinely empty profile or a long-running empty Host is
-                // still accepted after the window.
+                // Monotonic per-id merge (plus prune against a non-empty
+                // catalog) so a partial/cold/HMR-overlap response can never
+                // regress a known Session's activity.
                 setSessionActivity((previous) => {
-                  const known = previous !== null && typeof previous === 'object' ? Object.keys(previous).length : 0
-                  const next = Object.keys(activity).length
-                  if (next === 0 && known > 0 && Date.now() < activityEmptyGuardUntilRef.current) return previous
-                  if (next > 0) activityEmptyGuardUntilRef.current = Date.now() + DW_ACTIVITY_EMPTY_GUARD_MS
-                  return activity
+                  const ids = latestRef.current?.sessions?.ids
+                  return dwMergeActivityMaps(previous, activity, Array.isArray(ids) ? ids : null)
                 })
               }
             }
@@ -5960,7 +5998,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             ackedSyncInFlightRef.current = false
           }
         }
-        activityEmptyGuardUntilRef.current = Date.now() + DW_ACTIVITY_EMPTY_GUARD_MS
         void sync()
         const timer = window.setInterval(sync, DW_ACK_SYNC_POLL_MS)
         const onFocus = () => { void sync() }

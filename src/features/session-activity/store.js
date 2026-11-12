@@ -200,8 +200,8 @@ export function createActivityLedger(dshHome, options = {}) {
       await writeFile(temporary, serializeActivityLedger(merged), { encoding: 'utf8', mode: 0o600 })
       await rename(temporary, file)
     } catch (error) {
-      // Do not leave a partially written sibling behind; the rename target is
-      // untouched by this failed write.
+      // Best-effort temp cleanup: the rename target is untouched by this
+      // failed write, and a failed removal is harmless (stale *.tmp may remain).
       await rm(temporary, { force: true }).catch(() => {})
       throw error
     }
