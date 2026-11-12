@@ -9282,6 +9282,24 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     /** A3/T6: the badge requirement summary is a one-line excerpt of this many characters. */
     const ANNOTATION_MARK_SUMMARY_MAX = 18
 
+    /** A3/T9: the composer trigger source that owns annotation reference chips. */
+    const ANNOTATION_CHIP_SOURCE = 'ui-annotation'
+
+    /** A3/T9: trigger character the annotation source binds to (`@`). */
+    const ANNOTATION_CHIP_TRIGGER = '@'
+
+    /** A3/T9: menu order after the native `@reference` group. */
+    const ANNOTATION_CHIP_ORDER = 900
+
+    /** A3/T9: at most this many current-Session candidates appear in the menu (D8). */
+    const ANNOTATION_CHIP_CANDIDATE_LIMIT = 20
+
+    /** A3/T9: a batch chip ref is `batch:<id>|<id>…`. */
+    const ANNOTATION_CHIP_BATCH_PREFIX = 'batch:'
+
+    /** A3/T9: one bare record id inside a chip ref (ids are `psa-<order>-<token>`). */
+    const ANNOTATION_CHIP_REF_PATTERN = /^psa-[A-Za-z0-9_-]{1,120}$/
+
     /** F2: a floating surface root needs at least this computed z-index. */
     const ANNOTATION_SURFACE_MIN_Z = 10
 
@@ -9370,6 +9388,19 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'detail.copyLocator': 'Copy locator',
       'detail.close': 'Close',
       'detail.marks': 'Marks are shown on the page while the mode is on',
+      'chip.batchLabel': 'UI annotations × {count}',
+      'collection.countScope': '{current} current · {other} other',
+      'collection.include': 'Include in batch insert',
+      'collection.selectAllCurrent': 'Select current session',
+      'collection.deselectAll': 'Clear selection',
+      'collection.deleteSelected': 'Delete selected',
+      'collection.insertChip': 'Insert reference',
+      'collection.moveUp': 'Move up',
+      'collection.moveDown': 'Move down',
+      'collection.preview': 'Preview the element',
+      'collection.sortHint': 'Insertion order; ↑↓ adjusts the batch order',
+      'collection.otherSessionHint': 'From another session; batch insert skips it',
+      'collection.batchDisabled': 'Nothing to insert: select a current-session annotation first',
       'collection.title': 'Collection',
       'collection.count': '{count} elements',
       'collection.countOne': '1 element',
@@ -9412,6 +9443,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'feedback.relocateOtherSession': 'This annotation belongs to another session',
       'feedback.locatorCopied': 'Locator copied',
       'feedback.locatorCopyFailed': 'Could not copy the locator',
+      'feedback.chipInserted': 'Inserted as a reference chip (not sent)',
+      'feedback.chipBatchInserted': 'Inserted one batch reference chip (not sent)',
+      'feedback.chipFallback': 'Reference chips unavailable here; inserted as plain text',
+      'feedback.chipMissing': 'This reference\'s annotation is no longer available',
+      'feedback.selectedDeleted': 'Selected annotations deleted',
       'feedback.marked': 'Marked · {count} total',
       'feedback.markUpdated': 'Requirement updated',
       'feedback.markDeleted': 'Annotation deleted',
@@ -9429,7 +9465,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'insert.statusEphemeral': 'Status: transient surface no longer present (locator only)',
       'insert.statusAmbiguous': 'Status: target matches more than one element (locator only)',
       'insert.statusChanged': 'Status: target content changed',
-      'insert.skipped': '({count} annotation(s) from other sessions skipped)'
+      'insert.skipped': '({count} annotation(s) from other sessions skipped)',
+      'insert.removed': '({count} annotation(s) no longer exist and were skipped)',
+      'insert.noRemaining': '(no annotations remain for this reference)'
     }
 
     /** Copy for the UI element annotation mode, Chinese. */
@@ -9492,6 +9530,19 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'detail.copyLocator': '复制定位器',
       'detail.close': '关闭',
       'detail.marks': '模式开启时页面会持续显示标注遮罩',
+      'chip.batchLabel': 'UI 标注 × {count}',
+      'collection.countScope': '当前会话 {current} · 其他会话 {other}',
+      'collection.include': '加入批量插入',
+      'collection.selectAllCurrent': '全选当前会话',
+      'collection.deselectAll': '取消全选',
+      'collection.deleteSelected': '删除选中',
+      'collection.insertChip': '插入引用',
+      'collection.moveUp': '上移',
+      'collection.moveDown': '下移',
+      'collection.preview': '预览该元素',
+      'collection.sortHint': '按插入顺序排列，可用 ↑↓ 调整批量顺序',
+      'collection.otherSessionHint': '来自其他会话，批量插入会跳过',
+      'collection.batchDisabled': '没有可插入的标注：请先选择当前会话的标注',
       'collection.title': '标注集',
       'collection.count': '{count} 项',
       'collection.countOne': '1 项',
@@ -9534,6 +9585,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'feedback.relocateOtherSession': '这条标注来自其他会话',
       'feedback.locatorCopied': '已复制定位器',
       'feedback.locatorCopyFailed': '复制定位器失败',
+      'feedback.chipInserted': '已插入引用控件（未发送）',
+      'feedback.chipBatchInserted': '已插入批量引用控件（未发送）',
+      'feedback.chipFallback': '此处不支持引用控件，已插入纯文本',
+      'feedback.chipMissing': '该引用对应的标注已不存在',
+      'feedback.selectedDeleted': '已删除选中的标注',
       'feedback.marked': '已标记 · 共 {count} 条',
       'feedback.markUpdated': '需求已更新',
       'feedback.markDeleted': '标注已删除',
@@ -9551,7 +9607,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'insert.statusEphemeral': '状态：瞬态浮层已不存在（仅保留定位信息）',
       'insert.statusAmbiguous': '状态：目标匹配到多个元素（仅保留定位信息）',
       'insert.statusChanged': '状态：目标内容已变化',
-      'insert.skipped': '（已跳过 {count} 条来自其他会话的标注）'
+      'insert.skipped': '（已跳过 {count} 条来自其他会话的标注）',
+      'insert.removed': '（已跳过 {count} 条已被删除的标注）',
+      'insert.noRemaining': '（该引用对应的标注已全部删除）'
     }
 
     /**
@@ -10867,6 +10925,21 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const atOf = (entry) => (typeof entry?.at === 'number' && Number.isFinite(entry.at) ? entry.at : 0)
         return merged.slice().sort((left, right) => (orderOf(left) - orderOf(right)) || (atOf(left) - atOf(right)))
       }
+      if (undo.kind === 'multi') {
+        // Restore in ascending original-index order so every record lands back
+        // where it was removed from; a newer duplicate id is left untouched.
+        const entries = Array.isArray(undo.entries) ? undo.entries : []
+        if (entries.length === 0) return current.slice()
+        const ids = new Set(current.map((entry) => (entry !== null && typeof entry === 'object' ? entry.id : null)))
+        const ordered = entries
+          .filter((item) => item !== null && typeof item === 'object'
+            && item.record !== null && typeof item.record === 'object' && !ids.has(item.record.id))
+          .slice()
+          .sort((left, right) => (Number(left.index) || 0) - (Number(right.index) || 0))
+        let next = current
+        for (const item of ordered) next = restoreAnnotationRecord(next, item.record, item.index)
+        return next
+      }
       if (undo.record === null || typeof undo.record !== 'object') return current.slice()
       return restoreAnnotationRecord(current, undo.record, undo.index)
     }
@@ -10892,6 +10965,220 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       if (line.length === 0) return { text: '', empty: true, truncated: false }
       if (line.length <= limit) return { text: line, empty: false, truncated: false }
       return { text: `${line.slice(0, Math.max(1, limit - 1)).trimEnd()}…`, empty: false, truncated: true }
+    }
+
+    /**
+     * Remove several records at once while capturing a multi-entry undo payload
+     * (A3/T8/D5: `delete selected` also enters the 5 s undo slot).
+     * @param {Array<object>} list - current entries.
+     * @param {Array<string>} refIds - record ids to remove.
+     * @param {number} [at] - epoch ms of the removal.
+     * @returns {{ list: Array<object>, undo: object | null }} next entries and undo payload.
+     */
+    function annotationUndoRemoveMany(list, refIds, at) {
+      const current = Array.isArray(list) ? list : []
+      const wanted = new Set(Array.isArray(refIds) ? refIds.filter((id) => typeof id === 'string' && id.length > 0) : [])
+      if (wanted.size === 0) return { list: current.slice(), undo: null }
+      const entries = []
+      const next = []
+      for (let index = 0; index < current.length; index += 1) {
+        const entry = current[index]
+        if (entry !== null && typeof entry === 'object' && wanted.has(entry.id)) entries.push({ record: entry, index })
+        else next.push(entry)
+      }
+      if (entries.length === 0) return { list: current.slice(), undo: null }
+      const stamp = typeof at === 'number' && Number.isFinite(at) && at > 0 ? Math.round(at) : Date.now()
+      return { list: next, undo: { kind: 'multi', entries, at: stamp } }
+    }
+
+    /**
+     * Scope counts for the rail header/footer (A3/T8).
+     * @param {Array<object>} list - collection entries.
+     * @param {string | null} sessionId - current Session identity.
+     * @returns {{ current: number, other: number, included: number, otherIncluded: number, total: number }} counts.
+     */
+    function annotationScopeCounts(list, sessionId) {
+      let current = 0
+      let other = 0
+      let included = 0
+      let otherIncluded = 0
+      for (const entry of Array.isArray(list) ? list : []) {
+        if (entry === null || typeof entry !== 'object') continue
+        const entrySession = entry.session !== null && typeof entry.session === 'object' ? entry.session.sessionId ?? null : null
+        if (typeof sessionId === 'string' && sessionId.length > 0 && entrySession === sessionId) {
+          current += 1
+          if (entry.included !== false) included += 1
+        } else {
+          other += 1
+          if (entry.included !== false) otherIncluded += 1
+        }
+      }
+      return { current, other, included, otherIncluded, total: current + other }
+    }
+
+    /**
+     * The ordered current-Session records selected for a batch insert (A3/T8):
+     * only `included !== false` entries of the current Session qualify; an
+     * other-Session record can never be part of a batch.
+     * @param {Array<object>} list - collection entries.
+     * @param {string | null} sessionId - current Session identity.
+     * @returns {Array<object>} ordered batch entries.
+     */
+    function annotationSelectedEntries(list, sessionId) {
+      const selected = []
+      for (const entry of Array.isArray(list) ? list : []) {
+        if (entry === null || typeof entry !== 'object') continue
+        const entrySession = entry.session !== null && typeof entry.session === 'object' ? entry.session.sessionId ?? null : null
+        if (typeof sessionId !== 'string' || sessionId.length === 0 || entrySession !== sessionId) continue
+        if (entry.included === false) continue
+        selected.push(entry)
+      }
+      return selected
+    }
+
+    /**
+     * Apply several include-flag changes in one immutable pass (A3/T8
+     * select-all / deselect-all / other-Session forced exclusion).
+     * @param {Array<object>} list - collection entries.
+     * @param {Array<{ refId: string, included: boolean }>} changes - requested flags.
+     * @returns {Array<object>} next entries.
+     */
+    function annotationApplyIncludes(list, changes) {
+      if (!Array.isArray(list)) return []
+      const flags = new Map()
+      for (const change of Array.isArray(changes) ? changes : []) {
+        if (change === null || typeof change !== 'object' || typeof change.refId !== 'string') continue
+        flags.set(change.refId, change.included === true)
+      }
+      if (flags.size === 0) return list.slice()
+      return list.map((entry) => {
+        if (entry === null || typeof entry !== 'object' || !flags.has(entry.id)) return entry
+        const flag = flags.get(entry.id)
+        return entry.included === flag ? entry : { ...entry, included: flag }
+      })
+    }
+
+    /**
+     * The chip reference (ReferenceInsert) for one annotation record (A3/T9).
+     * @param {object} record - annotation record.
+     * @returns {{ source: string, ref: string, label: string, clipboardText: string }} chip insertion.
+     */
+    function annotationChipRefOf(record) {
+      const label = elementLabel(record) || 'UI annotation'
+      return {
+        source: ANNOTATION_CHIP_SOURCE,
+        ref: typeof record?.id === 'string' ? record.id : '',
+        label,
+        clipboardText: `@${label}`
+      }
+    }
+
+    /**
+     * The ONE group chip reference for a batch insert (D2: per-item chips rejected).
+     * @param {Array<object>} records - selected current-Session records, insertion order.
+     * @param {string} label - localized batch label (`UI annotations × N`).
+     * @returns {{ source: string, ref: string, label: string, clipboardText: string }} chip insertion.
+     */
+    function annotationChipRefBatch(records, label) {
+      const ids = (Array.isArray(records) ? records : [])
+        .map((record) => (record !== null && typeof record === 'object' ? record.id : null))
+        .filter((id) => typeof id === 'string' && ANNOTATION_CHIP_REF_PATTERN.test(id))
+      const text = typeof label === 'string' && label.length > 0 ? label : `UI annotations × ${ids.length}`
+      return {
+        source: ANNOTATION_CHIP_SOURCE,
+        ref: `${ANNOTATION_CHIP_BATCH_PREFIX}${ids.join('|')}`,
+        label: text,
+        clipboardText: `@${text}`
+      }
+    }
+
+    /**
+     * Parse one annotation chip ref (`<record-id>` or `batch:<id>|<id>…`).
+     * @param {unknown} ref - chip ref string.
+     * @returns {{ kind: 'single', id: string } | { kind: 'batch', ids: Array<string> } | null} parsed ref.
+     */
+    function parseAnnotationChipRef(ref) {
+      if (typeof ref !== 'string' || ref.length === 0) return null
+      if (ref.startsWith(ANNOTATION_CHIP_BATCH_PREFIX)) {
+        const ids = ref.slice(ANNOTATION_CHIP_BATCH_PREFIX.length).split('|').filter((id) => ANNOTATION_CHIP_REF_PATTERN.test(id))
+        return { kind: 'batch', ids }
+      }
+      return ANNOTATION_CHIP_REF_PATTERN.test(ref) ? { kind: 'single', id: ref } : null
+    }
+
+    /**
+     * Menu candidates for the annotation `@` group: current-Session records only,
+     * insertion order, capped at D8's 20 (an empty list means the group is absent).
+     * @param {Array<object>} list - collection entries.
+     * @param {string | null} sessionId - current Session identity.
+     * @param {number} [limit] - maximum candidates, default 20.
+     * @returns {Array<{ name: string, label: string, description?: string, value: string }>} candidates.
+     */
+    function annotationChipCandidates(list, sessionId, limit) {
+      const cap = typeof limit === 'number' && Number.isFinite(limit) && limit > 0 ? Math.round(limit) : ANNOTATION_CHIP_CANDIDATE_LIMIT
+      const candidates = []
+      for (const entry of Array.isArray(list) ? list : []) {
+        if (candidates.length >= cap) break
+        if (entry === null || typeof entry !== 'object') continue
+        const entrySession = entry.session !== null && typeof entry.session === 'object' ? entry.session.sessionId ?? null : null
+        if (typeof sessionId !== 'string' || sessionId.length === 0 || entrySession !== sessionId) continue
+        if (typeof entry.id !== 'string' || !ANNOTATION_CHIP_REF_PATTERN.test(entry.id)) continue
+        const label = elementLabel(entry) || 'UI annotation'
+        const excerpt = annotationMarkerBadgeText(entry.note).text
+        const candidate = { name: label, label, value: entry.id }
+        if (excerpt.length > 0) candidate.description = excerpt
+        candidates.push(candidate)
+      }
+      return candidates
+    }
+
+    /**
+     * Serialize one annotation chip to the model text the existing Phase 1
+     * serializers produce (A3/T9): a single chip == quick-reference block, a batch
+     * chip == one ordered batch request. Deleted batch members are skipped and
+     * counted honestly; a single missing record returns `text: null` so the
+     * controller can fail the send instead of silently downgrading (D9).
+     * @param {unknown} ref - chip ref.
+     * @param {Array<object>} list - current collection entries.
+     * @param {object} labels - insertion labels plus `removed`/`noRemaining`.
+     * @param {(record: object) => string} [statusOf] - live status resolver.
+     * @returns {{ text: string | null, missing: number, remaining: number }} serialization result.
+     */
+    function serializeAnnotationChip(ref, list, labels, statusOf) {
+      const source = labels !== null && typeof labels === 'object' ? labels : {}
+      const parsed = parseAnnotationChipRef(ref)
+      const records = Array.isArray(list) ? list : []
+      const resolveStatus = typeof statusOf === 'function' ? statusOf : () => 'resolved'
+      if (parsed === null) return { text: null, missing: 0, remaining: 0 }
+      if (parsed.kind === 'single') {
+        const record = records.find((entry) => entry !== null && typeof entry === 'object' && entry.id === parsed.id)
+        if (record === undefined) return { text: null, missing: 1, remaining: 0 }
+        return {
+          text: serializeQuickReference({ ...record, status: resolveStatus(record) }, record.note ?? '', source),
+          missing: 0,
+          remaining: 1
+        }
+      }
+      const byId = new Map()
+      for (const record of records) {
+        if (record !== null && typeof record === 'object' && typeof record.id === 'string') byId.set(record.id, record)
+      }
+      const found = []
+      for (const id of parsed.ids) {
+        const record = byId.get(id)
+        if (record !== undefined) found.push(record)
+      }
+      const missing = parsed.ids.length - found.length
+      if (found.length === 0) {
+        const line = typeof source.noRemaining === 'string' ? source.noRemaining : '(no annotations remain)'
+        return { text: `${line}\n`, missing, remaining: 0 }
+      }
+      const items = found.map((record) => ({ ref: { ...record, status: resolveStatus(record) }, note: record.note ?? '' }))
+      return {
+        text: serializeBatchRequest(items, { ...source, skippedCount: 0, removedCount: missing }),
+        missing,
+        remaining: found.length
+      }
     }
 
     /**
@@ -11090,6 +11377,24 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           }
           return changed ? { ...current, collection: next } : current
         }
+        case 'annotationIncludes': {
+          const changes = Array.isArray(payload.changes) ? payload.changes : []
+          const next = annotationApplyIncludes(current.collection, changes)
+          let changed = false
+          for (let index = 0; index < next.length; index += 1) {
+            if (next[index] !== current.collection[index]) {
+              changed = true
+              break
+            }
+          }
+          return changed ? { ...current, collection: next } : current
+        }
+        case 'annotationRemoveMany': {
+          const refIds = Array.isArray(payload.refIds) ? payload.refIds : []
+          let collection = current.collection
+          for (const refId of refIds) collection = removeAnnotationRecord(collection, refId)
+          return collection.length === current.collection.length ? current : { ...current, collection }
+        }
         case 'annotationMove': {
           const delta = payload.delta === -1 ? -1 : 1
           const next = moveAnnotationRecord(current.collection, payload.refId, delta)
@@ -11209,7 +11514,15 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const skippedCount = typeof source.skippedCount === 'number' && Number.isFinite(source.skippedCount) && source.skippedCount > 0
         ? Math.round(source.skippedCount)
         : 0
+      const removedTemplate = typeof source.removed === 'string' ? source.removed : '({count} annotation(s) no longer exist and were skipped)'
+      const removedCount = typeof source.removedCount === 'number' && Number.isFinite(source.removedCount) && source.removedCount > 0
+        ? Math.round(source.removedCount)
+        : 0
       const lines = [batchHeader]
+      if (removedCount > 0) {
+        lines.push('')
+        lines.push(removedTemplate.replace('{count}', String(removedCount)))
+      }
       if (skippedCount > 0) {
         lines.push('')
         lines.push(skippedTemplate.replace('{count}', String(skippedCount)))
@@ -12385,7 +12698,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         statusEphemeral: t('insert.statusEphemeral'),
         statusAmbiguous: t('insert.statusAmbiguous'),
         statusChanged: t('insert.statusChanged'),
-        skipped: t('insert.skipped')
+        skipped: t('insert.skipped'),
+        removed: t('insert.removed'),
+        removedCount: 0,
+        noRemaining: t('insert.noRemaining')
       }
     }
 
@@ -12579,6 +12895,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       let detailMeasuredSize = { width: ANNOTATION_DETAIL_SIZE.width, height: ANNOTATION_DETAIL_SIZE.height }
       /** Pending detail-card measurement frame. */
       let detailMeasureFrame = null
+      /** Composer service faces attached by the dynamic T9 inject (may stay null). */
+      let composerConversation = null
+      let composerInputTriggers = null
 
       /**
        * The current snapshot.
@@ -14637,11 +14956,151 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
-       * Insert the current selection as one quick reference (Phase 1 plain text).
+       * Attach the composer services resolved by the dynamic T9 inject. Kept
+       * replaceable and nullable: an embedding without the chat UI simply never
+       * calls this, and every insertion path falls back to plain text (D9).
+       * @param {{ conversation?: object, inputTriggers?: object }} services - service faces.
+       * @returns {void}
+       */
+      function attachComposerServices(services) {
+        const source = services !== null && typeof services === 'object' ? services : {}
+        composerConversation = source.conversation !== undefined && source.conversation !== null ? source.conversation : null
+        composerInputTriggers = source.inputTriggers !== undefined && source.inputTriggers !== null ? source.inputTriggers : null
+      }
+
+      /**
+       * Resolve the session-scoped input facade for one Session.
+       * @param {string | null} sessionId - Session identity.
+       * @returns {object | null} session input facade, or null when unavailable.
+       */
+      function composerInputFor(sessionId) {
+        if (composerConversation === null || typeof sessionId !== 'string' || sessionId.length === 0) return null
+        const sessions = ctx !== null && typeof ctx === 'object' ? ctx.sessions : null
+        if (sessions === null || typeof sessions !== 'object' || typeof sessions.scope !== 'function') return null
+        try {
+          const actx = sessions.scope(sessionId)
+          if (actx === undefined || actx === null) return null
+          const inputRegistry = composerConversation.input
+          if (inputRegistry === null || typeof inputRegistry !== 'object' || typeof inputRegistry.for !== 'function') return null
+          return inputRegistry.for(actx)
+        } catch {
+          return null
+        }
+      }
+
+      /**
+       * Insert one annotation reference as a native composer chip, or fall back to
+       * the Phase 1 plain-text block with an explanatory toast (A3/T9/D9).
+       * @param {Array<object>} records - record(s) to reference (one for single, N for the ONE group chip).
+       * @param {{ batch?: boolean, fallbackText: string }} options - batch flag and fallback text.
+       * @returns {boolean} whether any insertion applied.
+       */
+      function insertReferenceChip(records, options) {
+        const list = Array.isArray(records) ? records : []
+        const settingsForInsert = options !== null && typeof options === 'object' ? options : {}
+        if (list.length === 0) return false
+        const batch = settingsForInsert.batch === true
+        const fallbackText = typeof settingsForInsert.fallbackText === 'string' ? settingsForInsert.fallbackText : ''
+        const sessionId = annotationBridge.sessionId ?? snapshot().state.sessionId
+        const actions = annotationBridge.inputActions
+        if (sessionId !== null && actions !== null && typeof actions === 'object' && typeof actions.captureInsertion === 'function') {
+          let span = null
+          try {
+            span = actions.captureInsertion()
+          } catch {
+            span = null
+          }
+          const input = span === null ? null : composerInputFor(sessionId)
+          if (input !== null && typeof input.insertReference === 'function') {
+            try {
+              const ref = batch
+                ? annotationChipRefBatch(list, t('chip.batchLabel', { count: list.length }))
+                : annotationChipRefOf(list[0])
+              if (ref.ref.length > 0 && input.insertReference(ref, span) === true) {
+                feedback(t(batch ? 'feedback.chipBatchInserted' : 'feedback.chipInserted'))
+                annotationFocusComposer()
+                return true
+              }
+            } catch {
+              // Fall through to the plain-text path with its explanatory toast.
+            }
+          }
+        }
+        const inserted = fallbackText.length > 0 ? insertIntoComposer(fallbackText) : false
+        if (inserted) feedback(t('feedback.chipFallback'))
+        return inserted
+      }
+
+      /**
+       * The record a chip candidate names, for the `@` pick path.
+       * @param {string} refId - record id from the candidate value.
+       * @returns {object | null} record, or null when it was deleted meanwhile.
+       */
+      function chipRecord(refId) {
+        return snapshot().state.collection.find((entry) => entry !== null && typeof entry === 'object' && entry.id === refId) ?? null
+      }
+
+      /**
+       * `@` group candidates: current-Session records only, ≤20, insertion order.
+       * @param {string | null} sessionId - Session owning the composer.
+       * @returns {Array<object>} trigger candidates.
+       */
+      function chipCandidates(sessionId) {
+        return annotationChipCandidates(snapshot().state.collection, sessionId, ANNOTATION_CHIP_CANDIDATE_LIMIT)
+      }
+
+      /**
+       * Clipboard projection of one annotation chip.
+       * @param {unknown} ref - chip ref.
+       * @returns {string} clipboard text.
+       */
+      function chipClipboardText(ref) {
+        const parsed = parseAnnotationChipRef(ref)
+        if (parsed === null) return ''
+        if (parsed.kind === 'single') {
+          const record = chipRecord(parsed.id)
+          return record === null ? '' : annotationChipRefOf(record).clipboardText
+        }
+        return annotationChipRefBatch([], t('chip.batchLabel', { count: parsed.ids.length })).clipboardText
+      }
+
+      /**
+       * Model serialization of one annotation chip (the submit pipeline calls this
+       * through the source codec). A missing single record throws so the shell
+       * blocks the send instead of silently downgrading (D9); a batch chip skips
+       * deleted members and states the count honestly.
+       * @param {unknown} ref - chip ref.
+       * @returns {string} model text.
+       */
+      function serializeChip(ref) {
+        const result = serializeAnnotationChip(ref, snapshot().state.collection, annotationInsertLabels(t), (record) => statusOf(record))
+        if (result.text === null) throw new Error(t('feedback.chipMissing'))
+        return result.text
+      }
+
+      /**
+       * Chip click handler: single → the record's detail card, batch → the rail
+       * collection view (the group has no single element to outline).
+       * @param {unknown} ref - chip ref.
+       * @returns {boolean} whether the preview was accepted.
+       */
+      function openChipReference(ref) {
+        const parsed = parseAnnotationChipRef(ref)
+        if (parsed === null) return false
+        if (parsed.kind === 'batch') {
+          if (!isActive()) return false
+          dispatch({ type: 'openView', view: 'collection' })
+          return true
+        }
+        return openDetailCardById(parsed.id)
+      }
+
+      /**
+       * Insert the current selection as one quick reference.
        *
-       * A3/T7: the annotation is committed first (if it is new), then the plain-text
-       * block is inserted and the popover auto-closes. The native composer chip is
-       * Phase 2-B; until then this stays the Phase 1 insertion contract.
+       * The annotation is committed first (if it is new), then a native reference
+       * chip is inserted; an unavailable chip path falls back to the Phase 1 plain
+       * text with `feedback.chipFallback` (D9). The popover auto-closes first.
        * @returns {void}
        */
       function quickReference() {
@@ -14649,13 +15108,37 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const ref = state.selection[0]
         if (ref === undefined) return
         const note = state.note
-        const text = serializeQuickReference({ ...ref, note, status: statusOf(ref) }, note, annotationInsertLabels(t))
+        const fallbackText = serializeQuickReference({ ...ref, note, status: statusOf(ref) }, note, annotationInsertLabels(t))
         const committed = commitSelection({ feedback: false })
         if (!committed) return
-        insertIntoComposer(text)
+        const sessionId = annotationBridge.sessionId ?? state.sessionId ?? null
+        const record = snapshot().state.collection.find((entry) => identityKeyOf(entry) === identityKeyOf(ref)
+          && (entry?.session?.sessionId ?? null) === (ref.session?.sessionId ?? sessionId))
+        if (record === undefined) {
+          insertIntoComposer(fallbackText)
+          return
+        }
+        insertReferenceChip([record], { fallbackText })
       }
 
-      /** Insert every current-Session collection entry as one ordered batch request. @returns {void} */
+      /**
+       * Insert one rail row's reference as a native single chip (with fallback).
+       * @param {string} refId - record id.
+       * @returns {void}
+       */
+      function insertEntryChip(refId) {
+        const record = chipRecord(refId)
+        if (record === null) return
+        const fallbackText = serializeQuickReference({ ...record, status: statusOf(record) }, record.note ?? '', annotationInsertLabels(t))
+        insertReferenceChip([record], { fallbackText })
+      }
+
+      /**
+       * Insert the selected current-Session annotations as ONE group chip (D2);
+       * other-Session records can never be part of a batch (A3/T8). Auto-dismiss
+       * follows §4.4: popover/card closed, selection cleared, collection view kept.
+       * @returns {void}
+       */
       function insertBatch() {
         const state = snapshot().state
         if (state.collection.length === 0) return
@@ -14664,18 +15147,95 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           feedback(t('feedback.noComposer'), 'error')
           return
         }
-        const items = state.collection.map((entry) => ({ ref: entry, note: entry.note ?? '' }))
-        const split = batchScopeSplit(items, sessionId)
-        if (split.current.length === 0) {
+        const selected = annotationSelectedEntries(state.collection, sessionId)
+        if (selected.length === 0) {
           feedback(t('feedback.batchEmpty'), 'error')
           return
         }
-        const scoped = split.current.map((item) => {
-          const ref = item.ref ?? item
-          return { ref: { ...ref, status: statusOf(ref) }, note: item.note ?? ref.note ?? '' }
-        })
-        const labels = { ...annotationInsertLabels(t), skippedCount: split.other.length }
-        insertIntoComposer(serializeBatchRequest(scoped, labels))
+        const split = batchScopeSplit(state.collection.map((entry) => ({ ref: entry, note: entry.note ?? '' })), sessionId)
+        const fallbackItems = selected.map((record) => ({ ref: { ...record, status: statusOf(record) }, note: record.note ?? '' }))
+        const fallbackText = serializeBatchRequest(fallbackItems, { ...annotationInsertLabels(t), skippedCount: split.other.length })
+        closeDetailCard()
+        if (snapshot().state.selection.length > 0) dispatch({ type: 'selectSingle', ref: null })
+        insertReferenceChip(selected, { batch: true, fallbackText })
+      }
+
+      /**
+       * Toggle one record's batch inclusion. Other-Session records are forced out
+       * of every selection (the row is disabled in the rail).
+       * @param {string} refId - record id.
+       * @param {boolean} included - requested flag.
+       * @returns {void}
+       */
+      function setEntryIncluded(refId, included) {
+        const record = chipRecord(refId)
+        if (record === null) return
+        const flag = collectionScopeOf(record) === 'current' && included === true
+        if (record.included === flag) return
+        dispatch({ type: 'annotationInclude', refId, included: flag })
+      }
+
+      /**
+       * Select every current-Session record for the batch (or clear the selection).
+       * @param {boolean} included - target flag.
+       * @returns {void}
+       */
+      function setAllCurrentIncluded(included) {
+        const current = snapshot()
+        const sessionId = currentSessionId()
+        const changes = []
+        for (const entry of current.state.collection) {
+          const isCurrent = collectionScopeOf(entry) === 'current'
+          const flag = included === true && isCurrent
+          if (entry.included !== flag) changes.push({ refId: entry.id, included: flag })
+        }
+        if (changes.length === 0) return
+        dispatch({ type: 'annotationIncludes', changes })
+        const sessionIdForSelection = sessionId
+        if (sessionIdForSelection === null && included === true) feedback(t('feedback.noComposer'), 'error')
+      }
+
+      /**
+       * Move one rail row one slot up or down (A3/T8; order stays contiguous).
+       * @param {string} refId - record id.
+       * @param {number} delta - -1 up, +1 down.
+       * @returns {void}
+       */
+      function moveEntry(refId, delta) {
+        dispatch({ type: 'annotationMove', refId, delta: delta === -1 ? -1 : 1 })
+      }
+
+      /**
+       * Delete every selected annotation as one undo step (A3/T8/D5).
+       * @returns {void}
+       */
+      function removeSelected() {
+        const current = snapshot()
+        const ids = annotationSelectedEntries(current.state.collection, currentSessionId()).map((entry) => entry.id)
+        if (ids.length === 0) return
+        const removal = annotationUndoRemoveMany(current.state.collection, ids, Date.now())
+        if (removal.undo === null) return
+        dispatch({ type: 'annotationRemoveMany', refIds: ids })
+        closeDetailCard()
+        if (snapshot().noteEditor !== null) publish({ noteEditor: null })
+        setMarkUndo(removal.undo)
+      }
+
+      /**
+       * Rail preview: scroll to the element, flash it, then open its detail card.
+       * Other-Session rows keep the existing refusal message.
+       * @param {string} refId - record id.
+       * @returns {void}
+       */
+      function previewEntry(refId) {
+        const record = chipRecord(refId)
+        if (record === null) return
+        if (collectionScopeOf(record) !== 'current') {
+          feedback(t('feedback.relocateOtherSession'), 'error')
+          return
+        }
+        relocateEntry(refId)
+        openDetailCardById(refId)
       }
 
       /**
@@ -14726,7 +15286,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
        * @returns {void}
        */
       function updateCollectionNote(refId, note) {
-        dispatch({ type: 'collectionUpdateNote', refId, note })
+        dispatch({ type: 'annotationUpdateNote', refId, note: typeof note === 'string' ? note : '', now: Date.now() })
       }
 
       /**
@@ -14849,9 +15409,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       function quickReferenceById(refId) {
         const record = snapshot().state.collection.find((entry) => entry.id === refId)
         if (record === undefined) return
-        const text = serializeQuickReference({ ...record, status: statusOf(record) }, record.note ?? '', annotationInsertLabels(t))
+        const fallbackText = serializeQuickReference({ ...record, status: statusOf(record) }, record.note ?? '', annotationInsertLabels(t))
         closeDetailCard()
-        insertIntoComposer(text)
+        insertReferenceChip([record], { fallbackText })
       }
 
       /**
@@ -14986,6 +15546,19 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         quickReference,
         quickReferenceById,
         insertBatch,
+        insertEntryChip,
+        setEntryIncluded,
+        selectAllCurrent: () => setAllCurrentIncluded(true),
+        deselectAll: () => setAllCurrentIncluded(false),
+        moveEntry,
+        removeSelected,
+        previewEntry,
+        attachComposerServices,
+        chipCandidates,
+        chipRecord,
+        chipClipboardText,
+        serializeChip,
+        openChipReference,
         copyLocator,
         levelUp: () => shiftChain(1),
         levelDown: () => shiftChain(-1),
@@ -15085,6 +15658,16 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-status-dot[data-psa-status=ambiguous],.psa-status-dot[data-psa-status=changed]{background:var(--dsw-alias-state-warn-primary,var(--dsw-alias-label-tertiary))}
 .psa-status-dot[data-psa-status=missing]{background:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-tertiary))}
 .psa-entry-locator{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-entry-meta{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:15px;overflow-wrap:anywhere}
+.psa-entry-check{display:inline-flex;align-items:center;flex:none;cursor:pointer}
+.psa-entry-check input{margin:0;width:13px;height:13px;accent-color:var(--dsw-alias-state-business-primary);cursor:pointer}
+.psa-entry-check input:disabled{cursor:default;opacity:.55}
+.psa-entry[data-psa-entry-scope=other] .psa-entry-check{opacity:.6}
+.psa-rail-tools{display:flex;gap:4px}
+.psa-rail-tools .psa-btn{flex:1;justify-content:center;min-height:24px;font-size:11.5px}
+.psa-rail-max{color:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-tertiary))}
+.psa-entry-insert{width:auto;min-height:22px;padding:2px 6px;font-size:11px}
+.psa-btn-danger{border-color:var(--dsw-alias-state-error-primary,var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent)));color:var(--dsw-alias-state-error-primary)}
 .psa-entry-note{box-sizing:border-box;width:100%;min-height:34px;max-height:72px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
 .psa-entry-actions{display:flex;justify-content:flex-end;gap:2px}
 .psa-empty{display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center;padding:18px 6px;border:1px dashed var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px)}
@@ -15247,7 +15830,8 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           role: 'status',
           'aria-live': 'polite'
         },
-        React.createElement('span', { 'data-psa-undo-text': '' }, undo.kind === 'clear' ? t('feedback.cleared') : t('feedback.markDeleted')),
+        React.createElement('span', { 'data-psa-undo-text': '' },
+          undo.kind === 'clear' ? t('feedback.cleared') : (undo.kind === 'multi' ? t('feedback.selectedDeleted') : t('feedback.markDeleted'))),
         React.createElement('button', {
           type: 'button',
           className: 'psa-btn',
@@ -15554,7 +16138,8 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
-     * Rail collection view: ordered rows with inline notes and per-row actions.
+     * Rail collection view (A3/T8): scope counts, batch selection tools, ordered
+     * rows, empty/cap/other-Session notices, and the batch footer.
      * @param {{ t: Function, controller: object, snapshot: object }} props - rail props.
      * @returns {object} the collection view.
      */
@@ -15563,7 +16148,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       const state = snapshot.state
       const entries = state.collection
       const sessionId = controller.currentSessionId()
-      const otherCount = entries.filter((entry) => controller.collectionScopeOf(entry) !== 'current').length
+      const counts = annotationScopeCounts(entries, sessionId)
       const nodes = [
         React.createElement('div', { key: 'head', className: 'psa-rail-section' },
           React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
@@ -15577,7 +16162,33 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
             }, AnnotationChevron('left')),
             React.createElement('span', { className: 'psa-status-line psa-status-strong' }, t('collection.title')),
             React.createElement('span', { className: 'psa-btn-count', style: { marginLeft: 'auto' } },
-              entries.length === 1 ? t('collection.countOne') : t('collection.count', { count: entries.length }))))
+              entries.length === 1 ? t('collection.countOne') : t('collection.count', { count: entries.length })))),
+        React.createElement('div', {
+          key: 'scope',
+          className: 'psa-muted',
+          'data-psa-scope-counts': '',
+          'data-psa-current-count': String(counts.current),
+          'data-psa-other-count': String(counts.other),
+          'data-psa-included-count': String(counts.included)
+        }, t('collection.countScope', { current: counts.current, other: counts.other })),
+        React.createElement('div', { key: 'tools', className: 'psa-rail-tools', 'data-psa-rail-tools': '', 'data-psa-own': '' },
+          React.createElement('button', {
+            type: 'button',
+            className: 'psa-btn',
+            'data-psa-select-all': '',
+            'data-psa-own': '',
+            disabled: counts.current === 0 || counts.included === counts.current,
+            onClick: () => controller.selectAllCurrent()
+          }, t('collection.selectAllCurrent')),
+          React.createElement('button', {
+            type: 'button',
+            className: 'psa-btn',
+            'data-psa-deselect-all': '',
+            'data-psa-own': '',
+            disabled: counts.included === 0,
+            onClick: () => controller.deselectAll()
+          }, t('collection.deselectAll'))),
+        React.createElement('div', { key: 'sort', className: 'psa-muted' }, t('collection.sortHint'))
       ]
       if (sessionId === null && entries.length > 0) {
         // Without a mounted Composer seat there is no current Session, so scope is
@@ -15589,8 +16200,16 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           'data-psa-no-session': '',
           'data-psa-own': ''
         }, t('feedback.noComposer')))
-      } else if (otherCount > 0) {
-        nodes.push(React.createElement('div', { key: 'other', className: 'psa-muted' }, t('collection.crossSession', { count: otherCount })))
+      } else if (counts.other > 0) {
+        nodes.push(React.createElement('div', { key: 'other', className: 'psa-muted', 'data-psa-other-notice': '' }, t('collection.crossSession', { count: counts.other })))
+      }
+      if (entries.length >= ANNOTATION_RECORD_LIMIT) {
+        nodes.push(React.createElement('div', {
+          key: 'cap',
+          className: 'psa-muted psa-rail-max',
+          'data-psa-max-reached': '',
+          'data-psa-own': ''
+        }, t('collection.maxReached', { limit: ANNOTATION_RECORD_LIMIT })))
       }
       if (entries.length === 0) {
         nodes.push(React.createElement('div', { key: 'empty', className: 'psa-empty', 'data-psa-empty': '', 'data-psa-own': '' },
@@ -15601,6 +16220,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           key: entry.id,
           t,
           controller,
+          snapshot,
           entry,
           index
         }))
@@ -15610,7 +16230,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
-     * One collection row: index, element label, locator, note, scope, and actions.
+     * One collection row (A3/T8): include checkbox (other-Session rows disabled),
+     * index, element label → preview, status, Session/Workspace/surface metadata,
+     * locator, inline rainbow note editor, and the per-row actions.
      * @param {{ t: Function, controller: object, snapshot: object, entry: object, index: number }} props - row props.
      * @returns {object} the row.
      */
@@ -15621,23 +16243,48 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       // another Session the row is marked `other` instead of claiming a live match (F9).
       const status = scope === 'current' ? controller.statusOf(entry) : 'other'
       const locator = describeLocator(entry)
+      const included = scope === 'current' && entry.included !== false
+      const sessionId = entry.session !== null && typeof entry.session === 'object' ? entry.session.sessionId : null
+      const metadata = []
+      metadata.push(`${t('detail.session')} ${sessionShortLabel(sessionId) || t('insert.noSession')}`)
+      const workspace = entry.session !== null && typeof entry.session === 'object'
+        ? (entry.session.workspaceLabel || annotationWorkspaceLabel(entry.session.cwd))
+        : null
+      if (typeof workspace === 'string' && workspace.length > 0) metadata.push(`${t('detail.workspace')} ${workspace}`)
+      const face = entry.locator !== null && typeof entry.locator === 'object' ? entry.locator.surface : 'page'
+      if (face === 'floating') metadata.push(t('rail.surfaceFloating'))
       return React.createElement('div', {
         className: 'psa-entry',
         'data-psa-entry': '',
         'data-psa-own': '',
         'data-psa-ref': entry.id,
         'data-psa-entry-scope': scope,
-        'data-psa-status': status
+        'data-psa-status': status,
+        'data-psa-entry-included': included ? 'true' : 'false'
       },
       React.createElement('div', { className: 'psa-entry-head' },
-        React.createElement('span', { className: 'psa-entry-index' }, String(index + 1)),
+        React.createElement('label', {
+          className: 'psa-entry-check',
+          'data-psa-entry-include': '',
+          'data-psa-own': '',
+          title: scope === 'current' ? t('collection.include') : t('collection.otherSessionHint')
+        },
+        React.createElement('input', {
+          type: 'checkbox',
+          checked: included,
+          disabled: scope !== 'current',
+          'data-psa-own': '',
+          onChange: (event) => controller.setEntryIncluded(entry.id, event.currentTarget.checked === true)
+        })),
+        React.createElement('span', { className: 'psa-entry-index' }, `#${index + 1}`),
         React.createElement('button', {
           type: 'button',
           className: 'psa-entry-name',
           'data-psa-entry-relocate': '',
+          'data-psa-entry-preview': '',
           'data-psa-own': '',
-          title: t('collection.relocate'),
-          onClick: () => controller.relocateEntry(entry.id)
+          title: scope === 'current' ? t('collection.preview') : t('collection.otherSessionHint'),
+          onClick: () => controller.previewEntry(entry.id)
         }, elementLabel(entry)),
         scope === 'other'
           ? React.createElement('span', { className: 'psa-badge', 'data-psa-own': '' }, t('collection.otherSession'))
@@ -15648,6 +16295,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
             title: t(`popover.status.${status}`),
             'aria-label': t(`popover.status.${status}`)
           })),
+      React.createElement('div', { className: 'psa-entry-meta', 'data-psa-entry-meta': '', 'data-psa-own': '' }, metadata.join(' · ')),
       React.createElement('div', { className: 'psa-entry-locator', title: locator }, locator),
       React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
         React.createElement('textarea', {
@@ -15667,7 +16315,16 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
             controller.updateCollectionNote(entry.id, textarea === null ? '' : textarea.value)
           }
         })),
-      React.createElement('div', { className: 'psa-entry-actions' },
+      React.createElement('div', { className: 'psa-entry-actions', 'data-psa-own': '' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn psa-entry-insert',
+          'data-psa-entry-insert': '',
+          'data-psa-own': '',
+          disabled: scope !== 'current',
+          title: scope === 'current' ? t('collection.insertChip') : t('collection.otherSessionHint'),
+          onClick: () => controller.insertEntryChip(entry.id)
+        }, t('collection.insertChip')),
         React.createElement('button', {
           type: 'button',
           className: 'psa-icon-btn',
@@ -15689,6 +16346,26 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         React.createElement('button', {
           type: 'button',
           className: 'psa-icon-btn',
+          'data-psa-entry-move-up': '',
+          'data-psa-own': '',
+          disabled: index === 0,
+          'aria-label': t('collection.moveUp'),
+          title: t('collection.moveUp'),
+          onClick: () => controller.moveEntry(entry.id, -1)
+        }, RemixGlyph(REMIX_ARROW_UP_LINE, 13)),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-entry-move-down': '',
+          'data-psa-own': '',
+          disabled: index >= (props.snapshot.state.collection.length - 1),
+          'aria-label': t('collection.moveDown'),
+          title: t('collection.moveDown'),
+          onClick: () => controller.moveEntry(entry.id, 1)
+        }, RemixGlyph(REMIX_ARROW_DOWN_LINE, 13)),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn psa-detail-danger',
           'data-psa-entry-remove': '',
           'data-psa-own': '',
           'aria-label': t('collection.remove'),
@@ -15698,7 +16375,10 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
-     * Rail collection footer: clear-all and batch insertion.
+     * Rail collection footer (A3/T8): delete the selected annotations, insert the
+     * selected current-Session annotations as ONE group chip, or clear everything;
+     * each destructive action uses the same 5 s undo slot. Visible disable reasons
+     * explain why a batch insert is unavailable.
      * @param {Function} t - bound translate.
      * @param {object} controller - annotation controller.
      * @param {object} snapshot - current snapshot.
@@ -15706,8 +16386,34 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
      */
     function annotationCollectionFooter(t, controller, snapshot) {
       const state = snapshot.state
-      const currentCount = state.collection.filter((entry) => controller.collectionScopeOf(entry) === 'current').length
+      const sessionId = controller.currentSessionId()
+      const counts = annotationScopeCounts(state.collection, sessionId)
+      const canInsert = counts.included > 0
+      const reason = state.collection.length === 0
+        ? t('collection.emptyHint')
+        : (sessionId === null ? t('feedback.noComposer') : (counts.current === 0 ? t('collection.crossSession', { count: counts.other }) : t('collection.batchDisabled')))
       return React.createElement('div', { className: 'psa-rail-footer', 'data-psa-own': '' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn psa-btn-danger',
+          'data-psa-delete-selected': '',
+          'data-psa-own': '',
+          disabled: counts.included === 0,
+          title: counts.included === 0 ? t('collection.batchDisabled') : t('collection.deleteSelected'),
+          onClick: () => controller.removeSelected()
+        }, `${t('collection.deleteSelected')} (${counts.included})`),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn psa-btn-primary',
+          'data-psa-insert-batch': '',
+          'data-psa-own': '',
+          disabled: !canInsert,
+          title: canInsert ? t('collection.insertChip') : reason,
+          onClick: () => controller.insertBatch()
+        }, `${t('collection.insertBatch')} (${counts.included})`),
+        canInsert
+          ? null
+          : React.createElement('div', { className: 'psa-muted', 'data-psa-batch-reason': '', 'data-psa-own': '' }, reason),
         React.createElement('button', {
           type: 'button',
           className: 'psa-btn',
@@ -15715,15 +16421,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           'data-psa-own': '',
           disabled: state.collection.length === 0,
           onClick: () => controller.clearCollection()
-        }, t('collection.clear')),
-        React.createElement('button', {
-          type: 'button',
-          className: 'psa-btn psa-btn-primary',
-          'data-psa-insert-batch': '',
-          'data-psa-own': '',
-          disabled: currentCount === 0,
-          onClick: () => controller.insertBatch()
-        }, t('collection.insertBatch')))
+        }, t('collection.clear')))
     }
 
     /**
@@ -16170,6 +16868,94 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
+     * Build the `@` trigger source that owns annotation reference chips (A3/T9).
+     *
+     * The source receives the controller lazily so registration can happen before
+     * the controller effect settles; every callback resolves the current
+     * controller instance. `codec.serialize` throws for a deleted record so the
+     * shell blocks the send instead of silently downgrading (D9).
+     * @param {() => object | null} controllerAt - current annotation controller getter.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {object} trigger source for `ctx.inputTriggers.registerSource`.
+     */
+    function createAnnotationChipSource(controllerAt, t) {
+      /** @returns {object | null} the current controller. */
+      const controller = () => {
+        try {
+          return controllerAt()
+        } catch {
+          return null
+        }
+      }
+      return {
+        trigger: ANNOTATION_CHIP_TRIGGER,
+        name: ANNOTATION_CHIP_SOURCE,
+        order: ANNOTATION_CHIP_ORDER,
+        showGroupTitle: true,
+        /**
+         * Current-Session candidates only; an empty array hides the group (D8).
+         * @param {object} session - composer Session projection.
+         * @returns {Promise<Array<object>>} candidates.
+         */
+        async candidates(session) {
+          const current = controller()
+          if (current === null || session === null || typeof session !== 'object') return []
+          const sessionId = typeof session.sessionId === 'string' ? session.sessionId : ''
+          if (sessionId.length === 0) return []
+          return current.chipCandidates(sessionId)
+        },
+        /**
+         * A menu pick inserts the record's chip through the scoped input pipeline.
+         * @param {object} pick - pipeline pick (`candidate`, `session`, `span`).
+         * @returns {object | undefined} insert outcome, or undefined for a stale candidate.
+         */
+        onPick(pick) {
+          const current = controller()
+          if (current === null || pick === null || typeof pick !== 'object') return undefined
+          const candidate = pick.candidate !== null && typeof pick.candidate === 'object' ? pick.candidate : null
+          const value = candidate === null ? null : candidate.value
+          if (typeof value !== 'string') return undefined
+          const record = current.chipRecord(value)
+          if (record === null) return undefined
+          return { insert: annotationChipRefOf(record) }
+        },
+        /**
+         * A chip click opens the record's detail card (single) or the rail
+         * collection view (batch group).
+         * @param {object} _session - composer Session projection.
+         * @param {{ ref: string }} reference - chip reference.
+         * @returns {boolean} whether the preview was accepted.
+         */
+        openReference(_session, reference) {
+          const current = controller()
+          if (current === null || reference === null || typeof reference !== 'object') return false
+          return current.openChipReference(reference.ref)
+        },
+        codec: {
+          /**
+           * Clipboard projection of one chip.
+           * @param {string} ref - chip ref.
+           * @returns {string} clipboard text.
+           */
+          clipboardText: (ref) => {
+            const current = controller()
+            return current === null ? '' : current.chipClipboardText(ref)
+          },
+          /**
+           * Model text for one chip; failure rejects the send (never downgraded).
+           * @param {string} ref - chip ref.
+           * @returns {Promise<string>} serialized model text.
+           */
+          serialize: async (ref) => {
+            const current = controller()
+            if (current === null) throw new Error(t('feedback.chipMissing'))
+            return current.serializeChip(ref)
+          }
+        }
+      }
+    }
+
+    /**
      * Install the browser-only UI element annotation mode.
      * @param {object} ctx - client root context.
      * @returns {void}
@@ -16216,6 +17002,31 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         id: ANNOTATION_SEAT_ID,
         order: 60
       }, AnnotationSessionSeat)), 'power-suite: ui annotation composer seat')
+      // A3/T9: the composer chip pipeline is injected dynamically so the plugin
+      // keeps working on embeds without the chat UI. `conversation`+`inputTriggers`
+      // arrive when the composer services are installed; the source registration
+      // dies with the dynamic inject's fiber.
+      try {
+        ctx.inject(['conversation', 'inputTriggers'], (scoped) => {
+          const scope = scoped !== undefined && scoped !== null && typeof scoped.get === 'function' ? scoped : ctx
+          let conversation = null
+          let inputTriggers = null
+          try {
+            conversation = scope.get('conversation')
+            inputTriggers = scope.get('inputTriggers')
+          } catch {
+            conversation = null
+            inputTriggers = null
+          }
+          if (conversation === undefined || conversation === null || inputTriggers === undefined || inputTriggers === null) return
+          if (annotationController !== null) annotationController.attachComposerServices({ conversation, inputTriggers })
+          const register = typeof scope.effect === 'function' ? scope.effect.bind(scope) : ctx.effect.bind(ctx)
+          register(() => inputTriggers.registerSource(createAnnotationChipSource(() => annotationController, t)),
+            'power-suite: ui annotation chip source')
+        })
+      } catch {
+        // A missing dynamic-inject API leaves the plain-text insertion path (D9).
+      }
     }
     //#endregion
 
@@ -16330,7 +17141,16 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationUndoRemove,
         annotationUndoRestore,
         annotationMarkerBadgeText,
-        clampDetailCardPosition
+        clampDetailCardPosition,
+        annotationUndoRemoveMany,
+        annotationScopeCounts,
+        annotationSelectedEntries,
+        annotationApplyIncludes,
+        annotationChipRefOf,
+        annotationChipRefBatch,
+        parseAnnotationChipRef,
+        annotationChipCandidates,
+        serializeAnnotationChip
       }
     }
 
