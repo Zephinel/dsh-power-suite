@@ -22,7 +22,7 @@ npm run pack:check
 
 Current evidence (2026-11-12, Node 24.22.2):
 
-- `npm test`: **106 tests, 106 passed, 0 failed**.
+- `npm test`: **109 tests, 109 passed, 0 failed**.
 - `npm run check`: passed (`18 modules, 9 test files`).
 - `npm run pack:check`: **72 files** (0.2.0 tarball), including `src/`,
   `locale/`, `docs/` (with the Project page/rail states/sidebar switch,
@@ -41,13 +41,16 @@ Current evidence (2026-11-12, Node 24.22.2):
   validation and 25 s cache behavior), the read-acks store/route (schema,
   sanitization, max-merge, 1000-entry cap, 415/413/400/500), and the
   event-sourced activity ledger (store max-merge/cap/atomic persistence,
-  read-merge writes, flush/dispose durability including an in-flight write and
-  repeated dispose, record→dispose→reload, 20 sequential lifecycles, allowlist
-  event projection, one-time baseline, cold-load snapshot route).
+  best-effort read-merge writes with a TOCTOU window, flush/dispose durability
+  including an in-flight write, repeated dispose and a failed disk write,
+  record→dispose→reload, 20 sequential lifecycles, allowlist families plus the
+  explicit non-activity set, one-time baseline, seed-aware cold-load snapshot
+  route, and read-acks retry classification including 408/425).
 - Host routes are covered by tests where they exist: Dynamic Workspaces'
   card state is browser-derived but Host-backed through the read-acks store/route
-  and the session-activity ledger route (16 MiB document guard, allowlist event
-  projection, cold-load snapshot), while the Project view's
+  and the session-activity ledger route (16 MiB document guard, allowlist
+  families/non-activity set, bounded seed wait, cold-load snapshot), while the
+  Project view's
   `GET /api/power-suite.project` route and its pure folds are covered by the
   project-view suite (turn status, fork closer, stats exclusion, cache
   identity/TTL). The prompt-history rail shares the existing
@@ -282,19 +285,25 @@ These were exercised in the Web GUI during development:
   was retried on focus. HMR produced exactly one acks GET and one activity GET
   per 32 s window after reload (an HMR mount added one of each), with 0
   exceptions/plugin console errors.
-- Ledger durability and cold load were verified after a recompose: the first cold
-  GET returned `200` with a **404-entry** ledger in ~**60 ms** (not `{}`), and
-  the route and file counts agreed (file mode `600`, version `1`). A checkpoint
-  `80769cd0…` = `1794466322463` survived dispose/recompose as route = file =
-  **`1794466351365`** (≥ checkpoint, so the ≤750 ms debounce window was not
-  lost); a later probe read route `1794466488144` / file `1794466475256`.
+- Ledger durability, seed-aware cold load and multi-writer semantics were
+  verified after a recompose: the first cold GET returned `200` in **~30–34 ms**
+  with a **406-entry** ledger (not `{}`), and the route and file counts agreed
+  (file mode `600`, version `1`). Earlier probes saw 401, then 404, then 406
+  entries as Sessions accumulated — they are separate probe points, not a
+  contradiction. A checkpoint `80769cd0…` = `1794468599829` survived
+  dispose/recompose as route = file = **`1794468609063`** (≥ checkpoint, so the
+  ≤750 ms debounce window was not lost); a later probe read file
+  `1794468626727` / route `1794468642830` with live events advancing.
   `0c14a9e7…` (`1794263011213`) and `78f7a4a7…` (`1794418427299`) stayed stable
   through Host activity and recompose, while `442a0000…` advanced only with real
-  events (`…6219743` → `…6306695` → `…6318019` → `…6413163`). Forcing an empty
-  activity response left the card rows/panel unchanged (client empty-response
-  guard), and HMR kept one acks GET + one activity GET per 32 s window, one
-  panel/three rows, 0 exceptions/plugin console errors.
-- The 10× gate run was clean: `npm test` **10/10 runs exited 0 with 106/106
+  events (`…6219743` → `…6306695` → `…6318019` → `…6413163`). A fresh browser's
+  first activity response was `200` with the 406-entry map, and forcing an empty
+  response left the card rows unchanged (guarded window). HMR kept one acks GET +
+  one activity GET per 32 s window, one panel/four rows, 0 exceptions/plugin
+  console errors. The read-merge path is best-effort: sequential external writes
+  are preserved but interleaving writers can lose one side (TOCTOU), and a failed
+  disk write leaves the map in memory without durability (flush/dispose resolve).
+- The 10× gate run was clean: `npm test` **10/10 runs exited 0 with 109/109
   passing each**; `npm run check` **10/10 exited 0 with fail 0** (18 modules, 9
   test files); the final `npm run pack:check` was **72**.
 - The current-chat rainbow ring was verified live: exactly one ring rendered with

@@ -70,14 +70,18 @@ Session is running and the white sparkle icon when nothing runs.
 - Card times come from the Host's **event-sourced activity ledger**, not the
   catalog's last-prompt time, so a turn that ran for hours keeps its real
   completion time and stays in the recent window instead of vanishing on stop.
-  The ledger records allowlisted committed Session events live (turns, steps,
-  messages, assistant attempts, tool calls/results — including interrupted and
-  failed turn ends); metadata, seed/maintenance, and unknown future event types
-  do not count, so a brand-new event type can be under-reported until the
-  allowlist grows. Sessions that existed before the feature was installed only
-  get a one-time baseline (projection-cache time, or the header's `createdAt`
-  when there is no cache document), so a historical/seed-only end can be
-  under-reported — it is never fabricated. The native sidebar keeps its own
+  The ledger records allowlisted committed Session events live across all known
+  activity-bearing families (turns, steps, messages/attempts, tools including
+  PTC, jobs, commands, compaction, subagent state, goal/todo, approvals and
+  selection actions, workspace/deliverable/schedule changes, team traffic,
+  image/offload, feedback, inbox splice, LLM retry, tool-workflow progress —
+  including interrupted and failed turn ends). Metadata events, seed/maintenance
+  events, and unknown future/plugin event types do not count, so a brand-new
+  event type can be under-reported until the allowlist grows. Sessions that
+  existed before the feature was installed only get a one-time baseline
+  (projection-cache time, or the header's `createdAt` when there is no cache
+  document), so a historical/seed-only end can be under-reported — it is never
+  fabricated. The native sidebar keeps its own
   catalog times. The Host routes behind the marks/times need the plugin reloaded
   / Host recomposed after upgrading.
 - Rest the pointer on a row for its hover detail: the Workspace name, full

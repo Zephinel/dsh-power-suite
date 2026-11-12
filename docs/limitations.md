@@ -134,12 +134,14 @@
   is derived as read when its baseline is within **1000 ms** of the current
   activity, so a very small genuine change could keep a stale ack; metadata-only
   bumps cannot. Pushes are chunked (≤200 entries / ~48 KiB, one POST in flight):
-  network, 5xx, and 429 failures stay queued, a permanent non-retryable 4xx
-  drops **only that batch immediately**, and the local cache and pending map are
-  each capped at 1000 (pending entries dropped by the cap stay in the local map
-  and re-migrate later). The two Host routes need a plugin reload / Host
-  recompose after upgrading, and old local marks are uploaded once when DSH is
-  first opened with the new Host.
+  network, 5xx, **408/425**, and 429 failures stay queued, other permanent
+  non-retryable 4xx drop **only that batch immediately**, and the local cache and
+  pending map are each capped at 1000 (pending entries dropped by the cap stay
+  in the local map and re-migrate later); the sync **awaits** the push flush
+  before fetching activity. The browser `localStorage` cache is per browser
+  origin, while the Host documents are per `$DSH_HOME` DSH profile. The two Host
+  routes need a plugin reload / Host recompose after upgrading, and old local
+  marks are uploaded once when DSH is first opened with the new Host.
 - **One-time read-mark caveat from the superseded mtime build.** During the
   short-lived mtime-floor iteration some acknowledgement baselines were inflated
   (for example `78f7a4a7…`). Baselines are max-monotonic: opening the Session
@@ -149,23 +151,35 @@
   installs and Sessions touched after the ledger fix are unaffected.
 - **Activity is exact only for allowlisted events the Host observed.** The
   event-sourced ledger records committed `session/event` times live for the
-  explicit `ACTIVITY_EVENT_TYPES` allowlist, so long, interrupted, and failed
-  turns that end while the Host runs report exactly. Metadata events
-  (`request/*`, `session/title`, plugin metadata), seed/maintenance variants, and
-  **unknown future event types never advance activity** — they are
-  under-reported until the allowlist grows, never fabricated. Sessions that
-  existed before install rely on a one-time projection-cache baseline
-  (`max(timeContext.lastMessageTime, lastInjectionTime)`, else header
-  **`createdAt` only** — SessionHeader has no `updatedAt`), so a historical,
-  seed-only, or no-cache completion can be under-reported. Writes read-merge
-  per-id maxima across overlapping HMR/Host instances (max semantics only, no
-  generation ordering), and an abrupt process crash before the 750 ms flush can
-  lose the last debounce window (no `fsync` contract). The ledger is a
+  explicit `ACTIVITY_EVENT_TYPES` allowlist covering all known activity-bearing
+  families (turns/steps/messages, tools incl. PTC, jobs, commands, compaction,
+  subagent state, goal/todo, approvals and selection actions,
+  workspace/deliverable/schedule changes, team traffic, image/offload, feedback,
+  inbox splice, LLM retry, tool-workflow progress), so long, interrupted, and
+  failed turns that end while the Host runs report exactly. The explicit
+  `NON_ACTIVITY_EVENT_TYPES` metadata (request headers/context, titles and their
+  LLM requests, end seeds, delivery acknowledgements, web search requests),
+  seed-pattern variants, and **unknown future/plugin event types never advance
+  activity** — they are under-reported until the allowlist grows, never
+  fabricated. Sessions that existed before install rely on a one-time
+  projection-cache baseline (`max(timeContext.lastMessageTime,
+  lastInjectionTime)`, else header **`createdAt` only** — SessionHeader has no
+  `updatedAt`), so a historical, seed-only, or no-cache completion can be
+  under-reported. Writes are **best-effort read-merge-writes**: sequential
+  external writes are preserved, but interleaving concurrent writers can lose
+  one side (TOCTOU; no cross-process lock), designed for a normal single Host
+  plus overlapping HMR rather than multi-host coordination. An abrupt process
+  crash before the 750 ms flush can lose the last debounce window (no `fsync`),
+  and a failed disk write keeps the map in memory without durability (flush and
+  dispose still resolve; the stopped listener will not retry that write). The
+  route waits at most 5 s for the one-time baseline on a fresh install before
+  serving the current map (later polls fill in), and the client's empty-response
+  guard can defer a rare genuine clear by up to 120 s. The ledger is a
   per-DSH-profile Host file capped at 5000 Sessions (oldest entries drop), the
   route serves a live snapshot with no document scan/TTL, and Host code changes
-  need a plugin Host recompose. The **native sidebar keeps the catalog last-prompt
-  times**, so sidebar times can disagree with the card for long runs; after the
-  window expires, retention arithmetic still removes completed rows.
+  need a plugin Host recompose. The **native sidebar keeps the catalog
+  last-prompt times**, so sidebar times can disagree with the card for long runs;
+  after the window expires, retention arithmetic still removes completed rows.
 - **The rainbow ring is decoration for the current row only.** Only the Session
   open in the main view is ringed; merely-running and unopened completed rows are
   not. The animated ring needs Chromium's `@property` — other engines render a
