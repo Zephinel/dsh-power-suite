@@ -4589,13 +4589,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
     const DW_CSS = `
 .psd-panel-slot{flex:none;min-width:0;display:block}
-.psd-panel{margin:2px 8px 6px;border:0.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);overflow:hidden}
+.psd-panel{--psd-time-col:48px;--psd-action-col:22px;--psd-chevron-col:24px;margin:2px 8px 6px;border:0.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);overflow:hidden}
 .psd-panel-head{display:flex;align-items:center;gap:2px;padding:2px 4px 2px 2px}
+.psd-panel-head-time-spacer{flex:none;width:var(--psd-time-col,48px)}
+.psd-panel-head-actions{flex:none;display:inline-flex;align-items:center;justify-content:flex-end;width:var(--psd-action-col,22px)}
 .psd-panel-toggle{appearance:none;display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0;height:30px;box-sizing:border-box;padding:0 8px 0 17px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:var(--dsw-font-xs-13-line-height,20px);font-weight:500;text-align:left;cursor:pointer}
 .psd-panel-toggle:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .psd-panel-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-panel-head-spacer{flex:1 1 auto;min-width:8px}
-.psd-panel-chevron{appearance:none;flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:30px;box-sizing:border-box;padding:0;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.psd-panel-chevron{appearance:none;flex:none;display:inline-flex;align-items:center;justify-content:center;width:var(--psd-chevron-col,24px);height:30px;box-sizing:border-box;padding:0;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .psd-panel-chevron:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
 .psd-panel-chevron:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-panel-chevron[aria-expanded='false'] .psd-chevron{transform:rotate(-90deg)}
@@ -4617,32 +4619,32 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-panel-empty strong{color:var(--dsw-alias-label-secondary);font-weight:500}
 .psd-item{display:flex;flex-direction:column;min-width:0}
 .psd-run{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:28px;padding:0 0 0 7px;border-radius:var(--dsw-radius-md,8px);cursor:pointer}
-.psd-run-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - 76px);align-items:center;padding:4px 0 4px 8px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-run-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;padding:4px 0 4px 8px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-run:hover:not(:has(.psd-run-toggle:hover)) .psd-run-main{background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-run-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
-.psd-run-time{flex:none;width:48px;text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
+.psd-run-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
 .psd-run-head{display:flex;align-items:center;gap:8px;min-width:0;flex:0 1 auto}
 .psd-run-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
 .psd-run-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
 .psd-run-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap;color:var(--dsw-alias-label-primary);font-size:14px;line-height:20px}
 [data-clipped='true'].psd-run-title,[data-clipped='true'].psd-child-title{mask-image:linear-gradient(to right,#000 calc(100% - var(--psd-title-fade,28px)),#0000)}
-.psd-run-toggle{appearance:none;position:relative;z-index:1;flex:none;width:24px;height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.psd-run-toggle{appearance:none;position:relative;z-index:1;flex:none;width:var(--psd-chevron-col,24px);height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .psd-run-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-run-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-run-toggle .psd-chevron{transition:transform 160ms var(--ds-ease-in-out,ease)}
 .psd-run-toggle[aria-expanded='false'] .psd-chevron{transform:rotate(-90deg)}
-.psd-run-toggle-spacer{flex:none;width:24px}
+.psd-run-toggle-spacer{flex:none;width:var(--psd-chevron-col,24px)}
 .psd-children{position:relative;display:flex;flex-direction:column;gap:1px;margin:0 0 4px 22px;padding-left:9px;border-left:1px solid var(--dsw-alias-border-l2)}
 .psd-child{position:relative;display:flex;align-items:center;gap:2px;min-width:0;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:18px;text-align:left;cursor:pointer}
-.psd-child-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - 76px);align-items:center;gap:7px;padding:3px 0 3px 4px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-child-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:7px;padding:3px 0 3px 4px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-child:hover .psd-child-main{background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-child::before{content:'';position:absolute;left:-10px;top:50%;width:14px;height:1px;background:var(--dsw-alias-border-l2);pointer-events:none}
 .psd-child:last-child::after{content:'';position:absolute;left:-10px;top:calc(50% + 1px);bottom:-1px;width:2px;background:var(--dsw-alias-bg-layer-1);pointer-events:none}
 .psd-child-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-child-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
 .psd-child-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap}
-.psd-child-time{flex:none;width:48px;text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
+.psd-child-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
 .psd-hovercard{position:fixed;z-index:1000;box-sizing:border-box;width:${DW_HOVERCARD_WIDTH}px;max-height:min(${DW_HOVERCARD_MAX_HEIGHT}px,calc(100vh - 16px));overflow-x:hidden;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-alias-tooltip-bg,#2c2c2e);color:#fff;box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;font-size:12px;line-height:16px;pointer-events:none}
 .psd-hovercard::-webkit-scrollbar{display:none;width:0;height:0}
@@ -4662,16 +4664,24 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-hovercard-section-title{flex:none;color:#fff}
 .psd-hovercard-section-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#cfd3d6;font-variant-numeric:tabular-nums}
 .psd-hovercard-row-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#cfd3d6;font-variant-numeric:tabular-nums}
-.psd-run{--psd-title-fade:calc(var(--psd-action-width,22px) + 6px)}
-.psd-child{--psd-title-fade:calc(var(--psd-action-width,22px) + 6px)}
-.psd-run-actions{position:absolute;z-index:2;top:50%;right:76px;transform:translateY(-50%);display:flex;align-items:center;justify-content:flex-end;gap:2px;min-width:22px;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
+.psd-run,.psd-child{--psd-title-fade:28px}
+/* Fixed 22 px action slot between the time column and the disclosure column.
+   Main rows hold the New session button here; nested subagent rows hold only
+   Continue when interrupted and stay empty otherwise. The slot keeps its width
+   in every row and state, so every time column ends on the same x. */
+.psd-run-actions{flex:none;display:inline-flex;align-items:center;justify-content:flex-end;gap:2px;width:var(--psd-action-col,22px);min-height:22px;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
 .psd-run:hover .psd-run-actions,.psd-run:focus-within .psd-run-actions,.psd-child:hover .psd-run-actions,.psd-child:focus-within .psd-run-actions{opacity:1;pointer-events:auto}
+/* Continue on an interrupted main row is an overlay over the faded title tail,
+   immediately left of the time column: the 22 px action slot stays reserved for
+   New session, and no fixed column moves when the action appears. */
+.psd-row-continue{position:absolute;z-index:2;top:50%;right:calc(var(--psd-time-col,48px) + var(--psd-action-col,22px) + var(--psd-chevron-col,24px) + 6px);transform:translateY(-50%);opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
+.psd-run:hover .psd-row-continue,.psd-run:focus-within .psd-row-continue{opacity:1;pointer-events:auto}
 .psd-row-action{appearance:none;display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
 .psd-row-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-row-action:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-row-action[data-variant='continue']{color:var(--dsw-alias-state-warn-primary)}
 .psd-interrupted{flex:none;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary)}
-@media (prefers-reduced-motion: reduce){.psd-run-actions{transition:none}}
+@media (prefers-reduced-motion: reduce){.psd-run-actions,.psd-row-continue{transition:none}}
 .psd-group-header{flex:none;display:block;margin:3px 0 0}
 .psd-group-header[data-group='inactive']{margin-top:10px;padding-top:3px;border-top:0.5px solid var(--dsw-alias-border-l1)}
 .psd-group-toggle{appearance:none;display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;padding:4px 8px 4px 10px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:20px;font-weight:500;text-align:left;cursor:pointer}
@@ -5789,56 +5799,99 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     /**
-     * Fixed row trailing action cluster: [Continue (interrupted)] [New session].
+     * Continue CTA for an interrupted Session row: it opens that Session and
+     * requests the continuation; it never opens the row.
      *
-     * It lives inside the row, immediately before the disclosure chevron, in
-     * reserved fixed-width slots that are revealed on row hover/focus-within
-     * through opacity only, so the title/time layout never shifts. Both buttons
-     * stop the row's open handler.
+     * Nested subagent rows put it in the fixed 22 px action slot (they carry no
+     * New session action); main rows render it as the `.psd-row-continue`
+     * overlay over the faded title tail, just left of the time column, because
+     * their fixed slot is reserved for New session and a second flex column
+     * would move the shared time column.
+     * @param {object} props - action props.
+     * @param {Function} props.interruptedT - interrupted-feature translate.
+     * @param {object} props.row - row carrying id.
+     * @param {string} [props.className] - addition class for the overlay form.
+     * @returns {object} the button element.
+     */
+    function DwContinueAction({ interruptedT, row, className }) {
+      const label = interruptedT('continue.aria')
+      return React.createElement('button', {
+        type: 'button',
+        className: className === undefined ? 'psd-row-action' : `psd-row-action ${className}`,
+        'data-variant': 'continue',
+        'aria-label': label,
+        title: label,
+        onClick: (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          requestContinue(row.id)
+        }
+      }, React.createElement(RemixIcon, { path: REMIX_PLAY_FILL, size: 12 }))
+    }
+
+    /**
+     * New session action: creates and opens a blank Session in the row's own
+     * directory. It is anchored on the fixed 22 px action column, so the time
+     * and disclosure columns never move.
      * @param {object} props - action props.
      * @param {Function} props.t - dynamic-Workspaces translate.
-     * @param {Function} props.interruptedT - interrupted-feature translate.
      * @param {object} props.row - row carrying id/workspaceId/cwd.
-     * @param {boolean} props.interrupted - whether this Session was interrupted.
      * @param {Function} props.onNewSession - create-and-open same-directory Session.
-     * @returns {object} the cluster element.
+     * @returns {object} the button element.
      */
-    function DwRowActionCluster({ t, interruptedT, row, interrupted, onNewSession }) {
-      const continueLabel = interruptedT('continue.aria')
-      const newLabel = t('hover.newSession')
-      // The New session slot is reserved on every row so the button lands on one
-      // fixed column; Continue exists only on interrupted rows and is drawn to its
-      // left, so adding it never moves the New session button or the time.
-      const buttons = []
-      if (interrupted) {
-        buttons.push(React.createElement('button', {
-          key: 'continue',
-          type: 'button',
-          className: 'psd-row-action',
-          'data-variant': 'continue',
-          'aria-label': continueLabel,
-          title: continueLabel,
-          onClick: (event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            requestContinue(row.id)
-          }
-        }, React.createElement(RemixIcon, { path: REMIX_PLAY_FILL, size: 12 })))
-      }
-      buttons.push(React.createElement('button', {
-        key: 'new-session',
+    function DwNewSessionAction({ t, row, onNewSession }) {
+      const label = t('hover.newSession')
+      return React.createElement('button', {
         type: 'button',
         className: 'psd-row-action',
         'data-variant': 'new-session',
-        'aria-label': newLabel,
-        title: newLabel,
+        'aria-label': label,
+        title: label,
         onClick: (event) => {
           event.preventDefault()
           event.stopPropagation()
           onNewSession(row)
         }
-      }, React.createElement(DwNewChatGlyph)))
-      return React.createElement('span', { className: 'psd-run-actions' }, buttons)
+      }, React.createElement(DwNewChatGlyph))
+    }
+
+    /**
+     * Fixed 22 px action slot between the time column and the disclosure
+     * column, revealed on row hover/focus-within through opacity only.
+     *
+     * Main rows hold the New session button. Nested subagent rows hold no New
+     * session button (user decision: creating a Session belongs to the main
+     * row) and keep only Continue when interrupted; the slot stays reserved when
+     * empty so a child row's time column ends exactly where a parent row's does.
+     * @param {object} props - slot props.
+     * @param {Function} props.t - dynamic-Workspaces translate.
+     * @param {Function} props.interruptedT - interrupted-feature translate.
+     * @param {object} props.row - row carrying id/workspaceId/cwd.
+     * @param {'main' | 'child'} props.kind - row kind.
+     * @param {boolean} props.interrupted - whether this Session was interrupted.
+     * @param {Function} props.onNewSession - create-and-open same-directory Session.
+     * @returns {object} the slot element.
+     */
+    function DwRowActionSlot({ t, interruptedT, row, kind, interrupted, onNewSession }) {
+      const buttons = []
+      if (kind === 'main') {
+        buttons.push(React.createElement(DwNewSessionAction, {
+          key: 'new-session',
+          t,
+          row,
+          onNewSession
+        }))
+      } else if (interrupted) {
+        buttons.push(React.createElement(DwContinueAction, {
+          key: 'continue',
+          interruptedT,
+          row
+        }))
+      }
+      return React.createElement('span', {
+        className: 'psd-run-actions',
+        'data-empty': buttons.length === 0 ? 'true' : undefined
+      }, buttons)
     }
 
     /**
@@ -6116,10 +6169,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             // Identity glyph swap (user-requested): the all-complete header mark is
             // the DeepSeek brand glyph; the read parent-row mark is the sparkle.
             : React.createElement('span', { className: 'psd-spark' }, RemixGlyph(DW_DEEPSEEK_FILL, 14))),
-        React.createElement('span', { className: 'psd-panel-title' }, t('panel.title')),
-        React.createElement('span', { className: 'psd-count' }, t('count', { count: rows.length })))
+        React.createElement('span', { className: 'psd-panel-title' }, t('panel.title'))),
+        React.createElement('span', { key: 'spacer', className: 'psd-panel-head-spacer', 'aria-hidden': true })
       ]
-      headChildren.push(React.createElement('span', { key: 'spacer', className: 'psd-panel-head-spacer', 'aria-hidden': true }))
       if (expanded && canExpand) {
         headChildren.push(React.createElement('button', {
           key: 'all',
@@ -6128,7 +6180,13 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           onClick: onToggleAll
         }, showAll ? t('panel.showLess') : t('panel.viewAll', { count: rows.length })))
       }
-      // Every disclosure chevron lives at the row's far right.
+      // Header trailing controls share the row grid: the count badge sits on the
+      // reserved action column (its natural width overlaps the empty time column
+      // on its left) and the disclosure chevron closes the same 24 px column as
+      // every row, so header and rows line up vertically.
+      headChildren.push(React.createElement('span', { key: 'time', className: 'psd-panel-head-time-spacer', 'aria-hidden': true }))
+      headChildren.push(React.createElement('span', { key: 'actions', className: 'psd-panel-head-actions' },
+        React.createElement('span', { className: 'psd-count' }, t('count', { count: rows.length }))))
       headChildren.push(React.createElement('button', {
         key: 'chevron',
         type: 'button',
@@ -6166,10 +6224,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             const collapsed = collapsedParents.has(row.id)
             const hasChildren = rowChildren.length > 0
             const interrupted = rowInterrupted(row.id)
-            // Fixed trailing columns keep the same controls on one vertical line for
-            // every parent and child row: [actions 46][time 36][chevron 24], each
-            // separated by the 2 px row gap. The title takes the remaining width and
-            // fades out at its right edge only while it is actually clipped.
+            // Fixed trailing columns, left to right: time 48 px, action 22 px,
+            // disclosure 24 px, each separated by the 2 px row gap. Every parent
+            // and child row reserves all three (child rows keep the action and
+            // disclosure columns empty), so every time ends on one x; the title
+            // takes the remaining width and fades out at its right edge only while
+            // it is actually clipped.
             body.push(React.createElement('div', {
               key: row.id,
               className: 'psd-item',
@@ -6180,7 +6240,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               'data-state': row.state,
               'aria-current': isCurrent(row.id) ? 'true' : undefined,
               'data-actions': interrupted ? 'continue+new' : 'new',
-              style: { '--psd-action-width': interrupted ? '46px' : '22px' },
               onClick: (event) => {
                 const target = event.target
                 if (target instanceof Element && target.closest('button') !== null) return
@@ -6214,14 +6273,22 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                   }, RemixGlyph(REMIX_WARNING_FILL, 13))
                   : null,
                 React.createElement('span', { className: 'psd-run-title' }, row.title))),
-              React.createElement(DwRowActionCluster, {
+              interrupted
+                ? React.createElement(DwContinueAction, {
+                  className: 'psd-row-continue',
+                  interruptedT,
+                  row
+                })
+                : null,
+              React.createElement('span', { className: 'psd-run-time' }, time),
+              React.createElement(DwRowActionSlot, {
                 t,
                 interruptedT,
                 row,
+                kind: 'main',
                 interrupted,
                 onNewSession
               }),
-              React.createElement('span', { className: 'psd-run-time' }, time),
               hasChildren
                 ? React.createElement('button', {
                   type: 'button',
@@ -6251,8 +6318,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                   className: childCurrent ? 'psd-child psd-child-current' : 'psd-child',
                   'data-state': child.state,
                   'aria-current': childCurrent ? 'true' : undefined,
-                  'data-actions': childInterrupted ? 'continue+new' : 'new',
-                  style: { '--psd-action-width': childInterrupted ? '46px' : '22px' },
+                  'data-actions': childInterrupted ? 'continue' : 'none',
                   onClick: (event) => {
                     const target = event.target
                     if (target instanceof Element && target.closest('button') !== null) return
@@ -6289,14 +6355,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                   }, RemixGlyph(REMIX_WARNING_FILL, 13))
                   : null,
                 React.createElement('span', { className: 'psd-child-title' }, child.title)),
-                React.createElement(DwRowActionCluster, {
+                React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t)),
+                React.createElement(DwRowActionSlot, {
                   t,
                   interruptedT,
                   row: childRow,
+                  kind: 'child',
                   interrupted: childInterrupted,
                   onNewSession
                 }),
-                React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t)),
                 React.createElement('span', { className: 'psd-run-toggle-spacer', 'aria-hidden': true }))
               }))
               : null))
