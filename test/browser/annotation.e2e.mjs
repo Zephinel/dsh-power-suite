@@ -104,6 +104,14 @@ function assertNear(actual, expected, tolerance, message) {
   }
 }
 
+/** Privacy-safe summary of a composer draft for logs: never print the draft text itself. */
+function draftPreview(text) {
+  const value = typeof text === 'string' ? text : ''
+  if (value.length === 0) return 'empty (0 chars)'
+  const head = value.slice(0, 8).replace(/\s+/g, ' ')
+  return `${value.length} chars, starts "${head}${value.length > 8 ? '…' : ''}"`
+}
+
 function short(value, max = 220) {
   const text = typeof value === 'string' ? value : JSON.stringify(value)
   return text.length > max ? text.slice(0, max) + '…' : text
@@ -2165,7 +2173,7 @@ class Harness {
       blank.ok,
       `refusing to type/insert into a non-blank session (${label}): ` +
         `session=${blank.sessionId} messages=${blank.messages} turns=${blank.turns} ` +
-        `draft=${JSON.stringify(blank.draft)} editorImages=${blank.editorImages} attachments=${blank.attachments}`
+        `draft=${draftPreview(blank.draft)} editorImages=${blank.editorImages} attachments=${blank.attachments}`
     )
     this.track(blank.sessionId, 'blank-session')
     return blank
@@ -2623,7 +2631,11 @@ function buildScenarios(harness) {
         }
         return null
       })
-      assert(sidebarReset !== null, 'could not reset the sidebar workspace list scroll position')
+      if (sidebarReset === null) {
+        // NIT-5: the workspace list may be non-scrollable (already at the top) — that is a valid
+        // state, so do not fail setup; continue with the visible rows.
+        log('      S6: sidebar workspace list is not scrollable; assuming it is already at the top')
+      }
       await sleep(400)
       // ---- Part A: truly removed targets must be marked stale.
       // Target A (hard assertion): a workspace row with a stable data-row-key. The native
@@ -3375,7 +3387,7 @@ async function captureScreenshots(harness) {
         `[${name}] composer must contain only the inserted structured request: ${short(composerText, 220)}`
       )
     } else {
-      assertEqual(composerText, '', `[${name}] refusing capture: composer draft is not empty: ${short(composerText, 160)}`)
+      assertEqual(composerText, '', `[${name}] refusing capture: composer draft is not empty: ${draftPreview(composerText)}`)
     }
     // --- H12: viewport / layout / launcher geometry assertions ---
     const viewport = await h.page.evaluate('({ width: innerWidth, height: innerHeight })')
@@ -3438,7 +3450,7 @@ async function captureScreenshots(harness) {
   if (!blank.ok) {
     log(
       `      screenshot session ${blank.sessionId ?? '(none)'} is not blank ` +
-        `(messages=${blank.messages}, draft=${JSON.stringify(blank.draft)}, attachments=${blank.attachments}); ` +
+        `(messages=${blank.messages}, draft=${draftPreview(blank.draft)}, attachments=${blank.attachments}); ` +
         'creating a fresh blank session'
     )
     blank = await h.createBlankSessionViaHover()
@@ -3609,7 +3621,10 @@ async function createBlankSessionViaHover(page, state) {
     await sleep(650)
     const blank = await readBlankState(page)
     if (blank.ok) return blank
-    failures.push(`${action.label}: opened ${sessionId} but it is not blank (messages=${blank.messages}, draft=${JSON.stringify(blank.draft)})`)
+    failures.push(
+      `${action.label}: opened ${sessionId} but it is not blank ` +
+        `(messages=${blank.messages}, draft=${draftPreview(blank.draft)}, attachments=${blank.attachments})`
+    )
     return null
   }
   /** Hover the visible workspace rows and try their "New session in <workspace>" actions. */
@@ -3709,7 +3724,7 @@ async function ensureBlankSession(page, state) {
     if (blank.sessionId !== null) trackSession(state, blank.sessionId, 'non-blank-session-not-used')
     log(
       `      restored session ${blank.sessionId ?? '(none)'} is not blank ` +
-        `(messages=${blank.messages}, turns=${blank.turns}, draft=${JSON.stringify(blank.draft)}, ` +
+        `(messages=${blank.messages}, turns=${blank.turns}, draft=${draftPreview(blank.draft)}, ` +
         `editorImages=${blank.editorImages}, attachments=${blank.attachments}); creating a fresh blank session`
     )
     blank = await createBlankSessionViaHover(page, state)
@@ -3718,7 +3733,8 @@ async function ensureBlankSession(page, state) {
   assert(
     blank.ok,
     `the harness could not confirm a blank session before typing/inserting ` +
-      `(requires session root + composer + lexical editor + Chat view + 0 messages/turns + empty draft + no attachments): ${JSON.stringify(blank)}`
+      `(requires session root + composer + lexical editor + Chat view + 0 messages/turns + empty draft + no attachments): ` +
+      `${JSON.stringify({ ...blank, draft: draftPreview(blank.draft) })}`
   )
   trackSession(state, blank.sessionId, 'blank-session-used')
   await sleep(400)

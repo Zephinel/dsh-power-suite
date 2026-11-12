@@ -11353,9 +11353,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (!isActive()) {
           // Defensive cleanup: no state says "active", but an interrupted activation or a
           // foreign removal could still have page-level leftovers. None of these calls
-          // depend on the reducer, so they are always safe.
+          // depend on the reducer, so they are always safe. The resolved-node cache and
+          // its body observer are cleared here too, so this defensive path cannot leave
+          // them behind (NIT-6).
           uninstallPageListeners()
           disconnectFrameObserver()
+          clearResolvedNodeCache()
           restoreAnnotationLayout()
           return
         }

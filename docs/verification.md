@@ -137,10 +137,10 @@ network noise in every run below; smoke passed 6/6 in every run (32-key seam).
   native Plugins view → stable activation (same 2×500 ms predicate as S1) → Alt
   pass-through/contextmenu oracle; `--scenario 6` (49.4 s, log
   `/tmp/psa-target6.log`) PASS after mode-off → conversation → stable activation
-  → cleared collection → sidebar scroll reset → current-scope target recorded →
-  native collapse → strict `missing` + stale marker, then F8/F9/mixed scope. The
-  same-identity in-place replacement is recorded as evidence only; the true-removal
-  case is not relaxed. These targeted PASS runs are the same-build evidence that
+  → cleared collection → sidebar list state normalized (scroll reset when the list
+  is scrollable) → current-scope target recorded → native collapse → strict
+  `missing` + stale marker, then F8/F9/mixed scope. The same-identity in-place
+  replacement is recorded as evidence only; the true-removal case is not relaxed. These targeted PASS runs are the same-build evidence that
   the full-run S2/S6 failures were harness state precision rather than product
   behavior.
 
@@ -159,7 +159,7 @@ exited 1 with `FAIL gate-feature` (`PASS 4 / FAIL 12`), and `--scenario 10` exit
 | 3 | Wheel scrolling and shortcuts are untouched; marquee; Esc ladder | PASS (full run) — a real wheel changed the native scroll position with 0 `preventDefault`; Meta+K, Control+L, and plain letters arrived unprevented; Shift+drag drew a box and selected a candidate; the F6 Esc chain was: first Esc ended note editing and kept the popover and typed note, second Esc cleared the selection, third Esc left the mode |
 | 4 | Shift+click multi-select; collection add/update/note/remove | PASS (full run) — 3 Shift+clicks produced 3 multi outlines and the rail count; add-all de-duplicated and updated on re-add (Add → Update); inline note edit and remove worked |
 | 5 | Batch insert order, existing draft preserved, never sent, composer focused | PASS (full run) — one ordered numbered block per collection entry with the block count equal to the entry count, non-empty names, each note inside its own block (or the empty-note placeholder), the pre-existing draft kept verbatim before the header, no message sent, composer focused |
-| 6 | Removed targets are stale; genuinely mixed cross-session scope; no page mutation | PASS (targeted `--scenario 6` and the completion run; the full run failed with inherited state — see above) — the self-contained rerun clears the collection, resets the sidebar scroll, and records the target as a current-scope entry before the native collapse, then strictly reads `data-psa-status="missing"` and inserts the explicit `Status: target no longer resolves` line; a row rebuilt by sidebar virtualization accepts `missing`, `ambiguous`, `changed`, or `resolved`. A second genuinely blank Session created through the native hover action makes the mixed state real: every pre-switch entry becomes `data-psa-entry-scope="other"` with `data-psa-status="other"`, batch insert is disabled with the cross-session notice, and the inserted block contains exactly one numbered current-session block plus a skip line whose extracted count equals the other-scope entry count. A leak check over every other-scope entry's name, note, and locator text (tokens of 6+ characters) proves none reached the composer; re-locate is invoked on the other-scope row's own control, shows the exact localized refusal, and does not scroll |
+| 6 | Removed targets are stale; genuinely mixed cross-session scope; no page mutation | PASS (targeted `--scenario 6` and the completion run; the full run failed with inherited state — see above) — the self-contained rerun clears the collection, normalizes the sidebar list state (scroll reset when possible), and records the target as a current-scope entry before the native collapse, then strictly reads `data-psa-status="missing"` and inserts the explicit `Status: target no longer resolves` line; a row rebuilt by sidebar virtualization accepts `missing`, `ambiguous`, `changed`, or `resolved`. A second genuinely blank Session created through the native hover action makes the mixed state real: every pre-switch entry becomes `data-psa-entry-scope="other"` with `data-psa-status="other"`, batch insert is disabled with the cross-session notice, and the inserted block contains exactly one numbered current-session block plus a skip line whose extracted count equals the other-scope entry count. A leak check over every other-scope entry's name, note, and locator text (tokens of 6+ characters) proves none reached the composer; re-locate is invoked on the other-scope row's own control, shows the exact localized refusal, and does not scroll |
 | 7 | Exit cleans up completely and restores a pre-existing inline layout | PASS (full run and completion run) — a sentinel `padding-right: 13px` set before activation is restored exactly; the MutationObserver timeline contains a record with `data-psa-active === null` while `data-psa-frame` is still present and the sentinel padding restored (the reverse transition); the marker then had to disappear within up to 15 s of polling (raised from 5 s only to tolerate a busy main thread; disappearance is still mandatory and was observed). `--psa-rail-width` removed, inline grid byte-identical, 0 overlay nodes, one inactive launcher, native clicks worked again |
 | 8 | Launcher drag/resize/scroll/reload geometry; interrupted gesture cleanup | PASS (completion run; the full run hit a late-run CDP input timeout) — an interrupted drag ended by Esc neither toggled the mode nor persisted the position and left no `data-psa-dragging`/box node; real drags clamped with the 8 px margin; after the 1000 x 700 override the launcher was fully inside the viewport; a missing scrollable region fails the scenario; wheel scrolling did not move the launcher; after reload the mode started off and the remembered position came back |
 | 9 | Collection view keeps the rail/frame geometry; exit restores the baseline | PASS (completion run; the full run cascaded from S8) — opening and closing the collection left frame padding and canvas width unchanged and kept the rail in the right strip without a wide drawer; exit restored the pre-mode canvas width and inline grid |
@@ -191,9 +191,15 @@ byte sizes are unchanged by the targeted runs and are embedded in
 - [annotation-inserted.png](assets/annotation-inserted.png) — 200244 B — the
   ordered structured batch request inserted into the composer, not sent.
 
-Independent targeted re-review (round 2, R1–R3 plus the docs/harness
-corrections): result pending the Lead's final message; this line is replaced with
-the reviewer's verdict when it arrives.
+Independent targeted re-review (round 3, fresh read-only subagent, 2026-11-12):
+**merge-ready: yes** — no BLOCKER/MAJOR/MINOR findings. Verified R1 resolver
+semantics + DOM-revision cache (ordinary `p`/`li`/anonymous controls resolve;
+stable ambiguity terminal; no stale-first-hit), R2 real `session-<uuid>` session
+attribute preserved, R3 sanitizer shapes, S2/S6 self-contained harness fixes
+(true-removal still strictly `missing`), the three-source per-scenario evidence
+chain, and the documentation corrections. Remaining items were publication NITs
+only (this verdict line and the harness README stale sentence); no code/test
+changes required.
 
 Known evidence limits:
 

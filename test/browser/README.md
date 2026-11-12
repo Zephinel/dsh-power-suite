@@ -267,12 +267,15 @@ but do not fail the run (they are not page errors or same-origin HTTP failures).
   row status and a late marker removal in S6/S7 — with 0 page errors and 0 real network
   failures. Their cause is **not proven**; they are reported as observed harness/live-GUI
   timing effects with per-scenario same-build PASS evidence, not dismissed. A single green
-  full-suite run was not achieved; per-scenario evidence on build
-  `e0fdbc23d0dcbbfce5d1292f64850071`: S1-S5 in the 00:47 full run; S6-S9 in the same-build
-  `--from 6` run (exit 0); smoke 6/6 in every run. H1 gate proofs on this harness:
-  feature-absent client → exit 1 with `FAIL gate-feature` (`PASS 4 / FAIL 12`);
-  `--scenario 10` / `--from 10` → exit 2 with an argument error. The round-2 final run is
-  recorded in the "Current evidence" section once it has been executed.
+  full-suite run was not achieved on any build.
+  *Superseded historical evidence — round-1 build `e0fdbc23d0dcbbfce5d1292f64850071`
+  (round-1 build, superseded; kept for history only):* S1-S5 in its 00:47 full run and S6-S9 in
+  its same-build `--from 6` run (exit 0), smoke 6/6. This is **not** evidence for the current
+  build — the authoritative per-scenario record for the round-2 build
+  (`37388d3f9d1de0584b62bc111c6b6043`) is the "Current evidence (round 2, final build)" section
+  above (full run + same-build completion run + targeted S2/S6 runs). H1 gate proofs on this
+  harness: feature-absent client → exit 1 with `FAIL gate-feature` (`PASS 4 / FAIL 12`);
+  `--scenario 10` / `--from 10` → exit 2 with an argument error.
 - **Observed late-run instability (cause not established)**: see the "Environmental failures were
   observed…" bullet above; the harness keeps per-scenario evidence and does not retry more than
   the guarded retries described there.
