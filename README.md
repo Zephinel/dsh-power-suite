@@ -19,21 +19,25 @@ shows one plugin whose inventory grows with the suite.
 | [UI element annotation](docs/ui-annotation.md) | A floating launcher toggles a point-and-click annotation mode in which the page makes room for a narrow right rail instead of being covered; hovering outlines the element a click would select, a note popover records the requested change, and one localized reference or one ordered batch is inserted into the current composer without sending — with multi-select, marquee, ancestor adjustment, and a hold-to-pass-through modifier. |
 | [Settings](docs/settings.md) | The bundle's Plugins page carries its own configuration section: the prompt-history modifier plus the two Dynamic Workspaces retention windows (finished Sessions and Active projects). |
 
-New in 0.3.0:
+New in 0.3.0 (unreleased; planned version, no release date or tag yet):
 
 - **UI element annotation** — a round launcher toggles a point-and-click
   annotation mode in which the page makes room for a narrow right rail instead
   of being covered: hovering outlines the element a click would select, and a
-  compact popover records a note and inserts a structured plain-text reference
-  into the current composer through the shell's own insertion API, without
-  sending. Selection is isolated from the page (clicking a native control never
+  compact popover records a note (inserted verbatim, line breaks preserved) and
+  inserts a structured plain-text reference into the current composer through the
+  shell's own insertion API, without sending; opening the Project page leaves
+  annotation mode and hides the launcher. Selection is isolated from the page (clicking a native control never
   triggers it), the multi-select modifier toggles elements or draws a marquee,
   holding the pass-through modifier restores real native left and right clicks,
   and the collection keeps ordered session-scoped entries with per-entry notes,
   de-duplication, re-locate, stale/ambiguous status markers, and one ordered
   batch insert request.
 
-New in 0.2.0:
+New in 0.2.0 (development snapshot — never tagged or released; undated):
+
+> The package carried version 0.2.0 while this work landed; no release tag was
+> cut. The next planned release is **0.3.0**, still unreleased/undated.
 
 - **Session artifacts for provided attachments** — the Artifacts card now also
   lists the images and files the human attached to their prompts, de-duplicated

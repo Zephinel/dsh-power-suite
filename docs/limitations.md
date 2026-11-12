@@ -139,16 +139,20 @@
   its baseline is within **1000 ms** of the current activity, so a very small
   genuine change could keep a stale ack; metadata-only bumps cannot. Pushes are
   chunked (≤200 entries / ~48 KiB, one POST in flight): network, 5xx,
-  **408/425**, and 429 failures stay queued, other permanent non-retryable 4xx
-  drop **only that batch immediately**, and the local cache and pending map are
-  each capped at 1000 (pending entries dropped by the cap stay in the local map
-  and re-migrate later); **408/425 classification is client-only code with no
-  node test**. The sync awaits the actual in-flight push promise before fetching
+  **401/403/408/425**, and 429 failures stay queued, other permanent
+  non-retryable 4xx drop **only that batch immediately**, and the local cache and
+  pending map are each capped at 1000 (pending entries dropped by the cap stay in
+  the local map and re-migrate later); **401/403/408/425 classification is
+  client-only code with no node test**. A non-ENOENT read failure returns a
+  no-store `500 { code: "store-read-failed" }` for GET and POST and is never
+  cached as empty (the store refuses to overwrite unreadable marks); these
+  read-error paths are unit/`chmod`-tested only, not live-forced. The sync awaits the actual in-flight push promise before fetching
   activity (so no push is in flight when the activity request starts), which can
   delay that fetch by the push duration. The browser `localStorage` cache is per
   browser origin, while the Host documents are shared per `$DSH_HOME`. The two
-  Host routes need a plugin reload / Host recompose after upgrading, and old
-  local marks are uploaded once when DSH is first opened with the new Host.
+  Host routes need a plugin reload / Host recompose after upgrading, and the
+  migration POST runs **per mount** (it re-uploads the browser's local cache each
+  time), not once per upgrade.
 - **One-time read-mark caveat from the superseded mtime build.** During the
   short-lived mtime-floor iteration some acknowledgement baselines were inflated
   (for example `78f7a4a7…`). Baselines are max-monotonic: opening the Session
@@ -159,7 +163,7 @@
 - **Activity is exact only for allowlisted events the Host observed.** The
   event-sourced ledger records committed `session/event` times live for the
   explicit `ACTIVITY_EVENT_TYPES` allowlist covering known activity-bearing
-  families (turns/steps/messages, tools incl. PTC, jobs, commands, compaction,
+  families (turns/steps/messages, tools incl. PTC dispatch, jobs, commands, compaction,
   subagent state, goal/todo, approvals and selection actions,
   workspace/deliverable/schedule changes, team traffic, image/offload, feedback,
   inbox splice, LLM retry, tool-workflow progress, plus
@@ -189,11 +193,14 @@
   that is still pending; if that wait times out, the route serves the current map
   for the next 30 s without waiting while background seeding continues, and a
   permanently hung listing can cause another ≤5 s wait after each backoff
-  window. A seed that **fails/rejects** settles silently with no backoff and no
-  retry — seeded history never appears for this process (until a Host recompose/
-  restart), and only live committed events keep advancing activity; the route
-  never 500s, and per-session cache-document read failures are skipped (not
-  retried). The client merges activity per-id with `max(previous, next)` and
+  window. A seed that **fails/rejects** may set the immediate-serve backoff, but
+  the promise then settles and is **never retried** — seeded history never
+  appears for this process (until a Host recompose/restart); a `listSessions()`
+  rejection is swallowed and settles the same way. Only live committed events
+  keep advancing activity; the route never 500s, and per-session
+  cache-document read failures are skipped (not retried). Only **ENOENT** counts
+  as empty for the ledger: other read errors keep memory, skip the empty rewrite,
+  retry the load, and abort a write that cannot read the document. The client merges activity per-id with `max(previous, next)` and
   prunes only against a non-empty Session catalog, so partial/empty responses
   and HMR overlap cannot drop known activity; a genuinely empty catalog never
   prunes (stale entries may remain but no rows show), and a genuine clear does
@@ -323,6 +330,11 @@
   subset hash and requested focus Session. Unreadable Session logs are skipped
   with a warning that carries a bounded error identity rather than failing the
   page.
+- **Annotation mode is not usable while the Project page is open.** Opening the
+  page dispatches `power-suite:ui-annotation-exit`, deactivates annotation, and
+  hides the launcher; the page's Esc ladder closes the page first, then the
+  launcher returns with annotation still off. There is no mixed mode or z-index
+  negotiation beyond that page-exit handoff.
 - **NIT-level rough edges (accepted).** Run rows without expandable job records
   are still focusable buttons (Enter is a no-op); the Project page has no focus
   trap and does not return focus to the sidebar trigger on close; the page's
@@ -358,6 +370,28 @@
 - **Localization.** The Project view ships English and Chinese copy; live checks
   ran against the English GUI, so the Chinese strings are code-reviewed but not
   live-exercised.
+
+## UI element annotation
+
+- **Not keyboard-navigable for annotation itself.** The mode is pointer-driven
+  (launcher, hover, selection, popover); native keyboard shortcuts keep working
+  while it is active, but there is no keyboard path to annotate an element. This
+  is accepted for the current release.
+- **Marquee cap.** A marquee adds at most the 24 most specific intersecting
+  candidates, not every intersecting element.
+- **Coexistence with the Project page is resolved by page-exit only.** Opening
+  the Project page exits annotation and hides the launcher; annotation cannot be
+  used while the page is open, and there is no mixed z-index mode.
+- **Evidence traceability.** The annotation E2E acceptance evidence was recorded
+  on the pre-merge annotation build (final publication md5 `10dd3b72…` / branch
+  commit `fd8ccc9`, round-2 build `37388d3f…`); the merged build (`572b8fa1…`)
+  was not re-run through the harness — after the merge only an installed-page
+  smoke checked the launcher and rail markers. The logs it quotes live in `/tmp`
+  and are external development artifacts, not repository files.
+- **No client node harness for the pointer chain or sync internals.** The lazy
+  hover chain/descriptor behavior and the client ack flush/401-403/merge rules
+  live in the unexported browser bundle; they are code-reviewed (and the chain is
+  measured by the E2E harness), not unit-tested.
 
 ## Raw artifacts and implicit continuation
 

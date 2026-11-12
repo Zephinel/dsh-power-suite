@@ -92,8 +92,9 @@ reviewed files) to publish `docs/assets/annotation-idle.png`, `annotation-mode.p
 ## Gate semantics (H1)
 
 - `--smoke` is a pipeline-only mode, but it still fails (non-zero exit) when the injected client
-  fails to load, does not expose the frozen 31-key test seam, or does not mount the annotation
-  surface.
+  fails to load, does not expose the documented test-seam generation (the harness accepts the
+  round-1 **31-key** generation or the current **32-key** generation that adds
+  `resolveNodeCandidate`), or does not mount the annotation surface.
 - `full` / `--shots-only` with a client that has no annotation feature: a **FAIL** row is
   recorded and the process exits non-zero. A feature-absent client can never produce a green
   run. Example proof: `node test/browser/annotation.e2e.mjs --client /tmp/ps-annotation/baseline-client.js`
@@ -106,7 +107,14 @@ reviewed files) to publish `docs/assets/annotation-idle.png`, `annotation-mode.p
   fatal error; `2` only for usage/argument errors (`--scenario 10`, `--from 10`, missing value,
   `Network` setup failure is NOT a usage error and exits 1).
 
-## Current evidence (round 2, final build)
+## Current evidence (round 2, pre-merge annotation build)
+
+> This acceptance evidence was recorded on the pre-merge annotation branch (final
+> publication build `50a1bb3` / `src/client.js` md5 `10dd3b72…`, branch commit
+> `fd8ccc9`; the round-2 build above is `aaab678` / `37388d3f…`). The merged build
+> (`572b8fa1…`, after merging into `feat/dynamic-workspaces`) was **not re-run**
+> through this harness; after the merge only an installed-page smoke verified the
+> launcher and rail markers. Do not read this record as merged-build E2E evidence.
 
 Environment: worktree `src/client.js` md5 `37388d3f9d1de0584b62bc111c6b6043` (commit `aaab678`,
 seam 32 keys incl. `resolveNodeCandidate`), Chrome 157.0.8103.78, Node v24.22.2, live GUI at
@@ -167,7 +175,7 @@ log `/tmp/psa-shots-round2.log`), all capture assertions passing: `annotation-id
 
 | # | Scenario | Oracle |
 |---|----------|--------|
-| smoke | Pipeline + feature surface | injection factory ran; frozen seam is pinned to the documented generation and count — **31 keys** on the round-1 seam, **32 keys** once the round-2 `resolveNodeCandidate` key is present (the harness requires exactly the matching count, always requires `textDigest`, and requires `resolveNodeCandidate` when the 32-key generation is detected); the rail is a descendant of `[data-shell-overlay]`; exactly one launcher; the annotation stylesheet hides the native prompt-history rail while active; blank session verified |
+| smoke | Pipeline + feature surface | injection factory ran; the seam matches a documented generation and count — **31 keys** on the round-1 seam, **32 keys** on the current generation with `resolveNodeCandidate` (the harness requires exactly the matching count, always requires `textDigest`, and requires `resolveNodeCandidate` when the 32-key generation is detected); the rail is a descendant of `[data-shell-overlay]`; exactly one launcher; the annotation stylesheet hides the native prompt-history rail while active; blank session verified |
 | 1 | Activate via a real launcher click; layout shrinks and the rail appears and stays; native New Session is blocked | activation polls `html[data-psa-active]` + `[data-psa-rail]`, then re-verifies the rail twice 500 ms apart (**N1**); if the rail disappears it exits, retries activation once, re-verifies, and otherwise fails with the live environment snapshot. Then: `frame[data-psa-frame]`, `padding-right` equals computed rail width (±2 px), inline grid untouched; rail is **right-anchored** (`rail.right == innerWidth ±2`, `rail.left == innerWidth - railWidth ±2`); blocked real click: 0 hits on the native control's own listeners, ≥1 `preventDefault`, session id / sidebar row count / view unchanged |
 | 2 | Alt pass-through restores real native semantics; no-session notice; native context menu is not intercepted | Real Alt+click on New Session reaches the native handler and opens a conversation; `html[data-psa-passthrough]` only while held; the rail shows `[data-psa-no-session]` while no session is mounted and hides it once one is; hover outline absent while the modifier is held (F10); contextmenu oracle via `Event.prototype.preventDefault` log plus a document-start bubble-phase recorder: blocked right-click is prevented, never reaches the bubble listener, Alt+right-click appears exactly once with `defaultPrevented === false` |
 | 3 | Wheel scrolling and browser shortcuts are untouched; marquee; Esc ladder | native scrollable scrollTop changes and 0 wheel `preventDefault` (conversation scroll region when scrollable, otherwise the sidebar list — stated in the evidence); Meta+K / Control+L / plain letters delivered with `defaultPrevented === false`; Shift+drag draws `[data-psa-box]` and selects ≥1 candidate; F6 Esc ladder: first Esc ends note editing and keeps the popover + typed note, second Esc clears the selection, third Esc leaves the mode |
@@ -231,6 +239,11 @@ but do not fail the run (they are not page errors or same-origin HTTP failures).
   time, so a blank-draft → blank-draft switch cannot be reached from the UI; scenario 6 creates
   a second *genuinely blank* session through the native "New session in &lt;workspace&gt;" hover
   action and then asserts the mixed current/other-session scope.
+- **Evidence files are external development artifacts.** Every log path quoted in this
+  README lives under `/tmp` and is not part of the repository; the per-scenario PASS/FAIL
+  record above is the traceable in-repo summary, and the raw logs cannot be re-checked from a
+  clean checkout. The live E2E evidence is also **pre-merge**: the merged build
+  (`572b8fa1…`) was not re-run through the harness.
 - **Wheel over the conversation**: a blank session has an empty, non-scrollable conversation, so
   the wheel assertion uses the nearest native scrollable region (the sidebar session list) and
   states that in the evidence; scenario 8 fails if no scrollable region exists at all.
@@ -288,6 +301,14 @@ but do not fail the run (they are not page errors or same-origin HTTP failures).
   covered by the pure-model tests where exposed.
 - **Single device + language**: the E2E runs at 1728x900 on one DSH deployment in the active UI
   language; ZH copy is exercised by the unit tests, not end-to-end.
+- **Coverage gaps in the recorded acceptance**: no single fully-green full-suite run exists
+  (the record is a three-source per-scenario composite); scenario 5 does not assert the
+  mid-draft caret or a one-undo step; there is no ZH end-to-end run and no keyboard-isolation
+  scenario. These are gaps in the evidence, not claims about product behavior.
+- **Pre-merge evidence, not merged-build evidence**: the recorded runs targeted the pre-merge
+  annotation build (`10dd3b72…`/`fd8ccc9`, round-2 `37388d3f…`); the merged build (`572b8fa1…`)
+  was not re-run through this harness — after the merge only an installed-page smoke verified
+  the launcher and rail markers.
 - **Ego-browser / other automation layers** may refuse clicks behind the annotation popover
   (`role="dialog"`); raw CDP input used here is unaffected. Dismiss the selection with Esc before
   clicking underlying page controls in other tools.

@@ -22,9 +22,13 @@ npm run pack:check
 
 Current evidence (2026-11-12, Node 24.22.2):
 
-- `npm test`: **163 tests, 163 passed, 0 failed, 0 skipped** — 73 base
-  tests, 38 read-acks/session-activity Host tests, and 52 UI-element-annotation
-  tests through the browser-factory test seam.
+- `npm test`: **171 tests, 171 passed, 0 failed, 0 skipped** — 73 base tests
+  (56 other suites + 17 project-view), plus 7 more project-view tests (24
+  current), 13 read-acks, 21 session-activity Host tests, and **57**
+  UI-element-annotation tests through the browser-factory test seam; per-file:
+  interrupted-host 14, interrupted-sessions 6, project-view 24, prompt-history 6,
+  read-acks 13, session-activity 21, session-artifacts 16, settings 6,
+  ui-annotation 57, workspace-presets 8.
 - `npm run check`: passed (`18 modules, 10 test files`).
 - `npm run pack:check`: **78 files** (0.3.0 tarball), including `src/`,
   `locale/`, `docs/` (with the Project page/rail states/sidebar switch,
@@ -48,7 +52,8 @@ Current evidence (2026-11-12, Node 24.22.2):
   folds and route (turn status map, job association, the canonical measured-turn
   rule, the 40/200/24 caps, stats and recent-activity derivation, parameter
   validation and 25 s cache behavior), the read-acks store/route (schema,
-  sanitization, max-merge, 1000-entry cap, 415/413/400/500), and the
+  sanitization, max-merge, 1000-entry cap, 415/413/400/500 including the
+  non-ENOENT read-error paths exercised with `chmod`), and the
   event-sourced activity ledger (store max-merge/cap/atomic persistence,
   best-effort read-merge writes with a TOCTOU window, flush/dispose durability
   including an in-flight write and repeated dispose, record→dispose→reload, 20
@@ -57,11 +62,14 @@ Current evidence (2026-11-12, Node 24.22.2):
   baseline with the now+60 s future clamp, and the seed-timeout **backoff**
   route behavior: first GET bounded, backoff GETs fast, release picks up seeded
   values). The failed-disk-write path and the client's 408/425 retry
-  classification are **not** node tests — see the manual/code-reviewed note
-  below.
+  classification and the client 401/403 retry rule are **not** node tests — see
+  the manual/code-reviewed note below. The annotation E2E acceptance evidence is **pre-merge** and was not
+  re-run on the merged build; the lazy hover chain's zero-`textContent` claim is
+  E2E-instrumented, not a node test.
 - The UI element annotation mode adds no Host route, service, or Session-log
-  write; its pure model is covered by 52 `node:test` cases through the browser
-  factory test seam, and its live behavior by the acceptance harness below.
+  write; its pure model is covered by **57** `node:test` cases through the
+  browser factory test seam, and its live behavior by the pre-merge acceptance
+  harness below (not re-run on the merged build).
 - Host routes are covered by tests where they exist: Dynamic Workspaces'
   card state is browser-derived but Host-backed through the read-acks store/route
   and the session-activity ledger route (16 MiB document guard, allowlist
@@ -87,10 +95,14 @@ subagent: true`; two completed control Sessions stayed `interrupted: false`.
 
 ## UI element annotation acceptance
 
-> Recorded on the annotation feature branch before this merge. After merging into
-> `feat/dynamic-workspaces` the combined suite is 163/163 and `npm run check` reports
-> `18 modules, 10 test files` with a 78-file 0.3.0 tarball; the per-scenario evidence
-> below was taken on the pre-merge annotation build and is unaffected by the merge.
+> **Pre-merge annotation evidence.** Recorded on `fix/ui-annotation-review-fixes`
+> (final publication build `50a1bb3`, `src/client.js` md5 `10dd3b72…`; branch
+> commit `fd8ccc9`) **before** the merge into `feat/dynamic-workspaces`. The
+> merged build (`572b8fa1…`) was **not re-run** through the E2E harness — after
+> the merge only an installed-page smoke checked the launcher and rail markers.
+> The merged suite is **171/171**, `npm run check` **18 modules / 10 test files**,
+> and the tarball **78 files** (0.3.0); the per-scenario record below remains
+> pre-merge evidence, not merged-build evidence.
 
 Date: 2026-11-12 (round-2 fix build, `fix/ui-annotation-review-fixes`). The
 feature is browser-only ([ui-annotation.md](ui-annotation.md)), so its acceptance
@@ -124,12 +136,14 @@ This is the final acceptance record for the planned 0.3.0 release after two revi
 fix rounds: round 1 resolved F1–F18, round 2 resolved R1–R4 and the harness
 findings N1–N6/H10.
 
-Final publication build: commit `50a1bb3`, `src/client.js` md5 `10dd3b72…`. The
-acceptance run recorded above was taken on `37388d3f…`; the only delta is the
-review-requested defensive cleanup in `deactivate()`'s already-off early return
-(clears the resolved-node cache/observer; that branch is not exercised by any
-scenario). `npm test` 125/125 and `npm run check` are green on the final build; no
-acceptance behavior changed.
+Final publication build: commit `50a1bb3`, `src/client.js` md5 `10dd3b72…` (branch
+commit `fd8ccc9`). The acceptance run recorded above was taken on `37388d3f…`;
+the only delta is the review-requested defensive cleanup in `deactivate()`'s
+already-off early return (clears the resolved-node cache/observer; that branch is
+not exercised by any scenario). On that pre-merge build `npm test` was 125/125
+and `npm run check` green; the merged tree is 171/171 / 18 modules / 10 test
+files / 78-file pack. The harness itself was not re-run after the merge, so no
+merged-build E2E claim is made.
 
 Run:
 
@@ -143,14 +157,15 @@ node test/browser/annotation.e2e.mjs --shots-only --assets   # screenshots
 
 Automated gates on this build:
 
-- `npm test`: **125 tests, 125 passed, 0 failed, 0 skipped** — the 73 existing
-  tests plus 52 annotation model tests, including the round-2 resolver and
-  sanitizer regressions. The round-2 regression tests were red on the round-1
-  build (`e0fdbc23…`) and green on this build.
-- `node --check src/client.js`: passed.
-- `npm run check`: passed (`14 modules, 8 test files`).
-- `npm run pack:check`: **63 files** in the planned 0.3.0 tarball, including the
+- Pre-merge annotation build gates: `npm test` **125 tests, 125 passed, 0
+  failed, 0 skipped** (73 existing + 52 annotation model tests, including the
+  round-2 resolver/sanitizer regressions; red on round-1 `e0fdbc23…`, green on
+  this build); `node --check src/client.js` passed; `npm run check` passed
+  (`14 modules, 8 test files`); `npm run pack:check` **63 files** including the
   five annotation captures.
+- Merged tree gates (current): `npm test` **171/171**, `npm run check` passed
+  (`18 modules, 10 test files`), `npm run pack:check` **78 files**. No merged-build
+  E2E run exists (see the pre-merge note above).
 
 Acceptance result: **no single fully-green full-suite run exists for this build.**
 The complete per-scenario PASS evidence on md5 `37388d3f…` comes from three
@@ -518,9 +533,11 @@ These were exercised in the Web GUI during development:
   interleaving writers can lose one side (TOCTOU); a failed disk write keeps the
   map in memory without durability (flush/dispose resolve; not retried after
   dispose).
-- The 10× gate run was clean: `npm test` **10/10 runs exited 0 with 111/111
-  passing each**; `npm run check` **10/10 exited 0 with fail 0** (18 modules, 9
-  test files); the final `npm run pack:check` was **72**.
+- **Pre-merge historical gate evidence (`feat/dynamic-workspaces` at `6610dd0`):**
+  the 10× gate run was clean — `npm test` **10/10 runs exited 0 with 111/111
+  passing each**, `npm run check` **10/10 exited 0 with fail 0** (18 modules, 9
+  test files), final `npm run pack:check` **72**. This is pre-merge evidence, not
+  the current merged tree.
 - The current-chat rainbow ring was verified live: exactly one ring rendered with
   two running animations (angle moving 281° → 234° and the hue drift over 1.6 s),
   and it moved as different Sessions were opened — across completed and running

@@ -100,11 +100,14 @@ document at 1000 entries (oldest baselines drop), and writes atomically
 serves it: `GET /api/power-suite.read-acks` → `{ acked }`;
 `POST /api/power-suite.read-acks` with `application/json` (≤64 KiB of UTF-8
 bytes) merges and returns the merged document (`415` non-JSON, `413` too large,
-`400` malformed entries, and a no-store `500 { code: "store-failed" }` when the
-document cannot be written); every response is `no-store`. The browser keeps a
+`400` malformed entries, a no-store `500 { code: "store-read-failed" }` when a
+non-ENOENT read fails (GET or POST; the store never caches an empty result and
+reports a read error instead of overwriting unreadable marks), and a no-store
+`500 { code: "store-failed" }` when the document cannot be written); every
+response is `no-store`. The browser keeps a
 `localStorage` copy as a cache, syncs on mount/focus/visibility/30 s, migrates
-old local marks with a one-time POST, and pushes raised baselines with a 250 ms
-debounce after an **8 s AbortController** timeout. Network, 5xx, **408/425**, and
+the local marks with a POST on every mount (not once per upgrade), and pushes raised baselines with a 250 ms
+debounce after an **8 s AbortController** timeout. Network, 5xx, **401/403/408/425**, and
 429 failures stay queued and retry on the next sync cycle (one POST in flight);
 other permanent non-retryable 4xx (400/413/415/404 etc.) drop **only that batch
 immediately** so later acks still sync. Pushes are chunked to at most **200 entries / ~48 KiB**
@@ -117,12 +120,15 @@ the activity request starts (at the cost of delaying that fetch by the push
 duration). The browser `localStorage` cache is per origin; the Host documents
 live under `$DSH_HOME/dsh-power-suite`, so **multiple DSH profiles sharing one
 home share them** — `--profile` is only a config layer under
-`$DSH_HOME/profiles/<name>`. profile isolation is not provided. The read-acks
+`$DSH_HOME/profiles/<name>`. Profile isolation is not provided. The read-acks
 store has **no read-merge across writers**: each writer persists its own
 in-memory maxima, so concurrent profiles/HMR generations can overwrite each
 other's baselines (the activity ledger's best-effort read-merge is weaker still:
 per-id max with a TOCTOU window). Read state is derived at render
-(`baseline >= activity - 1000 ms`); there is no running-based clearing.
+(`baseline >= activity - 1000 ms`); there is no running-based clearing. The
+read-error behavior is covered by unit/`chmod` tests only — it was not
+live-forced against a real unreadable file, and the client's 401/403 retry
+classification has no node test (browser-bundle code).
 
 ### Session activity ledger
 
@@ -137,7 +143,7 @@ ledger**:
   allowlist, which covers known activity-bearing families (turns, steps,
   messages/attempts; tools incl. PTC dispatch; job registered/settled; command
   runs; compaction start/end/prune/summary; subagent catalog/descriptor/policy;
-  goal/todo; approvals and preset/plan/PTC/sandbox/model/permission selections;
+  goal/todo; approvals and preset/plan/sandbox/model/permission selections;
   working-directory/workspace/deliverable/schedule changes; team traffic;
   image/offload; feedback; inbox splice; LLM retry; tool-workflow agent/run
   progress; and `hook/invoked`/`hook/result`, which have no emitter in this
@@ -189,11 +195,13 @@ ledger**:
   still pending. If that wait times out, the route serves the current map for the
   next 30 s without waiting while background seeding continues; a late success
   clears the backoff and seeded values resume, and a permanently hung listing can
-  wait up to 5 s again after each 30 s window. A seed that **fails/rejects**
-  (e.g. `listSessions()` rejects) is different: the error is swallowed, the seed
-  promise settles, there is **no backoff and no retry**, and seeded history never
-  appears for this process (until a Host recompose/restart) — only live events
-  keep advancing activity. The route never answers 500 for either case. The
+  wait up to 5 s again after each 30 s window. A seed that **fails/rejects** is
+  different: a rejected seed promise may set the immediate-serve backoff window,
+  but it settles and is never retried, so seeded history never appears for this
+  process (until a Host recompose/restart) — only live events keep advancing
+  activity. A `listSessions()` rejection is swallowed inside the baseline and also
+  settles without retry; per-session cache-document read failures are skipped
+  (not retried). The route never answers 500 for either case. The
   client merges activity per-id with `max(previous, next)` and prunes only
   against a **non-empty** Session catalog, so empty/partial responses and HMR
   overlap cannot drop known activity; a genuinely empty catalog never prunes
@@ -436,8 +444,9 @@ renderless `conversation.input.overlay` seat, injects one
 and returns a disposer. An install guard keeps reconnects/HMR idempotent: one
 launcher and one listener set. The overlay seat renders the launcher, rail,
 highlight layer, note popover, and feedback toast with React; the conversation
-seat keeps the module bridge (`sessionId`, `inputActions`, draft) current because
-the root overlay does not receive the Session hooks as props. Locale namespace
+seat keeps the module bridge (`sessionId`, `inputActions`; the slot contract
+passes **no `draft` prop**) current because the root overlay does not receive the
+Session hooks as props. Locale namespace
 `powerSuiteAnnotation`, class prefix `psa-`, DOM markers `data-psa-*`.
 
 The layout is a frame `padding-right` change, never a CSS transform. On
@@ -445,27 +454,42 @@ activation the frame receives `data-psa-frame`, `padding-right = railWidth px`,
 and a `--psa-rail-width` custom property; the rail width is
 `clamp(188, round(0.116 * innerWidth), 236)` px. The frame's content box shrinks:
 the left sidebar keeps its width while the conversation column and the native
-right sidebar give up the rail width, and the shell's overlay layer still spans
-the frame so the rail occupies the freed strip. The padding transition is 180 ms
+right sidebar give up the rail width, so the fixed rail occupies the **rightmost
+strip, right of the native right column**. The shell's `.pI_x6G_overlayLayer` is
+`absolute; inset: 0` in the padded frame's **padding box** and does **not** span
+the rail strip, so native content does not paint under the rail. The padding transition is 180 ms
 and disabled under `prefers-reduced-motion`. Resize recomputes the layout
 (debounced): `innerWidth - leftSidebarWidth - rightSidebarWidth - railWidth >=
 560` keeps the shrink layout; otherwise the rail overlays the right edge and can
 collapse to 48 px. Exiting restores the frame's previous inline `padding-right`
 and rail-width property exactly (removing them only when the plugin set them) and
 clears the marker after the transition; the inline grid style is never touched.
+While annotation is active the entire prompt-history rail family (rail, search
+card, preview card, divider, toggle) is hidden; normal mode is unaffected. The
+Project page dispatches `power-suite:ui-annotation-exit` on open, so annotation
+deactivates; its launcher is hidden under
+`html[data-power-suite-project-page="true"]`, and the page Esc ladder closes the
+page first (launcher returns, annotation stays off), so annotation is not usable
+while the page is open. The marquee adds at most the 24 most specific intersecting
+candidates.
 
 While active, window capture-phase listeners consume `pointerdown`, `pointerup`,
 `mousedown`, `mouseup`, `click`, `auxclick`, `dblclick`, `contextmenu`, and
 `dragstart` with `preventDefault` + `stopImmediatePropagation` except over
-`[data-psa-own]`, so a native control under the pointer (for example **New
-session**) cannot act. Hover and marquee pause while the pass-through modifier is
+a `[data-psa-own]` ancestor, so a native control under the pointer (for example
+**New session**) cannot act; every feature UI node is inside such an ancestor
+(the attribute is a guarantee on the ancestor, not on every nested node). Hover and marquee pause while the pass-through modifier is
 held; the native events then reach the page unchanged and no click is
-synthesized. Candidates walk the event target's ancestor chain, prefer
+synthesized. Hover uses a **lazy** candidate chain: pointer moves collect elements only (up
+to 16 ancestors) with 0 `textContent` reads; expensive descriptors are built
+lazily for the chosen element plus at most 2 context ancestors. Candidates prefer
 interactive/semantic elements over text leaves, skip the composer's editable
 internals (the composer region is the candidate), and produce a plain-JSON
 `ElementRef` with reliability-ordered selector candidates, a stable identity key,
 sanitized text, and a small deterministic text digest used for change detection
-(derived data only; no raw page text is kept in it). A DOM-revision-aware
+(derived data only; no raw page text is kept in it). Selector candidates use
+`globalThis.CSS` when available; the fallback hex-escapes a leading digit
+(`#123abc` → `#\31 23abc`). A DOM-revision-aware
 resolver re-finds the live node from the ordered candidates so scroll-frame
 lookups stay bounded without trusting a stale first hit. The reducer (`off | idle |
 inspect | selected | multi | collection`, a settings view flag, and transient

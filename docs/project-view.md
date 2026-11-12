@@ -72,6 +72,11 @@ untouched:
   still-visible sidebar: the component instance stays mounted and only its data
   hook follows the new Workspace id. This is intended UX, not stale content —
   the previous Workspace's snapshot is discarded and its request aborted.
+- **Annotation mode hands off to the page.** Opening the Project page dispatches
+  `power-suite:ui-annotation-exit`, so UI-element annotation deactivates and its
+  launcher is hidden while the page is open; annotation is **not usable** on the
+  page. The page's Esc ladder closes the page first (menu → page), after which
+  the launcher returns with annotation still off.
 ![Clicking another Workspace in the still-visible sidebar switches the page in place](assets/project-sidebar-switch.png)
 
 - **One handler, HMR-safe**: a single document-level capture click handler

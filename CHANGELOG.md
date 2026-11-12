@@ -33,9 +33,50 @@ heading is added until the release is cut.
   page-lifetime. The browser-only feature adds no Host route,
   service, or profile change, cleans up every listener, layout marker, and DOM
   node on exit and HMR, and adds a pure test seam plus a live-page CDP acceptance
-  harness.
+  harness (recorded pre-merge; the merged build was not re-run through it).
 
-## [0.2.0] - 2026-11-11
+### Changed
+
+- UI element annotation audit fixes: user notes are normalized with
+  `normalizeUserNote` (CRLF→LF, NUL/C0 control characters except tab/newline
+  removed, spaces/line breaks preserved, **no redaction and no silent
+  truncation**) and inserted verbatim (multi-line notes can exceed single-line
+  layouts); hover uses a lazy element-only candidate chain with descriptors
+  built only for the chosen element and ≤2 context ancestors (0 `textContent`
+  reads on hover); opening the Project page dispatches
+  `power-suite:ui-annotation-exit` and hides the launcher (annotation is not
+  usable while the page is open; the page's Esc ladder runs first); the whole
+  prompt-history rail family is hidden in annotation mode; selector escaping uses
+  `globalThis.CSS` with a leading-digit hex fallback (`#123abc` → `#\31 23abc`);
+  pinned popovers re-clamp on resize while keeping their dragged offset; the
+  marquee adds at most the 24 most specific intersecting candidates.
+- Read-mark and activity robustness: non-ENOENT read-acks read failures return a
+  no-store `500 { code: "store-read-failed" }` for GET and POST and are never
+  cached as empty; the activity ledger keeps its in-memory map on a non-ENOENT
+  read error, does not schedule an empty rewrite, retries the load, and aborts a
+  write while the document is unreadable; `401/403` join network/5xx/429 as
+  retryable ack-push failures (other permanent 4xx still drop only that batch);
+  the read-acks `localStorage` migration runs per mount. Read-error behavior is
+  unit/`chmod`-tested only (not live-forced), and client 401/403 classification
+  has no browser node harness. Ack flush/sync failures are caught and
+  bounded-logged instead of surfacing as unhandled rejections; failed read-acks
+  writes clean up their temp sibling; the seed-backoff test uses relative
+  timing/poll-wait rather than fixed sleeps.
+- Activity seed failure wording: an already-pending seed that times out keeps the
+  30 s immediate-serve backoff while background seeding continues; a seed that
+  fails/rejects may set that backoff but settles and is never retried (a
+  `listSessions()` rejection is swallowed inside the baseline), so seeded history
+  never appears for that process. Selection families no longer list PTC mode
+  (`ptc-mode` is a message-source key; `tool/ptc-dispatch` remains activity).
+
+## [0.2.0] — undated development snapshot
+
+> **No release was tagged for 0.2.0 and no release date is claimed.** The package
+> version was 0.2.0 while the features below (Dynamic Workspaces, prompt history,
+> artifacts, project view, Host-shared read marks, the activity ledger, and the
+> project-page work) were developed and merged; it was never cut as a tagged
+> release. The next planned release is **0.3.0**, still unreleased/undated (see
+> `[Unreleased]`). No git tags exist in this repository.
 
 ### Added
 
@@ -127,7 +168,7 @@ heading is added until the release is cut.
 - Event-sourced activity ledger for the activity card: the Host subscribes to
   committed `session/event` times under an explicit `ACTIVITY_EVENT_TYPES`
   allowlist covering known activity-bearing families (turns, steps,
-  messages/attempts, tools incl. PTC, jobs, commands, compaction, subagent state,
+  messages/attempts, tools incl. PTC dispatch, jobs, commands, compaction, subagent state,
   goal/todo, approvals and selection actions, workspace/deliverable/schedule
   changes, team traffic, image/offload, feedback, inbox splice, LLM retry,
   tool-workflow progress); the explicit `NON_ACTIVITY_EVENT_TYPES` metadata

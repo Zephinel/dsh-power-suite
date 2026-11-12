@@ -94,6 +94,10 @@ flips to the magnifier's left (right edge 8 px from the button):
 
 ![Prompt-history rail with the search card open beside the magnifier](assets/prompt-history-search.png)
 
+While UI-element annotation is active, the whole prompt-history rail family
+(rail, search card, hover preview card, divider, and search toggle) is hidden so
+the two right-edge surfaces cannot overlap; normal mode is unaffected.
+
 The rail and the keyboard recall share one source, so both see the same
 human-only prompts and the same 500-entry cap. The rail refetches per Session
 and again when a turn finishes (the send that just completed appears then);

@@ -68,8 +68,11 @@ a strip freed from the right edge instead of covering the conversation.
 - The layout shrinks by setting the shell frame's `padding-right` to the rail
   width. The frame's content box shrinks: the left sidebar keeps its width while
   the conversation column and the native right sidebar give up the rail width,
-  and the shell's overlay layer still spans the full frame so the rail can
-  occupy the freed strip without covering the native right column. This is a
+  so the rail occupies the **rightmost strip, right of the native right column**
+  (the padding moves the page content left; the rail itself is `position: fixed;
+  right: 0`). The shell's `.pI_x6G_overlayLayer` is `position: absolute; inset: 0`
+  inside the padded frame's **padding box**, so it does **not** span the rail
+  strip; native content therefore does not paint under the fixed rail. This is a
   padding change, not a CSS transform: the page stays crisp and its own scrolling
   and hit testing keep working.
 - The padding change is animated with a 180 ms ease transition, disabled under
@@ -85,9 +88,11 @@ a strip freed from the right edge instead of covering the conversation.
 - Three views swap in place: **status**, **collection**, and **settings**. Opening
   or closing collection/settings only changes the rail's inner content — never the
   frame width, padding, or page layout. There is no wide drawer over the canvas.
-- The native prompt-history rail from this same plugin
-  ([prompt-history.md](prompt-history.md)) is hidden while annotation mode is
-  active so the two right-edge surfaces cannot overlap.
+- While annotation mode is active, the whole prompt-history rail family from
+  this same plugin ([prompt-history.md](prompt-history.md)) is hidden — the rail,
+  its search card, hover preview card, divider, and search toggle — so the two
+  right-edge surfaces cannot overlap. Normal (annotation-off) mode is
+  unaffected.
 - **Exit** the mode with the rail's exit control, the launcher, or Esc. The
   original layout comes back exactly: the frame's previous inline `padding-right`
   and rail-width property are restored, or removed when the plugin added them;
@@ -126,6 +131,11 @@ opens the note popover.
   are skipped; a hit inside the composer resolves to the composer region, never
   to the typed text. When no semantic candidate matches, the nearest element with
   a real box is used.
+- **Hover hot path** — the pointer chain collects **elements only** (up to 16
+  ancestors). Element descriptors are built lazily only for the chosen element
+  and at most **2 context ancestors**, so a hover performs **0 `textContent`
+  reads** and a bounded amount of work; the E2E measurement records the bounded
+  descriptor build rather than per-move descriptor construction.
 - **Ancestor adjustment** — the popover's up/down control moves along the
   candidate's ancestor chain, clamped at both ends, and re-derives the reference
   at each level. This is for choosing the right granularity: an icon instead of
@@ -164,9 +174,10 @@ the count with **Add {count} to collection** and **Clear selection**.
 
 A drag with the modifier held starts a **marquee** once it moves about 4 px: a
 selection rectangle is drawn over the page, the pointer events under it stay
-blocked, and on release every candidate intersecting the rectangle is added,
-de-duplicated by element identity, with nested duplicates of the same candidate
-collapsed. A plain drag without the modifier does not start a marquee; it stays a
+blocked, and on release the intersecting candidates are added, de-duplicated by
+element identity, with nested duplicates collapsed. The marquee is bounded to
+the **24 most specific** intersecting candidates (not every intersecting
+element). A plain drag without the modifier does not start a marquee; it stays a
 click/selection interaction, and wheel scrolling keeps working normally.
 
 ### Pass-through
@@ -188,7 +199,10 @@ page in the wrong mode.
 
 Clicking a single selected element opens a compact popover near it. It is
 draggable by its header, clamped inside the viewport with an 8 px margin, and kept
-left of the rail when there is room. It is 320 px wide.
+left of the rail when there is room. It is 320 px wide. On window resize a
+**pinned** (dragged) popover keeps its dragged offset and is re-clamped just
+enough to stay on-screen; an unpinned popover is re-clamped against the anchored
+element.
 
 ![A highlighted native control with its note popover](assets/annotation-selection.png)
 
@@ -200,7 +214,13 @@ It shows:
   resolves, or Content changed (see [statuses](#re-resolution-statuses));
 - the ancestor **Parent element** / **Child element** controls;
 - the **Requested change** field (a compact textarea, about three rows) with its
-  placeholder, saved as you type;
+  placeholder, saved as you type. The note is normalized with
+  `normalizeUserNote`: CRLF/CR becomes LF, NUL/C0 control characters other than
+  tab and newline are removed, and internal spaces and line breaks are preserved
+  — it is **not redacted and not truncated**. Both serializers insert it
+  verbatim, so a multi-line note is inserted as multi-line content (and can
+  exceed the single-line label layout); page-derived text still goes through the
+  sanitizer below;
 - **Quick reference** — inserts this one annotation into the current Session's
   composer at the caret, preserving the existing draft and caret position, one
   undo step, and never sending the message;
@@ -493,18 +513,30 @@ package manifest.
 - **Two seats** — a `shell.overlay` seat (`AnnotationOverlay`) renders the
   launcher, rail, popover, and highlight layers; a renderless
   `conversation.input.overlay` seat (`AnnotationSessionSeat`) keeps the module's
-  bridge (`sessionId`, `inputActions`, `draft`) current for the Session on screen
-  and notifies the controller. Feature copy is registered under the
-  `powerSuiteAnnotation` namespace and bound once with `ctx.locale.bind`, so both
-  the overlay and the controller localize through the same binding.
+  bridge (`sessionId`, `inputActions` — the slot contract passes **no** `draft`
+  prop) current for the Session on screen and notifies the controller. The
+  composer itself remains the source of truth for the live draft/caret.
+  Feature copy is registered under the `powerSuiteAnnotation` namespace and
+  bound once with `ctx.locale.bind`, so both the overlay and the controller
+  localize through the same binding.
 - **UI stack** — React elements via `React.createElement` for the rail, launcher,
   popover, and highlight rectangles; an imperative controller for DOM listeners,
   hover geometry, marquee, layout changes, and insertion; a tiny observable store
   (`getSnapshot`/`subscribe`) connects them. No second state library.
 - **Theme** — only shell `--dsw-alias-*` tokens, inline Remix Icon glyphs, no new
   packages, and one injected `<style data-power-suite-css="ui-annotation">` tag.
-  Class names are `psa-*` and DOM attributes are `data-psa-*`; all of the
-  feature's own UI carries `data-psa-own` so the event blocker can exempt it.
+  Class names are `psa-*` and DOM attributes are `data-psa-*`; every feature UI
+  node is inside a `data-psa-own` **ancestor** (the marker guarantees exclusion
+  even though not every node carries the attribute literally).
+- **Selector escaping** — candidate selectors use `globalThis.CSS` when
+  available and a small fallback otherwise; the fallback escapes a leading digit
+  as a hex escape (`#123abc` → `#\31 23abc`) rather than producing an invalid
+  selector.
+- **Coexistence with the Project page** — the Project page dispatches
+  `power-suite:ui-annotation-exit` when it opens, so annotation deactivates; the
+  launcher is hidden under `html[data-power-suite-project-page="true"]`, and the
+  page's Esc ladder closes the page first (the launcher returns with annotation
+  still off). Annotation is **not usable while the Project page is open**.
 - **Layout** — the frame's `padding-right` plus a CSS transition, never a CSS
   transform. The exact layout mode is recomputed (debounced) on resize:
   `innerWidth - sidebarWidth - railWidth >= 560` shrinks, otherwise the rail
@@ -564,8 +596,10 @@ plugin is installed, and its mode-dependent rules act only while
 
 ## Testing and verification
 
-Pure logic is covered by Node's test runner, and the whole interaction is covered
-on the live page.
+Pure logic is covered by Node's test runner (**57** cases); live behavior is
+exercised by a pre-merge acceptance harness, but **not every interaction has a
+single full-green live run** (see below and
+[verification.md](verification.md)).
 
 ```bash
 npm test            # node --test test/*.test.js
@@ -603,7 +637,14 @@ It opens the real DSH Web GUI with a fresh Chrome profile (`--user-data-dir`),
 injects this checkout's `src/client.js` in place of the installed bundle for that
 page, and runs the acceptance scenarios with real CDP mouse and keyboard input at
 a 1728 x 900 viewport. The installed plugin, the user profile, and the launchd
-service are never modified.
+service are never modified. The recorded acceptance evidence is **pre-merge**
+(final publication build `10dd3b72…` / branch commit `fd8ccc9`); the merged build
+(`572b8fa1…`) was **not re-run** through the harness — after the merge only an
+installed-page smoke checked the launcher and rail markers, and the round-3 audit
+fixes (note normalization, lazy hover) are unit-tested rather than re-covered by
+E2E. The evidence exists
+as in-repo summaries plus `/tmp` logs that are external development artifacts,
+not repository files.
 
 - Prerequisites: Node 22 or newer (global WebSocket), Google Chrome (override the
   binary with `CHROME_BIN`), and the DSH Web GUI running as
@@ -620,10 +661,9 @@ service are never modified.
   feature-gate failure, or harness fatal error; `2` only for usage/argument errors
   (`--scenario 10`, `--from 10`, a missing value). A failed `Network.enable` is a
   gate failure (exit 1), not a usage error. `--smoke` is pipeline-only but still
-  fails when the injected client cannot load, does not expose the documented
-  seam generation (31 keys on the round-1 generation with `textDigest`; exactly
-  32 once the `resolveNodeCandidate` key is present), or does not mount the
-  annotation surface. `full` and `--shots-only` with a feature-absent client
+  fails when the injected client cannot load, does not expose a documented seam
+  generation (round-1 31 keys with `textDigest`; the current generation is 32
+  with `resolveNodeCandidate`), or does not mount the annotation surface. `full` and `--shots-only` with a feature-absent client
   record a **FAIL** row and exit non-zero; every requested scenario must produce
   a result row.
 - Blank Session and privacy preconditions: before any capture or interaction the
@@ -741,3 +781,20 @@ acceptance `test/browser/`.
 - **Modifier conflicts are moved, not hidden.** Setting one modifier to the
   other's current key keeps the pair valid by moving the other modifier, and the
   settings view says what changed; an equal pair is never stored.
+- **Annotation mode is not accessible by keyboard alone.** The mode is entered
+  and driven with the pointer (the launcher, hover, selection, and popover are
+  mouse-oriented); keyboard users can use native keyboard shortcuts while it is
+  active, but there is no full keyboard navigation path for annotating. This is
+  an accepted accessibility limitation, not a hidden toggle.
+- **Marquee selection is capped at 24 candidates.** A very large marquee adds
+  the 24 most specific intersecting candidates, not every intersecting element.
+- **The Project page takes precedence.** Opening the Project page exits
+  annotation mode and hides the launcher; the two surfaces coexist only by that
+  exit (there is no mixed mode and no z-index negotiation beyond it).
+- **Not a full keyboard-navigation path.** The mode is entered and driven with
+  the pointer; native keyboard shortcuts keep working while active, but there is
+  no keyboard route to annotate an element.
+- **No client node-test harness for the pointer chain, flush, or 401/403
+  retries.** The hover chain/descriptor laziness and the client sync rules live
+  in the browser bundle; they are code-reviewed and (for the chain) covered by
+  the E2E measurement, not by `node:test`.

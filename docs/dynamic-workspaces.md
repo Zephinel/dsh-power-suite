@@ -204,19 +204,23 @@ $DSH_HOME/dsh-power-suite/read-acks.json
   returns `{ acked }`; `POST` with `application/json` merges the posted entries
   and returns the merged document. The body limit is **64 KiB of UTF-8 bytes**
   (not string length). Errors: `415` for a non-JSON content type, `413` above the
-  body limit, `400` for malformed ids/baselines, and a **no-store `500`
-  `{ code: "store-failed" }`** when the durable document cannot be written.
-  Every response is `cache-control: no-store`.
+  body limit, `400` for malformed ids/baselines, a **no-store `500`
+  `{ code: "store-read-failed" }`** when a non-ENOENT read fails (GET or POST —
+  the store never caches an empty result and refuses to overwrite unreadable
+  marks), and a no-store `500 { code: "store-failed" }` when the durable document
+  cannot be written. Every response is `cache-control: no-store`.
 - The browser keeps `localStorage['dsh-power-suite.acked-sessions']` as a fast,
   offline cache. On mount it reads the Host document and merges the per-id
-  maxima, sends a one-time migration POST (uploading old local marks), then
-  re-syncs every **30 s** and on window focus/visibility; newly raised baselines
+  maxima, sends a migration POST on each mount (uploading the local cache's old
+  marks — not once per upgrade), then re-syncs every **30 s** and on window
+  focus/visibility; newly raised baselines
   are pushed with a **250 ms** debounce. Both the local cache and the pending
   push map are capped at **1000** entries (oldest baselines drop from the pending
   map; they remain in the local map and re-migrate later). Pushes are split into
   sequential batches of at most **200 entries / a conservative 48 KiB** (well
   under the Host's 64 KiB cap; at most one POST in flight): network, 5xx,
-  **408/425**, and 429 failures stay queued and retry on the next sync/focus,
+  **401/403/408/425**, and 429 failures stay queued and retry on the next
+  sync/focus,
   while other permanent non-retryable 4xx (400/413/415/404 etc.) drop **only
   that batch immediately** so later acks still sync; entries that still hold the
   pushed value are removed after a successful POST. Client GET/POST requests and
@@ -258,7 +262,7 @@ committed events DSH itself uses:
   messages and assistant attempts; tools (including PTC dispatch); jobs
   (`registered`/`settled`); command runs; compaction start/end/prune/summary;
   subagent catalog/descriptor/model-selection-policy; goal and todo changes;
-  approval asked/decided/policy; agent-preset/plan/PTC/sandbox/model/permission
+  approval asked/decided/policy; agent-preset/plan/sandbox/model/permission
   selections; working-directory, workspace/deliverable, and schedule changes;
   team traffic; image/offload; feedback operations; inbox splice; LLM retry; and
   tool-workflow agent/run progress. It also allows `hook/invoked`/`hook/result`
@@ -307,6 +311,10 @@ committed events DSH itself uses:
   suffix; a failed write attempts to remove the temp sibling (best-effort, stale
   `*.tmp` may remain by design). A corrupt/missing file loads as empty and
   schedules an empty rewrite, while a valid empty document is not rewritten.
+  **Read-error policy:** only **ENOENT** counts as empty; any other read failure
+  keeps the in-memory map, does **not** schedule an empty rewrite, retries the
+  load later, and aborts a write that cannot safely read the document (so an
+  unreadable ledger is never overwritten with a partial merge).
 - **One-time baseline** — on install, Sessions already in the catalog without a
   ledger entry are seeded from their per-record projection-cache document's
   `max(timeContext.lastMessageTime, timeContext.lastInjectionTime)` (16 MiB
@@ -328,10 +336,11 @@ committed events DSH itself uses:
   serves the current map without waiting for the next **30 s** while background
   seeding continues; a late success clears the backoff and seeded values resume,
   and a permanently hung listing can again wait ≤5 s after each 30 s window. A
-  seed that **fails/rejects** (e.g. `listSessions()` rejects) is different: the
-  error is swallowed, the seed promise settles, there is **no backoff and no
-  retry**, and seeded history never appears this process (until a Host recompose/
-  restart); only live committed events keep advancing activity. The route never
+  seed that **fails/rejects** is different: a rejected seed promise may set the
+  immediate-serve backoff window, but it settles and is **never retried**, so
+  seeded history never appears this process (until a Host recompose/restart); a
+  `listSessions()` rejection is swallowed inside the baseline and settles without
+  retry too. Only live committed events keep advancing activity. The route never
   answers 500 for either case.
 - **Client** — the map is fetched on the existing card sync cadence (mount,
   focus, visibility, 30 s — no extra timer, 8 s `AbortController` timeout) and
@@ -494,7 +503,7 @@ The native **View options** menu picks how Sessions are grouped:
   not.
 - **Activity is exact only for allowlisted events this Host observed.** The
   ledger records committed `session/event` times live for known activity-bearing
-  families (turns/steps/messages, tools incl. PTC, jobs, commands, compaction,
+  families (turns/steps/messages, tools incl. PTC dispatch, jobs, commands, compaction,
   subagent state, goal/todo, approvals and selection actions,
   workspace/deliverable/schedule changes, team traffic, image/offload, feedback,
   inbox splice, LLM retry, tool-workflow progress, plus `hook/invoked`/`hook/result`
@@ -531,10 +540,11 @@ The native **View options** menu picks how Sessions are grouped:
   route serves the current map for the next 30 s without waiting while seeding
   runs in the background; if that seed eventually succeeds the backoff clears and
   the seeded values apply, and a permanently hung listing can add another ≤5 s
-  wait after each window. A seed that **fails/rejects** settles silently with no
-  backoff and no retry, so
-  seeded history never appears for this process (until a Host recompose/restart);
-  only live committed events advance activity. The route never 500s. Per-session
+  wait after each window. A seed that **fails/rejects** may set the
+  immediate-serve backoff, but the promise then settles and is **never retried**,
+  so seeded history never appears for this process (until a Host recompose/
+  restart); a `listSessions()` rejection is swallowed and settles the same way.
+  Only live committed events advance activity. The route never 500s. Per-session
   cache-document read failures are skipped (not retried) and just omit that
   Session's baseline.
 - **One-time migration caveat for read marks.** During the short-lived

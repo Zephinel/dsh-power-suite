@@ -74,8 +74,7 @@ Session is running and the white sparkle icon when nothing runs.
   completion time and stays in the recent window instead of vanishing on stop.
   The ledger records allowlisted committed Session events live across the 55
   documented activity-bearing `SessionEvent` types (7 metadata types are
-  explicitly excluded; the families are turns, steps, messages/attempts, tools including
-  PTC, jobs, commands, compaction, subagent state, goal/todo, approvals and
+  explicitly excluded; the families are turns, steps, messages/attempts, tools including PTC dispatch, jobs, commands, compaction, subagent state, goal/todo, approvals and
   selection actions, workspace/deliverable/schedule changes, team traffic,
   image/offload, feedback, inbox splice, LLM retry, tool-workflow progress —
   including interrupted and failed turn ends). Metadata events, seed/maintenance
@@ -137,7 +136,11 @@ reduces it to a strip. Exit with the rail's exit control, the launcher, or Esc.
   the element, summarizes its locator, shows whether it still resolves, and
   offers **↑ / ↓** to move to a parent element or back down when the chosen
   granularity is wrong.
-- Type the requested change in the **note** field. **Quick reference** inserts
+- Type the requested change in the **note** field; it is inserted **verbatim**
+  (line breaks and spaces preserved, no redaction or truncation), so multi-line
+  notes stay multi-line in the inserted request and may exceed single-line
+  layouts. Page-derived text is separately sanitized; the note is not.
+  **Quick reference** inserts
   this one annotation into the current Session's composer at the caret, keeping
   the existing draft and without sending. **Add to collection** parks the element
   in the rail's collection instead.
@@ -159,6 +162,9 @@ reduces it to a strip. Exit with the rail's exit control, the launcher, or Esc.
   Re-adding the same element keeps its position and updates its note — or leaves
   the saved note untouched when the note field is empty — instead of creating a
   duplicate.
+- Opening the **Project page** exits annotation mode and hides the launcher, so
+  annotation is not usable while that page is open; close the page and the
+  launcher returns with annotation still off.
 - Esc steps back one layer at a time: an active note edit ends first (the text
   stays), then the selection clears, then the mode turns off. From the
   collection or settings view, Esc first returns to the status view.
