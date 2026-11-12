@@ -122,26 +122,33 @@
   full wrapped workspace path, Status detail, absolute Last active time, and the
   running subagent count appear only in the row's hover card, which does not
   capture the pointer (and is unavailable on touch-only input).
-- **Read marks are shared per DSH profile, within a cap.** Acks live in the
-  Host's `$DSH_HOME/dsh-power-suite/read-acks.json` and sync to every browser of
-  that profile; the per-browser `localStorage['dsh-power-suite.acked-sessions']`
-  document is only a cache/offline path, so another DSH profile keeps its own
-  marks. The document is capped at **1000** entries (oldest baselines drop) and
-  the client merges maxima only — there is no unread-removal API, so a baseline
-  can only move forward (a genuinely newer result makes the green dot return on
-  every device). Without the route (older Host) the browser stays local-only;
-  with storage denied too, the map lives in memory for the page lifetime. A row
-  is derived as read when its baseline is within **1000 ms** of the current
-  activity, so a very small genuine change could keep a stale ack; metadata-only
-  bumps cannot. Pushes are chunked (≤200 entries / ~48 KiB, one POST in flight):
-  network, 5xx, **408/425**, and 429 failures stay queued, other permanent
-  non-retryable 4xx drop **only that batch immediately**, and the local cache and
-  pending map are each capped at 1000 (pending entries dropped by the cap stay
-  in the local map and re-migrate later); the sync **awaits** the push flush
-  before fetching activity. The browser `localStorage` cache is per browser
-  origin, while the Host documents are per `$DSH_HOME` DSH profile. The two Host
-  routes need a plugin reload / Host recompose after upgrading, and old local
-  marks are uploaded once when DSH is first opened with the new Host.
+- **Read marks are shared per `$DSH_HOME`, with no profile isolation and a
+  cap.** Acks live in `$DSH_HOME/dsh-power-suite/read-acks.json` and sync to
+  every browser using that home; the per-browser
+  `localStorage['dsh-power-suite.acked-sessions']` document is only a
+  cache/offline path. `--profile` is just a config layer under
+  `$DSH_HOME/profiles/<name>`, so multiple profiles sharing a home **share** the
+  file — profile isolation is not provided. The read-acks store has **no
+  read-merge across writers**: each writer persists its own maxima, so concurrent
+  profiles/HMR generations can overwrite each other's baselines (the design
+  assumes one Host process plus overlapping HMR). The document is capped at
+  **1000** entries (oldest baselines drop) and the client merges maxima only —
+  there is no unread-removal API, so a baseline can only move forward. Without
+  the route (older Host) the browser stays local-only; with storage denied too,
+  the map lives in memory for the page lifetime. A row is derived as read when
+  its baseline is within **1000 ms** of the current activity, so a very small
+  genuine change could keep a stale ack; metadata-only bumps cannot. Pushes are
+  chunked (≤200 entries / ~48 KiB, one POST in flight): network, 5xx,
+  **408/425**, and 429 failures stay queued, other permanent non-retryable 4xx
+  drop **only that batch immediately**, and the local cache and pending map are
+  each capped at 1000 (pending entries dropped by the cap stay in the local map
+  and re-migrate later); **408/425 classification is client-only code with no
+  node test**. The sync awaits the actual in-flight push promise before fetching
+  activity (so no push is in flight when the activity request starts), which can
+  delay that fetch by the push duration. The browser `localStorage` cache is per
+  browser origin, while the Host documents are shared per `$DSH_HOME`. The two
+  Host routes need a plugin reload / Host recompose after upgrading, and old
+  local marks are uploaded once when DSH is first opened with the new Host.
 - **One-time read-mark caveat from the superseded mtime build.** During the
   short-lived mtime-floor iteration some acknowledgement baselines were inflated
   (for example `78f7a4a7…`). Baselines are max-monotonic: opening the Session
@@ -151,12 +158,15 @@
   installs and Sessions touched after the ledger fix are unaffected.
 - **Activity is exact only for allowlisted events the Host observed.** The
   event-sourced ledger records committed `session/event` times live for the
-  explicit `ACTIVITY_EVENT_TYPES` allowlist covering all known activity-bearing
+  explicit `ACTIVITY_EVENT_TYPES` allowlist covering known activity-bearing
   families (turns/steps/messages, tools incl. PTC, jobs, commands, compaction,
   subagent state, goal/todo, approvals and selection actions,
   workspace/deliverable/schedule changes, team traffic, image/offload, feedback,
-  inbox splice, LLM retry, tool-workflow progress), so long, interrupted, and
-  failed turns that end while the Host runs report exactly. The explicit
+  inbox splice, LLM retry, tool-workflow progress, plus
+  `hook/invoked`/`hook/result` for forward compatibility even though this kernel
+  emits no hook events; `ptc-mode` is not a Session event and is excluded), so
+  long, interrupted, and failed turns that end while the Host runs report
+  exactly. The explicit
   `NON_ACTIVITY_EVENT_TYPES` metadata (request headers/context, titles and their
   LLM requests, end seeds, delivery acknowledgements, web search requests),
   seed-pattern variants, and **unknown future/plugin event types never advance
@@ -165,17 +175,27 @@
   projection-cache baseline (`max(timeContext.lastMessageTime,
   lastInjectionTime)`, else header **`createdAt` only** — SessionHeader has no
   `updatedAt`), so a historical, seed-only, or no-cache completion can be
-  under-reported. Writes are **best-effort read-merge-writes**: sequential
+  under-reported. Cache/header baseline times are clamped to `now + 60 s` (a
+  corrupt future value cannot pin activity), while live committed `event.time`
+  is trusted unclamped. Writes are **best-effort read-merge-writes**: sequential
   external writes are preserved, but interleaving concurrent writers can lose
   one side (TOCTOU; no cross-process lock), designed for a normal single Host
   plus overlapping HMR rather than multi-host coordination. An abrupt process
   crash before the 750 ms flush can lose the last debounce window (no `fsync`),
   and a failed disk write keeps the map in memory without durability (flush and
-  dispose still resolve; the stopped listener will not retry that write). The
-  route waits at most 5 s for the one-time baseline on a fresh install before
-  serving the current map (later polls fill in), and the client's empty-response
-  guard can defer a rare genuine clear by up to 120 s. The ledger is a
-  per-DSH-profile Host file capped at 5000 Sessions (oldest entries drop), the
+  dispose still resolve; the stopped listener will not retry that write; temp
+  cleanup is best-effort and stale `*.tmp` is not swept; dispose does not await
+  an in-flight ledger load). A first cold request may wait up to 5 s for the
+  one-time baseline; after a seed timeout/failure the route serves the current
+  map immediately for the next 30 s while background seeding continues, and a
+  permanently hung listing can cause another ≤5 s wait after each backoff
+  window. The client merges activity per-id with `max(previous, next)` and
+  prunes only against a non-empty Session catalog, so partial/empty responses
+  and HMR overlap cannot drop known activity; a genuinely empty catalog never
+  prunes (stale entries may remain but no rows show). That client merge has no
+  node-test harness. The client's empty-response guard can defer a rare genuine
+  clear by up to 120 s. The ledger is a `$DSH_HOME`-shared Host file capped at
+  5000 Sessions (oldest entries drop; profiles sharing a home share it), the
   route serves a live snapshot with no document scan/TTL, and Host code changes
   need a plugin Host recompose. The **native sidebar keeps the catalog
   last-prompt times**, so sidebar times can disagree with the card for long runs;

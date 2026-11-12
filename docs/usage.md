@@ -54,8 +54,8 @@ Session is running and the white sparkle icon when nothing runs.
 - The leading glyph tells the read state: a running spinner while the Session
   runs, a green dot for a finished but unopened Session, then a white session
   icon once it has been opened. Read marks are now **shared through the Host**,
-  so they persist across reloads and appear the same in every browser of the DSH
-  profile; a click is only needed on a genuinely new result (the 1 s tolerance
+  so they persist across reloads and appear the same in every browser using the
+  same `$DSH_HOME`; a click is only needed on a genuinely new result (the 1 s tolerance
   prevents transient status flags from resurrecting the green dot). The marks
   live in the Host's `read-acks.json`; a browser with the new Host keeps its old
   local marks by opening DSH once, which uploads them in small chunks. During the

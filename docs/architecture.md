@@ -109,10 +109,17 @@ immediately** so later acks still sync. Pushes are chunked to at most **200 entr
 per sequential POST (the local cache and the pending map are each capped at
 1000; pending entries dropped by the cap remain in the local map and re-migrate
 later), so a large cache cannot pin the Host's 64 KiB cap. The sync **awaits**
-the pending ack-push flush before the activity fetch, inside a `try/finally`
-that always clears the in-flight flag. The browser `localStorage` cache is per
-origin; the Host documents live under `$DSH_HOME` and are per DSH profile. Read
-state is derived at render
+the actual in-flight ack-push promise before the activity fetch, inside a
+`try/finally` that always clears the in-flight flag, so no push is in flight when
+the activity request starts (at the cost of delaying that fetch by the push
+duration). The browser `localStorage` cache is per origin; the Host documents
+live under `$DSH_HOME/dsh-power-suite`, so **multiple DSH profiles sharing one
+home share them** — `--profile` is only a config layer under
+`$DSH_HOME/profiles/<name>`. profile isolation is not provided. The read-acks
+store has **no read-merge across writers**: each writer persists its own
+in-memory maxima, so concurrent profiles/HMR generations can overwrite each
+other's baselines (the activity ledger's best-effort read-merge is weaker still:
+per-id max with a TOCTOU window). Read state is derived at render
 (`baseline >= activity - 1000 ms`); there is no running-based clearing.
 
 ### Session activity ledger
@@ -125,13 +132,15 @@ ledger**:
 
 - `ctx.on('session/event', …, { global: true })` inside `ctx.effect` advances
   `sessionId → max(event.time)` only for the explicit `ACTIVITY_EVENT_TYPES`
-  allowlist, which covers all known activity-bearing families (turns, steps,
+  allowlist, which covers known activity-bearing families (turns, steps,
   messages/attempts; tools incl. PTC dispatch; job registered/settled; command
   runs; compaction start/end/prune/summary; subagent catalog/descriptor/policy;
   goal/todo; approvals and preset/plan/PTC/sandbox/model/permission selections;
   working-directory/workspace/deliverable/schedule changes; team traffic;
   image/offload; feedback; inbox splice; LLM retry; tool-workflow agent/run
-  progress), with a finite positive time and valid id. The explicit
+  progress; and `hook/invoked`/`hook/result`, which have no emitter in this
+  install but are kept for forward compatibility), with a finite positive time
+  and valid id. The explicit
   `NON_ACTIVITY_EVENT_TYPES` (`request/header`, `request/context`,
   `session/title`, `session/title-llm-request`, `session/end-seed`,
   `session-log-deepseek/delivery-accepted`,
@@ -145,38 +154,46 @@ ledger**:
   snapshot/write; the route copies once per request). Writes are best-effort
   read-merge-writes: they re-read the current file, merge per-id maxima, write
   the merged map atomically (random-suffixed temp + rename, `0600` in a `0700`
-  directory; failed writes remove the temp sibling), and absorb external entries
+  directory; temp cleanup is best-effort, and a stale `*.tmp` from a failed
+  removal is deliberately left unswept for concurrent-writer safety), and absorb external entries
   into memory. Sequential external writes are preserved, but the read-merge-write
   sequence has a TOCTOU window, so interleaving concurrent writers can lose one
   side; this is designed for a single Host process plus overlapping HMR, **not**
   as a cross-process lock or ordered multi-writer protocol (max per id only).
   `flush()` awaits the serialized chain including an in-flight write and drains
   events recorded during it until stable; `dispose()` stops the debounce, flushes,
-  awaits the chain, and is idempotent. Corrupt/missing files load as empty and
+  awaits the write chain (but not an in-flight ledger load), and is idempotent. Corrupt/missing files load as empty and
   schedule a rewrite immediately; a valid empty document is not rewritten.
   Accepted failure caveats: an abrupt crash before the debounce/flush can lose
   the last ≤750 ms window (no `fsync`), and a failed disk write keeps the map in
   memory without durability (flush/dispose still resolve, and the stopped
-  listener means this instance will not retry it).
+  listener means this instance will not retry it after dispose).
 - On install, a one-time background baseline seeds Sessions that are in the
   catalog but not yet in the ledger from their projection-cache document's
   `max(timeContext.lastMessageTime, lastInjectionTime)` (16 MiB document cap,
-  id/path guard, mtime used only as a re-parse guard). A Session with no usable
-  cache row falls back to header **`createdAt` only** (SessionHeader has no
-  `updatedAt`) — a creation-time approximation. Max-merge means the baseline
+  id/path guard, mtime used only as a re-parse guard). Cache/header baseline
+  times are clamped to `now + 60 s` so a corrupt future value cannot pin
+  activity; live committed `event.time` is trusted unclamped. A Session with no
+  usable cache row falls back to header **`createdAt` only** (SessionHeader has
+  no `updatedAt`) — a creation-time approximation. Max-merge means the baseline
   never overwrites newer live events, and a listing failure leaves the ledger
   as-is.
 - `GET /api/power-suite.session-activity` keeps the same path/contract and
   serves a cheap live ledger snapshot (`no-store`; broken ledger → `200
   { sessions: {} }`). The route awaits the single-flight ledger load **plus** the
   one-time baseline through a bounded `waitForSeeded(5000 ms)` before every
-  snapshot: an existing durable ledger is returned immediately (measured
-  ~30–34 ms / 406 entries), while a fresh install includes seeded history only if
-  seeding finishes within 5 s — a hung/failed listing or document read falls
-  back to the current map (no 500, later polls fill in). The client ignores an
-  empty response while it holds a non-empty map, for up to 120 s after mount or
-  the last non-empty response (a genuinely empty profile is accepted after;
-  rare clears inside the window are deferred). Values are exact only for
+  snapshot: an existing durable ledger is returned fast (measured ~12 ms / 407
+  entries), while a first cold request may wait up to 5 s for seeding. After a
+  seed timeout/failure the route serves the current map **immediately for the
+  next 30 s** while background seeding continues; success clears the backoff and
+  seeded values resume. If the listing stays permanently hung, a request after
+  each 30 s backoff window may again wait up to 5 s. The client merges activity
+  per-id with `max(previous, next)` and prunes only against a **non-empty**
+  Session catalog, so empty/partial responses and HMR overlap cannot drop known
+  activity; a genuinely empty catalog never prunes (stale entries may remain but
+  no rows show). No client node-test harness exists for these merges. It also
+  ignores an empty response while it holds a non-empty map, for up to 120 s after
+  mount or the last non-empty response. Values are exact only for
   allowlisted events the Host observed; pre-install Sessions have only the
   baseline approximation (historical/seed-only/no-cache can be under-reported,
   never fabricated). Host code changes need a plugin Host recompose (no DSH

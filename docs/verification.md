@@ -22,7 +22,7 @@ npm run pack:check
 
 Current evidence (2026-11-12, Node 24.22.2):
 
-- `npm test`: **109 tests, 109 passed, 0 failed**.
+- `npm test`: **111 tests, 111 passed, 0 failed**.
 - `npm run check`: passed (`18 modules, 9 test files`).
 - `npm run pack:check`: **72 files** (0.2.0 tarball), including `src/`,
   `locale/`, `docs/` (with the Project page/rail states/sidebar switch,
@@ -30,6 +30,13 @@ Current evidence (2026-11-12, Node 24.22.2):
   panel/filter-menu/Quick Look, Dynamic Workspaces, hover-detail, and
   prompt-history rail captures), `cordis.patch.yml`, `icon.png`, and the standard
   repository files.
+- Manual probes / code-reviewed behavior (no node harness): a failed ledger disk
+  write was exercised with a temporary-directory probe only (it keeps the map in
+  memory without durability and resolves flush/dispose); the client's 408/425
+  retry classification and its per-id monotonic activity merge/prune rule live in
+  the unexported browser bundle and were reviewed in code plus exercised live,
+  not in `node:test`; flush-before-activity ordering was measured live, not
+  unit-tested.
 - Host tests cover the read-vs-event cache race, silent-subagent timing, continue
   content-type/state/in-flight validation, the non-human source fields, the
   prompt-history timestamp fold (`at` from a finite event time, `null`
@@ -42,14 +49,18 @@ Current evidence (2026-11-12, Node 24.22.2):
   sanitization, max-merge, 1000-entry cap, 415/413/400/500), and the
   event-sourced activity ledger (store max-merge/cap/atomic persistence,
   best-effort read-merge writes with a TOCTOU window, flush/dispose durability
-  including an in-flight write, repeated dispose and a failed disk write,
-  record→dispose→reload, 20 sequential lifecycles, allowlist families plus the
-  explicit non-activity set, one-time baseline, seed-aware cold-load snapshot
-  route, and read-acks retry classification including 408/425).
+  including an in-flight write and repeated dispose, record→dispose→reload, 20
+  sequential lifecycles, allowlist families plus the explicit non-activity set
+  — including `hook/invoked`/`hook/result` and the `ptc-mode` rejection, one-time
+  baseline with the now+60 s future clamp, and the seed-timeout **backoff**
+  route behavior: first GET bounded, backoff GETs fast, release picks up seeded
+  values). The failed-disk-write path and the client's 408/425 retry
+  classification are **not** node tests — see the manual/code-reviewed note
+  below.
 - Host routes are covered by tests where they exist: Dynamic Workspaces'
   card state is browser-derived but Host-backed through the read-acks store/route
   and the session-activity ledger route (16 MiB document guard, allowlist
-  families/non-activity set, bounded seed wait, cold-load snapshot), while the
+  families/non-activity set, seed backoff, cold-load snapshot), while the
   Project view's
   `GET /api/power-suite.project` route and its pure folds are covered by the
   project-view suite (turn status, fork closer, stats exclusion, cache
@@ -285,25 +296,26 @@ These were exercised in the Web GUI during development:
   was retried on focus. HMR produced exactly one acks GET and one activity GET
   per 32 s window after reload (an HMR mount added one of each), with 0
   exceptions/plugin console errors.
-- Ledger durability, seed-aware cold load and multi-writer semantics were
-  verified after a recompose: the first cold GET returned `200` in **~30–34 ms**
-  with a **406-entry** ledger (not `{}`), and the route and file counts agreed
-  (file mode `600`, version `1`). Earlier probes saw 401, then 404, then 406
-  entries as Sessions accumulated — they are separate probe points, not a
-  contradiction. A checkpoint `80769cd0…` = `1794468599829` survived
-  dispose/recompose as route = file = **`1794468609063`** (≥ checkpoint, so the
+- Ledger durability, seed backoff, cold load and multi-writer semantics were
+  verified after a recompose: the first cold GET returned `200` in ~**12 ms**
+  with a **407-entry** ledger (not `{}`), and the route and file counts agreed
+  (file mode `600`, version `1`). Across the probe series the Session count grew
+  401 → 404 → 406 → 407 as Sessions accumulated — distinct probe points, not a
+  contradiction. A checkpoint `80769cd0…` = `1794470830718` survived
+  dispose/recompose as route = file = **`1794470838578`** (≥ checkpoint, so the
   ≤750 ms debounce window was not lost); a later probe read file
-  `1794468626727` / route `1794468642830` with live events advancing.
-  `0c14a9e7…` (`1794263011213`) and `78f7a4a7…` (`1794418427299`) stayed stable
-  through Host activity and recompose, while `442a0000…` advanced only with real
-  events (`…6219743` → `…6306695` → `…6318019` → `…6413163`). A fresh browser's
-  first activity response was `200` with the 406-entry map, and forcing an empty
-  response left the card rows unchanged (guarded window). HMR kept one acks GET +
-  one activity GET per 32 s window, one panel/four rows, 0 exceptions/plugin
-  console errors. The read-merge path is best-effort: sequential external writes
-  are preserved but interleaving writers can lose one side (TOCTOU), and a failed
-  disk write leaves the map in memory without durability (flush/dispose resolve).
-- The 10× gate run was clean: `npm test` **10/10 runs exited 0 with 109/109
+  `1794470854443` / route `1794470870039` with live events advancing.
+  `0c14a9e7…` (`1794263011213`) and `78f7a4a7…` (`1794418427299`) stayed stable,
+  while `442a0000…` advanced only with real events. True flush-before-activity
+  ordering was measured: a POST delayed 300 ms made the activity GET start 1 ms
+  after the POST ended. A partial activity response (only `442a0000…`) and an
+  empty response both left all 4 card rows/times intact, and HMR kept +1 acks +
+  +1 activity GET per 32 s window, one panel/four rows, 0 console errors. The
+  read-merge path is best-effort: sequential external writes are preserved but
+  interleaving writers can lose one side (TOCTOU); a failed disk write keeps the
+  map in memory without durability (flush/dispose resolve; not retried after
+  dispose).
+- The 10× gate run was clean: `npm test` **10/10 runs exited 0 with 111/111
   passing each**; `npm run check` **10/10 exited 0 with fail 0** (18 modules, 9
   test files); the final `npm run pack:check` was **72**.
 - The current-chat rainbow ring was verified live: exactly one ring rendered with

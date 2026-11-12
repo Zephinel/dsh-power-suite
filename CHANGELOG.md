@@ -85,21 +85,26 @@ All notable changes to this repository are documented here. The format follows
 - Host-shared read acknowledgements: a durable
   `$DSH_HOME/dsh-power-suite/read-acks.json` document (schema v1, sanitized,
   per-id max-merge, 1000-entry cap, atomic writes) is served by an authenticated
-  `GET/POST /api/power-suite.read-acks` route; every browser of the profile syncs
-  the same baselines (local cache + 30 s/focus/visibility sync, one-time
-  migration of old local marks, 250 ms debounced push). Read state is derived as
-  `baseline >= activity - 1000 ms`, so a transient status flag can no longer
-  resurrect a stale green dot.
+  `GET/POST /api/power-suite.read-acks` route; every browser using the same
+  `$DSH_HOME` syncs the same baselines (local cache + 30 s/focus/visibility
+  sync, one-time migration of old local marks, 250 ms debounced push). Profiles
+  sharing a home **share the file with no profile isolation and no read-merge
+  across writers**, so concurrent profiles/HMR generations can overwrite each
+  other's baselines; the design assumes one Host process plus overlapping HMR.
+  Read state is derived as `baseline >= activity - 1000 ms`, so a transient
+  status flag can no longer resurrect a stale green dot.
 - Event-sourced activity ledger for the activity card: the Host subscribes to
   committed `session/event` times under an explicit `ACTIVITY_EVENT_TYPES`
-  allowlist covering all known activity-bearing families (turns, steps,
+  allowlist covering known activity-bearing families (turns, steps,
   messages/attempts, tools incl. PTC, jobs, commands, compaction, subagent state,
   goal/todo, approvals and selection actions, workspace/deliverable/schedule
   changes, team traffic, image/offload, feedback, inbox splice, LLM retry,
   tool-workflow progress); the explicit `NON_ACTIVITY_EVENT_TYPES` metadata
   (request headers/context, titles and their LLM requests, end seeds, delivery
   acknowledgements, web search requests), seed variants, and unknown
-  future/plugin types never count. It persists
+  future/plugin types never count; `hook/invoked`/`hook/result` are allowed for
+  forward compatibility although this kernel emits none, and `ptc-mode` is not a
+  Session event. It persists
   `$DSH_HOME/dsh-power-suite/session-activity.json`
   (`{version:1, sessions:{id:lastActivityAt}}`, max-merge, 5000-Session cap,
   debounced atomic writes) and seeds a one-time projection-cache baseline for
@@ -114,9 +119,14 @@ All notable changes to this repository are documented here. The format follows
   without durability (flush/dispose still resolve). A read-only
   `GET /api/power-suite.session-activity` keeps the same `{sessions}` contract
   and serves the live ledger (no per-request document scan, no-store) after a
-  bounded `waitForSeeded(5000 ms)` — immediate for an existing ledger, seeded
-  history for a fresh install when seeding finishes within 5 s, otherwise the
-  current map with later polls filling in. The client ignores an empty response
+  bounded `waitForSeeded(5000 ms)` — fast for an existing ledger; a first cold
+  request may wait up to 5 s, and after a seed timeout/failure the route serves
+  the current map immediately for a 30 s backoff while background seeding
+  continues (success clears it; a permanently hung listing can wait again after
+  each window). Baseline cache/header times are clamped to now+60 s while live
+  event times are trusted. The client merges activity per-id monotonically and
+  prunes only against a non-empty catalog, so partial/empty responses cannot
+  drop known activity. The client ignores an empty response
   while it holds a non-empty map for up to 120 s after mount/last non-empty, and
   the card folds the map in via `max(catalog updatedAt, activity)` for retention,
   ordering, relative times, bucket recency, child rows, and read-baseline
