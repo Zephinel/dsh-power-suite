@@ -3,11 +3,15 @@
 A DSH Power Suite feature: a floating launcher that turns the Web GUI into a
 point-and-click annotation surface. While the mode is on, the page makes room for
 a narrow right rail, hovering the interface outlines the element under the
-pointer, and clicking one opens a small note popover. A selected element can be
-inserted into the current Session's composer as a plain-text reference, alone or
-as one ordered batch for several elements. The mode only inserts text: it never
-edits the page's content elements, never reads form values, and never sends the
-message.
+pointer, and clicking one opens a small note popover. Hover-triggered floating
+cards, menus, and dialogs are selectable too: the whole floating surface is the
+default target, and the Parent/Child control drills into its rows. A selected
+element can be inserted into the current Session's composer as a plain-text
+reference, alone or as one ordered batch for several elements. Every captured
+reference carries a verified-unique locator, its stable ancestors, and the
+Session/Workspace/route identity, and the collection survives a page reload
+through browser-local storage. The mode only inserts text: it never edits the
+page's content elements, never reads form values, and never sends the message.
 
 ## What it does
 
@@ -18,18 +22,24 @@ message.
   can collapse to a narrow strip.
 - **Selection** — hover highlights the candidate element, a click selects it for
   good, and the popover can step up or down the ancestor chain when the first
-  candidate is too small or too large.
+  candidate is too small or too large. A hit inside a floating surface selects
+  the whole surface first and drills into its rows from there.
 - **Multi-select** — the multi-select modifier toggles membership on click, or a
   modifier-held drag draws a box that selects everything inside it.
 - **Pass-through** — holding the pass-through modifier gives the page its real
   native mouse behavior back, for the left and right buttons, without leaving the
   mode.
 - **Note popover** — element name, locator summary, live resolution status, an
-  ancestor lever, a note field, and two paths: insert one reference into the
-  composer, or add the element to the collection.
-- **Collection** — an ordered list held in the rail with per-entry notes, delete
-  and re-locate actions, and a batch insert that produces one structured request
-  for the model.
+  ancestor lever, a note field, a **Copy locator** action, and two paths: insert
+  one reference into the composer, or add the element to the collection. Floating
+  surfaces are marked as transient in the popover.
+- **Collection** — an ordered list held in the rail with per-entry notes, copy
+  locator, delete and re-locate actions, and a batch insert that produces one
+  structured request for the model. It is persisted in the browser and restored
+  after a reload (up to 100 annotations).
+- **Input focus treatment** — annotation text fields and selects use the plugin's
+  shared rainbow focus ring instead of a solid blue outline (see
+  [focus treatment](#focus-treatment)).
 - **Insertion** — references go into the current composer through the shell's own
   insertion API, preserving the existing draft and caret, one undo step, and
   never sending the message.
@@ -128,19 +138,31 @@ opens the note popover.
 
 - **Candidate choice** walks the pointer target's ancestor chain and prefers the
   nearest meaningful control or container — buttons, links, inputs, rows, menu
-  items, regions, headings, list and table cells, and other semantic surfaces —
-  over a bare text leaf or an anonymous wrapper. Our own UI nodes, the root
-  elements, zero-size or hidden elements, and the composer's editable internals
-  are skipped; a hit inside the composer resolves to the composer region, never
-  to the typed text. When no semantic candidate matches, the nearest element with
-  a real box is used.
+  items, tooltips, dialogs, regions, headings, list and table cells, and other
+  semantic surfaces — over a bare text leaf or an anonymous wrapper. Our own UI
+  nodes, the root elements, zero-size or hidden elements, and the composer's
+  editable internals are skipped; a hit inside the composer resolves to the
+  composer region, never to the typed text. When no semantic candidate matches,
+  the nearest element with a real box is used.
+- **Floating surfaces** — a hit inside a floating surface is scoped to that
+  surface: the whole card, menu, or dialog is the default target, and selection
+  never crosses the surface root to the page elements behind it. See
+  [floating surfaces](#floating-surfaces) for the exact rule and limits.
 - **Hover hot path** — the pointer chain collects **elements only** (up to 16
   ancestors). Element descriptors are built lazily only for the chosen element
   and at most **2 context ancestors**, so a hover performs **0 `textContent`
   reads** and a bounded amount of work. This was established by an **ad hoc
   vm/fake-DOM probe** (not the committed E2E harness, which has no such
   instrumentation) and by the unit seam asserting the chain builder never calls
-  the descriptor builder; treat it as a manual measurement.
+  the descriptor builder; treat it as a manual measurement. The v2 capture does
+  not change this: the verified-unique-selector query runs at capture time, not
+  on pointermove.
+- **Stationary-pointer recompute** — a hovered floating card that appears or
+  expands while the pointer stands still has no `pointermove` to follow. The mode
+  observes the body's DOM mutations while active and re-resolves the hover target
+  after a 60 ms debounce, so the outline follows the DOM instead of staying on
+  the old target. This is covered by a live E2E check that inserts a fixed
+  z-index layer under a stationary pointer and requires the outline to follow.
 - **Ancestor adjustment** — the popover's up/down control moves along the
   candidate's ancestor chain, clamped at both ends, and re-derives the reference
   at each level. This is for choosing the right granularity: an icon instead of
@@ -167,6 +189,51 @@ opens the note popover.
   feature reads layout and labels and inserts text; it does not edit the page's
   content elements, files, or Session logs. Its own UI, the prompt-rail style,
   and the temporary frame padding change are cleaned up on exit.
+
+### Floating surfaces
+
+Hover-triggered cards and menus are body-level portals; they are ordinary DOM and
+are annotatable. The mode scopes the pick to the floating surface so the result
+is the whole card rather than an unreadable 16 px text row inside it.
+
+- **Surface detection uses computed style, not class names.** From the hit
+  element the mode walks up to the first box whose computed `position` is
+  `fixed` or `absolute` and whose computed `z-index` is at least **10**, then
+  keeps extending upward while the ancestors are themselves floating boxes. That
+  outermost box is the **surface root**. Hashed DSH class names are never
+  consulted, so a DSH rebuild cannot silently disable the behavior; SVG boxes,
+  zero-size boxes, and the plugin's own UI are excluded.
+- **The whole surface is the default target.** Clicking anywhere in the surface
+  selects the surface root, and the hover outline is the same `.psa-hover`
+  rule used everywhere else — the computed border style, width, and colour of a
+  floating-surface outline are identical to an ordinary button's (a live E2E
+  check asserts this).
+- **Child / Parent drills inside the surface.** Child steps go to the surface's
+  inner candidates and text rows (an element with no element children, non-empty
+  text, and a box of at least 8×8 is a text row); Parent returns to the whole
+  surface. Inner levels are capped at 12. A surface record is marked
+  `surface: "floating"` and `ephemeral: true`, and the popover says the element
+  can disappear when its card closes.
+- **Paint layer.** While the mode is active the shell overlay's inline
+  `z-index` is raised to **150** (above native hover cards at 100, below native
+  modals at 1000 and menus at 1100) and restored exactly on exit — value and
+  priority included. The rail stays inside `[data-shell-overlay]`; nothing is
+  portalled. The raise is asserted live: the overlay's computed z-index must be
+  greater than the hover card's.
+- **Our own hover card** — the Dynamic Workspaces feature's running/recent hover
+  card gets a stable `data-psd-hovercard` attribute and, while annotation mode is
+  active, the annotation stylesheet makes it pointer-interactive at `z-index:
+  120`. Pinning its lifetime to the mode (instead of the anchor row's 140 ms
+  close) belongs to that feature; only when that behavior is present can the card
+  itself be hovered and annotated. This document does not claim that behavior
+  here.
+
+Limits of the surface rule: a native tooltip bubble that is
+`pointer-events: none` cannot receive the pointer and cannot be selected — annotate
+its anchor control instead. Native modals and context menus stack above the
+annotation layer (z-index 1000/1100); close them before annotating, as before.
+Cross-origin iframes, Shadow DOM internals, and canvas pixels remain
+unselectable.
 
 ### Multi-select and marquee
 
@@ -213,10 +280,21 @@ element.
 
 It shows:
 
-- the element **name** and a short **locator summary** (the tag, its accessible
-  name, and the most reliable selector candidate);
+- the element **name** and a short **locator summary**: the tag, its accessible
+  name, and the **verified-unique selector** when capture could construct one,
+  otherwise the most reliable ordered candidate. Duplicate-label controls such as
+  **New session** therefore show an anchored selector like
+  `div[data-slot="sidebar"] > div:nth-of-type(1) > button:nth-of-type(1)` and
+  resolve uniquely instead of reporting Matches several; when no candidate is
+  unique the summary falls back honestly and the status says so;
 - the live **resolution status**, shown as Resolved, Matches several, No longer
   resolves, or Content changed (see [statuses](#re-resolution-statuses));
+- a **Copy locator** control that copies the verified-unique selector (or the
+  best ordered candidate) to the clipboard and reports **Locator copied** or
+  **Could not copy the locator**;
+- a transient-surface notice for floating cards (`surface: "floating"`,
+  `ephemeral: true`), so a target that will disappear with its card is not
+  presented as a permanent one;
 - the ancestor **Parent element** / **Child element** controls;
 - the **Requested change** field (a compact textarea, about three rows) with its
   placeholder, saved as you type. The note is normalized with
@@ -226,6 +304,8 @@ It shows:
   verbatim, so a multi-line note is inserted as multi-line content (and can
   exceed the single-line label layout); page-derived text still goes through the
   sanitizer below;
+- the **Requested change** field uses the shared plugin rainbow focus ring (see
+  [focus treatment](#focus-treatment)) instead of a solid outline;
 - **Quick reference** — inserts this one annotation into the current Session's
   composer at the caret, preserving the existing draft and caret position, one
   undo step, and never sending the message;
@@ -264,9 +344,15 @@ collection is empty the view shows **No annotated elements** with the hint
   closes on its close control, on blur, or on Esc, and it never changes the canvas
   width. The inline note editor grows with its content up to 72 px and scrolls
   beyond it.
+- **Copy locator** copies the row's verified-unique selector (or best ordered
+  candidate) with the same toast as the popover.
 - **Remove** removes one entry and reports **Removed from the collection**;
   **Clear** empties the list in one click with no confirmation dialog and reports
   **Collection cleared**.
+- **Cap** — the collection and its persisted document hold at most **100**
+  annotations. Adding the 101st record is refused before it is committed, with a
+  visible message (**The collection is full (100 annotations)…**); nothing is
+  silently dropped and no record is evicted.
 - **Re-locate** scrolls a still-resolving element into view, flashes its
   highlight for about 600 ms, and reports **Moved to the element**. If the
   element no longer resolves, the action reports **The element cannot be located
@@ -280,10 +366,11 @@ collection is empty the view shows **No annotated elements** with the hint
 - The collection view's header area shows the total count, so the rail's status
   view and launcher badge agree with the list.
 
-### Session scope
+### Session scope and persistence
 
-The collection belongs to the browser page, not to one Session. It survives
-Session switches, and every entry records the Session it was created in.
+The collection belongs to the browser profile, not to one Session. It survives
+Session switches and page reloads, and every entry records the identity it was
+created in.
 
 - Entries whose origin Session is the current Session are **current-scope** rows.
 - Entries from another Session carry an **Other session** badge in the
@@ -292,9 +379,24 @@ Session switches, and every entry records the Session it was created in.
   many were skipped.
 - Switching back to the origin Session makes those entries current again.
   Nothing is deleted on a switch.
-- The collection is held in memory for the page lifetime. A page reload clears it;
-  it is not written to the Host, a Session log, or storage. This is deliberate:
-  annotations are a scratch list for the request being composed.
+- Records are validated and persisted in **browser-local `localStorage`** under
+  `power-suite.ui-annotation.annotations` as a versioned document
+  `{ "version": 2, "updatedAt": <epoch ms>, "records": [ … ] }`. Writes are
+  debounced by 250 ms after any collection change, and flushed when the mode is
+  deactivated, when the plugin is disposed, and when the tab becomes hidden. On
+  load, invalid JSON, malformed records, unknown document versions, duplicate ids,
+  and records beyond the 100 cap are dropped; a v1 record is upgraded in place.
+  Restored records re-resolve their statuses live, so a target that is gone reads
+  Missing while a still-present target reads Resolved.
+- Each record also carries the Session id, the full `cwd` plus its basename as
+  `workspaceLabel`, the route `location.pathname`, and the capture viewport, so a
+  restored annotation still says which Session and Workspace it belongs to. The
+  route never includes a query string or fragment, so a token can never be
+  persisted.
+- Persistence is **local to this browser profile**: there is no Host write, no
+  Session-log entry, and no cross-device sync. Notes, locators, `cwd`, and the
+  route stay on the machine. Clearing browser site data removes them; the
+  collection's **Clear** action also empties the persisted document.
 
 ### De-duplication
 
@@ -315,7 +417,7 @@ inserted, so a stale annotation is visible before it is used:
 |---|---|---|
 | Resolved | Exactly one element matches the candidates and its text is unchanged. | none |
 | Ambiguous | More than one element matches the candidates. | `Status: target matches more than one element (locator only)` / `状态：目标匹配到多个元素（仅保留定位信息）` |
-| Missing | No element matches any candidate any more. | `Status: target no longer resolves (locator only)` / `状态：目标已无法定位（仅保留定位信息）` |
+| Missing | No element matches any candidate any more. | `Status: target no longer resolves (locator only)` / `状态：目标已无法定位（仅保留定位信息）`; for a floating-surface record the honest variant is `Status: transient surface no longer present (locator only)` / `状态：瞬态浮层已不存在（仅保留定位信息）` |
 | Changed | The element still matches but its text is different from the annotation. | `Status: target content changed` / `状态：目标内容已变化` |
 
 Both insertion paths mark a non-resolved target: a single reference adds the
@@ -352,6 +454,12 @@ Session: <session short> · <HH:MM>
 Note: <note or "—">
 ```
 
+`<locator summary>` prefers the verified-unique selector when capture could build
+one, for example `button "New session" · div[data-slot="sidebar"] >
+div:nth-of-type(1) > button:nth-of-type(1)`, and otherwise falls back to the most
+reliable ordered candidate. `<name>` is the accessible name when one exists,
+otherwise the sanitized text summary.
+
 Chinese:
 
 ```text
@@ -379,6 +487,10 @@ Note: Align the actions to the right edge
 Status: target no longer resolves (locator only)
 ```
 
+A vanished floating-surface target says so explicitly instead of pretending it
+moved: `Status: transient surface no longer present (locator only)` /
+`状态：瞬态浮层已不存在（仅保留定位信息）`.
+
 ### Batch request (collection)
 
 **Insert all into composer** in the collection view produces one numbered,
@@ -393,7 +505,7 @@ Please adjust the UI elements below. Each item lists its reference and the reque
 (1 annotation(s) from other sessions skipped)
 
 1. New session
-   Reference: button "New session" · [aria-label="New session"]
+   Reference: button "New session" · div[data-slot="sidebar"] > div:nth-of-type(1) > button:nth-of-type(1)
    Note: Make this button sticky in the header
 
 2. Artifacts
@@ -445,7 +557,7 @@ applies the new value and moves the other modifier to a different choice; the
 settings view names the moved field and its new value, and an equal pair is never
 stored. Missing or unreadable stored values fall back to the defaults.
 
-Storage is browser-local and has three separate keys under the
+Storage is browser-local and has four separate keys under the
 `power-suite.ui-annotation.` prefix:
 
 - `power-suite.ui-annotation.settings` — the JSON settings document, holding only
@@ -453,7 +565,12 @@ Storage is browser-local and has three separate keys under the
 - `power-suite.ui-annotation.launcher` — the launcher position as JSON
   `{ "x": <number>, "y": <number> }`;
 - `power-suite.ui-annotation.rail-collapsed` — the rail's collapsed flag
-  (`true` or `false`).
+  (`true` or `false`);
+- `power-suite.ui-annotation.annotations` — the versioned v2 annotation record
+  document (locator, verified-unique selector, stable ancestors, Session/Workspace
+  identity, route, viewport, and the user's note), capped at 100 records. It is
+  the only key that holds page identity and user text; see
+  [session scope and persistence](#session-scope-and-persistence).
 
 The mode itself is not persisted: a page reload starts with the mode off while the
 launcher and rail state come back.
@@ -463,6 +580,18 @@ are not stored in the Host. The Plugins page holds the Host-side preferences
 (prompt-history modifier, Dynamic Workspaces retention windows — see
 [settings.md](settings.md)); annotation settings are per browser profile and are
 not synced to another browser or device.
+
+### Focus treatment
+
+Every annotation input — the popover request field, the collection row note, the
+expanded note editor, and the two settings selects — uses the plugin's shared
+**rainbow focus ring** instead of a solid blue outline. The ring is painted by a
+wrapper's `::after` mask ring (2 px band, `inset: -2px`, no layout shift), fades
+in over 140 ms, spins once every 3.2 s while drifting hue over 14 s, and uses the
+same conic-gradient stops and glow as the Dynamic Workspaces focus treatment, so
+the whole plugin reads as one effect. Under `prefers-reduced-motion` the ring is
+static; under `forced-colors` the ring is replaced by a 2 px system `Highlight`
+outline. Buttons keep their own focus rings — the rainbow ring is for inputs.
 
 ## Host boundaries
 
@@ -537,11 +666,53 @@ package manifest.
   available and a small fallback otherwise; the fallback escapes a leading digit
   as a hex escape (`#123abc` → `#\31 23abc`) rather than producing an invalid
   selector.
-- **Coexistence with the Project page** — the Project page dispatches
-  `power-suite:ui-annotation-exit` when it opens, so annotation deactivates; the
-  launcher is hidden under `html[data-power-suite-project-page="true"]`, and the
-  page's Esc ladder closes the page first (the launcher returns with annotation
-  still off). Annotation is **not usable while the Project page is open**.
+- **Paint layer (F1)** — activating the mode captures the shell overlay's own
+  inline `z-index` value and priority, sets `z-index: 150 !important` plus a
+  `data-psa-raised` marker, and restores the captured pair exactly on exit,
+  deactivation rollback, or disposal. The overlay element itself is unchanged, so
+  the rail stays inside the shell's own seat; only its stacking layer moves. This
+  puts the annotation outlines above native hover cards (z-index 100) while
+  native modals (1000) and menus (1100) stay above it.
+- **Floating-surface picker (F2)** — `annotationSurfaceRoot(chain)` finds the
+  outermost contiguous `fixed`/`absolute` + `z-index >= 10` ancestor using
+  computed style only; the pick returns that root, and
+  `annotationSurfaceLevels(root)` builds the bounded drill list (root plus
+  candidates and ≥ 8×8 text rows, capped at 12). A surface pick is recorded with
+  `surface: "floating"` / `ephemeral: true`. Ordinary page picks keep the v1
+  candidate-then-solid-box order and ancestor Parent/Child behavior.
+- **Mode state event (F4 side)** — activation and deactivation dispatch
+  `power-suite:ui-annotation-state` on `document` (bubbling, `detail: { active }`);
+  the Dynamic Workspaces feature owns the hover-card pin behavior that consumes it.
+  The annotation stylesheet also declares
+  `html[data-psa-active="true"] [data-psd-hovercard]{pointer-events:auto;z-index:120
+  !important}` so that feature's card can be hovered while the mode is on.
+- **ElementRef v2 (A2)** — each captured reference carries a verified-unique CSS
+  selector (constructed from sanitized stable attributes or a stable ancestor plus
+  `tag:nth-of-type` steps, then checked with `querySelectorAll`; `uniqueVerified`
+  records the outcome), up to three sanitized stable ancestors, the surface kind,
+  the ephemeral flag, Session id + `cwd`/`workspaceLabel`, `route`, `viewport`,
+  and `updatedAt`/`included`/`lastStatus`. It deliberately carries **no**
+  `outerHTML`, JS path, XPath, computed styles, or form values. The resolver tries
+  the unique selector first, so a duplicate-label control resolves uniquely while
+  genuine ambiguity is still reported.
+- **Persistence (D1/D15)** — the controller loads
+  `power-suite.ui-annotation.annotations` at construction through
+  `parseAnnotationStore`, keeps the collection in the reducer as before, writes a
+  debounced 250 ms `serializeAnnotationStore` document after every collection
+  change, flushes on deactivate/dispose/visibilitychange-hidden, and drops
+  invalid/duplicate/over-cap records on load. The 100-record cap is enforced in
+  `collectionAdd` at the commit boundary, with an explicit refusal rather than an
+  eviction.
+- **Copy locator (D10)** — one controller action copies
+  `uniqueSelector || best candidate` for a popover selection or a collection row
+  and reports success/failure through the existing toast.
+- **Focus treatment (B3)** — one `.psa-rainbow-field` wrapper recipe in
+  `ANNOTATION_CSS`; the wrapper paints the shared ring, the control's solid focus
+  outline is removed, and the same reduced-motion/forced-colors fallbacks apply.
+- **Project page** — the standalone Project detail page was removed from the
+  suite. The annotation region no longer listens for
+  `power-suite:ui-annotation-exit` and no longer hides the launcher under a
+  project-page marker; annotation mode and page navigation are now independent.
 - **Layout** — the frame's `padding-right` plus a CSS transition, never a CSS
   transform. The exact layout mode is recomputed (debounced) on resize:
   `innerWidth - sidebarWidth - railWidth >= 560` shrinks, otherwise the rail
@@ -573,13 +744,19 @@ package manifest.
 - **Test seam** — at the end of the factory, when
   `globalThis.__POWER_SUITE_TEST_HOOKS__` exists (set only by the test harness
   and the E2E injector), the factory publishes its pure helpers under
-  `__POWER_SUITE_TEST_HOOKS__.uiAnnotation`: settings normalization and modifier
+  `__POWER_SUITE_TEST_HOOKS__.uiAnnotation` (**48 keys**, the Phase 1 generation;
+  previous generations were 31/32/35): settings normalization and modifier
   conflict resolution, text/attribute sanitizers, selector candidates,
   `buildElementRef`, a deterministic text digest, a DOM node resolver, locator
-  descriptions, the reducer, quick-reference and batch
-  serializers, `batchScopeSplit`, `resolveRefStatus`, position clamps, rail width
-  and layout mode, and the collection list helpers. Production never defines the
-  flag.
+  descriptions, the reducer, quick-reference and batch serializers,
+  `batchScopeSplit`, `resolveRefStatus`, position clamps, rail width and layout
+  mode, the collection list helpers, and the Phase 1 additions —
+  `buildUniqueSelector`, `buildStableAncestors`, `annotationLocatorText`,
+  `annotationWorkspaceLabel`, `annotationRoutePath`,
+  `normalizeAnnotationViewport`, `normalizeAnnotationRecord`,
+  `parseAnnotationStore`, `serializeAnnotationStore`, `annotationSurfaceRoot`,
+  `annotationSurfaceLevels`, and the records storage key/limit constants.
+  Production never defines the flag.
 
 The visible DOM carries stable markers used by the E2E harness and by cleanup:
 `html[data-psa-active]`, `[data-psa-frame]`, `[data-psa-rail]`,
@@ -601,7 +778,7 @@ plugin is installed, and its mode-dependent rules act only while
 
 ## Testing and verification
 
-Pure logic is covered by Node's test runner (**57** cases); live behavior is
+Pure logic is covered by Node's test runner (**70** cases); live behavior is
 exercised by a pre-merge acceptance harness, but **not every interaction has a
 single full-green live run** (see below and
 [verification.md](verification.md)).
@@ -624,8 +801,15 @@ and Esc ladder (including ending an active note edit), collection de-duplication
 and empty-re-add note preservation, immutability, session scoping and notes,
 quick-reference and batch serialization (ordering, numbering, the empty-note and
 status markers, the other-session skip line, and the ZH label conventions), the
-resolution statuses (including digest-based change detection), and the
-launcher/popover clamps and rail-width thresholds.
+resolution statuses (including digest-based change detection), the
+launcher/popover clamps and rail-width thresholds, and the Phase 1 additions:
+floating-surface root/level picking (including the DOM-free accessor path),
+verified-unique selector construction and sanitized stable ancestors, v2
+record normalization (v1 tolerance, invalid-record rejection, verbatim notes,
+candidate bounding), the v2 store parse/serialize round trip (tolerant parsing,
+duplicate removal, 100-record cap, deterministic output), honest unique-selector
+resolution (one hit / several hits / zero-hit fallback), the copy-locator text
+helper, the explicit collection cap, and the transient-surface status line.
 
 The live acceptance harness is
 [`test/browser/annotation.e2e.mjs`](../test/browser/annotation.e2e.mjs), a
@@ -633,9 +817,9 @@ dependency-free Node script that drives local Chrome over CDP. Run it from the
 repository root against a running GUI:
 
 ```bash
-node test/browser/annotation.e2e.mjs            # smoke + 9 scenarios + screenshots
+node test/browser/annotation.e2e.mjs            # smoke + 11 scenarios + screenshots
 node test/browser/annotation.e2e.mjs --smoke    # pipeline smoke only
-node test/browser/annotation.e2e.mjs --scenario 4 --no-shots   # one scenario, no captures
+node test/browser/annotation.e2e.mjs --scenario 10 --no-shots  # one scenario (1-15), no captures
 ```
 
 It opens the real DSH Web GUI with a fresh Chrome profile (`--user-data-dir`),
@@ -663,7 +847,8 @@ not repository files.
 - Other modes: `--shots-only` captures the screenshots without assertions,
   `--assets` writes them to `docs/assets/` (the default is a temporary
   directory), `--client <path>` injects an alternate client file, `--scenario N`
-  or `--from N` runs a subset, `--no-shots` skips captures, `--headful` shows the
+  or `--from N` runs a subset (scenario ids 1-15; 11,12,13,14 belong to the
+  Phase 2 UX work and are not in this build's order), `--no-shots` skips captures, `--headful` shows the
   browser, and `--keep-open` leaves Chrome running for inspection.
 - Gate semantics: the exit code is `0` only when every check passes; `1` for any
   scenario failure, page error, real network/API failure, missing scenario row,
@@ -672,8 +857,9 @@ not repository files.
   gate failure (exit 1), not a usage error. `--smoke` is pipeline-only but still
   fails when the injected client cannot load, does not expose a documented seam
   generation (round-1 31 keys with `textDigest`; round-2 32 keys with
-  `resolveNodeCandidate`; current audit-fix 35 keys adding `normalizeUserNote`,
-  `cssIdentifier` and `clampPopoverPositionToViewport`), or does not mount the
+  `resolveNodeCandidate`; audit-fix 35 keys adding `normalizeUserNote`,
+  `cssIdentifier` and `clampPopoverPositionToViewport`; Phase 1 48 keys adding the
+  floating-surface picker, verified selector/ancestors, and v2 record store), or does not mount the
   annotation surface. `full` and `--shots-only` with a feature-absent client
   record a **FAIL** row and exit non-zero; every requested scenario must produce
   a result row.
@@ -768,9 +954,19 @@ acceptance `test/browser/`.
 - **Text insertion only.** References are inserted as plain text; the feature
   never edits the page's content elements, any file, or a Session log. An
   annotation cannot change the UI itself.
-- **Page-lifetime collection.** The collection is in memory: a page reload
-  clears it. Only the two modifier settings and the launcher position (and the
-  rail's collapsed state) are remembered.
+- **Browser-local persistence.** The collection is persisted in this browser
+  profile's `localStorage` (up to 100 records) and restored on reload. It is not
+  written to the Host, a Session log, or another device; site-data clearing
+  removes it. Records hold locators, `cwd`, `route` (pathname only), and the
+  user's note, never page HTML, form values, URL query strings, or tokens.
+- **Floating surfaces are transient.** A hover card, menu, or dialog can disappear
+  when it closes, so its record is marked `ephemeral` and its inserted reference
+  says the target is a transient surface rather than claiming it still exists.
+  A `pointer-events: none` native tooltip cannot be hovered at all; annotate its
+  anchor control. Native modals and context menus stack above the annotation
+  layer, so close them first. The Dynamic Workspaces hover card only becomes
+  fully annotatable once that feature's pin behavior ships; until then it still
+  closes shortly after the pointer leaves its anchor row.
 - **Browser-local settings.** The two modifiers apply to this browser profile and
   are not synced with the Host or another device.
 - **Best-effort locators.** Generated, virtualized, or rebuilt DOM can leave a
@@ -799,9 +995,10 @@ acceptance `test/browser/`.
   an accepted accessibility limitation, not a hidden toggle.
 - **Marquee selection is capped at 24 candidates.** A very large marquee adds
   the 24 most specific intersecting candidates, not every intersecting element.
-- **The Project page takes precedence.** Opening the Project page exits
-  annotation mode and hides the launcher; the two surfaces coexist only by that
-  exit (there is no mixed mode and no z-index negotiation beyond it).
+- **No Project-page coupling.** The former standalone Project detail page was
+  removed from the suite; annotation mode no longer exits on a project-page event
+  and its launcher is no longer hidden by a project-page marker. Annotation mode
+  and page navigation are independent.
 - **Not a full keyboard-navigation path.** The mode is entered and driven with
   the pointer; native keyboard shortcuts keep working while active, but there is
   no keyboard route to annotate an element.

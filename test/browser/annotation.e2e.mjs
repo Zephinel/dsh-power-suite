@@ -104,6 +104,23 @@ function assertNear(actual, expected, tolerance, message) {
   }
 }
 
+/**
+ * Assert two rectangles agree on every edge within a tolerance.
+ * @param {{ x: number, y: number, width: number, height: number }} actual - measured rectangle.
+ * @param {{ x: number, y: number, width: number, height: number }} expected - expected rectangle.
+ * @param {number} tolerance - maximum per-edge difference in pixels.
+ * @param {string} message - assertion message.
+ * @returns {void}
+ */
+function assertRectNear(actual, expected, tolerance, message) {
+  if (actual === null || actual === undefined || expected === null || expected === undefined) {
+    throw new Error(`${message} (missing rect: actual=${short(JSON.stringify(actual))}, expected=${short(JSON.stringify(expected))})`)
+  }
+  for (const key of ['x', 'y', 'width', 'height']) {
+    assertNear(actual[key], expected[key], tolerance, `${message} [${key}]`)
+  }
+}
+
 /** Privacy-safe summary of a composer draft for logs: never print the draft text itself. */
 function draftPreview(text) {
   const value = typeof text === 'string' ? text : ''
@@ -161,8 +178,8 @@ function parseArgs(argv) {
       throw error
     }
     const value = Number(raw)
-    if (!Number.isInteger(value) || value < 1 || value > 9) {
-      const error = new Error(`invalid ${name} "${raw}": expected an integer in the 1..9 scenario range`)
+    if (!Number.isInteger(value) || value < 1 || value > 15) {
+      const error = new Error(`invalid ${name} "${raw}": expected an integer in the 1..15 scenario range`)
       error.exitCode = 2
       throw error
     }
@@ -940,6 +957,20 @@ class Results {
     }
   }
 
+  /**
+   * Record an explicit SKIP row (cross-branch dependency, environment absence).
+   * A skip is never a PASS: the run reports it separately, and it does not fail
+   * the gate because the product path under test is not present in this branch.
+   * @param {string} id - row id.
+   * @param {string} title - row title.
+   * @param {string} detail - why it was skipped.
+   * @returns {void}
+   */
+  skip(id, title, detail) {
+    this.rows.push({ id, title, pass: true, skipped: true, detail: short(detail, 400), ms: 0 })
+    log(`SKIP  ${id}  ${title} — ${short(detail, 300)}`)
+  }
+
   hasRow(id) {
     return this.rows.some((row) => row.id === id)
   }
@@ -1050,8 +1081,9 @@ async function runSmoke({ page, results, state }) {
     assertEqual(probe.hookType, 'object', 'hooks.uiAnnotation is not an object')
     // Documented frozen generations: round-1 (31), round-2 adds resolveNodeCandidate
     // (32), audit-fix adds normalizeUserNote/cssIdentifier/clampPopoverPositionToViewport
-    // (35). Pin a documented count and require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35]
+    // (35), Phase 1 adds the A1/A2/persistence helpers (48). Pin a documented count and
+    // require the keys that generation introduced.
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1064,6 +1096,13 @@ async function runSmoke({ page, results, state }) {
     if (keyCount === 35) {
       for (const key of ['normalizeUserNote', 'cssIdentifier', 'clampPopoverPositionToViewport']) {
         assert(probe.keys.includes(key), `audit-fix seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
+      }
+    }
+    if (keyCount === 48) {
+      for (const key of ['RECORDS_STORAGE_KEY', 'RECORD_LIMIT', 'buildUniqueSelector', 'buildStableAncestors',
+        'parseAnnotationStore', 'serializeAnnotationStore', 'annotationSurfaceRoot', 'annotationSurfaceLevels',
+        'annotationLocatorText', 'normalizeAnnotationRecord']) {
+        assert(probe.keys.includes(key), `Phase 1 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
       }
     }
     state.hooks = probe.keys
@@ -1797,6 +1836,390 @@ const probes = {
   readMenuBubble: () => window.__psaMenuBubble || [],
 
   countPrevented: (type) => (window.__psaPreventedLog || []).filter((entry) => entry === type).length,
+
+  // ---- Phase 1 probes: floating surfaces, paint layer, v2 records, rainbow focus ----
+
+  /** Capture power-suite:ui-annotation-state events (F4 contract). */
+  installAnnotationStateRecorder: () => {
+    if (window.__psaStateEventsInstalled === true) return true
+    window.__psaStateEventsInstalled = true
+    window.__psaStateEvents = []
+    const record = (event) => {
+      window.__psaStateEvents.push({
+        active: event !== null && typeof event === 'object' ? event.detail?.active === true : false,
+        at: Date.now(),
+      })
+    }
+    document.addEventListener('power-suite:ui-annotation-state', record, true)
+    window.addEventListener('power-suite:ui-annotation-state', record, true)
+    return true
+  },
+  readAnnotationStateEvents: () => window.__psaStateEvents || [],
+  clearAnnotationStateEvents: () => {
+    window.__psaStateEvents = []
+    return true
+  },
+
+  /**
+   * Synthetic `[data-psd-hovercard]` node for the annotation-side F4 CSS contract.
+   * Its default `pointer-events:none` comes from a stylesheet class (like the real
+   * hovercard), so the annotation override can win on specificity exactly as it
+   * would there; z-index is inline and the override is `!important` (D3 contract).
+   */
+  createSyntheticHovercard: () => {
+    const existing = document.getElementById('psa-e2e-psd-hovercard')
+    if (existing !== null) existing.remove()
+    if (document.getElementById('psa-e2e-hovercard-style') === null) {
+      const style = document.createElement('style')
+      style.id = 'psa-e2e-hovercard-style'
+      style.textContent = '.psa-e2e-hovercard{pointer-events:none}'
+      document.head.appendChild(style)
+    }
+    const node = document.createElement('div')
+    node.id = 'psa-e2e-psd-hovercard'
+    node.className = 'psa-e2e-hovercard'
+    node.setAttribute('data-psd-hovercard', '')
+    Object.assign(node.style, {
+      position: 'fixed',
+      left: '4px',
+      top: '4px',
+      width: '40px',
+      height: '24px',
+      zIndex: '5',
+      background: 'transparent',
+    })
+    document.body.appendChild(node)
+    return true
+  },
+  removeSyntheticHovercardStyle: () => {
+    document.getElementById('psa-e2e-hovercard-style')?.remove()
+    return true
+  },
+  syntheticHovercardStyle: () => {
+    const node = document.getElementById('psa-e2e-psd-hovercard')
+    if (node === null) return null
+    const style = getComputedStyle(node)
+    return { zIndex: style.zIndex, pointerEvents: style.pointerEvents }
+  },
+  removeSyntheticHovercard: () => {
+    document.getElementById('psa-e2e-psd-hovercard')?.remove()
+    return true
+  },
+  /** Whether the dynamic-workspaces hovercard (cross-branch marker) exists in this build. */
+  realPsdHovercardPresent: () => document.querySelector('[data-psd-hovercard]') !== null,
+
+  /** One opaque synthetic floating layer used for the F3 stationary-pointer check. */
+  createFloatingProbeLayer: (x, y, width, height) => {
+    document.getElementById('psa-e2e-floating-layer')?.remove()
+    const node = document.createElement('div')
+    node.id = 'psa-e2e-floating-layer'
+    Object.assign(node.style, {
+      position: 'fixed',
+      left: `${x}px`,
+      top: `${y}px`,
+      width: `${width}px`,
+      height: `${height}px`,
+      zIndex: '500',
+      background: 'rgb(40, 44, 56)',
+      pointerEvents: 'auto',
+    })
+    document.body.appendChild(node)
+    const rect = node.getBoundingClientRect()
+    return { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }
+  },
+  removeFloatingProbeLayer: () => {
+    document.getElementById('psa-e2e-floating-layer')?.remove()
+    return true
+  },
+
+  /** Synthetic floating panel with text rows and one button, for deterministic drilling. */
+  createSurfaceProbePanel: () => {
+    document.getElementById('psa-e2e-surface-panel')?.remove()
+    const panel = document.createElement('div')
+    panel.id = 'psa-e2e-surface-panel'
+    Object.assign(panel.style, {
+      position: 'fixed',
+      left: '360px',
+      top: '280px',
+      width: '320px',
+      height: '150px',
+      zIndex: '500',
+      background: 'rgb(32, 35, 44)',
+      color: 'rgb(235, 238, 245)',
+      border: '1px solid rgb(90, 96, 112)',
+      borderRadius: '8px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '6px',
+      padding: '10px',
+      boxSizing: 'border-box',
+      pointerEvents: 'auto',
+      fontSize: '13px',
+      fontFamily: 'system-ui, sans-serif',
+    })
+    const title = document.createElement('div')
+    title.textContent = 'Hover preview card'
+    const path = document.createElement('div')
+    path.textContent = '/Users/probe/project'
+    const status = document.createElement('div')
+    status.textContent = 'Active'
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.textContent = 'Open'
+    button.setAttribute('aria-label', 'Probe panel action')
+    Object.assign(button.style, { alignSelf: 'flex-start', padding: '2px 10px', cursor: 'pointer' })
+    panel.append(title, path, status, button)
+    document.body.appendChild(panel)
+    const rectOf = (element) => {
+      const rect = element.getBoundingClientRect()
+      return {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        centerX: Math.round(rect.x + rect.width / 2),
+        centerY: Math.round(rect.y + rect.height / 2),
+      }
+    }
+    return { panel: rectOf(panel), title: rectOf(title), status: rectOf(status), button: rectOf(button) }
+  },
+  removeSurfaceProbePanel: () => {
+    document.getElementById('psa-e2e-surface-panel')?.remove()
+    return true
+  },
+
+  /** Hover outline rect plus the `.psa-hover` computed border tokens. */
+  hoverState: () => {
+    const hover = document.querySelector('[data-psa-hover]')
+    if (hover === null) return null
+    const rect = hover.getBoundingClientRect()
+    const style = getComputedStyle(hover)
+    return {
+      rect: {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      },
+      borderStyle: style.borderStyle,
+      borderWidth: style.borderWidth,
+      borderColor: style.borderColor,
+    }
+  },
+
+  /** Selection outlines and the current popover's surface/record metadata. */
+  selectionState: () => {
+    const outlines = [...document.querySelectorAll('[data-psa-selection],[data-psa-multi-outline]')].map((element) => {
+      const rect = element.getBoundingClientRect()
+      return {
+        ref: element.getAttribute('data-psa-ref'),
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      }
+    })
+    const popover = document.querySelector('[data-psa-popover]')
+    return {
+      outlines,
+      popover: popover === null ? null : {
+        surface: popover.getAttribute('data-psa-surface'),
+        ephemeral: popover.getAttribute('data-psa-ephemeral'),
+        title: document.querySelector('[data-psa-popover-title]')?.innerText ?? null,
+        ref: document.querySelector('[data-psa-popover-ref]')?.innerText ?? null,
+        status: document.querySelector('[data-psa-popover-status]')?.getAttribute('data-psa-status') ?? null,
+        copyLocator: document.querySelector('[data-psa-popover-copy-locator]') !== null,
+        ephemeralHint: document.querySelector('[data-psa-ephemeral-hint]')?.innerText ?? null,
+      },
+    }
+  },
+
+  /** Paint layer state for F1. */
+  paintLayerState: () => {
+    const overlay = document.querySelector('[data-shell-overlay]')
+    return {
+      found: overlay !== null,
+      inlineZ: overlay !== null ? overlay.style.zIndex : null,
+      inlinePriority: overlay !== null ? overlay.style.getPropertyPriority('z-index') : null,
+      computedZ: overlay !== null ? getComputedStyle(overlay).zIndex : null,
+      raised: document.documentElement.getAttribute('data-psa-raised'),
+    }
+  },
+
+  /** Floating surfaces currently painted above page content (excluding our own UI). */
+  floatingCandidates: () => {
+    const floats = []
+    for (const element of document.querySelectorAll('body *')) {
+      const style = getComputedStyle(element)
+      if (style.position !== 'fixed' && style.position !== 'absolute') continue
+      const z = Number.parseInt(style.zIndex, 10)
+      if (!Number.isFinite(z) || z < 10) continue
+      if (element.closest('[data-psa-own]') !== null) continue
+      if (String(element.id).startsWith('psa-e2e-')) continue
+      const rect = element.getBoundingClientRect()
+      if (rect.width < 120 || rect.height < 40) continue
+      if (style.display === 'none' || style.visibility === 'hidden') continue
+      floats.push({
+        tag: element.tagName.toLowerCase(),
+        role: element.getAttribute('role'),
+        z,
+        pointerEvents: style.pointerEvents,
+        rect: {
+          x: Math.round(rect.x),
+          y: Math.round(rect.y),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          centerX: Math.round(rect.x + rect.width / 2),
+          centerY: Math.round(rect.y + rect.height / 2),
+        },
+      })
+    }
+    return floats
+  },
+
+  /** First visible native hover-card-ish surface (fixed, 10 <= z < 1000, pointer-interactive). */
+  nativeHoverCard: () => {
+    for (const element of document.querySelectorAll('body *')) {
+      if (String(element.id).startsWith('psa-e2e-')) continue
+      const style = getComputedStyle(element)
+      if (style.position !== 'fixed') continue
+      const z = Number.parseInt(style.zIndex, 10)
+      if (!Number.isFinite(z) || z < 10 || z >= 1000) continue
+      if (style.pointerEvents !== 'auto') continue
+      if (element.closest('[data-psa-own]') !== null) continue
+      const rect = element.getBoundingClientRect()
+      if (rect.width < 160 || rect.width > 520 || rect.height < 50 || rect.height > 400) continue
+      return {
+        tag: element.tagName.toLowerCase(),
+        z,
+        text: (element.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 120),
+        rect: {
+          x: Math.round(rect.x),
+          y: Math.round(rect.y),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          centerX: Math.round(rect.x + rect.width / 2),
+          centerY: Math.round(rect.y + rect.height / 2),
+        },
+      }
+    }
+    return null
+  },
+
+  /** Parsed persisted annotation document with only privacy-safe fields exposed. */
+  annotationStorage: () => {
+    let text = null
+    try {
+      text = localStorage.getItem('power-suite.ui-annotation.annotations')
+    } catch {
+      text = null
+    }
+    if (text === null) return { present: false, version: null, count: 0, records: [] }
+    let parsed = null
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      return { present: true, corrupt: true, version: null, count: 0, records: [] }
+    }
+    const records = Array.isArray(parsed?.records) ? parsed.records : []
+    return {
+      present: true,
+      version: parsed?.version ?? null,
+      updatedAt: parsed?.updatedAt ?? null,
+      count: records.length,
+      rawLength: text.length,
+      records: records.map((record) => ({
+        id: record?.id ?? null,
+        version: record?.version ?? null,
+        order: record?.order ?? null,
+        note: record?.note ?? null,
+        route: record?.route ?? null,
+        session: record?.session ?? null,
+        surface: record?.locator?.surface ?? null,
+        ephemeral: record?.locator?.ephemeral ?? null,
+        uniqueSelector: record?.locator?.uniqueSelector ?? null,
+        uniqueVerified: record?.locator?.uniqueVerified ?? null,
+        ancestorCount: Array.isArray(record?.locator?.ancestors) ? record.locator.ancestors.length : null,
+        candidateCount: Array.isArray(record?.locator?.candidates) ? record.locator.candidates.length : null,
+        keys: Object.keys(record ?? {}).sort(),
+        locatorKeys: Object.keys(record?.locator ?? {}).sort(),
+      })),
+    }
+  },
+
+  /** Clone the current stored document up to `count` records (cap E2E setup). */
+  seedAnnotationStorage: (count) => {
+    const key = 'power-suite.ui-annotation.annotations'
+    let base = null
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || 'null')
+      if (parsed !== null && Array.isArray(parsed.records) && parsed.records.length > 0) base = parsed.records[0]
+    } catch {
+      base = null
+    }
+    if (base === null) return { ok: false }
+    const records = []
+    for (let index = 0; index < count; index += 1) {
+      const clone = JSON.parse(JSON.stringify(base))
+      clone.id = `psa-seed-${index}`
+      clone.order = index
+      clone.at = 1700000000000 + index
+      clone.updatedAt = clone.at
+      clone.note = ''
+      records.push(clone)
+    }
+    localStorage.setItem(key, JSON.stringify({ version: 2, updatedAt: Date.now(), records }))
+    return { ok: true, count: records.length }
+  },
+
+  clearAnnotationStorage: () => {
+    for (const key of [
+      'power-suite.ui-annotation.annotations',
+      'power-suite.ui-annotation.settings',
+      'power-suite.ui-annotation.launcher',
+      'power-suite.ui-annotation.rail-collapsed',
+    ]) {
+      try {
+        localStorage.removeItem(key)
+      } catch {
+        // storage may be blocked in a hostile embedding
+      }
+    }
+    return true
+  },
+
+  /** Rainbow-field focus treatment for one annotation input selector. */
+  rainbowFocusState: (selector) => {
+    const input = document.querySelector(selector)
+    if (input === null) return { found: false }
+    const wrapper = input.closest('.psa-rainbow-field')
+    const rect = input.getBoundingClientRect()
+    const style = getComputedStyle(input)
+    if (wrapper === null) {
+      return {
+        found: true,
+        wrapper: false,
+        focused: document.activeElement === input,
+        outlineStyle: style.outlineStyle,
+        outlineWidth: style.outlineWidth,
+        rect: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
+      }
+    }
+    const ring = getComputedStyle(wrapper, '::after')
+    return {
+      found: true,
+      wrapper: true,
+      focused: document.activeElement === input,
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+      ringOpacity: ring.opacity,
+      ringAnimation: ring.animationName,
+      ringDuration: ring.animationDuration,
+      ringBackground: ring.backgroundImage,
+      ringFilter: ring.filter,
+      rect: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
+    }
+  },
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -2209,9 +2632,11 @@ const SCENARIO_TITLES = {
   7: 'exit mode: markers/padding cleaned, native clicks work again, launcher stays',
   8: 'launcher drag clamp, viewport resize, scroll stability, reload default + position memory',
   9: 'collection view keeps the frame/rail geometry; exit restores the baseline layout',
+  10: 'floating surfaces: whole-card hover/selection, drill, identical outline style, F3 recompute, F4 state CSS, v2 records + reload persistence',
+  15: 'rainbow input focus ring: wrapper ring, no solid outline, reduced motion, no layout shift',
 }
 
-const SCENARIO_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+const SCENARIO_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15]
 
 function buildScenarios(harness) {
   const h = harness
@@ -3305,6 +3730,491 @@ function buildScenarios(harness) {
       assertEqual(restored.grid, baseline.grid, 'inline grid style changed after exit')
       return `padding ${paddingBefore} stable across collection open/close; canvas ${active.canvas.width}px -> restored ${restored.canvas.width}px (baseline ${canvasWidthBaseline}px)`
     },
+
+    10: async () => {
+      await h.ensureModeOff()
+      await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
+      await sleep(350)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      // Start from a clean persisted document so the reload assertions are exact.
+      await h.page.eval(probes.clearAnnotationStorage)
+      await h.page.reload()
+      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready before the floating-surface scenario' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the clean reload' })
+      await sleep(600)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      // Earlier scenarios legitimately leave unsent batches in the composer; this
+      // scenario types a note, so it must run on a genuinely blank session (H2).
+      const cleanBlank = await h.blankState()
+      if (cleanBlank.ok !== true) {
+        const fresh = await h.createBlankSessionViaHover()
+        assert(fresh && typeof fresh.sessionId === 'string', 'could not create a blank session for the annotation-record scenario')
+        await sleep(500)
+        await h.ensureSidebarExpanded()
+      }
+
+      // ---- F4 annotation side: state event contract + [data-psd-hovercard] CSS ----
+      const realHovercardPresent = await h.page.eval(probes.realPsdHovercardPresent)
+      await h.page.eval(probes.installAnnotationStateRecorder)
+      await h.page.eval(probes.clearAnnotationStateEvents)
+      await h.page.eval(probes.createSyntheticHovercard)
+      const overlayBefore = await h.page.eval(probes.paintLayerState)
+      const hovercardIdle = await h.page.eval(probes.syntheticHovercardStyle)
+      assertEqual(hovercardIdle.pointerEvents, 'none', 'the synthetic hovercard started pointer-interactive')
+      assertEqual(hovercardIdle.zIndex, '5', 'the synthetic hovercard started at a custom z-index')
+
+      await h.ensureActivatedStable()
+      await sleep(300)
+      const overlayActive = await h.page.eval(probes.paintLayerState)
+      const hovercardActive = await h.page.eval(probes.syntheticHovercardStyle)
+      assertEqual(overlayActive.inlineZ, '150', 'F1: [data-shell-overlay] inline z-index is not 150 while active')
+      assertEqual(overlayActive.inlinePriority, 'important', 'F1: the paint-layer raise is not !important')
+      assertEqual(overlayActive.computedZ, '150', 'F1: computed paint-layer z-index is not 150')
+      assertEqual(overlayActive.raised, 'true', 'F1: data-psa-raised marker missing while active')
+      assertEqual(hovercardActive.pointerEvents, 'auto', 'F4: [data-psd-hovercard] did not become pointer-interactive in annotation mode')
+      assertEqual(hovercardActive.zIndex, '120', 'F4: [data-psd-hovercard] z-index is not 120 in annotation mode')
+      const stateEventsActive = await h.page.eval(probes.readAnnotationStateEvents)
+      assert(
+        stateEventsActive.some((event) => event.active === true),
+        `F4: no {active:true} power-suite:ui-annotation-state event (got ${short(JSON.stringify(stateEventsActive))})`
+      )
+
+      await h.exit()
+      await sleep(250)
+      const overlayAfterExit = await h.page.eval(probes.paintLayerState)
+      assertEqual(overlayAfterExit.inlineZ, overlayBefore.inlineZ, 'F1: exit did not restore the captured inline z-index value')
+      assertEqual(overlayAfterExit.inlinePriority, overlayBefore.inlinePriority, 'F1: exit did not restore the captured z-index priority')
+      assertEqual(overlayAfterExit.computedZ, overlayBefore.computedZ, 'F1: exit did not restore the computed overlay z-index')
+      assertEqual(overlayAfterExit.raised, null, 'F1: data-psa-raised leaked after exit')
+      const hovercardAfterExit = await h.page.eval(probes.syntheticHovercardStyle)
+      assertEqual(hovercardAfterExit.pointerEvents, 'none', 'F4: the hovercard CSS override leaked outside annotation mode')
+      assertEqual(hovercardAfterExit.zIndex, '5', 'F4: the hovercard z-index override leaked outside annotation mode')
+      const stateEvents = await h.page.eval(probes.readAnnotationStateEvents)
+      assert(stateEvents.some((event) => event.active === false),
+        `F4: no {active:false} power-suite:ui-annotation-state event after exit (got ${short(JSON.stringify(stateEvents))})`)
+      await h.page.eval(probes.removeSyntheticHovercard)
+      await h.ensureActivatedStable()
+
+      // ---- F3: a floating layer that appears under a stationary pointer recomputes ----
+      const plainTarget = await h.page.eval(pageProbe.newSessionButton)
+      assert(plainTarget, 'native New session button not found for the F3 probe')
+      const plainRect = { x: plainTarget.left, y: plainTarget.top, width: plainTarget.width, height: plainTarget.height }
+      await h.page.moveTo(plainTarget.x, plainTarget.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-hover]')`, { timeout: 4000, label: 'hover outline on an ordinary control' })
+      await sleep(180)
+      const ordinaryHover = await h.page.eval(probes.hoverState)
+      assert(ordinaryHover, 'ordinary hover outline missing')
+      assertRectNear(ordinaryHover.rect, plainRect, 2, 'ordinary control hover outline does not match the control rect')
+      const layerRect = await h.page.eval(probes.createFloatingProbeLayer, plainTarget.left - 20, plainTarget.top - 20, 240, 120)
+      const hoverFollowDeadline = Date.now() + 2000
+      let layerHover = null
+      while (Date.now() < hoverFollowDeadline) {
+        await sleep(80)
+        layerHover = await h.page.eval(probes.hoverState)
+        if (layerHover !== null
+          && Math.abs(layerHover.rect.x - layerRect.x) <= 2
+          && Math.abs(layerHover.rect.width - layerRect.width) <= 2
+          && Math.abs(layerHover.rect.height - layerRect.height) <= 2) break
+        layerHover = null
+      }
+      assert(layerHover !== null, 'F3: the hover outline did not follow the floating layer inserted under the stationary pointer within 2s')
+      assertRectNear(layerHover.rect, layerRect, 2, 'F3: hover outline rect does not match the inserted floating layer')
+      const layerStatus = await h.page.eval(probes.selectionState)
+      assertEqual(layerStatus.popover, null, 'F3: inserting a floating layer opened a popover')
+      await h.page.eval(probes.removeFloatingProbeLayer)
+      const backDeadline = Date.now() + 2000
+      let backHover = null
+      while (Date.now() < backDeadline) {
+        await sleep(80)
+        backHover = await h.page.eval(probes.hoverState)
+        if (backHover !== null
+          && Math.abs(backHover.rect.x - ordinaryHover.rect.x) <= 2
+          && Math.abs(backHover.rect.width - ordinaryHover.rect.width) <= 2) break
+        backHover = null
+      }
+      assert(backHover !== null, 'F3: the hover outline did not return to the page element after the layer was removed')
+
+      // ---- F1/F2: native hover card is outlined as a whole card, above the paint layer ----
+      await h.page.moveTo(700, 160)
+      await sleep(200)
+      const rowPoint = await h.page.eval(probes.workspaceRowPoint) ?? await h.page.eval(probes.sessionRowPoint, null)
+      assert(rowPoint, 'no sidebar row available for the native hover-card probe')
+      await h.page.moveTo(rowPoint.x, rowPoint.y)
+      const cardDeadline = Date.now() + 5000
+      let nativeCard = null
+      while (Date.now() < cardDeadline) {
+        await sleep(150)
+        nativeCard = await h.page.eval(probes.nativeHoverCard)
+        if (nativeCard !== null) break
+      }
+      assert(nativeCard !== null, 'the native hover preview card did not appear over a sidebar row within 5s')
+      const paintLayer = await h.page.eval(probes.paintLayerState)
+      assert(Number(paintLayer.computedZ) > nativeCard.z,
+        `F1: annotation paint layer z=${paintLayer.computedZ} is not above the native card z=${nativeCard.z}`)
+      await h.page.moveTo(nativeCard.rect.centerX, nativeCard.rect.centerY)
+      const cardHoverDeadline = Date.now() + 3000
+      let cardHover = null
+      while (Date.now() < cardHoverDeadline) {
+        await sleep(100)
+        cardHover = await h.page.eval(probes.hoverState)
+        if (cardHover !== null && Math.abs(cardHover.rect.width - nativeCard.rect.width) <= 2 && Math.abs(cardHover.rect.height - nativeCard.rect.height) <= 2) break
+        cardHover = null
+      }
+      assert(cardHover !== null, 'F2: moving the pointer onto the hover card did not outline the whole card (still an inner row?)')
+      assertRectNear(cardHover.rect, nativeCard.rect, 2, 'F2: floating-surface hover outline does not match the card rect')
+      assertEqual(cardHover.borderStyle, ordinaryHover.borderStyle, 'F2: floating-surface outline border style differs from an ordinary control')
+      assertEqual(cardHover.borderWidth, ordinaryHover.borderWidth, 'F2: floating-surface outline border width differs from an ordinary control')
+      assertEqual(cardHover.borderColor, ordinaryHover.borderColor, 'F2: floating-surface outline border color differs from an ordinary control')
+      const layerAboveCard = await h.page.eval(probes.paintLayerState)
+      assert(Number(layerAboveCard.computedZ) > nativeCard.z, 'paint layer no longer above the native card after hovering it')
+
+      // Click the card: the whole card becomes the selection, marked floating/ephemeral.
+      await h.page.clickAt(nativeCard.rect.centerX, nativeCard.rect.centerY)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover after clicking the hover card' })
+      await sleep(250)
+      const cardSelection = await h.page.eval(probes.selectionState)
+      assertEqual(cardSelection.popover.surface, 'floating', 'clicking the hover card did not mark the record as a floating surface')
+      assertEqual(cardSelection.popover.ephemeral, 'true', 'the floating-surface record is not marked ephemeral')
+      assert(cardSelection.popover.ephemeralHint && cardSelection.popover.ephemeralHint.length > 0, 'the popover is missing the transient-surface hint')
+      assertEqual(cardSelection.popover.copyLocator, true, 'the popover is missing the copy-locator action')
+      assertNear(cardSelection.outlines.length, 1, 0, 'expected exactly one selection outline for the hover card')
+      assertRectNear(cardSelection.outlines[0], nativeCard.rect, 3, 'the hover-card selection outline does not match the card rect')
+      const popoverTitle = String(cardSelection.popover.title || '')
+      const popoverRef = String(cardSelection.popover.ref || '')
+      assert(popoverTitle.length > 0, 'the hover-card popover has no element title')
+      assert(popoverRef.length > 0, 'the hover-card popover has no locator summary')
+      assert(['resolved', 'changed'].includes(cardSelection.popover.status),
+        `the live hover card did not resolve to a target (status ${cardSelection.popover.status})`)
+      await h.clearSelection()
+      await h.page.moveTo(700, 160)
+      await sleep(200)
+
+      // ---- F2 drill: synthetic floating panel (deterministic, never detached) ----
+      const panel = await h.page.eval(probes.createSurfaceProbePanel)
+      await h.page.moveTo(panel.panel.centerX, panel.panel.centerY)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-hover]')`, { timeout: 4000, label: 'hover outline on the synthetic panel' })
+      await sleep(150)
+      const panelHover = await h.page.eval(probes.hoverState)
+      assertRectNear(panelHover.rect, panel.panel, 2, 'the synthetic floating panel was not picked as a whole surface')
+      await h.page.clickAt(panel.panel.centerX, panel.panel.centerY)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover after clicking the synthetic panel' })
+      await sleep(250)
+      const wholePanel = await h.page.eval(probes.selectionState)
+      assertEqual(wholePanel.popover.surface, 'floating', 'the synthetic panel was not recorded as a floating surface')
+      assertRectNear(wholePanel.outlines[0], panel.panel, 3, 'the synthetic panel selection is not the whole card')
+      const wholePanelTitle = wholePanel.popover.title
+      await h.click('[data-psa-level-down]')
+      await sleep(350)
+      const drilled = await h.page.eval(probes.selectionState)
+      assert(drilled.outlines.length === 1 && drilled.popover !== null, 'Child drilling lost the selection or popover')
+      assert(drilled.outlines[0].height < wholePanel.outlines[0].height - 20,
+        `Child drilling did not move to an inner row (whole height ${wholePanel.outlines[0].height}, drilled ${drilled.outlines[0].height})`)
+      assert(drilled.outlines[0].y >= panel.panel.y && drilled.outlines[0].y + drilled.outlines[0].height <= panel.panel.y + panel.panel.height + 2,
+        'the drilled outline left the floating panel')
+      assert(drilled.popover.title !== wholePanelTitle, 'Child drilling did not change the selected element')
+      await h.click('[data-psa-level-up]')
+      await sleep(350)
+      const returned = await h.page.eval(probes.selectionState)
+      assertRectNear(returned.outlines[0], panel.panel, 3, 'Parent did not return to the whole floating panel')
+      assertEqual(returned.popover.title, wholePanelTitle, 'Parent did not restore the whole-card element')
+      await h.clearSelection()
+      await h.page.eval(probes.removeSurfaceProbePanel)
+      await sleep(250)
+
+      // ---- A2: verified unique locator resolves the duplicate-label control ----
+      const newSession = await h.page.eval(pageProbe.newSessionButton)
+      assert(newSession, 'native New session button not found for the A2 probe')
+      await h.page.moveTo(newSession.x, newSession.y)
+      await sleep(150)
+      await h.page.clickAt(newSession.x, newSession.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the New session control' })
+      await sleep(250)
+      const pageSelection = await h.page.eval(probes.selectionState)
+      assertEqual(pageSelection.popover.surface, 'page', 'the New session control was recorded as a floating surface')
+      assertEqual(pageSelection.popover.status, 'resolved', `A2: duplicate-label control did not resolve uniquely (status ${pageSelection.popover.status})`)
+      assert(/data-slot="sidebar"/.test(String(pageSelection.popover.ref || '')),
+        `A2: popover locator does not show the anchored unique selector (${short(String(pageSelection.popover.ref || ''))})`)
+      await h.click('[data-psa-popover-copy-locator]')
+      await sleep(500)
+      const copyFeedback = await h.page.evaluate(`document.querySelector('[data-psa-feedback]')?.innerText ?? ''`)
+      assert(/(copied|could not copy|已复制|复制失败)/i.test(copyFeedback),
+        `D10: copy-locator produced no success/failure toast (got ${short(copyFeedback)})`)
+      // Write a note and add the control to the collection.
+      await h.assertBlankForInput('scenario 10 note typing')
+      const noteRect = await h.page.findRect('[data-psa-note]')
+      assert(noteRect, 'popover note textarea missing')
+      await h.page.clickAt(noteRect.x, noteRect.y)
+      await h.page.insertText('Keep this note')
+      await sleep(200)
+      await h.click('[data-psa-add]')
+      await sleep(400)
+      // A floating-surface record is persisted too (missing after its panel is gone).
+      const selfCard = await h.page.eval(probes.createSurfaceProbePanel)
+      await h.page.moveTo(selfCard.panel.centerX, selfCard.panel.centerY)
+      await sleep(200)
+      await h.page.clickAt(selfCard.panel.centerX, selfCard.panel.centerY)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the floating record' })
+      await sleep(200)
+      await h.click('[data-psa-add]')
+      await sleep(400)
+      await h.page.eval(probes.removeSurfaceProbePanel)
+      await sleep(400)
+      const stored = await h.page.eval(probes.annotationStorage)
+      assert(stored.present, 'D1: no annotation document was persisted after adding records')
+      assertEqual(stored.version, 2, 'D1: the persisted document is not version 2')
+      assert(stored.count >= 2, `D1: expected at least two persisted records, got ${stored.count}`)
+      const pageRecord = stored.records.find((record) => record.surface === 'page')
+      const floatingRecord = stored.records.find((record) => record.surface === 'floating')
+      assert(pageRecord, 'D1: no page record persisted')
+      assert(floatingRecord, 'D1: no floating record persisted')
+      assertEqual(pageRecord.version, 2, 'A2: the persisted record is not ElementRef v2')
+      assertEqual(pageRecord.uniqueVerified, true, 'A2: the persisted duplicate-label record has no verified unique selector')
+      assert(String(pageRecord.uniqueSelector || '').includes('data-slot'), `A2: uniqueSelector is not anchored (${short(String(pageRecord.uniqueSelector))})`)
+      assert((pageRecord.ancestorCount ?? 0) >= 1, 'A2: the persisted record has no stable ancestors')
+      assert((pageRecord.candidateCount ?? 0) >= 1, 'A2: the persisted record has no locator candidates')
+      assertEqual(pageRecord.note, 'Keep this note', 'D1: the user note did not survive serialization')
+      assertEqual(floatingRecord.ephemeral, true, 'A2: the floating record is not marked ephemeral')
+      for (const forbidden of ['outerHTML', 'innerHTML', 'querySelector', 'xpath', 'computedStyle', 'value']) {
+        assert(!JSON.stringify(pageRecord).includes(forbidden), `D11: the persisted record leaks ${forbidden}`)
+      }
+      const routePath = String(pageRecord.route || '')
+      assert(routePath.startsWith('/') && !routePath.includes('?') && !routePath.includes('#'), `D11: route is not a query-free pathname (${short(routePath)})`)
+
+      // ---- D1: records and their statuses survive a reload ----
+      await h.exit()
+      await h.page.reload()
+      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after the persistence reload' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the persistence reload' })
+      await sleep(700)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      await h.ensureActivatedStable()
+      await h.openCollection()
+      await sleep(400)
+      const reloadedEntries = await h.page.eval(probes.entries)
+      assert(reloadedEntries.length >= 2, `D1: persisted records were not restored after reload (${reloadedEntries.length} rows)`)
+      assert(reloadedEntries.some((entry) => entry.note === 'Keep this note'), 'D1: the note did not survive the reload')
+      const statuses = reloadedEntries.map((entry) => entry.status)
+      assert(statuses.includes('resolved'), `D1: the page record did not re-resolve after reload (statuses ${short(JSON.stringify(statuses))})`)
+      assert(statuses.includes('missing'), `D1: the removed floating target is not reported missing after reload (statuses ${short(JSON.stringify(statuses))})`)
+      await h.clickBack()
+      await sleep(200)
+
+      // ---- D15: the 101st record is refused explicitly and the store stays capped ----
+      await h.page.eval(probes.clearAnnotationStorage)
+      await h.page.reload()
+      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready before the cap seed' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher before the cap seed' })
+      await sleep(700)
+      await h.page.eval(probes.installAnnotationStateRecorder)
+      await h.ensureActivatedStable()
+      // Capture one real record, then clone the persisted document to the 100-record cap.
+      const seedTarget = await h.page.eval(pageProbe.newSessionButton)
+      await h.page.moveTo(seedTarget.x, seedTarget.y)
+      await sleep(150)
+      await h.page.clickAt(seedTarget.x, seedTarget.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover before the cap seed' })
+      await h.click('[data-psa-add]')
+      await sleep(400)
+      // Exit first: deactivate flushes the in-memory collection, which would
+      // otherwise overwrite the seeded document.
+      await h.exit()
+      await sleep(250)
+      const seeded = await h.page.eval(probes.seedAnnotationStorage, 100)
+      assert(seeded.ok, 'D15: could not seed the 100-record document')
+      await h.page.reload()
+      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after the cap seed' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the cap seed' })
+      await sleep(700)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      await h.ensureActivatedStable()
+      await h.openCollection()
+      const cappedEntries = await h.page.eval(probes.entries)
+      assertEqual(cappedEntries.length, 100, `D1/D15: the capped document did not load 100 rows (got ${cappedEntries.length})`)
+      await h.clickBack()
+      await sleep(200)
+      const rowForCap = await h.page.eval(probes.workspaceRowPoint) ?? await h.page.eval(probes.sessionRowPoint, null)
+      assert(rowForCap, 'no sidebar row available for the cap refusal probe')
+      await h.page.moveTo(rowForCap.x, rowForCap.y)
+      await sleep(150)
+      await h.page.clickAt(rowForCap.x, rowForCap.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the cap refusal probe' })
+      await sleep(200)
+      await h.click('[data-psa-add]')
+      await sleep(600)
+      const capFeedback = await h.page.evaluate(`document.querySelector('[data-psa-feedback]')?.innerText ?? ''`)
+      assert(/(full|100|已满)/i.test(capFeedback), `D15: the 101st record was not refused with a visible message (got ${short(capFeedback)})`)
+      await sleep(400)
+      const stillCapped = await h.page.eval(probes.annotationStorage)
+      assertEqual(stillCapped.count, 100, 'D15: a refused add changed the persisted record count')
+
+      // ---- cleanup: leave a clean page for the remaining scenarios/screenshots ----
+      // Empty the collection through the UI: the controller flushes its in-memory
+      // store on exit/dispose, so deleting localStorage alone would be overwritten
+      // by the seeded records on the next unload.
+      await h.openCollection()
+      await h.page.waitFor(`!!document.querySelector('[data-psa-clear]')`, { timeout: 6000, label: 'collection clear action' })
+      const clearRect = await h.page.findRect('[data-psa-clear]')
+      assert(clearRect, 'the collection clear action is not clickable')
+      await h.page.clickAt(clearRect.x, clearRect.y)
+      await sleep(700)
+      await h.exit()
+      await sleep(300)
+      await h.page.eval(probes.clearAnnotationStorage)
+      await h.page.reload()
+      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after the scenario cleanup' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the scenario cleanup' })
+      await sleep(600)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      const cleanStorage = await h.page.eval(probes.annotationStorage)
+      assertEqual(cleanStorage.count, 0, 'the scenario cleanup left annotation records behind')
+      const finalOverlay = await h.page.eval(probes.paintLayerState)
+      assertEqual(finalOverlay.raised, null, 'the scenario cleanup left data-psa-raised behind')
+      const finalHovercard = await h.page.eval(probes.syntheticHovercardStyle)
+      assertEqual(finalHovercard, null, 'the synthetic hovercard leaked after cleanup')
+      return `F1 z=150/restore exact; F2 card ${nativeCard.rect.width}x${nativeCard.rect.height} whole-card hover/selection; F3 stationary recompute; F4 state events + [data-psd-hovercard] pe/z (real card ${realHovercardPresent ? 'present' : 'absent in this branch'}); A2 uniqueSelector ${short(String(pageRecord.uniqueSelector).slice(0, 48))}; D1 reload kept ${reloadedEntries.length} records with resolved+missing; D15 refused at ${cappedEntries.length}`
+    },
+
+    15: async () => {
+      await h.ensureModeOff()
+      await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
+      await sleep(350)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+
+      /** Wait for one rainbow ring state. @param {string} selector - input selector. @returns {Promise<object>} state. */
+      const waitRing = async (selector) => {
+        const deadline = Date.now() + 4000
+        while (Date.now() < deadline) {
+          const state = await h.page.eval(probes.rainbowFocusState, selector)
+          const opacity = Number.parseFloat(String(state.ringOpacity ?? '0'))
+          if (state.found === true && state.focused === true && Number.isFinite(opacity) && opacity >= 0.99) return state
+          await sleep(80)
+        }
+        return h.page.eval(probes.rainbowFocusState, selector)
+      }
+      /**
+       * Wait until an element's rect is stable across two reads (popovers reclamp
+       * once their measured size arrives, which must not be mistaken for a focus
+       * layout shift).
+       * @param {string} selector - element selector.
+       * @returns {Promise<object | null>} stable rect.
+       */
+      const stableRect = async (selector) => {
+        let previous = null
+        const deadline = Date.now() + 5000
+        while (Date.now() < deadline) {
+          const rect = await h.page.findRect(selector)
+          if (rect !== null && previous !== null && rect.x === previous.x && rect.y === previous.y) return rect
+          previous = rect
+          await sleep(150)
+        }
+        return previous
+      }
+      /** Convert one findRect centre result into a rect. @param {object} hit - findRect result. @returns {object} rect. */
+      const rectOfHit = (hit) => ({ x: hit.left, y: hit.top, width: hit.width, height: hit.height })
+      await h.ensureActivatedStable()
+      const target = await h.page.eval(pageProbe.newSessionButton)
+      assert(target, 'native New session button not found for the rainbow-focus scenario')
+      await h.page.moveTo(target.x, target.y)
+      await sleep(150)
+      await h.page.clickAt(target.x, target.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-note]')`, { timeout: 8000, label: 'popover for the rainbow-focus scenario' })
+      const noteRect = await stableRect('[data-psa-note]')
+      assert(noteRect, 'popover note textarea missing for focus')
+      const noteIdle = await h.page.eval(probes.rainbowFocusState, '[data-psa-note]')
+      assertEqual(noteIdle.wrapper, true, 'B3: the popover textarea is not inside a .psa-rainbow-field wrapper')
+      assertEqual(noteIdle.ringOpacity, '0', 'B3: the popover ring is visible before focus')
+      await h.page.clickAt(noteRect.x, noteRect.y)
+      const noteFocused = await waitRing('[data-psa-note]')
+      assertEqual(noteFocused.focused, true, 'B3: the popover textarea did not take focus')
+      assertEqual(noteFocused.outlineStyle, 'none', 'B3: the popover textarea still paints a solid focus outline')
+      assertEqual(noteFocused.ringOpacity, '1', 'B3: the popover rainbow ring is not visible on focus')
+      assert(String(noteFocused.ringAnimation).includes('psa-ring-spin'), `B3: the rainbow ring spin animation is missing (animation ${noteFocused.ringAnimation})`)
+      assert(String(noteFocused.ringAnimation).includes('psa-ring-hue'), `B3: the shared-recipe hue drift animation is missing (animation ${noteFocused.ringAnimation})`)
+      assertEqual(noteFocused.ringDuration, '3.2s, 14s', 'B3: ring animation durations do not match the shared plugin recipe')
+      assertRectNear(noteFocused.rect, rectOfHit(noteRect), 1, 'B3: focusing the popover textarea shifted its layout')
+
+      // Settings selects share the same wrapper treatment.
+      await h.page.pressKey('escape')
+      await sleep(200)
+      await h.click('[data-psa-open-settings]')
+      await h.page.waitFor(`!!document.querySelector('[data-psa-setting-passthrough]')`, { timeout: 6000, label: 'settings view for the rainbow-focus scenario' })
+      const selectRect = await stableRect('[data-psa-setting-passthrough]')
+      assert(selectRect, 'settings select missing')
+      const selectIdle = await h.page.eval(probes.rainbowFocusState, '[data-psa-setting-passthrough]')
+      assertEqual(selectIdle.wrapper, true, 'B3: the settings select is not inside a .psa-rainbow-field wrapper')
+      await h.page.clickAt(selectRect.x, selectRect.y)
+      const selectFocused = await waitRing('[data-psa-setting-passthrough]')
+      assertEqual(selectFocused.focused, true, 'B3: the settings select did not take focus')
+      assertEqual(selectFocused.outlineStyle, 'none', 'B3: the settings select still paints a solid focus outline')
+      assertEqual(selectFocused.ringOpacity, '1', 'B3: the settings select rainbow ring is not visible on focus')
+      assert(String(selectFocused.ringAnimation).includes('psa-ring-spin'), 'B3: the settings select ring is not animating')
+      assertRectNear(selectFocused.rect, rectOfHit(selectRect), 1, 'B3: focusing the settings select shifted its layout')
+
+      // Reduced motion: static rainbow ring, still visible, no animation. Keep the
+      // settings view open; blur/re-focus through the real pointer to re-evaluate.
+      await h.page.evaluate(`document.activeElement instanceof HTMLElement ? document.activeElement.blur() : null`)
+      await h.page.send('Emulation.setEmulatedMedia', {
+        features: [{ name: 'prefers-reduced-motion', value: 'reduce' }]
+      })
+      await sleep(300)
+      await h.page.moveTo(selectRect.x, selectRect.y)
+      await sleep(80)
+      await h.page.clickAt(selectRect.x, selectRect.y)
+      await sleep(300)
+      const reducedSelect = await h.page.eval(probes.rainbowFocusState, '[data-psa-setting-passthrough]')
+      assertEqual(reducedSelect.ringOpacity, '1', 'B3: the reduced-motion rainbow ring is not visible')
+      assertEqual(reducedSelect.ringAnimation, 'none', `B3: reduced motion still animates the ring (${reducedSelect.ringAnimation})`)
+      assert(String(reducedSelect.ringBackground || '').includes('conic-gradient'), 'B3: the reduced-motion ring lost its rainbow gradient')
+      await h.page.send('Emulation.setEmulatedMedia', { features: [] })
+      await sleep(200)
+      await h.page.evaluate(`document.activeElement instanceof HTMLElement ? document.activeElement.blur() : null`)
+      await h.page.pressKey('escape')
+      await sleep(200)
+      await h.ensureStatusPanel()
+      await sleep(150)
+
+      // Collection inline note and expanded note editor share the same treatment.
+      const targetAgain = await h.page.eval(pageProbe.newSessionButton)
+      await h.page.moveTo(targetAgain.x, targetAgain.y)
+      await sleep(150)
+      await h.page.clickAt(targetAgain.x, targetAgain.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover before the collection rainbow check' })
+      await sleep(200)
+      await h.click('[data-psa-add]')
+      await sleep(400)
+      await h.openCollection()
+      await h.page.waitFor(`!!document.querySelector('[data-psa-entry-note]')`, { timeout: 6000, label: 'collection note for the rainbow check' })
+      const entryRect = await stableRect('[data-psa-entry-note]')
+      assert(entryRect, 'collection note missing')
+      const entryIdle = await h.page.eval(probes.rainbowFocusState, '[data-psa-entry-note]')
+      assertEqual(entryIdle.wrapper, true, 'B3: the collection note is not inside a .psa-rainbow-field wrapper')
+      await h.page.clickAt(entryRect.x, entryRect.y)
+      const entryFocused = await waitRing('[data-psa-entry-note]')
+      assertEqual(entryFocused.outlineStyle, 'none', 'B3: the collection note still paints a solid focus outline')
+      assertEqual(entryFocused.ringOpacity, '1', 'B3: the collection note rainbow ring is not visible on focus')
+      assertRectNear(entryFocused.rect, rectOfHit(entryRect), 1, 'B3: focusing the collection note shifted its layout')
+      await h.click('[data-psa-entry-expand]')
+      await h.page.waitFor(`!!document.querySelector('[data-psa-entry-note-editor]')`, { timeout: 6000, label: 'expanded note editor for the rainbow check' })
+      const editor = await waitRing('[data-psa-entry-note-editor] textarea')
+      assertEqual(editor.wrapper, true, 'B3: the expanded note editor is not inside a .psa-rainbow-field wrapper')
+      assertEqual(editor.focused, true, 'B3: the expanded note editor did not autofocus')
+      assertEqual(editor.ringOpacity, '1', 'B3: the expanded note editor rainbow ring is not visible on focus')
+      assertEqual(editor.outlineStyle, 'none', 'B3: the expanded note editor still paints a solid focus outline')
+      await h.page.pressKey('escape')
+      await sleep(200)
+      await h.ensureStatusPanel()
+      await h.exit()
+      // Buttons keep their own focus treatment: the ring is only for inputs.
+      const noteStateAfter = await h.page.eval(probes.paintLayerState)
+      assertEqual(noteStateAfter.raised, null, 'B3: data-psa-raised leaked after exiting the mode')
+      return 'rainbow wrapper + ::after ring (shared recipe: 3.2s spin + 14s hue) on popover/collection/editor textareas and settings select; outline none; rect stable; reduced motion static ring; mode exit restored'
+    },
   }
 }
 
@@ -3330,6 +4240,27 @@ async function runScenarios(harness, results, opts) {
         throw error
       }
     })
+    if (id === 10) {
+      // F4 is split across branches (D3): this branch ships the annotation-side state
+      // event and [data-psd-hovercard] CSS; the dynamic-workspaces branch owns the pin
+      // and lifetime. Record the cross-branch row explicitly as SKIP (never a fake PASS).
+      const scenarioRow = results.rows.find((row) => row.id === id)
+      if (scenarioRow !== undefined && scenarioRow.pass === true) {
+        let realCard = false
+        try {
+          realCard = await harness.page.eval(probes.realPsdHovercardPresent)
+        } catch {
+          realCard = false
+        }
+        results.skip(
+          '10b',
+          'plugin hovercard pin (F4 cross-branch, owned by sidebar-impl)',
+          realCard
+            ? '[data-psd-hovercard] present, but the pin/lifetime behavior is owned by the dynamic-workspaces branch; Lead re-verifies after merge'
+            : 'no [data-psd-hovercard] element in this branch (DW marker/pin owned by sidebar-impl); annotation-side event + CSS asserted in scenario 10'
+        )
+      }
+    }
     // Never let a viewport override or mode state cascade into the next scenario.
     try {
       const widths = await harness.page.evaluate(`({ width: innerWidth, height: innerHeight })`)
@@ -3879,7 +4810,8 @@ async function main() {
     }
   }
 
-  const passed = results.rows.filter((row) => row.pass).length
+  const passed = results.rows.filter((row) => row.pass && row.skipped !== true).length
+  const skipped = results.rows.filter((row) => row.skipped === true).length
   const failed = results.failures.length
   const pageErrors = page !== null ? page.pageErrors : []
   const networkProblems = page !== null ? page.networkProblems : []
@@ -3887,9 +4819,9 @@ async function main() {
 
   log('\n=== Results ===')
   for (const row of results.rows) {
-    log(`${row.pass ? 'PASS' : 'FAIL'}  ${row.id}  ${row.title}${row.pass ? '' : `\n        ↳ ${short(row.detail, 700)}`}`)
+    log(`${row.pass ? (row.skipped === true ? 'SKIP' : 'PASS') : 'FAIL'}  ${row.id}  ${row.title}${row.pass ? '' : `\n        ↳ ${short(row.detail, 700)}`}`)
   }
-  log(`\nPASS ${passed} / FAIL ${failed}`)
+  log(`\nPASS ${passed} / SKIP ${skipped} / FAIL ${failed}`)
   log(`page errors: ${pageErrors.length}`)
   for (const error of pageErrors.slice(0, 8)) log(`  ! ${error}`)
   log(`real network failures: ${networkProblems.length} (${NETWORK_PREDICATE_TEXT})`)
