@@ -96,7 +96,13 @@ browser/profile using that `$DSH_HOME`; the browser `localStorage` ack cache is
 per origin. The store sanitizes ids (≤200 chars) and finite positive
 baselines, merges per id with `Math.max` (monotonic, no removal verb), caps the
 document at 1000 entries (oldest baselines drop), and writes atomically
-(temporary sibling + rename, `0600`, serialized chain). One authenticated route
+(temporary sibling + rename, `0600`, serialized chain). `load()` is
+**single-flight**: one promise serves concurrent callers, and if a stale load
+would publish after a newer `record()`, publication forward-merges
+(`mergeAcked(state, parsed)`) instead of clobbering the newer state. `record()`
+awaits that same load inside the serialized write chain, `get()` returns the
+current state, and a non-ENOENT read failure resets the cached promise and throws
+typed `READ_ACKS_READ_FAILED` so a later call can retry after the disk recovers. One authenticated route
 serves it: `GET /api/power-suite.read-acks` → `{ acked }`;
 `POST /api/power-suite.read-acks` with `application/json` (≤64 KiB of UTF-8
 bytes) merges and returns the merged document (`415` non-JSON, `413` too large,
@@ -196,12 +202,21 @@ ledger**:
   next 30 s without waiting while background seeding continues; a late success
   clears the backoff and seeded values resume, and a permanently hung listing can
   wait up to 5 s again after each 30 s window. A seed that **fails/rejects** is
-  different: a rejected seed promise may set the immediate-serve backoff window,
-  but it settles and is never retried, so seeded history never appears for this
-  process (until a Host recompose/restart) — only live events keep advancing
-  activity. A `listSessions()` rejection is swallowed inside the baseline and also
-  settles without retry; per-session cache-document read failures are skipped
-  (not retried). The route never answers 500 for either case. The
+  different: a rejected seed promise may set the immediate-serve backoff window
+  and the Host resets `seedPromise` so a later request retries; seeded history
+  can therefore appear after recovery, while during the backoff a GET may serve
+  the current/empty memory with `200`. A `listSessions()` rejection is swallowed
+  inside the baseline and settles without retry for that baseline attempt;
+  per-session cache-document read failures are skipped. More importantly, a
+  non-ENOENT **ledger load** failure keeps memory, resets the load promise, and
+  throws typed `ACTIVITY_READ_FAILED` (no empty rewrite; writes abort while
+  unreadable); the Host `ensureLoaded()` resets/rethrows, `ensureSeeded()` resets
+  the seed promise with the 30 s backoff, and the route catches and serves
+  **`200` snapshot/empty — never 500**. After recovery, the next GET after the
+  backoff retries load + seed and returns the recovered entries; during the
+  backoff a GET may serve current/empty memory `200`. A fail-once ledger test
+  shows the first GET `200 {}` and the after-backoff GET returning the recovered
+  historical entry. The route never answers 500 for load/seed failures. The
   client merges activity per-id with `max(previous, next)` and prunes only
   against a **non-empty** Session catalog, so empty/partial responses and HMR
   overlap cannot drop known activity; a genuinely empty catalog never prunes
@@ -455,9 +470,12 @@ and a `--psa-rail-width` custom property; the rail width is
 `clamp(188, round(0.116 * innerWidth), 236)` px. The frame's content box shrinks:
 the left sidebar keeps its width while the conversation column and the native
 right sidebar give up the rail width, so the fixed rail occupies the **rightmost
-strip, right of the native right column**. The shell's `.pI_x6G_overlayLayer` is
-`absolute; inset: 0` in the padded frame's **padding box** and does **not** span
-the rail strip, so native content does not paint under the rail. The padding transition is 180 ms
+strip, right of the native right column**. The shell frame (`.pI_x6G_frame`) is
+`position: relative` and carries the `padding-right`; its direct child
+`.pI_x6G_overlayLayer` is `position: absolute; inset: 0`, so it fills the frame's
+**padding box** and **does span the rail strip** — only native content inside the
+content box is pushed left, and the rail is a separate fixed element painted
+above the overlay layer. The padding transition is 180 ms
 and disabled under `prefers-reduced-motion`. Resize recomputes the layout
 (debounced): `innerWidth - leftSidebarWidth - rightSidebarWidth - railWidth >=
 560` keeps the shrink layout; otherwise the rail overlays the right edge and can

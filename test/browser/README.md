@@ -112,10 +112,14 @@ reviewed files) to publish `docs/assets/annotation-idle.png`, `annotation-mode.p
 
 > This acceptance evidence was recorded on the pre-merge annotation branch (final
 > publication build `50a1bb3` / `src/client.js` md5 `10dd3b72…`, branch commit
-> `fd8ccc9`; the round-2 build above is `aaab678` / `37388d3f…`). The merged build
-> (`572b8fa1…`, after merging into `feat/dynamic-workspaces`) was **not re-run**
-> through this harness; after the merge only an installed-page smoke verified the
-> launcher and rail markers. Do not read this record as merged-build E2E evidence.
+> `fd8ccc9`; the round-2 build above is `aaab678` / `37388d3f…`). The **full
+> suite** was not re-run on the merged build (`572b8fa1…`, after merging into
+> `feat/dynamic-workspaces`). After the merge, `--smoke` passed **6/6 on the
+> merged build** with the **35-key** seam, 0 page errors and 0 real network
+> failures, reusing the existing blank Session
+> `session-5eec2763-0a91-460e-b559-08a8c3a98d13` (no new Session). Do not read the
+> per-scenario record below as merged full-E2E evidence: it is pre-merge, while
+> the merged-build evidence is smoke-only.
 
 Environment: worktree `src/client.js` md5 `37388d3f9d1de0584b62bc111c6b6043` (commit `aaab678`,
 historical round-2 build, seam 32 keys incl. `resolveNodeCandidate`), Chrome 157.0.8103.78, Node v24.22.2, live GUI at
@@ -243,8 +247,9 @@ but do not fail the run (they are not page errors or same-origin HTTP failures).
 - **Evidence files are external development artifacts.** Every log path quoted in this
   README lives under `/tmp` and is not part of the repository; the per-scenario PASS/FAIL
   record above is the traceable in-repo summary, and the raw logs cannot be re-checked from a
-  clean checkout. The live E2E evidence is also **pre-merge**: the merged build
-  (`572b8fa1…`) was not re-run through the harness.
+  clean checkout. The live full-E2E evidence is also **pre-merge**; the merged
+  build (`572b8fa1…`) only got `--smoke` (6/6, 35-key seam, 0 page errors/real
+  network failures), not the full suite.
 - **Wheel over the conversation**: a blank session has an empty, non-scrollable conversation, so
   the wheel assertion uses the nearest native scrollable region (the sidebar session list) and
   states that in the evidence; scenario 8 fails if no scrollable region exists at all.
@@ -286,7 +291,7 @@ but do not fail the run (they are not page errors or same-origin HTTP failures).
   (round-1 build, superseded; kept for history only):* S1-S5 in its 00:47 full run and S6-S9 in
   its same-build `--from 6` run (exit 0), smoke 6/6. This is **not** evidence for the current
   build — the authoritative per-scenario record for the round-2 build
-  (`37388d3f9d1de0584b62bc111c6b6043`) is the "Current evidence (round 2, final build)" section
+  (`37388d3f9d1de0584b62bc111c6b6043`) is the "Current evidence (round 2, pre-merge annotation build)" section
   above (full run + same-build completion run + targeted S2/S6 runs). H1 gate proofs on this
   harness: feature-absent client → exit 1 with `FAIL gate-feature` (`PASS 4 / FAIL 12`);
   `--scenario 10` / `--from 10` → exit 2 with an argument error.
@@ -306,10 +311,11 @@ but do not fail the run (they are not page errors or same-origin HTTP failures).
   (the record is a three-source per-scenario composite); scenario 5 does not assert the
   mid-draft caret or a one-undo step; there is no ZH end-to-end run and no keyboard-isolation
   scenario. These are gaps in the evidence, not claims about product behavior.
-- **Pre-merge evidence, not merged-build evidence**: the recorded runs targeted the pre-merge
-  annotation build (`10dd3b72…`/`fd8ccc9`, round-2 `37388d3f…`); the merged build (`572b8fa1…`)
-  was not re-run through this harness — after the merge only an installed-page smoke verified
-  the launcher and rail markers.
+- **Pre-merge full evidence plus merged-build smoke-only**: the recorded full runs targeted the
+  pre-merge annotation build (`10dd3b72…`/`fd8ccc9`, round-2 `37388d3f…`); the merged build
+  (`572b8fa1…`) got only `--smoke` (6/6 PASS, 35-key seam, 0 page errors/real network failures,
+  reused blank Session) — the full suite was not re-run on it, and no single all-green full run
+  exists.
 - **Ego-browser / other automation layers** may refuse clicks behind the annotation popover
   (`role="dialog"`); raw CDP input used here is unaffected. Dismiss the selection with Esc before
   clicking underlying page controls in other tools.

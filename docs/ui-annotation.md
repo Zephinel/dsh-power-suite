@@ -70,11 +70,14 @@ a strip freed from the right edge instead of covering the conversation.
   the conversation column and the native right sidebar give up the rail width,
   so the rail occupies the **rightmost strip, right of the native right column**
   (the padding moves the page content left; the rail itself is `position: fixed;
-  right: 0`). The shell's `.pI_x6G_overlayLayer` is `position: absolute; inset: 0`
-  inside the padded frame's **padding box**, so it does **not** span the rail
-  strip; native content therefore does not paint under the fixed rail. This is a
-  padding change, not a CSS transform: the page stays crisp and its own scrolling
-  and hit testing keep working.
+  right: 0`). The shell frame (`.pI_x6G_frame`) is `position: relative` and takes
+  the `padding-right`; its direct child `.pI_x6G_overlayLayer` is
+  `position: absolute; inset: 0`, so by CSS containing-block rules it fills the
+  frame's **padding box** and **does span the rail strip** — only the native
+  content inside the content box is pushed left, while the rail is a separate
+  `position: fixed` element painted above the overlay layer. This is a padding
+  change, not a CSS transform: the page stays crisp and its own scrolling and hit
+  testing keep working.
 - The padding change is animated with a 180 ms ease transition, disabled under
   `prefers-reduced-motion`.
 - **Narrow viewports** switch to an overlay layout: when the space left after the
@@ -134,8 +137,10 @@ opens the note popover.
 - **Hover hot path** — the pointer chain collects **elements only** (up to 16
   ancestors). Element descriptors are built lazily only for the chosen element
   and at most **2 context ancestors**, so a hover performs **0 `textContent`
-  reads** and a bounded amount of work; the E2E measurement records the bounded
-  descriptor build rather than per-move descriptor construction.
+  reads** and a bounded amount of work. This was established by an **ad hoc
+  vm/fake-DOM probe** (not the committed E2E harness, which has no such
+  instrumentation) and by the unit seam asserting the chain builder never calls
+  the descriptor builder; treat it as a manual measurement.
 - **Ancestor adjustment** — the popover's up/down control moves along the
   candidate's ancestor chain, clamped at both ends, and re-derives the reference
   at each level. This is for choosing the right granularity: an icon instead of
@@ -638,11 +643,14 @@ injects this checkout's `src/client.js` in place of the installed bundle for tha
 page, and runs the acceptance scenarios with real CDP mouse and keyboard input at
 a 1728 x 900 viewport. The installed plugin, the user profile, and the launchd
 service are never modified. The recorded acceptance evidence is **pre-merge**
-(final publication build `10dd3b72…` / branch commit `fd8ccc9`); the merged build
-(`572b8fa1…`) was **not re-run** through the harness — after the merge only an
-installed-page smoke checked the launcher and rail markers, and the round-3 audit
-fixes (note normalization, lazy hover) are unit-tested rather than re-covered by
-E2E. The evidence exists
+(final publication build `10dd3b72…` / branch commit `fd8ccc9`); the round-3
+audit fixes (note normalization, lazy hover) are unit-tested rather than
+re-covered by E2E. On the merged build (`572b8fa1…`),
+`node test/browser/annotation.e2e.mjs --smoke` passed **6/6** with the **35-key**
+seam, 0 page errors and 0 real network failures, reusing the existing blank
+Session `session-5eec2763-0a91-460e-b559-08a8c3a98d13` (no new Session). This is
+**smoke-only** merged-build evidence: the full E2E remains pre-merge and there is
+no single all-green full-suite run. The evidence exists
 as in-repo summaries plus `/tmp` logs that are external development artifacts,
 not repository files.
 
@@ -798,5 +806,6 @@ acceptance `test/browser/`.
   no keyboard route to annotate an element.
 - **No client node-test harness for the pointer chain, flush, or 401/403
   retries.** The hover chain/descriptor laziness and the client sync rules live
-  in the browser bundle; they are code-reviewed and (for the chain) covered by
-  the E2E measurement, not by `node:test`.
+  in the browser bundle; they are code-reviewed, the chain was measured by an
+  **ad hoc vm/fake-DOM probe (not the committed E2E harness)**, and neither is
+  covered end to end by `node:test`.

@@ -208,7 +208,12 @@ $DSH_HOME/dsh-power-suite/read-acks.json
   `{ code: "store-read-failed" }`** when a non-ENOENT read fails (GET or POST —
   the store never caches an empty result and refuses to overwrite unreadable
   marks), and a no-store `500 { code: "store-failed" }` when the durable document
-  cannot be written. Every response is `cache-control: no-store`.
+  cannot be written. Every response is `cache-control: no-store`. Loads are
+  **single-flight**, and publication forward-merges (`mergeAcked(state, parsed)`)
+  so a stale load cannot clobber a newer record; `record()` awaits the same load
+  in the serialized chain and `get()` returns the current state; a non-ENOENT
+  read failure resets the promise and throws typed `READ_ACKS_READ_FAILED` so a
+  later call retries after disk recovery.
 - The browser keeps `localStorage['dsh-power-suite.acked-sessions']` as a fast,
   offline cache. On mount it reads the Host document and merges the per-id
   maxima, sends a migration POST on each mount (uploading the local cache's old
@@ -312,9 +317,15 @@ committed events DSH itself uses:
   `*.tmp` may remain by design). A corrupt/missing file loads as empty and
   schedules an empty rewrite, while a valid empty document is not rewritten.
   **Read-error policy:** only **ENOENT** counts as empty; any other read failure
-  keeps the in-memory map, does **not** schedule an empty rewrite, retries the
-  load later, and aborts a write that cannot safely read the document (so an
-  unreadable ledger is never overwritten with a partial merge).
+  keeps the in-memory map, does **not** schedule an empty rewrite, throws typed
+  `ACTIVITY_READ_FAILED`, resets the load promise so a later request retries, and
+  aborts a write that cannot safely read the document (so an unreadable ledger is
+  never overwritten with a partial merge). The Host `ensureLoaded()` resets and
+  rethrows, `ensureSeeded()` resets the seed promise with the existing 30 s
+  backoff, and the route catches and serves **`200` snapshot/empty, never 500**;
+  after recovery the next GET after the backoff retries load + seed and returns
+  the recovered entries, while during the backoff a GET may serve current/empty
+  memory `200`.
 - **One-time baseline** — on install, Sessions already in the catalog without a
   ledger entry are seeded from their per-record projection-cache document's
   `max(timeContext.lastMessageTime, timeContext.lastInjectionTime)` (16 MiB
@@ -337,11 +348,13 @@ committed events DSH itself uses:
   seeding continues; a late success clears the backoff and seeded values resume,
   and a permanently hung listing can again wait ≤5 s after each 30 s window. A
   seed that **fails/rejects** is different: a rejected seed promise may set the
-  immediate-serve backoff window, but it settles and is **never retried**, so
-  seeded history never appears this process (until a Host recompose/restart); a
-  `listSessions()` rejection is swallowed inside the baseline and settles without
-  retry too. Only live committed events keep advancing activity. The route never
-  answers 500 for either case.
+  immediate-serve backoff window **and the Host resets the seed promise**, so a
+  later request retries load + seed and seeded history can appear after recovery;
+  during the backoff a GET may serve current/empty memory. A `listSessions()`
+  rejection is swallowed inside the baseline, so that attempt settles without an
+  error or retry and seeded history can remain absent until a recompose. Only
+  live committed events keep advancing activity outside those paths. The route
+  never answers 500 for either case.
 - **Client** — the map is fetched on the existing card sync cadence (mount,
   focus, visibility, 30 s — no extra timer, 8 s `AbortController` timeout) and
   folded in as `effectiveUpdatedAt = max(summary.updatedAt, activity[id])` for
@@ -541,10 +554,17 @@ The native **View options** menu picks how Sessions are grouped:
   runs in the background; if that seed eventually succeeds the backoff clears and
   the seeded values apply, and a permanently hung listing can add another ≤5 s
   wait after each window. A seed that **fails/rejects** may set the
-  immediate-serve backoff, but the promise then settles and is **never retried**,
-  so seeded history never appears for this process (until a Host recompose/
-  restart); a `listSessions()` rejection is swallowed and settles the same way.
-  Only live committed events advance activity. The route never 500s. Per-session
+  immediate-serve backoff, and the Host resets the seed promise so a later
+  request retries load + seed — seeded history can appear after recovery, while
+  during the backoff a GET may serve current/empty memory `200`; a
+  `listSessions()` rejection is swallowed inside the baseline and settles that
+  attempt without retry (seeded history can remain absent until a recompose).
+  A non-ENOENT ledger load failure is likewise retryable: it keeps memory, resets
+  the load/seed promises with the 30 s backoff, and the route answers `200`
+  snapshot/empty (never 500); after recovery the next GET retries and returns the
+  recovered entries. Only
+  live committed events advance activity outside that recovery path. The route
+  never 500s. Per-session
   cache-document read failures are skipped (not retried) and just omit that
   Session's baseline.
 - **One-time migration caveat for read marks.** During the short-lived

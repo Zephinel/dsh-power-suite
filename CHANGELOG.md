@@ -33,7 +33,8 @@ heading is added until the release is cut.
   page-lifetime. The browser-only feature adds no Host route,
   service, or profile change, cleans up every listener, layout marker, and DOM
   node on exit and HMR, and adds a pure test seam plus a live-page CDP acceptance
-  harness (recorded pre-merge; the merged build was not re-run through it).
+  harness (full acceptance recorded pre-merge; on the merged build only `--smoke`
+  was re-run: 6/6 PASS with the 35-key seam, smoke-only evidence).
 
 ### Changed
 
@@ -50,24 +51,33 @@ heading is added until the release is cut.
   `globalThis.CSS` with a leading-digit hex fallback (`#123abc` → `#\31 23abc`);
   pinned popovers re-clamp on resize while keeping their dragged offset; the
   marquee adds at most the 24 most specific intersecting candidates.
-- Read-mark and activity robustness: non-ENOENT read-acks read failures return a
-  no-store `500 { code: "store-read-failed" }` for GET and POST and are never
-  cached as empty; the activity ledger keeps its in-memory map on a non-ENOENT
-  read error, does not schedule an empty rewrite, retries the load, and aborts a
-  write while the document is unreadable; `401/403` join network/5xx/429 as
-  retryable ack-push failures (other permanent 4xx still drop only that batch);
-  the read-acks `localStorage` migration runs per mount. Read-error behavior is
-  unit/`chmod`-tested only (not live-forced), and client 401/403 classification
-  has no browser node harness. Ack flush/sync failures are caught and
-  bounded-logged instead of surfacing as unhandled rejections; failed read-acks
-  writes clean up their temp sibling; the seed-backoff test uses relative
-  timing/poll-wait rather than fixed sleeps.
-- Activity seed failure wording: an already-pending seed that times out keeps the
-  30 s immediate-serve backoff while background seeding continues; a seed that
-  fails/rejects may set that backoff but settles and is never retried (a
-  `listSessions()` rejection is swallowed inside the baseline), so seeded history
-  never appears for that process. Selection families no longer list PTC mode
-  (`ptc-mode` is a message-source key; `tool/ptc-dispatch` remains activity).
+- Read-mark and activity robustness: read-acks `load()` is single-flight with
+  forward-merge publication (`mergeAcked(state, parsed)`), so a stale concurrent
+  load cannot clobber a newer record; non-ENOENT reads reset the cached promise
+  and throw typed `READ_ACKS_READ_FAILED`, GET/POST answer no-store `500
+  { code: "store-read-failed" }`, empty is never cached, `record()` awaits the
+  same load in the serialized chain and `get()` returns current. A non-ENOENT
+  activity-ledger load keeps memory, resets its promise, throws typed
+  `ACTIVITY_READ_FAILED` (no empty rewrite; writes abort while unreadable; ENOENT
+  stays empty); the Host `ensureLoaded()` resets/rethrows, `ensureSeeded()`
+  resets the seed promise with the existing 30 s backoff, and the route serves
+  **`200` snapshot/empty, never 500** — after recovery the next GET after the
+  backoff retries load+seed and returns recovered entries, while during the
+  backoff a GET may serve current/empty memory. `401/403` join
+  network/5xx/429 as retryable ack-push failures (other permanent 4xx still drop
+  only that batch); the read-acks `localStorage` migration runs per mount.
+  Read-error behavior is unit/`chmod`-tested only and the concurrency proof is
+  store-level stress (20 rounds of 4 concurrent get + 3 record), **not** a real
+  multi-process Host; client 401/403 classification has no browser node harness.
+  Ack flush/sync failures are caught and bounded-logged; failed read-acks writes
+  clean up their temp sibling; the seed-backoff test uses relative timing/poll-wait.
+- Activity seed failure: an already-pending seed that times out keeps the 30 s
+  immediate-serve backoff while background seeding continues; a failed/rejected
+  seed may set that backoff but the Host resets the seed promise so a later
+  request retries load+seed — seeded history can appear after recovery (during
+  the backoff a GET may serve current/empty memory `200`). Selection families no
+  longer list PTC mode (`ptc-mode` is a message-source key; `tool/ptc-dispatch`
+  remains activity).
 
 ## [0.2.0] — undated development snapshot
 

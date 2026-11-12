@@ -145,8 +145,11 @@
   the local map and re-migrate later); **401/403/408/425 classification is
   client-only code with no node test**. A non-ENOENT read failure returns a
   no-store `500 { code: "store-read-failed" }` for GET and POST and is never
-  cached as empty (the store refuses to overwrite unreadable marks); these
-  read-error paths are unit/`chmod`-tested only, not live-forced. The sync awaits the actual in-flight push promise before fetching
+  cached as empty (the store refuses to overwrite unreadable marks). Loads are
+  single-flight and publication forward-merges, so a stale load cannot clobber a
+  newer record; `record()` awaits the same load in the serialized chain and
+  `get()` returns current. These read-error/race paths are unit/`chmod`-tested
+  only (store-level stress, **not** a real multi-process Host), not live-forced. The sync awaits the actual in-flight push promise before fetching
   activity (so no push is in flight when the activity request starts), which can
   delay that fetch by the push duration. The browser `localStorage` cache is per
   browser origin, while the Host documents are shared per `$DSH_HOME`. The two
@@ -194,13 +197,17 @@
   for the next 30 s without waiting while background seeding continues, and a
   permanently hung listing can cause another ≤5 s wait after each backoff
   window. A seed that **fails/rejects** may set the immediate-serve backoff, but
-  the promise then settles and is **never retried** — seeded history never
-  appears for this process (until a Host recompose/restart); a `listSessions()`
-  rejection is swallowed and settles the same way. Only live committed events
-  keep advancing activity; the route never 500s, and per-session
-  cache-document read failures are skipped (not retried). Only **ENOENT** counts
-  as empty for the ledger: other read errors keep memory, skip the empty rewrite,
-  retry the load, and abort a write that cannot read the document. The client merges activity per-id with `max(previous, next)` and
+  that attempt settles; the Host resets the seed promise so a later request
+  retries, and seeded history can appear after recovery. A `listSessions()`
+  rejection is swallowed inside the baseline and settles that attempt without
+  retry; per-session cache-document read failures are skipped. A non-ENOENT
+  **ledger load** failure is retryable: it keeps memory, resets the load/seed
+  promises with the existing 30 s backoff, and the route answers **`200`
+  snapshot/empty, never 500**; after recovery the next GET after the backoff
+  retries load + seed and returns the recovered entries, while during the backoff
+  a GET may serve current/empty memory `200`. Only **ENOENT** counts as empty for
+  the ledger; other read errors never schedule an empty rewrite and abort a write
+  that cannot read the document. The client merges activity per-id with `max(previous, next)` and
   prunes only against a non-empty Session catalog, so partial/empty responses
   and HMR overlap cannot drop known activity; a genuinely empty catalog never
   prunes (stale entries may remain but no rows show), and a genuine clear does
@@ -340,8 +347,12 @@
   trap and does not return focus to the sidebar trigger on close; the page's
   "Last active" label refreshes on its own 15 s tick, not a separate ticking
   display; at the 1000-entry acknowledgement cap the oldest baseline is dropped,
-  so a read mark beyond the cap could reappear in a future list; the unreadable
-  read-acks document is treated as empty and self-heals on the next write.
+  so a read mark beyond the cap could reappear in a future list; a non-ENOENT
+  read-acks read failure raises the typed `READ_ACKS_READ_FAILED` path — GET and
+  POST answer a no-store `500 { code: "store-read-failed" }`, the store never
+  caches an empty document, and reads/writes recover once the file is readable
+  again. These read-error paths are covered by `chmod`/unit tests only, not
+  live-forced.
 - **No virtualization.** Runs grow by **Show more** in batches of 60, so a very
   long project keeps all rendered rows in the DOM.
 - **Archived only, no archiving controls.** Archived Sessions are excluded from
@@ -382,16 +393,22 @@
 - **Coexistence with the Project page is resolved by page-exit only.** Opening
   the Project page exits annotation and hides the launcher; annotation cannot be
   used while the page is open, and there is no mixed z-index mode.
-- **Evidence traceability.** The annotation E2E acceptance evidence was recorded
-  on the pre-merge annotation build (final publication md5 `10dd3b72…` / branch
-  commit `fd8ccc9`, round-2 build `37388d3f…`); the merged build (`572b8fa1…`)
-  was not re-run through the harness — after the merge only an installed-page
-  smoke checked the launcher and rail markers. The logs it quotes live in `/tmp`
-  and are external development artifacts, not repository files.
+- **Evidence traceability.** The full annotation E2E acceptance evidence was
+  recorded on the pre-merge annotation build (final publication md5 `10dd3b72…` /
+  branch commit `fd8ccc9`, round-2 build `37388d3f…`); the full suite was **not**
+  re-run on the merged build (`572b8fa1…`). After the merge,
+  `node test/browser/annotation.e2e.mjs --smoke` passed **6/6 on the merged
+  build** with the **35-key** seam, 0 page errors and 0 real network failures,
+  reusing the existing blank Session
+  `session-5eec2763-0a91-460e-b559-08a8c3a98d13` (no new Session). That is
+  smoke-only evidence; full live behavior remains pre-merge and no single
+  all-green full-suite run exists. The logs it quotes live in `/tmp` and are
+  external development artifacts, not repository files.
 - **No client node harness for the pointer chain or sync internals.** The lazy
   hover chain/descriptor behavior and the client ack flush/401-403/merge rules
-  live in the unexported browser bundle; they are code-reviewed (and the chain is
-  measured by the E2E harness), not unit-tested.
+  live in the unexported browser bundle; they are code-reviewed, the chain was
+  measured by an **ad hoc vm/fake-DOM probe (not the committed E2E harness)**,
+  and neither is unit-tested end to end.
 
 ## Raw artifacts and implicit continuation
 

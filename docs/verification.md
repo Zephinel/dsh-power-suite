@@ -22,13 +22,13 @@ npm run pack:check
 
 Current evidence (2026-11-12, Node 24.22.2):
 
-- `npm test`: **171 tests, 171 passed, 0 failed, 0 skipped** — 73 base tests
+- `npm test`: **174 tests, 174 passed, 0 failed, 0 skipped** — 73 base tests
   (56 other suites + 17 project-view), plus 7 more project-view tests (24
-  current), 13 read-acks, 21 session-activity Host tests, and **57**
+  current), **14** read-acks, **22** session-activity Host tests, and **58**
   UI-element-annotation tests through the browser-factory test seam; per-file:
   interrupted-host 14, interrupted-sessions 6, project-view 24, prompt-history 6,
-  read-acks 13, session-activity 21, session-artifacts 16, settings 6,
-  ui-annotation 57, workspace-presets 8.
+  read-acks 14, session-activity 22, session-artifacts 16, settings 6,
+  ui-annotation 58, workspace-presets 8.
 - `npm run check`: passed (`18 modules, 10 test files`).
 - `npm run pack:check`: **78 files** (0.3.0 tarball), including `src/`,
   `locale/`, `docs/` (with the Project page/rail states/sidebar switch,
@@ -53,23 +53,34 @@ Current evidence (2026-11-12, Node 24.22.2):
   rule, the 40/200/24 caps, stats and recent-activity derivation, parameter
   validation and 25 s cache behavior), the read-acks store/route (schema,
   sanitization, max-merge, 1000-entry cap, 415/413/400/500 including the
-  non-ENOENT read-error paths exercised with `chmod`), and the
+  non-ENOENT read-error paths exercised with `chmod`, single-flight load with
+  forward-merge publication under concurrent get/record stress — 20 rounds of 4
+  concurrent get + 3 record preserve every ack in memory/file/reload, and
+  unreadable→restored merges old+new), and the
   event-sourced activity ledger (store max-merge/cap/atomic persistence,
   best-effort read-merge writes with a TOCTOU window, flush/dispose durability
   including an in-flight write and repeated dispose, record→dispose→reload, 20
   sequential lifecycles, allowlist families plus the explicit non-activity set
   — including `hook/invoked`/`hook/result` and the `ptc-mode` rejection, one-time
-  baseline with the now+60 s future clamp, and the seed-timeout **backoff**
-  route behavior: first GET bounded, backoff GETs fast, release picks up seeded
-  values). The failed-disk-write path and the client's 408/425 retry
+  baseline with the now+60 s future clamp, the seed-timeout **backoff** route
+  behavior (first GET bounded, backoff GETs fast, release picks up seeded
+  values), and the first-load **retry** after a typed activity read failure:
+  fail-once ledger returns `200 {}` on the first GET, then after the backoff the
+  next GET retries load+seed and returns the recovered entry). The
+  failed-disk-write path and the client's 408/425 retry
   classification and the client 401/403 retry rule are **not** node tests — see
-  the manual/code-reviewed note below. The annotation E2E acceptance evidence is **pre-merge** and was not
-  re-run on the merged build; the lazy hover chain's zero-`textContent` claim is
-  E2E-instrumented, not a node test.
+  the manual/code-reviewed note below. The annotation E2E acceptance evidence is
+  **pre-merge**; a later merged-build `--smoke` run passed 6/6 with the 35-key
+  seam (smoke only — the full E2E was not re-run and no single all-green full
+  run exists); the lazy hover chain's
+  zero-`textContent` claim comes from an **ad hoc vm/fake-DOM probe, not the
+  committed E2E harness** (which has no such instrumentation), and is not a node
+  test.
 - The UI element annotation mode adds no Host route, service, or Session-log
-  write; its pure model is covered by **57** `node:test` cases through the
+  write; its pure model is covered by **58** `node:test` cases through the
   browser factory test seam, and its live behavior by the pre-merge acceptance
-  harness below (not re-run on the merged build).
+  harness below (merged-build smoke passed 6/6, 35-key seam; the full E2E was
+  not re-run).
 - Host routes are covered by tests where they exist: Dynamic Workspaces'
   card state is browser-derived but Host-backed through the read-acks store/route
   and the session-activity ledger route (16 MiB document guard, allowlist
@@ -98,9 +109,9 @@ subagent: true`; two completed control Sessions stayed `interrupted: false`.
 > **Pre-merge annotation evidence.** Recorded on `fix/ui-annotation-review-fixes`
 > (final publication build `50a1bb3`, `src/client.js` md5 `10dd3b72…`; branch
 > commit `fd8ccc9`) **before** the merge into `feat/dynamic-workspaces`. The
-> merged build (`572b8fa1…`) was **not re-run** through the E2E harness — after
-> the merge only an installed-page smoke checked the launcher and rail markers.
-> The merged suite is **171/171**, `npm run check` **18 modules / 10 test files**,
+> **full E2E was not re-run** on the merged build (`572b8fa1…`); after the merge
+> `--smoke` passed **6/6** with the **35-key** seam (smoke-only evidence).
+> The merged suite is **174/174**, `npm run check` **18 modules / 10 test files**,
 > and the tarball **78 files** (0.3.0); the per-scenario record below remains
 > pre-merge evidence, not merged-build evidence.
 
@@ -142,9 +153,10 @@ commit `fd8ccc9`). The acceptance run recorded above was taken on `37388d3f…`;
 the only delta is the review-requested defensive cleanup in `deactivate()`'s
 already-off early return (clears the resolved-node cache/observer; that branch is
 not exercised by any scenario). On that pre-merge build `npm test` was 125/125
-and `npm run check` green; the merged tree is 171/171 / 18 modules / 10 test
-files / 78-file pack. The harness itself was not re-run after the merge, so no
-merged-build E2E claim is made.
+and `npm run check` green; the merged tree is 174/174 / 18 modules / 10 test
+files / 78-file pack. The full harness was not re-run after the merge; only
+`--smoke` was (6/6, 35-key seam, 0 page errors/real network failures), so no
+merged-build **full-E2E** claim is made.
 
 Run:
 
@@ -164,9 +176,10 @@ Automated gates on this build:
   this build); `node --check src/client.js` passed; `npm run check` passed
   (`14 modules, 8 test files`); `npm run pack:check` **63 files** including the
   five annotation captures.
-- Merged tree gates (current): `npm test` **171/171**, `npm run check` passed
-  (`18 modules, 10 test files`), `npm run pack:check` **78 files**. No merged-build
-  E2E run exists (see the pre-merge note above).
+- Merged tree gates (current): `npm test` **174/174**, `npm run check` passed
+  (`18 modules, 10 test files`), `npm run pack:check` **78 files**. Merged-build
+  evidence is the 6/6 `--smoke` run above (35-key seam); the full E2E was not
+  re-run on the merged build and there is no single all-green full run.
 
 Acceptance result: **no single fully-green full-suite run exists for this build.**
 The complete per-scenario PASS evidence on md5 `37388d3f…` comes from three
