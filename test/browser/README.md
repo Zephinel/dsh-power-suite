@@ -109,6 +109,39 @@ reviewed files) to publish `docs/assets/annotation-idle.png`, `annotation-mode.p
   fatal error; `2` only for usage/argument errors (`--scenario 16`, `--from 16`, missing value,
   `Network` setup failure is NOT a usage error and exits 1).
 
+## Current evidence (Phase 1 annotation build)
+
+Phase 1 (`feat/annotation-ux`, `src/client.js` md5 `151e0380b8283b79934c92126919c136`,
+commit `d68e6a9` plus the final evidence commit), Node v24.22.2, live GUI at 1728x900,
+`/tmp/ps-annotation/CONTRACT.md`-style harness with the **48-key** seam. Every log was
+written under `.tmp-work/` during the branch (gitignored, external development artifacts).
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Unit model | `npm test` | **193/193** pass, 0 skip (`test/ui-annotation.test.js`: 70 cases) |
+| Repository gate | `npm run check` | exit 0 (syntax + manifest + pack dry-run) |
+| Smoke | `node test/browser/annotation.e2e.mjs --smoke` | **6/6**, seam 48 keys, 0 page errors, 0 real network failures |
+| Floating surfaces / v2 / persistence / cap | `node test/browser/annotation.e2e.mjs --scenario 10 --no-shots` | **PASS**, plus explicit **SKIP** row `10b` (plugin-hovercard pin owned by the sidebar branch) |
+| Rainbow focus ring | `node test/browser/annotation.e2e.mjs --scenario 15 --no-shots` | **PASS** (ring on popover/settings/collection/editor inputs, `outline:none`, stable rect, reduced-motion static ring) |
+| Self-contained late sequence | `node test/browser/annotation.e2e.mjs --from 6 --no-shots` | smoke + S6,S7,S8,S9,S10,S15: **12 PASS / 1 SKIP / 0 FAIL**, 143.0 s, 0 page errors, 0 real network failures, exit 0 |
+| Full suite attempt 1 | `node test/browser/annotation.e2e.mjs --no-shots` | **stalled inside scenario 6** after S1-S5 passed (killed after ~4 min in S6; log has `PASS 1..5` only) |
+| Full suite attempt 2 | same | **stalled inside scenario 6** after S1-S5 passed (killed after ~5 min in S6, ~7 min total) |
+
+The two full-run stalls reproduce the pre-existing late-run headless-renderer/CDP stall
+documented below (scenario 6 passes in the shorter `--from 6` sequence and standalone on the
+same build); they are reported as harness/live-GUI timing, not dismissed, and **no single
+all-green full-suite run exists** for this build. Sessions touched in the recorded runs:
+`session-8cbac527-8ef9-4d7e-9c02-6ab5a4236c71`, `session-1e273273-4316-46f5-84c8-199bfc0812a2`,
+`session-d29fc9a7-9151-47dc-aeeb-41d739e34455`; no message was sent and no setting changed.
+
+Visual evidence for the Phase 1 behaviors was captured through the same CDP harness into
+`.tmp-work/shots2/` (not committed; the existing `docs/assets/annotation-*.png` set belongs to
+the earlier round): `10-floating-card-hover.png` (whole-card hover outline, overlay z=150 over
+card z=100), `10-floating-card-popover.png` (floating/ephemeral popover with Copy locator),
+`10-floating-drill.png` (Child drilled to a 20 px inner row), `15-rainbow-focus.png` and
+`15-settings-focus.png` (shared-recipe focus ring: `psa-ring-spin, psa-ring-hue` at
+`3.2s, 14s`).
+
 ## Current evidence (round 2, pre-merge annotation build)
 
 > This acceptance evidence was recorded on the pre-merge annotation branch (final
