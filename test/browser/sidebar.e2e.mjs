@@ -1699,6 +1699,154 @@ async function runLayoutChecks({ page, results, state }) {
     return `${count} top-level rows, ${state.rows.rows.length} rows incl. subagents`
   })
 
+  await results.check('b1-5', 'trailing grid stays right-anchored at every card width (parent + child)', async () => {
+    const widths = [null, 320, 400]
+    const samples = []
+    try {
+      for (const width of widths) {
+        const sample = await page.eval((w) => {
+          const panel = document.querySelector('.psd-panel')
+          if (!panel) return null
+          panel.style.width = w === null ? '' : `${w}px`
+          const box = (el) => {
+            const r = el.getBoundingClientRect()
+            return { left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width), top: Math.round(r.top), bottom: Math.round(r.bottom) }
+          }
+          const rows = [...document.querySelectorAll('.psd-run, .psd-child')].map((el) => {
+            const time = el.querySelector('.psd-run-time, .psd-child-time')
+            const toggle = el.querySelector('.psd-run-toggle, .psd-run-toggle-spacer')
+            const title = el.querySelector('.psd-run-title, .psd-child-title')
+            return {
+              kind: el.classList.contains('psd-run') ? 'parent' : 'child',
+              row: box(el),
+              time: time ? box(time) : null,
+              toggle: toggle ? box(toggle) : null,
+              title: title ? { rect: box(title), clipped: title.getAttribute('data-clipped') === 'true' } : null,
+            }
+          })
+          return { rows }
+        }, width)
+        assert(sample, `panel missing at width ${width ?? 'natural'}`)
+        samples.push({ width: width ?? 'natural', rows: sample.rows })
+      }
+    } finally {
+      await page.eval(() => {
+        const panel = document.querySelector('.psd-panel')
+        if (panel) panel.style.width = ''
+      })
+      await sleep(350)
+    }
+    const rowWidths = [...new Set(samples.flatMap((sample) => sample.rows.map((row) => row.row.width)))]
+    assert(rowWidths.length >= 3, `need at least three distinct row widths to prove the invariant, got ${rowWidths.join(', ')}`)
+    const details = []
+    for (const sample of samples) {
+      const parents = sample.rows.filter((row) => row.kind === 'parent')
+      const children = sample.rows.filter((row) => row.kind === 'child')
+      assert(parents.length >= 1 && children.length >= 1, `need parent and child rows at width ${sample.width}`)
+      const timeRights = sample.rows.map((row) => row.time.right)
+      assertNear(Math.max(...timeRights) - Math.min(...timeRights), 0, 1, `at width ${sample.width} parent/child time right edges must be identical (${JSON.stringify(timeRights)})`)
+      for (const row of sample.rows) {
+        assertEqual(row.toggle.right, row.row.right, `at width ${sample.width} a ${row.kind} row's disclosure column must sit on the row's right edge (toggle ${row.toggle.right}, row ${row.row.right})`)
+        assertNear(row.time.right, row.row.right - 50, 1, `at width ${sample.width} a ${row.kind} row's time must be right-anchored (time ${row.time.right}, row right ${row.row.right}, expected ${row.row.right - 50})`)
+        if (row.title.clipped) {
+          assert(row.title.rect.right <= row.time.left - 3, `at width ${sample.width} a clipped ${row.kind} title must never run under the trailing columns (title ${row.title.rect.right}, time left ${row.time.left})`)
+        }
+      }
+      details.push(`${sample.width}: row ${sample.rows[0].row.width}px, time right ${timeRights[0]}`)
+    }
+    return `${details.join(' / ')}; identical parent/child time rights and right-anchored trailing grid at all widths`
+  })
+
+  await results.check('b1-6', 'rows get a comfortable vertical gap and the tree connectors stay coherent', async () => {
+    const spacing = await page.eval(() => {
+      const box = (el) => {
+        const r = el.getBoundingClientRect()
+        return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), width: Math.round(r.width), height: Math.round(r.height) }
+      }
+      const body = document.querySelector('.psd-panel-body')
+      if (!body) return null
+      const items = [...body.children].filter((el) => el.classList.contains('psd-item'))
+      const itemGaps = []
+      for (let index = 1; index < items.length; index += 1) {
+        itemGaps.push(Math.round(items[index].getBoundingClientRect().top - items[index - 1].getBoundingClientRect().bottom))
+      }
+      const groups = []
+      for (const item of items) {
+        const run = item.querySelector('.psd-run')
+        for (const container of item.querySelectorAll('.psd-children')) {
+          const kids = [...container.children].filter((el) => el.classList.contains('psd-child'))
+          const gaps = []
+          for (let index = 1; index < kids.length; index += 1) {
+            gaps.push(Math.round(kids[index].getBoundingClientRect().top - kids[index - 1].getBoundingClientRect().bottom))
+          }
+          const parentGap = run !== null && kids.length > 0 ? Math.round(kids[0].getBoundingClientRect().top - run.getBoundingClientRect().bottom) : null
+          const style = getComputedStyle(container)
+          const last = kids[kids.length - 1]
+          const mask = last ? getComputedStyle(last, '::after') : null
+          groups.push({
+            kids: kids.length,
+            gaps,
+            parentGap,
+            trunkWidth: style.borderLeftWidth,
+            trunkColor: style.borderLeftColor,
+            lastMaskContent: mask ? mask.content : null,
+            lastRow: last ? box(last) : null,
+            firstRow: kids.length > 0 ? box(kids[0]) : null,
+            parentRow: run ? box(run) : null,
+            container: box(container),
+          })
+        }
+      }
+      return { itemGaps, groups }
+    })
+    assert(spacing, 'panel body not found')
+    for (const gap of spacing.itemGaps) assert(gap >= 4, `top-level item gap must be at least 4 px, got ${gap}`)
+    assert(spacing.groups.length >= 1, 'no nested child group to measure')
+    for (const group of spacing.groups) {
+      if (group.parentGap !== null) assert(group.parentGap >= 3, `parent row to first child gap must be at least 3 px, got ${group.parentGap}`)
+      for (const gap of group.gaps) assert(gap >= 4, `child row gap must be at least 4 px, got ${gap}`)
+      assertEqual(group.trunkWidth, '1px', 'tree trunk border must stay 1 px wide')
+      assert(group.lastMaskContent !== 'none', 'the last child must keep its trunk-end mask pseudo-element')
+      if (group.lastRow !== null) {
+        assert(group.lastRow.bottom <= group.container.bottom + 1, 'last child must sit inside the children container so the trunk ends cleanly')
+      }
+    }
+    // The gap must not create a dead hover strip: moving from one row across the
+    // gap to the next row must still leave a row hovered (hover intents work).
+    const points = await page.eval(() => {
+      const rows = [...document.querySelectorAll('.psd-run')]
+      const children = [...document.querySelectorAll('.psd-child')]
+      if (rows.length === 0) return null
+      // Prefer two top-level rows; with a single top-level row walk from the
+      // parent into its first child so the new parent->child gap is crossed.
+      const first = rows[0].getBoundingClientRect()
+      const secondEl = rows.length > 1 ? rows[1] : children[0] ?? null
+      if (secondEl === null) return null
+      const second = secondEl.getBoundingClientRect()
+      return {
+        from: { x: Math.round(first.left + 60), y: Math.round(first.top + first.height / 2) },
+        gap: { x: Math.round(first.left + 60), y: Math.round((first.bottom + second.top) / 2) },
+        to: { x: Math.round(second.left + 60), y: Math.round(second.top + second.height / 2) },
+      }
+    })
+    assert(points, 'need a second card row (or a nested child row) for the hover-across-gap probe')
+    await page.moveTo(900, 500)
+    await sleep(250)
+    await page.moveTo(points.from.x, points.from.y)
+    await sleep(350)
+    const firstHover = await page.eval(probe.hoverHighlight)
+    assert(firstHover.hovered, 'first card row did not register hover')
+    await page.moveTo(points.gap.x, points.gap.y)
+    await sleep(120)
+    await page.moveTo(points.to.x, points.to.y)
+    await sleep(350)
+    const secondHover = await page.eval(probe.hoverHighlight)
+    assert(secondHover.hovered, 'row hover did not survive crossing the new gap')
+    await page.moveTo(900, 500)
+    await sleep(300)
+    return `item gaps ${spacing.itemGaps.join('/')} px; child gaps ${spacing.groups.map((group) => group.gaps.join('/') || 'n/a').join(' / ')}; parent-child ${spacing.groups.map((group) => group.parentGap).join('/')} px; trunk 1px; hover crosses gap`
+  })
+
   await results.check('b1-2', 'rows share one trailing grid: time → New session slot → disclosure (parent + child)', async () => {
     const geometry = await page.eval(probe.panelGeometry)
     const rows = geometry.rows
@@ -1787,7 +1935,7 @@ async function runLayoutChecks({ page, results, state }) {
     // its row's time column, in parent and child rows alike.
     for (const row of geometry.rows) {
       if (!row.title || !row.title.clipped || !row.time) continue
-      assertNear(row.title.rect.right, row.time.rect.left - 2, 1, `clipped ${row.kind} title must end at the content column (title ${row.title.rect.right}, time left ${row.time.rect.left})`)
+      assertNear(row.title.rect.right, row.time.rect.left - 4, 1, `clipped ${row.kind} title must end at the content column (title ${row.title.rect.right}, time left ${row.time.rect.left}; the flexible spacer adds its own 2 px gap)`)
     }
     const sample = clipped[0]
     assert(sample.scrollWidth > sample.clientWidth, 'clipped flag disagrees with the measured overflow')
@@ -1922,7 +2070,7 @@ async function runLayoutChecks({ page, results, state }) {
     assertEqual(measured.probeWidth, 22, 'Continue overlay width')
     assertEqual(measured.probeHeight, 22, 'Continue overlay height')
     assertNear(measured.probeRight, measured.timeLeft - 2, 1, `Continue overlay right edge (${measured.probeRight}) must stop before the time column (${measured.timeLeft})`)
-    assertNear(measured.probeRight, measured.mainRight, 1, `Continue overlay must sit on the faded title-tail end (overlay ${measured.probeRight}, title tail ${measured.mainRight})`)
+    assertNear(measured.probeRight, measured.mainRight + 2, 1, `Continue overlay must sit on the faded title-tail end (overlay ${measured.probeRight}, title tail ${measured.mainRight} + 2 px spacer gap)`)
     assertEqual(measured.timeShift, 0, 'Continue overlay must not move the time column')
     return `Continue overlay 22x22 at right ${measured.probeRight} vs time column left ${measured.timeLeft} (row right ${measured.rowRight}); no time shift`
   })
@@ -3135,9 +3283,11 @@ async function captureScreenshots(page, state) {
   // B4 v3 atmosphere close-ups: card row + native Workspace row + native Session
   // row, in both themes.
   await captureAtmosphereEvidence(page, shot, 'light')
+  await captureLayoutEvidence(page, shot, 'light')
   await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
   await sleep(800)
   await captureAtmosphereEvidence(page, shot, 'dark')
+  await captureLayoutEvidence(page, shot, 'dark')
   await page.emulateMedia([])
   await sleep(300)
   return shots
@@ -3199,6 +3349,37 @@ async function captureAtmosphereEvidence(page, shot, theme) {
     }
   } catch (error) {
     console.log(`ATMOSSHOT ${theme} skipped: ${error?.message || String(error)}`)
+  }
+}
+
+/**
+ * Photograph the whole "Running & recent" card close-up so the new inter-row gaps
+ * and the trailing-column alignment are visible in light and dark. (The live
+ * sidebar shell clips a card forced wider than the sidebar column, so wide-width
+ * alignment is asserted numerically by b1-5 instead of via a wide screenshot.)
+ * @param {object} page - Page wrapper.
+ * @param {Function} shot - screenshot(name, clip) helper.
+ * @param {'light' | 'dark'} theme - theme label used in the file name.
+ * @returns {Promise<void>}
+ */
+async function captureLayoutEvidence(page, shot, theme) {
+  try {
+    const rect = await page.eval(() => {
+      const panel = document.querySelector('.psd-panel')
+      if (!panel) return null
+      const row = document.querySelector('.psd-run-current, .psd-child-current') ?? document.querySelector('.psd-run')
+      if (row) row.scrollIntoView({ block: 'center', behavior: 'instant' })
+      const r = panel.getBoundingClientRect()
+      return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.min(Math.round(r.height), 340) }
+    })
+    if (rect !== null) {
+      await page.moveTo(900, 500)
+      await sleep(500)
+      const clip = clipAroundRect(rect)
+      if (clip !== null) await shot(`14-card-spacing-${theme}`, clip)
+    }
+  } finally {
+    await sleep(150)
   }
 }
 
