@@ -117,13 +117,17 @@ heading is added until the release is cut.
   anywhere else moves the highlight together with the Activity/Workspace
   association.
 - Running & recent hover card: the row detail card now matches the live native
-  sidebar tooltip oracle (left edge flush with the sidebar's right edge, top
-  aligned to the row, borderless, 16 px radius, native tooltip surface, shadow,
-  12×16 padding and native title/secondary type), grows to 320 px for the figure
-  rows, and clamps to `min(560px, 100vh - 16px)`. The panel's plugin chrome now
-  follows the native recipes: borderless floating cards, inherited shell font
-  family/size/weight, and title-case **Active Projects** / **Inactive Projects**
-  bucket labels instead of uppercase.
+  sidebar session hover-card oracle (left edge flush with the sidebar's right
+  edge, top aligned to the row, borderless, 16 px radius, 12×16 padding and
+  native title/secondary type), grows to 320 px for the figure rows, and clamps
+  to `min(560px, 100vh - 16px)`. **All plugin tooltip-like floating cards** (the
+  row card, Artifact Quick Look, prompt-history preview/search cards, and the
+  annotation requirement popover/detail card/expanded note editor) now paint the
+  native hover-card surface — a fixed `#2C2C2E` (`--dsw-hovercard-bg`) in both
+  light and dark themes rather than the theme-flipping tooltip token, with no
+  border and the shell's native panel elevation. The panel's plugin chrome also
+  inherits the shell font family/size/weight and shows title-case **Active
+  Projects** / **Inactive Projects** bucket labels instead of uppercase.
 - Running & recent fold persistence: the Active/Inactive bucket fold state is
   restored on the **first observable paint** using a persisted bucket
   classification cache and then corrected by live data, so a collapsed bucket no

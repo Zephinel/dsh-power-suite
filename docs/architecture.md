@@ -303,8 +303,10 @@ interrupted child keeps only Continue in the action slot), and the header joins
 the same grid. Each row's workspace title/path, status, last-active time,
 subagent count, and the three native Session figures live in a native-style
 hover card that does not capture the pointer and matches the live native sidebar
-tooltip recipe (flush left edge, borderless, native tooltip surface, shadow and
-typography). The figures come from the injected `sessions` service's
+session hover-card recipe (flush left edge, borderless, the fixed `#2C2C2E`
+`--dsw-hovercard-bg` surface in both themes, the shell's native elevation and
+typography). The same recipe is used by the other plugin tooltip-like surfaces
+(Artifact Quick Look, prompt-history cards, annotation popover/detail cards). The figures come from the injected `sessions` service's
 `projectionsBySession` map — live Sessions are push-seeded, a cold persisted
 Session gets exactly one deduplicated `refreshProjections` read on first hover,
 and each section is omitted when its projection data is absent (no loading

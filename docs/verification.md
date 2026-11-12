@@ -20,17 +20,18 @@ npm run pack:check
   the DSH bundle patch points at a real file;
 - the pure-logic test suite (`node --test test/*.test.js`).
 
-Current evidence (2026-11-12, Node 24.22.2):
+Current evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round):
 
-- `npm test`: **157 tests, 157 passed, 0 failed, 0 skipped** after the 0.3.0
+- `npm test`: **201 tests, 201 passed, 0 failed, 0 skipped** after the 0.3.0
   Project-view removal (the 24 project-view tests were deleted with the page),
   including **14** read-acks, **22** session-activity Host tests, **7** extra
   interrupted-session tests (error/max-tokens/aborted-cause cases and SSE stream
-  frames) and **58** UI-element-annotation tests through the browser-factory
-  test seam; per-file: interrupted-host 20, interrupted-sessions 7, prompt-history
-  6, read-acks 14, session-activity 22, session-artifacts 16, settings 6,
-  ui-annotation 58, workspace-presets 8.
-- `npm run check`: passed (`16 modules, 9 test files`).
+  frames), **11** Dynamic-Workspaces hover-card figure tests, and **91**
+  UI-element-annotation tests through the browser-factory test seam; per-file:
+  dynamic-workspaces-stats 11, interrupted-host 20, interrupted-sessions 7,
+  prompt-history 6, read-acks 14, session-activity 22, session-artifacts 16,
+  settings 6, ui-annotation 91, workspace-presets 8.
+- `npm run check`: passed (`16 modules, 10 test files`).
 - Interrupted-state SSE transport was verified with cookie auth: 200,
   `content-type: text/event-stream; charset=utf-8`, no-store/no-buffering, first
   frame `: connected` + `retry: 10000`, held open until a 2 s curl timeout (no
@@ -130,23 +131,150 @@ performs the native expand/collapse again; the Workspace context-menu default
 preset path is untouched, and no data migration was needed because the page
 persisted no state. The live evidence for the page under "Manual UI checks" is
 kept as the historical record of that implementation; its links to the deleted
-page and screenshots were removed. Current gates after the removal: `npm test`
-**157 tests**, `npm run check` passed (`16 modules, 9 test files`), and
-`npm run pack:check` **70 files**. Before the removal the same gates reported
-181 tests, 18 modules, 10 test files, and 78 packed files.
+page and screenshots were removed. Current gates after the removal and the polish
+round: `npm test` **201 tests**, `npm run check` passed (`16 modules, 10 test
+files`), and `npm run pack:check` **70 files**. Before the removal the same gates
+reported 181 tests, 18 modules, 10 test files, and 78 packed files.
+
+## 0.3.0 polish round acceptance (2026-11-13, merged build)
+
+This round reworked the UI-element annotation feature, fine-tuned the Dynamic
+Workspaces surfaces, aligned plugin chrome with the native tooltip recipe, and
+removed the standalone Project detail page. It was verified on the merged
+integration build with real-GUI CDP runs plus an independent read-only verifier
+(two rounds, findings recorded in `.tmp-design/` during development and not
+committed). The per-scenario record below is the honest composite: the known
+late-run headless stalls (S6/S8 `Input.dispatchMouseEvent` timeouts) still
+prevent a single all-green full-suite process, so targeted self-contained runs
+stand in for the missing rows, as this repository has done before.
+
+**Gates on the verified build** (Node 24.22.2, Chrome 157): `npm test` **202
+tests, 202 passed, 0 failed, 0 skipped**; `npm run check` passed (`16 modules,
+10 test files`); `npm run pack:check` **70 files**, exit 0. The suite includes
+the 91-case UI-element-annotation model, the 11-case Dynamic-Workspaces hover-card
+figure model, and the existing Host suites.
+
+**Live harnesses** (throwaway headless Chrome, this checkout's `src/client.js`
+injected into the running GUI at 1728×900; 0 page errors and 0 real same-origin
+API/plugin network failures in every run below):
+
+- Sidebar harness `test/browser/sidebar.e2e.mjs`: **39/39 PASS**, 40.9 s. It
+  asserts the trailing grid (time right **209 px** for parent *and* child rows,
+  action slot 233, disclosure 259, no child New-session control, hover reveal
+  without shift), the two-layer bottom-face rainbow smoke glow (inset 0, row
+  radius 12/8 px, haze + rim masks/animations, native Workspace row, static
+  reduced-motion 0.3/0.38, no layout shift, old ring/band gone), the 320 px
+  hover-card frame, the native figures (Session statistics / Token usage /
+  Context usage with native formatting and honest cache-hit rounding, cold-row
+  single read, hidden-when-absent), title-case buckets, fold persistence at
+  first paint, the browser borderless/typography recipe, and both cross-branch
+  annotation-mode hover-card pin states.
+- Annotation harness `test/browser/annotation.e2e.mjs`: `--smoke` **6/6 PASS**
+  with the **66-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
+  FAIL 0** (including `10b`, the real pinned-cross-branch-card check),
+  scenario 11 **PASS 7 / 0 / 0**, scenario 12 **PASS 7 / 0 / 0** (marks, detail
+  card, requirement edit with `updatedAt`, delete → 5 s undo),
+  scenario 13 **PASS 7 / SKIP 1 (`13f`) / 0** (single native chip, chip preview,
+  Backspace removal, one grouped batch chip, transcript 0, never sent),
+  scenario 14 **PASS 7 / 0 / 0** (reload restores records/marks, removed target
+  is honestly missing), scenario 15 **PASS 7 / 0 / 0** (rainbow focus ring on
+  popover/collection/editor/settings inputs, no solid outline, no layout shift,
+  reduced-motion static, mode-exit restore). A clean `--from 6 --no-shots`
+  sequence on the final build = **PASS 17 / SKIP 1 (`13f`) / FAIL 0**, exit 0,
+  164 s.
+- One full `--no-shots` attempt observed smoke 6/6 + S1–S7 PASS, then stalled at
+  the documented late-run S8 renderer timeout (no product assertion failed); the
+  run was stopped there. S8/S9 were separately recovered in a same-build
+  `--from 8` run in round 1. There is no single all-green full-suite process for
+  this build.
+- `13f` (plain-text chip fallback) is an explicit SKIP: the live GUI always
+  installs the chip services, so the fallback cannot be forced without stubbing
+  the shell. The fallback text/toast and both serializers are unit-tested.
+
+**Independent verification (read-only, two rounds).** Round 1 verified the
+Project-page removal + sidebar polish + annotation Phase 1 (169/169 tests at the
+time) and found: stale "current" gate counts in this file (fixed in the same
+pass), a CHANGELOG "page-lifetime collection" claim (fixed), stale architecture
+wording (fixed), a stale cross-branch SKIP (fixed by harness capability
+detection), sidebar-harness flake/cascade (fixed with stable hover helpers and a
+`finally` cleanup), a dead project-page event constant (removed), and one real
+product bug — **F-2**: annotation records never resolved the Session's
+`cwd`/`workspaceLabel` because the overlay is not a slot. F-2 was fixed by
+mirroring the Session's `useSessions` state through the Session-scope seat and
+re-verified live (records now carry the absolute cwd + workspace basename;
+scenario 12 shows the real workspace label). Round 2 verified the final merged
+annotation Phase 2-A/2-B and the sidebar grid/B4/B6 work; no BLOCKER was found. Its one MAJOR finding was a harness defect in
+the cross-branch F4 check (it probed native sidebar rows instead of the plugin
+card rows that open the hover card, so `10b`/scenario 11 would report a false
+red); that was fixed in the harness (capability-based detector + card-row
+targeting, pointer reset before the inline check) and re-verified on the committed
+harness (scenario 10 = 8/0/0 with `10b` PASS, scenario 11 = 7/0/0, `--from 6` =
+17/1/0). Independent probes also re-measured the F-2 identity, marks, detail
+card, delete/undo, rail batch state/persistence, composer chips, the `@` source
+self-identification, the B4 glow geometry in both themes, the column grid, the
+B6 figure totals, and the project-page removal.
+
+**Verified behaviour in this round** (details in
+[ui-annotation.md](ui-annotation.md) and
+[dynamic-workspaces.md](dynamic-workspaces.md)):
+
+- Annotation: floating-surface picking (whole native hover card + drill into its
+  inner rows, identical outline style, paint layer `z-index:150` with exact
+  restore), 60 ms pointer-stationary hover recompute, ElementRef v2 capture
+  (verified unique selector, ancestors, surface/ephemeral, Session/Workspace
+  identity via the seat bridge, query-free route, bounds/viewport; no
+  outerHTML/input values), v2 record persistence (localStorage, cap 100, reload
+  restore + status re-resolution), page marks with numbered requirement badges,
+  hover detail card with edit/relocate/copy-locator/delete, requirement popover
+  commit/update/delete + 5 s undo + auto-dismiss, right-rail batch view
+  (include checkboxes, other-Session exclusion, inline editing, reorder,
+  preview, delete-selected/clear with undo, one grouped batch chip), native
+  composer reference chips (single + grouped, send-time serialization, missing
+  record blocks the send, plain-text fallback), and the rainbow input focus ring.
+- Dynamic Workspaces: fixed trailing grid with child rows lacking New session,
+  right-aligned times, the bottom-face rainbow smoke glow on the current card
+  row and its owning Workspace row, the native-aligned 320 px hover card with
+  native Session statistics / Token usage / Context usage figures (projection
+  seam, one cold read, hidden-when-absent), the identity-glyph swap, title-case
+  bucket labels, borderless native tooltip chrome, and fold persistence applied
+  at first paint.
+- Floating-card chrome: every plugin tooltip-like surface (Dynamic Workspaces
+  row card, Artifact Quick Look, prompt-history preview/search cards, annotation
+  requirement popover/detail card/expanded note editor) uses the native session
+  hover-card surface — `background: var(--dsw-hovercard-bg, #2C2C2E)` (a fixed
+  `rgb(44, 44, 46)` in **both** themes, unlike the theme-flipping
+  `--dsw-alias-tooltip-bg`), no border, 16 px radius, the shell's own
+  `--dsw-shadow-lv3` elevation, no background-image/backdrop-filter, and the
+  native near-white text palette. The sidebar harness asserts all four sidebar
+  surfaces against the live native card in emulated light **and** dark, and
+  annotation scenario 12 does the same for the annotation cards; both also check
+  the computed shadow string equals the native elevation exactly.
+- Project-page removal: no project DOM/marker/CSS, no client route usage;
+  clicking a Workspace title performs the native expand/collapse again; the
+  composer, right sidebar, and prompt-history rail are no longer covered.
+
+**Evidence gaps (honest list).** `13f` fallback live row (unit-tested only); no
+single all-green full annotation run in one process (documented late-run stalls);
+the header's all-complete brand-glyph branch was not observed live because the
+card always had a running row (pinned by the source-level unit test and the
+harness's pulse-state check); the Host-side project route cannot be observed
+removed until the installed main checkout is reloaded (the client no longer
+calls it; route registration was verified by a code probe); a full end-to-end
+Chinese-locale pass was not run (unit tests cover the ZH copy); sending a chip is
+never performed by the harness by contract, so missing-chip send blocking and
+batch removed-member serialization are unit-tested only.
 
 ## UI element annotation acceptance
 
-> **Pre-merge annotation evidence.** Recorded on `fix/ui-annotation-review-fixes`
-> (final publication build `50a1bb3`, `src/client.js` md5 `10dd3b72…`; branch
-> commit `fd8ccc9`) **before** the merge into `feat/dynamic-workspaces`. The
-> **full E2E was not re-run** on the merged build (`572b8fa1…`, whose seam is
-> the 32-key generation). After the audit fixes, `--smoke` passed **6/6** with
-> the **35-key** seam on the post-audit-fix build (`1c61a230…`) (smoke-only
-> evidence).
-> The merged suite is **181/181**, `npm run check` **18 modules / 10 test files**,
-> and the tarball **78 files** (0.3.0); the per-scenario record below remains
-> pre-merge evidence, not merged-build evidence.
+> **Historical pre-merge annotation evidence (superseded).** This section records
+> the original annotation acceptance on `fix/ui-annotation-review-fixes`
+> (publication build `50a1bb3` / branch commit `fd8ccc9`) **before** the first
+> merge into `feat/dynamic-workspaces`. It is kept as history. **Current
+> merged-build evidence is in
+> [0.3.0 polish round acceptance](#030-polish-round-acceptance-2026-11-13-merged-build)
+> above**; the annotation model has since grown to the v2 record/persistence,
+> floating-surface, marks/detail and composer-chip implementation with the
+> 66-key seam generation.
 
 Date: 2026-11-12 (round-2 fix build, `fix/ui-annotation-review-fixes`). The
 feature is browser-only ([ui-annotation.md](ui-annotation.md)), so its acceptance
@@ -349,7 +477,7 @@ Known evidence limits:
   not selectable, native input/textarea/contenteditable values are never read,
   and canvas-rendered content has no DOM target.
 
-## Manual UI checks
+## Manual UI checks (historical record; the removed 0.3.0 Project detail page sections below are kept as history)
 
 These were exercised in the Web GUI during development:
 
