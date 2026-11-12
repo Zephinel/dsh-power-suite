@@ -11,8 +11,11 @@
  * turns, interrupted/failed turns and maintenance rewrites all follow one rule.
  *
  * - **Live authority:** `ctx.on('session/event', (session, event) => …)`.
- *   Synthetic seed/maintenance event types are ignored defensively; only a
- *   finite positive `event.time` for a valid Session id advances an entry.
+ *   Only explicit activity-bearing event types advance an entry (turn/step/
+ *   message/tool events; metadata-only `request/header`, `request/context` and
+ *   synthetic seed/maintenance types are ignored), and only with a finite
+ *   positive `event.time` for a valid Session id. This keeps a title/metadata
+ *   write from resurrecting an already-read Session's unread dot.
  * - **Durable ledger:** `$DSH_HOME/dsh-power-suite/session-activity.json`
  *   `{ version: 1, sessions: { [id]: lastActivityAt } }`, bounded to the newest
  *   5000 entries, max-merged, atomic 0600 writes serialized and debounced.
@@ -20,7 +23,11 @@
  *   without a ledger entry are seeded from their per-record projection-cache
  *   document's `max(timeContext.lastMessageTime, lastInjectionTime)` without
  *   reading Session logs and without overwriting newer live entries. The
- *   document mtime is only a re-parse guard, never a value.
+ *   document mtime is only a re-parse guard, never a value. A Session with no
+ *   usable cache row falls back to its header `createdAt` only (the Session
+ *   header has no `updatedAt`). Durable writes read-merge the on-disk document
+ *   before replacing it, so overlapping Host instances cannot clobber each
+ *   other's newer entries.
  * - **Route:** `GET /api/power-suite.session-activity` returns a snapshot of
  *   the live ledger (same `{ sessions }` contract the client already consumes),
  *   `cache-control: no-store`, empty map on failure.
@@ -57,6 +64,27 @@ export const MAX_CACHE_DOCUMENT_BYTES = 16 * 1024 * 1024
 const SEED_EVENT_PATTERN = /(?:^|[/-])seed$/i
 
 /**
+ * Explicit allowlist of DSH `SessionEventMap` types that represent real work.
+ * Metadata/request bookkeeping is deliberately excluded so a title or request
+ * header write cannot make an old Session look freshly active; unknown future
+ * or plugin event types are ignored for the same reason (a missing event only
+ * under-reports, never fabricates recency).
+ */
+export const ACTIVITY_EVENT_TYPES = new Set([
+  'turn/start',
+  'turn/end',
+  'step/start',
+  'step/end',
+  'user/message',
+  'developer/message',
+  'system/message',
+  'assistant/message',
+  'assistant/attempt',
+  'tool/call',
+  'tool/result'
+])
+
+/**
  * Resolve the harness home from `DSH_HOME`, trimming surrounding whitespace and
  * resolving relative paths. An empty/whitespace override falls back to `~/.dsh`.
  * @returns {string} absolute harness home.
@@ -88,6 +116,16 @@ export function isSyntheticSeedEvent(type) {
 }
 
 /**
+ * Whether one committed event type is activity-bearing under the explicit
+ * allowlist above.
+ * @param {unknown} type - event type.
+ * @returns {boolean} whether it advances the activity ledger.
+ */
+export function isActivityBearingEvent(type) {
+  return typeof type === 'string' && ACTIVITY_EVENT_TYPES.has(type)
+}
+
+/**
  * Project one committed Session event onto a ledger entry.
  * @param {object} session - committed Session subject.
  * @param {object} event - committed Session event.
@@ -98,7 +136,7 @@ export function activityFromEvent(session, event) {
   const sessionId = session.id
   if (!isActivitySessionId(sessionId)) return null
   if (event === null || typeof event !== 'object') return null
-  if (isSyntheticSeedEvent(event.type)) return null
+  if (isSyntheticSeedEvent(event.type) || !isActivityBearingEvent(event.type)) return null
   if (!isActivityTime(event.time)) return null
   return { sessionId, time: event.time }
 }
@@ -206,9 +244,9 @@ export async function seedActivityBaseline(ctx, ledger, options = {}) {
     } catch {
       cached = null
     }
-    const updatedAt = typeof header.updatedAt === 'number' && Number.isFinite(header.updatedAt) ? header.updatedAt : 0
+    // SessionHeader has no `updatedAt`; createdAt is the only header fallback.
     const createdAt = typeof header.createdAt === 'number' && Number.isFinite(header.createdAt) ? header.createdAt : 0
-    const at = Math.max(cached ?? 0, updatedAt, createdAt)
+    const at = Math.max(cached ?? 0, createdAt)
     if (at > 0) seeds[id] = at
   }
   if (Object.keys(seeds).length > 0) ledger.record(seeds)
@@ -225,16 +263,18 @@ export async function seedActivityBaseline(ctx, ledger, options = {}) {
  */
 export function installSessionActivity(ctx, options = {}) {
   const ledger = options.ledger ?? createActivityLedger(harnessHome())
+  let loadPromise = null
+  const ensureLoaded = () => {
+    if (loadPromise === null) loadPromise = Promise.resolve(ledger.load()).catch(() => undefined)
+    return loadPromise
+  }
   ctx.effect(() => {
-    void (async () => {
-      try {
-        await ledger.load()
-        await seedActivityBaseline(ctx, ledger, { readCachedDocument: options.readCachedDocument })
-      } catch {
+    void ensureLoaded()
+      .then(() => seedActivityBaseline(ctx, ledger, { readCachedDocument: options.readCachedDocument }))
+      .catch(() => {
         // Missing services/corrupt files keep the live/loaded map; the route
         // still serves whatever the ledger already holds.
-      }
-    })()
+      })
     const stop = typeof ctx.on === 'function'
       ? ctx.on('session/event', (session, event) => {
         const entry = activityFromEvent(session, event)
@@ -243,8 +283,10 @@ export function installSessionActivity(ctx, options = {}) {
       }, { global: true })
       : null
     return () => {
+      // Stop live updates first, then await the debounce timer + full write
+      // chain so Cordis/HMR cannot drop the last committed events.
       if (typeof stop === 'function') stop()
-      void ledger.dispose()
+      return Promise.resolve(ledger.dispose()).catch(() => undefined)
     }
   }, `power-suite: session-activity ledger ${SESSION_ACTIVITY_ROUTE}`)
   ctx.effect(() => ctx.connection.fetch.register({
@@ -253,6 +295,9 @@ export function installSessionActivity(ctx, options = {}) {
     requestBody: 'buffered',
     fetch: async () => {
       try {
+        // Cold start: wait for the single-flight load so the first request
+        // never returns an empty map before the durable ledger is available.
+        await ensureLoaded()
         return sendJson(200, { sessions: ledger.snapshot() })
       } catch {
         // A broken ledger must not fail the browser's periodic card refresh.

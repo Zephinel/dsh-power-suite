@@ -21,6 +21,7 @@ import {
   createProjectionCacheReader,
   harnessHome,
   installSessionActivity,
+  isActivityBearingEvent,
   isSyntheticSeedEvent,
   readCachedDocumentActivity,
   seedActivityBaseline
@@ -164,6 +165,15 @@ test('activityFromEvent accepts committed events and ignores seeds or invalid ti
     assert.equal(activityFromEvent(session, { type, time: 1000 }), null)
   }
   assert.equal(isSyntheticSeedEvent('turn/end'), false)
+  // Explicit activity-bearing allowlist: real work advances, metadata noise does not.
+  for (const type of ['turn/start', 'turn/end', 'step/start', 'step/end', 'user/message', 'developer/message',
+    'system/message', 'assistant/message', 'assistant/attempt', 'tool/call', 'tool/result']) {
+    assert.deepEqual(activityFromEvent(session, { type, time: 1000 }), { sessionId: 'session-a', time: 1000 })
+  }
+  for (const type of ['request/header', 'request/context', 'session/title', 'plugin:demo/metadata', '']) {
+    assert.equal(activityFromEvent(session, { type, time: 1000 }), null)
+    assert.equal(isActivityBearingEvent(type), false)
+  }
 })
 
 test('the event handler creates/advances entries and the route serves the live ledger', async () => {
@@ -188,9 +198,8 @@ test('the event handler creates/advances entries and the route serves the live l
     assert.equal(response.headers.get('cache-control'), 'no-store')
     assert.deepEqual(await response.json(), { sessions: { 'session-a': 2000 } })
 
-    cleanups[0]()
+    await cleanups[0]()
     assert.equal(handlers.length, 0)
-    await ledger.dispose()
   } finally {
     await rm(home, { recursive: true, force: true })
   }
@@ -205,7 +214,7 @@ test('the one-time baseline seeds missing Sessions, preserves newer entries, and
     const records = [
       record({ id: 'session-cached', createdAt: 100 }),
       record({ id: 'session-newer', createdAt: 100 }),
-      record({ id: 'session-header', createdAt: 300, updatedAt: 400 }),
+      record({ id: 'session-header', createdAt: 300 }),
       record({ id: 'session-empty' })
     ]
     const cache = new Map([
@@ -219,7 +228,7 @@ test('the one-time baseline seeds missing Sessions, preserves newer entries, and
     })
     assert.equal(snapshot['session-cached'], 1000)
     assert.equal(snapshot['session-newer'], 5000)
-    assert.equal(snapshot['session-header'], 400)
+    assert.equal(snapshot['session-header'], 300)
     assert.equal(snapshot['session-empty'], undefined)
     await ledger.dispose()
   } finally {
@@ -291,6 +300,91 @@ test('the cache-document reader never returns mtime and skips oversized document
     assert.equal(await reader('../etc/passwd'), null)
   } finally {
     await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('dispose awaits an in-flight write, is idempotent, and loses no recorded event', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-ledger-'))
+  try {
+    const ledger = createActivityLedger(home)
+    await ledger.load()
+    ledger.record({ 'session-a': 1000 })
+    // Start a flush and dispose while the write chain is active.
+    const flushing = ledger.flush()
+    ledger.record({ 'session-b': 2000 })
+    const firstDispose = ledger.dispose()
+    const secondDispose = ledger.dispose()
+    await Promise.all([flushing, firstDispose, secondDispose])
+    const document = JSON.parse(await readFile(activityLedgerPath(home), 'utf8'))
+    assert.equal(document.sessions['session-a'], 1000)
+    assert.equal(document.sessions['session-b'], 2000)
+    // Repeated dispose after completion stays resolved and harmless.
+    await ledger.dispose()
+    assert.deepEqual(await createActivityLedger(home).load(), { 'session-a': 1000, 'session-b': 2000 })
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('a durable write read-merges an externally modified ledger instead of clobbering it', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-ledger-'))
+  try {
+    const ledger = createActivityLedger(home)
+    await ledger.load()
+    // Simulate another Host instance writing a newer entry before this flush.
+    await mkdir(path.dirname(activityLedgerPath(home)), { recursive: true })
+    await writeFile(activityLedgerPath(home), serializeActivityLedger({ 'session-b': 3000, 'session-c': 4000 }), 'utf8')
+    ledger.record({ 'session-a': 2000 })
+    await ledger.flush()
+    const document = JSON.parse(await readFile(activityLedgerPath(home), 'utf8'))
+    assert.deepEqual(document.sessions, { 'session-a': 2000, 'session-b': 3000, 'session-c': 4000 })
+    // Later snapshots also see the external entries.
+    assert.deepEqual(ledger.snapshot(), { 'session-a': 2000, 'session-b': 3000, 'session-c': 4000 })
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('the route waits for the (single-flight) ledger load before serving', async () => {
+  let loads = 0
+  let loaded = false
+  const fakeLedger = {
+    async load() {
+      loads += 1
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      loaded = true
+    },
+    record() {},
+    snapshot() {
+      return loaded ? { 'session-loaded': 1000 } : {}
+    },
+    async flush() {},
+    async dispose() {}
+  }
+  const { ctx, routes } = makeContext()
+  installSessionActivity(ctx, { ledger: fakeLedger, readCachedDocument: async () => null })
+  const route = routes.get(SESSION_ACTIVITY_ROUTE)
+  const first = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
+  assert.deepEqual(await first.json(), { sessions: { 'session-loaded': 1000 } })
+  assert.equal(loads, 1)
+  const second = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
+  assert.deepEqual(await second.json(), { sessions: { 'session-loaded': 1000 } })
+  assert.equal(loads, 1, 'load promise is single-flight')
+})
+
+test('repeated create/record/dispose lifecycles leave no torn temp state', async () => {
+  for (let round = 0; round < 20; round += 1) {
+    const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-loop-'))
+    try {
+      const ledger = createActivityLedger(home)
+      await ledger.load()
+      ledger.record({ [`session-${round}`]: 1000 + round })
+      await ledger.dispose()
+      const reloaded = await createActivityLedger(home).load()
+      assert.equal(reloaded[`session-${round}`], 1000 + round)
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
   }
 })
 

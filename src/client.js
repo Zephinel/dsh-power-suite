@@ -5057,9 +5057,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           signal: controller.signal
         })
         if (!response.ok) {
-          // 4xx is permanent for this exact batch (bad shape / too large / media
-          // type / no route): drop it so it cannot block newer acks forever.
-          // 5xx (including store-failed) and throttling stay retryable.
+          // Permanent responses (any non-retryable 4xx: bad shape, too large,
+          // media type, missing route, ...) drop that batch immediately so it
+          // can never block newer acks. 5xx (including store-failed), 429 and
+          // network/timeout failures stay queued for a later sync.
           const retryable = response.status >= 500 || response.status === 429
           return { merged: null, status: response.status, retryable }
         }
@@ -5104,6 +5105,19 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
       if (entries > 0) batches.push(batch)
       return batches
+    }
+
+    /**
+     * Bound the pending ack map to the same 1000-entry limit as the local map,
+     * dropping the oldest (smallest) baselines first. Pending entries retained
+     * after a failed push therefore can never grow into an unbounded queue.
+     * @param {Map<string, number>} pending - queued baselines.
+     * @returns {Map<string, number>} the same map when already bounded, else a capped copy.
+     */
+    function dwCapAckPending(pending) {
+      if (pending.size <= DW_ACK_MAX_ENTRIES) return pending
+      const entries = [...pending.entries()].sort((left, right) => (right[1] - left[1]) || left[0].localeCompare(right[0]))
+      return new Map(entries.slice(0, DW_ACK_MAX_ENTRIES))
     }
 
     /**
@@ -5763,6 +5777,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           added = true
         }
         if (!added) return
+        ackedPendingPushRef.current = dwCapAckPending(ackedPendingPushRef.current)
         if (ackedPushTimerRef.current !== null) window.clearTimeout(ackedPushTimerRef.current)
         ackedPushTimerRef.current = window.setTimeout(() => {
           ackedPushTimerRef.current = null
@@ -5922,7 +5937,16 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             if (!disposed && ackedPendingPushRef.current.size > 0) flushAckedPush()
             if (!disposed) {
               const activity = await dwFetchSessionActivity()
-              if (!disposed && activity !== null) setSessionActivity(activity)
+              if (!disposed && activity !== null) {
+                // A cold/older Host may answer with an empty map while the
+                // durable ledger is still loading; never wipe activity the
+                // client already knows, or the card would regress for 30 s.
+                setSessionActivity((previous) => {
+                  const known = previous !== null && typeof previous === 'object' ? Object.keys(previous).length : 0
+                  const next = Object.keys(activity).length
+                  return next === 0 && known > 0 ? previous : activity
+                })
+              }
             }
           } finally {
             ackedSyncInFlightRef.current = false

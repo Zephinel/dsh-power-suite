@@ -159,12 +159,14 @@ export function createActivityLedger(dshHome, options = {}) {
   const debounceMs = Number.isFinite(options.debounceMs) && options.debounceMs >= 0
     ? options.debounceMs
     : ACTIVITY_WRITE_DEBOUNCE_MS
-  let state = null
+  let state = {}
   let dirty = false
   let disposed = false
   let timer = null
   let chain = Promise.resolve()
-  const snapshot = () => ({ ...(state ?? {}) })
+  let loadPromise = null
+  let disposePromise = null
+  const snapshot = () => capActivitySessions(sanitizeActivitySessions(state))
   const enqueue = (task) => {
     const run = chain.then(task, task)
     chain = run.then(
@@ -173,30 +175,58 @@ export function createActivityLedger(dshHome, options = {}) {
     )
     return run
   }
-  const writeNow = async () => {
-    const payload = snapshot()
+  /**
+   * Write one atomic document, read-merging the current file first so two
+   * overlapping Host instances (HMR/recompose) never clobber each other's
+   * newer entries. Corrupt or missing files merge as empty. The written bytes
+   * are the merged map; the in-memory map also absorbs external entries.
+   */
+  const writeDocument = async (payload) => {
+    let external = {}
+    try {
+      external = parseActivityLedger(await readFile(file, 'utf8'))
+    } catch {
+      external = {}
+    }
+    const merged = mergeActivitySessions(external, payload)
     await mkdir(path.dirname(file), { recursive: true, mode: 0o700 })
     const temporary = `${file}.${process.pid}.${Date.now()}.tmp`
-    await writeFile(temporary, serializeActivityLedger(payload), { encoding: 'utf8', mode: 0o600 })
+    await writeFile(temporary, serializeActivityLedger(merged), { encoding: 'utf8', mode: 0o600 })
     await rename(temporary, file)
+    // Keep later snapshots aware of entries another instance wrote, then bound
+    // the live map again (cap/sanitize is otherwise deferred to snapshot/write).
+    state = capActivitySessions(sanitizeActivitySessions(mergeActivitySessions(state, external)))
+    return merged
   }
-  const flush = () => {
+  const persist = async () => {
+    if (!dirty) return false
+    const payload = snapshot()
+    dirty = false
+    await enqueue(() => writeDocument(payload))
+    return true
+  }
+  const flush = async () => {
     if (timer !== null) {
       clearTimeout(timer)
       timer = null
     }
-    if (!dirty) return Promise.resolve(snapshot())
-    dirty = false
-    const pending = snapshot()
-    return enqueue(async () => {
-      await writeNow()
-      return pending
-    }).catch(() => {
-      // A failed durable write keeps the in-memory ledger; a later record or
-      // flush retries. Do not let a disk error reject the Host lifecycle.
-      dirty = true
-      return snapshot()
-    })
+    // Always await the serialized chain, even when nothing is dirty: a write
+    // from an earlier flush may still be in flight, and dispose() must never
+    // resolve before its bytes are on disk. Drain entries recorded during a
+    // write until the ledger is stable.
+    for (let round = 0; round < 1000; round += 1) {
+      await chain.catch(() => {})
+      if (!dirty) return snapshot()
+      try {
+        await persist()
+      } catch {
+        // Keep the in-memory map; a later record/flush retries. Never reject
+        // the Host lifecycle.
+        dirty = true
+        return snapshot()
+      }
+    }
+    return snapshot()
   }
   const schedule = () => {
     if (disposed || timer !== null) return
@@ -205,55 +235,71 @@ export function createActivityLedger(dshHome, options = {}) {
       void flush()
     }, debounceMs)
   }
-  const load = async () => {
-    let text = null
-    try {
-      text = await readFile(file, 'utf8')
-    } catch {
-      text = null
-    }
-    // Parse validity is checked separately from the entry count: a valid empty
-    // document must not be rewritten on every load.
-    let validDocument = false
-    if (text !== null) {
+  const load = () => {
+    if (loadPromise !== null) return loadPromise
+    loadPromise = (async () => {
+      let text = null
       try {
-        const value = JSON.parse(text)
-        validDocument = value !== null && typeof value === 'object'
-          && value.version === ACTIVITY_LEDGER_VERSION
-          && value.sessions !== null && typeof value.sessions === 'object' && !Array.isArray(value.sessions)
+        text = await readFile(file, 'utf8')
       } catch {
-        validDocument = false
+        text = null
       }
-    }
-    const parsed = parseActivityLedger(text ?? '')
-    const hadState = state !== null
-    state = mergeActivitySessions(parsed, state ?? {})
-    if (text === null || !validDocument) {
-      // Missing or corrupt/foreign: serve empty and rewrite a valid document.
-      dirty = true
-    } else if (hadState) {
-      // Live events recorded while the file read was in flight must be persisted.
-      for (const [id, time] of Object.entries(state)) {
-        if ((parsed[id] ?? 0) < time) {
-          dirty = true
-          break
+      // Parse validity is checked separately from the entry count: a valid
+      // empty document must not be rewritten on every load.
+      let validDocument = false
+      if (text !== null) {
+        try {
+          const value = JSON.parse(text)
+          validDocument = value !== null && typeof value === 'object'
+            && value.version === ACTIVITY_LEDGER_VERSION
+            && value.sessions !== null && typeof value.sessions === 'object' && !Array.isArray(value.sessions)
+        } catch {
+          validDocument = false
         }
       }
-    }
-    if (dirty) schedule()
-    return snapshot()
+      const parsed = parseActivityLedger(text ?? '')
+      state = mergeActivitySessions(parsed, state)
+      if (text === null || !validDocument) {
+        dirty = true
+      } else {
+        // Live events recorded while the file read was in flight must persist.
+        for (const [id, time] of Object.entries(state)) {
+          if ((parsed[id] ?? 0) < time) {
+            dirty = true
+            break
+          }
+        }
+      }
+      if (dirty) schedule()
+      return snapshot()
+    })()
+    return loadPromise
   }
   const record = (entries) => {
-    const incoming = sanitizeActivitySessions(entries)
-    if (Object.keys(incoming).length === 0) return snapshot()
-    state = mergeActivitySessions(state ?? {}, incoming)
+    if (entries === null || typeof entries !== 'object') return
+    // Commit-path update is O(entries in this batch), not O(map size): mutate
+    // the in-memory map, mark dirty, and defer sanitize/cap/copy to
+    // snapshot()/write. The event stream normally passes one entry here.
+    let changed = false
+    for (const [id, time] of Object.entries(entries)) {
+      if (!isActivitySessionId(id) || !isActivityTime(time)) continue
+      if ((state[id] ?? 0) >= time) continue
+      state[id] = time
+      changed = true
+    }
+    if (!changed) return
     dirty = true
     schedule()
-    return snapshot()
   }
-  const dispose = async () => {
+  const dispose = () => {
+    if (disposePromise !== null) return disposePromise
     disposed = true
-    return flush()
+    if (timer !== null) {
+      clearTimeout(timer)
+      timer = null
+    }
+    disposePromise = flush().catch(() => snapshot())
+    return disposePromise
   }
   return { load, record, snapshot, flush, dispose, file }
 }
