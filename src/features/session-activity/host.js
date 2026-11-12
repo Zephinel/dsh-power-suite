@@ -25,9 +25,11 @@
  *   reading Session logs and without overwriting newer live entries. The
  *   document mtime is only a re-parse guard, never a value. A Session with no
  *   usable cache row falls back to its header `createdAt` only (the Session
- *   header has no `updatedAt`). Durable writes read-merge the on-disk document
- *   before replacing it, so overlapping Host instances cannot clobber each
- *   other's newer entries.
+ *   header has no `updatedAt`). Durable writes best-effort read-merge the
+ *   on-disk document before replacing it; this preserves sequential external
+ *   writes and is designed for the normal single-Host process / overlapping HMR
+ *   generations, not as a cross-process lock (interleaving writers can still
+ *   lose one side in the read-merge-write TOCTOU window).
  * - **Route:** `GET /api/power-suite.session-activity` returns a snapshot of
  *   the live ledger (same `{ sessions }` contract the client already consumes),
  *   `cache-control: no-store`, empty map on failure.
@@ -51,6 +53,9 @@ import {
 /** Route serving the live activity ledger snapshot. */
 export const SESSION_ACTIVITY_ROUTE = '/api/power-suite.session-activity'
 
+/** Longest a cold route request waits for the one-time baseline before serving. */
+export const SEED_BASELINE_WAIT_MS = 5000
+
 /** Projection-cache storage path fragments inside one harness home. */
 const PROJECTION_CACHE_PATH = ['storages', 'session_projcache', 'sessions']
 
@@ -64,24 +69,46 @@ export const MAX_CACHE_DOCUMENT_BYTES = 16 * 1024 * 1024
 const SEED_EVENT_PATTERN = /(?:^|[/-])seed$/i
 
 /**
- * Explicit allowlist of DSH `SessionEventMap` types that represent real work.
- * Metadata/request bookkeeping is deliberately excluded so a title or request
- * header write cannot make an old Session look freshly active; unknown future
- * or plugin event types are ignored for the same reason (a missing event only
- * under-reports, never fabricates recency).
+ * Known metadata/automation `SessionEventMap` types that must NOT advance
+ * activity: request bookkeeping, title/title-request metadata, seed closers,
+ * and an automation delivery acknowledgement. They can be written long after
+ * the last real work and would otherwise resurrect an already-read dot.
+ */
+export const NON_ACTIVITY_EVENT_TYPES = new Set([
+  'request/header',
+  'request/context',
+  'session/title',
+  'session/title-llm-request',
+  'session/end-seed',
+  'session-log-deepseek/delivery-accepted',
+  'web/deepseek-search-llm-request'
+])
+
+/**
+ * Explicit allowlist of known activity-bearing DSH `SessionEventMap` types
+ * (core + installed plugin augmentations): turns/steps/messages/tools/jobs,
+ * command and compaction runs, subagent state, goal/todo changes, approval and
+ * mode/user-selection actions, workspace/deliverable/schedule changes, team
+ * traffic, feedback/image operations and retry/workflow progress. Unknown
+ * future or plugin event types are ignored (a missing event only under-reports,
+ * never fabricates recency), as are the metadata types above.
  */
 export const ACTIVITY_EVENT_TYPES = new Set([
-  'turn/start',
-  'turn/end',
-  'step/start',
-  'step/end',
-  'user/message',
-  'developer/message',
-  'system/message',
-  'assistant/message',
-  'assistant/attempt',
-  'tool/call',
-  'tool/result'
+  'turn/start', 'turn/end', 'step/start', 'step/end',
+  'user/message', 'developer/message', 'system/message', 'assistant/message', 'assistant/attempt',
+  'tool/call', 'tool/result', 'tool/ptc-dispatch', 'tool/ptc-dispatch-start',
+  'job/registered', 'job/settled',
+  'command/run', 'command/done',
+  'compaction/start', 'compaction/end', 'compaction/prune', 'compaction/summary',
+  'subagent/catalog', 'subagent/descriptor', 'subagent/model-selection-policy',
+  'goal/change', 'todo/write',
+  'approval/asked', 'approval/decided', 'approval/policy',
+  'agent-preset/selected', 'plan/mode', 'ptc-mode', 'sandbox/mode', 'model/selection', 'permission/preset',
+  'working-directory/change', 'workspace/changes', 'deliverables/presented', 'schedule/change',
+  'team/member', 'team/message/queued', 'team/message/delivered', 'team/task',
+  'image/offload', 'feedback/message-put', 'feedback/message-delete', 'feedback/record',
+  'agent/inbox/spliced', 'llm/retry', 'llm/retry-started',
+  'tool-workflow/agent-start', 'tool-workflow/agent-end', 'tool-workflow/run-start', 'tool-workflow/run-end'
 ])
 
 /**
@@ -122,7 +149,7 @@ export function isSyntheticSeedEvent(type) {
  * @returns {boolean} whether it advances the activity ledger.
  */
 export function isActivityBearingEvent(type) {
-  return typeof type === 'string' && ACTIVITY_EVENT_TYPES.has(type)
+  return typeof type === 'string' && ACTIVITY_EVENT_TYPES.has(type) && !NON_ACTIVITY_EVENT_TYPES.has(type)
 }
 
 /**
@@ -144,8 +171,10 @@ export function activityFromEvent(session, event) {
 /**
  * Extract the cheap historical approximation from one projection-cache
  * document: the newer of `timeContext.lastMessageTime` and
- * `timeContext.lastInjectionTime`. Corrupt, foreign, or time-less documents
- * read as null. Document mtime is deliberately never a value.
+ * `timeContext.lastInjectionTime`. Documents with an unexpected shape (bad
+ * JSON, missing timeContext row, non-finite times) read as null; the cache
+ * domain's own version is not interpreted here. Document mtime is deliberately
+ * never a value.
  * @param {unknown} text - document contents.
  * @returns {number | null} cached activity approximation, or null.
  */
@@ -264,17 +293,32 @@ export async function seedActivityBaseline(ctx, ledger, options = {}) {
 export function installSessionActivity(ctx, options = {}) {
   const ledger = options.ledger ?? createActivityLedger(harnessHome())
   let loadPromise = null
+  let seedPromise = null
   const ensureLoaded = () => {
     if (loadPromise === null) loadPromise = Promise.resolve(ledger.load()).catch(() => undefined)
     return loadPromise
   }
+  const ensureSeeded = () => {
+    if (seedPromise === null) {
+      seedPromise = ensureLoaded()
+        .then(() => seedActivityBaseline(ctx, ledger, { readCachedDocument: options.readCachedDocument }))
+        .catch(() => undefined)
+    }
+    return seedPromise
+  }
+  const waitForSeeded = (maxMs = SEED_BASELINE_WAIT_MS) => new Promise((resolve) => {
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve()
+    }
+    const timer = setTimeout(finish, maxMs)
+    void ensureSeeded().then(finish, finish)
+  })
   ctx.effect(() => {
-    void ensureLoaded()
-      .then(() => seedActivityBaseline(ctx, ledger, { readCachedDocument: options.readCachedDocument }))
-      .catch(() => {
-        // Missing services/corrupt files keep the live/loaded map; the route
-        // still serves whatever the ledger already holds.
-      })
+    void ensureSeeded()
     const stop = typeof ctx.on === 'function'
       ? ctx.on('session/event', (session, event) => {
         const entry = activityFromEvent(session, event)
@@ -295,9 +339,10 @@ export function installSessionActivity(ctx, options = {}) {
     requestBody: 'buffered',
     fetch: async () => {
       try {
-        // Cold start: wait for the single-flight load so the first request
-        // never returns an empty map before the durable ledger is available.
-        await ensureLoaded()
+        // Cold start: wait (bounded) for the single-flight load AND one-time
+        // baseline so a fresh install's first request includes seeded history
+        // without letting a hung corpus listing block the route forever.
+        await waitForSeeded()
         return sendJson(200, { sessions: ledger.snapshot() })
       } catch {
         // A broken ledger must not fail the browser's periodic card refresh.

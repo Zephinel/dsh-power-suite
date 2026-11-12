@@ -14,7 +14,8 @@
  * and is debounced so an event burst costs at most one write per window.
  */
 
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { randomBytes } from 'node:crypto'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 /** Ledger document schema version; bump when the shape changes. */
@@ -176,10 +177,14 @@ export function createActivityLedger(dshHome, options = {}) {
     return run
   }
   /**
-   * Write one atomic document, read-merging the current file first so two
-   * overlapping Host instances (HMR/recompose) never clobber each other's
-   * newer entries. Corrupt or missing files merge as empty. The written bytes
-   * are the merged map; the in-memory map also absorbs external entries.
+   * Write one atomic document, best-effort read-merging the current file first.
+   *
+   * This is designed for the normal single-Host process and overlapping HMR
+   * generations: a sequential external write is preserved, but the
+   * read-merge-write sequence has a TOCTOU window, so two writers interleaving
+   * between the read and the rename can still lose one side. It is not a
+   * cross-process lock. Corrupt or missing files merge as empty; the in-memory
+   * map also absorbs external entries.
    */
   const writeDocument = async (payload) => {
     let external = {}
@@ -190,43 +195,48 @@ export function createActivityLedger(dshHome, options = {}) {
     }
     const merged = mergeActivitySessions(external, payload)
     await mkdir(path.dirname(file), { recursive: true, mode: 0o700 })
-    const temporary = `${file}.${process.pid}.${Date.now()}.tmp`
-    await writeFile(temporary, serializeActivityLedger(merged), { encoding: 'utf8', mode: 0o600 })
-    await rename(temporary, file)
+    const temporary = `${file}.${process.pid}.${Date.now()}.${randomBytes(4).toString('hex')}.tmp`
+    try {
+      await writeFile(temporary, serializeActivityLedger(merged), { encoding: 'utf8', mode: 0o600 })
+      await rename(temporary, file)
+    } catch (error) {
+      // Do not leave a partially written sibling behind; the rename target is
+      // untouched by this failed write.
+      await rm(temporary, { force: true }).catch(() => {})
+      throw error
+    }
     // Keep later snapshots aware of entries another instance wrote, then bound
     // the live map again (cap/sanitize is otherwise deferred to snapshot/write).
     state = capActivitySessions(sanitizeActivitySessions(mergeActivitySessions(state, external)))
     return merged
   }
-  const persist = async () => {
-    if (!dirty) return false
-    const payload = snapshot()
-    dirty = false
-    await enqueue(() => writeDocument(payload))
-    return true
-  }
-  const flush = async () => {
+  const flush = () => {
     if (timer !== null) {
       clearTimeout(timer)
       timer = null
     }
-    // Always await the serialized chain, even when nothing is dirty: a write
-    // from an earlier flush may still be in flight, and dispose() must never
-    // resolve before its bytes are on disk. Drain entries recorded during a
-    // write until the ledger is stable.
-    for (let round = 0; round < 1000; round += 1) {
-      await chain.catch(() => {})
-      if (!dirty) return snapshot()
-      try {
-        await persist()
-      } catch {
-        // Keep the in-memory map; a later record/flush retries. Never reject
-        // the Host lifecycle.
+    // Enqueue one drain operation onto the SAME serialized chain as every
+    // write. The returned promise therefore resolves only after all writes
+    // queued before it have landed (even when dirty was false at call time),
+    // and the drain loop persists any entries recorded while its own write is
+    // in flight. flush()/dispose() are linearizable under concurrency.
+    const drain = enqueue(async () => {
+      for (let round = 0; round < 1000; round += 1) {
+        if (!dirty) return
+        const payload = snapshot()
+        dirty = false
+        await writeDocument(payload)
+      }
+    })
+    return drain.then(
+      () => snapshot(),
+      () => {
+        // Write failed: keep the in-memory map for a later retry and never
+        // reject the Host lifecycle. Durability is not claimed for this write.
         dirty = true
         return snapshot()
       }
-    }
-    return snapshot()
+    )
   }
   const schedule = () => {
     if (disposed || timer !== null) return

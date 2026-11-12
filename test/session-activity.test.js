@@ -15,7 +15,9 @@ import {
   serializeActivityLedger
 } from '../src/features/session-activity/store.js'
 import {
+  ACTIVITY_EVENT_TYPES,
   MAX_CACHE_DOCUMENT_BYTES,
+  NON_ACTIVITY_EVENT_TYPES,
   SESSION_ACTIVITY_ROUTE,
   activityFromEvent,
   createProjectionCacheReader,
@@ -165,12 +167,19 @@ test('activityFromEvent accepts committed events and ignores seeds or invalid ti
     assert.equal(activityFromEvent(session, { type, time: 1000 }), null)
   }
   assert.equal(isSyntheticSeedEvent('turn/end'), false)
-  // Explicit activity-bearing allowlist: real work advances, metadata noise does not.
-  for (const type of ['turn/start', 'turn/end', 'step/start', 'step/end', 'user/message', 'developer/message',
-    'system/message', 'assistant/message', 'assistant/attempt', 'tool/call', 'tool/result']) {
+  // Explicit activity-bearing allowlist: every known activity family advances.
+  for (const type of ACTIVITY_EVENT_TYPES) {
     assert.deepEqual(activityFromEvent(session, { type, time: 1000 }), { sessionId: 'session-a', time: 1000 })
+    assert.equal(isActivityBearingEvent(type), true)
   }
-  for (const type of ['request/header', 'request/context', 'session/title', 'plugin:demo/metadata', '']) {
+  // Spot-check the families the third review called out.
+  for (const type of ['job/registered', 'job/settled', 'command/run', 'command/done', 'compaction/start',
+    'compaction/end', 'subagent/descriptor', 'goal/change', 'todo/write', 'approval/decided', 'plan/mode',
+    'tool-workflow/run-start', 'tool/ptc-dispatch']) {
+    assert.equal(isActivityBearingEvent(type), true)
+  }
+  // Metadata, automation-only, seed and unknown-future/plugin types never advance.
+  for (const type of [...NON_ACTIVITY_EVENT_TYPES, 'plugin:demo/metadata', 'future/unknown-event', '']) {
     assert.equal(activityFromEvent(session, { type, time: 1000 }), null)
     assert.equal(isActivityBearingEvent(type), false)
   }
@@ -326,7 +335,51 @@ test('dispose awaits an in-flight write, is idempotent, and loses no recorded ev
   }
 })
 
-test('a durable write read-merges an externally modified ledger instead of clobbering it', async () => {
+test('awaiting dispose() alone persists all entries (sensitive to a no-op dispose)', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-ledger-'))
+  try {
+    const ledger = createActivityLedger(home)
+    await ledger.load()
+    ledger.record({ 'session-a': 1000 })
+    // Start a flush and deliberately DO NOT await it: dispose() itself must
+    // serialize behind it and resolve only after bytes are on disk. Mutation
+    // check: if dispose() were a no-op, the file would not exist/content yet
+    // because the debounce timer is still pending and this test never awaits it.
+    const inFlightFlush = ledger.flush()
+    ledger.record({ 'session-b': 2000 })
+    await ledger.dispose()
+    const document = JSON.parse(await readFile(activityLedgerPath(home), 'utf8'))
+    assert.equal(document.sessions['session-a'], 1000)
+    assert.equal(document.sessions['session-b'], 2000)
+    await inFlightFlush
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('concurrent flush()/dispose() rounds never resolve before the write is on disk', async () => {
+  for (let round = 0; round < 8; round += 1) {
+    const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-race-'))
+    try {
+      const ledger = createActivityLedger(home)
+      await ledger.load()
+      ledger.record({ [`session-${round}-a`]: 1000 })
+      const flushPromise = ledger.flush()
+      ledger.record({ [`session-${round}-b`]: 2000 })
+      // Only dispose() is awaited here; it must include the in-flight flush.
+      await ledger.dispose()
+      const document = JSON.parse(await readFile(activityLedgerPath(home), 'utf8'))
+      assert.equal(document.sessions[`session-${round}-a`], 1000)
+      assert.equal(document.sessions[`session-${round}-b`], 2000)
+      await flushPromise
+      await ledger.dispose()
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  }
+})
+
+test('a durable write best-effort read-merges an externally modified ledger before writing', async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-ledger-'))
   try {
     const ledger = createActivityLedger(home)
@@ -370,6 +423,28 @@ test('the route waits for the (single-flight) ledger load before serving', async
   const second = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
   assert.deepEqual(await second.json(), { sessions: { 'session-loaded': 1000 } })
   assert.equal(loads, 1, 'load promise is single-flight')
+})
+
+test('fresh install: the FIRST route request already includes baseline seeding', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-ledger-'))
+  try {
+    const ledger = createActivityLedger(home)
+    const records = [record({ id: 'session-seeded', createdAt: 100 })]
+    const { ctx, routes } = makeContext({ records })
+    installSessionActivity(ctx, {
+      ledger,
+      readCachedDocument: async (id) => {
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        return id === 'session-seeded' ? 1234 : null
+      }
+    })
+    const first = await routes.get(SESSION_ACTIVITY_ROUTE).fetch(new Request('http://host/api/power-suite.session-activity'))
+    assert.equal(first.status, 200)
+    assert.deepEqual(await first.json(), { sessions: { 'session-seeded': 1234 } })
+    await ledger.dispose()
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
 })
 
 test('repeated create/record/dispose lifecycles leave no torn temp state', async () => {

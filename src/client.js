@@ -4877,6 +4877,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** Conservative byte budget for one read-acks POST batch. */
     const DW_ACK_PUSH_BATCH_BYTES = 48 * 1024
 
+    /** Ignore an empty activity response only while a known map is still fresh. */
+    const DW_ACTIVITY_EMPTY_GUARD_MS = 120000
+
     /** Most entries the local cache keeps; the oldest baselines drop first. */
     const DW_ACK_MAX_ENTRIES = 1000
 
@@ -5057,11 +5060,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           signal: controller.signal
         })
         if (!response.ok) {
-          // Permanent responses (any non-retryable 4xx: bad shape, too large,
+          // Permanent responses (other non-retryable 4xx: bad shape, too large,
           // media type, missing route, ...) drop that batch immediately so it
-          // can never block newer acks. 5xx (including store-failed), 429 and
-          // network/timeout failures stay queued for a later sync.
-          const retryable = response.status >= 500 || response.status === 429
+          // can never block newer acks. 5xx (including store-failed), 408, 425,
+          // 429 and network/timeout failures stay queued for a later sync.
+          const retryable = response.status >= 500 || response.status === 408 || response.status === 425 || response.status === 429
           return { merged: null, status: response.status, retryable }
         }
         const payload = await response.json()
@@ -5720,6 +5723,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       ackedRef.current = ackedBaselines
       const ackedPushTimerRef = React.useRef(null)
       const ackedPendingPushRef = React.useRef(new Map())
+      const activityEmptyGuardUntilRef = React.useRef(0)
       const ackedPushInFlightRef = React.useRef(false)
       const ackedSyncInFlightRef = React.useRef(false)
       const ackedMigrationRef = React.useRef(false)
@@ -5739,14 +5743,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       // only that batch so newer acks can still sync. At most one POST is in
       // flight, and only entries that still hold the pushed value are dropped.
       const flushAckedPush = React.useCallback(() => {
-        if (ackedPushInFlightRef.current) return
+        if (ackedPushInFlightRef.current) return Promise.resolve()
         if (ackedPushTimerRef.current !== null) {
           window.clearTimeout(ackedPushTimerRef.current)
           ackedPushTimerRef.current = null
         }
-        if (ackedPendingPushRef.current.size === 0) return
+        if (ackedPendingPushRef.current.size === 0) return Promise.resolve()
         ackedPushInFlightRef.current = true
-        void (async () => {
+        return (async () => {
           try {
             let rounds = 0
             while (ackedPendingPushRef.current.size > 0 && rounds < 64) {
@@ -5781,7 +5785,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (ackedPushTimerRef.current !== null) window.clearTimeout(ackedPushTimerRef.current)
         ackedPushTimerRef.current = window.setTimeout(() => {
           ackedPushTimerRef.current = null
-          flushAckedPush()
+          void flushAckedPush()
         }, DW_ACK_PUSH_DEBOUNCE_MS)
       }, [flushAckedPush])
 
@@ -5934,17 +5938,21 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                 scheduleAckedPush(dwAckedRecords(merged))
               }
             }
-            if (!disposed && ackedPendingPushRef.current.size > 0) flushAckedPush()
+            if (!disposed && ackedPendingPushRef.current.size > 0) await flushAckedPush()
             if (!disposed) {
               const activity = await dwFetchSessionActivity()
               if (!disposed && activity !== null) {
-                // A cold/older Host may answer with an empty map while the
-                // durable ledger is still loading; never wipe activity the
-                // client already knows, or the card would regress for 30 s.
+                // A cold/fresh Host can answer with an empty map while the
+                // ledger is still being seeded. Ignore that only briefly after
+                // mount / the last non-empty response when a known map exists;
+                // a genuinely empty profile or a long-running empty Host is
+                // still accepted after the window.
                 setSessionActivity((previous) => {
                   const known = previous !== null && typeof previous === 'object' ? Object.keys(previous).length : 0
                   const next = Object.keys(activity).length
-                  return next === 0 && known > 0 ? previous : activity
+                  if (next === 0 && known > 0 && Date.now() < activityEmptyGuardUntilRef.current) return previous
+                  if (next > 0) activityEmptyGuardUntilRef.current = Date.now() + DW_ACTIVITY_EMPTY_GUARD_MS
+                  return activity
                 })
               }
             }
@@ -5952,6 +5960,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             ackedSyncInFlightRef.current = false
           }
         }
+        activityEmptyGuardUntilRef.current = Date.now() + DW_ACTIVITY_EMPTY_GUARD_MS
         void sync()
         const timer = window.setInterval(sync, DW_ACK_SYNC_POLL_MS)
         const onFocus = () => { void sync() }
