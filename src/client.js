@@ -3588,6 +3588,8 @@ window.__ModuleLoader__.load({
 
     /** Host route reporting one Session's last-turn state. */
     const INTERRUPTED_ROUTE = 'api/power-suite.interrupted'
+    /** Host SSE route broadcasting turn-boundary interruptions. */
+    const INTERRUPTED_EVENTS_ROUTE = 'api/power-suite.interrupted-events'
     /** Host route resuming one Session through a non-human context message. */
     const CONTINUE_ROUTE = 'api/power-suite.continue'
 
@@ -4289,6 +4291,42 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const dispose = ctx.on('connection/reset', () => refreshAllInterrupted())
         return typeof dispose === 'function' ? dispose : undefined
       }, 'power-suite: interrupted connection reset')
+      ctx.effect(() => {
+        // Near-real-time cross-device invalidation over the Host's SSE stream.
+        // EventSource auto-reconnects; the 20 s poll above stays as fallback for
+        // browsers without EventSource (or when the stream is unavailable).
+        if (typeof EventSource !== 'function') return undefined
+        let source = null
+        try {
+          source = new EventSource(appUrl(INTERRUPTED_EVENTS_ROUTE), { withCredentials: true })
+        } catch {
+          return undefined
+        }
+        const onOpen = () => refreshAllInterrupted()
+        const onInterrupted = (message) => {
+          let payload = null
+          try {
+            payload = JSON.parse(typeof message?.data === 'string' ? message.data : '')
+          } catch {
+            return
+          }
+          if (payload === null || typeof payload !== 'object') return
+          const candidates = [payload.sessionId, payload.parentSession]
+          for (const sessionId of candidates) {
+            if (typeof sessionId !== 'string' || sessionId.length === 0) continue
+            if (interruptedStore.watchers.has(sessionId) || interruptedStore.records.has(sessionId)) {
+              refreshInterrupted(sessionId)
+            }
+          }
+        }
+        source.addEventListener('open', onOpen)
+        source.addEventListener('interrupted', onInterrupted)
+        return () => {
+          source.removeEventListener('open', onOpen)
+          source.removeEventListener('interrupted', onInterrupted)
+          source.close()
+        }
+      }, 'power-suite: interrupted SSE stream')
       ctx.effect(() => {
         /**
          * The injected context producer renders as a native ContextInjectionRow.

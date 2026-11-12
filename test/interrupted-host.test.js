@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { installInterruptedSessions } from '../src/features/interrupted-sessions/host.js'
+import { INTERRUPTED_EVENTS_ROUTE, installInterruptedSessions } from '../src/features/interrupted-sessions/host.js'
 
 /**
  * Build a Host context for the interrupted-sessions feature.
@@ -13,10 +13,13 @@ import { installInterruptedSessions } from '../src/features/interrupted-sessions
 function makeContext({ logs, parents, running = new Set(), controller, readSession }) {
   const events = {}
   const routes = new Map()
+  const disposers = []
   const ctx = {
     effect: (fn) => {
       const dispose = fn()
-      return typeof dispose === 'function' ? dispose : () => {}
+      const run = typeof dispose === 'function' ? dispose : () => {}
+      disposers.push(run)
+      return run
     },
     on: (name, handler) => {
       events[name] = handler
@@ -60,8 +63,14 @@ function makeContext({ logs, parents, running = new Set(), controller, readSessi
     ctx,
     route: routes.get('/api/power-suite.interrupted'),
     continueRoute: routes.get('/api/power-suite.continue'),
-    emit: (sessionId, event) => {
-      if (typeof events['session/event'] === 'function') events['session/event']({ id: sessionId }, event)
+    eventsRoute: routes.get(INTERRUPTED_EVENTS_ROUTE),
+    disposeAll: () => {
+      for (const dispose of disposers.reverse()) dispose()
+    },
+    emit: (sessionId, event, options = {}) => {
+      const session = { id: sessionId }
+      if (options.header !== undefined) session.header = options.header
+      if (typeof events['session/event'] === 'function') events['session/event'](session, event)
     }
   }
 }
@@ -370,4 +379,91 @@ test('a second concurrent continue is rejected while the first is admitting', as
   assert.equal((await second.json()).code, 'continue-in-flight')
   release()
   assert.equal((await first).status, 200)
+})
+
+/**
+ * Read the next SSE chunk from a stream reader.
+ * @param {ReadableStreamDefaultReader<Uint8Array>} reader - stream reader.
+ * @returns {Promise<string>} decoded chunk.
+ */
+async function readSseChunk(reader) {
+  const chunk = await reader.read()
+  assert.equal(chunk.done, false, 'SSE stream closed unexpectedly')
+  return new TextDecoder().decode(chunk.value)
+}
+
+test('the interrupted SSE route streams connected, boundary events, parentSession, and closes cleanly', async () => {
+  const logs = new Map([['session-sse', [turnStart(1, 1000)]]])
+  const parents = new Map([['session-sse', 'session-parent']])
+  const { eventsRoute, emit, disposeAll } = makeContext({ logs, parents })
+  assert.equal(typeof eventsRoute, 'object', 'event route is registered')
+  assert.deepEqual(eventsRoute.methods, ['GET'])
+  const controller = new AbortController()
+  let reader = null
+  try {
+    const response = await eventsRoute.fetch(new Request('http://localhost/api/power-suite.interrupted-events', { signal: controller.signal }))
+    assert.equal(response.status, 200)
+    assert.equal(response.headers.get('content-type'), 'text/event-stream; charset=utf-8')
+    assert.equal(response.headers.get('cache-control'), 'no-store')
+    assert.equal(response.headers.get('x-accel-buffering'), 'no')
+    reader = response.body.getReader()
+    const connected = await readSseChunk(reader)
+    assert.ok(connected.includes(': connected'), connected)
+    assert.ok(connected.includes('retry: 10000'), connected)
+
+    // Non-boundary events must not emit anything.
+    let pendingRead = reader.read().then((result) => ({ result }))
+    const timedOut = await Promise.race([
+      pendingRead.then(() => false),
+      new Promise((resolve) => setTimeout(() => resolve(true), 60))
+    ])
+    assert.equal(timedOut, true, 'non-boundary event produced an SSE frame')
+    // The pending read now consumes the next boundary frame.
+    emit('session-sse', turnStart(2, 2000), { header: { parentSession: 'session-parent' } })
+    const startChunk = new TextDecoder().decode((await pendingRead).result.value)
+    assert.ok(startChunk.includes('event: interrupted'), startChunk)
+    const startPayload = JSON.parse(startChunk.split('data: ')[1].split('\n')[0])
+    assert.deepEqual(startPayload, { sessionId: 'session-sse', parentSession: 'session-parent', event: 'turn/start' })
+
+    const endChunkPromise = readSseChunk(reader)
+    emit('session-sse', turnEnd(2, 3000, 'completed'))
+    const endChunk = await endChunkPromise
+    assert.ok(endChunk.includes('event: interrupted'), endChunk)
+    const endPayload = JSON.parse(endChunk.split('data: ')[1].split('\n')[0])
+    assert.deepEqual(endPayload, { sessionId: 'session-sse', parentSession: null, event: 'turn/end' })
+
+    // Abort must stop the heartbeat/stream without throwing or hanging.
+    controller.abort()
+    const finalChunk = await Promise.race([
+      reader.read().then((result) => result).catch(() => ({ done: true })),
+      new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), 200))
+    ])
+    assert.notEqual(finalChunk.timedOut, true, 'aborted SSE stream did not close')
+    assert.equal(finalChunk.done, true)
+  } finally {
+    if (reader !== null) await reader.cancel().catch(() => {})
+    controller.abort()
+    disposeAll()
+  }
+})
+
+test('Host disposal closes open SSE clients without throwing', async () => {
+  const logs = new Map([['session-dispose', [turnStart(1, 1000)]]])
+  const parents = new Map([['session-dispose', null]])
+  const { eventsRoute, disposeAll } = makeContext({ logs, parents })
+  let reader = null
+  try {
+    const response = await eventsRoute.fetch(new Request('http://localhost/api/power-suite.interrupted-events'))
+    reader = response.body.getReader()
+    assert.ok((await readSseChunk(reader)).includes(': connected'))
+    disposeAll()
+    const finalChunk = await Promise.race([
+      reader.read().then((result) => result).catch(() => ({ done: true })),
+      new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), 200))
+    ])
+    assert.notEqual(finalChunk.timedOut, true, 'Host-disposed SSE stream did not close')
+    assert.equal(finalChunk.done, true)
+  } finally {
+    if (reader !== null) await reader.cancel().catch(() => {})
+  }
 })

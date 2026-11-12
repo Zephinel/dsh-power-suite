@@ -28,6 +28,12 @@ import {
 /** Authenticated route that resumes an interrupted Session implicitly. */
 export const CONTINUE_ROUTE = '/api/power-suite.continue'
 
+/** Authenticated SSE route broadcasting interrupted-state invalidations. */
+export const INTERRUPTED_EVENTS_ROUTE = '/api/power-suite.interrupted-events'
+
+/** SSE heartbeat interval; comments keep proxies from idling the stream out. */
+const EVENT_HEARTBEAT_MS = 25000
+
 /** Cache bound: the route is asked per listed Session, including old ones. */
 const MAX_CACHED = 2000
 /** Child-session lineage is refreshed at most this often. */
@@ -289,6 +295,10 @@ export function installInterruptedSessions(ctx) {
     return value
   }
 
+  /** Open SSE clients; one entry per connected browser/tab. */
+  const eventClients = new Set()
+  const eventEncoder = new TextEncoder()
+
   ctx.effect(() => ctx.on('session/event', (session, event) => {
     if (session === null || typeof session !== 'object' || typeof session.id !== 'string') return
     if (event === null || typeof event !== 'object') return
@@ -325,10 +335,113 @@ export function installInterruptedSessions(ctx) {
     }
     derived.clear()
     if (event.type === 'subagent/descriptor') lineage.at = 0
+    if (event.type === 'turn/start' || event.type === 'turn/end') {
+      const parentSession = typeof session.header?.parentSession === 'string' ? session.header.parentSession : null
+      for (const client of [...eventClients]) {
+        if (!client.send('interrupted', { sessionId: session.id, parentSession, event: event.type })) {
+          eventClients.delete(client)
+        }
+      }
+    }
   }), 'power-suite: interrupted cache')
 
 
   const continueInFlight = new Set()
+
+  /**
+   * Open one server-sent-events stream for interrupted-state invalidations.
+   * The stream starts with a comment/retry hint, then receives one `interrupted`
+   * event per turn boundary and a comment heartbeat every 25 s. Cleanup is
+   * idempotent and runs on request abort, stream cancel, or Host disposal.
+   * @param {Request} request - authenticated stream request.
+   * @returns {Response} streaming SSE response.
+   */
+  function openEventStream(request) {
+    /** @type {object | null} */
+    let client = null
+    const body = new ReadableStream({
+      start(controller) {
+        let closed = false
+        const heartbeat = setInterval(() => {
+          if (closed) return
+          try {
+            controller.enqueue(eventEncoder.encode(': ping\n\n'))
+          } catch {
+            cleanup()
+          }
+        }, EVENT_HEARTBEAT_MS)
+        const cleanup = () => {
+          if (closed) return
+          closed = true
+          clearInterval(heartbeat)
+          if (client !== null) eventClients.delete(client)
+          if (request.signal !== null && typeof request.signal.removeEventListener === 'function') {
+            request.signal.removeEventListener('abort', cleanup)
+          }
+          try {
+            controller.close()
+          } catch {
+            // Already closed/cancelled by the peer.
+          }
+        }
+        client = {
+          get closed() { return closed },
+          send(type, data) {
+            if (closed) return false
+            try {
+              controller.enqueue(eventEncoder.encode(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`))
+              return true
+            } catch {
+              cleanup()
+              return false
+            }
+          },
+          cleanup
+        }
+        eventClients.add(client)
+        if (request.signal !== null && typeof request.signal.addEventListener === 'function') {
+          request.signal.addEventListener('abort', cleanup, { once: true })
+        }
+        try {
+          controller.enqueue(eventEncoder.encode(': connected\nretry: 10000\n\n'))
+        } catch {
+          cleanup()
+        }
+      },
+      cancel() {
+        if (client !== null) client.cleanup()
+      }
+    })
+    return new Response(body, {
+      status: 200,
+      headers: {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-store',
+        'x-accel-buffering': 'no'
+      }
+    })
+  }
+
+  ctx.effect(() => {
+    const dispose = ctx.connection.fetch.register({
+      path: INTERRUPTED_EVENTS_ROUTE,
+      methods: ['GET'],
+      requestBody: 'buffered',
+      fetch: (request) => openEventStream(request)
+    })
+    return () => {
+      if (typeof dispose === 'function') dispose()
+      for (const client of [...eventClients]) {
+        try {
+          client.cleanup()
+        } catch {
+          // Best-effort stream teardown on Host disposal.
+        }
+      }
+      eventClients.clear()
+    }
+  }, `power-suite: interrupted SSE ${INTERRUPTED_EVENTS_ROUTE}`)
+
   ctx.effect(() => ctx.connection.fetch.register({
     path: CONTINUE_ROUTE,
     methods: ['POST'],
