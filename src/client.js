@@ -4613,7 +4613,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-panel-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .psd-panel-link:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psd-chevron{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);transition:transform 160ms var(--ds-ease-in-out,ease)}
-.psd-panel-body{position:relative;display:flex;flex-direction:column;padding:2px 4px 5px;max-height:min(46cqh,320px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none}
+.psd-panel-body{position:relative;display:flex;flex-direction:column;gap:5px;padding:2px 4px 5px;max-height:min(46cqh,320px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none}
 .psd-panel-body::-webkit-scrollbar{display:none;width:0;height:0}
 .psd-panel-empty{padding:6px 10px 8px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:17px;display:flex;flex-direction:column;gap:2px}
 .psd-panel-empty strong{color:var(--dsw-alias-label-secondary);font-weight:500}
@@ -4622,6 +4622,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;padding:4px 0 4px 8px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-run:hover:not(:has(.psd-run-toggle:hover)) .psd-run-main{background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-run-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psd-run-spacer,.psd-child-spacer{flex:1 1 auto;min-width:0}
 .psd-run-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
 .psd-run-head{display:flex;align-items:center;gap:8px;min-width:0;flex:0 1 auto}
@@ -4635,7 +4636,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run-toggle .psd-chevron{transition:transform 160ms var(--ds-ease-in-out,ease)}
 .psd-run-toggle[aria-expanded='false'] .psd-chevron{transform:rotate(-90deg)}
 .psd-run-toggle-spacer{flex:none;width:var(--psd-chevron-col,24px)}
-.psd-children{position:relative;display:flex;flex-direction:column;gap:1px;margin:0 0 4px 22px;padding-left:9px;border-left:1px solid var(--dsw-alias-border-l2)}
+.psd-children{position:relative;display:flex;flex-direction:column;gap:5px;margin:4px 0 6px 22px;padding-left:9px;border-left:1px solid var(--dsw-alias-border-l2)}
 .psd-child{position:relative;display:flex;align-items:center;gap:2px;min-width:0;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:18px;text-align:left;cursor:pointer}
 .psd-child-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:7px;padding:3px 0 3px 4px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-child:hover .psd-child-main{background-color:var(--dsw-alias-interactive-bg-hover)}
@@ -6540,6 +6541,7 @@ function dwClearNativeAtmospheres() {
                   }, RemixGlyph(REMIX_WARNING_FILL, 13))
                   : null,
                 React.createElement('span', { className: 'psd-run-title' }, row.title))),
+              React.createElement('span', { key: 'spacer', className: 'psd-run-spacer', 'aria-hidden': true }),
               interrupted
                 ? React.createElement(DwContinueAction, {
                   className: 'psd-row-continue',
@@ -6620,6 +6622,7 @@ function dwClearNativeAtmospheres() {
                   }, RemixGlyph(REMIX_WARNING_FILL, 13))
                   : null,
                 React.createElement('span', { className: 'psd-child-title' }, child.title)),
+                React.createElement('span', { key: 'spacer', className: 'psd-child-spacer', 'aria-hidden': true }),
                 React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t)),
                 React.createElement(DwRowActionSlot, {
                   t,
