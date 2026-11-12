@@ -67,14 +67,19 @@ if (ui === undefined) {
     'annotationSurfaceRoot', 'annotationSurfaceLevels',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
-    'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition'
+    'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
+    'annotationUndoRemoveMany', 'annotationScopeCounts', 'annotationSelectedEntries',
+    'annotationApplyIncludes', 'annotationChipRefOf', 'annotationChipRefBatch',
+    'parseAnnotationChipRef', 'annotationChipCandidates', 'serializeAnnotationChip'
   ]
   /**
    * Frozen seam generation. 31 = round-1 audit, 32 = round-2 resolver, 35 =
    * audit-fix batch, 48 = A1/A2/persistence Phase 1 (surface picker, unique
    * selector/ancestors, v2 record store), 57 = A3 Phase 2-A (record commit/undo/
-   * move/include helpers, mark badge excerpt, detail-card clamp). The E2E
-   * `ACCEPTED_SEAM_GENERATIONS` must accept exactly these counts.
+   * move/include helpers, mark badge excerpt, detail-card clamp), 66 = A3 Phase
+   * 2-B (multi-delete undo, rail scope/selection helpers, chip ref round-trip,
+   * candidates and model serialization). The E2E `ACCEPTED_SEAM_GENERATIONS` must
+   * accept exactly these counts.
    */
   const SEAM_GENERATION = SEAM_EXPORTS.length
   /** Accepted `Function.length` ranges from the frozen signatures (defaults reduce length). */
@@ -122,6 +127,15 @@ if (ui === undefined) {
     serializeAnnotationStore: [1, 2],
     annotationSurfaceRoot: [1, 2],
     annotationSurfaceLevels: [1, 2],
+    annotationUndoRemoveMany: [2, 3],
+    annotationScopeCounts: [2, 2],
+    annotationSelectedEntries: [2, 2],
+    annotationApplyIncludes: [2, 2],
+    annotationChipRefOf: [1, 1],
+    annotationChipRefBatch: [1, 2],
+    parseAnnotationChipRef: [1, 1],
+    annotationChipCandidates: [2, 3],
+    serializeAnnotationChip: [3, 4],
     upsertAnnotationRecord: [2, 4],
     removeAnnotationRecord: [2, 2],
     restoreAnnotationRecord: [2, 3],
@@ -135,7 +149,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 57, 'the frozen Phase 2-A generation is pinned')
+    assert.equal(SEAM_GENERATION, 66, 'the frozen Phase 2-B generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -1930,6 +1944,179 @@ if (ui === undefined) {
     assert.ok(identity.includes('annotationIdentityWarned'), 'the fallback failure is reported once instead of swallowed')
     assert.ok(source.includes('const annotationBridge = { sessionId: null, inputActions: null, sessionCwd: null }'),
       'the bridge declares the cwd slot explicitly')
+  })
+
+  //#region A3 Phase 2-B rail selection and chip references (T8/T9)
+
+  test('T8: scope counts and selected entries only consider current-Session included records', () => {
+    const alpha = recordOf('Alpha')
+    const beta = recordOf('Beta', SESSION_A, { included: false })
+    const other = recordOf('Gamma', SESSION_B)
+    const list = [alpha, beta, other]
+    assert.deepEqual(plain(ui.annotationScopeCounts(list, SESSION_A)), {
+      current: 2, other: 1, included: 1, otherIncluded: 1, total: 3
+    })
+    assert.deepEqual(plain(ui.annotationSelectedEntries(list, SESSION_A).map((entry) => entry.id)), [alpha.id])
+    assert.deepEqual(plain(ui.annotationSelectedEntries(list, null)), [], 'no current Session means no batch selection')
+    beta.included = true
+    assert.deepEqual(plain(ui.annotationSelectedEntries(list, SESSION_A).map((entry) => entry.id)), [alpha.id, beta.id], 'insertion order is preserved')
+    assert.equal(plain(ui.annotationScopeCounts([], SESSION_A)).total, 0)
+  })
+
+  test('T8: annotationApplyIncludes applies many flags in one immutable pass', () => {
+    const alpha = recordOf('Alpha')
+    const beta = recordOf('Beta')
+    const list = [alpha, beta]
+    const changed = ui.annotationApplyIncludes(list, [
+      { refId: alpha.id, included: false },
+      { refId: 'psa-missing', included: true },
+      { refId: beta.id, included: false }
+    ])
+    assert.equal(changed[0].included, false)
+    assert.equal(changed[1].included, false)
+    assert.equal(list[0].included, true, 'the input list is never mutated')
+    const same = ui.annotationApplyIncludes(changed, [{ refId: alpha.id, included: false }])
+    assert.equal(same[0], changed[0], 'an unchanged flag keeps the record reference')
+    assert.equal(ui.annotationApplyIncludes([], [{ refId: alpha.id, included: false }]).length, 0)
+  })
+
+  test('T8/D5: annotationUndoRemoveMany captures original positions and restores all of them', () => {
+    const alpha = recordOf('Alpha')
+    const beta = recordOf('Beta')
+    const gamma = recordOf('Gamma')
+    const delta = recordOf('Delta')
+    const list = [alpha, beta, gamma, delta]
+    const removal = ui.annotationUndoRemoveMany(list, [beta.id, delta.id], 9_000)
+    assert.deepEqual(plain(removal.list.map((entry) => entry.id)), [alpha.id, gamma.id])
+    assert.equal(removal.undo.kind, 'multi')
+    assert.equal(removal.undo.at, 9_000)
+    assert.deepEqual(plain(removal.undo.entries.map((item) => item.index)), [1, 3])
+    const restored = ui.annotationUndoRestore(removal.list, removal.undo)
+    assert.deepEqual(plain(restored.map((entry) => entry.id)), [alpha.id, beta.id, gamma.id, delta.id])
+    assert.deepEqual(plain(ui.annotationUndoRemoveMany(list, [], 1)), { list: plain(list), undo: null })
+    assert.equal(ui.annotationUndoRemoveMany(list, ['psa-missing'], 1).undo, null)
+  })
+
+  test('T8: the rail reducer actions include, move and multi-remove records', () => {
+    const alpha = recordOf('Alpha')
+    const beta = recordOf('Beta')
+    const gamma = recordOf('Gamma')
+    let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
+    for (const record of [alpha, beta, gamma]) state = ui.reduceAnnotationState(state, { type: 'annotationCommit', record, now: 1_000 })
+    state = ui.reduceAnnotationState(state, {
+      type: 'annotationIncludes',
+      changes: [{ refId: alpha.id, included: false }, { refId: gamma.id, included: false }]
+    })
+    assert.deepEqual(plain(state.collection.map((entry) => entry.included)), [false, true, false])
+    state = ui.reduceAnnotationState(state, { type: 'annotationMove', refId: gamma.id, delta: -1 })
+    assert.deepEqual(plain(state.collection.map((entry) => entry.id)), [alpha.id, gamma.id, beta.id])
+    assert.deepEqual(plain(state.collection.map((entry) => entry.order)), [0, 1, 2], 'the move keeps order contiguous')
+    state = ui.reduceAnnotationState(state, { type: 'annotationRemoveMany', refIds: [alpha.id, beta.id] })
+    assert.deepEqual(plain(state.collection.map((entry) => entry.id)), [gamma.id])
+  })
+
+  test('T9: annotation chip refs round-trip for single and batch group chips', () => {
+    const alpha = recordOf('Alpha', SESSION_A, { note: 'first' })
+    const beta = recordOf('Beta')
+    const single = ui.annotationChipRefOf(alpha)
+    assert.equal(single.source, 'ui-annotation')
+    assert.equal(single.ref, alpha.id)
+    assert.equal(single.label, 'Alpha')
+    assert.equal(single.clipboardText, '@Alpha')
+    assert.deepEqual(plain(ui.parseAnnotationChipRef(single.ref)), { kind: 'single', id: alpha.id })
+
+    const batch = ui.annotationChipRefBatch([alpha, beta], 'UI annotations × 2')
+    assert.equal(batch.source, 'ui-annotation')
+    assert.equal(batch.ref, `batch:${alpha.id}|${beta.id}`)
+    assert.equal(batch.label, 'UI annotations × 2')
+    assert.equal(batch.clipboardText, '@UI annotations × 2')
+    assert.deepEqual(plain(ui.parseAnnotationChipRef(batch.ref)), { kind: 'batch', ids: [alpha.id, beta.id] })
+    assert.deepEqual(plain(ui.parseAnnotationChipRef('batch:')), { kind: 'batch', ids: [] })
+    assert.equal(ui.parseAnnotationChipRef('nonsense'), null)
+    assert.equal(ui.parseAnnotationChipRef(''), null)
+    assert.equal(ui.parseAnnotationChipRef(null), null)
+    assert.deepEqual(plain(ui.parseAnnotationChipRef(`batch:${alpha.id}|not-an-id|${beta.id}`).ids), [alpha.id, beta.id], 'invalid ids are dropped from a batch ref')
+  })
+
+  test('T9/D8: annotationChipCandidates lists current-Session records only, described and capped', () => {
+    const alpha = recordOf('Alpha', SESSION_A, { note: 'Fix the toolbar\nwith more detail' })
+    const beta = recordOf('Beta')
+    const other = recordOf('Gamma', SESSION_B)
+    const candidates = ui.annotationChipCandidates([alpha, beta, other], SESSION_A)
+    assert.deepEqual(plain(candidates.map((candidate) => candidate.name)), ['Alpha', 'Beta'])
+    assert.deepEqual(plain(candidates.map((candidate) => candidate.value)), [alpha.id, beta.id], 'the pick value is the record id')
+    assert.equal(candidates[0].description, 'Fix the toolbar', 'the description is the first requirement line')
+    assert.equal(candidates[1].description, undefined)
+    assert.deepEqual(plain(ui.annotationChipCandidates([other], SESSION_A)), [], 'no current-Session record hides the group')
+    const many = []
+    for (let index = 0; index < 25; index += 1) many.push(recordOf(`Record ${index}`))
+    assert.equal(ui.annotationChipCandidates(many, SESSION_A).length, 20, 'D8 caps the group at 20 candidates')
+    assert.equal(ui.annotationChipCandidates(many, SESSION_A, 5).length, 5)
+  })
+
+  test('T9: serializeAnnotationChip reuses the existing quick-reference and batch formats', () => {
+    const alpha = recordOf('Alpha', SESSION_A, { note: 'Fix the toolbar' })
+    const beta = recordOf('Beta', SESSION_A, { note: 'Fix the footer' })
+    const resolved = () => 'resolved'
+    const single = ui.serializeAnnotationChip(alpha.id, [alpha, beta], EN_LABELS, resolved)
+    assert.equal(single.missing, 0)
+    assert.equal(single.remaining, 1)
+    assert.equal(plain(single.text), plain(ui.serializeQuickReference({ ...alpha, status: 'resolved' }, 'Fix the toolbar', EN_LABELS)))
+    const batchRef = `batch:${alpha.id}|${beta.id}`
+    const batch = ui.serializeAnnotationChip(batchRef, [alpha, beta], EN_LABELS, resolved)
+    assert.equal(batch.missing, 0)
+    assert.equal(batch.remaining, 2)
+    const expected = ui.serializeBatchRequest([
+      { ref: { ...alpha, status: 'resolved' }, note: 'Fix the toolbar' },
+      { ref: { ...beta, status: 'resolved' }, note: 'Fix the footer' }
+    ], { ...EN_LABELS, skippedCount: 0, removedCount: 0 })
+    assert.equal(plain(batch.text), plain(expected))
+    assert.equal(ui.serializeAnnotationChip('nonsense', [alpha], EN_LABELS, resolved).text, null)
+  })
+
+  test('T9/D9: deleted batch members are skipped with an honest removed line; a missing single fails', () => {
+    const alpha = recordOf('Alpha', SESSION_A, { note: 'keep' })
+    const labels = { ...EN_LABELS, removed: '({count} deleted annotation(s) skipped)', noRemaining: '(nothing remains)' }
+    const resolved = () => 'resolved'
+    const partial = ui.serializeAnnotationChip(`batch:${alpha.id}|psa-gone-one`, [alpha], labels, resolved)
+    assert.equal(partial.missing, 1)
+    assert.equal(partial.remaining, 1)
+    assert.ok(plain(partial.text).includes('(1 deleted annotation(s) skipped)'), 'the removed count is stated')
+    assert.ok(plain(partial.text).includes('1. Alpha'), 'the surviving record is still serialized')
+    assert.ok(!plain(partial.text).includes('2. '), 'no block is emitted for a deleted record')
+    const gone = ui.serializeAnnotationChip(`batch:psa-gone-one|psa-gone-two`, [alpha], labels, resolved)
+    assert.equal(gone.missing, 2)
+    assert.equal(gone.remaining, 0)
+    assert.equal(plain(gone.text), '(nothing remains)\n')
+    const missingSingle = ui.serializeAnnotationChip('psa-gone-one', [alpha], EN_LABELS, resolved)
+    assert.equal(missingSingle.text, null, 'a missing single chip returns null so the controller throws/chip goes invalid')
+  })
+
+  test('T9: serializeBatchRequest keeps the existing format and adds the removed line only when asked', () => {
+    const alpha = recordOf('Alpha')
+    const items = [{ ref: { ...alpha, status: 'resolved' }, note: 'n' }]
+    const base = ui.serializeBatchRequest(items, EN_LABELS)
+    assert.ok(!plain(base).includes('no longer exist'), 'no removed line without removedCount')
+    const withRemoved = ui.serializeBatchRequest(items, { ...EN_LABELS, removedCount: 2, skippedCount: 1 })
+    assert.ok(plain(withRemoved).includes('(2 annotation(s) no longer exist and were skipped)'))
+    assert.ok(plain(withRemoved).includes(EN_LABELS.skipped.replace('{count}', '1')))
+    assert.ok(plain(withRemoved).indexOf('no longer exist') < plain(withRemoved).indexOf('other sessions'), 'removed line precedes the skip line')
+  })
+
+  test('T9: the chip source contract wires candidates, pick, preview and the serializing codec', () => {
+    const source = {
+      trigger: '@',
+      name: 'ui-annotation',
+      candidates: (sessionId) => ui.annotationChipCandidates([recordOf('Alpha')], sessionId),
+      parse: ui.parseAnnotationChipRef,
+      batch: (records) => ui.annotationChipRefBatch(records, 'UI annotations × 2'),
+      serialize: (ref) => ui.serializeAnnotationChip(ref, [recordOf('Alpha')], EN_LABELS, () => 'resolved')
+    }
+    assert.equal(source.trigger, '@')
+    assert.equal(source.name, 'ui-annotation')
+    assert.equal(source.candidates(SESSION_A).length, 1)
+    assert.deepEqual(plain(source.parse(source.batch([recordOf('Alpha'), recordOf('Beta')]).ref)).kind, 'batch')
+    assert.equal(source.serialize('psa-gone-one').text, null)
   })
 
   //#region geometry and layout

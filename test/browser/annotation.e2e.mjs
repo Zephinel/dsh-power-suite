@@ -74,6 +74,8 @@ const KEY_DEFS = {
   meta: { key: 'Meta', code: 'MetaLeft', vk: 91, mod: MOD.meta },
   shift: { key: 'Shift', code: 'ShiftLeft', vk: 16, mod: MOD.shift },
   escape: { key: 'Escape', code: 'Escape', vk: 27, mod: 0 },
+  backspace: { key: 'Backspace', code: 'Backspace', vk: 8, mod: 0 },
+  end: { key: 'End', code: 'End', vk: 35, mod: 0 },
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -977,6 +979,19 @@ class Results {
     return this.rows.some((row) => row.id === id)
   }
 
+  /**
+   * Replace a just-recorded PASS row with an explicit SKIP row (cross-branch
+   * dependency / environment absence). Never a fake PASS, never a duplicate id.
+   * @param {string} id - row id.
+   * @param {string} title - row title.
+   * @param {string} detail - why the row cannot be verified on this branch.
+   * @returns {void}
+   */
+  replaceWithSkip(id, title, detail) {
+    this.rows = this.rows.filter((row) => row.id !== id)
+    this.skip(id, title, detail)
+  }
+
   recordFailure(id, title, detail) {
     this.rows.push({ id, title, pass: false, detail, ms: 0 })
     log(`FAIL  ${id}  ${title} — ${short(detail, 400)}`)
@@ -1075,7 +1090,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1084,9 +1099,10 @@ async function runSmoke({ page, results, state }) {
     // Documented frozen generations: round-1 (31), round-2 adds resolveNodeCandidate
     // (32), audit-fix adds normalizeUserNote/cssIdentifier/clampPopoverPositionToViewport
     // (35), Phase 1 adds the A1/A2/persistence helpers (48), Phase 2-A adds the record
-    // action/undo/mark/detail-card helpers (57). Pin a documented count and require the
-    // keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57]
+    // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
+    // rail selection and chip-ref serialization helpers (66). Pin a documented count and
+    // require the keys that generation introduced.
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1113,6 +1129,13 @@ async function runSmoke({ page, results, state }) {
         'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove', 'annotationUndoRestore',
         'annotationMarkerBadgeText', 'clampDetailCardPosition']) {
         assert(probe.keys.includes(key), `Phase 2-A seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
+      }
+    }
+    if (keyCount === 66) {
+      for (const key of ['annotationUndoRemoveMany', 'annotationScopeCounts', 'annotationSelectedEntries',
+        'annotationApplyIncludes', 'annotationChipRefOf', 'annotationChipRefBatch', 'parseAnnotationChipRef',
+        'annotationChipCandidates', 'serializeAnnotationChip']) {
+        assert(probe.keys.includes(key), `Phase 2-B seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
       }
     }
     state.hooks = probe.keys
@@ -1459,6 +1482,16 @@ const probes = {
       top: Math.round(rect.top),
     }
   },
+
+  /** Every visible workspace row point, for expanding workspace groups in the sidebar. */
+  workspaceRowPoints: () => [...document.querySelectorAll('[data-row-key^="workspace:"]')]
+    .map((element) => {
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      if (rect.top < 0 || rect.bottom > innerHeight) return null
+      return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+    })
+    .filter((point) => point !== null),
 
   workspaceRowPoint: () => {
     for (const element of document.querySelectorAll('[data-row-key^="workspace:"]')) {
@@ -1918,6 +1951,9 @@ const probes = {
   /** Whether the dynamic-workspaces hovercard (cross-branch marker) exists in this build. */
   realPsdHovercardPresent: () => document.querySelector('[data-psd-hovercard]') !== null,
 
+  /** Whether the dynamic-workspaces feature itself is installed (cross-branch build capability). */
+  dynamicWorkspacesPresent: () => document.querySelector('[data-psd-rail], [data-psd-search-card], [data-psd-preview-card], [data-psd-hovercard]') !== null,
+
   /** One opaque synthetic floating layer used for the F3 stationary-pointer check. */
   createFloatingProbeLayer: (x, y, width, height) => {
     document.getElementById('psa-e2e-floating-layer')?.remove()
@@ -2204,6 +2240,46 @@ const probes = {
     return true
   },
 
+
+  // ---- A3 Phase 2-B: native composer chips + cross-branch dynamic-workspaces card ------
+
+  /** Native composer reference chips (atomic Lexical decorator nodes) in the draft. */
+  chipState: () => {
+    const editor = document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')
+    if (editor === null) return { present: false, text: '', chips: [] }
+    let nodes = [...editor.querySelectorAll('[data-lexical-decorator="true"]')]
+    if (nodes.length === 0) nodes = [...editor.querySelectorAll('[contenteditable="false"]')]
+    const chips = nodes.map((node) => {
+      const rect = node.getBoundingClientRect()
+      return {
+        text: (node.innerText || node.textContent || '').replace(/\s+/g, ' ').trim(),
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      }
+    })
+    return { present: true, text: editor.innerText || '', chips }
+  },
+
+  /** The dynamic-workspaces hovercard marker + its computed contract state. */
+  psdHovercardState: () => {
+    const card = document.querySelector('[data-psd-hovercard]')
+    if (card === null) return null
+    const rect = card.getBoundingClientRect()
+    const style = getComputedStyle(card)
+    return {
+      x: Math.round(rect.x),
+      y: Math.round(rect.y),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      centerX: Math.round(rect.x + rect.width / 2),
+      centerY: Math.round(rect.y + rect.height / 2),
+      pointerEvents: style.pointerEvents,
+      zIndex: style.zIndex,
+      visible: rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden',
+    }
+  },
 
   // ---- A3 Phase 2-A: page marks, hover detail card, undo toast -------------------------
 
@@ -2746,6 +2822,56 @@ class Harness {
     return true
   }
 
+  /**
+   * After a reload the shell can restore a different "last viewed" Session than the
+   * one a scenario captured records in. Switch back through the native sidebar row
+   * (expanding workspace groups and scrolling the list if needed) so scope/mark
+   * assertions are deterministic; returns the current Session either way.
+   * @param {string | null | undefined} targetSessionId - Session that owns the records.
+   * @returns {Promise<string | null>} the current Session after the attempt.
+   */
+  async ensureSessionFor(targetSessionId) {
+    if (typeof targetSessionId !== 'string' || targetSessionId.length === 0) return null
+    let current = await this.refreshSession()
+    if (current === targetSessionId) return current
+    await this.ensureSidebarExpanded()
+    /**
+     * Locate the native row for one Session id.
+     * @returns {Promise<{ x: number, y: number } | null>} row centre, when rendered.
+     */
+    const rowPointFor = async () => this.page.evaluate(`(() => {
+      const element = document.querySelector('[data-row-key="session:${targetSessionId}"]')
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      if (rect.top < 0 || rect.bottom > innerHeight) return null
+      return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+    })()`)
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const row = await rowPointFor()
+      if (row !== null) {
+        await this.page.clickAt(row.x, row.y)
+        await sleep(550)
+        current = await this.refreshSession()
+        if (current === targetSessionId) return current
+      }
+      // Reveal grouped Session rows: expand every visible workspace row once, then
+      // scroll the sidebar list a little and retry.
+      const workspacePoints = await this.page.eval(probes.workspaceRowPoints)
+      for (const point of workspacePoints.slice(0, 6)) {
+        await this.page.clickAt(point.x, point.y)
+        await sleep(120)
+      }
+      const sidebar = await this.page.eval(probes.sessionRowPoint, null)
+      if (sidebar !== null) {
+        await this.page.moveTo(sidebar.x, sidebar.y)
+        await this.page.wheel(sidebar.x, sidebar.y, 240)
+        await sleep(220)
+      }
+    }
+    return this.refreshSession()
+  }
+
   /** Track every session this run opens or creates (H2). */
   track(sessionId, source) {
     return trackSession(this.state, sessionId, source)
@@ -2792,12 +2918,14 @@ const SCENARIO_TITLES = {
   8: 'launcher drag clamp, viewport resize, scroll stability, reload default + position memory',
   9: 'collection view keeps the frame/rail geometry; exit restores the baseline layout',
   10: 'floating surfaces: whole-card hover/selection, drill, identical outline style, F3 recompute, F4 state CSS, v2 records + reload persistence',
+  11: 'F4 cross-branch: pinned dynamic-workspaces hover card is selectable in annotation mode (SKIP without the DW branch)',
   12: 'page marks + hover detail card + delete/undo + other-Session exclusion',
+  13: 'composer chip: single Quick reference, chip click preview, Backspace removal, ONE batch group chip, not sent',
   14: 'persistence: reload restores records/marks; removed target is missing and not drawn',
   15: 'rainbow input focus ring: wrapper ring, no solid outline, reduced motion, no layout shift',
 }
 
-const SCENARIO_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15]
+const SCENARIO_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 
 function buildScenarios(harness) {
   const h = harness
@@ -3146,48 +3274,36 @@ function buildScenarios(harness) {
       for (const entry of entries) {
         assert(entry.name.length > 0, `collection entry name must not be empty (ref ${entry.ref}) — a vacuous batch assertion is not acceptable`)
       }
+      const chipsBefore = (await h.page.eval(probes.chipState)).chips.length
       await h.click('[data-psa-insert-batch]')
-      const headerPattern = /Please adjust the UI elements below|请调整以下 UI 元素/
+      // A3/T9/D2: the batch insertion is ONE native group chip ("UI annotations × N"),
+      // never N per-item chips and never the old plain numbered blocks in the draft.
       await h.page.waitFor(
-        `(${headerPattern.toString()}).test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || '')`,
-        { timeout: 8000, label: 'batch insert appended to the composer' }
+        `document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-editor="true"] [data-lexical-decorator="true"]').length === ${chipsBefore + 1}`,
+        { timeout: 8000, label: 'batch group chip in the composer' }
       )
       await sleep(400)
+      const batchChip = await h.page.eval(probes.chipState)
+      assertEqual(batchChip.chips.length, chipsBefore + 1, 'D2: a batch insert must add exactly ONE group chip')
+      const batchLabel = String(batchChip.chips[batchChip.chips.length - 1].text || '')
+      assert(/UI annotations|UI 标注/.test(batchLabel), `the group chip label is not the batch label: ${short(batchLabel)}`)
       const composer = await h.composer()
       const text = composer.text || ''
-      assert(headerPattern.test(text), `batch header missing from the composer: ${short(text, 260)}`)
       assert(text.includes('DRAFT-PRESERVE'), 'the pre-existing draft text was not preserved')
-      assert(text.indexOf('DRAFT-PRESERVE') < text.search(headerPattern), 'the existing draft must stay before the inserted block')
-      const headerIndex = text.search(headerPattern)
-      assert(headerIndex >= 0, `batch header missing from the composer: ${short(text, 260)}`)
-      const inserted = text.slice(headerIndex)
-      // H4: exactly one ordered numbered block per collection entry, each with its own note.
-      const blockMatches = [...inserted.matchAll(/^(\d+)\. /gm)]
-      assertEqual(
-        blockMatches.length,
-        entries.length,
-        `expected one numbered block per collection entry (${entries.length}), got ${blockMatches.length}: ${short(inserted, 320)}`
-      )
-      for (let index = 0; index < blockMatches.length; index++) {
-        assertEqual(Number(blockMatches[index][1]), index + 1, `numbered blocks must be ordered 1..n (block index ${index})`)
-        const start = blockMatches[index].index
-        const end = index + 1 < blockMatches.length ? blockMatches[index + 1].index : inserted.length
-        const segment = inserted.slice(start, end)
-        const entry = entries[index]
-        assert(segment.includes(entry.name), `block ${index + 1} does not contain its entry name "${entry.name}": ${short(segment, 220)}`)
-        if (entry.note.length > 0) {
-          assert(segment.includes(entry.note), `block ${index + 1} does not contain its note "${entry.note}": ${short(segment, 240)}`)
-        } else {
-          assert(/Note: (—|$)|备注：\s*(—|$)/.test(segment), `block ${index + 1} is missing the empty-note placeholder: ${short(segment, 240)}`)
-        }
-      }
+      assert(!/^\d+\. /m.test(text), `the batch chip must not insert the plain numbered blocks: ${short(text, 260)}`)
+      assert(!/Please adjust the UI elements below|请调整以下 UI 元素/.test(text), 'the batch header must not be inserted as plain text when a chip is available')
       const transcriptAfter = await h.transcript()
       assertEqual(transcriptAfter.messages, transcriptBefore.messages, 'a message was sent by the batch insert')
       assertEqual(transcriptAfter.chatChildren, transcriptBefore.chatChildren, 'conversation DOM changed after the batch insert')
       assertEqual(await h.refreshSession(), sessionBefore, 'the current session id changed after the batch insert')
       assert(composer.focused, 'the composer was not focused after insertion')
+      // Cleanup: empty the draft so the next scenario starts from a blank composer.
+      await h.page.evaluate(`(() => { const editor = document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]'); if (editor !== null) editor.focus(); return true })()`)
+      await h.page.dispatchKey('a', 'KeyA', 65, MOD.meta)
+      await h.page.pressKey('backspace')
+      await sleep(250)
       await h.clickBack()
-      return `draft preserved before ${blockMatches.length} ordered numbered blocks with matching notes, not sent, composer focused`
+      return `draft preserved before one group chip "${short(batchLabel, 40)}" (D2, no numbered blocks in the draft), not sent, composer focused`
     },
 
     6: async () => {
@@ -3312,18 +3428,20 @@ function buildScenarios(harness) {
           `sidebar=${short(JSON.stringify(await h.page.eval(probes.sidebarState)))})`
       )
       const toggleStatus = afterCollapse.find((entry) => entry.ref === toggleEntry?.ref)?.status ?? 'n/a'
-      // Batch insert: the truly removed target must carry the explicit stale marker line.
+      // Batch insert: A3/T9 makes the insertion ONE group chip; the stale/status lines
+      // are emitted by the send-time codec (unit-tested) and are intentionally absent
+      // from the draft. The stale target's honesty is asserted above through the rail
+      // row status plus the codec unit tests.
       const domBeforeInsert = await h.page.eval(probes.nonComposerElementCount)
+      const chipsBefore = (await h.page.eval(probes.chipState)).chips.length
       await h.click('[data-psa-insert-batch]')
-      const stalePattern = /Status: target no longer resolves|目标已无法定位/
       await h.page.waitFor(
-        `(${stalePattern.toString()}).test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || '')`,
-        { timeout: 8000, label: 'stale marker line in the inserted text' }
+        `document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-editor="true"] [data-lexical-decorator="true"]').length === ${chipsBefore + 1}`,
+        { timeout: 8000, label: 'batch group chip for the stale-target collection' }
       ).catch(() => {})
       await sleep(300)
-      const staleText = (await h.composer()).text || ''
-      const staleMarkerCount = (staleText.match(new RegExp(stalePattern.source, 'g')) || []).length
-      assert(staleMarkerCount >= 1, `expected an explicit stale marker line for the removed target, got ${staleMarkerCount}: ${short(staleText, 320)}`)
+      const staleChip = await h.page.eval(probes.chipState)
+      assertEqual(staleChip.chips.length, chipsBefore + 1, 'the stale-target batch must add exactly one group chip')
       assertEqual(await h.page.eval(probes.nonComposerElementCount), domBeforeInsert, 'native DOM elements changed outside the composer during insertion')
       // Restore the sidebar and confirm the rebuilt target resolves again.
       const reopen = await h.page.eval(probes.buttonAriaRect, 'Open sidebar')
@@ -3496,26 +3614,27 @@ function buildScenarios(harness) {
         false,
         'batch insert must be enabled once a current-session entry exists'
       )
-      // Batch insert with mixed scope: only the current entry plus the explicit skip line.
+      // Batch insert with mixed scope (A3/T8/T9): only the CURRENT entry is selected, so
+      // the insertion is ONE group chip over that single entry. Other-Session records are
+      // excluded before the chip ref is built; their count is surfaced by the rail notice
+      // (asserted above), never by the draft.
       const domBeforeMixed = await h.page.eval(probes.nonComposerElementCount)
+      const chipsBeforeMixed = (await h.page.eval(probes.chipState)).chips.length
       await h.click('[data-psa-insert-batch]')
-      const skipPattern = /\(\d+ annotation\(s\) from other sessions skipped\)|来自其他会话/
       await h.page.waitFor(
-        `(${skipPattern.toString()}).test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || '')`,
-        { timeout: 8000, label: 'cross-session skip line in the inserted text' }
+        `document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-editor="true"] [data-lexical-decorator="true"]').length === ${chipsBeforeMixed + 1}`,
+        { timeout: 8000, label: 'mixed-scope group chip in the letter composer' }
       ).catch(() => {})
-      await sleep(450)
-      const mixedText = (await h.composer()).text || ''
-      const skipMatch = mixedText.match(new RegExp(skipPattern.source))
-      assert(skipMatch, `expected the cross-session skip line in the inserted text: ${short(mixedText, 340)}`)
-      // N4: the skip line must report the exact number of other-session annotations, in either
-      // the EN "(N annotation(s) … skipped)" or ZH "另有 N 条来自其他会话…" shape.
-      const skipCount = /(\d+)/.exec(skipMatch[0])?.[1]
-      assert(skipCount !== undefined, `the cross-session skip line carries no count: "${skipMatch[0]}" (N4)`)
-      assertEqual(Number(skipCount), entriesA.length, `the skip line must report ${entriesA.length} other-session annotations, got "${skipMatch[0]}" (N4)`)
-      assert(mixedText.includes(currentNote), `the current-session entry note must be inserted: ${short(mixedText, 340)}`)
-      const mixedBlocks = [...mixedText.matchAll(/^(\d+)\. /gm)]
-      assertEqual(mixedBlocks.length, 1, `exactly one numbered block must be inserted for the mixed scope, got ${mixedBlocks.length}: ${short(mixedText, 340)}`)
+      await sleep(400)
+      const mixedChip = await h.page.eval(probes.chipState)
+      assertEqual(mixedChip.chips.length, chipsBeforeMixed + 1, 'the mixed-scope batch must add exactly one group chip')
+      const mixedLabel = String(mixedChip.chips[mixedChip.chips.length - 1].text || '')
+      assert(/UI annotations|UI 标注/.test(mixedLabel), `the mixed-scope chip is not the batch group label: ${short(mixedLabel)}`)
+      assert(/×\s*1|×1/.test(mixedLabel), `the mixed-scope group chip must cover exactly the one current entry: ${short(mixedLabel)}`)
+      const mixedText = mixedChip.text || ''
+      assert(!/\(\d+ annotation\(s\) from other sessions skipped\)|来自其他会话/.test(mixedText),
+        'the chip draft must not carry the plain skipped line (it belongs to the send-time codec/rail notice)')
+      assert(!/^\d+\. /m.test(mixedText), 'the mixed-scope chip must not insert numbered plain blocks')
       // N4: leak check covers the entry name, note and locator text of every other-scope row.
       const otherLeakTokens = []
       for (const entry of otherEntries) {
@@ -3530,8 +3649,8 @@ function buildScenarios(harness) {
       assertEqual(await h.page.eval(probes.nonComposerElementCount), domBeforeMixed, 'native DOM elements changed outside the composer during the mixed-scope insertion')
       assertEqual((await h.transcript()).messages, 0, 'a message was sent after the mixed-scope insert')
       await h.ensureStatusPanel()
-      const scopeDetail = `mixed scope: ${short(sessionA, 22)} (${otherEntries.length} entries -> other, skipped) + ${short(sessionB, 22)} (1 current entry inserted), skip line "${skipMatch[0]}"`
-      return `true removal -> status missing + ${staleMarkerCount} stale marker line(s) (in-place replaced toggle status: ${toggleStatus}, rebuilt row status: ${restoredStatus}); ${scopeDetail}; no DOM mutation`
+      const scopeDetail = `mixed scope: ${short(sessionA, 22)} (${otherEntries.length} entries -> other, excluded from the chip ref) + ${short(sessionB, 22)} (1 current entry -> ONE group chip "${short(mixedLabel, 30)}")`
+      return `true removal -> rail status missing + one batch group chip (stale codec line unit-tested; in-place replaced toggle status: ${toggleStatus}, rebuilt row status: ${restoredStatus}); ${scopeDetail}; no DOM mutation`
     },
 
     7: async () => {
@@ -3892,29 +4011,6 @@ function buildScenarios(harness) {
     },
 
     10: async () => {
-      /**
-       * After a reload the shell can restore a different "last viewed" Session than
-       * the one the records were captured in. Switch back through the native
-       * sidebar row so the current/other scope assertions are deterministic.
-       * @param {string | null | undefined} targetSessionId - Session that owns the records.
-       * @returns {Promise<string | null>} the current Session after the attempt.
-       */
-      async function ensureSessionFor(targetSessionId) {
-        if (typeof targetSessionId !== 'string' || targetSessionId.length === 0) return null
-        let current = await h.refreshSession()
-        if (current === targetSessionId) return current
-        await h.ensureSidebarExpanded()
-        const row = await h.page.evaluate(`(() => { const element = document.querySelector('[data-row-key="session:${targetSessionId}"]'); if (element === null) return null; const rect = element.getBoundingClientRect(); if (rect.width <= 0 || rect.height <= 0) return null; return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) } })()`)
-        if (row === null) return current
-        await h.page.clickAt(row.x, row.y)
-        await sleep(500)
-        try {
-          await h.page.waitFor(`document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') === ${JSON.stringify(targetSessionId)}`, { timeout: 6000, label: 'Session switch through the sidebar' })
-        } catch {
-          return h.refreshSession()
-        }
-        return h.refreshSession()
-      }
       await h.ensureModeOff()
       await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
       await sleep(350)
@@ -4196,7 +4292,7 @@ function buildScenarios(harness) {
       await h.ensureSidebarExpanded()
       await h.ensureConversation()
       const reloadTargetSession = (await h.page.eval(probes.annotationStorage)).records.find((record) => record.note === 'Keep this note')?.session?.sessionId ?? null
-      await ensureSessionFor(reloadTargetSession)
+      await h.ensureSessionFor(reloadTargetSession)
       await h.ensureActivatedStable()
       await h.openCollection()
       await sleep(400)
@@ -4291,6 +4387,29 @@ function buildScenarios(harness) {
       const finalHovercard = await h.page.eval(probes.syntheticHovercardStyle)
       assertEqual(finalHovercard, null, 'the synthetic hovercard leaked after cleanup')
       return `F1 z=150/restore exact; F2 card ${nativeCard.rect.width}x${nativeCard.rect.height} whole-card hover/selection; F3 stationary recompute; F4 state events + [data-psd-hovercard] pe/z (real card ${realHovercardPresent ? 'present' : 'absent in this branch'}); A2 uniqueSelector ${short(String(pageRecord.uniqueSelector).slice(0, 48))}; D1 reload kept ${reloadedEntries.length} records with resolved+missing; D15 refused at ${cappedEntries.length}`
+    },
+
+    11: async () => {
+      // F4 cross-branch: the dynamic-workspaces branch owns the hover-card pin and
+      // lifetime. On this branch the DW side is absent, so the scenario detects the
+      // capability and records an explicit SKIP row (never a fake PASS); after the
+      // branches merge the same code runs the real pin/select + no-mode regression.
+      await h.ensureModeOff()
+      await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
+      await sleep(300)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      const dwPresent = await h.page.eval(probes.dynamicWorkspacesPresent)
+      if (!dwPresent) {
+        h.state.s11Absent = true
+        return 'dynamic-workspaces feature absent in this branch: F4 pin/select + no-mode close regression recorded as SKIP (real PASS after merge)'
+      }
+      const result = await runCrossBranchHovercardCheck(h)
+      if (result.verified !== true) {
+        h.state.s11Absent = true
+        return `dynamic-workspaces marker present but no hover card appeared: ${result.reason}`
+      }
+      return result.reason
     },
 
     12: async () => {
@@ -4466,30 +4585,172 @@ function buildScenarios(harness) {
       return `2 marks (#index + requirement excerpt), hover detail card (requirement/session/workspace/position/actions, keep-open, no focus steal), edit saved (updatedAt bumped), delete -> role=status undo toast -> restored, other-Session record not drawn after reload, reduced-motion static`
     },
 
-    14: async () => {
-      /**
-       * After a reload the shell can restore a different "last viewed" Session than
-       * the one the records were captured in. Switch back through the native
-       * sidebar row so the mark/scope assertions are deterministic.
-       * @param {string | null | undefined} targetSessionId - Session that owns the records.
-       * @returns {Promise<string | null>} the current Session after the attempt.
-       */
-      async function ensureSessionFor(targetSessionId) {
-        if (typeof targetSessionId !== 'string' || targetSessionId.length === 0) return null
-        let current = await h.refreshSession()
-        if (current === targetSessionId) return current
-        await h.ensureSidebarExpanded()
-        const row = await h.page.evaluate(`(() => { const element = document.querySelector('[data-row-key="session:${targetSessionId}"]'); if (element === null) return null; const rect = element.getBoundingClientRect(); if (rect.width <= 0 || rect.height <= 0) return null; return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) } })()`)
-        if (row === null) return current
-        await h.page.clickAt(row.x, row.y)
+    13: async () => {
+      await h.ensureModeOff()
+      await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
+      await sleep(300)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      await h.page.eval(probes.clearAnnotationStorage)
+      await h.page.reload()
+      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready before the chip scenario' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the clean reload' })
+      await sleep(600)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      const cleanBlank = await h.blankState()
+      if (cleanBlank.ok !== true) {
+        const fresh = await h.createBlankSessionViaHover()
+        assert(fresh && typeof fresh.sessionId === 'string', 'could not create a blank session for the chip scenario')
         await sleep(500)
-        try {
-          await h.page.waitFor(`document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') === ${JSON.stringify(targetSessionId)}`, { timeout: 6000, label: 'Session switch through the sidebar' })
-        } catch {
-          return h.refreshSession()
-        }
-        return h.refreshSession()
+        await h.ensureSidebarExpanded()
       }
+      const sessionId = await h.refreshSession()
+      h.track(sessionId, 's13-session')
+      await h.assertBlankForInput('scenario 13 chip insertion')
+      await h.ensureActivatedStable()
+      await h.ensureStatusPanel()
+      await h.clearSelection()
+
+      /**
+       * Select one element and type its requirement (popover left open).
+       * @param {{ x: number, y: number }} point - element centre.
+       * @param {string} note - requirement text.
+       * @returns {Promise<void>}
+       */
+      const selectAndType = async (point, note) => {
+        await h.page.moveTo(point.x, point.y)
+        await sleep(140)
+        await h.page.clickAt(point.x, point.y)
+        await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: `popover before "${note}"` })
+        const noteRect = await h.page.findRect('[data-psa-note]')
+        assert(noteRect, 'popover requirement textarea missing')
+        await h.page.clickAt(noteRect.x, noteRect.y)
+        await sleep(120)
+        await h.page.insertText(note)
+        await sleep(200)
+      }
+
+      // Record 1: normal requirement commit.
+      const targetA = await h.page.eval(pageProbe.newSessionButton)
+      assert(targetA, 'native New session button not found for the chip scenario')
+      await selectAndType(targetA, 'Chip requirement one')
+      await h.click('[data-psa-add]')
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 1`, { timeout: 6000, label: 'first page mark for the chip scenario' })
+
+      // Record 2: Quick reference — commits the annotation AND inserts the native chip.
+      const composerRegion = await h.page.findRect('[data-conversation-region="composer"]')
+      assert(composerRegion, 'composer region not found for the chip scenario')
+      await selectAndType(composerRegion, 'Chip requirement two')
+      await h.click('[data-psa-quick-ref]')
+      await h.page.waitFor(
+        `document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-editor="true"] [data-lexical-decorator="true"]').length >= 1`,
+        { timeout: 8000, label: 'single reference chip after Quick reference' }
+      )
+      await sleep(350)
+      const afterQuickRef = await h.ui()
+      assertEqual(afterQuickRef.popover, false, 'the quick reference did not auto-dismiss the popover')
+      assertEqual(afterQuickRef.selection + afterQuickRef.multi, 0, 'the quick reference did not clear the selection')
+      assertEqual((await h.page.eval(probes.marksState)).length, 2, 'the quick reference did not keep/refresh both page marks')
+      const singleChip = await h.page.eval(probes.chipState)
+      assertEqual(singleChip.chips.length, 1, 'the quick reference must insert exactly one native chip (occurrence=1)')
+      const singleChipText = String(singleChip.chips[0].text || '')
+      assert(singleChipText.includes('@'), `the single chip lost its @ glyph: ${short(singleChipText)}`)
+      assert(singleChipText.replace(/^@/, '').trim().length > 0, `the single chip label is empty: ${short(singleChipText)}`)
+      assert(!/UI annotation ·|Reference:|Note:|Status:/.test(singleChip.text || ''), `the draft still contains the plain 4-line block: ${short(singleChip.text, 260)}`)
+      const transcriptBefore = await h.transcript()
+      assertEqual(transcriptBefore.messages, 0, 'the chip insertion sent a message')
+
+      // Chip click (through the pass-through modifier) opens the record's detail card.
+      await h.page.keyDown('alt')
+      try {
+        await h.page.clickAt(singleChip.chips[0].x, singleChip.chips[0].y, { modifiers: MOD.alt })
+      } finally {
+        await h.page.keyUp('alt')
+      }
+      await h.page.waitFor(`!!document.querySelector('[data-psa-detail]')`, { timeout: 5000, label: 'detail card after chip click' })
+      const chipDetail = await h.page.eval(probes.detailState)
+      assert(chipDetail !== null, 'the chip click did not open the detail card')
+      assertEqual(chipDetail.requirement, 'Chip requirement two', 'the chip click opened the wrong record detail card')
+      await h.page.pressKey('escape')
+      await sleep(250)
+
+      // Backspace removes the chip atomically (one or two presses; never the draft text).
+      const editorRect = await h.page.findRect('[data-conversation-region="composer"] [data-lexical-editor="true"]')
+      assert(editorRect, 'composer editor not found for chip removal')
+      await h.page.keyDown('alt')
+      try {
+        await h.page.clickAt(editorRect.left + editorRect.width - 8, editorRect.y, { modifiers: MOD.alt })
+      } finally {
+        await h.page.keyUp('alt')
+      }
+      await sleep(200)
+      await h.page.pressKey('end')
+      await sleep(100)
+      let removed = false
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await h.page.pressKey('backspace')
+        await sleep(150)
+        const state = await h.page.eval(probes.chipState)
+        if (state.chips.length === 0) {
+          removed = true
+          break
+        }
+      }
+      assert(removed, 'Backspace did not remove the native chip')
+      await h.page.waitFor(`document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-editor="true"] [data-lexical-decorator="true"]').length === 0`, { timeout: 4000, label: 'chip removed from the draft' })
+
+      // Batch: select the current Session and insert ONE group chip.
+      await h.openCollection()
+      const rowsBefore = await h.page.eval(probes.entries)
+      assertEqual(rowsBefore.length, 2, 'the chip scenario must have two collection records before the batch')
+      // Records start included (Phase 1 semantics); select-all is then a no-op and
+      // stays disabled. Assert the enabled state explicitly, then only click when it
+      // actually has work to do.
+      const selectAllDisabled = await h.page.evaluate(`document.querySelector('[data-psa-select-all]')?.disabled === true`)
+      if (selectAllDisabled) {
+        const includedCount = await h.page.evaluate(`document.querySelector('[data-psa-scope-counts]')?.getAttribute('data-psa-included-count') ?? null`)
+        assertEqual(includedCount, '2', 'records are not selected for the batch')
+      } else {
+        await h.click('[data-psa-select-all]')
+        await sleep(250)
+        const includedCount = await h.page.evaluate(`document.querySelector('[data-psa-scope-counts]')?.getAttribute('data-psa-included-count') ?? null`)
+        assertEqual(includedCount, '2', 'select-all did not include both current-Session records')
+      }
+      await h.click('[data-psa-insert-batch]')
+      await h.page.waitFor(
+        `document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-editor="true"] [data-lexical-decorator="true"]').length === 1`,
+        { timeout: 8000, label: 'ONE batch group chip' }
+      )
+      await sleep(350)
+      const batchChip = await h.page.eval(probes.chipState)
+      assertEqual(batchChip.chips.length, 1, 'D2: the batch insert must produce exactly one group chip')
+      assert(/UI annotations|UI 标注/.test(batchChip.chips[0].text || ''), `the group chip label is wrong: ${short(batchChip.chips[0].text)}`)
+      assert(!/^(\d+)\. /m.test(batchChip.text || ''), 'the batch chip must not insert the plain numbered blocks')
+      const afterBatch = await h.ui()
+      assertEqual(afterBatch.panel, 'collection', 'the batch insert must keep the collection view (spec 4.4)')
+      assertEqual((await h.transcript()).messages, 0, 'the batch chip insertion sent a message')
+      // The group chip also opens the collection view on click (preview path).
+      await h.page.keyDown('alt')
+      try {
+        await h.page.clickAt(batchChip.chips[0].x, batchChip.chips[0].y, { modifiers: MOD.alt })
+      } finally {
+        await h.page.keyUp('alt')
+      }
+      await sleep(300)
+      assertEqual((await h.ui()).panel, 'collection', 'the group chip click did not keep/open the collection view')
+
+      // Cleanup: clear the draft, leave the rail on the collection view for the next
+      // scenario's own reset, and exit the mode.
+      await h.page.evaluate(`(() => { const editor = document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]'); if (editor !== null) editor.focus(); return true })()`)
+      await h.page.dispatchKey('a', 'KeyA', 65, MOD.meta)
+      await h.page.pressKey('backspace')
+      await sleep(250)
+      await h.exit()
+      return `Quick reference -> 1 native chip "@${short(singleChipText.replace(/^@/, ''), 28)}" (occurrence=1, no plain 4-line block), chip click -> detail card, Backspace removed it, batch -> ONE group chip "${short(batchChip.chips[0].text, 28)}" (no numbered blocks), collection view kept, transcript 0, not sent`
+    },
+
+    14: async () => {
       await h.ensureModeOff()
       await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
       await sleep(300)
@@ -4566,7 +4827,7 @@ function buildScenarios(harness) {
       await h.ensureConversation()
       const storedAfter = await h.page.eval(probes.annotationStorage)
       assertEqual(storedAfter.count, 2, 'the persisted records were not restored after the reload')
-      await ensureSessionFor(syntheticRecord.session?.sessionId ?? sessionId)
+      await h.ensureSessionFor(syntheticRecord.session?.sessionId ?? sessionId)
       await h.ensureActivatedStable()
       await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 1`, { timeout: 8000, label: 'only the live mark after reload' }).catch(async (error) => {
         // Diagnostics instead of a bare timeout: which records came back, which
@@ -4739,6 +5000,73 @@ function buildScenarios(harness) {
   }
 }
 
+/**
+ * F4 cross-branch check: pinned dynamic-workspaces hover card in annotation mode,
+ * plus the no-mode 140 ms close regression. Only meaningful once the DW branch is
+ * merged (the annotation side of the contract is asserted in scenario 10).
+ * @param {object} h - harness.
+ * @returns {Promise<{ verified: boolean, reason: string }>} outcome.
+ */
+async function runCrossBranchHovercardCheck(h) {
+  await h.ensureActivatedStable()
+  await h.ensureStatusPanel()
+  /**
+   * Hover a sidebar row until the DW hover card appears.
+   * @returns {Promise<{ card: object, point: object } | null>} the card and anchor.
+   */
+  const findCard = async () => {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const point = (await h.page.eval(probes.workspaceRowPoint)) ?? (await h.page.eval(probes.sessionRowPoint, null))
+      if (point === null || point === undefined) {
+        await sleep(250)
+        continue
+      }
+      await h.page.moveTo(point.x, point.y)
+      const deadline = Date.now() + 4000
+      while (Date.now() < deadline) {
+        const card = await h.page.eval(probes.psdHovercardState)
+        if (card !== null && card.visible) return { card, point }
+        await sleep(120)
+      }
+    }
+    return null
+  }
+  const found = await findCard()
+  if (found === null) return { verified: false, reason: 'no [data-psd-hovercard] appeared over a sidebar row within the probe window' }
+  await h.page.moveTo(found.card.centerX, found.card.centerY)
+  await sleep(650)
+  const held = await h.page.eval(probes.psdHovercardState)
+  assert(held !== null, 'F4: the dynamic-workspaces hover card closed while the pointer rested on it in annotation mode')
+  assertEqual(held.pointerEvents, 'auto', 'F4: the hover card is not pointer-interactive in annotation mode')
+  assertEqual(held.zIndex, '120', 'F4: the hover card z-index is not 120 in annotation mode')
+  assert(Number(held.zIndex) < 150, 'F4: the hover card must stay below the annotation paint layer')
+  await h.page.clickAt(held.centerX, held.centerY, { appliedWhen: async () => (await h.ui()).popover === true })
+  await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 6000, label: 'popover after selecting the pinned hover card' })
+  const pinnedPopover = await h.page.eval(probes.popover)
+  assert(pinnedPopover !== null, 'F4: clicking the pinned hover card did not select it')
+  await h.page.pressKey('escape')
+  await sleep(250)
+  // No-mode regression: without the mode, leaving the anchor closes the card again.
+  await h.ensureModeOff()
+  await h.page.moveTo(700, 160)
+  await sleep(200)
+  const again = await findCard()
+  assert(again !== null, 'F4 regression: the dynamic-workspaces hover card no longer appears with the mode off')
+  await h.page.moveTo(again.card.centerX, again.card.centerY)
+  const closeDeadline = Date.now() + 900
+  let closed = false
+  while (Date.now() < closeDeadline) {
+    const current = await h.page.eval(probes.psdHovercardState)
+    if (current === null) {
+      closed = true
+      break
+    }
+    await sleep(120)
+  }
+  assert(closed, 'F4 regression: with the mode off the hover card did not close within 900 ms of leaving its anchor')
+  return { verified: true, reason: 'pinned card stays pointer-interactive at z=120 and is selectable; closes within 900 ms with the mode off' }
+}
+
 async function runScenarios(harness, results, opts) {
   const scenarios = buildScenarios(harness)
   for (const id of SCENARIO_ORDER) {
@@ -4764,23 +5092,47 @@ async function runScenarios(harness, results, opts) {
     if (id === 10) {
       // F4 is split across branches (D3): this branch ships the annotation-side state
       // event and [data-psd-hovercard] CSS; the dynamic-workspaces branch owns the pin
-      // and lifetime. Record the cross-branch row explicitly as SKIP (never a fake PASS).
+      // and lifetime. Run the real pin check when the DW feature is installed, and
+      // record an explicit SKIP (never a fake PASS) when it is absent.
       const scenarioRow = results.rows.find((row) => row.id === id)
       if (scenarioRow !== undefined && scenarioRow.pass === true) {
-        let realCard = false
+        let dwPresent = false
         try {
-          realCard = await harness.page.eval(probes.realPsdHovercardPresent)
+          dwPresent = await harness.page.eval(probes.dynamicWorkspacesPresent)
         } catch {
-          realCard = false
+          dwPresent = false
         }
-        results.skip(
-          '10b',
-          'plugin hovercard pin (F4 cross-branch, owned by sidebar-impl)',
-          realCard
-            ? '[data-psd-hovercard] present, but the pin/lifetime behavior is owned by the dynamic-workspaces branch; Lead re-verifies after merge'
-            : 'no [data-psd-hovercard] element in this branch (DW marker/pin owned by sidebar-impl); annotation-side event + CSS asserted in scenario 10'
+        if (dwPresent) {
+          await results.check('10b', 'plugin hovercard pin (F4 merged: pin + selectable in annotation mode)', async () => {
+            const outcome = await runCrossBranchHovercardCheck(harness)
+            if (outcome.verified !== true) throw new Error(outcome.reason)
+            return outcome.reason
+          })
+        } else {
+          results.skip(
+            '10b',
+            'plugin hovercard pin (F4 cross-branch, owned by the dynamic-workspaces branch)',
+            'no dynamic-workspaces feature in this worktree (DW marker/pin absent); the annotation-side event + [data-psd-hovercard] CSS are asserted in scenario 10, and the real pin row runs after the branches merge'
+          )
+        }
+      }
+    }
+    if (id === 11) {
+      const scenarioRow = results.rows.find((row) => row.id === id)
+      if (scenarioRow !== undefined && scenarioRow.pass === true && harness.state.s11Absent === true) {
+        results.replaceWithSkip(
+          id,
+          'F4 cross-branch: pinned dynamic-workspaces hover card is selectable in annotation mode',
+          'dynamic-workspaces feature absent in this worktree: the pin/select + no-mode close regression cannot be observed here; the same scenario runs for real after the branches merge'
         )
       }
+    }
+    if (id === 13) {
+      results.skip(
+        '13f',
+        'chip plain-text fallback (D9) when the composer chip services are unavailable',
+        'this live GUI always installs conversation/inputTriggers, so the fallback branch cannot be forced end-to-end without stubbing DSH services; the fallback text + toast and the serializers are unit-tested in test/ui-annotation.test.js'
+      )
     }
     // Never let a viewport override or mode state cascade into the next scenario.
     try {
@@ -4842,9 +5194,13 @@ async function captureScreenshots(harness) {
     const composerState = await h.composer()
     const composerText = (composerState.text || '').trim()
     if (expectations.allowInsertedText === true) {
+      // Phase 2-B: the normal insertion is ONE native group chip (the plain batch
+      // text is only the D9 fallback); accept either shape in the capture assertion.
+      const chip = await h.page.eval(probes.chipState)
+      const hasChip = chip.chips.length >= 1 && /UI annotations|UI 标注/.test(String(chip.chips[0].text || ''))
       assert(
-        /^(Please adjust the UI elements below|请调整以下 UI 元素)/.test(composerText),
-        `[${name}] composer must contain only the inserted structured request: ${short(composerText, 220)}`
+        hasChip || /^(Please adjust the UI elements below|请调整以下 UI 元素)/.test(composerText),
+        `[${name}] composer must contain only the inserted structured request (group chip or plain fallback): ${short(composerText, 220)}`
       )
     } else {
       assertEqual(composerText, '', `[${name}] refusing capture: composer draft is not empty: ${draftPreview(composerText)}`)
@@ -4999,11 +5355,18 @@ async function captureScreenshots(harness) {
   await capture('annotation-collection.png', { modeOn: true })
   // 5) Composer with the structured batch request inserted (not sent).
   await h.click('[data-psa-insert-batch]')
-  const headerPattern = /Please adjust the UI elements below|请调整以下 UI 元素/
+  // Phase 2-B inserts one native group chip; keep a plain-text fallback wait for
+  // builds where the chip services are unavailable (D9).
   await h.page.waitFor(
-    `(${headerPattern.toString()}).test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || '')`,
-    { timeout: 8000, label: 'batch insert for the composer screenshot' }
-  ).catch(() => {})
+    `document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-editor="true"] [data-lexical-decorator="true"]').length >= 1`,
+    { timeout: 8000, label: 'batch group chip for the composer screenshot' }
+  ).catch(async () => {
+    const headerPattern = /Please adjust the UI elements below|请调整以下 UI 元素/
+    await h.page.waitFor(
+      `(${headerPattern.toString()}).test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || '')`,
+      { timeout: 4000, label: 'plain-text batch fallback for the composer screenshot' }
+    ).catch(() => {})
+  })
   await sleep(350)
   await h.clickBack()
   await sleep(300)
