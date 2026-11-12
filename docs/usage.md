@@ -58,17 +58,24 @@ Session is running and the white sparkle icon when nothing runs.
   profile; a click is only needed on a genuinely new result (the 1 s tolerance
   prevents transient status flags from resurrecting the green dot). The marks
   live in the Host's `read-acks.json`; a browser with the new Host keeps its old
-  local marks by opening DSH once, which uploads them.
+  local marks by opening DSH once, which uploads them in small chunks. During the
+  short-lived activity-floor iteration some baselines were inflated; those marks
+  cannot be lowered automatically, but the affected rows have since left the
+  card, so no visible action is needed.
 - The row of the Session the main conversation currently shows gets a faint
   **rainbow ring** plus glow; it follows whichever Session you open (from the
   card, the sidebar, or anywhere else) and disappears when that row leaves the
   card. Merely-running or unopened rows are not ringed. Reduced-motion users see
   a static ring.
-- Times on the card use the Host's **true last-activity** timestamps, not the
-  catalog's last-prompt time, so a turn that ran for hours shows its real
-  completion age and stays in the recent window instead of vanishing on stop.
-  (The native sidebar keeps its own catalog times.) The two Host routes behind
-  these marks/times need the plugin reloaded / Host recomposed after upgrading.
+- Card times come from the Host's **event-sourced activity ledger**, not the
+  catalog's last-prompt time, so a turn that ran for hours keeps its real
+  completion time and stays in the recent window instead of vanishing on stop.
+  The ledger records committed Session events live (including interrupted and
+  failed turn ends); Sessions that existed before the feature was installed only
+  get a one-time baseline, so a historical/seed-only end can be under-reported —
+  it is never fabricated. The native sidebar keeps its own catalog times. The
+  Host routes behind the marks/times need the plugin reloaded / Host recomposed
+  after upgrading.
 - Rest the pointer on a row for its hover detail: the Workspace name, full
   workspace path, Status with its time, absolute Last active time, and the
   running subagent count. The card sits outside the sidebar and never covers the

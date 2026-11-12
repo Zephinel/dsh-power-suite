@@ -120,7 +120,8 @@ sidebar's panel tabs. It starts expanded.
 - **Interrupted rows**: a row whose Session is interrupted (main or child) shows
   an amber warning badge before the title, taken from the suite's shared
   interrupted-Session records; its **Continue** action reuses the interrupted
-  feature's continuation request (it does not open the row first).
+  feature's continuation request: it opens that Session and then sends the
+  continuation once the conversation is open and idle.
 - **New session**: the native shell's "new chat" sprite icon (with an inlined
   Remix fallback) creates a blank Session in **the row's own directory** using
   the Session service, then opens it — without opening the source Session. When
@@ -199,53 +200,86 @@ $DSH_HOME/dsh-power-suite/read-acks.json
   capped at **1000** entries (oldest baselines drop first), and written
   atomically with a serialized chain and `0600` mode.
 - `GET|POST /api/power-suite.read-acks` — authenticated exact route: `GET`
-  returns `{ acked }`; `POST` with `application/json` (≤64 KiB) merges the
-  posted entries and returns the merged document. Errors: `415` for a non-JSON
-  content type, `413` above the body limit, `400` for malformed ids/baselines.
+  returns `{ acked }`; `POST` with `application/json` merges the posted entries
+  and returns the merged document. The body limit is **64 KiB of UTF-8 bytes**
+  (not string length). Errors: `415` for a non-JSON content type, `413` above the
+  body limit, `400` for malformed ids/baselines, and a **no-store `500`
+  `{ code: "store-failed" }`** when the durable document cannot be written.
   Every response is `cache-control: no-store`.
 - The browser keeps `localStorage['dsh-power-suite.acked-sessions']` as a fast,
   offline cache. On mount it reads the Host document and merges the per-id
   maxima, sends a one-time migration POST (uploading old local marks), then
   re-syncs every **30 s** and on window focus/visibility; newly raised baselines
-  are pushed with a **250 ms** debounce. A missing route (a Host without the new
-  feature) degrades silently to local-only behavior.
+  are pushed with a **250 ms** debounce. Both the local cache and the pending
+  push map are capped at **1000** entries. Pushes are split into sequential
+  batches of at most **200 entries / a conservative 48 KiB** (well under the
+  Host's 64 KiB cap; at most one POST in flight): network, 5xx, and 429 failures
+  stay queued and retry on the next sync/focus, a permanent 4xx drops only that
+  batch (bounded rounds) so later acks still sync, and entries are dropped only
+  after the Host acknowledges them. Client GET/POST requests and the activity
+  fetch carry an **8 s `AbortController` timeout**; the sync uses `try/finally`
+  to always clear its in-flight flag and flushes pending ack pushes before
+  fetching activity. A missing route (a Host without the new feature) degrades
+  silently to local-only behavior.
 - Read state is derived at render: read iff
-  `baseline >= updatedAt - 1000 ms`. The old “running clears the ack” branch is
-  gone, so momentary status flags cannot flip a row; genuinely newer activity
-  exceeds the baseline and the unread dot returns on every device.
+  `baseline >= activity - 1000 ms` (using the effective activity timestamp
+  below). The old “running clears the ack” branch is gone, so momentary status
+  flags cannot flip a row; genuinely newer activity exceeds the baseline and the
+  unread dot returns on every device.
 - Both new routes need a **Host plugin recompose** (reload the plugin / restart
   the Host process) to appear; no DSH restart is needed. After upgrading, open
   DSH once per machine to upload that browser's old local acks.
 
-## Accurate activity timestamps
+## Event-sourced activity ledger
 
 The session list's `updatedAt` is the catalog **last-prompt** time, not last
 activity: a turn that ran for hours looked hours old the second it stopped, so
-the card's retention window dropped it immediately (and every relative time was
-wrong). The feature adds a read-only Host route and folds its values into the
-card's clock:
+the card's retention window dropped it immediately. The mtime of the
+projection-cache document is no better — Host maintenance/restart appends
+`session/end-seed` and rewrites documents long after real activity, which would
+fabricate recency. The feature therefore builds its own ledger from the same
+committed events DSH itself uses:
 
-- `GET /api/power-suite.session-activity` — authenticated, read-only; returns
-  `{ sessions: { "<sessionId>": <lastActivityAt> } }` for the whole catalogued
-  corpus (subagents included), with a 5 s in-memory TTL and
-  `cache-control: no-store`. A listing failure answers an empty map with `200`
-  so the client silently keeps its own timestamps.
-- The value is computed **without reading Session logs**: the optional wire
-  projection is tried first, then the per-record projection-cache document
-  (`storages/session_projcache/sessions/<id>.json`) is read directly for
-  `record.rows.timeContext.val.lastMessageTime` (mtime-guarded; `timeContext`
-  has no wire view in this runtime), then the header's `updatedAt`/`createdAt`;
-  the max wins.
-- The browser fetches the map on the existing card sync cadence (mount, focus,
-  visibility, 30 s — no extra timer) and uses
-  `effectiveUpdatedAt = max(summary.updatedAt, activity[id])` for the recent-row
-  cutoff/order/time, running-row order/time, Active/Inactive recency, nested
-  child timestamps, and the read-baseline raise. Missing route → summary
-  timestamps as before.
+- **Live authority** — the Host subscribes to `ctx.on('session/event', …,
+  { global: true })` inside its plugin effect. A committed event with a finite
+  positive `event.time` for a valid Session id advances that Session's entry with
+  `max` semantics, so completed, interrupted, and failed turns all follow one
+  rule. Synthetic seed/maintenance event types (`*seed`,
+  `session/end-seed`, `session/start-seed`, `plugin:…/seed`) are filtered out
+  defensively and can never count as activity.
+- **Durable ledger** — `$DSH_HOME/dsh-power-suite/session-activity.json`:
+  `{ "version": 1, "sessions": { "<sessionId>": <lastActivityAt> } }`. The store
+  sanitizes ids (≤200 chars) and finite positive epoch-ms values, merges with
+  `Math.max`, caps at the **5000 newest** Sessions, and writes atomically
+  (temporary sibling + rename, `0600` file in a `0700` directory) on a
+  serialized chain with a **750 ms** debounce (`load`/`record`/`snapshot`/
+  `flush`/`dispose`). A corrupt or missing file reads as empty and is rewritten;
+  a valid empty document is not rewritten.
+- **One-time baseline** — on install, Sessions already in the catalog without a
+  ledger entry are seeded from their per-record projection-cache document's
+  `max(timeContext.lastMessageTime, timeContext.lastInjectionTime)` (16 MiB
+  document cap, id/path guard, document mtime used only as a re-parse guard —
+  never as a value), falling back to the header's `updatedAt`/`createdAt`. The
+  seed is merged with max semantics so it never overwrites newer live events;
+  a listing failure leaves the ledger untouched.
+- **Route** — `GET /api/power-suite.session-activity` keeps the same path and
+  `{ sessions }` contract and serves a cheap snapshot of the live ledger (no
+  per-request document scan, no TTL), `cache-control: no-store`; a broken ledger
+  degrades to `200 { sessions: {} }`.
+- **Client** — the map is fetched on the existing card sync cadence (mount,
+  focus, visibility, 30 s — no extra timer, 8 s `AbortController` timeout) and
+  folded in as `effectiveUpdatedAt = max(summary.updatedAt, activity[id])` for
+  the recent-row cutoff/order/time, running-row order/time, Active/Inactive
+  recency, nested child timestamps, and the read-baseline raise.
 
-![The card before the activity route: the long-running Session has vanished after its stop](assets/card-activity-before.png)
+Exactness: values are **exact for events this Host observed** (including
+`turn/end` of long, interrupted, or failed turns); Sessions that existed before
+install only have the one-time projection-cache approximation, so a historical
+or seed-only completion can be under-reported — never fabricated. The Host half
+needs a plugin Host recompose (reload the plugin / restart the Host process; no
+DSH restart) after upgrading.
 
-![The same workspace after the route: the long run is listed with its true completion age and opens](assets/card-activity-after.png)
+![The card with ledger-backed activity times and the current-chat ring](assets/card-activity-ledger.png)
 
 ## Current-chat ring
 
@@ -377,13 +411,26 @@ The native **View options** menu picks how Sessions are grouped:
   tolerance deliberately favors keeping an ack: a real new turn that moves
   `updatedAt` by more than one second clears it, while metadata-only bumps do
   not.
-- **Activity timestamps depend on the projection cache.** The session-activity
-  route derives last activity from the shipped per-record projection-cache
-  document (`record.rows.timeContext.val.lastMessageTime`), with header
-  timestamps as fallback and no Session-log reads. A changed DSH cache layout
-  makes the route fall back to catalog times; the native sidebar itself keeps the
-  catalog (last-prompt) times regardless — only this card prefers the true
-  activity value. The route needs a Host plugin recompose after upgrading.
+- **Activity is exact only for events this Host observed.** The ledger records
+  committed `session/event` times live, so long/interrupted/failed turns that
+  finish while the Host runs report exactly. Sessions that predate the install
+  rely on a one-time projection-cache approximation
+  (`max(timeContext.lastMessageTime, lastInjectionTime)`, header fallback), so a
+  historical or seed-only completion can be under-reported — the ledger never
+  fabricates recency from mtime or catalog prompt times. Seed/maintenance events
+  are filtered out by design. The ledger is a per-DSH-profile Host file (5000
+  Sessions cap, oldest dropped); the route needs a plugin Host recompose after
+  upgrading, and the native sidebar keeps its catalog times regardless.
+- **One-time migration caveat for read marks.** During the short-lived
+  mtime-floor build some acknowledgement baselines were inflated (for example
+  `78f7a4a7…`). Baselines are max-monotonic, so opening the Session cannot lower
+  them and no automatic downgrade exists; the affected row has since left the
+  card's retention window, so the visible symptom is gone. Fresh installs and
+  sessions touched after the ledger fix are unaffected.
+- **Cache-identity hash collisions are tolerated.** The 25 s project snapshot
+  cache identity uses a 32-bit FNV-1a hash of the archived-member subset; a
+  collision can only cause a cache miss or a briefly stale snapshot, never wrong
+  data beyond one poll. It is accepted as a NIT.
 - **The current-chat ring is an enhancement, not state.** Only the row of the
   Session open in the main view is ringed; merely-running and unopened completed
   rows are not. The animated ring needs Chromium's `@property`; other engines
@@ -395,7 +442,8 @@ The native **View options** menu picks how Sessions are grouped:
   layout.
 - **Continue sends a real continuation.** The row's Continue action reuses the
   interrupted-session continuation flow, so pressing it actually asks the Host to
-  resume that Session (it does not open the row first). The badge and action were
+  resume that Session (it opens the Session first and then continues). The badge
+  and action were
   verified against a controlled interrupt state because the live GUI had no
   genuinely interrupted Session; no live child-interrupted case was exercised.
 - **New session directory fallback.** The row's New session action creates a
@@ -404,10 +452,11 @@ The native **View options** menu picks how Sessions are grouped:
   Session can land in the Workspace default directory instead.
 - **Parent disclosure state is per page.** Each parent's expanded/collapsed
   nested list is not persisted; only the two bucket folds are.
-- **Client-side derivation, no Host route.** The card and buckets read the
-  browser's Session, Session-status, and Workspace stores. There is no new
-  `/api/` route for this feature, so a change made from another device can lag by
-  one snapshot.
+- **Client-side derivation, Host-backed state.** The card and buckets derive
+  rows from the browser's Session, Session-status, and Workspace stores, while
+  read marks and activity times come from the Host (`read-acks.json` and the
+  event-sourced activity ledger). A change made from another device can still lag
+  one snapshot/poll, and Host code changes need a plugin Host recompose.
 - **Per-browser state.** Bucket folds live in `localStorage` for one browser and
   profile; the card's open state is not persisted.
 - **Blank and archived Sessions are skipped.** Rows come from the Session list,

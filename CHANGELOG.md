@@ -72,13 +72,13 @@ All notable changes to this repository are documented here. The format follows
   newest first with status filters, session filter, include-jobs toggle, search,
   expandable nested job rows, live elapsed time, and Show-more paging; Settings
   edits the Workspace default preset and shows the grouping windows read-only
-  plus path actions. The page covers the content area right of the left sidebar
-  with its own top bar (back/close, title, Active badge, refresh) over the four
-  tabs; Esc or the back control closes it and restores the conversation, Session,
-  draft, selected view, and sidebars untouched. The native chevron fold, row
+  plus path actions. It carries its own top bar (back/close, title, Active
+  badge, refresh) over the four tabs; Esc (menu-first) or the back control
+  closes it and restores the conversation, Session, draft, selected view, and
+  sidebars untouched. The native chevron fold, row
   context menu, New Session button, Session rows, drags, and modified clicks keep
   their behavior. The new authenticated `GET /api/power-suite.project` route
-  serves one snapshot (workspaceId or sessionId, newest 20 Sessions, 10 s cache
+  serves one snapshot (workspaceId or sessionId, newest 20 Sessions, 25 s cache
   with `refresh=1`, `no-store`), and the pure folds live in
   `src/features/project-view/fold.js`.
 
@@ -90,13 +90,19 @@ All notable changes to this repository are documented here. The format follows
   migration of old local marks, 250 ms debounced push). Read state is derived as
   `baseline >= activity - 1000 ms`, so a transient status flag can no longer
   resurrect a stale green dot.
-- True last-activity timestamps for the activity card: a read-only
-  `GET /api/power-suite.session-activity` route reports the catalog's real last
-  activity (from the projection-cache document, without replaying Session logs,
-  5 s TTL), and the card uses `max(catalog updatedAt, activity)` for retention,
-  ordering, relative times, bucket recency, child rows, and read-baseline raising
-  — long turns no longer look stale the moment they stop (the native sidebar keeps
-  catalog times).
+- Event-sourced activity ledger for the activity card: the Host subscribes to
+  committed `session/event` times (seed/maintenance events filtered out),
+  persists `$DSH_HOME/dsh-power-suite/session-activity.json`
+  (`{version:1, sessions:{id:lastActivityAt}}`, max-merge, 5000-Session cap,
+  debounced atomic writes), and seeds a one-time projection-cache baseline for
+  pre-install Sessions (never overwriting newer live events). A read-only
+  `GET /api/power-suite.session-activity` keeps the same `{sessions}` contract
+  and serves the live ledger (no per-request document scan, no-store), and the
+  card folds it in via `max(catalog updatedAt, activity)` for retention,
+  ordering, relative times, bucket recency, child rows, and read-baseline
+  raising. Activity is exact for events the Host observed (including long,
+  interrupted, and failed turn ends); pre-install Sessions rely on the baseline
+  approximation, and the native sidebar keeps catalog times.
 - Current-chat rainbow ring: the card marks the Session open in the main view
   with a 2 px conic-gradient ring plus soft glow (`@property` rotation + hue
   drift, static under reduced motion), `pointer-events: none`, no layout shift,
@@ -128,14 +134,33 @@ All notable changes to this repository are documented here. The format follows
   `updatedAt` advanced more than 1000 ms past the baseline, so transient running
   flags no longer resurrect the green unread dot — acks survive HMR and reloads,
   are shared by rows and subagent children, are pruned only against a non-empty
-  catalog, and the retention window still removes completed rows.
+  catalog, and the retention window still removes completed rows. *(Superseded by
+  the Host-shared read acknowledgements above: this per-browser document is now
+  only the fast/offline cache and is migrated to the Host on first use.)*
+
+- Independent-review follow-up fixes: the canonical measured-turn rule
+  (`isMeasuredTurn`) now governs run rows/counts, per-Session `runCount`,
+  `limits.totalRunsMeasured`, and `computeStats`, so a fork seed's synthetic
+  `turn/end` without a `turn/start` classifies as **stopped**, reports **0
+  runs**, and synthetic boundaries never inflate stats; the project snapshot
+  cache TTL is 25 s with archived-subset-hash + `focusSessionId` identity and
+  per-Session warnings carry a bounded error identity; read-acks POST failures
+  return no-store `500 { code: "store-failed" }`, the body cap is 64 KiB of
+  UTF-8 bytes, client requests time out after 8 s, pushes are chunked
+  (≤200 entries/~48 KiB, one in flight) with retry for transient failures and
+  bounded batch-drop for permanent 4xx, and queued entries are dropped only
+  after the Host acknowledges them (local/pending maps capped at 1000); the
+  activity route uses an 8 s AbortController timeout and the client flushes
+  pending ack pushes before fetching it; the Project page's first Escape closes
+  an open menu and the second closes the page, and header `openWorkspace`
+  promises have rejection guards.
 
 ### Changed
 
-- The Project page now covers only the content area right of the left Workspaces
-  sidebar (left = the sidebar's docked box right edge, width = viewport width
-  minus that edge, full height), measured and re-measured through sidebar/right-
-  sidebar toggles and window resize. The sidebar stays visible and interactive,
+- The Project page's geometry was corrected to cover only the content area right
+  of the left Workspaces sidebar (left = the sidebar's docked box right edge,
+  width = viewport width minus that edge, full height), measured and re-measured
+  through sidebar/right-sidebar toggles and window resize. The sidebar stays visible and interactive,
   so another Workspace switches the page in place; the page still covers the
   composer, right sidebar, and history rails, and `aria-modal` was dropped.
 - The Running & recent card gained row actions: a fixed trailing cluster with

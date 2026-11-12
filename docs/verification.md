@@ -22,11 +22,11 @@ npm run pack:check
 
 Current evidence (2026-11-11, Node 24.22.2):
 
-- `npm test`: **89 tests, 89 passed, 0 failed**.
-- `npm run check`: passed (`17 modules, 9 test files`).
-- `npm run pack:check`: **71 files** (0.2.0 tarball), including `src/`,
+- `npm test`: **102 tests, 102 passed, 0 failed**.
+- `npm run check`: passed (`18 modules, 9 test files`).
+- `npm run pack:check`: **72 files** (0.2.0 tarball), including `src/`,
   `locale/`, `docs/` (with the Project page/rail states/sidebar switch,
-  activity-card actions/acknowledgement/activity/current-ring states, Artifacts
+  activity-card actions/acknowledgement/ledger/current-ring states, Artifacts
   panel/filter-menu/Quick Look, Dynamic Workspaces, hover-detail, and
   prompt-history rail captures), `cordis.patch.yml`, `icon.png`, and the standard
   repository files.
@@ -36,17 +36,22 @@ Current evidence (2026-11-11, Node 24.22.2):
   otherwise) with the 500-prompt cap unchanged, the settings store (schema
   version 2 with the two retention windows, version-1 migration to the default
   windows, and patch validation for unknown/invalid fields), and the Project view
-  folds and route (turn status map, job association, the 40/200/24 caps, stats
-  and recent-activity derivation, parameter validation and cache behavior).
-- Most browser features add no Host route: Dynamic Workspaces derives its
-  buckets and summary card from the browser's Session, status, and Workspace
-  stores; the prompt-history rail shares the existing
-  `api/prompt-history.list` payload; draft attachment memory writes nothing to
-  the Host or storage. The Project view is the exception — its
-  `GET /api/power-suite.project` route and its pure folds are covered by the
-  project-view test suite. The remaining client-only surfaces have no
-  `node:test` suite of their own, so the syntax gate and the live checks below
-  cover them.
+  folds and route (turn status map, job association, the canonical measured-turn
+  rule, the 40/200/24 caps, stats and recent-activity derivation, parameter
+  validation and 25 s cache behavior), the read-acks store/route (schema,
+  sanitization, max-merge, 1000-entry cap, 415/413/400/500), and the
+  event-sourced activity ledger (store max-merge/cap/atomic persistence, event
+  projection and seed filtering, one-time baseline, live snapshot route).
+- Host routes are covered by tests where they exist: Dynamic Workspaces'
+  card state is browser-derived but Host-backed through the read-acks store/route
+  (schema, sanitization, merge, cap, 415/413/400/500) and the session-activity
+  route (16 MiB document guard, event projection/seed filter, snapshot serving), while the
+  Project view's `GET /api/power-suite.project` route and its pure folds are
+  covered by the project-view suite (turn status, fork closer, stats exclusion,
+  cache identity/TTL). The prompt-history rail shares the existing
+  `api/prompt-history.list` payload and draft attachment memory writes nothing to
+  the Host or storage; the remaining client-only surfaces rely on the syntax gate
+  and the live checks below.
 - The root-package reinstall was verified after a Host restart: the Loader row
   `include:power-suite` reports `fiberPhase: active` from the new repository
   root path.
@@ -253,17 +258,28 @@ These were exercised in the Web GUI during development:
   and cleared after the Host merge; both directions (read → unread and
   unread → read) worked across contexts, and HMR kept one poll per ~32 s window
   with 0 console errors.
-- Host last-activity timestamps were verified live: the
-  `api/power-suite.session-activity` route answered `200`/`no-store` for 394
-  catalogued Sessions and mapped `session-442a0000…` to `1794423139036`
-  (13:52:19, the expected completion time). With the route blocked the card
-  showed 3 rows and the long-running Session was missing; after unblocking it
-  showed 4 rows with `# 实现任务：DSH Power Suite ·` at 27 min, and opening it
-  worked; its children showed 29/34/35 min, the Workspace stayed Active, and one
-  row correctly turned green because its true activity exceeded the old baseline
-  (the derived-read model doing its job). HMR kept one fetch per poll window and
-  there were 0 console errors.
-- The current-chat rainbow ring was verified live: exactly one ring rendered with
+- The event-sourced activity ledger was verified live: the route answered
+  `200`/`no-store` with 401 Sessions. After the ledger took over, the three
+  probed Sessions reported authoritative committed-event times —
+  `0c14a9e7…` = `1794263011213` (2026-11-09 17:23:31; the earlier mtime build
+  reported the later `1794455566124`), `78f7a4a7…` = `1794418427299` (12:33:47;
+  before `1794455517024`), and `442a0000…` = `1794462064496` at probe time, later
+  advancing with real resumed events to `1794463519838`/`1794463539588`. The
+  card showed the old DSH “熄灭当前 mac 的屏幕…” row gone, `78f7a4a7…` correctly
+  absent (12:33 is far outside the 2 h window, so its misleading dot cannot
+  appear), `442a0000…` present at minutes-level, the other rows unchanged, and
+  one panel. Opening `442a0000…` raised its Host read baseline from
+  `1794462069446` to `1794463523500`. Event-driven proof: a live Session
+  advanced `1794463340198` → `1794463361062` without a restart and persisted to
+  the ledger file (later `1794463369210`), while the old `0c14`/`78f7` values
+  stayed unchanged as the file mtime advanced. Chunked pushes were forced with
+  450 pending entries plus a forced first POST `413`: the client sent batches of
+  200/200/68 entries (6811/6811/2710 bytes), dropped only the rejected first
+  batch, synced the later/new acks, and showed no retry storm; a hung activity
+  request aborted at 8 s and was retried on focus. HMR produced exactly one
+  acks GET and one activity GET per 32 s window after reload (an HMR mount added
+  one of each), with 0 exceptions/plugin console errors.
+- The current-chat rainbow ring was verified live:- The current-chat rainbow ring was verified live: exactly one ring rendered with
   two running animations (angle moving 281° → 234° and the hue drift over 1.6 s),
   and it moved as different Sessions were opened — across completed and running
   rows, from the sidebar, onto a nested child row and back. Row rectangles did not
@@ -274,6 +290,18 @@ These were exercised in the Web GUI during development:
 - The earlier page-local acknowledgement evidence is superseded by the
   Host-shared model above: the old behaviour (a reload forgetting read marks and
   a transient running flag clearing them) was the defect this round fixed.
+- The independent-review fixes were verified: the canonical measured-turn rule
+  makes a fork seed's synthetic `turn/end` (kind `forked`, no `turn/start`)
+  classify as **stopped** and report **0 runs** — the old `buildRuns.totalRuns=1`
+  expectation is now 0, and mixed inherited+real Sessions count only real turns
+  (stats/overview not inflated). Project snapshot polling against the 25 s cache
+  measured **cold 2.28 s**, an immediately warm **0.029 s**, a warm poll at 15 s
+  **0.043 s**, and a manual `refresh=1` **1.69 s**; each poll issued one request
+  and the cache key includes the archived-member hash + `focusSessionId`. The
+  Project page Escape closed an open menu first and the page on the second
+  Escape. A forced one-shot read-acks POST failure stayed pending and was
+  retried on window focus, then reached the Host document. HMR left a single
+  poll/handler set. There were 0 console errors.
 - The settings page and the configurable windows were verified live:- The settings page and the configurable windows were verified live: the
   **DSH Power Suite** Plugins page shows exactly three setting rows (Shortcut
   modifier, Finished Session retention, Active project retention) with the
@@ -322,7 +350,7 @@ The live surfaces are captured in
 [assets/card-unread-dot.png](assets/card-unread-dot.png),
 [assets/card-shared-ack.png](assets/card-shared-ack.png),
 [assets/card-activity-before.png](assets/card-activity-before.png),
-[assets/card-activity-after.png](assets/card-activity-after.png),
+[assets/card-activity-ledger.png](assets/card-activity-ledger.png),
 [assets/card-current-glow.png](assets/card-current-glow.png),
 [assets/card-current-glow-dark.png](assets/card-current-glow-dark.png),
 [assets/card-current-glow-reduced.png](assets/card-current-glow-reduced.png),

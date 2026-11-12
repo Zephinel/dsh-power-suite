@@ -11,7 +11,7 @@ shows one plugin whose inventory grows with the suite.
 |---|---|
 | [Session artifacts](docs/session-artifacts.md) | An **Artifacts** card in the right Sidebar's Start page listing the current Session's created and delivered files **and the images/files the user attached to their prompts**, with 40 px image thumbnails, an All/Generated/Provided dropdown filter in the panel header, native open, download, copy content (text verbatim; images as a real clipboard picture in a secure context, with an HTML-image fallback on plain HTTP), and LAN link copy. |
 | [Workspace presets](docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions created in that Workspace. |
-| [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with single-line rows, right-edge disclosure chevrons, Host-shared read marks (unread completions green until opened, synced across browsers), true last-activity times for long runs, a rainbow ring on the current chat, row hover actions (interrupted Continue, same-directory New session), a row hover detail, nested subagent Sessions, and configurable retention windows. |
+| [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with single-line rows, right-edge disclosure chevrons, Host-shared read marks (unread completions green until opened, synced across browsers), event-sourced Host last-activity times for long runs, a rainbow ring on the current chat, row hover actions (interrupted Continue, same-directory New session), a row hover detail, nested subagent Sessions, and configurable retention windows. |
 | [Prompt history](docs/prompt-history.md) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; a right-edge rail lists them newest first with a hover full-text preview, an inline search, and click-to-copy. Plain arrows keep their original behavior. |
 | [Project view](docs/project-view.md) | A **standalone Project page** (content area right of the sidebar) opened by clicking a Workspace, with Overview stats, Sessions, Runs with expandable turn/job records, and Workspace settings; the sidebar stays interactive for switching, the page hides the prompt-history rail and keeps one top-bar Refresh, and Esc/back returns to the untouched conversation. |
 | [Draft attachments](docs/draft-attachments.md) | Attachments in a draft (pasted images, dropped or picked files) survive switching Sessions and coming back, for the page lifetime; the shell only persists the draft text. |
@@ -57,10 +57,10 @@ New in 0.2.0:
   by the Host in `read-acks.json` and synced to every browser of the profile
   (with a local cache and a 1 s derived-read tolerance), so a reload or another
   browser no longer resurrects stale green dots.
-- **True activity times on the card** — a new read-only Host route supplies real
-  last-activity timestamps, so a turn that ran for hours keeps its true
-  completion age and stays in the recent window instead of vanishing when it
-  stops.
+- **Event-sourced activity times on the card** — the Host keeps a durable
+  ledger built from committed `session/event` times (with a one-time baseline for
+  pre-install Sessions), so a turn that ran for hours keeps its real activity
+  time and stays in the recent window instead of vanishing when it stops.
 - **Current-chat rainbow ring** — the card marks the Session the main
   conversation currently shows with an animated rainbow ring (static under
   reduced motion) that follows every way of opening a Session.

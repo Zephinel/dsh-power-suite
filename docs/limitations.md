@@ -109,12 +109,14 @@
   feature render nothing; the native browser is unaffected.
 - **Per-browser fold state.** `power-suite.dynamic-workspaces.folds` lives in
   `localStorage`; the card's open/closed state is not persisted.
-- **Client-side derivation, Host-owned windows.** No Host route serves the
-  buckets or card; data comes from the browser's Session, status, and Workspace
-  stores, so a change from another device can lag one snapshot. The two
-  retention windows come from the shared settings route: the page that changes
-  them re-derives immediately, while other open browsers read the new value on
-  their next settings read (page load).
+- **Client-side derivation, Host-backed state.** The buckets and card rows are
+  derived in the browser from the Session, status, and Workspace stores, but the
+  card's read marks and activity times come from Host routes
+  (`api/power-suite.read-acks`, `api/power-suite.session-activity`), and the two
+  retention windows come from the shared settings route. Those Host routes need
+  a plugin Host recompose after upgrading (reload the plugin / restart the Host
+  process; no DSH restart). A change from another device can still lag one
+  snapshot/poll.
 - **Some row detail is hover-only.** A card row shows only its leading glyph,
   title, and time, and carries no native `title` tooltip; the Workspace name,
   full wrapped workspace path, Status detail, absolute Last active time, and the
@@ -131,16 +133,31 @@
   with storage denied too, the map lives in memory for the page lifetime. A row
   is derived as read when its baseline is within **1000 ms** of the current
   activity, so a very small genuine change could keep a stale ack; metadata-only
-  bumps cannot. The two Host routes need a plugin reload / Host recompose after
-  upgrading, and old local marks are uploaded once when DSH is first opened with
-  the new Host.
-- **Times favor true activity only on this card.** The session-activity route
-  depends on the shipped projection-cache document layout
-  (`record.rows.timeContext.val.lastMessageTime`) and reads no Session logs; a
-  changed cache layout falls back to catalog times. The **native sidebar keeps
-  the catalog last-prompt times** regardless, so sidebar times can disagree with
-  the card for long runs. After the window expires, retention arithmetic still
-  removes completed rows.
+  bumps cannot. Pushes are chunked (≤200 entries / ~48 KiB, one POST in flight):
+  network, 5xx, and 429 failures stay queued, a permanent 4xx drops only that
+  batch, and both the local cache and pending map are capped at 1000. The two
+  Host routes need a plugin reload / Host recompose after upgrading, and old
+  local marks are uploaded once when DSH is first opened with the new Host.
+- **One-time read-mark caveat from the superseded mtime build.** During the
+  short-lived mtime-floor iteration some acknowledgement baselines were inflated
+  (for example `78f7a4a7…`). Baselines are max-monotonic: opening the Session
+  cannot lower one and there is no automatic downgrade, so the affected Session
+  may stay acknowledged longer than its real history warrants. It has already
+  left the card's retention window, so the visible symptom is gone; fresh
+  installs and Sessions touched after the ledger fix are unaffected.
+- **Activity is exact only for events the Host observed.** The event-sourced
+  ledger records committed `session/event` times live, so long, interrupted, and
+  failed turns that end while the Host runs report exactly. Sessions that
+  existed before install rely on the one-time projection-cache baseline
+  (`max(timeContext.lastMessageTime, lastInjectionTime)` plus header fallback),
+  so a historical or seed-only completion can be under-reported — the ledger
+  never fabricates recency from document mtime or catalog prompt times. Seed and
+  maintenance events are filtered out by design. The ledger is a per-DSH-profile
+  Host file capped at 5000 Sessions (oldest entries drop), the route serves a
+  live snapshot with no document scan/TTL, and Host code changes need a plugin
+  Host recompose. The **native sidebar keeps the catalog last-prompt times**, so
+  sidebar times can disagree with the card for long runs; after the window
+  expires, retention arithmetic still removes completed rows.
 - **The rainbow ring is decoration for the current row only.** Only the Session
   open in the main view is ringed; merely-running and unopened completed rows are
   not. The animated ring needs Chromium's `@property` — other engines render a
@@ -244,11 +261,28 @@
 - **Runs and jobs are capped.** At most 40 runs per Session and 200 runs total
   are carried; an expanded turn shows at most 24 job rows while keeping the full
   job count, and the UI states `Showing X of Y jobs`. Job-to-turn association is
-  a heuristic when the exact tool call cannot be matched.
+  a heuristic when the exact tool call cannot be matched. A turn only counts as
+  a run with a finite `startedAt` (`isMeasuredTurn`), so a synthetic fork closer
+  yields 0 runs and mixed inherited+real Sessions count only their real turns.
+- **Cache-identity hash collisions are tolerated (NIT).** The 25 s project
+  snapshot cache identity includes a 32-bit FNV-1a hash of the archived-member
+  subset; a collision can only cause a cache miss or a briefly stale snapshot,
+  never wrong data beyond one poll.
 - **First loads and refreshes are slow on large logs.** A first or forced refresh
-  took roughly 1.7–4.6 s on a five-Session repository. The Host keeps a 10 s
+  took roughly 1.7–4.6 s on a five-Session repository. The Host keeps a **25 s**
   snapshot cache for the browser's 15 s poll; manual refresh bypasses it and pays
-  the read cost again. Unreadable Session logs are skipped with a warning.
+  the read cost again. The cache is FIFO (oldest Workspace snapshot evicted at
+  the 30-entry cap), not LRU, and its identity includes the archived-member
+  subset hash and requested focus Session. Unreadable Session logs are skipped
+  with a warning that carries a bounded error identity rather than failing the
+  page.
+- **NIT-level rough edges (accepted).** Run rows without expandable job records
+  are still focusable buttons (Enter is a no-op); the Project page has no focus
+  trap and does not return focus to the sidebar trigger on close; the page's
+  "Last active" label refreshes on its own 15 s tick, not a separate ticking
+  display; at the 1000-entry acknowledgement cap the oldest baseline is dropped,
+  so a read mark beyond the cap could reappear in a future list; the unreadable
+  read-acks document is treated as empty and self-heals on the next write.
 - **No virtualization.** Runs grow by **Show more** in batches of 60, so a very
   long project keeps all rendered rows in the DOM.
 - **Archived only, no archiving controls.** Archived Sessions are excluded from
@@ -262,8 +296,16 @@
 - **The sidebar open affordance is the title text, not the leading icon.** The
   leading icon doubles as the native fold chevron on hover, so clicking it folds
   or expands the Workspace group; the title/folder text opens the project page.
-  The sidebar entry also ignores drags and modified or non-primary clicks by
-  design, leaving drag reordering and open-in-new-tab gestures native.
+  On touch/no-hover input a title/folder tap is intentionally the page entry and
+  only the small chevron folds. The sidebar entry also ignores drags and modified
+  or non-primary clicks by design, leaving drag reordering and open-in-new-tab
+  gestures native.
+- **Page state is intentionally preserved across Workspace switches.** The tab,
+  filters, searches, and expanded rows survive clicking another Workspace in the
+  still-visible sidebar; only the data hook follows the new Workspace id (the old
+  request is aborted and its snapshot dropped). The same page instance is reused,
+  so a filtered/expanded view can temporarily look empty until the new snapshot
+  arrives rather than resetting.
 - **Coarse statuses.** A turn that closed without a recognized reason is reported
   as stopped, not as completed or failed.
 - **Localization.** The Project view ships English and Chinese copy; live checks

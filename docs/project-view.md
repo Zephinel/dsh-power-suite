@@ -15,8 +15,9 @@ returns to the conversation exactly as it was.
   with its own top bar above the unchanged four tabs:
   **Overview / Sessions / Runs / Settings**.
 - **Top bar**: a back/close chevron, the project title, the **Active /
-  Inactive** badge, and the page's **single refresh control**. **Esc** and the
-  back control both close the page.
+  Inactive** badge, and the page's **single refresh control**. **Esc** closes an
+  open page menu/dropdown first (its own handler stops propagation) and closes
+  the page on the next press; the back control closes the page directly.
 - **Closing** restores the conversation, current Session, composer draft,
   selected conversation view, and both sidebar states; opening and closing never
   navigate.
@@ -63,7 +64,14 @@ untouched:
   **drags** (past a small slop threshold or a `dragstart`) and **modified or
   non-primary clicks** (⌘/Ctrl/⇧/Alt, secondary buttons) are ignored, and the
   Workspace service is resolved lazily through `ctx.get('workspaces')`, so the
-  plugin still loads without a Workspace UI.
+  plugin still loads without a Workspace UI. A touch/no-hover tap on the
+  title/folder area is intentionally the page entry; only the small native
+  chevron folds the Workspace.
+- **Page state survives Workspace switches.** The tab, filters, searches, and
+  expanded rows stay as they are when another Workspace is clicked from the
+  still-visible sidebar: the component instance stays mounted and only its data
+  hook follows the new Workspace id. This is intended UX, not stale content —
+  the previous Workspace's snapshot is discarded and its request aborted.
 ![Clicking another Workspace in the still-visible sidebar switches the page in place](assets/project-sidebar-switch.png)
 
 - **One handler, HMR-safe**: a single document-level capture click handler
@@ -170,7 +178,9 @@ timestamp is in its tooltip), the duration, tool-call count, and job count.
 - **Workspace path** with **Copy project path** and **Open Workspace** (the
   latter closes the page and navigates).
 - If any measured Session log could not be read, a warnings banner reports how
-  many were skipped.
+  many were skipped; each `warnings[]` entry carries a bounded error identity
+  (error name and a truncated message) so fold/programming failures are
+  diagnosable rather than flattened into a generic line.
 
 ## Data loading
 
@@ -202,9 +212,13 @@ fence as the rest of the GUI:
   their logs with concurrency 4, slices a fork's inherited event prefix, and
   excludes archived Sessions. Unreadable logs are skipped and reported in
   `warnings[]`.
-- An in-memory snapshot cache keyed by Workspace id + `updatedAt` + member count
-  holds a response for 10 s (up to 30 Workspace snapshots per Host process);
-  manual refresh bypasses the cache.
+- An in-memory snapshot cache holds a response for **25 s** (up to 30 Workspace
+  snapshots per Host process), so the page's 15 s poll normally reuses the warm
+  snapshot while still refreshing at most one poll behind; manual `refresh=1`
+  bypasses it. The cache identity covers the Workspace id, `updatedAt`, member
+  count, a hash of the relevant archived-member subset, and the requested
+  `focusSessionId`, so archived-set or focus changes cannot serve a stale
+  snapshot.
 
 Payload:
 
@@ -233,9 +247,21 @@ Payload:
 
 Folding rules (pure helpers in
 [`fold.js`](../src/features/project-view/fold.js)): one run is one
-`turn/start`..`turn/end` pair; a turn with no end is `running` while its Agent is
+`turn/start`..`turn/end` pair. A **closed** turn is classified by its recorded
+`turn/end` reason first — a fork seed's synthetic closer that has no matching
+`turn/start` (the start lives in the inherited prefix) is `forked` and reports
+**stopped**, not interrupted. A turn with no end is `running` while its Agent is
 live and `interrupted` otherwise. `turn/end` reasons map to completed,
 interrupted (`disposed` shutdown), stopped, or failed as described above.
+
+**Canonical measured-turn rule:** a turn counts as a run only when
+`isMeasuredTurn(turn)` holds — a finite `startedAt`. The same predicate governs
+`buildRuns` (no synthetic-boundary run row or count), each Session's `runCount`,
+`limits.totalRunsMeasured`, and `computeStats` (`totalRuns`, completed,
+`completedToday`, and the duration average). A Session with only a fork closer
+therefore reports **0 runs**, and a mixed inherited+real Session counts only its
+real turns; synthetic boundaries never inflate the overview stats. The raw
+frames are still folded (status/feeds), only run measurement excludes them.
 `job/registered`..`job/settled` pairs are associated with their turn by the exact
 tool-call id (`callId`/`rootCallId`), then by time containment, then by the
 nearest preceding turn. `completedToday` uses the local day boundary, and the
@@ -258,8 +284,9 @@ plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-
 ```
 
 The Host half registers the route; the browser half registers the `shell.overlay`
-page seat, the sidebar Workspace entry, and the locale dictionaries. Restart the
-Host process after upgrading the package's Host JavaScript.
+page seat, the sidebar Workspace entry, and the locale dictionaries. Reload the
+plugin / recompose the Host after upgrading its Host JavaScript to pick up new
+routes (no DSH restart is needed).
 
 Implementation: Host route and cache
 [`src/features/project-view/host.js`](../src/features/project-view/host.js), pure
@@ -296,9 +323,9 @@ folds [`fold.js`](../src/features/project-view/fold.js), browser surface
   call cannot be matched.
 - **First loads are slow on large logs.** A first or forced refresh took roughly
   1.7–4.6 s on a five-Session repository (a cold 30-Session Workspace took about
-  12.5 s); the 10 s snapshot cache absorbs the 15 s poll, and manual refresh
+  12.5 s); the 25 s snapshot cache covers the 15 s poll, and manual refresh
   intentionally pays the cost again. Unreadable Session logs are skipped with a
-  warning rather than failing the page.
+  warning (carrying a bounded error identity) rather than failing the page.
 - **No virtualization and no infinite background loading.** The list grows by
   **Show more** in batches of 60; a very long project keeps every rendered run in
   the DOM.

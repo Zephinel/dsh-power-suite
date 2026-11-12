@@ -96,26 +96,54 @@ baselines, merges per id with `Math.max` (monotonic, no removal verb), caps the
 document at 1000 entries (oldest baselines drop), and writes atomically
 (temporary sibling + rename, `0600`, serialized chain). One authenticated route
 serves it: `GET /api/power-suite.read-acks` → `{ acked }`;
-`POST /api/power-suite.read-acks` with `application/json` (≤64 KiB) merges and
-returns the merged document (`415` non-JSON, `413` too large, `400` malformed
-entries); every response is `no-store`. The browser keeps a `localStorage` copy
-as a cache, syncs on mount/focus/visibility/30 s, migrates old local marks with a
-one-time POST, and pushes raised baselines with a 250 ms debounce. Read state is
-derived at render (`baseline >= activity - 1000 ms`); there is no running-based
-clearing.
+`POST /api/power-suite.read-acks` with `application/json` (≤64 KiB of UTF-8
+bytes) merges and returns the merged document (`415` non-JSON, `413` too large,
+`400` malformed entries, and a no-store `500 { code: "store-failed" }` when the
+document cannot be written); every response is `no-store`. The browser keeps a
+`localStorage` copy as a cache, syncs on mount/focus/visibility/30 s, migrates
+old local marks with a one-time POST, and pushes raised baselines with a 250 ms
+debounce after an **8 s AbortController** timeout. Failed/timed-out pushes stay
+queued and retry on the next sync cycle (one POST in flight); a permanent 4xx
+drops only that batch. Pushes are chunked to at most **200 entries / ~48 KiB**
+per sequential POST (local and pending maps capped at 1000), so a large cache
+cannot pin the Host's 64 KiB cap. Queued entries are dropped only after the Host
+acknowledges them; pending pushes are flushed before the activity fetch, inside
+a `try/finally` that always clears the in-flight flag. Read state is derived at
+render (`baseline >= activity - 1000 ms`); there is no running-based clearing.
 
-### Session activity timestamps
+### Session activity ledger
 
-The client session-list `updatedAt` is the catalog last-prompt time, which is
-stale after long turns. A read-only authenticated route,
-`GET /api/power-suite.session-activity`, returns
-`{ sessions: { sessionId: lastActivityAt } }` across the catalogued corpus
-(subagents included) with a 5 s in-memory TTL and `no-store`; a listing failure
-answers an empty map with `200`. Values are computed without reading Session
-logs: the optional wire projection is tried, then the per-record
-projection-cache document `storages/session_projcache/sessions/<id>.json` is read
-directly for `record.rows.timeContext.val.lastMessageTime` (mtime-guarded), then
-header `updatedAt`/`createdAt`, taking the max. The browser folds the map in as
+The client session-list `updatedAt` is the catalog last-prompt time (stale after
+long turns), and projection-cache document mtime is rewritten by Host
+maintenance (`session/end-seed`), so neither is authoritative. The feature
+(`src/features/session-activity/`) instead maintains an **event-sourced durable
+ledger**:
+
+- `ctx.on('session/event', …, { global: true })` inside `ctx.effect` advances
+  `sessionId → max(event.time)` for every committed event with a finite positive
+  time and a valid id; seed/maintenance event types are filtered defensively
+  (`*seed`, `session/end-seed`, `plugin:…/seed`) and never count. Cleanup
+  unsubscribes and flushes the store.
+- `$DSH_HOME/dsh-power-suite/session-activity.json` holds
+  `{ version: 1, sessions: { id: lastActivityAt } }`: sanitized (id ≤200 chars,
+  finite positive epoch ms), max-merged, capped at the 5000 newest Sessions,
+  atomic temp+rename writes (`0600` in a `0700` directory) on a serialized chain
+  with a 750 ms debounce; corrupt/missing reads empty (rewritten on next write),
+  a valid empty document is not rewritten.
+- On install, a one-time background baseline seeds Sessions that are in the
+  catalog but not yet in the ledger from their projection-cache document's
+  `max(timeContext.lastMessageTime, lastInjectionTime)` (16 MiB document cap,
+  id/path guard, mtime used only as a re-parse guard), with header fallback;
+  max-merge means it never overwrites newer live events, and a listing failure
+  leaves the ledger as-is.
+- `GET /api/power-suite.session-activity` keeps the same path/contract and
+  serves a cheap live ledger snapshot (`no-store`; broken ledger → `200
+  { sessions: {} }`). Values are exact for events the Host observed; pre-install
+  Sessions have only the baseline approximation (a historical/seed-only end can
+  be under-reported, never fabricated). Host code changes need a plugin Host
+  recompose (no DSH restart).
+
+The browser folds the map in as
 `effectiveUpdatedAt = max(summary.updatedAt, activity[id])` for card
 retention/order/time, bucket recency, child timestamps, and read-baseline
 raising.
@@ -201,7 +229,12 @@ hue drift), static under reduced motion and on engines without `@property`,
 three states: the shell loading indicator while running, the green done dot while
 a completion is unread, and a white session-type icon (RemixIcon `deepseek-fill`
 for main rows, `robot-2-line` for subagent rows) once the Session has been opened
-and the completion acknowledged; a new run clears the acknowledgement. The card
+and the completion acknowledged. Read state is derived from the Host-shared
+baseline (`baseline >= activity - 1000 ms`), not from running status. Rows carry
+fixed hover/focus-revealed **Continue** (interrupted only; opens the Session and
+then sends the continuation) and **New session** (creates a blank Session in the
+row's cwd and opens it) slots before the chevron, and the row of the Session
+open in the main view carries the rainbow ring. The card
 body hides its scrollbar, rows have no native tooltips, and the row body and
 disclosure arrow highlight independently (the body highlight has 8 px horizontal
 inner padding).
@@ -268,20 +301,27 @@ callback (ResizeObservers on the sidebar slot/docked box/container,
 MutationObserver for a replaced subtree, window resize, a 500 ms settle interval)
 with cleanup on close. The page has its own top bar (back/close chevron, project
 title, Active/Inactive badge, refresh) above the unchanged four tabs (Overview /
-Sessions / Runs / Settings); Esc and the back control close it; opening never
-navigates and closing restores the conversation, current Session, composer
-draft, selected conversation view, and both sidebar states. It is not modal
+Sessions / Runs / Settings); Esc closes an open page menu first and then the
+page itself, and the back control closes it; opening never navigates and closing
+restores the conversation, current Session, composer draft, selected conversation
+view, and both sidebar states. It is not modal
 (`aria-modal` is not set). The page is workspace-scoped: it fetches
 `GET /api/power-suite.project?workspaceId=…` (15 s poll, window-focus refresh,
 manual `refresh=1`, `AbortController` cancels stale requests on a workspace
 switch) and handles loading/error/404-empty states. Header navigation (Open
-Workspace, New Session, Sessions-list click) closes the page then navigates;
-refresh, Copy project path, settings presets, and Runs expansion stay in-page.
+Workspace, New Session, Sessions-list click) closes the page then navigates
+(fire-and-forget UI promises attach rejection guards); refresh, Copy project
+path, settings presets, and Runs expansion stay in-page. The page keeps its tab,
+filters, searches, and expanded rows across Workspace switches — the component
+instance stays mounted and only the data hook follows the WorkspaceId — which is
+intended UX.
 A single document-level capture click handler on sidebar Workspace titles
 dispatches the open event; the native fold chevron, row context menu, New Session
 button, Session rows, drags, and modified/non-primary clicks stay native, the
 Workspace service is resolved lazily through `ctx.get('workspaces')`, and effect
 cleanup removes the handler and the event listener so HMR cannot stack them.
+Header navigation treats `openWorkspace` as fire-and-forget and logs a bounded
+`console.warn` for rejected promises.
 
 The Host route resolves a Workspace from `workspaceId` or from a `sessionId`
 (direct membership → durable parent chain → canonical cwd), measures the newest
@@ -289,12 +329,18 @@ The Host route resolves a Workspace from `workspaceId` or from a `sessionId`
 sliced, unreadable logs skipped into `warnings[]`), and folds each log with the
 pure helpers in `project-view/fold.js`: turn/start..turn/end runs, the coarse
 status map, and job association by exact tool-call id → time containment →
-nearest preceding turn. Caps are 40 runs per Session, 200 runs total, and 24 job
-rows per run (with the full `jobCount` kept). A 10 s in-memory snapshot cache
-(keyed by Workspace id + `updatedAt` + member count, at most 30 snapshots) absorbs
-the browser poll, `refresh=1` bypasses it, and every response is
-`cache-control: no-store`; missing parameters answer `400`, unknown/unaccounted
-Workspaces `404`.
+nearest preceding turn. A turn counts as a measured run only with a finite
+`startedAt` (`isMeasuredTurn` governs `buildRuns`, each session's `runCount`,
+`limits.totalRunsMeasured`, and `computeStats`), so synthetic fork boundaries
+never inflate the overview. Caps are 40 runs per Session, 200 runs total, and 24
+job rows per run (with the full `jobCount` kept). A **25 s** in-memory snapshot
+cache (keyed by Workspace id + `updatedAt` + member count + a hash of the
+relevant archived-member subset + the requested `focusSessionId`, at most 30
+snapshots, FIFO eviction) covers the browser's 15 s poll; `refresh=1` bypasses
+it, and every response is `cache-control: no-store`; missing parameters answer
+`400`, unknown/unaccounted Workspaces `404`. Per-Session warnings stay a bounded
+error identity (error name plus a truncated message) so one unreadable log never
+turns the whole snapshot into a 500.
 
 ### Hover Quick Look
 
