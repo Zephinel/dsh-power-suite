@@ -538,10 +538,15 @@ afterwards, and is never sent automatically.
   `batch:<id>|<id>…` over the included current-Session records in collection
   order. D2 explicitly rejects per-item chips. Clicking it opens the collection
   view.
-- **`@` source** — while typing an `@` reference in the composer, the
-  **UI annotations** group lists current-Session records only, capped at 20, with
-  the requirement excerpt as the description; when there are no candidates the
-  group is absent rather than empty.
+- **`@` source** — while typing an `@` reference in the composer, this source
+  contributes current-Session records only, capped at 20. It renders **no custom
+  group header** (`showGroupTitle: false`): the shell's slash-menu dictionary has
+  no annotation title and locale registration cannot take over another owner's
+  namespace, so a header would show the raw source name. Instead every row
+  self-identifies in the mixed list: the label is
+  `UI annotation · <element name>` (`UI 标注 · <element name>` in Chinese) and the
+  requirement excerpt is the description. When there are no candidates the rows
+  are absent rather than an empty group.
 - **Send-time serialization** — the shell calls the source codec when the draft
   is submitted; nothing is sent by the annotation feature itself. A single chip
   serializes exactly like the quick-reference block below; the batch chip
@@ -953,6 +958,14 @@ page, and runs the acceptance scenarios with real CDP mouse and keyboard input a
 a 1728 x 900 viewport. The installed plugin, the user profile, and the launchd
 service are never modified.
 
+> **Pre-merge branch evidence.** All numbers in this section (seam 48/57/66,
+> `npm test` 193/204/214, the scenario runs and screenshots) were recorded on the
+> `feat/annotation-ux` branch **before the final merge**, against the live GUI at
+> that time. They are branch-build evidence, not the merged-build verdict. The
+> merged-build acceptance record — including verifier round 2 — is maintained by
+> the Lead in [verification.md](verification.md) after the final merge; consult
+> that file for the release record.
+
 The Phase 1 build (`feat/annotation-ux`, `src/client.js` md5 `151e0380…`)
 recorded these live results against the running GUI:
 
@@ -1026,10 +1039,13 @@ against the running GUI:
   fallback branch cannot be forced end-to-end without stubbing DSH services; the
   fallback text, toast and both serializers are unit-tested.
 - Scenario **11** (F4 merged pin) is recorded as an explicit **SKIP** in this
-  worktree because the dynamic-workspaces feature is not merged here; the
-  scenario detects the DW capability and runs the real pin + no-mode regression
-  after merge. The `10b` row uses the same capability gate: SKIP here, real check
-  after merge (M-4).
+  worktree because the merged F4 contract is not installed here. The scenario
+  behaviorally probes the DW-rendered sidebar rows and skips only when no
+  `[data-psd-hovercard]` marker can be produced (no DW hovercard at all, or a
+  legacy card without the merged marker), quoting the probe's exact reason; after
+  merge the same code runs the real pin + no-mode regression, and a present marker
+  with a failing pin/select **fails** the row (retry once) instead of being masked
+  as SKIP. The `10b` row uses the same behavior detector (M-4).
 - Sequence `--from 4 --no-shots` (smoke + S4-S15): **13 PASS / 2 SKIP / 0 FAIL**
   in ~2 min, 0 page errors, 0 real network failures. S5 now asserts the ONE group
   chip (D2) instead of the old plain numbered blocks; S6's stale/cross-session

@@ -9389,6 +9389,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'detail.close': 'Close',
       'detail.marks': 'Marks are shown on the page while the mode is on',
       'chip.batchLabel': 'UI annotations × {count}',
+      'chip.candidateLabel': 'UI annotation · {name}',
       'collection.countScope': '{current} current · {other} other',
       'collection.include': 'Include in batch insert',
       'collection.selectAllCurrent': 'Select current session',
@@ -9531,6 +9532,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'detail.close': '关闭',
       'detail.marks': '模式开启时页面会持续显示标注遮罩',
       'chip.batchLabel': 'UI 标注 × {count}',
+      'chip.candidateLabel': 'UI 标注 · {name}',
       'collection.countScope': '当前会话 {current} · 其他会话 {other}',
       'collection.include': '加入批量插入',
       'collection.selectAllCurrent': '全选当前会话',
@@ -11112,9 +11114,12 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
      * @param {Array<object>} list - collection entries.
      * @param {string | null} sessionId - current Session identity.
      * @param {number} [limit] - maximum candidates, default 20.
+     * @param {string} [labelTemplate] - optional display-label template with `{name}`;
+     *   the source uses it so annotation rows are identifiable in the mixed `@` list
+     *   without a custom group header (the shell's slash menu has no title slot for us).
      * @returns {Array<{ name: string, label: string, description?: string, value: string }>} candidates.
      */
-    function annotationChipCandidates(list, sessionId, limit) {
+    function annotationChipCandidates(list, sessionId, limit, labelTemplate) {
       const cap = typeof limit === 'number' && Number.isFinite(limit) && limit > 0 ? Math.round(limit) : ANNOTATION_CHIP_CANDIDATE_LIMIT
       const candidates = []
       for (const entry of Array.isArray(list) ? list : []) {
@@ -11124,8 +11129,13 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         if (typeof sessionId !== 'string' || sessionId.length === 0 || entrySession !== sessionId) continue
         if (typeof entry.id !== 'string' || !ANNOTATION_CHIP_REF_PATTERN.test(entry.id)) continue
         const label = elementLabel(entry) || 'UI annotation'
+        const displayLabel = typeof labelTemplate === 'string' && labelTemplate.length > 0
+          ? labelTemplate.replace('{name}', label)
+          : label
         const excerpt = annotationMarkerBadgeText(entry.note).text
-        const candidate = { name: label, label, value: entry.id }
+        // `name` stays the raw element label so search and exact-match keep working;
+        // only the rendered row is prefixed.
+        const candidate = { name: label, label: displayLabel, value: entry.id }
         if (excerpt.length > 0) candidate.description = excerpt
         candidates.push(candidate)
       }
@@ -15046,7 +15056,12 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
        * @returns {Array<object>} trigger candidates.
        */
       function chipCandidates(sessionId) {
-        return annotationChipCandidates(snapshot().state.collection, sessionId, ANNOTATION_CHIP_CANDIDATE_LIMIT)
+        return annotationChipCandidates(
+          snapshot().state.collection,
+          sessionId,
+          ANNOTATION_CHIP_CANDIDATE_LIMIT,
+          t('chip.candidateLabel')
+        )
       }
 
       /**
@@ -16891,7 +16906,11 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         trigger: ANNOTATION_CHIP_TRIGGER,
         name: ANNOTATION_CHIP_SOURCE,
         order: ANNOTATION_CHIP_ORDER,
-        showGroupTitle: true,
+        // The shell's slash-menu dictionary has no annotation title, and locale
+        // registration cannot take over another owner's namespace, so a custom group
+        // header would render the raw source name. Native reference sources use the
+        // same no-title treatment; candidates self-identify via `chip.candidateLabel`.
+        showGroupTitle: false,
         /**
          * Current-Session candidates only; an empty array hides the group (D8).
          * @param {object} session - composer Session projection.
