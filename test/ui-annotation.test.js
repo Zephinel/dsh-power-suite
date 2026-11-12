@@ -10,8 +10,11 @@
  * live-page behavior belongs to `test/browser/annotation.e2e.mjs`.
  *
  * Contract: `/tmp/ps-annotation/CONTRACT.md` §3.7 (frozen seam signatures) and
- * §4.1 (unit-test scope). The seam is inert in production because the
- * `__POWER_SUITE_TEST_HOOKS__` global is only defined by this harness.
+ * §4.1 (unit-test scope), extended by `/tmp/ps-annotation/REVIEW-FINDINGS.md`.
+ * Every fix-round regression below (F1-F4, F6, F11, F16) is written to fail on
+ * the reviewed build 5136d3c and pass on `fix/ui-annotation-review-fixes`.
+ * The seam is inert in production because the `__POWER_SUITE_TEST_HOOKS__`
+ * global is only defined by this harness.
  */
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
@@ -44,6 +47,7 @@ if (ui === undefined) {
     'DEFAULT_SETTINGS', 'MODIFIER_CHOICES', 'SETTINGS_STORAGE_KEY',
     'normalizeSettings', 'resolveModifierChange', 'parseStoredSettings', 'serializeSettings',
     'modifierMatches',
+    'textDigest',
     'sanitizeText', 'sanitizeAttributeName', 'sanitizeAttributeValue',
     'buildElementRef', 'selectorCandidates', 'identityKeyOf', 'describeLocator', 'elementLabel',
     'createAnnotationState', 'reduceAnnotationState',
@@ -59,6 +63,7 @@ if (ui === undefined) {
     parseStoredSettings: [1, 1],
     serializeSettings: [1, 1],
     modifierMatches: [2, 2],
+    textDigest: [1, 1],
     sanitizeText: [1, 2],
     sanitizeAttributeName: [1, 1],
     sanitizeAttributeValue: [2, 2],
@@ -188,6 +193,9 @@ if (ui === undefined) {
     skipped: '({count} annotation(s) from other sessions skipped)',
     time: '14:05'
   }
+
+  /** A real sidebar row key: `session:<uuid>`, 44 chars (REVIEW-FINDINGS F2). */
+  const REAL_ROW_KEY = 'session:123e4567-e89b-12d3-a456-426614174000'
 
   //#endregion
 
@@ -335,13 +343,89 @@ if (ui === undefined) {
 
   test('sanitizeAttributeValue drops Bearer/sk-/long base64-hex values and keeps ordinary values', () => {
     assert.equal(ui.sanitizeAttributeValue('aria-label', 'New session'), 'New session')
-    assert.equal(ui.sanitizeAttributeValue('data-row-key', 'session:abc123'), 'session:abc123')
+    assert.equal(ui.sanitizeAttributeValue('data-row-key', REAL_ROW_KEY), REAL_ROW_KEY)
     assert.equal(ui.sanitizeAttributeValue('role', 'button'), 'button')
     assert.equal(ui.sanitizeAttributeValue('aria-label', 'Bearer abcdef1234567890'), null)
     assert.equal(ui.sanitizeAttributeValue('data-key', 'sk-ABCDEF0123456789'), null)
     assert.equal(ui.sanitizeAttributeValue('value', 'deadbeefdeadbeefdeadbeefdeadbeef'), null)
     assert.equal(ui.sanitizeAttributeValue('value', 'c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0'), null)
     assert.equal(ui.sanitizeAttributeValue('token', 'anything'), null)
+  })
+
+  test('F1: sensitive or generated ids never become id candidates or identity keys', () => {
+    const sensitiveIds = ['alice@example.com', 'sk-live-ZYXWVUTS9876543210', 'deadbeefdeadbeefdeadbeefdeadbeef']
+    for (const id of sensitiveIds) {
+      assert.equal(ui.sanitizeAttributeValue('id', id), null, `the authoritative sanitizer rejects ${id}`)
+    }
+    for (const id of [...sensitiveIds, ':r1:', '_Row_1a2b3c']) {
+      const candidates = ui.selectorCandidates(descriptorOf({ tag: 'button', id, name: 'Secret target' }))
+      assert.equal(candidates.some((candidate) => candidate.kind === 'id'), false, `no id candidate for ${id}`)
+      const ref = refOf({ tag: 'button', id, name: 'Secret target', text: 'Secret target' })
+      assert.equal(ui.identityKeyOf(ref).startsWith('id:'), false, `no id-based identity for ${id}`)
+      for (const candidate of ref.locator.candidates) {
+        assert.ok(!candidate.value.includes('alice@example.com'), `email id leaked into ${candidate.value}`)
+        assert.ok(!candidate.value.includes('sk-live'), `secret id leaked into ${candidate.value}`)
+        assert.ok(!candidate.value.includes('deadbeef'), `token-shaped id leaked into ${candidate.value}`)
+      }
+    }
+    // An ordinary authored id is still a stable locator (F1 must not over-filter).
+    assert.equal(ui.sanitizeAttributeValue('id', 'composer-send'), 'composer-send')
+    const ordinary = refOf({ tag: 'button', id: 'composer-send', name: 'Send', text: 'Send' })
+    assert.equal(ordinary.locator.candidates.find((candidate) => candidate.kind === 'id')?.value, '#composer-send')
+    assert.equal(ui.identityKeyOf(ordinary), 'id:#composer-send')
+  })
+
+  test('F2: known stable data attributes keep real row-key values while other secrets stay filtered', () => {
+    const allowListed = [
+      ['data-row-key', REAL_ROW_KEY],
+      ['data-conversation-region', 'composer'],
+      ['data-conversation-session', REAL_ROW_KEY],
+      ['data-lexical-editor', 'true'],
+      ['data-testid', 'composer-send'],
+      ['data-slot', 'conversation.input.dock'],
+      ['data-sidebar-toggle', 'sidebar']
+    ]
+    for (const [name, value] of allowListed) {
+      assert.equal(ui.sanitizeAttributeValue(name, value), value, `${name} keeps its stable value`)
+    }
+    const bareUuid = '123e4567-e89b-12d3-a456-426614174000'
+    assert.equal(ui.sanitizeAttributeValue('data-row-key', bareUuid), bareUuid, 'a bare UUID is a stable key shape')
+    // The allow-list is not a secret-laundering channel.
+    for (const value of ['Bearer abcdef1234567890', 'sk-live-ZYXWVUTS9876543210', 'deadbeefdeadbeefdeadbeefdeadbeef']) {
+      assert.equal(ui.sanitizeAttributeValue('data-row-key', value), null, 'an allow-listed name still rejects secret shapes')
+      assert.equal(ui.sanitizeAttributeValue('data-unknown', value), null, 'unknown attributes still reject secret shapes')
+    }
+    const rowCandidates = ui.selectorCandidates(descriptorOf({
+      tag: 'div',
+      component: 'row',
+      attrs: [{ name: 'data-row-key', value: REAL_ROW_KEY }]
+    }))
+    const dataCandidate = rowCandidates.find((candidate) => candidate.kind === 'data')
+    assert.ok(dataCandidate !== undefined, 'the real row key yields a data candidate')
+    assert.equal(dataCandidate.value, `[data-row-key="${REAL_ROW_KEY}"]`)
+    assert.equal(
+      ui.identityKeyOf(refOf({ tag: 'div', component: 'row', attrs: [{ name: 'data-row-key', value: REAL_ROW_KEY }] })),
+      `data:[data-row-key="${REAL_ROW_KEY}"]`,
+      'the identity key is built from the surviving row key'
+    )
+  })
+
+  //#endregion
+
+  //#region digests (F11)
+
+  test('F11: textDigest is deterministic FNV-1a 32-bit hex over sanitized text', () => {
+    // The standard FNV-1a 32-bit test vectors pin the algorithm, not just determinism.
+    assert.equal(ui.textDigest(''), '811c9dc5', 'empty input is the FNV offset basis')
+    assert.equal(ui.textDigest('a'), 'e40c292c')
+    assert.equal(ui.textDigest('foobar'), 'bf9cf968')
+    assert.equal(ui.textDigest('  Ship   it  now  '), ui.textDigest('Ship it now'), 'whitespace-collapsed')
+    assert.match(ui.textDigest('anything'), /^[0-9a-f]{8}$/, 'lowercase zero-padded 8-hex')
+    assert.notEqual(ui.textDigest('first'), ui.textDigest('second'))
+    assert.equal(ui.textDigest(null), '', 'non-strings digest to empty')
+    assert.equal(ui.textDigest(42), '')
+    assert.equal(ui.textDigest('\u200B\uFEFF'), '811c9dc5', 'zero-width-only input sanitizes to empty')
+    assert.match(ui.textDigest('word '.repeat(1000).trim()), /^[0-9a-f]{8}$/, 'long input stays bounded and deterministic')
   })
 
   //#endregion
@@ -354,7 +438,7 @@ if (ui === undefined) {
       role: 'listitem',
       name: 'Session row',
       attrs: [
-        { name: 'data-row-key', value: 'session:abc123' },
+        { name: 'data-row-key', value: REAL_ROW_KEY },
         { name: 'class', value: '_row_1a2b3c ps-list-row' },
         { name: 'aria-label', value: 'Session: Hello' }
       ],
@@ -372,7 +456,7 @@ if (ui === undefined) {
       previousReliability = candidate.reliability
     }
     assert.equal(candidates[0].kind, 'data')
-    assert.ok(candidates[0].value.includes('data-row-key') && candidates[0].value.includes('session:abc123'))
+    assert.ok(candidates[0].value.includes('data-row-key') && candidates[0].value.includes(REAL_ROW_KEY))
     for (const candidate of candidates) {
       assert.ok(!/_[A-Za-z0-9]{4,}/.test(candidate.value), `no hashed class token in ${candidate.value}`)
       assert.ok(!candidate.value.includes('<'), 'never serializes node HTML')
@@ -432,12 +516,12 @@ if (ui === undefined) {
       tag: 'div',
       component: 'row',
       name: 'Session row',
-      attrs: [{ name: 'data-row-key', value: 'session:abc123' }],
+      attrs: [{ name: 'data-row-key', value: REAL_ROW_KEY }],
       text: 'Session row title'
     })
     const row = refOf(rowDescriptor, { order: 2 })
     assert.equal(row.component, 'row')
-    assert.ok(row.locator.candidates.some((candidate) => candidate.value.includes('session:abc123')))
+    assert.ok(row.locator.candidates.some((candidate) => candidate.value.includes(REAL_ROW_KEY)))
     const sameRow = refOf(rowDescriptor, { order: 9, at: 1_900_000_000_000 })
     assert.equal(ui.identityKeyOf(row), ui.identityKeyOf(sameRow), 'the row key does not depend on capture order')
 
@@ -462,7 +546,7 @@ if (ui === undefined) {
     }, { order: 4 })
     assert.equal(input.component, 'input')
     assert.equal(input.locator.tag, 'input')
-    assert.deepEqual(Object.keys(input).sort(), ['at', 'bounds', 'component', 'context', 'id', 'locator', 'note', 'order', 'session', 'text', 'version'])
+    assert.deepEqual(Object.keys(input).sort(), ['at', 'bounds', 'component', 'context', 'id', 'locator', 'note', 'order', 'session', 'text', 'textDigest', 'version'])
     assert.deepEqual(Object.keys(input.locator).sort(), ['candidates', 'key', 'name', 'path', 'role', 'tag'])
     assert.equal(input.locator.name, 'Search sessions', 'the accessible name survives')
     assert.equal(input.text, '', 'an input contributes no value text')
@@ -474,6 +558,35 @@ if (ui === undefined) {
     assert.equal(editable.component, 'editable')
     assert.equal(editable.text, '', 'contenteditable contents are never read')
     assert.equal(ui.identityKeyOf(editable), ui.identityKeyOf(refOf(editableDescriptor, { at: 1_900_000_000_000, order: 12 })))
+  })
+
+  test('F3: aria-label-only identity keys include structural context and survive re-selection', () => {
+    const pathA = 'body > div:nth-of-type(1) > button:nth-of-type(1)'
+    const pathB = 'body > div:nth-of-type(2) > button:nth-of-type(1)'
+    const makeClose = (path, context = {}) => refOf({
+      tag: 'button',
+      name: 'Close',
+      attrs: [{ name: 'aria-label', value: 'Close' }],
+      path
+    }, context)
+    const closeA = makeClose(pathA)
+    const closeB = makeClose(pathB)
+    assert.equal(ui.identityKeyOf(closeA), `label:[aria-label="Close"]|button|${pathA}`, 'label keys carry tag and path')
+    assert.equal(ui.identityKeyOf(closeB), `label:[aria-label="Close"]|button|${pathB}`)
+    assert.notEqual(ui.identityKeyOf(closeA), ui.identityKeyOf(closeB), 'two Close buttons are not the same identity')
+    assert.equal(ui.identityKeyOf(closeA), ui.identityKeyOf(makeClose(pathA, { at: 1_800_000_000_000, order: 7 })), 're-selection keeps the identity')
+  })
+
+  test('F11: ElementRef carries a top-level textDigest for the full sanitized text', () => {
+    const fullText = 'word '.repeat(40).trim() // 199 chars, longer than the 80-char display summary
+    const descriptorDigest = ui.textDigest(fullText)
+    const ref = refOf({ name: 'Long target', text: fullText, textDigest: descriptorDigest })
+    assert.equal(ref.textDigest, descriptorDigest, 'buildElementRef copies the descriptor digest through')
+    assert.ok(ref.text.length <= 81, 'the display summary stays bounded')
+    assert.notEqual(ref.textDigest, ui.textDigest(ref.text), 'the digest covers the full text, not the truncated summary')
+    const plain = refOf({ name: 'Plain target', text: 'plain' })
+    assert.equal(plain.textDigest, '', 'the descriptor owns digest computation; an absent digest stays empty')
+    assert.deepEqual(Object.keys(plain).sort(), ['at', 'bounds', 'component', 'context', 'id', 'locator', 'note', 'order', 'session', 'text', 'textDigest', 'version'])
   })
 
   test('sanitized text is applied when building a ref, even for hostile descriptor text', () => {
@@ -731,6 +844,32 @@ if (ui === undefined) {
     assert.deepEqual(plain(ui.collectionClear()), [])
   })
 
+  test('F4: an empty re-add preserves an existing note and only an explicit setNote clears it', () => {
+    const ref = refOf({ name: 'Target', text: 'Target' })
+    const sameElement = refOf({ name: 'Target', text: 'Target' }, { order: 4, at: 1_800_000_000_000 })
+    const seeded = ui.collectionAdd([], entryOf(ref, 'keep me'))
+
+    const emptyReadd = ui.collectionAdd(seeded.list, entryOf(sameElement, ''))
+    assert.equal(emptyReadd.updated, true)
+    assert.equal(emptyReadd.list[0].note, 'keep me', 'an empty note must not overwrite the saved note')
+
+    const whitespaceReadd = ui.collectionAdd(seeded.list, entryOf(sameElement, '   '))
+    assert.equal(whitespaceReadd.list[0].note, 'keep me', 'a whitespace-only note is empty')
+
+    const noted = ui.collectionAdd(seeded.list, entryOf(sameElement, 'new note'))
+    assert.equal(noted.list[0].note, 'new note', 'a non-empty note still updates the entry')
+
+    const cleared = ui.collectionSetNote(seeded.list, ref.id, '')
+    assert.equal(cleared[0].note, '', 'the explicit editor path clears the note')
+    assert.equal(seeded.list[0].note, 'keep me', 'setNote stays immutable')
+
+    // The reducer collectionAdd action shares that boundary; the re-add path passes an empty note.
+    let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
+    state = ui.reduceAnnotationState(state, { type: 'collectionAdd', entry: entryOf(ref, 'reducer note') })
+    state = ui.reduceAnnotationState(state, { type: 'collectionAdd', entry: entryOf(sameElement, '') })
+    assert.equal(state.collection[0].note, 'reducer note', 'reducer re-add preserves the note too')
+  })
+
   //#endregion
 
   //#region serialization
@@ -863,6 +1002,61 @@ if (ui === undefined) {
     }), 'missing')
   })
 
+  test('F11: resolveRefStatus changed detection covers digest, accessible name, and empty captured text', () => {
+    const longText = 'word '.repeat(40).trim()
+    const longRef = refOf({
+      tag: 'button',
+      name: 'Long target',
+      attrs: [{ name: 'id', value: 'long-button' }],
+      text: longText,
+      textDigest: ui.textDigest(longText)
+    })
+    const longElement = liveElement('BUTTON', longText)
+    const base = { candidates: longRef.locator.candidates, expectedTag: 'button', queryAll: () => [longElement] }
+
+    // Unchanged digest and accessible name keep the target resolved.
+    assert.equal(ui.resolveRefStatus({
+      ...base,
+      liveInfo: () => ({ expectedDigest: longRef.textDigest, actualDigest: ui.textDigest(longText), expectedName: 'Long target', actualName: 'Long target' })
+    }), 'resolved')
+
+    // A tail change beyond the 80-char display summary changes the digest.
+    assert.equal(ui.resolveRefStatus({
+      ...base,
+      liveInfo: () => ({ expectedDigest: longRef.textDigest, actualDigest: ui.textDigest(`${longText} tail`) })
+    }), 'changed', 'a change outside the truncated summary still reads as changed')
+
+    // The accessible name can change while the visible text stays the same.
+    assert.equal(ui.resolveRefStatus({
+      ...base,
+      liveInfo: () => ({ expectedName: 'Long target', actualName: 'Long target renamed' })
+    }), 'changed', 'an aria-label change reads as changed')
+
+    // Captured text was empty but the live element now has text.
+    const emptyRef = refOf({
+      tag: 'button',
+      name: 'Icon',
+      attrs: [{ name: 'id', value: 'icon-button' }],
+      text: '',
+      textDigest: ui.textDigest('')
+    })
+    assert.equal(ui.resolveRefStatus({
+      candidates: emptyRef.locator.candidates,
+      expectedTag: 'button',
+      queryAll: () => [liveElement('BUTTON', 'now has text')],
+      liveInfo: () => ({ expectedDigest: emptyRef.textDigest, actualDigest: ui.textDigest('now has text') })
+    }), 'changed', 'empty captured text with live text reads as changed')
+
+    // The digest must not rescue the generic-only branch (no stable candidate).
+    const genericRef = refOf({ tag: 'div', role: '', name: '', component: 'container', text: '', textDigest: ui.textDigest('') })
+    assert.equal(ui.resolveRefStatus({
+      candidates: genericRef.locator.candidates,
+      expectedTag: 'div',
+      queryAll: () => [liveElement('DIV', 'now has text')],
+      liveInfo: () => ({ expectedDigest: ui.textDigest(''), actualDigest: ui.textDigest('now has text') })
+    }), 'resolved', 'a unique anonymous generic match stays resolved; digest does not corroborate')
+  })
+
   //#endregion
 
   //#region geometry and layout
@@ -915,6 +1109,49 @@ if (ui === undefined) {
     assert.equal(ui.layoutModeFor(1039, 280, 200), 'overlay', '559px falls back to overlay')
     assert.equal(ui.layoutModeFor(1728, 0, 200), 'shrink')
     assert.equal(ui.layoutModeFor(500, 280, 48), 'overlay')
+  })
+
+  //#endregion
+
+  //#region source-level regressions (F6, F16)
+
+  test('F6: the popover note textarea is wired to beginEdit/endEdit in production code', () => {
+    const source = client.source
+    assert.equal(typeof source, 'string')
+    const start = source.indexOf('function AnnotationPopover')
+    assert.ok(start >= 0, 'the AnnotationPopover component exists')
+    const nextFunction = source.indexOf('\n    function ', start + 'function AnnotationPopover'.length)
+    const popover = source.slice(start, nextFunction > 0 ? nextFunction : source.length)
+    assert.ok(popover.includes("'data-psa-note'"), 'the popover still renders the note textarea')
+    assert.ok(popover.includes('onFocus'), 'the note textarea enters edit mode on focus')
+    assert.ok(popover.includes('onBlur'), 'the note textarea leaves edit mode on blur')
+    assert.ok(/beginEdit/.test(popover) && /endEdit/.test(popover), 'the textarea handlers dispatch the editing actions')
+    // The reducer tests above are only meaningful if production actually dispatches
+    // these actions; the wiring lives in the controller beginEdit/endEdit methods.
+    assert.match(source, /type:\s*'beginEdit'/, 'the controller dispatches beginEdit')
+    assert.match(source, /type:\s*'endEdit'/, 'the controller dispatches endEdit')
+  })
+
+  test('F16: annotation region markers are balanced and closed before the plugin region', () => {
+    const source = client.source
+    const outerStart = source.indexOf('//#region feature: ui element annotation')
+    const pluginStart = source.indexOf('//#region plugin', outerStart)
+    assert.ok(outerStart >= 0, 'the outer annotation region exists')
+    assert.ok(pluginStart > outerStart, 'the plugin region follows the annotation region')
+    const slice = source.slice(outerStart, pluginStart)
+    const stack = []
+    for (const line of slice.split('\n')) {
+      if (/^\s*\/\/#region\b/.test(line)) stack.push(line.trim())
+      else if (/^\s*\/\/#endregion\b/.test(line)) {
+        assert.ok(stack.length > 0, 'no orphan #endregion inside the annotation feature')
+        stack.pop()
+      }
+    }
+    assert.deepEqual(stack, [], 'the outer annotation region closes before //#region plugin')
+    assert.ok(slice.includes('//#region ui element annotation — pure model'), 'the pure model has its own nested region')
+    const regions = (source.match(/\/\/#region\b/g) ?? []).length
+    const endregions = (source.match(/\/\/#endregion\b/g) ?? []).length
+    assert.equal(regions, endregions, 'whole-file region and endregion markers balance')
   })
 
   //#endregion

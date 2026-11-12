@@ -143,16 +143,18 @@ function createBrowserStubs(registrationBox, shared) {
  * @param {boolean} [options.hooksFlag=true] - set the §3.7 flag inside the
  *   sandbox; `false` materializes the production path, where the seam must not
  *   run.
- * @returns {{ hooks: object|undefined, factory: Function|null, registration: object|null }} the
+ * @returns {{ hooks: object|undefined, factory: Function|null, registration: object|null, source: string, sourcePath: string|null }} the
  *   seam hook bag (`hooks.uiAnnotation` may be undefined before the feature
  *   region lands; `hooks` itself is undefined when `hooksFlag` is false), the
- *   materialized factory (null when evaluation did not register one) and the
- *   captured module registration.
+ *   materialized factory (null when evaluation did not register one), the
+ *   captured module registration, and the evaluated source text plus its path
+ *   (null when `options.source` was injected) for source-level regression
+ *   assertions such as the popover edit wiring or region-marker balance.
  */
 export function loadClientModule(options = {}) {
-  const source = typeof options.source === 'string'
-    ? options.source
-    : readFileSync(resolveSourcePath(options), 'utf8')
+  const injectedSource = typeof options.source === 'string'
+  const sourcePath = injectedSource ? null : resolveSourcePath(options)
+  const source = injectedSource ? options.source : readFileSync(sourcePath, 'utf8')
 
   const registrationBox = { current: null }
   const document = {
@@ -229,7 +231,7 @@ export function loadClientModule(options = {}) {
   if (registration && typeof registration.factory === 'function') {
     factory = registration.factory(createStubRequire())
   }
-  return { hooks, factory, registration }
+  return { hooks, factory, registration, source, sourcePath }
 }
 
 /** requestAnimationFrame that never calls back (top-level only needs the API). */
