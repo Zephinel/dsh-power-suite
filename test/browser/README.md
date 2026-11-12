@@ -109,6 +109,15 @@ reviewed files) to publish `docs/assets/annotation-idle.png`, `annotation-mode.p
   fatal error; `2` only for usage/argument errors (`--scenario 16`, `--from 16`, missing value,
   `Network` setup failure is NOT a usage error and exits 1).
 
+## Evidence scope (pre-merge branch builds)
+
+> The Phase 1, Phase 2-A and Phase 2-B tables below are **pre-merge branch
+> evidence** for `feat/annotation-ux`: seam 48/57/66 and `npm test` 193/204/214
+> counts were recorded on those branch builds. The merged-build acceptance record
+> (Lead, after the final merge + verifier round 2) lives in
+> [`docs/verification.md`](../../docs/verification.md); use that for the release
+> verdict instead of these branch numbers.
+
 ## Current evidence (Phase 1 annotation build)
 
 Phase 1 (`feat/annotation-ux`, `src/client.js` md5 `151e0380b8283b79934c92126919c136`,
@@ -184,7 +193,20 @@ Phase 2-B (on top of the Phase 2-A commits), Node v24.22.2, live GUI at 1728x900
 Scenario 13 uses the real CDP composer: it asserts the native Lexical decorator
 chip count, clipboard projection, chipless draft, atomic Backspace removal, the
 single group chip for a batch, and that the transcript stays 0 (nothing is sent).
-The group chip label is `UI annotations × N` (D2: per-item chips are rejected).
+The batch chip label is `UI annotations × N` (D2: per-item chips are rejected).
+The `@` source renders no custom group header (`showGroupTitle: false`, because
+the shell has no annotation menu title and the raw source name would leak); its
+rows self-identify as `UI annotation · <element name>` with the requirement
+excerpt as the description, so they are distinguishable in the mixed `@` list.
+
+Skip semantics: `10b`/`11` are SKIP only when the **merged F4 pin contract** is
+genuinely absent — the scenario behaviorally probes the DW-rendered sidebar rows
+and skips only when no `[data-psd-hovercard]` marker can be produced (covering both
+"no DW hovercard at all" and "legacy DW card without the merged marker"), with the
+probe's exact reason in the SKIP text. When the marker IS produced but the
+pin/select/no-mode-close check fails, scenario 11 retries once and then **FAILS**;
+it is never masked as SKIP. `13f` (plain-text chip fallback) is SKIP because the
+live GUI always installs the chip services; the fallback path is unit-tested.
 
 ## Current evidence (round 2, pre-merge annotation build)
 

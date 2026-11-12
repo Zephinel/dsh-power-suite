@@ -134,7 +134,7 @@ if (ui === undefined) {
     annotationChipRefOf: [1, 1],
     annotationChipRefBatch: [1, 2],
     parseAnnotationChipRef: [1, 1],
-    annotationChipCandidates: [2, 3],
+    annotationChipCandidates: [2, 4],
     serializeAnnotationChip: [3, 4],
     upsertAnnotationRecord: [2, 4],
     removeAnnotationRecord: [2, 2],
@@ -2048,6 +2048,11 @@ if (ui === undefined) {
     assert.equal(candidates[0].description, 'Fix the toolbar', 'the description is the first requirement line')
     assert.equal(candidates[1].description, undefined)
     assert.deepEqual(plain(ui.annotationChipCandidates([other], SESSION_A)), [], 'no current-Session record hides the group')
+    const prefixed = ui.annotationChipCandidates([alpha, beta], SESSION_A, 20, 'UI annotation · {name}')
+    assert.deepEqual(plain(prefixed.map((candidate) => candidate.name)), ['Alpha', 'Beta'], 'the pick/search name stays the raw element label')
+    assert.deepEqual(plain(prefixed.map((candidate) => candidate.label)), ['UI annotation · Alpha', 'UI annotation · Beta'],
+      'the rendered row self-identifies in the mixed @ list')
+    assert.equal(prefixed[0].description, 'Fix the toolbar')
     const many = []
     for (let index = 0; index < 25; index += 1) many.push(recordOf(`Record ${index}`))
     assert.equal(ui.annotationChipCandidates(many, SESSION_A).length, 20, 'D8 caps the group at 20 candidates')
@@ -2101,6 +2106,25 @@ if (ui === undefined) {
     assert.ok(plain(withRemoved).includes('(2 annotation(s) no longer exist and were skipped)'))
     assert.ok(plain(withRemoved).includes(EN_LABELS.skipped.replace('{count}', '1')))
     assert.ok(plain(withRemoved).indexOf('no longer exist') < plain(withRemoved).indexOf('other sessions'), 'removed line precedes the skip line')
+  })
+
+  test('T9: the chip source hides its group header and self-identifies candidates instead', () => {
+    const source = client.source
+    assert.equal(typeof source, 'string')
+    const start = source.indexOf('function createAnnotationChipSource')
+    assert.ok(start >= 0, 'the chip source factory exists')
+    const nextFunction = source.indexOf('\n    function ', start + 'function createAnnotationChipSource'.length)
+    const factory = source.slice(start, nextFunction > 0 ? nextFunction : source.length)
+    assert.ok(factory.includes('showGroupTitle: false'),
+      'the source must not render a custom group header (the shell has no annotation menu title and the raw source name would leak)')
+    assert.ok(factory.includes('current.chipCandidates(sessionId)'), 'candidates come from the controller helper')
+    const candidatesStart = source.indexOf('function chipCandidates(sessionId)')
+    const candidatesEnd = source.indexOf('\n      function ', candidatesStart + 'function chipCandidates(sessionId)'.length)
+    const controllerCandidates = source.slice(candidatesStart, candidatesEnd > 0 ? candidatesEnd : source.length)
+    assert.ok(controllerCandidates.includes("t('chip.candidateLabel')"), 'candidates must use the localized self-identifying label template')
+    assert.ok(controllerCandidates.includes('annotationChipCandidates'), 'candidates come from the pure helper')
+    assert.ok(source.includes("'chip.candidateLabel': 'UI annotation · {name}'"), 'the EN candidate label prefix exists')
+    assert.ok(source.includes("'chip.candidateLabel': 'UI 标注 · {name}'"), 'the ZH candidate label prefix exists')
   })
 
   test('T9: the chip source contract wires candidates, pick, preview and the serializing codec', () => {
