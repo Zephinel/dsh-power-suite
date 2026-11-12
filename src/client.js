@@ -727,16 +727,16 @@ window.__ModuleLoader__.load({
      * both surfaces can use it; content comes from the artifacts preview route.
      */
     const QUICKLOOK_CSS = `
-.dsa-quicklook{position:fixed;z-index:1000;box-sizing:border-box;display:flex;flex-direction:column;max-height:min(560px,calc(100vh - 32px));overflow:hidden;border-radius:20px;border:1px solid var(--dsw-alias-border-l2,transparent);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-primary);box-shadow:0 12px 36px rgb(0 0 0 / 16%),0 2px 8px rgb(0 0 0 / 6%);animation:dsa-quicklook-in .16s cubic-bezier(.22,1,.36,1)}
+.dsa-quicklook{position:fixed;z-index:1000;box-sizing:border-box;display:flex;flex-direction:column;max-height:min(560px,calc(100vh - 32px));overflow:hidden;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);animation:dsa-quicklook-in .16s cubic-bezier(.22,1,.36,1)}
 .dsa-quicklook-header{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--dsw-alias-border-l2,transparent);min-width:0;flex:none}
 .dsa-quicklook-title{min-width:0;flex:1}
-.dsa-quicklook-name{font-size:14px;font-weight:600;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsa-quicklook-name{font-size:14px;font-weight:500;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsa-quicklook-meta{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:16px}
 .dsa-quicklook-body{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--dsw-alias-bg-layer-2,transparent)}
 .dsa-quicklook-layer{position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:center;overflow:auto;background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-layer-1))}
 .dsa-quicklook-layer-media{align-items:center}
 .dsa-quicklook-layer .dsa-quicklook-image,.dsa-quicklook-layer .dsa-quicklook-media{margin:auto}
-.dsa-quicklook-text{margin:0;padding:16px 20px;box-sizing:border-box;align-self:stretch;width:100%;font-family:var(--dsw-font-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;line-height:17px;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-secondary)}
+.dsa-quicklook-text{margin:0;padding:16px 20px;box-sizing:border-box;align-self:stretch;width:100%;font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;line-height:17px;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-secondary)}
 .dsa-quicklook-image{display:block;max-width:100%;max-height:360px;object-fit:contain}
 .dsa-quicklook-frame{width:100%;height:340px;border:0;background:#fff;align-self:stretch}
 .dsa-quicklook-media{max-width:100%;max-height:340px}
@@ -747,7 +747,7 @@ window.__ModuleLoader__.load({
 .dsa-quicklook-action{appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:0;width:32px;height:32px;flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;text-decoration:none;transition:background .15s ease,color .15s ease}
 .dsa-quicklook-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dsa-quicklook-loading{padding:48px 20px;color:var(--dsw-alias-label-tertiary);font-size:13px}
-.dsa-quicklook-resize{position:absolute;left:0;bottom:0;z-index:3;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:nesw-resize;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-layer-2));border:1px solid var(--dsw-alias-border-l2,transparent);border-left:0;border-bottom:0;border-radius:0 10px 0 19px;box-shadow:2px -2px 6px rgb(0 0 0 / 6%);transition:background .15s ease,color .15s ease}
+.dsa-quicklook-resize{position:absolute;left:0;bottom:0;z-index:3;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:nesw-resize;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-layer-2));border:0;border-radius:0 var(--dsw-radius-sm,8px) 0 var(--dsw-radius-lg,16px);transition:background .15s ease,color .15s ease}
 .dsa-quicklook-resize:hover{color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-interactive-bg-hover)}
 @keyframes dsa-quicklook-in{from{opacity:0}to{opacity:1}}
 .dsa-quicklook[data-resizing=true]{user-select:none}
@@ -759,7 +759,7 @@ window.__ModuleLoader__.load({
 .dsa-md li{margin:0 0 2px}
 .dsa-md blockquote{margin:0 0 9px;padding:0 0 0 10px;border-left:2px solid var(--dsw-alias-border-l3,var(--dsw-alias-border-l2));color:var(--dsw-alias-label-secondary)}
 .dsa-md pre{margin:0 0 9px;padding:8px 10px;overflow:auto;border-radius:6px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));font-size:11px;line-height:16px}
-.dsa-md code{font-family:var(--dsw-font-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));padding:0 3px;border-radius:3px}
+.dsa-md code{font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));padding:0 3px;border-radius:3px}
 .dsa-md pre code{background:transparent;padding:0;font-size:inherit}
 .dsa-md a{color:var(--dsw-alias-link);text-decoration:none}
 .dsa-md a:hover{text-decoration:underline}
@@ -767,7 +767,7 @@ window.__ModuleLoader__.load({
 .dsa-md img{display:block;max-width:100%;height:auto;margin:0 0 9px;border-radius:4px}
 .dsa-md table{border-collapse:collapse;margin:0 0 9px;font-size:11.5px;max-width:100%}
 .dsa-md th,.dsa-md td{border:1px solid var(--dsw-alias-border-l3,var(--dsw-alias-border-l2));padding:3px 7px;text-align:left;vertical-align:top}
-.dsa-code{font-family:var(--dsw-font-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;line-height:17.5px;white-space:pre;display:block;padding:16px 20px;color:var(--dsw-alias-label-secondary);align-self:stretch;width:100%;box-sizing:border-box;overflow:auto}
+.dsa-code{font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;line-height:17.5px;white-space:pre;display:block;padding:16px 20px;color:var(--dsw-alias-label-secondary);align-self:stretch;width:100%;box-sizing:border-box;overflow:auto}
 .dsa-code .tok-comment{color:var(--dsw-alias-label-tertiary);font-style:italic}
 .dsa-code .tok-string{color:var(--dsw-alias-state-success-primary)}
 .dsa-code .tok-keyword{color:var(--dsw-alias-state-business-primary)}
@@ -3410,7 +3410,6 @@ window.__ModuleLoader__.load({
 .dps-choice-option input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
 .dps-choice-text{white-space:nowrap;padding:4px 10px;border-radius:8px;font-size:12.5px;line-height:18px;color:var(--dsw-alias-label-secondary)}
 .dps-choice-option[data-selected=true] .dps-choice-text{background:var(--dsw-alias-bg-layer-4,var(--dsw-alias-bg-layer-3));color:var(--dsw-alias-label-primary)}
-.dps-choice-option input:focus-visible+.dps-choice-text{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .dps-choice-option input:disabled+.dps-choice-text{opacity:.5;cursor:default}
 .dps-visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 `
@@ -3485,7 +3484,7 @@ window.__ModuleLoader__.load({
 
       const modifierOptions = PROMPT_HISTORY_MODIFIERS.map((mode) => React.createElement('label', {
         key: mode,
-        className: 'dps-choice-option',
+        className: 'dps-choice-option psf-rainbow-focus',
         'data-selected': mode === current ? 'true' : undefined
       },
       React.createElement('input', {
@@ -3500,7 +3499,7 @@ window.__ModuleLoader__.load({
 
       const recentOptions = RECENT_SESSION_MINUTES.map((minutes) => React.createElement('label', {
         key: minutes,
-        className: 'dps-choice-option',
+        className: 'dps-choice-option psf-rainbow-focus',
         'data-selected': minutes === currentRecent ? 'true' : undefined
       },
       React.createElement('input', {
@@ -3515,7 +3514,7 @@ window.__ModuleLoader__.load({
 
       const activeOptions = ACTIVE_PROJECT_DAYS.map((days) => React.createElement('label', {
         key: days,
-        className: 'dps-choice-option',
+        className: 'dps-choice-option psf-rainbow-focus',
         'data-selected': days === currentActive ? 'true' : undefined
       },
       React.createElement('input', {
@@ -4527,17 +4526,18 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'time.hour': '{n}小时',
       'time.day': '{n}天',
       'duration.seconds': '{s}秒',
-      'duration.minutes': '{m}分 {s}秒',
-      'duration.hours': '{h}小时 {m}分'
+      'duration.minutes': '{m}分{s}秒',
+      'duration.hours': '{h}时{m}分'
     }
 
     const DW_CSS = `
 .psd-panel-slot{flex:none;min-width:0;display:block}
 .psd-panel{margin:2px 8px 6px;border:0.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);overflow:hidden}
 .psd-panel-head{display:flex;align-items:center;gap:2px;padding:2px 4px 2px 2px}
-.psd-panel-toggle{appearance:none;display:flex;align-items:center;gap:8px;flex:1;min-width:0;height:30px;box-sizing:border-box;padding:0 8px 0 17px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;font-weight:600;text-align:left;cursor:pointer}
+.psd-panel-toggle{appearance:none;display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0;height:30px;box-sizing:border-box;padding:0 8px 0 17px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:var(--dsw-font-xs-13-line-height,20px);font-weight:500;text-align:left;cursor:pointer}
 .psd-panel-toggle:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .psd-panel-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psd-panel-head-spacer{flex:1 1 auto;min-width:8px}
 .psd-panel-chevron{appearance:none;flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:30px;box-sizing:border-box;padding:0;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .psd-panel-chevron:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
 .psd-panel-chevron:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
@@ -4548,9 +4548,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-pulse::after{content:'';position:absolute;inset:-4px;border-radius:50%;corner-shape:round;border:1px solid var(--dsw-alias-state-business-primary);opacity:.45;animation:psd-pulse 2s var(--ds-ease-in-out,ease) infinite}
 @keyframes psd-pulse{0%{transform:scale(.7);opacity:.6}70%{transform:scale(1.25);opacity:0}100%{transform:scale(1.25);opacity:0}}
 @media (prefers-reduced-motion: reduce){.psd-pulse::after{animation:none}}
-.psd-panel-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary)}
+.psd-panel-title{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary)}
 .psd-count{flex:none;min-width:18px;padding:0 6px;box-sizing:border-box;border-radius:var(--dsw-radius-xs,4px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-size:11px;line-height:18px;text-align:center;font-variant-numeric:tabular-nums}
-.psd-panel-link{flex:none;appearance:none;display:inline-flex;align-items:center;box-sizing:border-box;height:30px;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;line-height:18px;padding:0 8px;border-radius:var(--dsw-radius-md,8px);cursor:pointer;white-space:nowrap}
+.psd-panel-link{flex:none;appearance:none;display:inline-flex;align-items:center;box-sizing:border-box;height:30px;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:var(--dsw-font-xxs-12-font-size,12px);line-height:var(--dsw-font-xxs-12-line-height,18px);padding:0 8px;border-radius:var(--dsw-radius-md,8px);cursor:pointer;white-space:nowrap}
 .psd-panel-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .psd-panel-link:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psd-chevron{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);transition:transform 160ms var(--ds-ease-in-out,ease)}
@@ -4559,68 +4559,89 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-panel-empty{padding:6px 10px 8px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:17px;display:flex;flex-direction:column;gap:2px}
 .psd-panel-empty strong{color:var(--dsw-alias-label-secondary);font-weight:500}
 .psd-item{display:flex;flex-direction:column;min-width:0}
-.psd-run{display:flex;align-items:center;gap:2px;min-width:0;min-height:28px;padding:0 0 0 7px;border-radius:var(--dsw-radius-md,8px)}
-.psd-run-main:hover{background:var(--dsw-alias-interactive-bg-hover)}
-@property --psd-ring-angle{syntax:'<angle>';inherits:false;initial-value:0deg}
-.psd-run-current{position:relative;isolation:isolate}
-.psd-run-current::before{content:'';position:absolute;inset:-2px;border-radius:calc(var(--dsw-radius-md,8px) + 2px);padding:2px;background:conic-gradient(from var(--psd-ring-angle,0deg),#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;z-index:0;filter:saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}
-.psd-run-current > *{position:relative;z-index:1}
-.psd-child-ring{content:'';position:absolute;inset:-1px;border-radius:calc(var(--dsw-radius-sm,6px) + 1px);padding:2px;background:conic-gradient(from var(--psd-ring-angle,0deg),#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;z-index:0;filter:saturate(.92) drop-shadow(0 0 4px rgba(178,150,255,.32))}
-.psd-child-current{position:relative;isolation:isolate}
-.psd-child-current > *:not(.psd-child-ring){position:relative;z-index:1}
-@keyframes psd-ring-spin{to{--psd-ring-angle:360deg}}
-@keyframes psd-ring-hue{from{filter:hue-rotate(0deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}to{filter:hue-rotate(360deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}}
-.psd-run-current::before,.psd-child-ring{animation:psd-ring-spin 3.2s linear infinite,psd-ring-hue 14s linear infinite}
-@media (prefers-reduced-motion: reduce){.psd-run-current::before,.psd-child-ring{animation:none}}
+.psd-run{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:28px;padding:0 0 0 7px;border-radius:var(--dsw-radius-md,8px);cursor:pointer}
+.psd-run-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - 76px);align-items:center;padding:4px 0 4px 8px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-run:hover:not(:has(.psd-run-toggle:hover)) .psd-run-main{background-color:var(--dsw-alias-interactive-bg-hover)}
+.psd-run-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psd-run-time{flex:none;width:48px;text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
+.psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
+.psd-run-head{display:flex;align-items:center;gap:8px;min-width:0;flex:0 1 auto}
+.psd-run-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
+.psd-run-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
+.psd-run-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap;color:var(--dsw-alias-label-primary);font-size:14px;line-height:20px}
+[data-clipped='true'].psd-run-title,[data-clipped='true'].psd-child-title{mask-image:linear-gradient(to right,#000 calc(100% - var(--psd-title-fade,28px)),#0000)}
 .psd-run-toggle{appearance:none;position:relative;z-index:1;flex:none;width:24px;height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .psd-run-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-run-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-run-toggle .psd-chevron{transition:transform 160ms var(--ds-ease-in-out,ease)}
 .psd-run-toggle[aria-expanded='false'] .psd-chevron{transform:rotate(-90deg)}
 .psd-run-toggle-spacer{flex:none;width:24px}
-.psd-run-main{appearance:none;display:flex;flex:1;min-width:0;align-items:center;padding:4px 8px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.psd-run-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-children{position:relative;display:flex;flex-direction:column;gap:1px;margin:0 0 4px 22px;padding-left:9px;border-left:1px solid var(--dsw-alias-border-l2)}
-.psd-child{position:relative;display:flex;align-items:center;gap:2px;min-width:0;padding:0 4px 0 0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;text-align:left}
-.psd-child-main{appearance:none;display:flex;align-items:center;gap:7px;flex:1;min-width:0;padding:3px 3px 3px 4px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-child{position:relative;display:flex;align-items:center;gap:2px;min-width:0;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:18px;text-align:left;cursor:pointer}
+.psd-child-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - 76px);align-items:center;gap:7px;padding:3px 0 3px 4px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-child:hover .psd-child-main{background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-child::before{content:'';position:absolute;left:-10px;top:50%;width:14px;height:1px;background:var(--dsw-alias-border-l2);pointer-events:none}
 .psd-child:last-child::after{content:'';position:absolute;left:-10px;top:calc(50% + 1px);bottom:-1px;width:2px;background:var(--dsw-alias-bg-layer-1);pointer-events:none}
-.psd-child:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-child-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-child-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
-.psd-child-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.psd-child-time{flex:none;color:var(--dsw-alias-label-tertiary);font-size:10.5px;line-height:16px;font-variant-numeric:tabular-nums}
-.psd-run-head{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
-.psd-run-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
-.psd-run-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
+.psd-child-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap}
+.psd-child-time{flex:none;width:48px;text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
-.psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
-.psd-run-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary);font-size:13px;line-height:19px}
-.psd-run-time{flex:none;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:17px;font-variant-numeric:tabular-nums}
-.psd-hovercard{position:fixed;z-index:1000;box-sizing:border-box;width:300px;max-height:320px;overflow:hidden;padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,var(--dsw-shadow-lv2,none));color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;pointer-events:none}
-.psd-hovercard-title{font-size:13px;line-height:19px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.psd-hovercard-path{margin-top:2px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:15px;white-space:normal;word-break:break-all;overflow-wrap:anywhere;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
-.psd-hovercard-row{display:flex;gap:6px;margin-top:6px;min-width:0}
-.psd-hovercard-key{flex:none;min-width:62px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}
-.psd-hovercard-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px}
-.psd-run-actions{display:flex;align-items:center;gap:2px;flex:none;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
+.psd-hovercard{position:fixed;z-index:1000;box-sizing:border-box;width:244px;max-height:min(320px,calc(100vh - 16px));overflow:hidden;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-alias-tooltip-bg,#2c2c2e);color:#fff;box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;font-size:12px;line-height:16px;pointer-events:none}
+.psd-hovercard-content{display:flex;flex-direction:column;gap:8px}
+.psd-hovercard-title{color:#fff;font-size:14px;line-height:20px;font-weight:400;overflow-wrap:break-word}
+.psd-hovercard-path{color:#cfd3d6;font-size:12px;line-height:16px;white-space:normal;word-break:break-all;overflow-wrap:anywhere;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
+.psd-hovercard-time{color:#cfd3d6;font-size:12px;line-height:16px}
+.psd-hovercard-status{display:flex;align-items:center;gap:8px;color:#adb2b8;font-size:12px;line-height:20px}
+.psd-hovercard-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--dsw-alias-state-business-primary)}
+.psd-hovercard-dot[data-state='done']{background:var(--dsw-alias-state-success-primary)}
+.psd-hovercard-row{display:flex;gap:8px;min-width:0;font-size:12px;line-height:16px}
+.psd-hovercard-key{flex:none;color:#adb2b8}
+.psd-hovercard-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#cfd3d6}
+.psd-run{--psd-title-fade:calc(var(--psd-action-width,22px) + 6px)}
+.psd-child{--psd-title-fade:calc(var(--psd-action-width,22px) + 6px)}
+.psd-run-actions{position:absolute;z-index:2;top:50%;right:76px;transform:translateY(-50%);display:flex;align-items:center;justify-content:flex-end;gap:2px;min-width:22px;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
 .psd-run:hover .psd-run-actions,.psd-run:focus-within .psd-run-actions,.psd-child:hover .psd-run-actions,.psd-child:focus-within .psd-run-actions{opacity:1;pointer-events:auto}
 .psd-row-action{appearance:none;display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
 .psd-row-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-row-action:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-row-action[data-variant='continue']{color:var(--dsw-alias-state-warn-primary)}
-.psd-row-action[data-hidden='true']{visibility:hidden;pointer-events:none}
 .psd-interrupted{flex:none;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary)}
 @media (prefers-reduced-motion: reduce){.psd-run-actions{transition:none}}
 .psd-group-header{flex:none;display:block;margin:3px 0 0}
 .psd-group-header[data-group='inactive']{margin-top:10px;padding-top:3px;border-top:0.5px solid var(--dsw-alias-border-l1)}
-.psd-group-toggle{appearance:none;display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;padding:4px 8px 4px 10px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;line-height:16px;font-weight:600;letter-spacing:.02em;text-align:left;cursor:pointer}
+.psd-group-toggle{appearance:none;display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;padding:4px 8px 4px 10px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:20px;font-weight:500;text-align:left;cursor:pointer}
 .psd-group-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
 .psd-group-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-group-toggle[aria-expanded='false'] .psd-chevron{transform:rotate(-90deg)}
-.psd-group-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase}
+.psd-group-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .psd-group-count{flex:none;min-width:16px;padding:0 5px;border-radius:var(--dsw-radius-xs,4px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font-size:10px;line-height:16px;text-align:center;font-variant-numeric:tabular-nums;font-weight:500}
-
+/* Shared rainbow focus ring for plugin inputs. Replaces solid-color focus borders;
+   used by the prompt-history search field and the settings choice pills, and
+   available to the annotation note editors once that surface is rewritten. */
+@property --psf-ring-angle{syntax:'<angle>';inherits:false;initial-value:0deg}
+.psf-rainbow-focus{position:relative}
+.psf-rainbow-focus::after{content:'';position:absolute;inset:-2px;border-radius:calc(var(--dsw-radius-sm,8px) + 2px);padding:2px;background:conic-gradient(from var(--psf-ring-angle,0deg),#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:0;transition:opacity 140ms var(--ds-ease-in-out,ease);filter:saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38));z-index:2}
+.psf-rainbow-focus:focus-within::after,.psf-rainbow-focus:focus-visible::after{opacity:1;animation:psf-ring-spin 3.2s linear infinite,psf-ring-hue 14s linear infinite}
+@keyframes psf-ring-spin{to{--psf-ring-angle:360deg}}
+@keyframes psf-ring-hue{from{filter:hue-rotate(0deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}to{filter:hue-rotate(360deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}}
+@media (prefers-reduced-motion: reduce){.psf-rainbow-focus:focus-within::after,.psf-rainbow-focus:focus-visible::after{animation:none}}
+@media (forced-colors: active){.psf-rainbow-focus::after{display:none}.psf-rainbow-focus:focus-within{outline:2px solid Highlight;outline-offset:1px}}
+/* Current-session highlight: a soft rainbow wave behind the bottom of the row
+   content (replaces the old conic ring). The same wave runs behind the matching
+   native Workspace row and is marked by data-psd-current-workspace. */
+.psd-run-current,.psd-child-current{position:relative;isolation:isolate}
+.psd-run-current::before{content:'';position:absolute;left:6px;right:6px;bottom:0;height:12px;border-radius:8px;background:linear-gradient(90deg,#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4);background-size:220% 100%;pointer-events:none;z-index:0;opacity:.3;filter:blur(6px) saturate(.9);mask-image:linear-gradient(90deg,#0000,#000 18%,#000 82%,#0000);animation:psd-wave-slide 9s linear infinite,psd-wave-breathe 3.6s ease-in-out infinite,psd-wave-hue 14s linear infinite}
+.psd-child-wave{position:absolute;left:4px;right:6px;bottom:0;height:10px;border-radius:8px;background:linear-gradient(90deg,#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4);background-size:220% 100%;pointer-events:none;z-index:0;opacity:.28;filter:blur(5px) saturate(.9);mask-image:linear-gradient(90deg,#0000,#000 18%,#000 82%,#0000);animation:psd-wave-slide 9s linear infinite,psd-wave-breathe 3.6s ease-in-out infinite,psd-wave-hue 14s linear infinite}
+.psd-run-current > *{position:relative;z-index:1}
+.psd-child-current > *:not(.psd-child-wave){position:relative;z-index:1}
+[data-psd-current-workspace='true']{position:relative;isolation:isolate}
+[data-psd-current-workspace='true']::after{content:'';position:absolute;left:10px;right:10px;bottom:2px;height:10px;border-radius:8px;background:linear-gradient(90deg,#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4);background-size:220% 100%;pointer-events:none;z-index:0;opacity:.28;filter:blur(5px) saturate(.9);mask-image:linear-gradient(90deg,#0000,#000 18%,#000 82%,#0000);animation:psd-wave-slide 9s linear infinite,psd-wave-breathe 3.6s ease-in-out infinite,psd-wave-hue 14s linear infinite}
+[data-psd-current-workspace='true'] > *{position:relative;z-index:1}
+@keyframes psd-wave-slide{0%{background-position:0 50%}100%{background-position:220% 50%}}
+@keyframes psd-wave-breathe{0%,100%{opacity:.2;transform:scaleX(.97)}50%{opacity:.4;transform:scaleX(1.03)}}
+@keyframes psd-wave-hue{from{filter:hue-rotate(0deg) blur(5px) saturate(.9)}50%{filter:hue-rotate(180deg) blur(6px) saturate(.92)}to{filter:hue-rotate(360deg) blur(5px) saturate(.9)}}
+@media (prefers-reduced-motion: reduce){.psd-run-current::before,.psd-child-wave,[data-psd-current-workspace='true']::after{animation:none;opacity:.26;transform:none;filter:blur(5px) saturate(.9)}}
 `
 
     /**
@@ -4879,6 +4900,61 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     function dwWriteFolds(folds) {
       try {
         window.localStorage.setItem(DW_FOLD_KEY, JSON.stringify({ active: folds.active, inactive: folds.inactive }))
+      } catch {
+        // A storage-denied browser keeps the in-memory state only.
+      }
+    }
+
+    /**
+     * localStorage key holding the last observed Active/Inactive bucket of every
+     * Workspace. On reload the Session store is still empty for the first paint,
+     * so without this cache every native section classifies as Inactive and a
+     * persisted fold visibly does not apply until the stores hydrate.
+     */
+    const DW_BUCKET_KEY = 'power-suite.dynamic-workspaces.buckets'
+
+    /** Document version of the persisted bucket-classification cache. */
+    const DW_BUCKET_VERSION = 1
+
+    /** Cache key used for the native ungrouped section (no `workspace:` suffix). */
+    const DW_BUCKET_UNGROUPED = '__ungrouped__'
+
+    /**
+     * Read the last observed bucket classification of each Workspace, degrading
+     * to an empty map on a corrupt, missing, or storage-denied document.
+     * @returns {Map<string, boolean>} workspace id (or the ungrouped key) → active.
+     */
+    function dwReadBucketCache() {
+      const cache = new Map()
+      try {
+        const raw = window.localStorage.getItem(DW_BUCKET_KEY)
+        if (raw === null) return cache
+        const value = JSON.parse(raw)
+        const source = value !== null && typeof value === 'object' && value.workspaces !== null && typeof value.workspaces === 'object'
+          ? value.workspaces
+          : null
+        if (source === null) return cache
+        for (const [id, bucket] of Object.entries(source)) {
+          if (typeof id !== 'string' || id.length === 0) continue
+          if (bucket !== 'active' && bucket !== 'inactive') continue
+          cache.set(id, bucket === 'active')
+        }
+      } catch {
+        // A corrupt document or a storage-denied browser starts empty.
+      }
+      return cache
+    }
+
+    /**
+     * Persist the last observed bucket classification of each Workspace.
+     * @param {Map<string, boolean>} cache - workspace id (or ungrouped) → active.
+     * @returns {void}
+     */
+    function dwWriteBucketCache(cache) {
+      try {
+        const workspaces = {}
+        for (const [id, active] of cache) workspaces[id] = active ? 'active' : 'inactive'
+        window.localStorage.setItem(DW_BUCKET_KEY, JSON.stringify({ version: DW_BUCKET_VERSION, workspaces }))
       } catch {
         // A storage-denied browser keeps the in-memory state only.
       }
@@ -5409,35 +5485,39 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     function DwRowActionCluster({ t, interruptedT, row, interrupted, onNewSession }) {
       const continueLabel = interruptedT('continue.aria')
       const newLabel = t('hover.newSession')
-      return React.createElement('span', { className: 'psd-run-actions' },
-        React.createElement('button', {
+      // The New session slot is reserved on every row so the button lands on one
+      // fixed column; Continue exists only on interrupted rows and is drawn to its
+      // left, so adding it never moves the New session button or the time.
+      const buttons = []
+      if (interrupted) {
+        buttons.push(React.createElement('button', {
+          key: 'continue',
           type: 'button',
           className: 'psd-row-action',
           'data-variant': 'continue',
-          'data-hidden': interrupted ? undefined : 'true',
-          disabled: !interrupted,
-          tabIndex: interrupted ? 0 : -1,
           'aria-label': continueLabel,
           title: continueLabel,
           onClick: (event) => {
             event.preventDefault()
             event.stopPropagation()
-            if (!interrupted) return
             requestContinue(row.id)
           }
-        }, React.createElement(RemixIcon, { path: REMIX_PLAY_FILL, size: 12 })),
-        React.createElement('button', {
-          type: 'button',
-          className: 'psd-row-action',
-          'data-variant': 'new-session',
-          'aria-label': newLabel,
-          title: newLabel,
-          onClick: (event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            onNewSession(row)
-          }
-        }, React.createElement(DwNewChatGlyph)))
+        }, React.createElement(RemixIcon, { path: REMIX_PLAY_FILL, size: 12 })))
+      }
+      buttons.push(React.createElement('button', {
+        key: 'new-session',
+        type: 'button',
+        className: 'psd-row-action',
+        'data-variant': 'new-session',
+        'aria-label': newLabel,
+        title: newLabel,
+        onClick: (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onNewSession(row)
+        }
+      }, React.createElement(DwNewChatGlyph)))
+      return React.createElement('span', { className: 'psd-run-actions' }, buttons)
     }
 
     /**
@@ -5485,10 +5565,19 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
 
       // Hover detail card for one row: the row itself only carries the title,
-      // state and time; the workspace and other facts live in the card. The card
-      // anchors to the panel's right edge (not the row's), so it sits entirely
-      // outside the sidebar and can never cover the row's trailing actions.
+      // state and time; the workspace and other facts live in the card. Like the
+      // native sidebar tooltip it starts flush on the sidebar column's right edge
+      // and on the hovered row's top, so it sits entirely outside the sidebar and
+      // can never cover the row's trailing actions.
       const [hover, setHover] = React.useState(null)
+      // Whether the UI annotation mode is active; while it is, a shown hovercard is
+      // pinned (pointer-interactive, marked with data-psd-pinned) so it can be
+      // inspected and annotated. Normal mode never sets the marker.
+      const [annotationActive, setAnnotationActive] = React.useState(
+        () => document.documentElement.getAttribute('data-psa-active') === 'true'
+      )
+      const hoverCardRef = React.useRef(null)
+      const panelRootRef = React.useRef(null)
       const hoverTimer = React.useRef(null)
       const clearHoverTimer = () => {
         if (hoverTimer.current !== null) {
@@ -5515,20 +5604,83 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           window.removeEventListener('resize', dismiss)
         }
       }, [hover])
+      // Native-style right-edge fade: mask a row title only while it actually
+      // overflows its fixed column, so a short title never loses its last glyphs
+      // to the gradient. Runs after every render (row titles/time update live).
+      const measureClippedTitles = React.useCallback(() => {
+        const root = panelRootRef.current
+        if (!(root instanceof HTMLElement)) return
+        for (const title of root.querySelectorAll('.psd-run-title,.psd-child-title')) {
+          const clipped = title.scrollWidth > title.clientWidth + 1
+          if (clipped) {
+            if (title.getAttribute('data-clipped') !== 'true') title.setAttribute('data-clipped', 'true')
+          } else if (title.hasAttribute('data-clipped')) {
+            title.removeAttribute('data-clipped')
+          }
+        }
+      }, [])
+      React.useLayoutEffect(() => {
+        measureClippedTitles()
+      })
+      React.useEffect(() => {
+        const root = panelRootRef.current
+        if (!(root instanceof HTMLElement) || typeof ResizeObserver === 'undefined') return undefined
+        const observer = new ResizeObserver(() => measureClippedTitles())
+        observer.observe(root)
+        return () => observer.disconnect()
+      }, [measureClippedTitles])
+      // Keep the card inside the viewport (native tooltips are clamped at the
+      // bottom edge); measuring after mount avoids guessing the content height.
+      React.useLayoutEffect(() => {
+        if (hover === null) return
+        const element = hoverCardRef.current
+        if (!(element instanceof HTMLElement)) return
+        const maxTop = Math.max(8, window.innerHeight - element.offsetHeight - 8)
+        if (hover.top > maxTop) {
+          setHover((previous) => (previous === null ? previous : { ...previous, top: maxTop }))
+        }
+      }, [hover])
       const showHover = (row, element) => {
         clearHoverTimer()
         hoverTimer.current = window.setTimeout(() => {
           if (!(element instanceof HTMLElement) || !element.isConnected) return
           const rect = element.getBoundingClientRect()
+          // Native row tooltips start flush on the sidebar column's right edge and
+          // on the hovered row's top. Fall back to the old panel anchor only when
+          // the sidebar column cannot be identified.
+          const sidebar = element.closest('[class*="_sidebarCol"]')
           const panel = element.closest('.psd-panel')
-          const anchorRight = panel instanceof HTMLElement ? panel.getBoundingClientRect().right : rect.right
-          setHover({ row, top: Math.round(rect.top), anchorRight: Math.round(anchorRight) })
+          const anchorLeft = sidebar instanceof HTMLElement
+            ? Math.round(sidebar.getBoundingClientRect().right)
+            : panel instanceof HTMLElement
+              ? Math.round(panel.getBoundingClientRect().right + 10)
+              : Math.round(rect.right)
+          setHover({ row, top: Math.round(rect.top), anchorLeft })
         }, 260)
       }
       const hideHover = () => {
         clearHoverTimer()
+        // While the annotation mode is active the hovercard becomes an annotatable
+        // surface: it stays open when the pointer leaves the row so the pointer can
+        // travel onto the card itself (the annotation stylesheet makes it
+        // pointer-interactive only in that mode).
+        if (document.documentElement.getAttribute('data-psa-active') === 'true') return
         hoverTimer.current = window.setTimeout(() => setHover(null), 140)
       }
+      // The annotation mode broadcasts its state; leaving the mode must never
+      // leave a pinned hovercard behind, entering it must cancel a pending hide.
+      React.useEffect(() => {
+        const onAnnotationState = (event) => {
+          const active = event instanceof CustomEvent && event.detail !== null && typeof event.detail === 'object'
+            ? event.detail.active === true
+            : false
+          setAnnotationActive(active)
+          if (active) clearHoverTimer()
+          else setHover(null)
+        }
+        document.addEventListener('power-suite:ui-annotation-state', onAnnotationState)
+        return () => document.removeEventListener('power-suite:ui-annotation-state', onAnnotationState)
+      }, [])
 
       const headChildren = [
         React.createElement('button', {
@@ -5546,6 +5698,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         React.createElement('span', { className: 'psd-panel-title' }, t('panel.title')),
         React.createElement('span', { className: 'psd-count' }, t('count', { count: rows.length })))
       ]
+      headChildren.push(React.createElement('span', { key: 'spacer', className: 'psd-panel-head-spacer', 'aria-hidden': true }))
       if (expanded && canExpand) {
         headChildren.push(React.createElement('button', {
           key: 'all',
@@ -5563,7 +5716,16 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         'aria-label': expanded ? t('panel.collapse') : t('panel.expand'),
         onClick: onToggle
       }, React.createElement('span', { className: 'psd-chevron' }, React.createElement(DwChevron, null))))
-      const children = [React.createElement('div', { key: 'head', className: 'psd-panel-head' }, headChildren)]
+      const head = React.createElement('div', {
+        key: 'head',
+        className: 'psd-panel-head',
+        onClick: (event) => {
+          const target = event.target
+          if (target instanceof Element && target.closest('button') !== null) return
+          onToggle()
+        }
+      }, headChildren)
+      const children = [head]
       if (expanded) {
         const body = []
         if (rows.length === 0) {
@@ -5583,6 +5745,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             const collapsed = collapsedParents.has(row.id)
             const hasChildren = rowChildren.length > 0
             const interrupted = rowInterrupted(row.id)
+            // Fixed trailing columns keep the same controls on one vertical line for
+            // every parent and child row: [actions 46][time 36][chevron 24], each
+            // separated by the 2 px row gap. The title takes the remaining width and
+            // fades out at its right edge only while it is actually clipped.
             body.push(React.createElement('div', {
               key: row.id,
               className: 'psd-item',
@@ -5590,7 +5756,17 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             },
             React.createElement('div', {
               className: isCurrent(row.id) ? 'psd-run psd-run-current' : 'psd-run',
-              'data-state': row.state
+              'data-state': row.state,
+              'aria-current': isCurrent(row.id) ? 'true' : undefined,
+              'data-actions': interrupted ? 'continue+new' : 'new',
+              style: { '--psd-action-width': interrupted ? '46px' : '22px' },
+              onClick: (event) => {
+                const target = event.target
+                if (target instanceof Element && target.closest('button') !== null) return
+                onOpen(row.id)
+              },
+              onMouseEnter: (event) => showHover(row, event.currentTarget),
+              onMouseLeave: hideHover
             },
               React.createElement('button', {
                 type: 'button',
@@ -5598,8 +5774,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                 'aria-current': isCurrent(row.id) ? 'true' : undefined,
                 'aria-label': t('panel.open', { title: row.title }),
                 onClick: () => onOpen(row.id),
-                onMouseEnter: (event) => showHover(row, event.currentTarget),
-                onMouseLeave: hideHover,
                 onFocus: (event) => showHover(row, event.currentTarget),
                 onBlur: hideHover
               },
@@ -5618,8 +5792,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                     title: interruptedTitle(row.id)
                   }, RemixGlyph(REMIX_WARNING_FILL, 13))
                   : null,
-                React.createElement('span', { className: 'psd-run-title' }, row.title),
-                React.createElement('span', { className: 'psd-run-time' }, time))),
+                React.createElement('span', { className: 'psd-run-title' }, row.title))),
               React.createElement(DwRowActionCluster, {
                 t,
                 interruptedT,
@@ -5627,6 +5800,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                 interrupted,
                 onNewSession
               }),
+              React.createElement('span', { className: 'psd-run-time' }, time),
               hasChildren
                 ? React.createElement('button', {
                   type: 'button',
@@ -5653,10 +5827,20 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                 return React.createElement('div', {
                   key: child.id,
                   className: childCurrent ? 'psd-child psd-child-current' : 'psd-child',
-                  'data-state': child.state
+                  'data-state': child.state,
+                  'aria-current': childCurrent ? 'true' : undefined,
+                  'data-actions': childInterrupted ? 'continue+new' : 'new',
+                  style: { '--psd-action-width': childInterrupted ? '46px' : '22px' },
+                  onClick: (event) => {
+                    const target = event.target
+                    if (target instanceof Element && target.closest('button') !== null) return
+                    onOpen(child.id)
+                  },
+                  onMouseEnter: (event) => showHover(childRow, event.currentTarget),
+                  onMouseLeave: hideHover
                 },
                 childCurrent
-                  ? React.createElement('span', { key: 'ring', className: 'psd-child-ring', 'aria-hidden': true })
+                  ? React.createElement('span', { key: 'wave', className: 'psd-child-wave', 'aria-hidden': true })
                   : null,
                 React.createElement('button', {
                   type: 'button',
@@ -5664,8 +5848,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                   'aria-current': childCurrent ? 'true' : undefined,
                   'aria-label': t('panel.open', { title: child.title }),
                   onClick: () => onOpen(child.id),
-                  onMouseEnter: (event) => showHover(childRow, event.currentTarget),
-                  onMouseLeave: hideHover,
                   onFocus: (event) => showHover(childRow, event.currentTarget),
                   onBlur: hideHover
                 },
@@ -5684,15 +5866,16 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                     title: interruptedTitle(child.id)
                   }, RemixGlyph(REMIX_WARNING_FILL, 13))
                   : null,
-                React.createElement('span', { className: 'psd-child-title' }, child.title),
-                React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t))),
+                React.createElement('span', { className: 'psd-child-title' }, child.title)),
                 React.createElement(DwRowActionCluster, {
                   t,
                   interruptedT,
                   row: childRow,
                   interrupted: childInterrupted,
                   onNewSession
-                }))
+                }),
+                React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t)),
+                React.createElement('span', { className: 'psd-run-toggle-spacer', 'aria-hidden': true }))
               }))
               : null))
           }
@@ -5708,33 +5891,47 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               ? dwFormatRelative(now - row.updatedAt, t)
               : dwFormatDuration(now - duration.at, t))
           : dwFormatRelative(now - row.updatedAt, t)
-        const cardTop = Math.round(Math.max(8, Math.min(hover.top - 8, window.innerHeight - 320)))
-        const cardLeft = Math.round(Math.min(hover.anchorRight + 10, window.innerWidth - 300 - 8))
+        const cardLeft = Math.round(Math.max(8, Math.min(hover.anchorLeft, window.innerWidth - 244 - 8)))
         children.push(React.createElement('div', {
           key: 'hover',
+          ref: hoverCardRef,
           className: 'psd-hovercard',
           role: 'tooltip',
           'aria-hidden': true,
-          style: { top: cardTop, left: cardLeft }
+          'data-psd-hovercard': '',
+          'data-psd-pinned': annotationActive ? 'true' : undefined,
+          onMouseLeave: () => {
+            clearHoverTimer()
+            setHover(null)
+          },
+          style: { top: Math.round(hover.top), left: cardLeft }
         },
-        React.createElement('div', { className: 'psd-hovercard-title' }, row.workspace),
-        row.workspacePath.length === 0
-          ? null
-          : React.createElement('div', { className: 'psd-hovercard-path' }, row.workspacePath),
-        React.createElement('div', { className: 'psd-hovercard-row' },
-          React.createElement('span', { className: 'psd-hovercard-key' }, t('hover.status')),
-          React.createElement('span', { className: 'psd-hovercard-value' },
-            `${running ? t('hover.running') : t('hover.done')} · ${statusTime}`)),
-        React.createElement('div', { className: 'psd-hovercard-row' },
-          React.createElement('span', { className: 'psd-hovercard-key' }, t('hover.updated')),
-          React.createElement('span', { className: 'psd-hovercard-value' }, dwFormatAbsoluteTime(row.updatedAt))),
-        row.subagents > 0
-          ? React.createElement('div', { className: 'psd-hovercard-row' },
-            React.createElement('span', { className: 'psd-hovercard-key' },
-              row.subagents === 1 ? t('hover.subagentsOne') : t('hover.subagents', { count: row.subagents })))
-          : null))
+        React.createElement('div', { className: 'psd-hovercard-content' },
+          React.createElement('div', { className: 'psd-hovercard-title' }, row.workspace),
+          row.workspacePath.length === 0
+            ? null
+            : React.createElement('div', { className: 'psd-hovercard-path' }, row.workspacePath),
+          React.createElement('div', { className: 'psd-hovercard-time' }, dwFormatRelative(now - row.updatedAt, t)),
+          React.createElement('div', { className: 'psd-hovercard-status' },
+            React.createElement('span', {
+              className: 'psd-hovercard-dot',
+              'data-state': running ? 'running' : 'done',
+              'aria-hidden': true
+            }),
+            React.createElement('span', null,
+              `${running ? t('hover.running') : t('hover.done')} · ${statusTime}`)),
+          // Remaining native-tooltip-style detail rows. Later hover-card content
+          // (session statistics, token usage, context) appends rows here.
+          React.createElement('div', { className: 'psd-hovercard-row' },
+            React.createElement('span', { className: 'psd-hovercard-key' }, t('hover.updated')),
+            React.createElement('span', { className: 'psd-hovercard-value' }, dwFormatAbsoluteTime(row.updatedAt))),
+          row.subagents > 0
+            ? React.createElement('div', { className: 'psd-hovercard-row' },
+              React.createElement('span', { className: 'psd-hovercard-key' },
+                row.subagents === 1 ? t('hover.subagentsOne') : t('hover.subagents', { count: row.subagents })))
+            : null)))
       }
-      return React.createElement('div', { className: 'psd-panel' }, children)
+      return React.createElement('div', { ref: panelRootRef, className: 'psd-panel' }, children)
     }
 
     /**
@@ -5787,6 +5984,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
       const mountsRef = React.useRef(null)
       const latestRef = React.useRef(null)
+      const mainViewRef = React.useRef({ ids: new Set(), currentId: null })
+      const bucketCacheRef = React.useRef(dwReadBucketCache())
+      const markedWorkspaceRef = React.useRef(new Set())
       const aliveRef = React.useRef(true)
       const applyScheduledRef = React.useRef(false)
       const durationsRef = React.useRef(new Map())
@@ -5942,19 +6142,24 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const runningParents = dwRunningSubagentParents(sessions, statuses)
       const workspaces = workspaceSnapshot?.items ?? []
       const archivedIds = new Set(workspaceSnapshot?.archivedSessionIds ?? [])
-      // The rainbow ring marks the Session the main conversation currently shows.
-      // The client summary's `retainedBy.mainView` counter is the same source the
-      // read-baseline effect trusts, so the highlight follows every way of
-      // opening a Session (card, sidebar, elsewhere).
-      let currentSessionId = null
+      // The current Session is the one the main conversation shows. The client
+      // summary's `retainedBy.mainView` counter is the same source the read-baseline
+      // effect trusts; a Session that just gained retention wins over an older one
+      // that is still being released, so opening a Session anywhere (card, native
+      // sidebar, elsewhere) moves the highlight immediately.
+      const mainViewIds = []
       if (sessions !== null && typeof sessions === 'object' && Array.isArray(sessions.ids)) {
         for (const id of sessions.ids) {
-          if ((sessions.byId?.[id]?.retainedBy?.mainView ?? 0) > 0) {
-            currentSessionId = id
-            break
-          }
+          if ((sessions.byId?.[id]?.retainedBy?.mainView ?? 0) > 0) mainViewIds.push(id)
         }
       }
+      const previousMain = mainViewRef.current
+      const newlyRetained = mainViewIds.find((id) => !previousMain.ids.has(id))
+      let currentSessionId = null
+      if (newlyRetained !== undefined) currentSessionId = newlyRetained
+      else if (previousMain.currentId !== null && mainViewIds.includes(previousMain.currentId)) currentSessionId = previousMain.currentId
+      else currentSessionId = mainViewIds[0] ?? null
+      mainViewRef.current = { ids: new Set(mainViewIds), currentId: currentSessionId }
       const runningRows = dwRunningRows(sessions, statuses, workspaces, t, runningParents, archivedIds, sessionActivity)
       const recentRows = dwRecentRows(sessions, statuses, workspaces, t, now, runningParents, archivedIds, windows.recentMs, sessionActivity)
       const panelRows = runningRows.concat(recentRows)
@@ -5973,7 +6178,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (!runningIds.has(id)) durationsRef.current.delete(id)
       }
 
-      latestRef.current = { sessions, statuses, workspaces: workspaceSnapshot, folds, windows, activity: sessionActivity }
+      latestRef.current = { sessions, statuses, workspaces: workspaceSnapshot, folds, windows, activity: sessionActivity, currentSessionId }
 
       // Read state is derived at render time from the acknowledged baseline:
       // opening a Session raises its baseline to the observed `updatedAt`, and a
@@ -6079,26 +6284,42 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (refs === null || latest === null) return
         if (!(refs.list instanceof HTMLElement) || refs.activeHeader.isConnected !== true) return
         const workspaces = latest.workspaces?.items ?? []
-        const activity = dwActiveSessions(
-          latest.sessions,
-          latest.statuses,
-          workspaces,
-          Date.now(),
-          new Set(latest.workspaces?.archivedSessionIds ?? []),
-          latest.windows.activeMs,
-          latest.activity ?? {}
-        )
+        // First paint after a reload happens before the Session catalog hydrates,
+        // and an empty catalog classifies every section as Inactive — a persisted
+        // Active fold would visibly paint expanded and then collapse. During that
+        // pre-hydration pass only, reuse the last observed bucket classification;
+        // live data always wins as soon as the catalog exists.
+        const sessionIds = Array.isArray(latest.sessions?.ids) ? latest.sessions.ids : []
+        const cachedBuckets = bucketCacheRef.current
+        // `phase` is the shell catalog's pending → ready edge; older shell builds do
+        // not expose it, so an empty id list also counts as not hydrated.
+        const catalogPhase = latest.sessions?.phase
+        const catalogReady = catalogPhase === 'ready' || (catalogPhase === undefined && sessionIds.length > 0)
+        const useCachedBuckets = !catalogReady && cachedBuckets.size > 0
+        const activity = useCachedBuckets
+          ? null
+          : dwActiveSessions(
+            latest.sessions,
+            latest.statuses,
+            workspaces,
+            Date.now(),
+            new Set(latest.workspaces?.archivedSessionIds ?? []),
+            latest.windows.activeMs,
+            latest.activity ?? {}
+          )
         const activeIds = new Set()
         const recencyByWorkspace = new Map()
         let ungroupedActive = false
-        for (const row of activity.rows) {
-          const workspaceId = activity.workspaceOf.get(row.id)
-          if (workspaceId === undefined) {
-            ungroupedActive = true
-            continue
+        if (activity !== null) {
+          for (const row of activity.rows) {
+            const workspaceId = activity.workspaceOf.get(row.id)
+            if (workspaceId === undefined) {
+              ungroupedActive = true
+              continue
+            }
+            activeIds.add(workspaceId)
+            recencyByWorkspace.set(workspaceId, Math.max(recencyByWorkspace.get(workspaceId) ?? 0, row.updatedAt))
           }
-          activeIds.add(workspaceId)
-          recencyByWorkspace.set(workspaceId, Math.max(recencyByWorkspace.get(workspaceId) ?? 0, row.updatedAt))
         }
         const sections = []
         let domIndex = 0
@@ -6109,26 +6330,77 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           if (row === null) { domIndex += 1; continue }
           const key = row.getAttribute('data-row-key') ?? ''
           const workspaceId = key.slice('workspace:'.length)
-          const active = workspaceId.length === 0 ? ungroupedActive : activeIds.has(workspaceId)
-          sections.push({ element: child, active, domIndex, recency: recencyByWorkspace.get(workspaceId) ?? 0 })
+          const cacheKey = workspaceId.length === 0 ? DW_BUCKET_UNGROUPED : workspaceId
+          const active = useCachedBuckets
+            ? cachedBuckets.get(cacheKey) === true
+            : (workspaceId.length === 0 ? ungroupedActive : activeIds.has(workspaceId))
+          sections.push({ element: child, row, workspaceId, cacheKey, active, domIndex, recency: recencyByWorkspace.get(workspaceId) ?? 0 })
           domIndex += 1
         }
         const activeSections = sections.filter((section) => section.active)
         const inactiveSections = sections.filter((section) => !section.active)
         activeSections.sort((left, right) => (right.recency - left.recency) || (left.domIndex - right.domIndex))
         const ordered = [...activeSections, ...inactiveSections]
+        // Only touch the native inline style when it actually changes: redundant
+        // writes would retrigger the style observer below in a loop.
         ordered.forEach((section, index) => {
-          section.element.style.order = String((section.active ? 100 : 5001) + index)
+          const order = String((section.active ? 100 : 5001) + index)
+          if (section.element.style.order !== order) section.element.style.order = order
         })
         for (const section of sections) {
           const collapsed = section.active ? latest.folds.active : latest.folds.inactive
-          section.element.style.display = collapsed ? 'none' : ''
+          const display = collapsed ? 'none' : ''
+          if (section.element.style.display !== display) section.element.style.display = display
         }
-        refs.activeHeader.style.order = '0'
-        refs.inactiveHeader.style.order = '5000'
+        if (refs.activeHeader.style.order !== '0') refs.activeHeader.style.order = '0'
+        if (refs.inactiveHeader.style.order !== '5000') refs.inactiveHeader.style.order = '5000'
         const empty = sections.length === 0
-        refs.activeHeader.style.display = empty ? 'none' : ''
-        refs.inactiveHeader.style.display = empty ? 'none' : ''
+        const headerDisplay = empty ? 'none' : ''
+        if (refs.activeHeader.style.display !== headerDisplay) refs.activeHeader.style.display = headerDisplay
+        if (refs.inactiveHeader.style.display !== headerDisplay) refs.inactiveHeader.style.display = headerDisplay
+        // Current-Session marker: the native Workspace row that owns the Session
+        // open in the main view carries the same rainbow wave as the card row.
+        const marked = markedWorkspaceRef.current
+        for (const element of marked) element.removeAttribute('data-psd-current-workspace')
+        marked.clear()
+        let currentWorkspaceKey = null
+        if (typeof latest.currentSessionId === 'string' && latest.currentSessionId.length > 0) {
+          let owner = dwOwningWorkspace(latest.currentSessionId, workspaces)
+          if (owner === null) {
+            // A subagent Session opened from a card child row has no own Workspace
+            // entry; its parent Session's Workspace is the project the user opened.
+            const summary = latest.sessions?.byId?.[latest.currentSessionId]
+            const parentId = summary !== null && typeof summary === 'object' && typeof summary.parentId === 'string'
+              ? summary.parentId
+              : ''
+            if (parentId.length > 0) owner = dwOwningWorkspace(parentId, workspaces)
+          }
+          currentWorkspaceKey = owner !== null && typeof owner.workspaceId === 'string' && owner.workspaceId.length > 0
+            ? owner.workspaceId
+            : DW_BUCKET_UNGROUPED
+        }
+        if (currentWorkspaceKey !== null) {
+          for (const section of sections) {
+            if (section.cacheKey !== currentWorkspaceKey) continue
+            section.row.setAttribute('data-psd-current-workspace', 'true')
+            marked.add(section.row)
+            break
+          }
+        }
+        // Remember this classification so the next reload can apply persisted
+        // folds before the stores hydrate (see useCachedBuckets above).
+        if (activity !== null) {
+          let changed = cachedBuckets.size !== sections.length
+          const next = new Map()
+          for (const section of sections) {
+            next.set(section.cacheKey, section.active)
+            if (!changed && cachedBuckets.get(section.cacheKey) !== section.active) changed = true
+          }
+          if (changed) {
+            bucketCacheRef.current = next
+            dwWriteBucketCache(next)
+          }
+        }
         const counts = { active: activeSections.length, inactive: inactiveSections.length }
         if (aliveRef.current) {
           setGroupCounts((previous) => (
@@ -6167,7 +6439,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             reconcile()
             scheduleApply()
           })
-          observer.observe(sidebar, { childList: true, subtree: true })
+          // Attribute watches catch a native re-render that resets an inline
+          // `display`/`order` we already applied; every write above compares the
+          // current value first, so this cannot loop on our own updates.
+          observer.observe(sidebar, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] })
         }
 
         const reconcile = () => {
@@ -6216,6 +6491,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             if (refs.panel instanceof HTMLElement) refs.panel.remove()
             if (refs.activeHeader instanceof HTMLElement) refs.activeHeader.remove()
             if (refs.inactiveHeader instanceof HTMLElement) refs.inactiveHeader.remove()
+            for (const element of markedWorkspaceRef.current) element.removeAttribute('data-psd-current-workspace')
+            markedWorkspaceRef.current.clear()
             if (refs.list instanceof HTMLElement) {
               refs.list.style.display = ''
               refs.list.style.flexDirection = ''
@@ -6399,11 +6676,13 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psp-search-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
 .psp-search-toggle[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psp-search-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
-.psp-rail-card{position:fixed;z-index:61;box-sizing:border-box;overflow:hidden;padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,none);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}
+.psp-rail-card{position:fixed;z-index:61;box-sizing:border-box;overflow:hidden;padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-shadow-lv3,none);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}
 .psp-rail-card-text{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:6;overflow:hidden;white-space:pre-wrap;word-break:break-word;font:var(--dsw-font-xs-strong-13,inherit);font-family:inherit;font-size:13px;font-weight:500;line-height:20px}
 .psp-rail-card-time{margin-top:4px;color:var(--dsw-alias-label-caption,var(--dsw-alias-label-tertiary));font:var(--dsw-font-xxs-12,inherit);font-family:inherit;font-size:12px;line-height:18px}
-.psp-search-card{position:fixed;z-index:61;display:flex;flex-direction:column;gap:4px;box-sizing:border-box;overflow:hidden;width:min(300px,calc(100vw - 40px));padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,none);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:16px}
+.psp-search-card{position:fixed;z-index:61;display:flex;flex-direction:column;gap:4px;box-sizing:border-box;overflow:hidden;width:min(300px,calc(100vw - 40px));padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-shadow-lv3,none);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:16px}
 .psp-search-row{display:flex;align-items:center;gap:6px}
+.psp-search-field{position:relative;display:flex;flex:1;min-width:0;height:22px;align-items:center;border-radius:var(--dsw-radius-sm,8px)}
+.psf-rainbow-focus.psp-search-field::after{inset:-3px;border-radius:calc(var(--dsw-radius-sm,8px) + 3px)}
 .psp-search-icon{flex:none;color:var(--dsw-alias-label-tertiary)}
 .psp-search-input{flex:1;min-width:0;height:22px;margin:0;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:18px;outline:none}
 .psp-search-input::placeholder{color:var(--dsw-alias-label-tertiary)}
@@ -6964,17 +7243,20 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       },
       React.createElement('div', { className: 'psp-search-row' },
         RemixGlyph(REMIX_SEARCH_LINE, 13, 'psp-search-icon'),
-        React.createElement('input', {
-          ref: searchRef,
-          type: 'text',
-          className: 'psp-search-input',
-          value: query,
-          placeholder: t('search.placeholder'),
-          'aria-label': t('search.aria'),
-          autoComplete: 'off',
-          spellCheck: false,
-          onChange: (event) => setQuery(event.target.value)
-        })),
+        // The rainbow ring illustrates the input's active state (shared with the
+        // annotation note editors); the input itself stays borderless.
+        React.createElement('span', { className: 'psp-search-field psf-rainbow-focus' },
+          React.createElement('input', {
+            ref: searchRef,
+            type: 'text',
+            className: 'psp-search-input',
+            value: query,
+            placeholder: t('search.placeholder'),
+            'aria-label': t('search.aria'),
+            autoComplete: 'off',
+            spellCheck: false,
+            onChange: (event) => setQuery(event.target.value)
+          }))),
       React.createElement('div', { className: 'psp-search-count' },
         t('count.filtered', { count: marks.length, total: prompts.length })),
       needle.length > 0 && marks.length === 0
