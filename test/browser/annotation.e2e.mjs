@@ -3892,6 +3892,29 @@ function buildScenarios(harness) {
     },
 
     10: async () => {
+      /**
+       * After a reload the shell can restore a different "last viewed" Session than
+       * the one the records were captured in. Switch back through the native
+       * sidebar row so the current/other scope assertions are deterministic.
+       * @param {string | null | undefined} targetSessionId - Session that owns the records.
+       * @returns {Promise<string | null>} the current Session after the attempt.
+       */
+      async function ensureSessionFor(targetSessionId) {
+        if (typeof targetSessionId !== 'string' || targetSessionId.length === 0) return null
+        let current = await h.refreshSession()
+        if (current === targetSessionId) return current
+        await h.ensureSidebarExpanded()
+        const row = await h.page.evaluate(`(() => { const element = document.querySelector('[data-row-key="session:${targetSessionId}"]'); if (element === null) return null; const rect = element.getBoundingClientRect(); if (rect.width <= 0 || rect.height <= 0) return null; return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) } })()`)
+        if (row === null) return current
+        await h.page.clickAt(row.x, row.y)
+        await sleep(500)
+        try {
+          await h.page.waitFor(`document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') === ${JSON.stringify(targetSessionId)}`, { timeout: 6000, label: 'Session switch through the sidebar' })
+        } catch {
+          return h.refreshSession()
+        }
+        return h.refreshSession()
+      }
       await h.ensureModeOff()
       await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
       await sleep(350)
@@ -4172,6 +4195,8 @@ function buildScenarios(harness) {
       await sleep(700)
       await h.ensureSidebarExpanded()
       await h.ensureConversation()
+      const reloadTargetSession = (await h.page.eval(probes.annotationStorage)).records.find((record) => record.note === 'Keep this note')?.session?.sessionId ?? null
+      await ensureSessionFor(reloadTargetSession)
       await h.ensureActivatedStable()
       await h.openCollection()
       await sleep(400)
@@ -4179,7 +4204,14 @@ function buildScenarios(harness) {
       assert(reloadedEntries.length >= 2, `D1: persisted records were not restored after reload (${reloadedEntries.length} rows)`)
       assert(reloadedEntries.some((entry) => entry.note === 'Keep this note'), 'D1: the note did not survive the reload')
       const statuses = reloadedEntries.map((entry) => entry.status)
-      assert(statuses.includes('resolved'), `D1: the page record did not re-resolve after reload (statuses ${short(JSON.stringify(statuses))})`)
+      if (!statuses.includes('resolved')) {
+        const sessionDiagnostics = {
+          currentSession: await h.refreshSession(),
+          storage: (await h.page.eval(probes.annotationStorage)).records.map((record) => ({ id: record.id, note: record.note, sessionId: record.session?.sessionId ?? null, surface: record.surface })),
+          marks: await h.page.eval(probes.marksState),
+        }
+        throw new Error(`D1: the page record did not re-resolve after reload (statuses ${short(JSON.stringify(statuses))}) | diagnostics=${short(JSON.stringify(sessionDiagnostics), 800)}`)
+      }
       assert(statuses.includes('missing'), `D1: the removed floating target is not reported missing after reload (statuses ${short(JSON.stringify(statuses))})`)
       await h.clickBack()
       await sleep(200)
@@ -4435,6 +4467,29 @@ function buildScenarios(harness) {
     },
 
     14: async () => {
+      /**
+       * After a reload the shell can restore a different "last viewed" Session than
+       * the one the records were captured in. Switch back through the native
+       * sidebar row so the mark/scope assertions are deterministic.
+       * @param {string | null | undefined} targetSessionId - Session that owns the records.
+       * @returns {Promise<string | null>} the current Session after the attempt.
+       */
+      async function ensureSessionFor(targetSessionId) {
+        if (typeof targetSessionId !== 'string' || targetSessionId.length === 0) return null
+        let current = await h.refreshSession()
+        if (current === targetSessionId) return current
+        await h.ensureSidebarExpanded()
+        const row = await h.page.evaluate(`(() => { const element = document.querySelector('[data-row-key="session:${targetSessionId}"]'); if (element === null) return null; const rect = element.getBoundingClientRect(); if (rect.width <= 0 || rect.height <= 0) return null; return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) } })()`)
+        if (row === null) return current
+        await h.page.clickAt(row.x, row.y)
+        await sleep(500)
+        try {
+          await h.page.waitFor(`document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') === ${JSON.stringify(targetSessionId)}`, { timeout: 6000, label: 'Session switch through the sidebar' })
+        } catch {
+          return h.refreshSession()
+        }
+        return h.refreshSession()
+      }
       await h.ensureModeOff()
       await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
       await sleep(300)
@@ -4511,8 +4566,19 @@ function buildScenarios(harness) {
       await h.ensureConversation()
       const storedAfter = await h.page.eval(probes.annotationStorage)
       assertEqual(storedAfter.count, 2, 'the persisted records were not restored after the reload')
+      await ensureSessionFor(syntheticRecord.session?.sessionId ?? sessionId)
       await h.ensureActivatedStable()
-      await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 1`, { timeout: 8000, label: 'only the live mark after reload' })
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 1`, { timeout: 8000, label: 'only the live mark after reload' }).catch(async (error) => {
+        // Diagnostics instead of a bare timeout: which records came back, which
+        // ones are drawn, and which Session the page considers current.
+        const diagnostics = {
+          storage: await h.page.eval(probes.annotationStorage),
+          marks: await h.page.eval(probes.marksState),
+          sessionId: await h.refreshSession(),
+          ui: await h.ui(),
+        }
+        throw new Error(`${error.message} | diagnostics=${short(JSON.stringify(diagnostics), 900)}`)
+      })
       await sleep(300)
       const marksAfter = await h.page.eval(probes.marksState)
       assertEqual(marksAfter.length, 1, `the removed target must not be drawn (got ${marksAfter.length} marks)`)

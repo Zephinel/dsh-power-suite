@@ -142,6 +142,29 @@ card z=100), `10-floating-card-popover.png` (floating/ephemeral popover with Cop
 `15-settings-focus.png` (shared-recipe focus ring: `psa-ring-spin, psa-ring-hue` at
 `3.2s, 14s`).
 
+## Current evidence (Phase 2-A annotation build)
+
+Phase 2-A (`feat/annotation-ux`, on top of the Phase 1 commit `1261846`), Node v24.22.2,
+live GUI at 1728x900, **57-key** seam. Logs/screenshots are external development evidence
+under `.tmp-work/` (gitignored).
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Unit model | `npm test` | **204/204** pass, 0 skip |
+| Repository gate | `npm run check` | exit 0 (18 modules, 10 test files) |
+| Smoke | `node test/browser/annotation.e2e.mjs --smoke` | **6/6**, seam 57 keys, 0 page errors, 0 real network failures |
+| Marks + detail + delete/undo + other-Session | `node test/browser/annotation.e2e.mjs --scenario 12 --no-shots` | **PASS** (2 marks with `#index`/requirement badges and `pointer-events:none`, hover detail card with full requirement/Session/Workspace/position/actions, keep-open and no focus steal, detail edit persisted and `updatedAt` bumped, delete → `role=status` undo toast → restore, other-Session record not drawn after reload, reduced-motion static) |
+| Reload restores marks; removed target missing | `node test/browser/annotation.e2e.mjs --scenario 14 --no-shots` | **PASS** (2 records restored, only the live target drawn, rail `missing`/`resolved` statuses) |
+| F-2 Session/Workspace identity | `node test/browser/annotation.e2e.mjs --scenario 10 --no-shots` | **PASS**, incl. new assertions: `session.cwd` absolute non-null, `workspaceLabel` = cwd basename, record `sessionId` = current Session, plausible `bounds`, captured `viewport`, query-free route |
+| Multi-select / collection rework | `--scenario 4`, and S4→S5 sequence `--from 4 --no-shots` | **PASS** (S4 3 shift selections, add/update/note/remove; S5 draft preserved + ordered batch blocks) |
+| Self-contained late sequence | `node test/browser/annotation.e2e.mjs --from 6 --no-shots` | smoke + S6,S7,S8,S9,S10,S12,S14,S15: **14 PASS / 1 SKIP / 0 FAIL**, 173.3 s, 0 page errors, 0 real network failures, exit 0 |
+| Native hover-card flake | one earlier `--from 6` attempt | **FAIL inside scenario 10 before any annotation assertion**: the native DSH hover preview card (`probes.nativeHoverCard`) did not appear within 5 s; the same sequence reran green. Pre-existing live-GUI/harness timing, not a Phase 2-A assertion. |
+
+The new scenarios are self-contained (each clears the persisted document and creates/verifies a
+blank Session) and the runner's reload helper re-selects the record-owning Session through the
+native sidebar row when the shell restores a different "last viewed" Session after a reload.
+Scenario 10 now also guards the F-2 regression that Phase 1 silently persisted `cwd:null`.
+
 ## Current evidence (round 2, pre-merge annotation build)
 
 > This acceptance evidence was recorded on the pre-merge annotation branch (final
