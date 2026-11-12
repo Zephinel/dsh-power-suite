@@ -792,6 +792,20 @@ package manifest.
   Class names are `psa-*` and DOM attributes are `data-psa-*`; every feature UI
   node is inside a `data-psa-own` **ancestor** (the marker guarantees exclusion
   even though not every node carries the attribute literally).
+- **Tooltip-like floating windows use the native tooltip recipe** — the
+  requirement popover (`.psa-popover`), the hover detail card
+  (`.psa-detail-card`), and the expanded note editor (`.psa-note-editor`) are
+  deliberately **not** panel cards. They copy the shell's own tooltip recipe
+  exactly: `background: var(--dsw-alias-tooltip-bg)`, no border, no panel
+  `box-shadow`, no `backdrop-filter`, and the same near-white label color, in
+  **both light and dark themes** (the shell flips the token set on
+  `body[data-ds-dark-theme]`, so no theme-specific branch is needed: light
+  `#2c2c2e`, dark `#43454a`). Their inputs/buttons are tinted from the same
+  near-white label color so they stay readable on that background. The rail,
+  launcher, marks, and the undo toast keep the panel recipe. E2E scenario 12
+  measures the real native tooltip stylesheet rule and asserts the computed
+  background/text/border/shadow/backdrop of all three surfaces match it under both
+  emulated themes.
 - **Selector escaping** — candidate selectors use `globalThis.CSS` when
   available and a small fallback otherwise; the fallback escapes a leading digit
   as a hex escape (`#123abc` → `#\31 23abc`) rather than producing an invalid

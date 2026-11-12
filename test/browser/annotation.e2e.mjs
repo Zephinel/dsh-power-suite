@@ -4586,10 +4586,12 @@ function buildScenarios(harness) {
       const rows = await h.page.eval(probes.entries)
       assertEqual(rows.length, 3, `the collection should hold 3 records with one other-Session entry (got ${rows.length})`)
       assertEqual(rows.filter((entry) => entry.scope === 'other').length, 1, 'the other-Session scope badge is missing')
-      await h.clickBack()
+      // 5. Tooltip-like surfaces must use the native DSH tooltip background recipe
+      // in BOTH themes (light/dark) — computed-style assertion (task-13).
+      const tooltipRecipe = await checkAnnotationTooltipRecipe(h)
       await h.ensureStatusPanel()
       await h.exit()
-      return `2 marks (#index + requirement excerpt), hover detail card (requirement/session/workspace/position/actions, keep-open, no focus steal), edit saved (updatedAt bumped), delete -> role=status undo toast -> restored, other-Session record not drawn after reload, reduced-motion static`
+      return `2 marks (#index + requirement excerpt), hover detail card (requirement/session/workspace/position/actions, keep-open, no focus steal), edit saved (updatedAt bumped), delete -> role=status undo toast -> restored, other-Session record not drawn after reload, reduced-motion static, tooltip recipe matched native in light+dark (bg ${tooltipRecipe.light.native.backgroundColor} / ${tooltipRecipe.dark.native.backgroundColor})`
     },
 
     13: async () => {
@@ -5141,6 +5143,250 @@ async function runCrossBranchHovercardCheck(h) {
   }
   assert(closed, 'F4 regression: with the mode off the hover card did not close within 900 ms of leaving its anchor')
   return { verified: true, reason: 'pinned card stays pointer-interactive at z=120 and is selectable; closes within 900 ms with the mode off' }
+}
+
+/**
+ * Measure the native DSH tooltip recipe and the annotation tooltip-like floating
+ * surfaces in light and dark themes, then assert they agree.
+ *
+ * The native recipe comes from the real shell stylesheet rule that sets
+ * `var(--dsw-alias-tooltip-bg)`: its class name is discovered from the CSS rule,
+ * applied to a temporary probe node, and its computed style is read in both
+ * themes (dark = `body[data-ds-dark-theme]`, the shell's theme switch). Our
+ * surfaces are the real mounted `.psa-popover`, `.psa-detail-card` and
+ * `.psa-note-editor`. Light/dark close-up clips are written when
+ * `PSA_TOOLTIP_EVIDENCE_DIR` is set.
+ * @param {object} h - harness.
+ * @returns {Promise<{ light: object, dark: object }>} measured recipe per theme.
+ */
+async function checkAnnotationTooltipRecipe(h) {
+  const evidenceDir = process.env.PSA_TOOLTIP_EVIDENCE_DIR
+  if (evidenceDir) await mkdir(evidenceDir, { recursive: true })
+  const originalDark = await h.page.evaluate(`document.body.hasAttribute('data-ds-dark-theme')`)
+  /**
+   * Switch the shell theme for measurement (restored by the caller).
+   * @param {boolean} dark - whether to set the dark theme attribute.
+   * @returns {Promise<void>}
+   */
+  const setTheme = async (dark) => {
+    await h.page.evaluate(`(() => { document.body.toggleAttribute('data-ds-dark-theme', ${dark === true}); return true })()`)
+    await sleep(180)
+  }
+  /**
+   * Computed recipe of one mounted surface.
+   * @param {string} selector - surface selector.
+   * @returns {Promise<object | null>} computed values.
+   */
+  const styleOf = async (selector) => h.page.evaluate(`(() => {
+    const element = document.querySelector(${JSON.stringify(selector)})
+    if (element === null) return null
+    const style = getComputedStyle(element)
+    return {
+      backgroundColor: style.backgroundColor,
+      backgroundImage: style.backgroundImage,
+      borderTopWidth: style.borderTopWidth,
+      borderTopStyle: style.borderTopStyle,
+      borderTopColor: style.borderTopColor,
+      borderRadius: style.borderTopLeftRadius,
+      boxShadow: style.boxShadow,
+      backdropFilter: style.backdropFilter,
+      color: style.color,
+    }
+  })()`)
+  /**
+   * Computed recipe of the shell's native tooltip: find the stylesheet rule that
+   * paints the tooltip background, clone its class onto a probe node, read style.
+   * @returns {Promise<object | null>} native computed values, or null if the real
+   *   tooltip rule cannot be discovered (an honest failure for the assertion).
+   */
+  const nativeRecipe = async () => h.page.evaluate(`(() => {
+    let className = null
+    for (const sheet of document.styleSheets) {
+      let rules
+      try { rules = sheet.cssRules } catch { continue }
+      for (const rule of rules) {
+        const text = rule.cssText || ''
+        if (!text.includes('var(--dsw-alias-tooltip-bg)')) continue
+        const selector = rule.selectorText || ''
+        const match = selector.match(/\\.(_bubble_[A-Za-z0-9_-]+)/)
+        if (match !== null) { className = match[1]; break }
+      }
+      if (className !== null) break
+    }
+    if (className === null) return null
+    const probe = document.createElement('div')
+    probe.id = 'psa-e2e-native-tooltip-probe'
+    probe.className = className
+    probe.textContent = 'Native tooltip'
+    probe.style.position = 'fixed'
+    probe.style.left = '-9000px'
+    probe.style.top = '0'
+    document.body.appendChild(probe)
+    const style = getComputedStyle(probe)
+    const result = {
+      className,
+      backgroundColor: style.backgroundColor,
+      backgroundImage: style.backgroundImage,
+      borderTopWidth: style.borderTopWidth,
+      borderTopStyle: style.borderTopStyle,
+      borderTopColor: style.borderTopColor,
+      borderRadius: style.borderTopLeftRadius,
+      boxShadow: style.boxShadow,
+      backdropFilter: style.backdropFilter,
+      color: style.color,
+    }
+    probe.remove()
+    return result
+  })()`)
+  /**
+   * Save one close-up clip around a selector (evidence only).
+   * @param {string} name - file name stem.
+   * @param {string} selector - element to frame.
+   * @returns {Promise<void>}
+   */
+  const clipShot = async (name, selector) => {
+    if (!evidenceDir) return
+    const rect = await h.page.evaluate(`(() => {
+      const element = document.querySelector(${JSON.stringify(selector)})
+      if (element === null) return null
+      const r = element.getBoundingClientRect()
+      const pad = 10
+      return {
+        x: Math.max(0, Math.floor(r.left - pad)),
+        y: Math.max(0, Math.floor(r.top - pad)),
+        width: Math.min(innerWidth, Math.ceil(r.width + pad * 2)),
+        height: Math.min(innerHeight, Math.ceil(r.height + pad * 2)),
+      }
+    })()`)
+    if (rect === null) return
+    const data = await h.page.send('Page.captureScreenshot', {
+      format: 'png',
+      clip: { x: rect.x, y: rect.y, width: rect.width, height: rect.height, scale: 1 },
+    })
+    await writeFile(path.join(evidenceDir, name), Buffer.from(data.data, 'base64'))
+  }
+  /**
+   * Put a visible native-tooltip probe on screen for the evidence capture.
+   * @param {boolean} show - create or remove it.
+   * @returns {Promise<void>}
+   */
+  const nativeProbeVisible = async (show) => {
+    await h.page.evaluate(`(() => {
+      const existing = document.getElementById('psa-e2e-native-tooltip-visible')
+      if (${show === true} === false) { if (existing !== null) existing.remove(); return true }
+      if (existing !== null) return true
+      let className = null
+      for (const sheet of document.styleSheets) {
+        let rules
+        try { rules = sheet.cssRules } catch { continue }
+        for (const rule of rules) {
+          const text = rule.cssText || ''
+          if (!text.includes('var(--dsw-alias-tooltip-bg)')) continue
+          const selector = rule.selectorText || ''
+          const match = selector.match(/\\.(_bubble_[A-Za-z0-9_-]+)/)
+          if (match !== null) { className = match[1]; break }
+        }
+        if (className !== null) break
+      }
+      if (className === null) return false
+      const probe = document.createElement('div')
+      probe.id = 'psa-e2e-native-tooltip-visible'
+      probe.className = className
+      probe.textContent = 'Native DSH tooltip'
+      probe.style.position = 'fixed'
+      probe.style.left = '560px'
+      probe.style.top = '120px'
+      document.body.appendChild(probe)
+      return true
+    })()`)
+  }
+  const light = {}
+  const dark = {}
+  // 1. Note editor (a separate floating tooltip-like card).
+  await h.openCollection()
+  await h.click('[data-psa-entry-expand]')
+  await h.page.waitFor(`!!document.querySelector('[data-psa-entry-note-editor]')`, { timeout: 6000, label: 'note editor for the tooltip recipe check' })
+  await setTheme(false)
+  light.noteEditor = await styleOf('.psa-note-editor')
+  light.native = await nativeRecipe()
+  await nativeProbeVisible(true)
+  await clipShot('tooltip-light-native-note-editor.png', '#psa-e2e-native-tooltip-visible')
+  await clipShot('tooltip-light-note-editor.png', '.psa-note-editor')
+  await nativeProbeVisible(false)
+  await setTheme(true)
+  dark.noteEditor = await styleOf('.psa-note-editor')
+  dark.native = await nativeRecipe()
+  await nativeProbeVisible(true)
+  await clipShot('tooltip-dark-native-note-editor.png', '#psa-e2e-native-tooltip-visible')
+  await clipShot('tooltip-dark-note-editor.png', '.psa-note-editor')
+  await nativeProbeVisible(false)
+  await setTheme(originalDark)
+  await h.page.pressKey('escape')
+  await sleep(250)
+  // 2. Requirement popover.
+  await h.ensureStatusPanel()
+  const target = await h.page.eval(pageProbe.newSessionButton)
+  assert(target, 'native New session button not found for the tooltip recipe check')
+  await h.page.moveTo(target.x, target.y)
+  await sleep(150)
+  await h.page.clickAt(target.x, target.y)
+  await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the tooltip recipe check' })
+  await setTheme(false)
+  light.popover = await styleOf('.psa-popover')
+  const nativeLight = await nativeRecipe()
+  light.native = nativeLight
+  await nativeProbeVisible(true)
+  await clipShot('tooltip-light-native-popover.png', '#psa-e2e-native-tooltip-visible')
+  await clipShot('tooltip-light-popover.png', '.psa-popover')
+  await nativeProbeVisible(false)
+  await setTheme(true)
+  dark.popover = await styleOf('.psa-popover')
+  dark.native = await nativeRecipe()
+  await nativeProbeVisible(true)
+  await clipShot('tooltip-dark-native-popover.png', '#psa-e2e-native-tooltip-visible')
+  await clipShot('tooltip-dark-popover.png', '.psa-popover')
+  await nativeProbeVisible(false)
+  await setTheme(originalDark)
+  await h.page.pressKey('escape')
+  await sleep(250)
+  // 3. Hover detail card.
+  const marks = await h.page.eval(probes.marksState)
+  assert(marks.length > 0, 'no page mark available for the detail-card tooltip recipe check')
+  await h.page.moveTo(marks[0].rect.x + Math.round(marks[0].rect.width / 2), marks[0].rect.y + Math.round(marks[0].rect.height / 2))
+  await h.page.waitFor(`!!document.querySelector('[data-psa-detail]')`, { timeout: 5000, label: 'detail card for the tooltip recipe check' })
+  await setTheme(false)
+  light.detailCard = await styleOf('.psa-detail-card')
+  await nativeProbeVisible(true)
+  await clipShot('tooltip-light-native-detail.png', '#psa-e2e-native-tooltip-visible')
+  await clipShot('tooltip-light-detail.png', '.psa-detail-card')
+  await nativeProbeVisible(false)
+  await setTheme(true)
+  dark.detailCard = await styleOf('.psa-detail-card')
+  await nativeProbeVisible(true)
+  await clipShot('tooltip-dark-native-detail.png', '#psa-e2e-native-tooltip-visible')
+  await clipShot('tooltip-dark-detail.png', '.psa-detail-card')
+  await nativeProbeVisible(false)
+  await setTheme(originalDark)
+  await h.page.pressKey('escape')
+  await sleep(250)
+  // 4. Assert both themes against the native recipe.
+  for (const [themeName, measured] of [['light', light], ['dark', dark]]) {
+    const native = measured.native
+    assert(native !== null, `the native DSH tooltip rule was not found in the ${themeName} theme`)
+    assert(native.backgroundColor !== 'rgba(0, 0, 0, 0)', `native tooltip background is transparent in the ${themeName} theme`)
+    for (const [surfaceName, surface] of [['popover', measured.popover], ['detailCard', measured.detailCard], ['noteEditor', measured.noteEditor]]) {
+      assert(surface !== null, `${surfaceName} is missing in the ${themeName} theme`)
+      assertEqual(surface.backgroundColor, native.backgroundColor, `${themeName}: ${surfaceName} background must match the native tooltip recipe`)
+      assertEqual(surface.color, native.color, `${themeName}: ${surfaceName} text color must match the native tooltip recipe`)
+      assertEqual(surface.borderTopWidth, '0px', `${themeName}: ${surfaceName} must not paint the old 1px border`)
+      assertEqual(surface.boxShadow, 'none', `${themeName}: ${surfaceName} must not paint the old panel shadow`)
+      assertEqual(surface.backdropFilter, 'none', `${themeName}: ${surfaceName} must not add a backdrop filter`)
+    }
+  }
+  assert(light.native.backgroundColor !== dark.native.backgroundColor, 'native tooltip background must differ between light and dark themes')
+  assertEqual(light.popover.backgroundColor, light.native.backgroundColor, 'light theme popover background')
+  assertEqual(dark.popover.backgroundColor, dark.native.backgroundColor, 'dark theme popover background')
+  return { light, dark }
 }
 
 async function runScenarios(harness, results, opts) {

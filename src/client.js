@@ -15733,7 +15733,28 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-note-editor-textarea{box-sizing:border-box;width:100%;min-height:96px;max-height:220px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
 .psa-feedback{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:56;max-width:min(520px,calc(100vw - 48px));padding:8px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 8px 24px rgb(0 0 0 / 18%));color:var(--dsw-alias-label-secondary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:none}
 .psa-feedback[data-psa-kind=error]{color:var(--dsw-alias-state-error-primary)}
-/* B3: rainbow circulating focus ring for annotation inputs. Values are copied from
+/* Tooltip-like floating windows use the native DSH tooltip recipe exactly:
+   same background token, no border, no panel shadow, no backdrop filter, the same
+   near-white label color, in both light and dark themes. The shell switches the
+   token set on body[data-ds-dark-theme], so this needs no theme-specific branch. */
+.psa-popover,.psa-detail-card,.psa-note-editor{background:var(--dsw-alias-tooltip-bg);border:0;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;color:var(--dsw-static-neutral-bluish-00)}
+.psa-popover .psa-muted,.psa-detail-card .psa-muted,.psa-note-editor .psa-muted{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 64%,transparent)}
+.psa-popover .psa-popover-ref,.psa-popover .psa-popover-status{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 72%,transparent)}
+.psa-detail-card .psa-detail-label,.psa-detail-card .psa-detail-meta{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 64%,transparent)}
+.psa-detail-card .psa-detail-meta dd{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 82%,transparent)}
+.psa-popover .psa-icon-btn,.psa-detail-card .psa-icon-btn,.psa-note-editor .psa-icon-btn{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 76%,transparent)}
+.psa-popover .psa-icon-btn:hover:enabled,.psa-detail-card .psa-icon-btn:hover:enabled,.psa-note-editor .psa-icon-btn:hover:enabled{background:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 12%,transparent);color:var(--dsw-static-neutral-bluish-00)}
+.psa-popover .psa-btn,.psa-detail-card .psa-btn{border-color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 26%,transparent);background:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 4%,transparent);color:var(--dsw-static-neutral-bluish-00)}
+.psa-popover .psa-btn:hover:enabled,.psa-detail-card .psa-btn:hover:enabled{background:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 12%,transparent)}
+.psa-popover .psa-btn-primary,.psa-detail-card .psa-btn-primary{border-color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 55%,transparent);background:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 12%,transparent);color:var(--dsw-static-neutral-bluish-00)}
+.psa-popover .psa-btn-primary:hover:enabled,.psa-detail-card .psa-btn-primary:hover:enabled{background:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 20%,transparent)}
+.psa-popover .psa-popover-textarea,.psa-detail-card .psa-detail-textarea,.psa-note-editor .psa-note-editor-textarea{border-color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 22%,transparent);background:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 8%,transparent);color:var(--dsw-static-neutral-bluish-00);caret-color:var(--dsw-static-neutral-bluish-00)}
+.psa-popover .psa-popover-textarea::placeholder,.psa-detail-card .psa-detail-textarea::placeholder,.psa-note-editor .psa-note-editor-textarea::placeholder{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 52%,transparent)}
+.psa-detail-card .psa-detail-requirement{background:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 8%,transparent);color:var(--dsw-static-neutral-bluish-00)}
+.psa-detail-card .psa-detail-requirement[data-psa-detail-empty=true]{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 52%,transparent)}
+.psa-popover .psa-detail-danger,.psa-detail-card .psa-detail-danger{color:var(--dsw-alias-state-error-secondary,var(--dsw-alias-state-error-primary))}
+/* B3: rainbow circulating focus ring for annotation inputs. */
+ Values are copied from
    the shared dynamic-workspaces recipe (.psf-rainbow-focus) so every plugin input
    reads as one effect: identical conic stops, the same 140ms fade, 3.2s ring spin
    plus 14s hue drift, and the same reduced-motion/forced-colors fallbacks. The
