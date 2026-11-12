@@ -4,6 +4,37 @@ All notable changes to this repository are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+Planned as version 0.3.0; the release date is still pending. No dated release
+heading is added until the release is cut.
+
+### Added
+
+- UI element annotation: a floating launcher toggles a client-only annotation
+  mode that makes room for a responsive right rail by shrinking the shell frame's
+  `padding-right` (`clamp(188px, 11.6vw, 236px)`, no CSS transform) and falls
+  back to an overlay rail on narrow viewports. Hover outlines the candidate
+  element; a click selects it and opens a draggable note popover carrying the
+  element name, locator summary, resolved/ambiguous/missing/changed status,
+  ancestor level up/down, a note field, and **Quick reference** / **Add to
+  collection** actions. Page pointer events are consumed in the capture phase so
+  native controls cannot act while annotating; the configurable multi-select
+  modifier toggles selection or starts a marquee, and the configurable
+  pass-through modifier restores real native mouse and context-menu behavior
+  without synthesizing clicks. References are inserted through the composer's
+  semantic `captureInsertion`/`insertText` API — preserving the draft and caret,
+  one undo step, never sending — as one localized reference or one ordered batch
+  for the collection, which de-dupes by a stable locator key, keeps per-entry
+  notes, marks other-session entries and excludes them from the batch, and marks
+  stale targets explicitly. The two modifiers (a conflicting choice moves the
+  other modifier, with an explanation), the launcher position, and the
+  rail-collapsed state persist in browser `localStorage`; the collection is
+  page-lifetime. The browser-only feature adds no Host route,
+  service, or profile change, cleans up every listener, layout marker, and DOM
+  node on exit and HMR, and adds a pure test seam plus a live-page CDP acceptance
+  harness.
+
 ## [0.2.0] - 2026-11-11
 
 ### Added

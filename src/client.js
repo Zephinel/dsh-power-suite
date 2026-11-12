@@ -9162,6 +9162,4469 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
     //#endregion
 
+    //#region feature: ui element annotation
+    //
+    // Browser-only mode that lets the user outline real DSH elements, give each
+    // one a requested change, and insert a structured reference into the
+    // current Session Composer. It never edits the page, never reads field
+    // values, and never sends a message.
+    //
+    // Architecture: one always-mounted `shell.overlay` surface (launcher, rail,
+    // highlights, popover, feedback), one renderless `conversation.input.overlay`
+    // seat that keeps the Composer bridge current, one imperative controller
+    // (capture listeners, geometry, layout, persistence, insertion), and one
+    // pure reducer/store that connects them. The mode is page-wide: the layout
+    // frame keeps its inline grid and makes room through `padding-right`, so the
+    // rail sits in the freed strip without covering any native column.
+    //
+    // Host boundaries: Shadow DOM hosts are selectable (internals are not),
+    // cross-origin iframes are not selectable, native `<input>`/`<textarea>`/
+    // contenteditable contents are never read, canvas content has no DOM target,
+    // and body-level portals are ordinary DOM and selectable.
+
+    //#region ui element annotation — pure model
+
+    /** Copy namespace of the UI element annotation mode. */
+    const ANNOTATION_NS = 'powerSuiteAnnotation'
+
+    /** The always-mounted overlay seat that renders the annotation surface. */
+    const ANNOTATION_OVERLAY_ID = 'power-suite.ui-annotation-overlay'
+
+    /** The renderless Composer seat that maintains the insertion bridge. */
+    const ANNOTATION_SEAT_ID = 'power-suite.ui-annotation-seat'
+
+    /** Browser-owned persistence keys. The mode itself is intentionally not restored. */
+    const SETTINGS_STORAGE_KEY = 'power-suite.ui-annotation.settings'
+    const LAUNCHER_STORAGE_KEY = 'power-suite.ui-annotation.launcher'
+    const RAIL_STORAGE_KEY = 'power-suite.ui-annotation.rail-collapsed'
+
+    /** The two configurable modifiers, in native select order. */
+    const MODIFIER_CHOICES = ['alt', 'ctrl', 'meta', 'shift']
+
+    /** Defaults: Alt/Option passes clicks through, Shift adds to the selection. */
+    const ANNOTATION_DEFAULT_SETTINGS = Object.freeze({
+      passThroughModifier: 'alt',
+      multiModifier: 'shift'
+    })
+
+    /** Copy for the UI element annotation mode. */
+    const ANNOTATION_EN = {
+      'launcher.enter': 'Annotate UI elements',
+      'launcher.exit': 'Exit annotation mode',
+      'rail.aria': 'UI element annotation',
+      'rail.title': 'UI annotation',
+      'rail.collapse': 'Collapse rail',
+      'rail.expand': 'Expand rail',
+      'rail.exit': 'Exit annotation mode',
+      'rail.hint': 'Click an element to annotate it. {passThrough}-click keeps the page usable; {multi}-click adds to the selection.',
+      'rail.status.idle': 'Click an element to annotate it',
+      'rail.status.selected': '1 element selected',
+      'rail.status.multi': '{count} elements selected',
+      'rail.openCollection': 'Collection',
+      'rail.openSettings': 'Settings',
+      'rail.back': 'Back',
+      'rail.addMulti': 'Add {count} to collection',
+      'rail.clearSelection': 'Clear selection',
+      'rail.selectedName': 'Selected element',
+      'popover.aria': 'Element annotation',
+      'popover.drag': 'Drag popover',
+      'popover.statusLabel': 'Target',
+      'popover.status.resolved': 'Resolved',
+      'popover.status.ambiguous': 'Matches several',
+      'popover.status.missing': 'No longer resolves',
+      'popover.status.changed': 'Content changed',
+      'popover.levelUp': 'Parent element',
+      'popover.levelDown': 'Child element',
+      'popover.noteLabel': 'Requested change',
+      'popover.notePlaceholder': 'Describe the requested change',
+      'popover.quickRef': 'Quick reference',
+      'popover.add': 'Add to collection',
+      'popover.update': 'Update collection',
+      'popover.close': 'Close',
+      'collection.title': 'Collection',
+      'collection.count': '{count} elements',
+      'collection.countOne': '1 element',
+      'collection.empty': 'No annotated elements',
+      'collection.emptyHint': 'Select an element, write a note, then add it to the collection.',
+      'collection.otherSession': 'Other session',
+      'collection.notePlaceholder': 'Note',
+      'collection.expand': 'Edit note in a larger editor',
+      'collection.relocate': 'Re-locate',
+      'collection.remove': 'Remove',
+      'collection.clear': 'Clear',
+      'collection.insertBatch': 'Insert all into composer',
+      'collection.crossSession': '{count} from other sessions will be skipped',
+      'collection.noteEditorTitle': 'Note',
+      'collection.noteEditorClose': 'Close',
+      'settings.title': 'Settings',
+      'settings.passThrough': 'Pass-through modifier',
+      'settings.multi': 'Multi-select modifier',
+      'settings.field.passThrough': 'Pass-through',
+      'settings.field.multi': 'Multi-select',
+      'settings.conflict': '{field} was moved to {value} because both modifiers cannot be the same key.',
+      'settings.saved': 'Settings saved',
+      'settings.hint': 'Hold the pass-through key to use the page normally. Hold the multi-select key to add elements or drag a box.',
+      'modifier.alt': '⌥ / Alt',
+      'modifier.ctrl': 'Ctrl',
+      'modifier.meta': '⌘ / Meta',
+      'modifier.shift': '⇧ / Shift',
+      'feedback.modeOn': 'Annotation mode on',
+      'feedback.inserted': 'Inserted into the current session composer (not sent)',
+      'feedback.insertFailed': 'Could not insert into the composer',
+      'feedback.noComposer': 'Open a session before inserting a reference',
+      'feedback.added': 'Added to the collection',
+      'feedback.updated': 'Updated the existing collection entry',
+      'feedback.removed': 'Removed from the collection',
+      'feedback.cleared': 'Collection cleared',
+      'feedback.relocated': 'Moved to the element',
+      'feedback.relocateFailed': 'The element cannot be located ({status})',
+      'feedback.relocateOtherSession': 'This annotation belongs to another session',
+      'feedback.batchEmpty': 'Nothing to insert from the current session',
+      'insert.title': 'UI annotation',
+      'insert.reference': 'Reference:',
+      'insert.session': 'Session:',
+      'insert.noSession': '—',
+      'insert.note': 'Note:',
+      'insert.emptyNote': '—',
+      'insert.batchHeader': 'Please adjust the UI elements below. Each item lists its reference and the requested change.',
+      'insert.status': 'Status: target no longer resolves (locator only)',
+      'insert.statusAmbiguous': 'Status: target matches more than one element (locator only)',
+      'insert.statusChanged': 'Status: target content changed',
+      'insert.skipped': '({count} annotation(s) from other sessions skipped)'
+    }
+
+    /** Copy for the UI element annotation mode, Chinese. */
+    const ANNOTATION_ZH = {
+      'launcher.enter': '标注 UI 元素',
+      'launcher.exit': '退出标注模式',
+      'rail.aria': 'UI 元素标注',
+      'rail.title': 'UI 标注',
+      'rail.collapse': '收起工具条',
+      'rail.expand': '展开工具条',
+      'rail.exit': '退出标注模式',
+      'rail.hint': '点击页面元素开始标注。按住 {passThrough} 点击可正常使用页面；按住 {multi} 点击可加选。',
+      'rail.status.idle': '点击页面元素开始标注',
+      'rail.status.selected': '已选择 1 个元素',
+      'rail.status.multi': '已选择 {count} 个元素',
+      'rail.openCollection': '标注集',
+      'rail.openSettings': '设置',
+      'rail.back': '返回',
+      'rail.addMulti': '将 {count} 个加入标注集',
+      'rail.clearSelection': '取消选择',
+      'rail.selectedName': '已选元素',
+      'popover.aria': '元素标注',
+      'popover.drag': '拖动浮层',
+      'popover.statusLabel': '目标',
+      'popover.status.resolved': '可定位',
+      'popover.status.ambiguous': '有多个匹配',
+      'popover.status.missing': '无法定位',
+      'popover.status.changed': '内容已变化',
+      'popover.levelUp': '上一级元素',
+      'popover.levelDown': '下一级元素',
+      'popover.noteLabel': '修改说明',
+      'popover.notePlaceholder': '描述需要修改的内容',
+      'popover.quickRef': '快速引用',
+      'popover.add': '加入标注集',
+      'popover.update': '更新标注集',
+      'popover.close': '关闭',
+      'collection.title': '标注集',
+      'collection.count': '{count} 项',
+      'collection.countOne': '1 项',
+      'collection.empty': '还没有标注',
+      'collection.emptyHint': '选择元素、写下修改说明，然后加入标注集。',
+      'collection.otherSession': '其他会话',
+      'collection.notePlaceholder': '备注',
+      'collection.expand': '在较大编辑器中编辑备注',
+      'collection.relocate': '重新定位',
+      'collection.remove': '移除',
+      'collection.clear': '清空',
+      'collection.insertBatch': '全部插入输入框',
+      'collection.crossSession': '另有 {count} 条来自其他会话，插入时将跳过',
+      'collection.noteEditorTitle': '备注',
+      'collection.noteEditorClose': '关闭',
+      'settings.title': '设置',
+      'settings.passThrough': '透传修饰键',
+      'settings.multi': '多选修饰键',
+      'settings.field.passThrough': '透传',
+      'settings.field.multi': '多选',
+      'settings.conflict': '{field}已改为 {value}，两个修饰键不能相同。',
+      'settings.saved': '设置已保存',
+      'settings.hint': '按住透传键可正常操作页面；按住多选键可加选元素或拖出选框。',
+      'modifier.alt': '⌥ / Alt',
+      'modifier.ctrl': 'Ctrl',
+      'modifier.meta': '⌘ / Meta',
+      'modifier.shift': '⇧ / Shift',
+      'feedback.modeOn': '已进入标注模式',
+      'feedback.inserted': '已插入当前会话输入框（不会发送）',
+      'feedback.insertFailed': '无法插入输入框',
+      'feedback.noComposer': '打开一个会话后可以插入引用',
+      'feedback.added': '已加入标注集',
+      'feedback.updated': '已更新标注集中的条目',
+      'feedback.removed': '已从标注集移除',
+      'feedback.cleared': '标注集已清空',
+      'feedback.relocated': '已定位到该元素',
+      'feedback.relocateFailed': '无法定位该元素（{status}）',
+      'feedback.relocateOtherSession': '这条标注来自其他会话',
+      'feedback.batchEmpty': '当前会话没有可插入的标注',
+      'insert.title': 'UI 标注',
+      'insert.reference': '定位：',
+      'insert.session': '会话：',
+      'insert.noSession': '—',
+      'insert.note': '备注：',
+      'insert.emptyNote': '—',
+      'insert.batchHeader': '请调整以下 UI 元素，每项都附有定位和修改说明。',
+      'insert.status': '状态：目标已无法定位（仅保留定位信息）',
+      'insert.statusAmbiguous': '状态：目标匹配到多个元素（仅保留定位信息）',
+      'insert.statusChanged': '状态：目标内容已变化',
+      'insert.skipped': '（已跳过 {count} 条来自其他会话的标注）'
+    }
+
+    /**
+     * Long-lived bridge to the mounted Composer seat. Always all-or-nothing: the
+     * Session id only exists while the seat's insertion actions do.
+     */
+    const annotationBridge = { sessionId: null, inputActions: null }
+
+    /** Install guard: a remount must never register the surface twice. */
+    let annotationInstalled = false
+
+    /** The controller singleton, or `null` while the feature is uninstalled. */
+    let annotationController = null
+
+    // Remix Icon path data (Apache-2.0, https://remixicon.com), inlined so the
+    // mode needs no icon package at runtime.
+    const REMIX_FOCUS_3_LINE = 'M12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2ZM12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4ZM12 8C14.2091 8 16 9.79086 16 12C16 14.2091 14.2091 16 12 16C9.79086 16 8 14.2091 8 12C8 9.79086 9.79086 8 12 8Z'
+    const REMIX_CLOSE_LINE = 'M11.9997 10.5865L16.9495 5.63672L18.3637 7.05093L13.4139 12.0007L18.3637 16.9504L16.9495 18.3646L11.9997 13.4149L7.04996 18.3646L5.63574 16.9504L10.5855 12.0007L5.63574 7.05093L7.04996 5.63672L11.9997 10.5865Z'
+    const REMIX_ARROW_UP_LINE = 'M13.0001 7.82843V20H11.0001V7.82843L5.63614 13.1924L4.22192 11.7782L12.0001 4L19.7783 11.7782L18.3641 13.1924L13.0001 7.82843Z'
+    const REMIX_ARROW_DOWN_LINE = 'M13.0001 16.1716L18.3641 10.8076L19.7783 12.2218L12.0001 20L4.22192 12.2218L5.63614 10.8076L11.0001 16.1716V4H13.0001V16.1716Z'
+    const REMIX_DELETE_BIN_LINE = 'M17 6H22V8H20V21C20 21.5523 19.5523 22 19 22H5C4.44772 22 4 21.5523 4 21V8H2V6H7V3C7 2.44772 7.44772 2 8 2H16C16.5523 2 17 2.44772 17 3V6ZM18 8H6V20H18V8ZM9 11H11V17H9V11ZM13 11H15V17H13V11ZM9 4V6H15V4H9Z'
+    const REMIX_LIST_CHECK_2 = 'M11 4H21V6H11V4ZM11 8H17V10H11V8ZM11 14H21V16H11V14ZM11 18H17V20H11V18ZM3 4H9V10H3V4ZM5 6V8H7V6H5ZM3 14H9V20H3V14ZM5 16V18H7V16H5Z'
+    const REMIX_SETTINGS_3_LINE = 'M8.68637 4.0001L10.293 2.39348C11.6835 1.00295 13.9379 1.00295 15.3284 2.39348L16.935 4.0001H19.2427C20.8995 4.0001 22.2427 5.34325 22.2427 7.0001V9.30772L23.8492 10.9143C25.2398 12.3048 25.2398 14.5592 23.8492 15.9497L22.2427 17.5564V19.864C22.2427 21.5208 20.8995 22.864 19.2427 22.864H16.935L15.3284 24.4706C13.9379 25.8611 11.6835 25.8611 10.293 24.4706L8.68637 22.864H6.37874C4.72189 22.864 3.37874 21.5208 3.37874 19.864V17.5564L1.77212 15.9497C0.381596 14.5592 0.381596 12.3048 1.77212 10.9143L3.37874 9.30772V7.0001C3.37874 5.34325 4.72189 4.0001 6.37874 4.0001H8.68637ZM13.9143 4.41431C13.1332 3.63326 11.8669 3.63326 11.0858 4.41431L8.9431 6.55701H6.37874C5.82645 6.55701 5.37874 7.00472 5.37874 7.55701V10.1214L3.23603 12.2641C2.45498 13.0451 2.45498 14.3114 3.23603 15.0925L5.37874 17.2352V19.864C5.37874 20.4163 5.82645 20.864 6.37874 20.864H9.00754L11.0858 22.9423C11.8669 23.7234 13.1332 23.7234 13.9143 22.9423L15.9925 20.864H18.6213C19.1736 20.864 19.6213 20.4163 19.6213 19.864V17.2352L21.764 15.0925C22.5451 14.3114 22.5451 13.0451 21.764 12.2641L19.6213 10.1214V7.55701C19.6213 7.00472 19.1736 6.55701 18.6213 6.55701H16.0569L13.9143 4.41431ZM12.6213 13.864C13.7259 13.864 14.6213 12.9686 14.6213 11.864C14.6213 10.7595 13.7259 9.86402 12.6213 9.86402C11.5167 9.86402 10.6213 10.7595 10.6213 11.864C10.6213 12.9686 11.5167 13.864 12.6213 13.864Z'
+
+    /** Control and zero-width characters stripped from every captured string. */
+    const ANNOTATION_CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g
+
+    /** Redaction patterns, longest/most specific first. */
+    const ANNOTATION_REDACTIONS = [
+      /\bbearer\s+[a-z0-9._~+/-]+=*/gi,
+      /\bsk-[a-z0-9_-]{8,}/gi,
+      /\bAKIA[0-9A-Z]{16}\b/gi,
+      /\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]*/gi,
+      /\b(?:[A-Fa-f0-9]{24,}|[A-Za-z0-9+/_-]{24,}={0,2})\b/g,
+      /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g
+    ]
+
+    /** Attribute names never exposed through a locator. */
+    const SENSITIVE_ATTRIBUTE_NAMES = /token|secret|password|passwd|authorization|cookie|csrf|session[-_]?key/i
+
+    /**
+     * Secret-shaped values that are rejected even for a known stable attribute.
+     * A proven secret always wins over the namespace allowance. Matching is
+     * case-insensitive so `Bearer`/`bearer`, `SK-`/`sk-`, AWS keys and JWTs are
+     * all rejected by the same cheap pass (R3).
+     */
+    const SENSITIVE_SECRET_VALUES = /bearer\s|sk-[a-z0-9_-]{8,}|\bAKIA[0-9A-Z]{16}\b|\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]*|[\w.+-]+@[\w-]+(?:\.[\w-]+)+/i
+
+    /** Attribute values that must never be captured, even under a safe name. */
+    const SENSITIVE_ATTRIBUTE_VALUES = /bearer\s|sk-[a-z0-9_-]{8,}|\bAKIA[0-9A-Z]{16}\b|\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]*|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b[A-Fa-f0-9]{24,}\b|\b[A-Za-z0-9+/_-]{24,}={0,2}\b/i
+
+    /**
+     * Stable data attributes whose values may legitimately be a namespaced key
+     * (`session:<uuid>`) or a bare UUID; those shapes are longer than the generic
+     * long-token secret heuristic would allow.
+     */
+    const STABLE_KEY_ATTRIBUTES = new Set([
+      'data-row-key',
+      'data-conversation-region',
+      'data-conversation-session',
+      'data-lexical-editor',
+      'data-testid',
+      'data-slot',
+      'data-sidebar-toggle'
+    ])
+
+    /** A colon-namespaced stable key such as `session:<uuid>`. */
+    const NAMESPACED_KEY_PATTERN = /^[a-z][a-z0-9_-]*:[A-Za-z0-9][A-Za-z0-9._:-]{0,80}$/
+
+    /** A bare UUID used as a stable key. */
+    const UUID_PATTERN = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/
+
+    /**
+     * A DSH Session id shaped `session-<uuid>`, the real value the shell writes
+     * into `data-conversation-session` (R2). Narrow on purpose: only this shape,
+     * never a generic long token.
+     */
+    const SESSION_ID_PATTERN = /^session-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
+    /** Attributes that make a stable locator, most reliable first. */
+    const LOCATOR_DATA_ATTRIBUTES = [
+      ['data-row-key', 0.98],
+      ['data-conversation-region', 0.95],
+      ['data-conversation-session', 0.86],
+      ['data-testid', 0.92],
+      ['data-slot', 0.9]
+    ]
+
+    /**
+     * Whether a value looks generated per render instead of authored.
+     * @param {string} value - id/data-attribute/candidate value.
+     * @returns {boolean} whether the value is unstable.
+     */
+    function isDynamicValue(value) {
+      if (typeof value !== 'string' || value.length === 0) return true
+      if (value.length > 120) return true
+      if (value.startsWith(':r') || value.includes(':r')) return true
+      if (/^(?:react|radix|headlessui|mui|aria-)[-_]/i.test(value)) return true
+      if (/_[A-Za-z0-9]{4,}$/.test(value)) return true
+      if (/[A-Fa-f0-9]{12,}/.test(value)) return true
+      if (/^[a-z]+-[0-9a-f]{4,}$/i.test(value)) return true
+      return false
+    }
+
+    /**
+     * Escape one value for use inside a double-quoted CSS attribute selector.
+     * @param {string} value - raw attribute value.
+     * @returns {string} escaped value.
+     */
+    function cssString(value) {
+      return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\a ')
+    }
+
+    /**
+     * Escape one id for use in an id selector, using the platform escaper when present.
+     * @param {string} id - raw id value.
+     * @returns {string} escaped id.
+     */
+    function cssIdentifier(id) {
+      const text = String(id)
+      try {
+        if (typeof CSS !== 'undefined' && CSS !== null && typeof CSS.escape === 'function') return CSS.escape(text)
+      } catch {
+        // Fall through to the conservative escaper.
+      }
+      return text.replace(/[^A-Za-z0-9_-]/g, (character) => `\\${character}`)
+    }
+
+    /**
+     * Redact and truncate one user/DOM string for display or insertion.
+     * @param {unknown} value - raw value.
+     * @param {number} [max] - maximum output length, default 80.
+     * @returns {string} sanitized text.
+     */
+    function sanitizeText(value, max) {
+      if (typeof value !== 'string' || value.length === 0) return ''
+      const limit = typeof max === 'number' && Number.isFinite(max) && max > 0 ? Math.round(max) : 80
+      let text = value.replace(ANNOTATION_CONTROL_CHARS, ' ').replace(/\s+/g, ' ').trim()
+      if (text.length === 0) return ''
+      for (const pattern of ANNOTATION_REDACTIONS) {
+        pattern.lastIndex = 0
+        text = text.replace(pattern, '[redacted]')
+      }
+      if (text.length > limit) {
+        text = `${text.slice(0, Math.max(1, limit - 1)).trimEnd()}…`
+      }
+      return text
+    }
+
+    /**
+     * Deterministic FNV-1a 32-bit digest of one collapsed, sanitized text.
+     *
+     * This is derived data only: it lets re-resolution detect content changes
+     * without storing the raw text in the ref. The offset basis is returned for an
+     * empty string, so an empty-but-captured target can be recognized later.
+     * @param {unknown} value - raw text.
+     * @returns {string} eight lowercase hex digits, or '' for a non-string.
+     */
+    function textDigest(value) {
+      if (typeof value !== 'string') return ''
+      const text = sanitizeText(value, 4096)
+      let hash = 0x811c9dc5
+      for (let index = 0; index < text.length; index += 1) {
+        hash ^= text.charCodeAt(index)
+        hash = Math.imul(hash, 0x01000193)
+      }
+      return (hash >>> 0).toString(16).padStart(8, '0')
+    }
+
+    /**
+     * Accept one attribute name for capture.
+     * @param {unknown} name - raw attribute name.
+     * @returns {string | null} lowercase name, or null when denied.
+     */
+    function sanitizeAttributeName(name) {
+      if (typeof name !== 'string') return null
+      const trimmed = name.trim().toLowerCase()
+      if (trimmed.length === 0 || trimmed.length > 64) return null
+      if (trimmed === 'class' || trimmed === 'style' || trimmed === 'value') return null
+      if (trimmed.startsWith('on')) return null
+      if (SENSITIVE_ATTRIBUTE_NAMES.test(trimmed)) return null
+      return trimmed
+    }
+
+    /**
+     * Accept one attribute value for capture.
+     * @param {unknown} name - attribute name, checked again.
+     * @param {unknown} value - raw attribute value.
+     * @returns {string | null} trimmed value, or null when denied.
+     */
+    function sanitizeAttributeValue(name, value) {
+      const safeName = sanitizeAttributeName(name)
+      if (safeName === null || typeof value !== 'string') return null
+      const trimmed = value.replace(ANNOTATION_CONTROL_CHARS, ' ').trim()
+      if (trimmed.length === 0 || trimmed.length > 160) return null
+      // A proven secret is never allowed, whatever the attribute is called.
+      if (SENSITIVE_SECRET_VALUES.test(trimmed)) return null
+      // Known stable data attributes keep namespaced ids/UUIDs, which are longer
+      // than the generic opaque-token heuristic but are identity, not secrets.
+      if (STABLE_KEY_ATTRIBUTES.has(safeName)
+        && (NAMESPACED_KEY_PATTERN.test(trimmed) || UUID_PATTERN.test(trimmed) || SESSION_ID_PATTERN.test(trimmed))) {
+        return trimmed
+      }
+      if (SENSITIVE_ATTRIBUTE_VALUES.test(trimmed)) return null
+      return trimmed
+    }
+
+    /**
+     * Merge raw persisted settings with defaults, keeping the modifiers distinct.
+     * @param {unknown} raw - parsed value or anything else.
+     * @returns {{ passThroughModifier: string, multiModifier: string }} normalized settings.
+     */
+    function normalizeSettings(raw) {
+      const source = raw !== null && typeof raw === 'object' ? raw : {}
+      let passThroughModifier = MODIFIER_CHOICES.includes(source.passThroughModifier)
+        ? source.passThroughModifier
+        : ANNOTATION_DEFAULT_SETTINGS.passThroughModifier
+      let multiModifier = MODIFIER_CHOICES.includes(source.multiModifier)
+        ? source.multiModifier
+        : ANNOTATION_DEFAULT_SETTINGS.multiModifier
+      if (multiModifier === passThroughModifier) {
+        multiModifier = MODIFIER_CHOICES.find((choice) => choice !== passThroughModifier) ?? ANNOTATION_DEFAULT_SETTINGS.multiModifier
+      }
+      return { passThroughModifier, multiModifier }
+    }
+
+    /**
+     * Apply one modifier choice and move the other field off a collision.
+     * @param {object} settings - current settings.
+     * @param {'passThroughModifier' | 'multiModifier'} field - changed field.
+     * @param {unknown} value - requested modifier id.
+     * @returns {{ settings: object, adjustedField?: string }} next settings, plus the moved field.
+     */
+    function resolveModifierChange(settings, field, value) {
+      const current = normalizeSettings(settings)
+      if (field !== 'passThroughModifier' && field !== 'multiModifier') return { settings: current }
+      if (!MODIFIER_CHOICES.includes(value)) return { settings: current }
+      const otherField = field === 'passThroughModifier' ? 'multiModifier' : 'passThroughModifier'
+      const next = { ...current, [field]: value }
+      if (next[otherField] === value) {
+        next[otherField] = MODIFIER_CHOICES.find((choice) => choice !== value) ?? current[otherField]
+        return { settings: next, adjustedField: otherField }
+      }
+      return { settings: next }
+    }
+
+    /**
+     * Parse the persisted settings document.
+     * @param {string | null} text - raw localStorage value.
+     * @returns {{ passThroughModifier: string, multiModifier: string }} normalized settings.
+     */
+    function parseStoredSettings(text) {
+      if (typeof text !== 'string' || text.length === 0) return normalizeSettings(null)
+      try {
+        return normalizeSettings(JSON.parse(text))
+      } catch {
+        return normalizeSettings(null)
+      }
+    }
+
+    /**
+     * Serialize settings for localStorage, normalized.
+     * @param {object} settings - settings to store.
+     * @returns {string} JSON document.
+     */
+    function serializeSettings(settings) {
+      return JSON.stringify(normalizeSettings(settings))
+    }
+
+    /**
+     * Whether a keyboard or mouse event carries one configured modifier.
+     * @param {object} eventLike - event with altKey/ctrlKey/metaKey/shiftKey.
+     * @param {string} modifier - modifier id from `MODIFIER_CHOICES`.
+     * @returns {boolean} whether the modifier is held.
+     */
+    function modifierMatches(eventLike, modifier) {
+      if (eventLike === null || typeof eventLike !== 'object') return false
+      if (modifier === 'alt') return eventLike.altKey === true
+      if (modifier === 'ctrl') return eventLike.ctrlKey === true
+      if (modifier === 'meta') return eventLike.metaKey === true
+      if (modifier === 'shift') return eventLike.shiftKey === true
+      return false
+    }
+
+    /**
+     * Short display form of one Session identity.
+     *
+     * DSH Session ids carry a `session-` prefix followed by a UUID; the prefix
+     * is dropped so two Sessions never render the same `session-` stem.
+     * @param {unknown} sessionId - Session identity.
+     * @returns {string} eight compact characters, or an empty string.
+     */
+    function sessionShortLabel(sessionId) {
+      if (typeof sessionId !== 'string' || sessionId.length === 0) return ''
+      const bare = sessionId.startsWith('session-') ? sessionId.slice('session-'.length) : sessionId
+      const compact = bare.replace(/[^0-9A-Za-z]/g, '')
+      if (compact.length > 0) return compact.slice(0, 8)
+      return sessionId.slice(0, 8)
+    }
+
+    /**
+     * Format one epoch-ms timestamp as local 24-hour HH:MM.
+     * @param {unknown} at - epoch milliseconds.
+     * @returns {string} clock label.
+     */
+    function formatAnnotationTime(at) {
+      const value = typeof at === 'number' && Number.isFinite(at) ? at : Date.now()
+      const date = new Date(value)
+      const pad = (part) => String(part).padStart(2, '0')
+      return `${pad(date.getHours())}:${pad(date.getMinutes())}`
+    }
+
+    /**
+     * Join one colon-bearing label with its value. A full-width Chinese colon
+     * takes no following space; an ASCII colon takes one.
+     * @param {string} label - localized label such as `Reference:` / `定位：`.
+     * @param {string} value - the value after the colon.
+     * @returns {string} one formatted line fragment.
+     */
+    function annotationJoinLabel(label, value) {
+      const text = typeof label === 'string' ? label.trimEnd() : ''
+      if (text.length === 0) return value
+      if (text.endsWith('：')) return `${text}${value}`
+      if (text.endsWith(':')) return `${text} ${value}`
+      return `${text}: ${value}`
+    }
+
+    /**
+     * One short random token for a ref id.
+     * @param {number} length - token length.
+     * @returns {string} lowercase alphanumeric token.
+     */
+    function annotationRandomToken(length) {
+      let token = ''
+      while (token.length < length) token += Math.random().toString(36).slice(2)
+      return token.slice(0, length)
+    }
+
+    /**
+     * Normalize one bounds rectangle into plain rounded numbers.
+     * @param {unknown} bounds - possibly partial rectangle.
+     * @returns {{ x: number, y: number, width: number, height: number } | null} normalized rectangle.
+     */
+    function normalizeAnnotationBounds(bounds) {
+      if (bounds === null || typeof bounds !== 'object') return null
+      const parts = ['x', 'y', 'width', 'height'].map((key) => (typeof bounds[key] === 'number' && Number.isFinite(bounds[key]) ? Math.round(bounds[key]) : null))
+      if (parts.some((part) => part === null)) return null
+      return { x: parts[0], y: parts[1], width: parts[2], height: parts[3] }
+    }
+
+    /**
+     * Order locator candidates from one element descriptor, most reliable first.
+     *
+     * Only stable, sanitized selectors are emitted: dynamic ids/hashed data
+     * values are skipped and class names are never used.
+     * @param {object} descriptor - element descriptor from the controller.
+     * @returns {Array<{ kind: string, value: string, reliability: number }>} candidates.
+     */
+    function selectorCandidates(descriptor) {
+      const source = descriptor !== null && typeof descriptor === 'object' ? descriptor : {}
+      const tag = typeof source.tag === 'string' ? source.tag.trim().toLowerCase() : ''
+      const attrs = Array.isArray(source.attrs) ? source.attrs : []
+      const candidates = []
+      const seen = new Set()
+      /**
+       * Push one deduplicated candidate.
+       * @param {string} kind - candidate kind.
+       * @param {string} value - CSS selector or tag.
+       * @param {number} reliability - 0..1 ordering weight.
+       * @returns {void}
+       */
+      const push = (kind, value, reliability) => {
+        if (typeof value !== 'string' || value.length === 0 || seen.has(value)) return
+        seen.add(value)
+        candidates.push({ kind, value, reliability })
+      }
+      /**
+       * Read one captured attribute value.
+       * @param {string} name - attribute name.
+       * @returns {string | null} safe value.
+       */
+      const attrValue = (name) => {
+        const attr = attrs.find((item) => item !== null && typeof item === 'object' && item.name === name)
+        if (attr === undefined) return null
+        return sanitizeAttributeValue(name, attr.value)
+      }
+      for (const [name, reliability] of LOCATOR_DATA_ATTRIBUTES) {
+        const value = attrValue(name)
+        if (value === null) continue
+        push('data', `[${name}="${cssString(value)}"]`, reliability)
+      }
+      const knownAttributes = new Set(LOCATOR_DATA_ATTRIBUTES.map(([name]) => name))
+      for (const attr of attrs) {
+        if (attr === null || typeof attr !== 'object') continue
+        if (typeof attr.name !== 'string' || !attr.name.startsWith('data-')) continue
+        if (knownAttributes.has(attr.name)) continue
+        const value = sanitizeAttributeValue(attr.name, attr.value)
+        if (value === null) continue
+        // Allow-listed stable attributes are identity even when their value is a
+        // long opaque id (e.g. `session-<uuid>`); unknown attributes still go
+        // through the generated-value heuristic (R2).
+        if (!STABLE_KEY_ATTRIBUTES.has(attr.name) && isDynamicValue(value)) continue
+        push('data', `[${attr.name}="${cssString(value)}"]`, 0.7)
+      }
+      // Defensive: descriptors are pure-model data too, so an id that did not go
+      // through annotationStableId still has to pass the same sanitizer here.
+      let id = typeof source.id === 'string' ? source.id : ''
+      if (id.length > 0) id = sanitizeAttributeValue('id', id) ?? ''
+      if (id.length === 0) {
+        const idAttr = attrs.find((item) => item !== null && typeof item === 'object' && item.name === 'id')
+        if (idAttr !== undefined) {
+          const idValue = sanitizeAttributeValue('id', idAttr.value)
+          if (idValue !== null) id = idValue
+        }
+      }
+      if (id.length > 0 && !isDynamicValue(id)) push('id', `#${cssIdentifier(id)}`, 0.88)
+      const labelValue = attrValue('aria-label')
+      if (labelValue !== null) push('label', `[aria-label="${cssString(labelValue)}"]`, 0.8)
+      if (isFormTag(tag)) {
+        const nameValue = attrValue('name')
+        if (nameValue !== null && !isDynamicValue(nameValue)) push('label', `[name="${cssString(nameValue)}"]`, 0.72)
+      }
+      const role = typeof source.role === 'string' ? source.role.trim() : ''
+      if (role.length > 0) push('role', `[role="${cssString(role)}"]`, 0.35)
+      if (tag.length > 0 && tag !== 'html' && tag !== 'body') push('tag', tag, 0.2)
+      const path = typeof source.path === 'string' ? source.path : ''
+      if (path.length > 0) push('path', path, 0.1)
+      candidates.sort((left, right) => right.reliability - left.reliability)
+      return candidates.slice(0, 6)
+    }
+
+    /**
+     * Whether a tag is a form control.
+     * @param {string} tag - lowercase tag name.
+     * @returns {boolean} whether the tag is a form control.
+     */
+    function isFormTag(tag) {
+      return tag === 'input' || tag === 'select' || tag === 'textarea' || tag === 'button'
+    }
+
+    /**
+     * Stable identity key for one element, used for collection de-duplication.
+     * @param {string} tag - lowercase tag name.
+     * @param {object} source - element descriptor.
+     * @param {Array<object>} candidates - ordered candidates.
+     * @returns {string} identity key.
+     */
+    function identityKeyForCandidates(tag, source, candidates) {
+      // A data attribute or id is a real identity; an accessible label alone is not
+      // (two different "Close" buttons share it), so label-only identity carries the
+      // structural context needed to tell those elements apart (F3).
+      const stable = candidates.find((candidate) => candidate.kind === 'data' || candidate.kind === 'id')
+      if (stable !== undefined) return `${stable.kind}:${stable.value}`
+      const path = typeof source.path === 'string' && source.path.length > 0 ? source.path : tag
+      const label = candidates.find((candidate) => candidate.kind === 'label')
+      if (label !== undefined) return `label:${label.value}|${tag}|${path}`
+      const role = typeof source.role === 'string' && source.role.length > 0 ? source.role : ''
+      const text = sanitizeText(source.text, 40)
+      return `path:${role}:${path}:${text}`
+    }
+
+    /**
+     * Build one serializable ElementRef (never a DOM node, never HTML).
+     * @param {object} descriptor - { tag, id, role, name, attrs, text, component, path, tagPath, isEditable, insideComposer }.
+     * @param {object} context - { sessionId, at, order, bounds, levelChain }.
+     * @returns {object} the ElementRef.
+     */
+    function buildElementRef(descriptor, context) {
+      const source = descriptor !== null && typeof descriptor === 'object' ? descriptor : {}
+      const scope = context !== null && typeof context === 'object' ? context : {}
+      const tag = (typeof source.tag === 'string' ? source.tag.trim().toLowerCase() : '') || 'element'
+      const candidates = selectorCandidates(source)
+      const levelChain = Array.isArray(scope.levelChain) ? scope.levelChain : []
+      const contextLabels = levelChain.filter((label) => typeof label === 'string' && label.length > 0).slice(0, 2)
+      const at = typeof scope.at === 'number' && Number.isFinite(scope.at) ? scope.at : Date.now()
+      const order = typeof scope.order === 'number' && Number.isFinite(scope.order) ? scope.order : 0
+      const bounds = normalizeAnnotationBounds(scope.bounds) ?? { x: 0, y: 0, width: 0, height: 0 }
+      const sessionId = typeof scope.sessionId === 'string' && scope.sessionId.length > 0 ? scope.sessionId : null
+      return {
+        version: 1,
+        id: `psa-${order}-${annotationRandomToken(6)}`,
+        at,
+        order,
+        session: { sessionId },
+        locator: {
+          tag,
+          role: sanitizeText(source.role, 32),
+          name: sanitizeText(source.name, 60),
+          candidates,
+          key: identityKeyForCandidates(tag, source, candidates),
+          path: typeof source.path === 'string' ? source.path : ''
+        },
+        component: typeof source.component === 'string' && source.component.length > 0 ? source.component : 'other',
+        text: sanitizeText(source.text, 80),
+        // Derived from the full sanitized text; never the text itself (F11).
+        textDigest: typeof source.textDigest === 'string' ? source.textDigest : '',
+        context: contextLabels.join(' › '),
+        bounds,
+        note: ''
+      }
+    }
+
+    /**
+     * The stable identity of one ref, used for de-duplication.
+     * @param {object} ref - ElementRef.
+     * @returns {string} identity key.
+     */
+    function identityKeyOf(ref) {
+      if (ref === null || typeof ref !== 'object') return ''
+      const locator = ref.locator
+      if (locator === null || typeof locator !== 'object') return ''
+      return typeof locator.key === 'string' ? locator.key : ''
+    }
+
+    /**
+     * Human-readable locator summary: tag, label, and the most stable selector.
+     * @param {object} ref - ElementRef.
+     * @returns {string} one-line summary.
+     */
+    function describeLocator(ref) {
+      const locator = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : {}
+      const tag = typeof locator.tag === 'string' && locator.tag.length > 0 ? locator.tag : 'element'
+      const name = typeof locator.name === 'string' ? locator.name : ''
+      const candidates = Array.isArray(locator.candidates) ? locator.candidates : []
+      const stable = candidates.find((candidate) => candidate !== null && typeof candidate === 'object' && candidate.kind !== 'tag' && candidate.kind !== 'path')
+      const head = name.length > 0 ? `${tag} "${name}"` : tag
+      const tail = stable !== undefined
+        ? stable.value
+        : (typeof locator.path === 'string' && locator.path.length > 0 ? locator.path : '')
+      const summary = tail.length > 0 ? `${head} · ${tail}` : head
+      return summary.length > 160 ? `${summary.slice(0, 159)}…` : summary
+    }
+
+    /**
+     * Display label of one element: accessible name, then text summary, then tag.
+     * @param {object} ref - ElementRef.
+     * @returns {string} label.
+     */
+    function elementLabel(ref) {
+      const locator = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : {}
+      const name = typeof locator.name === 'string' ? locator.name : ''
+      if (name.length > 0) return name
+      const text = ref !== null && typeof ref === 'object' && typeof ref.text === 'string' ? ref.text : ''
+      if (text.length > 0) return text
+      return typeof locator.tag === 'string' && locator.tag.length > 0 ? locator.tag : 'element'
+    }
+
+    /**
+     * One ordered collection entry list update, never mutating the input.
+     * @param {Array<object>} list - current entries (ElementRefs with `note`).
+     * @param {object} entry - ElementRef to add or update.
+     * @returns {{ list: Array<object>, added: boolean, updated: boolean }} next list and what happened.
+     */
+    function collectionAdd(list, entry) {
+      const current = Array.isArray(list) ? list : []
+      const ref = entry !== null && typeof entry === 'object' && entry.ref !== null && typeof entry.ref === 'object' ? entry.ref : entry
+      if (ref === null || typeof ref !== 'object') return { list: current.slice(), added: false, updated: false }
+      const key = identityKeyOf(ref)
+      const sessionId = ref.session !== null && typeof ref.session === 'object' ? ref.session.sessionId ?? null : null
+      const index = current.findIndex((item) => {
+        const candidate = item !== null && typeof item === 'object' && item.ref !== null && typeof item.ref === 'object' ? item.ref : item
+        if (candidate === null || typeof candidate !== 'object') return false
+        const candidateSession = candidate.session !== null && typeof candidate.session === 'object' ? candidate.session.sessionId ?? null : null
+        return identityKeyOf(candidate) === key && candidateSession === sessionId
+      })
+      if (index >= 0) {
+        const next = current.slice()
+        const existing = next[index] !== null && typeof next[index] === 'object' && next[index].ref !== null && typeof next[index].ref === 'object' ? next[index].ref : next[index]
+        // Re-adding a selected element must not wipe a note the user already wrote:
+        // only an explicit non-empty note updates it here. Clearing a note is the
+        // collection editor's explicit `collectionSetNote` path (F4).
+        const incomingNote = typeof ref.note === 'string' ? ref.note.trim() : ''
+        next[index] = {
+          ...ref,
+          id: existing.id ?? ref.id,
+          at: existing.at ?? ref.at,
+          order: typeof existing.order === 'number' ? existing.order : ref.order,
+          note: incomingNote.length > 0
+            ? ref.note
+            : (typeof existing.note === 'string' ? existing.note : '')
+        }
+        return { list: next, added: false, updated: true }
+      }
+      return { list: current.concat([ref]), added: true, updated: false }
+    }
+
+    /**
+     * Remove one collection entry by ref id.
+     * @param {Array<object>} list - current entries.
+     * @param {string} refId - ref id to remove.
+     * @returns {Array<object>} next entries.
+     */
+    function collectionRemove(list, refId) {
+      if (!Array.isArray(list)) return []
+      return list.filter((entry) => {
+        const ref = entry !== null && typeof entry === 'object' && entry.ref !== null && typeof entry.ref === 'object' ? entry.ref : entry
+        return ref === null || typeof ref !== 'object' || ref.id !== refId
+      })
+    }
+
+    /**
+     * Clear the collection.
+     * @returns {Array<object>} an empty list.
+     */
+    function collectionClear() {
+      return []
+    }
+
+    /**
+     * Update one collection entry's note, keeping order.
+     * @param {Array<object>} list - current entries.
+     * @param {string} refId - ref id to update.
+     * @param {string} note - replacement note.
+     * @returns {Array<object>} next entries.
+     */
+    function collectionSetNote(list, refId, note) {
+      if (!Array.isArray(list)) return []
+      const text = typeof note === 'string' ? note : ''
+      return list.map((entry) => {
+        const ref = entry !== null && typeof entry === 'object' && entry.ref !== null && typeof entry.ref === 'object' ? entry.ref : entry
+        if (ref === null || typeof ref !== 'object' || ref.id !== refId) return entry
+        return { ...ref, note: text }
+      })
+    }
+
+    /**
+     * The initial annotation state: mode off, nothing selected, empty collection.
+     * @returns {object} fresh state.
+     */
+    function createAnnotationState() {
+      return {
+        phase: 'off',
+        view: 'status',
+        hoverId: null,
+        selection: [],
+        note: '',
+        editing: false,
+        collection: [],
+        passThrough: false,
+        box: null,
+        feedback: null,
+        sessionId: null
+      }
+    }
+
+    /**
+     * Phase implied by a selection cardinality.
+     * @param {number} count - selected element count.
+     * @returns {'idle' | 'selected' | 'multi'} phase.
+     */
+    function annotationPhaseForCount(count) {
+      if (count <= 0) return 'idle'
+      return count === 1 ? 'selected' : 'multi'
+    }
+
+    /**
+     * One deactivation path shared by every phase.
+     * @param {object} state - current state.
+     * @returns {object} next state.
+     */
+    function annotationDeactivateState(state) {
+      return {
+        ...state,
+        phase: 'off',
+        view: 'status',
+        hoverId: null,
+        selection: [],
+        note: '',
+        editing: false,
+        passThrough: false,
+        box: null,
+        feedback: null
+      }
+    }
+
+    /**
+     * Pure annotation reducer.
+     *
+     * Actions: activate, deactivate, hover {targetId}, selectSingle {ref},
+     * toggleMulti {ref}, setMulti {refs}, setNote {text}, beginEdit, endEdit,
+     * openView {view}, collectionAdd {entry}, collectionUpdateNote {refId,
+     * note}, collectionRemove {refId}, collectionClear, passThrough {on},
+     * box {box}, feedback {feedback}, session {sessionId}, exitOne.
+     * @param {object} state - current state.
+     * @param {object} action - one action.
+     * @returns {object} next state, or the same reference when unchanged.
+     */
+    function reduceAnnotationState(state, action) {
+      const current = state !== null && typeof state === 'object' ? state : createAnnotationState()
+      const payload = action !== null && typeof action === 'object' ? action : {}
+      switch (payload.type) {
+        case 'activate': {
+          if (current.phase !== 'off') return current
+          return { ...current, phase: 'idle', view: 'status', hoverId: null, selection: [], note: '', editing: false, box: null, feedback: null }
+        }
+        case 'deactivate':
+          return annotationDeactivateState(current)
+        case 'hover': {
+          if (current.phase === 'off') return current
+          const targetId = typeof payload.targetId === 'string' && payload.targetId.length > 0 ? payload.targetId : null
+          const phase = current.selection.length > 0 ? current.phase : (targetId === null ? 'idle' : 'inspect')
+          if (current.hoverId === targetId && current.phase === phase) return current
+          return { ...current, hoverId: targetId, phase }
+        }
+        case 'selectSingle': {
+          const ref = payload.ref !== null && typeof payload.ref === 'object' ? payload.ref : null
+          if (ref === null) return { ...current, phase: 'idle', selection: [], note: '', editing: false }
+          return { ...current, phase: 'selected', selection: [ref], note: ref.note ?? '', editing: false, view: 'status', hoverId: null }
+        }
+        case 'toggleMulti': {
+          const ref = payload.ref !== null && typeof payload.ref === 'object' ? payload.ref : null
+          if (ref === null) return current
+          const key = identityKeyOf(ref)
+          const index = current.selection.findIndex((item) => identityKeyOf(item) === key)
+          const selection = index >= 0
+            ? current.selection.filter((item, itemIndex) => itemIndex !== index)
+            : current.selection.concat([ref])
+          return {
+            ...current,
+            selection,
+            phase: annotationPhaseForCount(selection.length),
+            note: selection.length === 1 ? (selection[0].note ?? '') : '',
+            editing: false,
+            view: 'status',
+            hoverId: null
+          }
+        }
+        case 'setMulti': {
+          const refs = Array.isArray(payload.refs) ? payload.refs : []
+          const seen = new Set()
+          const selection = []
+          for (const ref of refs) {
+            if (ref === null || typeof ref !== 'object') continue
+            const key = identityKeyOf(ref)
+            if (seen.has(key)) continue
+            seen.add(key)
+            selection.push(ref)
+          }
+          const merged = current.selection.concat(selection.filter((ref) => !current.selection.some((item) => identityKeyOf(item) === identityKeyOf(ref))))
+          return {
+            ...current,
+            selection: merged,
+            phase: annotationPhaseForCount(merged.length),
+            note: '',
+            editing: false,
+            view: 'status',
+            hoverId: null
+          }
+        }
+        case 'setNote':
+          return { ...current, note: typeof payload.text === 'string' ? payload.text : '' }
+        case 'beginEdit':
+          return { ...current, editing: true }
+        case 'endEdit':
+          return { ...current, editing: false }
+        case 'openView': {
+          const view = payload.view === 'collection' || payload.view === 'settings' ? payload.view : 'status'
+          const phase = view === 'collection' ? 'collection' : 'idle'
+          if (current.view === view && current.phase === phase && current.selection.length === 0) return current
+          return { ...current, view, phase, selection: [], note: '', editing: false, hoverId: null }
+        }
+        case 'collectionAdd': {
+          const result = collectionAdd(current.collection, payload.entry)
+          if (!result.added && !result.updated) return current
+          return { ...current, collection: result.list }
+        }
+        case 'collectionUpdateNote':
+          return { ...current, collection: collectionSetNote(current.collection, payload.refId, payload.note) }
+        case 'collectionRemove':
+          return { ...current, collection: collectionRemove(current.collection, payload.refId) }
+        case 'collectionClear':
+          return { ...current, collection: collectionClear() }
+        case 'passThrough': {
+          const on = payload.on === true
+          if (current.passThrough === on) return current
+          return { ...current, passThrough: on }
+        }
+        case 'box': {
+          const box = normalizeAnnotationBounds(payload.box)
+          if (box === null && current.box === null) return current
+          return { ...current, box }
+        }
+        case 'feedback': {
+          const feedback = payload.feedback !== null && typeof payload.feedback === 'object'
+            ? payload.feedback
+            : null
+          if (feedback === null && current.feedback === null) return current
+          return { ...current, feedback }
+        }
+        case 'session': {
+          const sessionId = typeof payload.sessionId === 'string' && payload.sessionId.length > 0 ? payload.sessionId : null
+          if (current.sessionId === sessionId) return current
+          return {
+            ...current,
+            sessionId,
+            hoverId: null,
+            selection: [],
+            note: '',
+            editing: false,
+            box: null,
+            view: 'status',
+            phase: current.phase === 'off' ? 'off' : 'idle'
+          }
+        }
+        case 'exitOne': {
+          if (current.editing) return { ...current, editing: false }
+          if (current.selection.length > 0) return { ...current, selection: [], note: '', editing: false, phase: 'idle', hoverId: null }
+          if (current.view !== 'status') return { ...current, view: 'status', phase: 'idle' }
+          if (current.phase !== 'off') return annotationDeactivateState(current)
+          return current
+        }
+        default:
+          return current
+      }
+    }
+
+    /**
+     * Serialize one quick-reference insertion block.
+     * @param {object} ref - ElementRef.
+     * @param {string} note - requested change.
+     * @param {object} labels - { title, reference, session, noSession, note, emptyNote, time? }.
+     * @returns {string} insertion text, trailing newline included.
+     */
+    function serializeQuickReference(ref, note, labels) {
+      const source = labels !== null && typeof labels === 'object' ? labels : {}
+      const title = typeof source.title === 'string' ? source.title : 'UI annotation'
+      const reference = typeof source.reference === 'string' ? source.reference : 'Reference:'
+      const sessionLabel = typeof source.session === 'string' ? source.session : 'Session:'
+      const noteLabel = typeof source.note === 'string' ? source.note : 'Note:'
+      const emptyNote = typeof source.emptyNote === 'string' ? source.emptyNote : '—'
+      const timeText = typeof source.time === 'string' ? source.time : formatAnnotationTime(ref?.at)
+      const sessionText = sessionShortLabel(ref?.session?.sessionId) || (typeof source.noSession === 'string' ? source.noSession : '—')
+      const noteText = sanitizeText(note, 400) || emptyNote
+      const lines = [
+        `${title} · ${elementLabel(ref)}`,
+        annotationJoinLabel(reference, describeLocator(ref)),
+        annotationJoinLabel(sessionLabel, `${sessionText} · ${timeText}`),
+        annotationJoinLabel(noteLabel, noteText)
+      ]
+      // A stale or ambiguous target is called out explicitly, locator only.
+      const status = ref !== null && typeof ref === 'object' ? ref.status : undefined
+      if (status === 'missing') lines.push(typeof source.status === 'string' ? source.status : 'Status: target no longer resolves (locator only)')
+      else if (status === 'ambiguous') lines.push(typeof source.statusAmbiguous === 'string' ? source.statusAmbiguous : 'Status: target matches more than one element (locator only)')
+      else if (status === 'changed') lines.push(typeof source.statusChanged === 'string' ? source.statusChanged : 'Status: target content changed')
+      lines.push('')
+      return lines.join('\n')
+    }
+
+    /**
+     * Serialize the ordered batch request.
+     * @param {Array<object>} items - [{ ref, note }] in collection order.
+     * @param {object} labels - batch labels plus optional `skippedCount`.
+     * @returns {string} insertion text, trailing newline included.
+     */
+    function serializeBatchRequest(items, labels) {
+      const source = labels !== null && typeof labels === 'object' ? labels : {}
+      const batchHeader = typeof source.batchHeader === 'string'
+        ? source.batchHeader
+        : 'Please adjust the UI elements below. Each item lists its reference and the requested change.'
+      const reference = typeof source.reference === 'string' ? source.reference : 'Reference:'
+      const noteLabel = typeof source.note === 'string' ? source.note : 'Note:'
+      const emptyNote = typeof source.emptyNote === 'string' ? source.emptyNote : '—'
+      const statusLabel = typeof source.status === 'string' ? source.status : 'Status: target no longer resolves (locator only)'
+      const statusAmbiguous = typeof source.statusAmbiguous === 'string' ? source.statusAmbiguous : 'Status: target matches more than one element (locator only)'
+      const statusChanged = typeof source.statusChanged === 'string' ? source.statusChanged : 'Status: target content changed'
+      const skippedTemplate = typeof source.skipped === 'string' ? source.skipped : '({count} annotation(s) from other sessions skipped)'
+      const skippedCount = typeof source.skippedCount === 'number' && Number.isFinite(source.skippedCount) && source.skippedCount > 0
+        ? Math.round(source.skippedCount)
+        : 0
+      const lines = [batchHeader]
+      if (skippedCount > 0) {
+        lines.push('')
+        lines.push(skippedTemplate.replace('{count}', String(skippedCount)))
+      }
+      lines.push('')
+      const entries = Array.isArray(items) ? items : []
+      entries.forEach((item, index) => {
+        const ref = item !== null && typeof item === 'object' && item.ref !== null && typeof item.ref === 'object' ? item.ref : item
+        const note = item !== null && typeof item === 'object' && typeof item.note === 'string' ? item.note : (ref?.note ?? '')
+        const label = elementLabel(ref)
+        lines.push(`${index + 1}. ${label}`)
+        lines.push(`   ${annotationJoinLabel(reference, describeLocator(ref))}`)
+        lines.push(`   ${annotationJoinLabel(noteLabel, sanitizeText(note, 400) || emptyNote)}`)
+        const status = ref !== null && typeof ref === 'object' ? ref.status : undefined
+        if (status === 'missing') lines.push(`   ${statusLabel}`)
+        else if (status === 'ambiguous') lines.push(`   ${statusAmbiguous}`)
+        else if (status === 'changed') lines.push(`   ${statusChanged}`)
+        if (index < entries.length - 1) lines.push('')
+      })
+      lines.push('')
+      return lines.join('\n')
+    }
+
+    /**
+     * Split entries into the current Session and all other Sessions, keeping order.
+     * @param {Array<object>} items - [{ ref, note }] or bare ElementRefs.
+     * @param {string | null} sessionId - current Session identity.
+     * @returns {{ current: Array<object>, other: Array<object> }} the two ordered lists.
+     */
+    function batchScopeSplit(items, sessionId) {
+      const entries = Array.isArray(items) ? items : []
+      const current = []
+      const other = []
+      for (const item of entries) {
+        const ref = item !== null && typeof item === 'object' && item.ref !== null && typeof item.ref === 'object' ? item.ref : item
+        const refSession = ref !== null && typeof ref === 'object' && ref.session !== null && typeof ref.session === 'object' ? ref.session.sessionId ?? null : null
+        if (typeof sessionId === 'string' && sessionId.length > 0 && refSession === sessionId) current.push(item)
+        else other.push(item)
+      }
+      return { current, other }
+    }
+
+    /**
+     * Re-resolve one ref against a live document through injected queries.
+     * @param {object} input - { candidates, expectedTag, queryAll, liveInfo }.
+     * @returns {'resolved' | 'ambiguous' | 'missing' | 'changed'} status.
+     */
+    function resolveRefStatus(input) {
+      const source = input !== null && typeof input === 'object' ? input : {}
+      const { candidates, expectedTag, queryAll, liveInfo } = source
+      if (typeof queryAll !== 'function') return 'missing'
+      const tag = typeof expectedTag === 'string' ? expectedTag.trim().toLowerCase() : ''
+      const ordered = Array.isArray(candidates) ? candidates.slice().sort((left, right) => (right?.reliability ?? 0) - (left?.reliability ?? 0)) : []
+      let unique = null
+      let genericMatch = null
+      const hasStableCandidate = ordered.some((candidate) => candidate !== null && typeof candidate === 'object'
+        && (candidate.kind === 'data' || candidate.kind === 'id' || candidate.kind === 'label'))
+      for (const candidate of ordered) {
+        if (candidate === null || typeof candidate !== 'object' || typeof candidate.value !== 'string' || candidate.value.length === 0) continue
+        let matches
+        try {
+          matches = queryAll(candidate.value)
+        } catch {
+          continue
+        }
+        if (matches === null || matches === undefined) continue
+        if (typeof matches[Symbol.iterator] !== 'function') continue
+        const list = []
+        for (const element of matches) {
+          if (element === null || typeof element !== 'object') continue
+          if (typeof element.tagName !== 'string') continue
+          const elementTag = element.tagName.toLowerCase()
+          if (tag.length === 0 || elementTag === tag) list.push(element)
+        }
+        if (list.length === 0) continue
+        const generic = candidate.kind === 'tag' || candidate.kind === 'path' || candidate.kind === 'role'
+        if (list.length > 1) {
+          // A generic locator matching several elements cannot identify one; a stable
+          // locator matching several is a genuine ambiguity.
+          if (generic) continue
+          return 'ambiguous'
+        }
+        if (generic) {
+          // Remember the first generic hit, but keep looking for a stable identity.
+          if (genericMatch === null) genericMatch = list[0]
+          continue
+        }
+        unique = list[0]
+        break
+      }
+      if (typeof liveInfo === 'function') {
+        const probe = unique === null ? genericMatch : unique
+        if (probe !== null) {
+          const info = liveInfo(probe)
+          if (info !== null && typeof info === 'object') {
+            if (info.isConnected === false) return 'missing'
+            const expected = typeof info.expectedText === 'string' ? info.expectedText : ''
+            const actual = typeof info.textContent === 'string' ? info.textContent : ''
+            if (unique === null) {
+              // A ref whose stable identity disappeared must be corroborated by the
+              // captured text summary; with none (icon-only) a same-position
+              // replacement reads as gone. A ref that never had a stable candidate
+              // (anonymous icon-only control) still resolves on its unique generic hit.
+              if (expected.length === 0) return hasStableCandidate ? 'missing' : 'resolved'
+              return sanitizeText(actual) === sanitizeText(expected) ? 'resolved' : 'changed'
+            }
+            // Stable identity resolved. A changed accessible name means this is a
+            // different control now, even when the tag/selector still matches.
+            const expectedName = typeof info.expectedName === 'string' ? info.expectedName : ''
+            const actualName = typeof info.actualName === 'string' ? info.actualName : ''
+            if (expectedName.length > 0 && actualName.length > 0
+              && sanitizeText(actualName, 60) !== expectedName) return 'changed'
+            // A digest mismatch catches text changes beyond the 80-char summary and
+            // the captured-empty -> now-has-text case (F11).
+            const expectedDigest = typeof info.expectedDigest === 'string' ? info.expectedDigest : ''
+            const actualDigest = typeof info.actualDigest === 'string' ? info.actualDigest : ''
+            if (expectedDigest.length > 0 && actualDigest.length > 0 && expectedDigest !== actualDigest) return 'changed'
+            if (expected.length > 0 && sanitizeText(actual) !== sanitizeText(expected)) return 'changed'
+          }
+        }
+      }
+      if (unique !== null) return 'resolved'
+      return genericMatch === null ? 'missing' : 'resolved'
+    }
+
+    /**
+     * Clamp the launcher into the viewport with a margin.
+     * @param {{ x: number, y: number } | null} pos - desired top-left position.
+     * @param {{ width: number, height: number }} viewport - viewport size.
+     * @param {number} [size] - launcher edge length, default 40.
+     * @param {number} [margin] - minimum gap from every edge, default 8.
+     * @returns {{ x: number, y: number }} clamped position.
+     */
+    function clampLauncherPosition(pos, viewport, size, margin) {
+      const edge = typeof size === 'number' && Number.isFinite(size) && size > 0 ? size : 40
+      const gap = typeof margin === 'number' && Number.isFinite(margin) && margin >= 0 ? margin : 8
+      const width = viewport !== null && typeof viewport === 'object' && typeof viewport.width === 'number' ? viewport.width : 0
+      const height = viewport !== null && typeof viewport === 'object' && typeof viewport.height === 'number' ? viewport.height : 0
+      const maxX = Math.max(gap, width - edge - gap)
+      const maxY = Math.max(gap, height - edge - gap)
+      const rawX = pos !== null && typeof pos === 'object' && typeof pos.x === 'number' && Number.isFinite(pos.x) ? pos.x : width - edge - gap
+      const rawY = pos !== null && typeof pos === 'object' && typeof pos.y === 'number' && Number.isFinite(pos.y) ? pos.y : height - edge - gap
+      return {
+        x: Math.round(Math.min(Math.max(rawX, gap), maxX)),
+        y: Math.round(Math.min(Math.max(rawY, gap), maxY))
+      }
+    }
+
+    /**
+     * Place the popover beside a target rect, inside the viewport and left of the rail.
+     * @param {{ x: number, y: number, width: number, height: number }} rect - target rect.
+     * @param {{ width: number, height: number }} popoverSize - popover size.
+     * @param {{ width: number, height: number }} viewport - viewport size.
+     * @param {number} [railWidth] - reserved right strip width, default 0.
+     * @param {number} [margin] - minimum gap from every edge, default 8.
+     * @returns {{ x: number, y: number }} clamped position.
+     */
+    function clampPopoverPosition(rect, popoverSize, viewport, railWidth, margin) {
+      const gap = typeof margin === 'number' && Number.isFinite(margin) && margin >= 0 ? margin : 8
+      const rail = typeof railWidth === 'number' && Number.isFinite(railWidth) && railWidth > 0 ? railWidth : 0
+      const width = viewport !== null && typeof viewport === 'object' && typeof viewport.width === 'number' ? viewport.width : 0
+      const height = viewport !== null && typeof viewport === 'object' && typeof viewport.height === 'number' ? viewport.height : 0
+      const popoverWidth = popoverSize !== null && typeof popoverSize === 'object' && typeof popoverSize.width === 'number' ? popoverSize.width : 320
+      const popoverHeight = popoverSize !== null && typeof popoverSize === 'object' && typeof popoverSize.height === 'number' ? popoverSize.height : 232
+      const target = rect !== null && typeof rect === 'object' ? rect : { x: 0, y: 0, width: 0, height: 0 }
+      const targetX = typeof target.x === 'number' && Number.isFinite(target.x) ? target.x : 0
+      const targetY = typeof target.y === 'number' && Number.isFinite(target.y) ? target.y : 0
+      const targetWidth = typeof target.width === 'number' && Number.isFinite(target.width) ? target.width : 0
+      const targetHeight = typeof target.height === 'number' && Number.isFinite(target.height) ? target.height : 0
+      const maxX = Math.max(gap, width - rail - popoverWidth - gap)
+      const maxY = Math.max(gap, height - popoverHeight - gap)
+      let x = targetX + targetWidth + gap + 4
+      if (x > maxX) x = targetX - popoverWidth - gap - 4
+      let y = targetY
+      if (y > maxY) y = targetY + targetHeight - popoverHeight
+      return {
+        x: Math.round(Math.min(Math.max(x, gap), maxX)),
+        y: Math.round(Math.min(Math.max(y, gap), maxY))
+      }
+    }
+
+    /**
+     * Compute the rail width for one viewport.
+     * @param {number} viewportWidth - window inner width.
+     * @param {boolean} [collapsed] - whether the rail is collapsed to its strip, default false.
+     * @returns {number} rail width in pixels.
+     */
+    function computeRailWidth(viewportWidth, collapsed) {
+      if (collapsed === true) return 48
+      const width = typeof viewportWidth === 'number' && Number.isFinite(viewportWidth) ? viewportWidth : 0
+      return Math.min(236, Math.max(188, Math.round(width * 0.116)))
+    }
+
+    /**
+     * Decide whether the layout can shrink or the rail must float over the page.
+     * @param {number} viewportWidth - window inner width.
+     * @param {number} sidebarWidth - native left + right sidebar widths.
+     * @param {number} railWidth - rail width to reserve.
+     * @returns {'shrink' | 'overlay'} layout mode.
+     */
+    function layoutModeFor(viewportWidth, sidebarWidth, railWidth) {
+      const width = typeof viewportWidth === 'number' && Number.isFinite(viewportWidth) ? viewportWidth : 0
+      const side = typeof sidebarWidth === 'number' && Number.isFinite(sidebarWidth) ? sidebarWidth : 0
+      const rail = typeof railWidth === 'number' && Number.isFinite(railWidth) ? railWidth : 0
+      return width - side - rail >= 560 ? 'shrink' : 'overlay'
+    }
+    //#endregion
+
+    /** Selector set of elements the picker treats as meaningful, nearest first. */
+    const ANNOTATION_CANDIDATE_SELECTOR = 'button, a, input, select, textarea, [role="button"], [role="tab"], [role="menuitem"], [role="link"], [role="dialog"], [role="list"], [role="listitem"], [role="treeitem"], [role="combobox"], [role="textbox"], [data-row-key], [data-conversation-region], [aria-label], h1, h2, h3, h4, h5, h6, li, td, pre, p, code, nav, aside, main, section'
+
+    /** Estimated popover size used for clamping. */
+    const ANNOTATION_POPOVER_SIZE = { width: 320, height: 248 }
+
+    /** Launcher edge length in pixels; must match the stylesheet. */
+    const ANNOTATION_LAUNCHER_SIZE = 44
+
+    /**
+     * Clamp the launcher for the current layout. While a rail is visible the
+     * launcher must stay in the main area and never sit under the rail strip (it
+     * would cover the rail footer actions); when the mode is off the whole
+     * viewport is available again.
+     * @param {{ x: number, y: number } | null} pos - desired position.
+     * @param {{ width: number, height: number }} viewport - viewport size.
+     * @param {number} [reservedRight] - visible rail strip width, default 0.
+     * @returns {{ x: number, y: number }} clamped position.
+     */
+    function clampLauncherForLayout(pos, viewport, reservedRight) {
+      const clamped = clampLauncherPosition(pos, viewport, ANNOTATION_LAUNCHER_SIZE)
+      const reserved = typeof reservedRight === 'number' && Number.isFinite(reservedRight) && reservedRight > 0
+        ? reservedRight
+        : 0
+      if (reserved === 0) return clamped
+      const width = viewport !== null && typeof viewport === 'object' && typeof viewport.width === 'number' ? viewport.width : 0
+      const maxX = Math.max(8, Math.round(width - reserved - ANNOTATION_LAUNCHER_SIZE - 8))
+      return { x: Math.min(clamped.x, maxX), y: clamped.y }
+    }
+
+    /**
+     * Resolve one event target (or node) to an Element.
+     * @param {unknown} target - event target or node.
+     * @returns {Element | null} the element, when available.
+     */
+    function annotationDomElement(target) {
+      if (target === null || target === undefined || typeof target !== 'object') return null
+      if (typeof Element !== 'undefined' && target instanceof Element) return target
+      if (typeof target.nodeType === 'number' && target.nodeType === 3) return annotationDomElement(target.parentElement)
+      return null
+    }
+
+    /**
+     * The event target element. The target is preferred over `composedPath()[0]`
+     * because the DOM retargets a Shadow DOM hit to its host, which is exactly
+     * the selectable boundary this feature documents.
+     * @param {object} event - DOM event.
+     * @returns {Element | null} the event target element.
+     */
+    function annotationEventElement(event) {
+      if (event === null || typeof event !== 'object') return null
+      const target = annotationDomElement(event.target)
+      if (target !== null) return target
+      if (typeof event.composedPath === 'function') {
+        const path = event.composedPath()
+        if (Array.isArray(path)) {
+          for (const entry of path) {
+            const element = annotationDomElement(entry)
+            if (element !== null) return element
+          }
+        }
+      }
+      return null
+    }
+
+    /**
+     * Retarget one node inside a Shadow DOM to its host element.
+     * @param {Element | null} node - node to retarget.
+     * @returns {Element | null} the outermost host element.
+     */
+    function annotationShadowHost(node) {
+      let current = node
+      let depth = 0
+      while (current !== null && depth < 8) {
+        const root = typeof current.getRootNode === 'function' ? current.getRootNode() : null
+        if (root !== null && root !== undefined && root !== document
+          && root.host !== null && root.host !== undefined && root.host !== document) {
+          current = annotationDomElement(root.host)
+          depth += 1
+          continue
+        }
+        break
+      }
+      return current
+    }
+
+    /** @returns {{ width: number, height: number }} the current viewport size. */
+    function annotationViewport() {
+      return {
+        width: typeof window.innerWidth === 'number' ? window.innerWidth : 0,
+        height: typeof window.innerHeight === 'number' ? window.innerHeight : 0
+      }
+    }
+
+    /**
+     * The layout frame: the element whose padding makes room for the rail.
+     * @returns {Element | null} the frame element.
+     */
+    function annotationLayoutFrame() {
+      const overlay = document.querySelector('[data-shell-overlay]')
+      if (overlay === null) return null
+      const frame = overlay.parentElement
+      return frame instanceof HTMLElement ? frame : null
+    }
+
+    /**
+     * Sum the widths of the native left and right Sidebar columns.
+     * @returns {number} total sidebar width in pixels.
+     */
+    function annotationMeasureSidebarWidths() {
+      let total = 0
+      for (const selector of ['[class$="_sidebarCol"]', '[class$="_rightbarCol"]']) {
+        const column = document.querySelector(selector)
+        if (!(column instanceof HTMLElement)) continue
+        const rect = column.getBoundingClientRect()
+        if (rect.width > 0) total += rect.width
+      }
+      return total
+    }
+
+    /**
+     * One element's viewport rectangle, rounded.
+     * @param {unknown} element - candidate element.
+     * @returns {{ x: number, y: number, width: number, height: number } | null} rectangle.
+     */
+    function annotationRectOf(element) {
+      if (element === null || typeof element !== 'object' || typeof element.getBoundingClientRect !== 'function') return null
+      const rect = element.getBoundingClientRect()
+      if (rect === null || typeof rect !== 'object') return null
+      return {
+        x: Math.round(rect.left),
+        y: Math.round(rect.top),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height)
+      }
+    }
+
+    /**
+     * Whether two rectangles intersect.
+     * @param {{ x: number, y: number, width: number, height: number }} left - first rectangle.
+     * @param {{ x: number, y: number, width: number, height: number }} right - second rectangle.
+     * @returns {boolean} whether they overlap.
+     */
+    function annotationRectsIntersect(left, right) {
+      return left.x < right.x + right.width
+        && right.x < left.x + left.width
+        && left.y < right.y + right.height
+        && right.y < left.y + left.height
+    }
+
+    /**
+     * Whether one element is rendered and visible.
+     * @param {Element | null} element - candidate element.
+     * @returns {boolean} whether it has a box and is not hidden.
+     */
+    function annotationElementVisible(element) {
+      if (element === null || typeof element !== 'object') return false
+      if (typeof element.getClientRects !== 'function') return false
+      if (element.getClientRects().length === 0) return false
+      // Zero-area elements have no meaningful target to outline or annotate; the
+      // primary picker check rejects them before any fallback path (F13).
+      const rect = typeof element.getBoundingClientRect === 'function' ? element.getBoundingClientRect() : null
+      if (rect === null || rect.width <= 0 || rect.height <= 0) return false
+      const style = window.getComputedStyle(element)
+      if (style === null || typeof style !== 'object') return true
+      return style.visibility !== 'hidden' && style.display !== 'none'
+    }
+
+    /**
+     * Stable id of one element, empty when it looks generated.
+     * @param {Element} element - candidate element.
+     * @returns {string} stable id or ''.
+     */
+    function annotationStableId(element) {
+      const rawId = element.getAttribute('id')
+      if (rawId === null || rawId.length === 0 || rawId.length > 48) return ''
+      // The attribute sanitizer is the single authority for what may be captured;
+      // an id is just another safe-named attribute value (F1).
+      const id = sanitizeAttributeValue('id', rawId)
+      if (id === null || isDynamicValue(id)) return ''
+      return id
+    }
+
+    /**
+     * Semantic role of one element, explicit role handled by the caller.
+     * @param {string} tag - lowercase tag name.
+     * @param {Element} element - candidate element.
+     * @returns {string} role name or ''.
+     */
+    function annotationRoleOf(tag, element) {
+      if (tag === 'button') return 'button'
+      if (tag === 'a' && element.hasAttribute('href')) return 'link'
+      if (tag === 'input') {
+        const type = (element.getAttribute('type') ?? 'text').toLowerCase()
+        if (type === 'checkbox') return 'checkbox'
+        if (type === 'radio') return 'radio'
+        if (type === 'submit' || type === 'button' || type === 'reset') return 'button'
+        return 'textbox'
+      }
+      if (tag === 'select') return 'combobox'
+      if (tag === 'textarea') return 'textbox'
+      if (/^h[1-6]$/.test(tag)) return 'heading'
+      if (tag === 'li') return 'listitem'
+      if (element.getAttribute('data-row-key') !== null) return 'row'
+      if (tag === 'nav' || tag === 'aside' || tag === 'main' || tag === 'section') return 'region'
+      return ''
+    }
+
+    /**
+     * Component class used in the ElementRef and the popover label.
+     * @param {string} tag - lowercase tag name.
+     * @param {string} role - derived or explicit role.
+     * @param {boolean} isEditable - whether the element is contenteditable.
+     * @param {boolean} insideComposer - whether the element is the composer region.
+     * @returns {string} component class.
+     */
+    function annotationComponentOf(tag, role, isEditable, insideComposer) {
+      if (isEditable) return 'editable'
+      if (insideComposer) return 'region'
+      if (role === 'button' || tag === 'button' || role === 'tab') return 'button'
+      if (role === 'link' || tag === 'a') return 'link'
+      if (role === 'textbox' || role === 'combobox' || role === 'checkbox' || role === 'radio'
+        || tag === 'input' || tag === 'select' || tag === 'textarea') return 'input'
+      if (role === 'menuitem' || role === 'menuitemcheckbox') return 'menu-item'
+      if (role === 'row' || role === 'listitem' || tag === 'li' || tag === 'tr') return 'row'
+      if (role === 'region' || tag === 'main' || tag === 'section' || tag === 'nav' || tag === 'aside') return 'region'
+      if (role === 'heading' || tag === 'p' || tag === 'pre' || tag === 'code') return 'text'
+      return 'container'
+    }
+
+    /**
+     * Accessible name of one element. Never reads control values or editor content.
+     * @param {Element} element - candidate element.
+     * @param {string} tag - lowercase tag name.
+     * @returns {string} sanitized name.
+     */
+    function annotationAccessibleName(element, tag) {
+      const ariaLabel = element.getAttribute('aria-label')
+      if (ariaLabel !== null && ariaLabel.trim().length > 0) return sanitizeText(ariaLabel, 60)
+      const labelledBy = element.getAttribute('aria-labelledby')
+      if (labelledBy !== null && labelledBy.length > 0) {
+        const label = document.getElementById(labelledBy)
+        if (label !== null) {
+          const text = sanitizeText(label.textContent ?? '', 60)
+          if (text.length > 0) return text
+        }
+      }
+      if (tag === 'img') {
+        const alt = element.getAttribute('alt')
+        if (alt !== null && alt.trim().length > 0) return sanitizeText(alt, 60)
+      }
+      const wrappingLabel = typeof element.closest === 'function' ? element.closest('label') : null
+      if (wrappingLabel !== null && wrappingLabel !== element) {
+        const text = sanitizeText(wrappingLabel.textContent ?? '', 60)
+        if (text.length > 0) return text
+      }
+      if (isFormTag(tag)) {
+        const placeholder = element.getAttribute('placeholder')
+        if (placeholder !== null && placeholder.trim().length > 0) return sanitizeText(placeholder, 60)
+        const name = element.getAttribute('name')
+        if (name !== null && name.trim().length > 0) return sanitizeText(name, 60)
+        return sanitizeText(element.getAttribute('type') ?? tag, 40)
+      }
+      return ''
+    }
+
+    /** Selector of every surface whose content is user input, never page copy. */
+    const ANNOTATION_LIVE_INPUT_SURFACE = 'input, textarea, select, [contenteditable], [data-lexical-editor="true"]'
+
+    /**
+     * Whether one element is (or contains) a live input surface. Those live values
+     * and editor contents are never read, copied, or summarized (F7).
+     * @param {Element} element - candidate element.
+     * @returns {boolean} whether text collection must be suppressed.
+     */
+    function annotationHasLiveInputSurface(element) {
+      if (element === null || typeof element !== 'object') return false
+      if (typeof element.matches === 'function' && element.matches(ANNOTATION_LIVE_INPUT_SURFACE)) return true
+      return typeof element.querySelector === 'function'
+        && element.querySelector(ANNOTATION_LIVE_INPUT_SURFACE) !== null
+    }
+
+    /**
+     * Sanitized text summary of one element. Never reads control values and never
+     * descends into a native editor or password field.
+     * @param {Element} element - candidate element.
+     * @param {boolean} isEditable - whether the element is contenteditable.
+     * @returns {string} sanitized summary.
+     */
+    function annotationTextSummary(element, isEditable) {
+      if (isEditable) return ''
+      if (annotationHasLiveInputSurface(element)) return ''
+      const text = typeof element.textContent === 'string' ? element.textContent : ''
+      return sanitizeText(text, 80)
+    }
+
+    /**
+     * Digest of the full sanitized text of one element (F11). Privacy suppression is
+     * the same as the text summary: live input surfaces yield '' so a digest can
+     * never stand in for their content.
+     * @param {Element} element - candidate element.
+     * @param {boolean} isEditable - whether the element is contenteditable.
+     * @returns {string} eight-hex digest, or ''.
+     */
+    function annotationTextDigest(element, isEditable) {
+      if (isEditable) return ''
+      if (annotationHasLiveInputSurface(element)) return ''
+      const text = typeof element.textContent === 'string' ? element.textContent : ''
+      return textDigest(text)
+    }
+
+    /**
+     * One short structural path (at most four levels) with nth-of-type steps.
+     * @param {Element} element - candidate element.
+     * @returns {{ parts: Array<{ tag: string, index: number }>, selector: string }} path parts and selector.
+     */
+    function annotationTagPath(element) {
+      const parts = []
+      let current = element
+      let depth = 0
+      while (current !== null && current !== document.body && current !== document.documentElement && depth < 4) {
+        const tag = current.tagName.toLowerCase()
+        let index = 1
+        let sibling = current.previousElementSibling
+        while (sibling !== null) {
+          if (sibling.tagName === current.tagName) index += 1
+          sibling = sibling.previousElementSibling
+        }
+        parts.unshift({ tag, index })
+        current = current.parentElement
+        depth += 1
+      }
+      const selector = parts.map((part) => (part.index > 1 ? `${part.tag}:nth-of-type(${part.index})` : part.tag)).join(' > ')
+      return { parts, selector }
+    }
+
+    /**
+     * Build the descriptor consumed by `buildElementRef` from a live element.
+     * @param {Element} element - candidate element.
+     * @param {boolean} insideComposer - whether the element is the composer region.
+     * @returns {object} element descriptor.
+     */
+    function annotationDescriptorOf(element, insideComposer) {
+      const tag = element.tagName.toLowerCase()
+      const isEditable = tag !== 'input' && tag !== 'textarea' && tag !== 'select' && element.isContentEditable === true
+      const attrs = []
+      for (const attribute of Array.from(element.attributes)) {
+        const name = sanitizeAttributeName(attribute.name)
+        if (name === null) continue
+        const value = sanitizeAttributeValue(name, attribute.value)
+        if (value === null) continue
+        attrs.push({ name, value })
+      }
+      const role = sanitizeText(element.getAttribute('role') ?? '', 32) || annotationRoleOf(tag, element)
+      const pathInfo = annotationTagPath(element)
+      return {
+        tag,
+        id: annotationStableId(element),
+        role,
+        name: annotationAccessibleName(element, tag),
+        attrs,
+        text: annotationTextSummary(element, isEditable),
+        textDigest: annotationTextDigest(element, isEditable),
+        component: annotationComponentOf(tag, role, isEditable, insideComposer === true),
+        path: pathInfo.selector,
+        tagPath: pathInfo.parts,
+        isEditable,
+        insideComposer: insideComposer === true
+      }
+    }
+
+    /**
+     * First node of a candidate chain: text nodes resolve to their parent, our
+     * own UI is rejected, and an editable's contents resolve to the composer
+     * region (whose internals are never read).
+     * @param {unknown} target - event target.
+     * @returns {Element | null} the chain's start element.
+     */
+    function annotationStartNode(target) {
+      const shadowHost = annotationShadowHost(annotationDomElement(target))
+      const node = shadowHost === null ? annotationDomElement(target) : shadowHost
+      if (node === null) return null
+      if (typeof node.closest !== 'function') return null
+      if (node.closest('[data-psa-own]') !== null) return null
+      const editable = node.closest('[data-lexical-editor="true"], [contenteditable="true"]')
+      if (editable !== null) {
+        const composer = editable.closest('[data-conversation-region="composer"]')
+        return composer ?? editable
+      }
+      return node
+    }
+
+    /**
+     * Walk the ancestor chain of one target, nearest first.
+     * @param {unknown} target - event target.
+     * @returns {Array<{ element: Element, descriptor: object }>} the chain.
+     */
+    function annotationCandidateChain(target) {
+      const start = annotationStartNode(target)
+      if (start === null) return []
+      const chain = []
+      let current = start
+      let depth = 0
+      while (current !== null && current !== document.body && current !== document.documentElement && depth < 16) {
+        const insideComposer = typeof current.closest === 'function' && current.closest('[data-conversation-region="composer"]') !== null
+        chain.push({ element: current, descriptor: annotationDescriptorOf(current, insideComposer) })
+        current = current.parentElement
+        depth += 1
+      }
+      return chain
+    }
+
+    /**
+     * Whether one chain element is a meaningful candidate.
+     * @param {Element} element - chain element.
+     * @returns {boolean} whether the picker accepts it.
+     */
+    function annotationIsCandidate(element) {
+      if (element === null || typeof element !== 'object') return false
+      const tag = typeof element.tagName === 'string' ? element.tagName.toLowerCase() : ''
+      if (tag === '' || tag === 'html' || tag === 'body') return false
+      if (typeof element.closest !== 'function') return false
+      if (element.closest('[data-psa-own]') !== null) return false
+      if (typeof element.matches !== 'function' || !element.matches(ANNOTATION_CANDIDATE_SELECTOR)) return false
+      return annotationElementVisible(element)
+    }
+
+    /**
+     * Choose the meaningful index in one candidate chain.
+     * @param {Array<{ element: Element, descriptor: object }>} chain - candidate chain.
+     * @returns {number} chosen index, or -1.
+     */
+    function annotationPickChainIndex(chain) {
+      for (let index = 0; index < chain.length; index += 1) {
+        if (annotationIsCandidate(chain[index].element)) return index
+      }
+      for (let index = 0; index < chain.length; index += 1) {
+        const rect = annotationRectOf(chain[index].element)
+        if (rect !== null && rect.width > 0 && rect.height > 0) return index
+      }
+      return -1
+    }
+
+    /**
+     * Resolve one unique element-like object from ordered locator candidates.
+     *
+     * Mirrors `resolveRefStatus`'s walk: a STABLE kind (`data`/`id`/`label`)
+     * matching several elements is genuine ambiguity and stops the walk; a GENERIC
+     * kind (`role`/`tag`/`path`) matching several cannot discriminate, so the walk
+     * continues to less reliable candidates. A unique match wins, and the first
+     * unique generic match is remembered as the fallback (R1).
+     *
+     * Pure: `queryAll(selector)` and `elementLike.tagName` are injected, so this is
+     * shared with the unit-test seam.
+     * @param {{ candidates?: Array<object>, expectedTag?: string, queryAll?: Function }} input - resolver input.
+     * @returns {object | null} the unique element-like object, or null.
+     */
+    function resolveNodeCandidate(input) {
+      const source = input !== null && typeof input === 'object' ? input : {}
+      const { candidates, expectedTag, queryAll } = source
+      if (typeof queryAll !== 'function') return null
+      const tag = typeof expectedTag === 'string' ? expectedTag.trim().toLowerCase() : ''
+      const ordered = Array.isArray(candidates)
+        ? candidates.slice().sort((left, right) => (right?.reliability ?? 0) - (left?.reliability ?? 0))
+        : []
+      let genericMatch = null
+      for (const candidate of ordered) {
+        if (candidate === null || typeof candidate !== 'object' || typeof candidate.value !== 'string' || candidate.value.length === 0) continue
+        let matches
+        try {
+          matches = queryAll(candidate.value)
+        } catch {
+          continue
+        }
+        if (matches === null || matches === undefined) continue
+        if (typeof matches[Symbol.iterator] !== 'function') continue
+        const list = []
+        for (const element of matches) {
+          if (element === null || typeof element !== 'object') continue
+          if (typeof element.tagName !== 'string') continue
+          const elementTag = element.tagName.toLowerCase()
+          if (tag.length === 0 || elementTag === tag) list.push(element)
+        }
+        if (list.length === 0) continue
+        const generic = candidate.kind === 'tag' || candidate.kind === 'path' || candidate.kind === 'role'
+        if (list.length > 1) {
+          // Stable ambiguity is final; generic ambiguity just means "keep looking".
+          if (generic) continue
+          return null
+        }
+        if (generic) {
+          if (genericMatch === null) genericMatch = list[0]
+          continue
+        }
+        return list[0]
+      }
+      return genericMatch
+    }
+
+    /**
+     * Resolve one ref to its unique live element.
+     * @param {object} ref - ElementRef.
+     * @returns {Element | null} the element when exactly one candidate resolves.
+     */
+    function annotationResolveNode(ref) {
+      if (ref === null || typeof ref !== 'object') return null
+      const locator = ref.locator
+      if (locator === null || typeof locator !== 'object') return null
+      return resolveNodeCandidate({
+        candidates: locator.candidates,
+        expectedTag: locator.tag,
+        queryAll: (selector) => document.querySelectorAll(selector)
+      })
+    }
+
+    /**
+     * Collect marquee candidates intersecting one rectangle. A single bounded
+     * query runs at release; nested candidates keep the deepest element.
+     * @param {{ x: number, y: number, width: number, height: number }} rect - marquee rectangle.
+     * @returns {Element[]} ordered candidates, capped.
+     */
+    function annotationBoxCandidateElements(rect) {
+      if (rect === null || typeof rect !== 'object') return []
+      const hits = []
+      let nodes
+      try {
+        // One bounded scan at release, over exactly the click picker's candidates (F15).
+        nodes = document.querySelectorAll(ANNOTATION_CANDIDATE_SELECTOR)
+      } catch {
+        return []
+      }
+      for (const node of nodes) {
+        if (!(node instanceof Element)) continue
+        if (node.closest('[data-psa-own]') !== null) continue
+        if (!annotationElementVisible(node)) continue
+        const box = annotationRectOf(node)
+        if (box === null || box.width === 0 || box.height === 0) continue
+        if (!annotationRectsIntersect(rect, box)) continue
+        hits.push(node)
+      }
+      const specific = hits.filter((node) => !hits.some((other) => other !== node && node.contains(other)))
+      return specific.slice(0, 24)
+    }
+
+    /**
+     * Localized labels for the two insertion formats.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {object} insertion labels.
+     */
+    function annotationInsertLabels(t) {
+      return {
+        title: t('insert.title'),
+        reference: t('insert.reference'),
+        session: t('insert.session'),
+        noSession: t('insert.noSession'),
+        note: t('insert.note'),
+        emptyNote: t('insert.emptyNote'),
+        batchHeader: t('insert.batchHeader'),
+        status: t('insert.status'),
+        statusAmbiguous: t('insert.statusAmbiguous'),
+        statusChanged: t('insert.statusChanged'),
+        skipped: t('insert.skipped')
+      }
+    }
+
+    /**
+     * Focus the current Conversation's Lexical editor after an insertion.
+     * @returns {void}
+     */
+    function annotationFocusComposer() {
+      const editor = document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')
+      if (editor instanceof HTMLElement) editor.focus()
+    }
+
+    /**
+     * Read one localStorage key, tolerating blocked storage.
+     * @param {string} key - storage key.
+     * @returns {string | null} stored text.
+     */
+    function annotationReadStorage(key) {
+      try {
+        return window.localStorage.getItem(key)
+      } catch {
+        return null
+      }
+    }
+
+    /**
+     * Write one localStorage key, tolerating blocked storage.
+     * @param {string} key - storage key.
+     * @param {string} value - value to store.
+     * @returns {void}
+     */
+    function annotationWriteStorage(key, value) {
+      try {
+        window.localStorage.setItem(key, value)
+      } catch {
+        // Private mode or a hostile embedding: persistence is best effort.
+      }
+    }
+
+    /**
+     * Create the observable annotation store.
+     * @param {object} initial - initial snapshot.
+     * @returns {{ getSnapshot: Function, subscribe: Function, set: Function }} store.
+     */
+    function createAnnotationStore(initial) {
+      let snapshot = initial
+      const listeners = new Set()
+      return {
+        /** @returns {object} the current snapshot. */
+        getSnapshot() {
+          return snapshot
+        },
+        /**
+         * Subscribe one listener.
+         * @param {Function} listener - change listener.
+         * @returns {Function} unsubscribe.
+         */
+        subscribe(listener) {
+          listeners.add(listener)
+          return () => {
+            listeners.delete(listener)
+          }
+        },
+        /**
+         * Replace the snapshot and notify listeners.
+         * @param {object} next - next snapshot.
+         * @returns {void}
+         */
+        set(next) {
+          snapshot = next
+          for (const listener of [...listeners]) {
+            try {
+              listener()
+            } catch {
+              // A failing subscriber must not break the controller.
+            }
+          }
+        }
+      }
+    }
+
+    /**
+     * Create the annotation controller singleton.
+     *
+     * Owns capture-phase event isolation, hover/selection geometry, the marquee,
+     * the layout frame, persistence, and Composer insertion. React only renders
+     * the snapshot.
+     * @param {Function} t - namespace-bound translate.
+     * @param {object} ctx - client root context.
+     * @returns {object} the controller face used by the React surface.
+     */
+    function createAnnotationController(t, ctx) {
+      let settings = parseStoredSettings(annotationReadStorage(SETTINGS_STORAGE_KEY))
+      let railCollapsed = annotationReadStorage(RAIL_STORAGE_KEY) === 'true'
+      const viewport = annotationViewport()
+      const store = createAnnotationStore({
+        state: createAnnotationState(),
+        settings: { ...settings },
+        launcherPosition: clampLauncherPosition(readLauncherPosition(), viewport, ANNOTATION_LAUNCHER_SIZE),
+        launcherDragging: false,
+        railWidth: computeRailWidth(viewport.width, railCollapsed),
+        railCollapsed,
+        layoutMode: 'shrink',
+        hoverRect: null,
+        selectionRects: [],
+        boxRect: null,
+        popoverPosition: null,
+        popoverPinned: false,
+        flashRefId: null,
+        flashRect: null,
+        noteEditor: null
+      })
+
+      /** Installed window listeners, removed on deactivate. */
+      const pageListeners = []
+      /** Cleanups for temporary gesture listeners; teardown aborts all of them. */
+      const activeGestures = new Set()
+      /** DOM revision: bumped by body mutations so resolved nodes can be reused safely (R1/R4). */
+      let domRevision = 0
+      /** Body mutation observer feeding domRevision; disconnected on deactivate/dispose. */
+      let domObserver = null
+      /** Resolved-node cache: `{ node, rev }` per ref id, reused only at the same revision. */
+      const resolvedNodeCache = new Map()
+      /** Hover identity tokens per element. */
+      const elementTokens = new WeakMap()
+      /** Chain and index of the last picked selection, for level up/down. */
+      let lastPick = null
+      /** Pointer gesture in flight. */
+      let pointer = null
+      /** Last pointer point used for hover resolution. */
+      let hoverPoint = null
+      /** Hover rAF handle. */
+      let hoverFrame = null
+      /** Geometry rAF handle. */
+      let geometryFrame = null
+      /** Resize debounce timer. */
+      let resizeTimer = null
+      /** Frame inline-style observer, the element it watches, and its debounce. */
+      let frameObserver = null
+      let observedFrame = null
+      let frameObserverTimer = null
+      /** Inline frame styles captured before the first mode write (F12). */
+      let frameSnapshot = null
+      /** Timer that drops the frame marker after the reverse transition (F12). */
+      let frameRestoreTimer = null
+      /** Feedback auto-dismiss timer. */
+      let feedbackTimer = null
+      /** Re-locate flash timer. */
+      let flashTimer = null
+      /** Until timestamp for the click that follows a launcher drag. */
+      let suppressLauncherClickUntil = 0
+      /** Ref id the current popover was placed for. */
+      let popoverRefId = null
+      /** Real mounted popover size used for clamping; the constant is only the fallback (F14). */
+      let popoverMeasuredSize = { width: ANNOTATION_POPOVER_SIZE.width, height: ANNOTATION_POPOVER_SIZE.height }
+      /** Mounted popover element, only used for measurement. */
+      let popoverElement = null
+      /** Pending popover measurement frame. */
+      let popoverMeasureFrame = null
+      /** Monotonic hover token. */
+      let tokenSeq = 0
+
+      /**
+       * The current snapshot.
+       * @returns {object} snapshot.
+       */
+      function snapshot() {
+        return store.getSnapshot()
+      }
+
+      /**
+       * Whether annotation mode is on.
+       * @returns {boolean} whether active.
+       */
+      function isActive() {
+        return snapshot().state.phase !== 'off'
+      }
+
+      /**
+       * Merge a patch into the snapshot and notify React.
+       * @param {object} patch - partial snapshot.
+       * @returns {void}
+       */
+      function publish(patch) {
+        const current = snapshot()
+        let changed = false
+        for (const key of Object.keys(patch)) {
+          if (patch[key] !== current[key]) {
+            changed = true
+            break
+          }
+        }
+        if (!changed) return
+        store.set({ ...current, ...patch })
+      }
+
+      /**
+       * Whether an event target sits inside our own surface, which is never blocked.
+       * @param {object} event - DOM event.
+       * @returns {boolean} whether the target is ours.
+       */
+      function eventInsideOwn(event) {
+        const element = annotationEventElement(event)
+        if (element === null || typeof element.closest !== 'function') return false
+        return element.closest('[data-psa-own]') !== null
+      }
+
+      /**
+       * Whether the pass-through modifier is held for one event.
+       * @param {object} event - DOM event.
+       * @returns {boolean} whether the page keeps native semantics.
+       */
+      function passThroughEvent(event) {
+        return snapshot().state.passThrough || modifierMatches(event, settings.passThroughModifier)
+      }
+
+      /**
+       * Apply one pass-through state to the reducer and the root cursor marker.
+       * @param {boolean} on - whether the page has native mouse semantics.
+       * @returns {void}
+       */
+      function setPassThrough(on) {
+        const active = on === true
+        if (active) document.documentElement.setAttribute('data-psa-passthrough', 'true')
+        else document.documentElement.removeAttribute('data-psa-passthrough')
+        dispatch({ type: 'passThrough', on: active })
+        if (active) {
+          // Native mouse semantics resume: no hover outline, and an in-flight
+          // marquee is cancelled instead of selecting on release (F10).
+          abortGestures()
+          clearHover()
+        }
+      }
+
+      /**
+       * Block one page-level event when the mode owns it.
+       * @param {object} event - DOM event.
+       * @returns {boolean} whether it was blocked.
+       */
+      function blockEvent(event) {
+        if (!isActive()) return false
+        if (eventInsideOwn(event)) return false
+        if (passThroughEvent(event)) return false
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        return true
+      }
+
+      /**
+       * Token identifying one hovered element inside the snapshot.
+       * @param {Element} element - hovered element.
+       * @returns {string} token.
+       */
+      function tokenOf(element) {
+        const existing = elementTokens.get(element)
+        if (existing !== undefined) return existing
+        tokenSeq += 1
+        const token = `psa-hover-${tokenSeq}`
+        elementTokens.set(element, token)
+        return token
+      }
+
+      /**
+       * Build one ref from a chain position, preserving the order/timestamp of the
+       * ref it replaces (level up/down must not churn collection identity).
+       * @param {Array<object>} chain - candidate chain.
+       * @param {number} index - chosen chain index.
+       * @param {object | null} like - ref being replaced, when any.
+       * @returns {object} new ElementRef.
+       */
+      function refFromChain(chain, index, like) {
+        const entry = chain[index]
+        const bounds = annotationRectOf(entry.element)
+        const context = {
+          sessionId: annotationBridge.sessionId ?? annotationConversationSessionId(),
+          at: like !== null && typeof like === 'object' && typeof like.at === 'number' ? like.at : Date.now(),
+          order: like !== null && typeof like === 'object' && typeof like.order === 'number' ? like.order : Date.now() % 1000000,
+          bounds,
+          levelChain: chain.slice(index + 1, index + 3).map((item) => item.descriptor.name || item.descriptor.component || item.descriptor.tag)
+        }
+        const ref = buildElementRef(entry.descriptor, context)
+        ref.note = like !== null && typeof like === 'object' && typeof like.note === 'string' ? like.note : ''
+        return ref
+      }
+
+      /**
+       * The current Conversation Session identity from the DOM.
+       * @returns {string | null} Session id.
+       */
+      function annotationConversationSessionId() {
+        const occurrence = document.querySelector('[data-conversation-session]')
+        if (occurrence === null) return null
+        const value = occurrence.getAttribute('data-conversation-session')
+        return value !== null && value.length > 0 ? value : null
+      }
+
+      /**
+       * Start the body mutation observer that feeds the resolved-node revision.
+       * Only childList/characterData are observed: an attribute-only change keeps
+       * the same node, so it cannot swap the element identity we resolved (R1/R4).
+       * @returns {void}
+       */
+      function ensureDomObserver() {
+        if (domObserver !== null) return
+        if (typeof MutationObserver !== 'function') return
+        if (typeof document === 'undefined' || document.body === null) return
+        domObserver = new MutationObserver(() => {
+          domRevision += 1
+        })
+        domObserver.observe(document.body, { childList: true, subtree: true, characterData: true })
+      }
+
+      /**
+       * Drop the resolved-node cache and stop observing DOM mutations.
+       * Called on deactivate, activation rollback, and disposal.
+       * @returns {void}
+       */
+      function clearResolvedNodeCache() {
+        resolvedNodeCache.clear()
+        domRevision += 1
+        if (domObserver !== null) {
+          domObserver.disconnect()
+          domObserver = null
+        }
+      }
+
+      /**
+       * Resolve one ref's live node.
+       *
+       * The resolved node is cached together with the DOM revision. A scroll frame
+       * reuses it only while no body mutation happened and the node is still
+       * connected; any mutation (or a missing node entry) re-runs the unique
+       * candidate resolver, so a re-render cannot leave us highlighting the stale
+       * first hit a selector happened to match (F3 + R1/R4).
+       * @param {object} ref - ElementRef.
+       * @returns {Element | null} the unique live element, or null.
+       */
+      function liveNode(ref) {
+        ensureDomObserver()
+        const cached = resolvedNodeCache.get(ref.id)
+        if (cached !== undefined) {
+          if (cached.rev === domRevision) {
+            // A null entry is a real "ambiguous/unresolvable at this revision" result;
+            // reusing it keeps scroll frames from re-scanning the same ref.
+            if (cached.node === null) return null
+            if (cached.node.isConnected !== false) return cached.node
+          }
+          resolvedNodeCache.delete(ref.id)
+        }
+        const node = annotationResolveNode(ref)
+        resolvedNodeCache.set(ref.id, { node, rev: domRevision })
+        return node
+      }
+
+      /**
+       * Re-resolve one ref's status against the live document.
+       * @param {object} ref - ElementRef.
+       * @returns {'resolved' | 'ambiguous' | 'missing' | 'changed'} status.
+       */
+      function statusOf(ref) {
+        if (ref === null || typeof ref !== 'object' || ref.locator === null || typeof ref.locator !== 'object') return 'missing'
+        return resolveRefStatus({
+          candidates: ref.locator.candidates,
+          expectedTag: ref.locator.tag,
+          queryAll: (selector) => document.querySelectorAll(selector),
+          liveInfo: (element) => {
+            const elementText = typeof element.textContent === 'string' ? element.textContent : ''
+            const liveTag = typeof element.tagName === 'string' ? element.tagName.toLowerCase() : ''
+            return {
+              isConnected: element.isConnected,
+              textContent: elementText,
+              expectedText: typeof ref.text === 'string' ? ref.text : '',
+              expectedDigest: typeof ref.textDigest === 'string' ? ref.textDigest : '',
+              actualDigest: textDigest(elementText),
+              expectedName: ref.locator !== null && typeof ref.locator === 'object' && typeof ref.locator.name === 'string' ? ref.locator.name : '',
+              actualName: liveTag.length > 0 ? annotationAccessibleName(element, liveTag) : ''
+            }
+          }
+        })
+      }
+
+      /**
+       * The Session the bridge is currently attached to, or null when no composer is
+       * mounted (start page, Plugins view, or a seat that has not mounted yet).
+       * @returns {string | null} current Session identity.
+       */
+      function currentSessionId() {
+        const sessionId = annotationBridge.sessionId ?? snapshot().state.sessionId
+        return typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null
+      }
+
+      /**
+       * Whether one ref is already in the collection for its own Session.
+       * @param {object} ref - ElementRef.
+       * @returns {boolean} whether present.
+       */
+      function isInCollection(ref) {
+        const key = identityKeyOf(ref)
+        const sessionId = ref?.session?.sessionId ?? null
+        return snapshot().state.collection.some((entry) => identityKeyOf(entry) === key && (entry?.session?.sessionId ?? null) === sessionId)
+      }
+
+      /**
+       * Current Session scope of one collection entry.
+       * @param {object} ref - ElementRef.
+       * @returns {'current' | 'other'} scope.
+       */
+      function collectionScopeOf(ref) {
+        const current = currentSessionId()
+        if (current === null) return 'other'
+        return ref?.session?.sessionId === current ? 'current' : 'other'
+      }
+
+      /**
+       * Derive selection/popover geometry for one state.
+       * @param {object} state - next state.
+       * @param {object} previous - previous snapshot.
+       * @returns {object} snapshot patch.
+       */
+      function deriveGeometry(state, previous) {
+        const selectionRects = []
+        for (const ref of state.selection) {
+          const node = liveNode(ref)
+          const rect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref.bounds)
+          if (rect !== null) selectionRects.push({ id: ref.id, rect })
+        }
+        let popoverPosition = previous.popoverPosition
+        let popoverPinned = previous.popoverPinned
+        if (state.phase === 'selected' && state.selection.length === 1) {
+          const ref = state.selection[0]
+          if (popoverRefId !== ref.id) {
+            popoverRefId = ref.id
+            popoverPinned = false
+            popoverPosition = null
+          }
+          if (popoverPosition === null || !popoverPinned) {
+            const node = liveNode(ref)
+            const rect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref.bounds)
+            popoverPosition = rect === null
+              ? null
+              : clampPopoverPosition(rect, popoverMeasuredSize, annotationViewport(), previous.railWidth)
+          }
+        } else {
+          popoverRefId = null
+          popoverPosition = null
+          popoverPinned = false
+        }
+        return { selectionRects, popoverPosition, popoverPinned, boxRect: state.box }
+      }
+
+      /**
+       * Re-clamp an unpinned popover with the last measured popover size.
+       * @returns {void}
+       */
+      function reclampPopoverWithMeasuredSize() {
+        const current = snapshot()
+        if (current.state.phase !== 'selected' || current.popoverPinned || current.state.selection.length !== 1) return
+        const ref = current.state.selection[0]
+        const node = liveNode(ref)
+        const targetRect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref.bounds)
+        if (targetRect === null) return
+        publish({ popoverPosition: clampPopoverPosition(targetRect, popoverMeasuredSize, annotationViewport(), current.railWidth) })
+      }
+
+      /**
+       * Measure the mounted popover and use its real height/width for clamping; a
+       * fixed estimate could overflow for a long note or a narrow viewport (F14).
+       * @returns {void}
+       */
+      function measurePopover() {
+        if (popoverElement === null || typeof popoverElement.getBoundingClientRect !== 'function') return
+        const rect = popoverElement.getBoundingClientRect()
+        if (rect.width <= 0 || rect.height <= 0) return
+        const size = { width: Math.round(rect.width), height: Math.round(rect.height) }
+        const changed = size.width !== popoverMeasuredSize.width || size.height !== popoverMeasuredSize.height
+        popoverMeasuredSize = size
+        if (changed) reclampPopoverWithMeasuredSize()
+      }
+
+      /** Schedule one coalesced popover measurement. @returns {void} */
+      function schedulePopoverMeasure() {
+        if (popoverMeasureFrame !== null) return
+        popoverMeasureFrame = window.requestAnimationFrame(() => {
+          popoverMeasureFrame = null
+          measurePopover()
+        })
+      }
+
+      /**
+       * Track the mounted popover element for measurement.
+       * @param {Element | null} node - mounted popover root.
+       * @returns {void}
+       */
+      function attachPopoverNode(node) {
+        if (!(node instanceof HTMLElement) || node === popoverElement) return
+        popoverElement = node
+        schedulePopoverMeasure()
+      }
+
+      /** Forget the mounted popover element. @returns {void} */
+      function detachPopoverNode() {
+        popoverElement = null
+        if (popoverMeasureFrame !== null) {
+          window.cancelAnimationFrame(popoverMeasureFrame)
+          popoverMeasureFrame = null
+        }
+      }
+
+      /**
+       * Reduce one action and publish the derived snapshot.
+       * @param {object} action - reducer action.
+       * @returns {object} next state.
+       */
+      function dispatch(action) {
+        const current = snapshot()
+        const nextState = reduceAnnotationState(current.state, action)
+        if (nextState === current.state) return current.state
+        const patch = deriveGeometry(nextState, current)
+        store.set({ ...current, state: nextState, ...patch })
+        return nextState
+      }
+
+      /**
+       * Show one transient feedback message.
+       * @param {string} text - localized message.
+       * @param {'info' | 'error'} [kind] - severity.
+       * @returns {void}
+       */
+      function feedback(text, kind) {
+        if (typeof text !== 'string' || text.length === 0) return
+        dispatch({
+          type: 'feedback',
+          feedback: { kind: kind === 'error' ? 'error' : 'info', text, at: Date.now() }
+        })
+        if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
+        feedbackTimer = window.setTimeout(() => {
+          feedbackTimer = null
+          dispatch({ type: 'feedback', feedback: null })
+        }, 3200)
+      }
+
+      /**
+       * Clamp and store the launcher position.
+       * @param {{ x: number, y: number }} position - desired position.
+       * @returns {void}
+       */
+      function persistLauncherPosition(position) {
+        annotationWriteStorage(LAUNCHER_STORAGE_KEY, JSON.stringify(position))
+      }
+
+      /**
+       * Read the remembered launcher position.
+       * @returns {{ x: number, y: number } | null} remembered position.
+       */
+      function readLauncherPosition() {
+        const raw = annotationReadStorage(LAUNCHER_STORAGE_KEY)
+        if (raw === null) return null
+        try {
+          const parsed = JSON.parse(raw)
+          if (parsed === null || typeof parsed !== 'object') return null
+          if (typeof parsed.x !== 'number' || typeof parsed.y !== 'number') return null
+          return { x: parsed.x, y: parsed.y }
+        } catch {
+          return null
+        }
+      }
+
+      /**
+       * Recompute rail width, layout mode, and the frame padding.
+       * @returns {void}
+       */
+      function updateLayout() {
+        const current = snapshot()
+        const size = annotationViewport()
+        const railWidth = computeRailWidth(size.width, current.railCollapsed)
+        const mode = layoutModeFor(size.width, annotationMeasureSidebarWidths(), railWidth)
+        const frame = annotationLayoutFrame()
+        if (isActive() && frame !== null) {
+          captureFrameInline(frame)
+          if (frameRestoreTimer !== null) {
+            // Reactivating before the reverse transition finished must keep the marker.
+            window.clearTimeout(frameRestoreTimer)
+            frameRestoreTimer = null
+          }
+          if (frame.getAttribute('data-psa-frame') !== 'true') frame.setAttribute('data-psa-frame', 'true')
+          if (mode === 'shrink') {
+            if (frame.style.paddingRight !== `${railWidth}px`) frame.style.paddingRight = `${railWidth}px`
+          } else if (frameSnapshot !== null) {
+            // Overlay mode reserves no strip: put the host's own padding back instead
+            // of writing '' over it or leaving the shrink padding behind (F12).
+            restoreInlineProperty(frame, 'padding-right', frameSnapshot.paddingRight)
+          }
+          const railProperty = `${railWidth}px`
+          if (frame.style.getPropertyValue('--psa-rail-width') !== railProperty) frame.style.setProperty('--psa-rail-width', railProperty)
+          observeFrame(frame)
+        }
+        const launcherPosition = clampLauncherForLayout(current.launcherPosition, size, isActive() ? railWidth : 0)
+        const patch = { railWidth, layoutMode: mode, launcherPosition }
+        if (current.state.phase === 'selected' && current.selectionRects.length > 0 && current.popoverPosition !== null && current.popoverPinned === false) {
+          const ref = current.state.selection[0]
+          const node = ref === undefined ? null : liveNode(ref)
+          const rect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref?.bounds)
+          if (rect !== null) patch.popoverPosition = clampPopoverPosition(rect, popoverMeasuredSize, size, railWidth)
+        }
+        publish(patch)
+        persistLauncherPositionIfNeeded(launcherPosition, current.launcherPosition)
+      }
+
+      /**
+       * Persist a clamped launcher position when resize moved it.
+       * @param {{ x: number, y: number }} next - clamped position.
+       * @param {{ x: number, y: number }} previous - previous position.
+       * @returns {void}
+       */
+      function persistLauncherPositionIfNeeded(next, previous) {
+        if (next.x === previous.x && next.y === previous.y) return
+        persistLauncherPosition(next)
+      }
+
+      /**
+       * Observe the frame's inline style so opening/closing native sidebars
+       * re-evaluates the layout mode.
+       * @param {Element} frame - layout frame.
+       * @returns {void}
+       */
+      function observeFrame(frame) {
+        if (frameObserver !== null && observedFrame === frame) return
+        if (frameObserver !== null) {
+          frameObserver.disconnect()
+          frameObserver = null
+        }
+        observedFrame = frame
+        if (typeof MutationObserver !== 'function') return
+        frameObserver = new MutationObserver(() => {
+          if (frameObserverTimer !== null) window.clearTimeout(frameObserverTimer)
+          frameObserverTimer = window.setTimeout(() => {
+            frameObserverTimer = null
+            if (!isActive()) return
+            updateLayout()
+          }, 140)
+        })
+        frameObserver.observe(frame, { attributes: true, attributeFilter: ['style', 'class'] })
+      }
+
+      /** Stop observing the frame. @returns {void} */
+      function disconnectFrameObserver() {
+        if (frameObserverTimer !== null) {
+          window.clearTimeout(frameObserverTimer)
+          frameObserverTimer = null
+        }
+        if (frameObserver !== null) {
+          frameObserver.disconnect()
+          frameObserver = null
+        }
+        observedFrame = null
+      }
+
+      /**
+       * Register one temporary gesture cleanup so teardown can abort it.
+       * @param {(aborted: boolean) => void} cleanup - removes listeners and settles the gesture.
+       * @returns {Function} unregister handle.
+       */
+      function trackGesture(cleanup) {
+        activeGestures.add(cleanup)
+        return () => {
+          activeGestures.delete(cleanup)
+        }
+      }
+
+      /**
+       * Abort every in-flight gesture (launcher drag, popover drag, marquee) without
+       * changing the mode or persisting a half-finished interaction.
+       * @returns {void}
+       */
+      function abortGestures() {
+        for (const cleanup of [...activeGestures]) {
+          try {
+            cleanup(true)
+          } catch {
+            // One broken gesture must not block the remaining cleanups.
+          }
+        }
+        activeGestures.clear()
+        pointer = null
+        publish({ launcherDragging: false })
+        if (snapshot().state.box !== null || snapshot().boxRect !== null) {
+          publish({ boxRect: null })
+          dispatch({ type: 'box', box: null })
+        }
+      }
+
+      /**
+       * Cancel a pending hover computation and clear the hover highlight.
+       * @returns {void}
+       */
+      function clearHover() {
+        if (hoverFrame !== null) {
+          window.cancelAnimationFrame(hoverFrame)
+          hoverFrame = null
+        }
+        hoverPoint = null
+        if (snapshot().state.hoverId !== null || snapshot().hoverRect !== null) {
+          publish({ hoverRect: null })
+          dispatch({ type: 'hover', targetId: null })
+        }
+      }
+
+      /**
+       * Schedule one coalesced hover resolution.
+       * @returns {void}
+       */
+      function scheduleHover() {
+        if (hoverFrame !== null) return
+        hoverFrame = window.requestAnimationFrame(() => {
+          hoverFrame = null
+          resolveHover()
+        })
+      }
+
+      /**
+       * Resolve the element under the last pointer point and publish its outline.
+       * @returns {void}
+       */
+      function resolveHover() {
+        if (!isActive() || hoverPoint === null) return
+        if (snapshot().state.passThrough) {
+          clearHover()
+          return
+        }
+        const element = document.elementFromPoint(hoverPoint.x, hoverPoint.y)
+        if (element === null) {
+          clearHover()
+          return
+        }
+        if (element.closest('[data-psa-own]') !== null) {
+          clearHover()
+          return
+        }
+        const chain = annotationCandidateChain(element)
+        const index = annotationPickChainIndex(chain)
+        if (index < 0) {
+          clearHover()
+          return
+        }
+        const candidate = chain[index].element
+        const token = tokenOf(candidate)
+        const rect = annotationRectOf(candidate)
+        if (snapshot().state.hoverId !== token) dispatch({ type: 'hover', targetId: token })
+        publish({ hoverRect: rect })
+      }
+
+      /**
+       * Schedule one coalesced selection-outline refresh.
+       * @returns {void}
+       */
+      function scheduleGeometry() {
+        if (geometryFrame !== null) return
+        geometryFrame = window.requestAnimationFrame(() => {
+          geometryFrame = null
+          const current = snapshot()
+          if (!isActive()) return
+          const patch = { selectionRects: [] }
+          const rects = []
+          for (const ref of current.state.selection) {
+            const node = liveNode(ref)
+            const rect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref.bounds)
+            if (rect !== null) rects.push({ id: ref.id, rect })
+          }
+          patch.selectionRects = rects
+          if (current.flashRefId !== null) {
+            const flashRef = current.state.collection.find((entry) => entry.id === current.flashRefId)
+            const flashNode = flashRef === undefined ? null : liveNode(flashRef)
+            patch.flashRect = flashNode !== null ? annotationRectOf(flashNode) : null
+          }
+          if (current.popoverPosition !== null && current.popoverPinned === false && current.state.phase === 'selected') {
+            const ref = current.state.selection[0]
+            const node = ref === undefined ? null : liveNode(ref)
+            const rect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref?.bounds)
+            if (rect !== null) patch.popoverPosition = clampPopoverPosition(rect, popoverMeasuredSize, annotationViewport(), current.railWidth)
+          }
+          publish(patch)
+        })
+      }
+
+      /**
+       * Handle one left-button pointer press on the page.
+       * @param {PointerEvent} event - pointerdown.
+       * @returns {void}
+       */
+      function onPointerDown(event) {
+        if (!isActive()) return
+        if (eventInsideOwn(event)) return
+        if (passThroughEvent(event)) {
+          clearHover()
+          return
+        }
+        if (!blockEvent(event)) return
+        if (event.button !== 0) {
+          pointer = null
+          return
+        }
+        pointer = {
+          startX: event.clientX,
+          startY: event.clientY,
+          moved: false,
+          boxMode: modifierMatches(event, settings.multiModifier),
+          pointerId: event.pointerId
+        }
+        lastPick = null
+        clearHover()
+      }
+
+      /**
+       * Handle pointer movement: marquee growth, hover resolution, click slop.
+       * @param {PointerEvent} event - pointermove.
+       * @returns {void}
+       */
+      function onPointerMove(event) {
+        if (!isActive()) return
+        if (pointer !== null) {
+          const dx = event.clientX - pointer.startX
+          const dy = event.clientY - pointer.startY
+          if (!pointer.moved && Math.hypot(dx, dy) > 4) pointer.moved = true
+          if (pointer.boxMode) {
+            if (pointer.moved) {
+              const box = {
+                x: Math.round(Math.min(pointer.startX, event.clientX)),
+                y: Math.round(Math.min(pointer.startY, event.clientY)),
+                width: Math.round(Math.abs(event.clientX - pointer.startX)),
+                height: Math.round(Math.abs(event.clientY - pointer.startY))
+              }
+              if (snapshot().state.box === null) dispatch({ type: 'box', box })
+              publish({ boxRect: box })
+            }
+            return
+          }
+        }
+        if (passThroughEvent(event)) {
+          clearHover()
+          return
+        }
+        if (eventInsideOwn(event)) {
+          clearHover()
+          return
+        }
+        hoverPoint = { x: event.clientX, y: event.clientY }
+        scheduleHover()
+      }
+
+      /**
+       * Handle pointer release: click selection, modifier toggle, or marquee finish.
+       * @param {PointerEvent} event - pointerup.
+       * @returns {void}
+       */
+      function onPointerUp(event) {
+        if (!isActive()) {
+          pointer = null
+          return
+        }
+        const gesture = pointer
+        pointer = null
+        if (gesture === null) return
+        if (gesture.boxMode && gesture.moved) {
+          if (!eventInsideOwn(event)) blockEvent(event)
+          finishMarquee(event)
+          return
+        }
+        if (eventInsideOwn(event)) return
+        if (passThroughEvent(event)) {
+          publish({ boxRect: null })
+          dispatch({ type: 'box', box: null })
+          return
+        }
+        if (!blockEvent(event)) return
+        if (gesture.boxMode) {
+          toggleSelectionAt(event)
+          return
+        }
+        if (gesture.moved) return
+        selectAt(event)
+      }
+
+      /**
+       * One plain click: pick a candidate and open its popover.
+       * @param {object} event - pointer event.
+       * @returns {void}
+       */
+      function selectAt(event) {
+        const element = annotationEventElement(event)
+        if (element === null) return
+        const chain = annotationCandidateChain(element)
+        const index = annotationPickChainIndex(chain)
+        if (index < 0) return
+        const ref = refFromChain(chain, index, null)
+        lastPick = { chain, index }
+        dispatch({ type: 'selectSingle', ref })
+      }
+
+      /**
+       * One modifier click: toggle the clicked candidate in the selection.
+       * @param {object} event - pointer event.
+       * @returns {void}
+       */
+      function toggleSelectionAt(event) {
+        const element = annotationEventElement(event)
+        if (element === null) return
+        const chain = annotationCandidateChain(element)
+        const index = annotationPickChainIndex(chain)
+        if (index < 0) return
+        const state = snapshot().state
+        const existing = state.selection.find((item) => identityKeyOf(item) === identityKeyOf(refFromChain(chain, index, null)))
+        const like = existing !== undefined ? { ...existing, note: state.note } : null
+        const ref = refFromChain(chain, index, like)
+        lastPick = { chain, index }
+        dispatch({ type: 'toggleMulti', ref })
+      }
+
+      /**
+       * Finish a marquee: collect intersecting candidates into the selection.
+       * @param {object} event - pointer event that released the box.
+       * @returns {void}
+       */
+      function finishMarquee(event) {
+        const box = snapshot().boxRect
+        publish({ boxRect: null })
+        dispatch({ type: 'box', box: null })
+        if (box === null || box.width < 4 || box.height < 4) return
+        const elements = annotationBoxCandidateElements(box)
+        const refs = []
+        const seen = new Set()
+        for (const element of elements) {
+          const chain = annotationCandidateChain(element)
+          const index = annotationPickChainIndex(chain)
+          if (index < 0) continue
+          const ref = refFromChain(chain, index, null)
+          const key = identityKeyOf(ref)
+          if (seen.has(key)) continue
+          seen.add(key)
+            refs.push(ref)
+        }
+        if (refs.length === 0) return
+        dispatch({ type: 'setMulti', refs })
+      }
+
+      /**
+       * Handle a wheel event: the page keeps its native scrolling; only highlights
+       * are refreshed.
+       * @returns {void}
+       */
+      function onWheel() {
+        if (isActive()) scheduleGeometry()
+      }
+
+      /**
+       * Handle window scroll: refresh highlight geometry once per frame.
+       * @returns {void}
+       */
+      function onScroll() {
+        if (isActive()) scheduleGeometry()
+      }
+
+      /**
+       * Handle window resize with a trailing debounce. Runs for the whole
+       * plugin lifetime: the launcher must stay clamped inside the viewport even
+       * when the mode is off (the rail/layout work only applies while active).
+       * @returns {void}
+       */
+      function onInstalledResize() {
+        if (resizeTimer !== null) window.clearTimeout(resizeTimer)
+        resizeTimer = window.setTimeout(() => {
+          resizeTimer = null
+          const current = snapshot()
+          const launcherPosition = clampLauncherForLayout(current.launcherPosition, annotationViewport(), isActive() ? current.railWidth : 0)
+          if (launcherPosition.x !== current.launcherPosition.x || launcherPosition.y !== current.launcherPosition.y) {
+            publish({ launcherPosition })
+            persistLauncherPosition(launcherPosition)
+          }
+          if (!isActive()) return
+          updateLayout()
+          scheduleGeometry()
+        }, 120)
+      }
+
+      /**
+       * Track the pass-through modifier while active and consume Esc.
+       * @param {KeyboardEvent} event - keydown.
+       * @returns {void}
+       */
+      function onKeyDown(event) {
+        if (!isActive()) return
+        if (event.isComposing === true) return
+        const wantPassThrough = modifierMatches(event, settings.passThroughModifier)
+        if (snapshot().state.passThrough !== wantPassThrough) setPassThrough(wantPassThrough)
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          event.stopPropagation()
+          escapeOne()
+          return
+        }
+        // All other keys keep their native behavior, including browser shortcuts.
+      }
+
+      /**
+       * Refresh pass-through state when a modifier key is released.
+       * @param {KeyboardEvent} event - keyup.
+       * @returns {void}
+       */
+      function onKeyUp(event) {
+        if (!isActive()) return
+        const wantPassThrough = modifierMatches(event, settings.passThroughModifier)
+        if (snapshot().state.passThrough !== wantPassThrough) setPassThrough(wantPassThrough)
+      }
+
+      /**
+       * Reset transient modifier and gesture state when focus leaves the window.
+       * @returns {void}
+       */
+      function onWindowBlur() {
+        if (!isActive()) return
+        if (snapshot().state.passThrough) setPassThrough(false)
+        abortGestures()
+        clearHover()
+      }
+
+      /**
+       * Cancel an in-flight page gesture without selecting anything.
+       * @returns {void}
+       */
+      function onPointerCancel() {
+        pointer = null
+        if (isActive() && (snapshot().state.box !== null || snapshot().boxRect !== null)) {
+          publish({ boxRect: null })
+          dispatch({ type: 'box', box: null })
+        }
+        clearHover()
+      }
+
+      /**
+       * Drop transient state when the page is hidden.
+       * @returns {void}
+       */
+      function onVisibilityChange() {
+        if (document.visibilityState === 'hidden' && isActive()) {
+          if (snapshot().state.passThrough) setPassThrough(false)
+          clearHover()
+        }
+      }
+
+      /**
+       * Step out one level: expanded note editor, then selection, then rail view,
+       * then mode off.
+       * @returns {void}
+       */
+      function escapeOne() {
+        const current = snapshot()
+        const state = current.state
+        if (state.phase === 'off') return
+        if (current.noteEditor !== null) {
+          closeNoteEditor()
+          return
+        }
+        if (state.box !== null) {
+          publish({ boxRect: null })
+          dispatch({ type: 'box', box: null })
+          return
+        }
+        if (state.editing) {
+          dispatch({ type: 'endEdit' })
+          return
+        }
+        if (state.selection.length > 0) {
+          dispatch({ type: 'exitOne' })
+          return
+        }
+        if (state.view !== 'status') {
+          dispatch({ type: 'openView', view: 'status' })
+          return
+        }
+        deactivate()
+      }
+
+      /**
+       * Install the capture-phase window listeners exactly once.
+       * @returns {void}
+       */
+      function installPageListeners() {
+        if (pageListeners.length > 0) return
+        /** @param {string} type - event type. @param {Function} handler - listener. @param {object} options - addEventListener options. @returns {void} */
+        const listen = (type, handler, options) => {
+          window.addEventListener(type, handler, options)
+          pageListeners.push({ type, handler, options })
+        }
+        listen('pointerdown', onPointerDown, { capture: true, passive: false })
+        listen('pointerup', onPointerUp, { capture: true, passive: false })
+        listen('mousedown', blockEvent, { capture: true, passive: false })
+        listen('pointerup', blockEvent, { capture: true, passive: false })
+        listen('mouseup', blockEvent, { capture: true, passive: false })
+        listen('click', blockEvent, { capture: true, passive: false })
+        listen('auxclick', blockEvent, { capture: true, passive: false })
+        listen('dblclick', blockEvent, { capture: true, passive: false })
+        listen('contextmenu', blockEvent, { capture: true, passive: false })
+        listen('dragstart', blockEvent, { capture: true, passive: false })
+        listen('pointercancel', onPointerCancel, { capture: true, passive: true })
+        listen('pointermove', onPointerMove, { capture: true, passive: true })
+        listen('wheel', onWheel, { capture: true, passive: true })
+        listen('scroll', onScroll, { capture: true, passive: true })
+        listen('keydown', onKeyDown, { capture: true, passive: false })
+        listen('keyup', onKeyUp, { capture: true, passive: true })
+        listen('blur', onWindowBlur, { capture: false, passive: true })
+        listen('visibilitychange', onVisibilityChange, { capture: false, passive: true })
+      }
+
+      /** Remove every installed window listener. @returns {void} */
+      function uninstallPageListeners() {
+        for (const entry of pageListeners) window.removeEventListener(entry.type, entry.handler, entry.options)
+        pageListeners.length = 0
+        pointer = null
+        hoverPoint = null
+      }
+
+      /** Cancel every pending frame and timer. @returns {void} */
+      function clearTimers() {
+        if (hoverFrame !== null) window.cancelAnimationFrame(hoverFrame)
+        if (geometryFrame !== null) window.cancelAnimationFrame(geometryFrame)
+        hoverFrame = null
+        geometryFrame = null
+        if (resizeTimer !== null) window.clearTimeout(resizeTimer)
+        if (frameObserverTimer !== null) window.clearTimeout(frameObserverTimer)
+        if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
+        if (flashTimer !== null) window.clearTimeout(flashTimer)
+        if (frameRestoreTimer !== null) window.clearTimeout(frameRestoreTimer)
+        if (popoverMeasureFrame !== null) window.cancelAnimationFrame(popoverMeasureFrame)
+        popoverMeasureFrame = null
+        resizeTimer = null
+        frameObserverTimer = null
+        feedbackTimer = null
+        flashTimer = null
+        frameRestoreTimer = null
+      }
+
+      /** @returns {boolean} whether the host asks for reduced motion. */
+      function prefersReducedMotion() {
+        try {
+          return typeof window.matchMedia === 'function'
+            && window.matchMedia('(prefers-reduced-motion: reduce)').matches === true
+        } catch {
+          return false
+        }
+      }
+
+      /**
+       * Remember the frame's own inline padding-right and --psa-rail-width (value
+       * and priority) before the mode writes them, so exit restores the exact
+       * previous state instead of blanket-clearing host inline styles (F12).
+       * @param {HTMLElement} frame - layout frame.
+       * @returns {void}
+       */
+      function captureFrameInline(frame) {
+        if (frameSnapshot !== null && frameSnapshot.frame === frame) return
+        if (frameSnapshot !== null) {
+          const previousFrame = frameSnapshot.frame
+          restoreFrameInline()
+          if (previousFrame !== null && previousFrame !== undefined && typeof previousFrame.removeAttribute === 'function') {
+            previousFrame.removeAttribute('data-psa-frame')
+          }
+        }
+        frameSnapshot = {
+          frame,
+          paddingRight: {
+            value: frame.style.getPropertyValue('padding-right'),
+            priority: frame.style.getPropertyPriority('padding-right')
+          },
+          railWidth: {
+            value: frame.style.getPropertyValue('--psa-rail-width'),
+            priority: frame.style.getPropertyPriority('--psa-rail-width')
+          }
+        }
+      }
+
+      /**
+       * Restore one inline property to exactly its captured value and priority.
+       * @param {HTMLElement} frame - layout frame.
+       * @param {string} name - CSS property name.
+       * @param {{ value: string, priority: string }} saved - captured property state.
+       * @returns {void}
+       */
+      function restoreInlineProperty(frame, name, saved) {
+        if (saved.value === '' && saved.priority === '') frame.style.removeProperty(name)
+        else frame.style.setProperty(name, saved.value, saved.priority)
+      }
+
+      /**
+       * Restore the captured inline frame styles. Never a blanket clear.
+       * @returns {void}
+       */
+      function restoreFrameInline() {
+        if (frameSnapshot === null) return
+        const frame = frameSnapshot.frame
+        if (frame !== null && frame !== undefined && typeof frame.style === 'object') {
+          restoreInlineProperty(frame, 'padding-right', frameSnapshot.paddingRight)
+          restoreInlineProperty(frame, '--psa-rail-width', frameSnapshot.railWidth)
+        }
+        frameSnapshot = null
+      }
+
+      /**
+       * Remove every layout marker this mode added, restoring the frame exactly.
+       *
+       * Exit restores the captured inline padding while the transition rule is
+       * still present, then drops the frame marker after the reverse transition
+       * (immediately under reduced motion, and always on disposal/rollback).
+       * @param {{ immediate?: boolean }} [options] - force the marker removal now.
+       * @returns {void}
+       */
+      function restoreAnnotationLayout(options) {
+        const settingsForRestore = options !== null && typeof options === 'object' ? options : {}
+        const immediate = settingsForRestore.immediate === true || prefersReducedMotion()
+        const frame = annotationLayoutFrame()
+        const snapshotFrame = frameSnapshot === null ? null : frameSnapshot.frame
+        document.documentElement.removeAttribute('data-psa-active')
+        document.documentElement.removeAttribute('data-psa-passthrough')
+        if (frameRestoreTimer !== null) {
+          window.clearTimeout(frameRestoreTimer)
+          frameRestoreTimer = null
+        }
+        if (snapshotFrame !== null && snapshotFrame !== undefined) restoreFrameInline()
+        const markerFrame = snapshotFrame !== null && snapshotFrame !== undefined ? snapshotFrame : frame
+        if (markerFrame === null || markerFrame === undefined) return
+        if (immediate) {
+          markerFrame.removeAttribute('data-psa-frame')
+          if (frame !== null && frame !== markerFrame) frame.removeAttribute('data-psa-frame')
+          return
+        }
+        // Keep the marker while the restored padding animates back, then remove it.
+        frameRestoreTimer = window.setTimeout(() => {
+          frameRestoreTimer = null
+          if (markerFrame.isConnected !== false) markerFrame.removeAttribute('data-psa-frame')
+          const current = annotationLayoutFrame()
+          if (current !== null && current !== markerFrame) current.removeAttribute('data-psa-frame')
+        }, 180)
+      }
+
+      /**
+       * Turn annotation mode on: markers, layout, listeners.
+       *
+       * Activation touches page-level state (root attribute, frame padding, window
+       * listeners). If any step throws, every one of those is rolled back before the
+       * error leaves this function, so the page can never keep blockers or padding
+       * from a half-applied mode.
+       * @returns {void}
+       */
+      function activate() {
+        if (isActive()) return
+        document.documentElement.setAttribute('data-psa-active', 'true')
+        try {
+          installPageListeners()
+          dispatch({ type: 'activate' })
+          updateLayout()
+        } catch (error) {
+          try {
+            dispatch({ type: 'deactivate' })
+          } catch {
+            // The rollback below does not depend on the reducer.
+          }
+          uninstallPageListeners()
+          disconnectFrameObserver()
+          clearResolvedNodeCache()
+          clearTimers()
+          restoreAnnotationLayout({ immediate: true })
+          throw error
+        }
+        feedback(t('feedback.modeOn'))
+      }
+
+      /** Turn annotation mode off and restore the exact original layout. @returns {void} */
+      function deactivate() {
+        if (!isActive()) {
+          // Defensive cleanup: no state says "active", but an interrupted activation or a
+          // foreign removal could still have page-level leftovers. None of these calls
+          // depend on the reducer, so they are always safe. The resolved-node cache and
+          // its body observer are cleared here too, so this defensive path cannot leave
+          // them behind (NIT-6).
+          uninstallPageListeners()
+          disconnectFrameObserver()
+          clearResolvedNodeCache()
+          restoreAnnotationLayout()
+          return
+        }
+        try {
+          dispatch({ type: 'deactivate' })
+        } finally {
+          // Layout restoration and listener removal come first and unconditionally; the
+          // UI-state refresh below is best effort.
+          abortGestures()
+          clearResolvedNodeCache()
+          lastPick = null
+          uninstallPageListeners()
+          disconnectFrameObserver()
+          restoreAnnotationLayout()
+          if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
+          feedbackTimer = null
+          try {
+            clearHover()
+          } catch {
+            // A throwing subscriber must not keep page markers alive.
+          }
+          try {
+            publish({
+              boxRect: null,
+              popoverPosition: null,
+              popoverPinned: false,
+              hoverRect: null,
+              noteEditor: null,
+              launcherPosition: clampLauncherPosition(snapshot().launcherPosition, annotationViewport(), ANNOTATION_LAUNCHER_SIZE)
+            })
+            dispatch({ type: 'feedback', feedback: null })
+          } catch {
+            // Snapshot refresh is cosmetic once the layout is restored.
+          }
+        }
+      }
+
+      /** Toggle annotation mode. @returns {void} */
+      function toggleMode() {
+        if (isActive()) deactivate()
+        else activate()
+      }
+
+      /**
+       * Start dragging the launcher; a moved drag never toggles the mode.
+       * @param {PointerEvent} event - pointerdown on the launcher.
+       * @returns {void}
+       */
+      function beginLauncherDrag(event) {
+        if (event.button !== 0) return
+        event.preventDefault()
+        const start = snapshot().launcherPosition
+        const originX = event.clientX
+        const originY = event.clientY
+        let moved = false
+        suppressLauncherClickUntil = 0
+        /** @param {PointerEvent} moveEvent - pointermove. @returns {void} */
+        const onMove = (moveEvent) => {
+          const dx = moveEvent.clientX - originX
+          const dy = moveEvent.clientY - originY
+          if (!moved && Math.hypot(dx, dy) < 4) return
+          moved = true
+          publish({ launcherDragging: true })
+          publish({
+            launcherPosition: clampLauncherForLayout(
+              { x: start.x + dx, y: start.y + dy },
+              annotationViewport(),
+              isActive() ? snapshot().railWidth : 0
+            )
+          })
+        }
+        /**
+         * Settle the drag exactly once. An aborted drag (teardown, pass-through)
+         * never persists a position and swallows the click that follows it.
+         * @param {boolean} aborted - whether a teardown is aborting the gesture.
+         * @returns {void}
+         */
+        const settle = (aborted) => {
+          if (settled === true) return
+          settled = true
+          unregister()
+          window.removeEventListener('pointermove', onMove, true)
+          window.removeEventListener('pointerup', onUp, true)
+          window.removeEventListener('pointercancel', onCancel, true)
+          publish({ launcherDragging: false })
+          if (aborted) {
+            suppressLauncherClickUntil = Date.now() + 600
+            return
+          }
+          if (!moved) return
+          suppressLauncherClickUntil = Date.now() + 600
+          persistLauncherPosition(snapshot().launcherPosition)
+        }
+        const onUp = () => settle(false)
+        const onCancel = () => settle(true)
+        let settled = false
+        const unregister = trackGesture(settle)
+        window.addEventListener('pointermove', onMove, true)
+        window.addEventListener('pointerup', onUp, true)
+        window.addEventListener('pointercancel', onCancel, true)
+      }
+
+      /**
+       * Consume the click that would otherwise toggle the mode after a drag.
+       * @returns {boolean} whether the click must be ignored.
+       */
+      function consumeLauncherClickSuppressed() {
+        if (Date.now() > suppressLauncherClickUntil) return false
+        suppressLauncherClickUntil = 0
+        return true
+      }
+
+      /**
+       * Start dragging the popover by its header.
+       * @param {PointerEvent} event - pointerdown on the popover header.
+       * @returns {void}
+       */
+      function beginPopoverDrag(event) {
+        if (event.button !== 0) return
+        const start = snapshot().popoverPosition
+        if (start === null) return
+        event.preventDefault()
+        measurePopover()
+        const originX = event.clientX
+        const originY = event.clientY
+        /** @param {PointerEvent} moveEvent - pointermove. @returns {void} */
+        const onMove = (moveEvent) => {
+          const size = annotationViewport()
+          const railWidth = snapshot().railWidth
+          const maxX = Math.max(8, size.width - railWidth - popoverMeasuredSize.width - 8)
+          const maxY = Math.max(8, size.height - popoverMeasuredSize.height - 8)
+          const x = Math.min(Math.max(start.x + moveEvent.clientX - originX, 8), maxX)
+          const y = Math.min(Math.max(start.y + moveEvent.clientY - originY, 8), maxY)
+          publish({ popoverPosition: { x: Math.round(x), y: Math.round(y) }, popoverPinned: true })
+        }
+        /** @param {boolean} aborted - whether a teardown is aborting the gesture. @returns {void} */
+        const settle = (aborted) => {
+          if (settled === true) return
+          settled = true
+          unregister()
+          window.removeEventListener('pointermove', onMove, true)
+          window.removeEventListener('pointerup', onUp, true)
+          window.removeEventListener('pointercancel', onCancel, true)
+          if (aborted) return
+        }
+        const onUp = () => settle(false)
+        const onCancel = () => settle(true)
+        let settled = false
+        const unregister = trackGesture(settle)
+        window.addEventListener('pointermove', onMove, true)
+        window.addEventListener('pointerup', onUp, true)
+        window.addEventListener('pointercancel', onCancel, true)
+      }
+
+      /** Toggle the collapsed rail strip. @returns {void} */
+      function toggleRailCollapsed() {
+        const next = !snapshot().railCollapsed
+        publish({ railCollapsed: next })
+        annotationWriteStorage(RAIL_STORAGE_KEY, next ? 'true' : 'false')
+        updateLayout()
+      }
+
+      /** Show one rail view in place. @param {'status' | 'collection' | 'settings'} view - requested view. @returns {void} */
+      function openView(view) {
+        dispatch({ type: 'openView', view })
+      }
+
+      /** Return the rail to its status view. @returns {void} */
+      function backView() {
+        dispatch({ type: 'openView', view: 'status' })
+      }
+
+      /** Clear the current selection and close the popover. @returns {void} */
+      function clearSelection() {
+        dispatch({ type: 'selectSingle', ref: null })
+      }
+
+      /**
+       * Update the popover's note draft.
+       * @param {string} text - note text.
+       * @returns {void}
+       */
+      function updateNote(text) {
+        dispatch({ type: 'setNote', text: typeof text === 'string' ? text : '' })
+      }
+
+      /**
+       * Mark the popover note as being edited. The first Esc then ends editing and
+       * keeps both the note and the popover (F6).
+       * @returns {void}
+       */
+      function beginEdit() {
+        if (!isActive()) return
+        dispatch({ type: 'beginEdit' })
+      }
+
+      /**
+       * End note editing without clearing the note or the selection.
+       * @returns {void}
+       */
+      function endEdit() {
+        if (!isActive()) return
+        dispatch({ type: 'endEdit' })
+      }
+
+      /**
+       * Add the current selection to the collection (add or update by identity).
+       * @returns {void}
+       */
+      function addSelectionToCollection() {
+        const current = snapshot()
+        const state = current.state
+        if (state.selection.length === 0) return
+        const sessionId = annotationBridge.sessionId ?? state.sessionId ?? null
+        let updated = false
+        for (const ref of state.selection) {
+          const entry = {
+            ...ref,
+            session: { sessionId: ref.session?.sessionId ?? sessionId },
+            note: state.selection.length === 1 ? state.note : (ref.note ?? '')
+          }
+          const existing = store.getSnapshot().state.collection.some((item) => identityKeyOf(item) === identityKeyOf(entry) && (item?.session?.sessionId ?? null) === (entry.session?.sessionId ?? null))
+          if (existing) updated = true
+          dispatch({ type: 'collectionAdd', entry })
+        }
+        feedback(updated ? t('feedback.updated') : t('feedback.added'))
+      }
+
+      /**
+       * Insert one text block into the current Composer without sending it.
+       * @param {string} text - text to insert.
+       * @returns {boolean} whether insertion succeeded.
+       */
+      function insertIntoComposer(text) {
+        const actions = annotationBridge.inputActions
+        if (actions === null || typeof actions !== 'object'
+          || typeof actions.captureInsertion !== 'function' || typeof actions.insertText !== 'function') {
+          feedback(t('feedback.noComposer'), 'error')
+          return false
+        }
+        try {
+          const span = actions.captureInsertion()
+          if (actions.insertText(text, span) !== true) {
+            feedback(t('feedback.insertFailed'), 'error')
+            return false
+          }
+        } catch {
+          feedback(t('feedback.insertFailed'), 'error')
+          return false
+        }
+        annotationFocusComposer()
+        feedback(t('feedback.inserted'))
+        return true
+      }
+
+      /** Insert the current selection as one quick reference. @returns {void} */
+      function quickReference() {
+        const state = snapshot().state
+        const ref = state.selection[0]
+        if (ref === undefined) return
+        const withStatus = { ...ref, status: statusOf(ref) }
+        insertIntoComposer(serializeQuickReference(withStatus, state.note, annotationInsertLabels(t)))
+      }
+
+      /** Insert every current-Session collection entry as one ordered batch request. @returns {void} */
+      function insertBatch() {
+        const state = snapshot().state
+        if (state.collection.length === 0) return
+        const sessionId = annotationBridge.sessionId ?? state.sessionId
+        if (sessionId === null || sessionId === undefined) {
+          feedback(t('feedback.noComposer'), 'error')
+          return
+        }
+        const items = state.collection.map((entry) => ({ ref: entry, note: entry.note ?? '' }))
+        const split = batchScopeSplit(items, sessionId)
+        if (split.current.length === 0) {
+          feedback(t('feedback.batchEmpty'), 'error')
+          return
+        }
+        const scoped = split.current.map((item) => {
+          const ref = item.ref ?? item
+          return { ref: { ...ref, status: statusOf(ref) }, note: item.note ?? ref.note ?? '' }
+        })
+        const labels = { ...annotationInsertLabels(t), skippedCount: split.other.length }
+        insertIntoComposer(serializeBatchRequest(scoped, labels))
+      }
+
+      /**
+       * Move one chain position for the level up/down controls.
+       * @param {number} delta - +1 for a parent, -1 for a child.
+       * @returns {void}
+       */
+      function shiftChain(delta) {
+        const state = snapshot().state
+        const ref = state.selection[0]
+        if (ref === undefined || lastPick === null) return
+        const nextIndex = lastPick.index + delta
+        if (nextIndex < 0 || nextIndex >= lastPick.chain.length) return
+        lastPick = { chain: lastPick.chain, index: nextIndex }
+        const nextRef = refFromChain(lastPick.chain, nextIndex, { ...ref, note: state.note })
+        dispatch({ type: 'selectSingle', ref: nextRef })
+      }
+
+      /**
+       * Apply one settings select change, resolving modifier conflicts visibly.
+       * @param {'passThroughModifier' | 'multiModifier'} field - changed field.
+       * @param {string} value - requested modifier id.
+       * @returns {void}
+       */
+      function setModifier(field, value) {
+        const result = resolveModifierChange(settings, field, value)
+        const changed = result.settings.passThroughModifier !== settings.passThroughModifier
+          || result.settings.multiModifier !== settings.multiModifier
+        if (!changed) return
+        settings = result.settings
+        annotationWriteStorage(SETTINGS_STORAGE_KEY, serializeSettings(settings))
+        publish({ settings: { ...settings } })
+        if (result.adjustedField !== undefined) {
+          const fieldLabel = result.adjustedField === 'passThroughModifier' ? t('settings.field.passThrough') : t('settings.field.multi')
+          const movedValue = t(`modifier.${settings[result.adjustedField]}`)
+          feedback(t('settings.conflict', { field: fieldLabel, value: movedValue }))
+        } else {
+          feedback(t('settings.saved'))
+        }
+      }
+
+      /**
+       * Update one collection entry note live.
+       * @param {string} refId - ref id.
+       * @param {string} note - note text.
+       * @returns {void}
+       */
+      function updateCollectionNote(refId, note) {
+        dispatch({ type: 'collectionUpdateNote', refId, note })
+      }
+
+      /**
+       * Remove one collection entry.
+       * @param {string} refId - ref id.
+       * @returns {void}
+       */
+      function removeEntry(refId) {
+        dispatch({ type: 'collectionRemove', refId })
+        if (snapshot().noteEditor !== null && snapshot().noteEditor.refId === refId) publish({ noteEditor: null })
+        feedback(t('feedback.removed'))
+      }
+
+      /** Clear the collection. @returns {void} */
+      function clearCollection() {
+        if (snapshot().state.collection.length === 0) return
+        dispatch({ type: 'collectionClear' })
+        if (snapshot().noteEditor !== null) publish({ noteEditor: null })
+        feedback(t('feedback.cleared'))
+      }
+
+      /**
+       * Scroll one collection entry's target into view and flash it.
+       * @param {string} refId - ref id.
+       * @returns {void}
+       */
+      function relocateEntry(refId) {
+        const ref = snapshot().state.collection.find((entry) => entry.id === refId)
+        if (ref === undefined) return
+        if (collectionScopeOf(ref) !== 'current') {
+          // Another Session's entry is not part of the current DOM; resolving it
+          // against this page could jump into an unrelated lookalike (F9).
+          feedback(t('feedback.relocateOtherSession'), 'error')
+          return
+        }
+        const status = statusOf(ref)
+        const node = status === 'resolved' ? liveNode(ref) : null
+        if (node === null) {
+          feedback(t('feedback.relocateFailed', { status: t(`popover.status.${status}`) }), 'error')
+          return
+        }
+        try {
+          node.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        } catch {
+          node.scrollIntoView()
+        }
+        if (flashTimer !== null) window.clearTimeout(flashTimer)
+        publish({ flashRefId: refId, flashRect: annotationRectOf(node) })
+        flashTimer = window.setTimeout(() => {
+          flashTimer = null
+          publish({ flashRefId: null, flashRect: null })
+        }, 600)
+        feedback(t('feedback.relocated'))
+        scheduleGeometry()
+      }
+
+      /**
+       * Open the temporary expanded note editor for one collection entry.
+       * @param {string} refId - ref id.
+       * @returns {void}
+       */
+      function openNoteEditor(refId) {
+        const ref = snapshot().state.collection.find((entry) => entry.id === refId)
+        if (ref === undefined) return
+        const current = snapshot()
+        const size = annotationViewport()
+        const width = 300
+        const x = Math.max(8, size.width - current.railWidth - width - 16)
+        const y = Math.max(8, Math.min(96, size.height - 220))
+        publish({ noteEditor: { refId, x, y } })
+      }
+
+      /** Close the expanded note editor. @returns {void} */
+      function closeNoteEditor() {
+        publish({ noteEditor: null })
+      }
+
+      /**
+       * Notify the controller that the mounted Composer seat changed Session.
+       * @param {string | null} sessionId - Session identity, or null.
+       * @returns {void}
+       */
+      function sessionChanged(sessionId) {
+        dispatch({ type: 'session', sessionId })
+      }
+
+      // The launcher must obey the viewport for the whole plugin lifetime, not
+      // only while the annotation mode is active.
+      window.addEventListener('resize', onInstalledResize, { passive: true })
+
+      /** Tear everything down (plugin unmount). @returns {void} */
+      function dispose() {
+        window.removeEventListener('resize', onInstalledResize)
+        abortGestures()
+        clearResolvedNodeCache()
+        detachPopoverNode()
+        uninstallPageListeners()
+        disconnectFrameObserver()
+        clearTimers()
+        restoreAnnotationLayout({ immediate: true })
+        if (flashTimer !== null) window.clearTimeout(flashTimer)
+        flashTimer = null
+        pointer = null
+        lastPick = null
+        try {
+          clearHover()
+        } catch {
+          // Disposal never depends on a subscriber.
+        }
+        annotationBridge.inputActions = null
+        annotationBridge.sessionId = null
+      }
+
+      return {
+        store,
+        t,
+        toggleMode,
+        activate,
+        deactivate,
+        beginLauncherDrag,
+        consumeLauncherClickSuppressed,
+        beginPopoverDrag,
+        attachPopoverNode,
+        detachPopoverNode,
+        toggleRailCollapsed,
+        openView,
+        backView,
+        clearSelection,
+        updateNote,
+        beginEdit,
+        endEdit,
+        addSelectionToCollection,
+        quickReference,
+        insertBatch,
+        levelUp: () => shiftChain(1),
+        levelDown: () => shiftChain(-1),
+        setModifier,
+        updateCollectionNote,
+        removeEntry,
+        clearCollection,
+        relocateEntry,
+        openNoteEditor,
+        closeNoteEditor,
+        statusOf,
+        isInCollection,
+        collectionScopeOf,
+        currentSessionId,
+        sessionChanged,
+        dispose
+      }
+    }
+
+    /** Stylesheet of the UI element annotation surface; injected once per plugin install. */
+    const ANNOTATION_CSS = `
+[data-psa-frame="true"]{transition:padding-right .18s ease}
+@media (prefers-reduced-motion:reduce){[data-psa-frame="true"]{transition:none}}
+html[data-psa-active="true"] [data-psp-rail]{display:none}
+html[data-psa-active="true"]:not([data-psa-passthrough="true"]) body{cursor:crosshair}
+html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
+.psa-launcher{position:fixed;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:50%;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);box-shadow:var(--dsw-elevation-panel,0 6px 24px rgb(0 0 0 / 18%));cursor:grab;pointer-events:auto;touch-action:none;user-select:none;z-index:50}
+.psa-launcher:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-layer-1))}
+.psa-launcher[data-psa-active=true]{color:var(--dsw-alias-state-business-primary);border-color:var(--dsw-alias-state-business-primary)}
+.psa-launcher[data-psa-dragging=true]{cursor:grabbing}
+.psa-launcher:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px}
+.psa-launcher-icon{display:block}
+.psa-launcher-count{position:absolute;top:-4px;right:-4px;box-sizing:border-box;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));font-size:10.5px;line-height:15px;text-align:center;font-variant-numeric:tabular-nums}
+.psa-layer{position:fixed;inset:0;pointer-events:none;z-index:39}
+.psa-hover{position:fixed;box-sizing:border-box;border:1px dashed var(--dsw-alias-state-business-primary);border-radius:3px}
+.psa-selection{position:fixed;box-sizing:border-box;border:1.5px solid var(--dsw-alias-state-business-primary);border-radius:3px}
+.psa-multi{position:fixed;box-sizing:border-box;border:1px solid var(--dsw-alias-state-business-primary);border-radius:3px}
+.psa-selection[data-psa-flash=true],.psa-multi[data-psa-flash=true]{animation:psa-flash .6s ease-out 1}
+@keyframes psa-flash{0%{box-shadow:0 0 0 6px var(--dsw-alias-state-business-primary)}100%{box-shadow:0 0 0 0 transparent}}
+@media (prefers-reduced-motion:reduce){.psa-selection[data-psa-flash=true],.psa-multi[data-psa-flash=true],.psa-flash-outline{animation:none}}
+.psa-box{position:fixed;box-sizing:border-box;border:1px solid var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));opacity:.65}
+.psa-flash-outline{position:fixed;box-sizing:border-box;border:2px solid var(--dsw-alias-state-business-primary);border-radius:3px;animation:psa-flash .6s ease-out 1}
+.psa-rail{position:fixed;top:0;right:0;bottom:0;box-sizing:border-box;display:flex;flex-direction:column;min-height:0;width:var(--psa-rail-width,200px);background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12.5px;line-height:18px;pointer-events:auto;z-index:40}
+.psa-rail[data-psa-mode=overlay]{top:8px;right:8px;bottom:8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%))}
+.psa-rail[data-psa-collapsed=true]{align-items:center}
+.psa-rail-header{display:flex;align-items:center;gap:4px;padding:8px 8px 6px;flex:none}
+.psa-rail[data-psa-collapsed=true] .psa-rail-header{flex-direction:column;padding:8px 4px;gap:4px}
+.psa-rail-title{flex:1;min-width:0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-dot{width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-state-business-primary);flex:none}
+.psa-icon-btn{appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);width:24px;height:24px;padding:0;border-radius:var(--dsw-radius-sm,6px);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.psa-icon-btn:hover:enabled{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.psa-icon-btn:disabled{color:var(--dsw-alias-label-tertiary);cursor:default}
+.psa-icon-btn:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.psa-rail-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:8px;padding:2px 10px 10px}
+.psa-rail[data-psa-collapsed=true] .psa-rail-body{display:none}
+.psa-rail-section{display:flex;flex-direction:column;gap:6px}
+.psa-status-line{color:var(--dsw-alias-label-secondary)}
+.psa-status-strong{color:var(--dsw-alias-label-primary);font-weight:500}
+.psa-muted{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px}
+.psa-truncate{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-btn{appearance:none;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:space-between;gap:6px;width:100%;min-height:28px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;cursor:pointer;text-align:left}
+.psa-btn:hover:enabled{background:var(--dsw-alias-interactive-bg-hover)}
+.psa-btn:disabled{color:var(--dsw-alias-label-tertiary);cursor:default}
+.psa-btn:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.psa-btn-primary{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary)}
+.psa-btn-count{color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums;font-size:12px}
+.psa-rail-footer{flex:none;display:flex;flex-direction:column;gap:6px;padding:8px 10px 10px;border-top:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent))}
+.psa-entry{display:flex;flex-direction:column;gap:4px;padding:8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px)}
+.psa-entry[data-psa-entry-scope=other]{border-style:dashed}
+.psa-entry-head{display:flex;align-items:center;gap:6px;min-width:0}
+.psa-entry-index{flex:none;min-width:13px;text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;font-variant-numeric:tabular-nums}
+.psa-entry-name{flex:1;min-width:0;appearance:none;border:0;background:transparent;padding:0;color:var(--dsw-alias-label-primary);font:inherit;font-weight:500;font-size:12px;line-height:17px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.psa-entry-name:hover{text-decoration:underline}
+.psa-entry-name:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.psa-badge{flex:none;padding:0 4px;border-radius:6px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-tertiary);font-size:10.5px;line-height:14px}
+.psa-status-dot{flex:none;width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-label-tertiary)}
+.psa-status-dot[data-psa-status=resolved]{background:var(--dsw-alias-state-success-primary,var(--dsw-alias-label-tertiary))}
+.psa-status-dot[data-psa-status=ambiguous],.psa-status-dot[data-psa-status=changed]{background:var(--dsw-alias-state-warn-primary,var(--dsw-alias-label-tertiary))}
+.psa-status-dot[data-psa-status=missing]{background:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-tertiary))}
+.psa-entry-locator{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-entry-note{box-sizing:border-box;width:100%;min-height:34px;max-height:72px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
+.psa-entry-note:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.psa-entry-actions{display:flex;justify-content:flex-end;gap:2px}
+.psa-empty{display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center;padding:18px 6px;border:1px dashed var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px)}
+.psa-empty-title{color:var(--dsw-alias-label-primary);font-weight:500}
+.psa-field{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.psa-field-label{min-width:0;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-select{appearance:none;height:26px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-layer-1));color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;cursor:pointer}
+.psa-select:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.psa-popover{position:fixed;box-sizing:border-box;width:320px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;gap:8px;padding:10px 12px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:auto;z-index:45}
+.psa-popover-head{display:flex;align-items:center;gap:6px;cursor:grab;user-select:none}
+.psa-popover-title{flex:1;min-width:0;font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-popover-ref{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-popover-status{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:16px}
+.psa-levels{display:inline-flex;align-items:center;gap:2px;margin-left:auto}
+.psa-popover-note{display:flex;flex-direction:column;gap:4px}
+.psa-popover-textarea{box-sizing:border-box;width:100%;min-height:56px;max-height:150px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
+.psa-popover-textarea:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.psa-popover-actions{display:flex;gap:6px}
+.psa-popover-actions .psa-btn{flex:1;justify-content:center}
+.psa-note-editor{position:fixed;box-sizing:border-box;width:300px;display:flex;flex-direction:column;gap:6px;padding:10px 12px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:auto;z-index:55}
+.psa-note-editor-textarea{box-sizing:border-box;width:100%;min-height:96px;max-height:220px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
+.psa-feedback{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:56;max-width:min(520px,calc(100vw - 48px));padding:8px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 8px 24px rgb(0 0 0 / 18%));color:var(--dsw-alias-label-secondary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:none}
+.psa-feedback[data-psa-kind=error]{color:var(--dsw-alias-state-error-primary)}
+`
+
+    /**
+     * One inline chevron glyph.
+     * @param {'left' | 'right'} direction - pointing direction.
+     * @returns {object} the SVG element.
+     */
+    function AnnotationChevron(direction) {
+      return React.createElement('svg', {
+        viewBox: '0 0 24 24',
+        width: 13,
+        height: 13,
+        fill: 'none',
+        stroke: 'currentColor',
+        strokeWidth: 1.8,
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+        'aria-hidden': true,
+        focusable: 'false',
+        style: { transform: direction === 'right' ? 'none' : 'rotate(180deg)' }
+      }, React.createElement('path', { d: 'M9 5 16 12 9 19' }))
+    }
+
+    /**
+     * Inline style for one viewport-relative rectangle.
+     * @param {{ x: number, y: number, width: number, height: number }} rect - rectangle.
+     * @returns {object} style object.
+     */
+    function annotationRectStyle(rect) {
+      return {
+        left: `${rect.x}px`,
+        top: `${rect.y}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`
+      }
+    }
+
+    /**
+     * Subscribe one component to the annotation store.
+     * @param {object} controller - annotation controller.
+     * @returns {object} current snapshot.
+     */
+    function useAnnotationSnapshot(controller) {
+      const subscribe = React.useCallback((listener) => controller.store.subscribe(listener), [controller])
+      const getSnapshot = React.useCallback(() => controller.store.getSnapshot(), [controller])
+      if (typeof React.useSyncExternalStore === 'function') {
+        return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+      }
+      const [value, setValue] = React.useState(getSnapshot)
+      React.useEffect(() => subscribe(() => setValue(getSnapshot())), [subscribe, getSnapshot])
+      return value
+    }
+
+    /**
+     * The always-mounted annotation surface: launcher, rail, highlights,
+     * popover, note editor, and feedback.
+     * @param {{ t: Function, controller: object }} props - bound translate and controller.
+     * @returns {object} React fragment.
+     */
+    function AnnotationOverlay(props) {
+      const { t, controller } = props
+      const snapshot = useAnnotationSnapshot(controller)
+      const state = snapshot.state
+      const active = state.phase !== 'off'
+      const node = []
+      node.push(React.createElement(AnnotationLauncher, { key: 'launcher', t, controller, snapshot }))
+      if (active) {
+        node.push(React.createElement(AnnotationHighlights, { key: 'layer', snapshot }))
+        node.push(React.createElement(AnnotationRail, { key: 'rail', t, controller, snapshot }))
+        if (state.phase === 'selected') {
+          node.push(React.createElement(AnnotationPopover, { key: 'popover', t, controller, snapshot }))
+        }
+      }
+      if (snapshot.noteEditor !== null) node.push(React.createElement(AnnotationNoteEditor, { key: 'note-editor', t, controller, snapshot }))
+      if (state.feedback !== null) {
+        node.push(React.createElement('div', {
+          key: 'feedback',
+          className: 'psa-feedback',
+          'data-psa-feedback': '',
+          'data-psa-own': '',
+          'data-psa-kind': state.feedback.kind,
+          role: 'status',
+          'aria-live': 'polite'
+        }, state.feedback.text))
+      }
+      return React.createElement(React.Fragment, null, node)
+    }
+
+    /**
+     * The round floating entry button: drag to move, click to toggle the mode.
+     * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
+     * @returns {object} the launcher button.
+     */
+    function AnnotationLauncher(props) {
+      const { t, controller, snapshot } = props
+      const active = snapshot.state.phase !== 'off'
+      const count = snapshot.state.collection.length
+      return React.createElement('button', {
+        type: 'button',
+        className: 'psa-launcher',
+        'data-psa-launcher': '',
+        'data-psa-own': '',
+        'data-psa-active': active ? 'true' : 'false',
+        'data-psa-dragging': snapshot.launcherDragging ? 'true' : undefined,
+        'aria-pressed': active ? 'true' : 'false',
+        'aria-label': active ? t('launcher.exit') : t('launcher.enter'),
+        title: active ? t('launcher.exit') : t('launcher.enter'),
+        style: { left: `${snapshot.launcherPosition.x}px`, top: `${snapshot.launcherPosition.y}px` },
+        onPointerDown: (event) => controller.beginLauncherDrag(event),
+        onClick: () => {
+          if (controller.consumeLauncherClickSuppressed()) return
+          controller.toggleMode()
+        }
+      },
+      RemixGlyph(REMIX_FOCUS_3_LINE, 20, 'psa-launcher-icon'),
+      count > 0
+        ? React.createElement('span', { className: 'psa-launcher-count', 'data-psa-own': '' }, String(count))
+        : null)
+    }
+
+    /**
+     * Hover, selection, marquee, and re-locate flash rectangles.
+     * @param {{ snapshot: object }} props - surface props.
+     * @returns {object} the highlight layer.
+     */
+    function AnnotationHighlights(props) {
+      const { snapshot } = props
+      const state = snapshot.state
+      const boxes = []
+      if (snapshot.hoverRect !== null) {
+        boxes.push(React.createElement('div', {
+          key: 'hover',
+          className: 'psa-hover',
+          'data-psa-hover': '',
+          'data-psa-own': '',
+          style: annotationRectStyle(snapshot.hoverRect)
+        }))
+      }
+      const multi = state.selection.length > 1
+      for (const item of snapshot.selectionRects) {
+        boxes.push(React.createElement('div', {
+          key: `${multi ? 'multi' : 'selection'}-${item.id}`,
+          className: multi ? 'psa-multi' : 'psa-selection',
+          'data-psa-selection': multi ? undefined : '',
+          'data-psa-multi-outline': multi ? '' : undefined,
+          'data-psa-ref': item.id,
+          'data-psa-flash': snapshot.flashRefId === item.id ? 'true' : undefined,
+          'data-psa-own': '',
+          style: annotationRectStyle(item.rect)
+        }))
+      }
+      if (snapshot.flashRect !== null) {
+        boxes.push(React.createElement('div', {
+          key: 'flash',
+          className: 'psa-flash-outline',
+          'data-psa-flash': snapshot.flashRefId ?? '',
+          'data-psa-own': '',
+          style: annotationRectStyle(snapshot.flashRect)
+        }))
+      }
+      if (snapshot.boxRect !== null) {
+        boxes.push(React.createElement('div', {
+          key: 'box',
+          className: 'psa-box',
+          'data-psa-box': '',
+          'data-psa-own': '',
+          style: annotationRectStyle(snapshot.boxRect)
+        }))
+      }
+      return React.createElement('div', { className: 'psa-layer', 'data-psa-layer': '', 'data-psa-own': '' }, boxes)
+    }
+
+    /**
+     * The constant narrow right tool rail; its inner view swaps in place.
+     * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
+     * @returns {object} the rail.
+     */
+    function AnnotationRail(props) {
+      const { t, controller, snapshot } = props
+      const state = snapshot.state
+      const collapsed = snapshot.railCollapsed
+      const count = state.collection.length
+      const title = state.view === 'collection'
+        ? t('collection.title')
+        : (state.view === 'settings' ? t('settings.title') : t('rail.title'))
+      const collapseButton = React.createElement('button', {
+        type: 'button',
+        className: 'psa-icon-btn',
+        'data-psa-collapse': '',
+        'data-psa-own': '',
+        'aria-label': collapsed ? t('rail.expand') : t('rail.collapse'),
+        title: collapsed ? t('rail.expand') : t('rail.collapse'),
+        onClick: () => controller.toggleRailCollapsed()
+      }, AnnotationChevron(collapsed ? 'right' : 'left'))
+      const exitButton = React.createElement('button', {
+        type: 'button',
+        className: 'psa-icon-btn',
+        'data-psa-exit': '',
+        'data-psa-own': '',
+        'aria-label': t('rail.exit'),
+        title: t('rail.exit'),
+        onClick: () => controller.deactivate()
+      }, RemixGlyph(REMIX_CLOSE_LINE, 14))
+      if (collapsed) {
+        return React.createElement('aside', {
+          className: 'psa-rail',
+          'data-psa-rail': '',
+          'data-psa-own': '',
+          'data-psa-collapsed': 'true',
+          'data-psa-mode': snapshot.layoutMode,
+          role: 'complementary',
+          'aria-label': t('rail.aria')
+        },
+        React.createElement('div', { className: 'psa-rail-header' },
+          collapseButton,
+          count > 0
+            ? React.createElement('button', {
+              type: 'button',
+              className: 'psa-btn',
+              'data-psa-open-collection': '',
+              'data-psa-own': '',
+              'aria-label': t('rail.openCollection'),
+              title: t('rail.openCollection'),
+              style: { width: 'auto', minHeight: '22px', padding: '0 4px' },
+              onClick: () => {
+                controller.toggleRailCollapsed()
+                controller.openView('collection')
+              }
+            }, String(count))
+            : null,
+          exitButton))
+      }
+      const footer = state.view === 'collection' ? annotationCollectionFooter(t, controller, snapshot) : null
+      return React.createElement('aside', {
+        className: 'psa-rail',
+        'data-psa-rail': '',
+        'data-psa-own': '',
+        'data-psa-mode': snapshot.layoutMode,
+        role: 'complementary',
+        'aria-label': t('rail.aria')
+      },
+      React.createElement('div', { className: 'psa-rail-header' },
+        React.createElement('span', { className: 'psa-dot', 'aria-hidden': true }),
+        React.createElement('span', { className: 'psa-rail-title', title }, title),
+        collapseButton,
+        exitButton),
+      React.createElement('div', { className: 'psa-rail-body', 'data-psa-rail-panel': state.view, 'data-psa-own': '' },
+        state.view === 'collection'
+          ? AnnotationCollectionView({ t, controller, snapshot })
+          : (state.view === 'settings'
+            ? AnnotationSettingsView({ t, controller, snapshot })
+            : AnnotationStatusView({ t, controller, snapshot }))),
+      footer)
+    }
+
+    /**
+     * Rail status view: mode state, selection guidance, and the two view switches.
+     * @param {{ t: Function, controller: object, snapshot: object }} props - rail props.
+     * @returns {object} the status view.
+     */
+    function AnnotationStatusView(props) {
+      const { t, controller, snapshot } = props
+      const state = snapshot.state
+      const count = state.collection.length
+      const selection = state.selection
+      const settings = snapshot.settings
+      const hint = t('rail.hint', {
+        passThrough: t(`modifier.${settings.passThroughModifier}`),
+        multi: t(`modifier.${settings.multiModifier}`)
+      })
+      const status = selection.length === 0
+        ? t('rail.status.idle')
+        : (selection.length === 1 ? t('rail.status.selected') : t('rail.status.multi', { count: selection.length }))
+      const nodes = [
+        React.createElement('div', { key: 'status', className: 'psa-rail-section' },
+          React.createElement('div', { className: 'psa-status-line psa-status-strong' }, status),
+          selection.length === 1
+            ? React.createElement('div', { className: 'psa-muted psa-truncate', title: elementLabel(selection[0]) }, `${t('rail.selectedName')} · ${elementLabel(selection[0])}`)
+            : null,
+          React.createElement('div', { className: 'psa-muted' }, hint))
+      ]
+      if (selection.length > 1) {
+        nodes.push(React.createElement('div', { key: 'multi', className: 'psa-rail-section' },
+          React.createElement('button', {
+            type: 'button',
+            className: 'psa-btn psa-btn-primary',
+            'data-psa-add-multi': '',
+            'data-psa-own': '',
+            onClick: () => controller.addSelectionToCollection()
+          }, t('rail.addMulti', { count: selection.length })),
+          React.createElement('button', {
+            type: 'button',
+            className: 'psa-btn',
+            'data-psa-own': '',
+            onClick: () => controller.clearSelection()
+          }, t('rail.clearSelection'))))
+      }
+      nodes.push(React.createElement('div', { key: 'nav', className: 'psa-rail-section' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-open-collection': '',
+          'data-psa-own': '',
+          onClick: () => controller.openView('collection')
+        },
+        React.createElement('span', null, t('rail.openCollection')),
+        React.createElement('span', { className: 'psa-btn-count' }, String(count))),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-open-settings': '',
+          'data-psa-own': '',
+          onClick: () => controller.openView('settings')
+        },
+        React.createElement('span', null, t('rail.openSettings')),
+        RemixGlyph(REMIX_SETTINGS_3_LINE, 13))))
+      return React.createElement(React.Fragment, null, nodes)
+    }
+
+    /**
+     * Rail collection view: ordered rows with inline notes and per-row actions.
+     * @param {{ t: Function, controller: object, snapshot: object }} props - rail props.
+     * @returns {object} the collection view.
+     */
+    function AnnotationCollectionView(props) {
+      const { t, controller, snapshot } = props
+      const state = snapshot.state
+      const entries = state.collection
+      const sessionId = controller.currentSessionId()
+      const otherCount = entries.filter((entry) => controller.collectionScopeOf(entry) !== 'current').length
+      const nodes = [
+        React.createElement('div', { key: 'head', className: 'psa-rail-section' },
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+            React.createElement('button', {
+              type: 'button',
+              className: 'psa-icon-btn',
+              'data-psa-own': '',
+              'aria-label': t('rail.back'),
+              title: t('rail.back'),
+              onClick: () => controller.backView()
+            }, AnnotationChevron('left')),
+            React.createElement('span', { className: 'psa-status-line psa-status-strong' }, t('collection.title')),
+            React.createElement('span', { className: 'psa-btn-count', style: { marginLeft: 'auto' } },
+              entries.length === 1 ? t('collection.countOne') : t('collection.count', { count: entries.length }))))
+      ]
+      if (sessionId === null && entries.length > 0) {
+        // Without a mounted Composer seat there is no current Session, so scope is
+        // unknown for every entry; say that explicitly instead of implying the
+        // entries are merely from another Session (F8).
+        nodes.push(React.createElement('div', {
+          key: 'no-session',
+          className: 'psa-muted',
+          'data-psa-no-session': '',
+          'data-psa-own': ''
+        }, t('feedback.noComposer')))
+      } else if (otherCount > 0) {
+        nodes.push(React.createElement('div', { key: 'other', className: 'psa-muted' }, t('collection.crossSession', { count: otherCount })))
+      }
+      if (entries.length === 0) {
+        nodes.push(React.createElement('div', { key: 'empty', className: 'psa-empty', 'data-psa-empty': '', 'data-psa-own': '' },
+          React.createElement('div', { className: 'psa-empty-title' }, t('collection.empty')),
+          React.createElement('div', { className: 'psa-muted' }, t('collection.emptyHint'))))
+      } else {
+        const rows = entries.map((entry, index) => React.createElement(AnnotationEntryRow, {
+          key: entry.id,
+          t,
+          controller,
+          entry,
+          index
+        }))
+        nodes.push(React.createElement('div', { key: 'rows', className: 'psa-rail-section' }, rows))
+      }
+      return React.createElement(React.Fragment, null, nodes)
+    }
+
+    /**
+     * One collection row: index, element label, locator, note, scope, and actions.
+     * @param {{ t: Function, controller: object, snapshot: object, entry: object, index: number }} props - row props.
+     * @returns {object} the row.
+     */
+    function AnnotationEntryRow(props) {
+      const { t, controller, entry, index } = props
+      const scope = controller.collectionScopeOf(entry)
+      // A resolution chip only means something for the current page's Session; for
+      // another Session the row is marked `other` instead of claiming a live match (F9).
+      const status = scope === 'current' ? controller.statusOf(entry) : 'other'
+      const locator = describeLocator(entry)
+      return React.createElement('div', {
+        className: 'psa-entry',
+        'data-psa-entry': '',
+        'data-psa-own': '',
+        'data-psa-ref': entry.id,
+        'data-psa-entry-scope': scope,
+        'data-psa-status': status
+      },
+      React.createElement('div', { className: 'psa-entry-head' },
+        React.createElement('span', { className: 'psa-entry-index' }, String(index + 1)),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-entry-name',
+          'data-psa-entry-relocate': '',
+          'data-psa-own': '',
+          title: t('collection.relocate'),
+          onClick: () => controller.relocateEntry(entry.id)
+        }, elementLabel(entry)),
+        scope === 'other'
+          ? React.createElement('span', { className: 'psa-badge', 'data-psa-own': '' }, t('collection.otherSession'))
+          : React.createElement('span', {
+            className: 'psa-status-dot',
+            'data-psa-status': status,
+            'data-psa-own': '',
+            title: t(`popover.status.${status}`),
+            'aria-label': t(`popover.status.${status}`)
+          })),
+      React.createElement('div', { className: 'psa-entry-locator', title: locator }, locator),
+      React.createElement('textarea', {
+        className: 'psa-entry-note',
+        'data-psa-entry-note': '',
+        'data-psa-own': '',
+        rows: 2,
+        value: typeof entry.note === 'string' ? entry.note : '',
+        placeholder: t('collection.notePlaceholder'),
+        'aria-label': t('collection.notePlaceholder'),
+        onChange: (event) => {
+          const textarea = event.currentTarget
+          if (textarea !== null && typeof textarea === 'object') {
+            textarea.style.height = 'auto'
+            textarea.style.height = `${Math.min(textarea.scrollHeight ?? 34, 72)}px`
+          }
+          controller.updateCollectionNote(entry.id, textarea === null ? '' : textarea.value)
+        }
+      }),
+      React.createElement('div', { className: 'psa-entry-actions' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-entry-expand': '',
+          'data-psa-own': '',
+          'aria-label': t('collection.expand'),
+          title: t('collection.expand'),
+          onClick: () => controller.openNoteEditor(entry.id)
+        }, RemixGlyph(REMIX_LIST_CHECK_2, 13)),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-entry-remove': '',
+          'data-psa-own': '',
+          'aria-label': t('collection.remove'),
+          title: t('collection.remove'),
+          onClick: () => controller.removeEntry(entry.id)
+        }, RemixGlyph(REMIX_DELETE_BIN_LINE, 13))))
+    }
+
+    /**
+     * Rail collection footer: clear-all and batch insertion.
+     * @param {Function} t - bound translate.
+     * @param {object} controller - annotation controller.
+     * @param {object} snapshot - current snapshot.
+     * @returns {object} footer element.
+     */
+    function annotationCollectionFooter(t, controller, snapshot) {
+      const state = snapshot.state
+      const currentCount = state.collection.filter((entry) => controller.collectionScopeOf(entry) === 'current').length
+      return React.createElement('div', { className: 'psa-rail-footer', 'data-psa-own': '' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-clear': '',
+          'data-psa-own': '',
+          disabled: state.collection.length === 0,
+          onClick: () => controller.clearCollection()
+        }, t('collection.clear')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn psa-btn-primary',
+          'data-psa-insert-batch': '',
+          'data-psa-own': '',
+          disabled: currentCount === 0,
+          onClick: () => controller.insertBatch()
+        }, t('collection.insertBatch')))
+    }
+
+    /**
+     * Rail settings view: the two configurable modifiers.
+     * @param {{ t: Function, controller: object, snapshot: object }} props - rail props.
+     * @returns {object} the settings view.
+     */
+    function AnnotationSettingsView(props) {
+      const { t, controller, snapshot } = props
+      const settings = snapshot.settings
+      /**
+       * One modifier field.
+       * @param {string} labelKey - dictionary key of the field label.
+       * @param {string} dataAttribute - required DOM marker.
+       * @param {string} field - settings field name.
+       * @param {string} value - current modifier id.
+       * @returns {object} the field.
+       */
+      const field = (labelKey, dataAttribute, fieldName, value) => React.createElement('label', {
+        className: 'psa-field',
+        'data-psa-own': ''
+      },
+      React.createElement('span', { className: 'psa-field-label' }, t(labelKey)),
+      React.createElement('select', {
+        className: 'psa-select',
+        'data-psa-own': '',
+        [dataAttribute]: '',
+        value,
+        onChange: (event) => controller.setModifier(fieldName, event.target.value)
+      }, MODIFIER_CHOICES.map((choice) => React.createElement('option', { key: choice, value: choice }, t(`modifier.${choice}`)))))
+      const message = snapshot.state.feedback === null ? '' : snapshot.state.feedback.text
+      return React.createElement('div', { className: 'psa-rail-section' },
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+          React.createElement('button', {
+            type: 'button',
+            className: 'psa-icon-btn',
+            'data-psa-own': '',
+            'aria-label': t('rail.back'),
+            title: t('rail.back'),
+            onClick: () => controller.backView()
+          }, AnnotationChevron('left')),
+          React.createElement('span', { className: 'psa-status-line psa-status-strong' }, t('settings.title'))),
+        field('settings.passThrough', 'data-psa-setting-passthrough', 'passThroughModifier', settings.passThroughModifier),
+        field('settings.multi', 'data-psa-setting-multi', 'multiModifier', settings.multiModifier),
+        React.createElement('div', {
+          className: 'psa-muted',
+          'data-psa-settings-feedback': '',
+          'data-psa-own': '',
+          role: 'status',
+          'aria-live': 'polite'
+        }, message),
+        React.createElement('div', { className: 'psa-muted' }, t('settings.hint')))
+    }
+
+    /**
+     * The draggable element popover with the note editor and the two actions.
+     * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
+     * @returns {object | null} the popover.
+     */
+    function AnnotationPopover(props) {
+      const { t, controller, snapshot } = props
+      const state = snapshot.state
+      const setPopoverNode = React.useCallback((node) => {
+        if (node === null) controller.detachPopoverNode()
+        else controller.attachPopoverNode(node)
+      }, [controller])
+      const ref = state.selection[0]
+      if (ref === undefined || snapshot.popoverPosition === null) return null
+      const status = controller.statusOf(ref)
+      const inCollection = controller.isInCollection(ref)
+      const locator = describeLocator(ref)
+      return React.createElement('div', {
+        ref: setPopoverNode,
+        className: 'psa-popover',
+        'data-psa-popover': '',
+        'data-psa-own': '',
+        role: 'dialog',
+        'aria-label': t('popover.aria'),
+        style: { left: `${snapshot.popoverPosition.x}px`, top: `${snapshot.popoverPosition.y}px` }
+      },
+      React.createElement('div', {
+        className: 'psa-popover-head',
+        'data-psa-own': '',
+        title: t('popover.drag'),
+        onPointerDown: (event) => controller.beginPopoverDrag(event)
+      },
+      React.createElement('span', { className: 'psa-popover-title', 'data-psa-popover-title': '' }, elementLabel(ref)),
+      React.createElement('button', {
+        type: 'button',
+        className: 'psa-icon-btn',
+        'data-psa-popover-close': '',
+        'data-psa-own': '',
+        'aria-label': t('popover.close'),
+        title: t('popover.close'),
+        onClick: () => controller.clearSelection()
+      }, RemixGlyph(REMIX_CLOSE_LINE, 14))),
+      React.createElement('div', { className: 'psa-popover-ref', 'data-psa-popover-ref': '', title: locator }, locator),
+      React.createElement('div', {
+        className: 'psa-popover-status',
+        'data-psa-popover-status': '',
+        'data-psa-status': status
+      },
+      React.createElement('span', { className: 'psa-status-dot', 'data-psa-status': status, 'data-psa-own': '' }),
+      React.createElement('span', { 'data-psa-own': '' }, `${t('popover.statusLabel')} · ${t(`popover.status.${status}`)}`),
+      React.createElement('span', { className: 'psa-levels' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-level-up': '',
+          'data-psa-own': '',
+          'aria-label': t('popover.levelUp'),
+          title: t('popover.levelUp'),
+          onClick: () => controller.levelUp()
+        }, RemixGlyph(REMIX_ARROW_UP_LINE, 13)),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-level-down': '',
+          'data-psa-own': '',
+          'aria-label': t('popover.levelDown'),
+          title: t('popover.levelDown'),
+          onClick: () => controller.levelDown()
+        }, RemixGlyph(REMIX_ARROW_DOWN_LINE, 13)))),
+      React.createElement('label', { className: 'psa-popover-note', 'data-psa-own': '' },
+        React.createElement('span', { className: 'psa-muted' }, t('popover.noteLabel')),
+        React.createElement('textarea', {
+          className: 'psa-popover-textarea',
+          'data-psa-note': '',
+          'data-psa-own': '',
+          rows: 3,
+          value: state.note,
+          placeholder: t('popover.notePlaceholder'),
+          'aria-label': t('popover.noteLabel'),
+          onChange: (event) => controller.updateNote(event.target.value),
+          onFocus: () => controller.beginEdit(),
+          onBlur: () => controller.endEdit()
+        })),
+      React.createElement('div', { className: 'psa-popover-actions' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-quick-ref': '',
+          'data-psa-own': '',
+          onClick: () => controller.quickReference()
+        }, t('popover.quickRef')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn psa-btn-primary',
+          'data-psa-add': '',
+          'data-psa-own': '',
+          onClick: () => controller.addSelectionToCollection()
+        }, inCollection ? t('popover.update') : t('popover.add'))))
+    }
+
+    /**
+     * Temporary expanded note editor for one collection entry, anchored beside
+     * the rail so it never covers the canvas permanently.
+     * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
+     * @returns {object | null} the editor.
+     */
+    function AnnotationNoteEditor(props) {
+      const { t, controller, snapshot } = props
+      const editor = snapshot.noteEditor
+      if (editor === null) return null
+      const entry = snapshot.state.collection.find((item) => item.id === editor.refId)
+      if (entry === undefined) return null
+      return React.createElement('div', {
+        className: 'psa-note-editor',
+        'data-psa-entry-note-editor': '',
+        'data-psa-own': '',
+        style: { left: `${editor.x}px`, top: `${editor.y}px` }
+      },
+      React.createElement('div', { className: 'psa-popover-head', 'data-psa-own': '' },
+        React.createElement('span', { className: 'psa-popover-title' }, t('collection.noteEditorTitle')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-own': '',
+          'aria-label': t('collection.noteEditorClose'),
+          title: t('collection.noteEditorClose'),
+          onClick: () => controller.closeNoteEditor()
+        }, RemixGlyph(REMIX_CLOSE_LINE, 14))),
+      React.createElement('div', { className: 'psa-muted psa-truncate' }, elementLabel(entry)),
+      React.createElement('textarea', {
+        className: 'psa-note-editor-textarea',
+        'data-psa-own': '',
+        value: typeof entry.note === 'string' ? entry.note : '',
+        placeholder: t('collection.notePlaceholder'),
+        'aria-label': t('collection.notePlaceholder'),
+        autoFocus: true,
+        onChange: (event) => controller.updateCollectionNote(entry.id, event.target.value),
+        onBlur: () => controller.closeNoteEditor()
+      }))
+    }
+
+    /**
+     * Invisible Composer seat that keeps the insertion bridge current and resets
+     * selection state when the viewed Session changes.
+     * @param {object} props - session slot props.
+     * @returns {object} a hidden anchor element.
+     */
+    function AnnotationSessionSeat(props) {
+      const { sessionId, inputActions } = props
+      React.useEffect(() => {
+        annotationBridge.sessionId = typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null
+        annotationBridge.inputActions = inputActions ?? null
+        if (annotationController !== null) annotationController.sessionChanged(annotationBridge.sessionId)
+        return () => {
+          // The bridge is all-or-nothing: a session id without its Composer actions (or the
+          // reverse) would keep collection scope and insertion decisions stale after this
+          // seat unmounts (e.g. leaving the conversation for the Plugins view).
+          annotationBridge.sessionId = null
+          annotationBridge.inputActions = null
+          if (annotationController !== null) annotationController.sessionChanged(null)
+        }
+      }, [sessionId, inputActions])
+      return React.createElement('span', {
+        style: { display: 'none' },
+        'aria-hidden': true
+      })
+    }
+
+    /**
+     * Install the browser-only UI element annotation mode.
+     * @param {object} ctx - client root context.
+     * @returns {void}
+     */
+    function installUiAnnotation(ctx) {
+      if (annotationInstalled) return
+      annotationInstalled = true
+      const t = ctx.locale.bind(ANNOTATION_NS)
+      ctx.effect(() => ctx.locale.register(ANNOTATION_NS, {
+        en: ANNOTATION_EN,
+        zh: ANNOTATION_ZH
+      }), 'power-suite: ui annotation dictionaries')
+      ctx.effect(() => {
+        const style = document.createElement('style')
+        style.setAttribute('data-power-suite-css', 'ui-annotation')
+        style.textContent = ANNOTATION_CSS
+        document.head.appendChild(style)
+        return () => style.remove()
+      }, 'power-suite: ui annotation stylesheet')
+      ctx.effect(() => {
+        try {
+          annotationController = createAnnotationController(t, ctx)
+        } catch (error) {
+          // The guard must not wedge this factory into a "installed" state with no controller.
+          annotationInstalled = false
+          throw error
+        }
+        return () => {
+          if (annotationController !== null) annotationController.dispose()
+          annotationController = null
+          annotationInstalled = false
+        }
+      }, 'power-suite: ui annotation controller')
+      ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+        name: 'shell.overlay',
+        id: ANNOTATION_OVERLAY_ID
+      }, (props) => React.createElement(AnnotationOverlay, {
+        ...props,
+        t,
+        controller: annotationController
+      }))), 'power-suite: ui annotation overlay')
+      ctx.effect(() => ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({
+        name: 'conversation.input.overlay',
+        id: ANNOTATION_SEAT_ID,
+        order: 60
+      }, AnnotationSessionSeat)), 'power-suite: ui annotation composer seat')
+    }
+    //#endregion
+
     //#region plugin
     /**
      * The page type and its Start-guide card.
@@ -9208,7 +13671,51 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       installQuickLook(ctx)
       installSettingsPage(ctx)
       installProjectView(ctx)
+      installUiAnnotation(ctx)
     }
+
+    // Test seam: `test/helpers/client-module.mjs` materializes this factory under a
+    // DOM stub and reads these pure helpers. Production never defines the flag.
+    if (typeof globalThis !== 'undefined'
+      && typeof globalThis.__POWER_SUITE_TEST_HOOKS__ === 'object'
+      && globalThis.__POWER_SUITE_TEST_HOOKS__ !== null) {
+      globalThis.__POWER_SUITE_TEST_HOOKS__.uiAnnotation = {
+        DEFAULT_SETTINGS: ANNOTATION_DEFAULT_SETTINGS,
+        MODIFIER_CHOICES,
+        SETTINGS_STORAGE_KEY,
+        normalizeSettings,
+        resolveModifierChange,
+        parseStoredSettings,
+        serializeSettings,
+        modifierMatches,
+        sanitizeText,
+        textDigest,
+        sanitizeAttributeName,
+        sanitizeAttributeValue,
+        buildElementRef,
+        selectorCandidates,
+        identityKeyOf,
+        describeLocator,
+        elementLabel,
+        createAnnotationState,
+        reduceAnnotationState,
+        serializeQuickReference,
+        serializeBatchRequest,
+        batchScopeSplit,
+        resolveRefStatus,
+        resolveNodeCandidate,
+        clampLauncherPosition,
+        clampPopoverPosition,
+        computeRailWidth,
+        layoutModeFor,
+        collectionAdd,
+        collectionRemove,
+        collectionClear,
+        collectionSetNote
+      }
+    }
+
+    //#endregion
 
     return {
       inject: ['slots', 'locale', 'sidebarRight', 'sidebarRightTabs', 'contextMenus', 'remote', 'remote.agentPresets', 'uiWorkspace', 'sessions'],

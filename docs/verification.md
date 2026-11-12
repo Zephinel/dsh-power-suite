@@ -22,14 +22,16 @@ npm run pack:check
 
 Current evidence (2026-11-12, Node 24.22.2):
 
-- `npm test`: **111 tests, 111 passed, 0 failed**.
-- `npm run check`: passed (`18 modules, 9 test files`).
-- `npm run pack:check`: **72 files** (0.2.0 tarball), including `src/`,
+- `npm test`: **163 tests, 163 passed, 0 failed, 0 skipped** — 73 base
+  tests, 38 read-acks/session-activity Host tests, and 52 UI-element-annotation
+  tests through the browser-factory test seam.
+- `npm run check`: passed (`18 modules, 10 test files`).
+- `npm run pack:check`: **78 files** (0.3.0 tarball), including `src/`,
   `locale/`, `docs/` (with the Project page/rail states/sidebar switch,
   activity-card actions/acknowledgement/ledger/current-ring states, Artifacts
-  panel/filter-menu/Quick Look, Dynamic Workspaces, hover-detail, and
-  prompt-history rail captures), `cordis.patch.yml`, `icon.png`, and the standard
-  repository files.
+  panel/filter-menu/Quick Look, Dynamic Workspaces, hover-detail,
+  prompt-history rail captures, and the UI-element-annotation captures),
+  `cordis.patch.yml`, `icon.png`, and the standard repository files.
 - Manual probes / code-reviewed behavior (no node harness): a failed ledger disk
   write was exercised with a temporary-directory probe only (it keeps the map in
   memory without durability and resolves flush/dispose); the client's 408/425
@@ -57,6 +59,9 @@ Current evidence (2026-11-12, Node 24.22.2):
   values). The failed-disk-write path and the client's 408/425 retry
   classification are **not** node tests — see the manual/code-reviewed note
   below.
+- The UI element annotation mode adds no Host route, service, or Session-log
+  write; its pure model is covered by 52 `node:test` cases through the browser
+  factory test seam, and its live behavior by the acceptance harness below.
 - Host routes are covered by tests where they exist: Dynamic Workspaces'
   card state is browser-derived but Host-backed through the read-acks store/route
   and the session-activity ledger route (16 MiB document guard, allowlist
@@ -79,6 +84,204 @@ prompts; subagent detection was checked against real local Session logs: the par
 `session-bd41197f-48fd-4065-a4f8-5545510cc86e` (main turn completed, two child
 sessions left with open crash tails) returned `interrupted: true,
 subagent: true`; two completed control Sessions stayed `interrupted: false`.
+
+## UI element annotation acceptance
+
+> Recorded on the annotation feature branch before this merge. After merging into
+> `feat/dynamic-workspaces` the combined suite is 163/163 and `npm run check` reports
+> `18 modules, 10 test files` with a 78-file 0.3.0 tarball; the per-scenario evidence
+> below was taken on the pre-merge annotation build and is unaffected by the merge.
+
+Date: 2026-11-12 (round-2 fix build, `fix/ui-annotation-review-fixes`). The
+feature is browser-only ([ui-annotation.md](ui-annotation.md)), so its acceptance
+run uses the real DSH Web GUI instead of a Host test:
+`test/browser/annotation.e2e.mjs` (Node 22 or newer; this run used Node 24.22.2;
+dependency-free) launches headless Google Chrome (157.0.8103.78) with a throwaway
+profile, opens the GUI served by the launchd service `com.rexxin.dsh-web`, and
+injects this checkout's `src/client.js` through the page's module loader before
+the shell loads. The build under test is commit `aaab678` (`src/client.js` md5
+`37388d3f9d1de0584b62bc111c6b6043`, round-2 seam generation of 32 keys). The
+installed checkout, the user profile, the launchd service, and the GUI's existing
+Sessions are untouched. The harness requires a blank Session by checking, at
+once, a `[data-conversation-session]` root, the composer region with a Lexical
+editor, the Chat view, zero transcript messages, zero turns, an empty draft, and
+no draft attachments; otherwise it creates a genuinely fresh blank Session
+through the native "New session in <workspace>" hover action and aborts
+explicitly if that is impossible. The non-blank-auto-restore branch is
+implemented but was not triggered in this environment, so no live evidence
+claims it. The harness tracks and prints every Session it touches, drives every
+interaction with real CDP mouse and keyboard input at 1728 x 900, and reports
+page errors plus network failures under its exact predicate: same-origin http(s)
+only, where a `Document`/`Fetch`/`XHR` response has status ≥ 400 or an `/api/`
+or `/plugins` path fails to load; third-party origins, favicon,
+`chrome-extension:`/`data:`/`blob:` URLs, and same-origin static requests outside
+the DSH API/plugin routes are ignored as noise, and a failed `Network.enable` is
+reported and fails the run. Exit codes: 0 only when every check passes; 1 for a
+scenario/page/network/gate/harness failure or a missing result row; 2 only for
+usage/argument errors.
+
+This is the final acceptance record for the planned 0.3.0 release after two review
+fix rounds: round 1 resolved F1–F18, round 2 resolved R1–R4 and the harness
+findings N1–N6/H10.
+
+Final publication build: commit `50a1bb3`, `src/client.js` md5 `10dd3b72…`. The
+acceptance run recorded above was taken on `37388d3f…`; the only delta is the
+review-requested defensive cleanup in `deactivate()`'s already-off early return
+(clears the resolved-node cache/observer; that branch is not exercised by any
+scenario). `npm test` 125/125 and `npm run check` are green on the final build; no
+acceptance behavior changed.
+
+Run:
+
+```bash
+node test/browser/annotation.e2e.mjs --no-shots              # full run
+node test/browser/annotation.e2e.mjs --from 6 --no-shots     # same-build completion run
+node test/browser/annotation.e2e.mjs --scenario 2 --no-shots # targeted self-contained rerun
+node test/browser/annotation.e2e.mjs --scenario 6 --no-shots # targeted self-contained rerun
+node test/browser/annotation.e2e.mjs --shots-only --assets   # screenshots
+```
+
+Automated gates on this build:
+
+- `npm test`: **125 tests, 125 passed, 0 failed, 0 skipped** — the 73 existing
+  tests plus 52 annotation model tests, including the round-2 resolver and
+  sanitizer regressions. The round-2 regression tests were red on the round-1
+  build (`e0fdbc23…`) and green on this build.
+- `node --check src/client.js`: passed.
+- `npm run check`: passed (`14 modules, 8 test files`).
+- `npm run pack:check`: **63 files** in the planned 0.3.0 tarball, including the
+  five annotation captures.
+
+Acceptance result: **no single fully-green full-suite run exists for this build.**
+The complete per-scenario PASS evidence on md5 `37388d3f…` comes from three
+same-build sources — the full run, the completion run, and two targeted
+self-contained reruns — and is listed in the table below. Page errors were 0,
+real network failures were 0, and the network domain was enabled with 0 ignored
+network noise in every run below; smoke passed 6/6 in every run (32-key seam).
+
+- **Full run** (`--no-shots`, 524.5 s, exit 1, log
+  `/tmp/psa-final-round2.log`): S1, S3, S4, S5, and S7 PASS. S2 failed before its
+  pass-through assertion completed because the scenario did not first ensure a
+  stable activation (harness state precision; fixed by making S2 self-contained,
+  then PASSed targeted). S6 failed with `changed` instead of `missing` while
+  inheriting the previous scenarios' collection and virtualized-sidebar state
+  (harness state precision; fixed by the self-contained reset, then PASSed
+  targeted). S8 hit a CDP `Input.dispatchMouseEvent` timeout and S9 cascaded.
+- **Completion run** (`--from 6 --no-shots`, 61.0 s, exit 0, log
+  `/tmp/psa-round2-from6.log`): S6, S7, S8, and S9 PASS.
+- **Targeted self-contained reruns** (exit 0 each, `PASS 7 / FAIL 0`):
+  `--scenario 2` (11.4 s, log `/tmp/psa-target2.log`) PASS after mode-off →
+  native Plugins view → stable activation (same 2×500 ms predicate as S1) → Alt
+  pass-through/contextmenu oracle; `--scenario 6` (49.4 s, log
+  `/tmp/psa-target6.log`) PASS after mode-off → conversation → stable activation
+  → cleared collection → sidebar list state normalized (scroll reset when the list
+  is scrollable) → current-scope target recorded → native collapse → strict
+  `missing` + stale marker, then F8/F9/mixed scope. The same-identity in-place
+  replacement is recorded as evidence only; the true-removal case is not relaxed. These targeted PASS runs are the same-build evidence that
+  the full-run S2/S6 failures were harness state precision rather than product
+  behavior.
+
+Same-build per-scenario evidence: S1, S3, S4, S5, and S7 are green in the full
+run; S2 and S6 are green in the self-contained targeted reruns; S6–S9 also pass in
+the completion run. Every scenario has PASS evidence on this build, but there is
+still no single fully-green full-suite run, and this record does not claim one.
+H1 gate proofs were re-confirmed on the final harness: the feature-absent client
+exited 1 with `FAIL gate-feature` (`PASS 4 / FAIL 12`), and `--scenario 10` exited
+2 as an argument error.
+
+| # | Scenario | Evidence on this build |
+|---|---|---|
+| 1 | Activate via a real launcher click; layout shrinks and the rail appears; native New Session is blocked | PASS (full run) — activation polls `html[data-psa-active]` + `[data-psa-rail]`, re-verifies twice 500 ms apart, and retries activation once before failing with an environment snapshot; markers set; frame `padding-right` equals the computed rail width (200 px at 1728 x 900); rail right-anchored in the freed strip; inline grid untouched; the blocked real click reached 0 native handler hits with `preventDefault` applied and the Session/view stayed unchanged |
+| 2 | Alt pass-through restores native semantics; no-session state; native context menu is not intercepted | PASS (targeted `--scenario 2`; the full run failed before the assertion completed — see above) — the self-contained run goes mode-off → native Plugins view → stable activation → native New Session action via Alt, `html[data-psa-passthrough]` only while held, hover outline paused, `[data-psa-no-session]` while no Session is mounted, and a contextmenu oracle with a blocked right-click that never reached the bubble listener and exactly one Alt right-click with `defaultPrevented === false` |
+| 3 | Wheel scrolling and shortcuts are untouched; marquee; Esc ladder | PASS (full run) — a real wheel changed the native scroll position with 0 `preventDefault`; Meta+K, Control+L, and plain letters arrived unprevented; Shift+drag drew a box and selected a candidate; the F6 Esc chain was: first Esc ended note editing and kept the popover and typed note, second Esc cleared the selection, third Esc left the mode |
+| 4 | Shift+click multi-select; collection add/update/note/remove | PASS (full run) — 3 Shift+clicks produced 3 multi outlines and the rail count; add-all de-duplicated and updated on re-add (Add → Update); inline note edit and remove worked |
+| 5 | Batch insert order, existing draft preserved, never sent, composer focused | PASS (full run) — one ordered numbered block per collection entry with the block count equal to the entry count, non-empty names, each note inside its own block (or the empty-note placeholder), the pre-existing draft kept verbatim before the header, no message sent, composer focused |
+| 6 | Removed targets are stale; genuinely mixed cross-session scope; no page mutation | PASS (targeted `--scenario 6` and the completion run; the full run failed with inherited state — see above) — the self-contained rerun clears the collection, normalizes the sidebar list state (scroll reset when possible), and records the target as a current-scope entry before the native collapse, then strictly reads `data-psa-status="missing"` and inserts the explicit `Status: target no longer resolves` line; a row rebuilt by sidebar virtualization accepts `missing`, `ambiguous`, `changed`, or `resolved`. A second genuinely blank Session created through the native hover action makes the mixed state real: every pre-switch entry becomes `data-psa-entry-scope="other"` with `data-psa-status="other"`, batch insert is disabled with the cross-session notice, and the inserted block contains exactly one numbered current-session block plus a skip line whose extracted count equals the other-scope entry count. A leak check over every other-scope entry's name, note, and locator text (tokens of 6+ characters) proves none reached the composer; re-locate is invoked on the other-scope row's own control, shows the exact localized refusal, and does not scroll |
+| 7 | Exit cleans up completely and restores a pre-existing inline layout | PASS (full run and completion run) — a sentinel `padding-right: 13px` set before activation is restored exactly; the MutationObserver timeline contains a record with `data-psa-active === null` while `data-psa-frame` is still present and the sentinel padding restored (the reverse transition); the marker then had to disappear within up to 15 s of polling (raised from 5 s only to tolerate a busy main thread; disappearance is still mandatory and was observed). `--psa-rail-width` removed, inline grid byte-identical, 0 overlay nodes, one inactive launcher, native clicks worked again |
+| 8 | Launcher drag/resize/scroll/reload geometry; interrupted gesture cleanup | PASS (completion run; the full run hit a late-run CDP input timeout) — an interrupted drag ended by Esc neither toggled the mode nor persisted the position and left no `data-psa-dragging`/box node; real drags clamped with the 8 px margin; after the 1000 x 700 override the launcher was fully inside the viewport; a missing scrollable region fails the scenario; wheel scrolling did not move the launcher; after reload the mode started off and the remembered position came back |
+| 9 | Collection view keeps the rail/frame geometry; exit restores the baseline | PASS (completion run; the full run cascaded from S8) — opening and closing the collection left frame padding and canvas width unchanged and kept the rail in the right strip without a wide drawer; exit restored the pre-mode canvas width and inline grid |
+
+Sessions created/reused in the final round-2 runs, for cleanup:
+`session-5eec2763-0a91-460e-b559-08a8c3a98d13` (full run),
+`session-8e460d06-507a-4c6d-95c6-63f20882c6e4` (completion run, targeted S2/S6,
+and the screenshots run), and `session-1e273273-4316-46f5-84c8-199bfc0812a2`
+(completion run S7, targeted S6 session B).
+
+Screenshots (round-2 build, 1728 x 900 originals, dark theme; from one logged
+`node test/browser/annotation.e2e.mjs --shots-only --assets` run,
+log `/tmp/psa-shots-round2.log`, 42.0 s, exit 0, with every capture assertion
+passing; blank-session predicate, privacy shield, right-anchored rail, launcher
+clear of the footer, and the selection popover fully inside the viewport; the
+byte sizes are unchanged by the targeted runs and are embedded in
+[ui-annotation.md](ui-annotation.md)):
+
+- [annotation-idle.png](assets/annotation-idle.png) — 125075 B — mode off, the
+  default bottom-right launcher, no annotation surface.
+- [annotation-mode.png](assets/annotation-mode.png) — 144859 B — mode on: the
+  page shrunk by the 200 px rail in the freed right strip.
+- [annotation-selection.png](assets/annotation-selection.png) — 163687 B — a
+  highlighted native control with its popover (element, locator, Target ·
+  Resolved, note, Quick reference / Add to collection) fully inside the viewport.
+- [annotation-collection.png](assets/annotation-collection.png) — 161038 B — the
+  collection view in the rail: three ordered rows with notes and the Clear /
+  Insert all footer unobstructed.
+- [annotation-inserted.png](assets/annotation-inserted.png) — 200244 B — the
+  ordered structured batch request inserted into the composer, not sent.
+
+Independent targeted re-review (round 3, fresh read-only subagent, 2026-11-12):
+**merge-ready: yes** — no BLOCKER/MAJOR/MINOR findings. Verified R1 resolver
+semantics + DOM-revision cache (ordinary `p`/`li`/anonymous controls resolve;
+stable ambiguity terminal; no stale-first-hit), R2 real `session-<uuid>` session
+attribute preserved, R3 sanitizer shapes, S2/S6 self-contained harness fixes
+(true-removal still strictly `missing`), the three-source per-scenario evidence
+chain, and the documentation corrections. Remaining items were publication NITs
+only (this verdict line and the harness README stale sentence); no code/test
+changes required.
+
+Known evidence limits:
+
+- **No single green full-suite run.** The complete per-scenario evidence above
+  comes from three same-build sources; the full-run S2/S6 failures were harness
+  state precision (targeted self-contained reruns pass), while the S8 CDP input
+  timeout and its S9 cascade happened before their product assertions completed.
+  The S8 cause is not established: it is not attributed to the product nor
+  proven to be purely environmental.
+- Native context-menu visuals are not observable in headless Chrome; the
+  assertion is the event-level `preventDefault`/bubble oracle.
+- The blank-session predicate is DOM-based (session root, composer, Lexical
+  editor, Chat view, message/turn counts, draft, attachments). The branch that
+  detects a non-blank auto-restored Session and creates a fresh one is implemented
+  but was not triggered in this environment.
+- This DSH build keeps one blank draft Session at a time, so a blank → blank
+  Session switch cannot be reached from the UI; scenario 6 creates a second
+  genuinely blank Session through the native hover action and asserts the mixed
+  current/other-session scope.
+- A blank Session's conversation is empty and non-scrollable, so the wheel
+  assertion uses the nearest native scrollable region (the sidebar list) and
+  states that in the evidence; scenario 8 fails if no scrollable region exists.
+- Headless Chrome can swallow the native `resize` event for
+  `Emulation.setDeviceMetricsOverride`; the harness retries with a second real
+  viewport change and only then falls back to one synthetic resize event.
+- Long full-suite runs can hit CDP `Runtime.evaluate` /
+  `Input.dispatchMouseEvent` timeouts and live-GUI rebuild effects before a
+  scenario's product assertion completes; the harness retries gestures only when
+  their postcondition proves the state did not change, and a rebuilt sidebar row
+  accepts `missing | ambiguous | changed | resolved` (the true-removal case still
+  requires `missing`). Scenario 7 polls the reverse-transition marker for up to
+  15 s (was 5 s), but its disappearance stays mandatory.
+- Zero-area picker behavior is not directly synthesizable in the live GUI and is
+  covered by the pure-model tests.
+- The run is single-device and single-language: one deployment at 1728 x 900 in
+  the active UI language; the Chinese copy is covered by unit tests rather than
+  end-to-end.
+- Benign DSH-internal telemetry WebSocket 403s (`ws://127.0.0.1:9230/ingest`)
+  are printed with detail but are not page errors or real network failures under
+  the predicate, so they do not gate the run.
+- The product boundaries the run does not move are documented in
+  [ui-annotation.md](ui-annotation.md#host-boundaries): Shadow DOM internals are
+  not inspectable (only the host is selectable), cross-origin iframe contents are
+  not selectable, native input/textarea/contenteditable values are never read,
+  and canvas-rendered content has no DOM target.
 
 ## Manual UI checks
 
@@ -401,6 +604,11 @@ The live surfaces are captured in
 [assets/dynamic-workspaces.png](assets/dynamic-workspaces.png),
 [assets/dynamic-workspaces-hover.png](assets/dynamic-workspaces-hover.png),
 [assets/prompt-history-preview.png](assets/prompt-history-preview.png),
-[assets/prompt-history-search.png](assets/prompt-history-search.png), and
-[assets/settings-page.png](assets/settings-page.png), embedded in their feature
-references.
+[assets/prompt-history-search.png](assets/prompt-history-search.png),
+[assets/settings-page.png](assets/settings-page.png),
+[assets/annotation-idle.png](assets/annotation-idle.png),
+[assets/annotation-mode.png](assets/annotation-mode.png),
+[assets/annotation-selection.png](assets/annotation-selection.png),
+[assets/annotation-collection.png](assets/annotation-collection.png), and
+[assets/annotation-inserted.png](assets/annotation-inserted.png), embedded in
+their feature references.

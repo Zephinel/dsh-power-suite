@@ -27,6 +27,7 @@ src/client.js           Browser entry (DSH module loader)
 ├─ Draft attachment memory seat (invisible)
 ├─ Dynamic Workspaces buckets + running & recent Sessions card
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
+├─ UI element annotation mode (launcher, right rail, highlights, note popover, collection, composer insert)
 ├─ Plugins-page settings section
 ├─ Standalone Project page seat (content-area Overview / Sessions / Runs / Settings)
 └─ Shared hover Quick Look for generated/provided Artifacts rows and native Workspace file rows
@@ -254,9 +255,9 @@ The client talks to the Host only over the authenticated routes above; it never
 imports Host code. Feature copy is registered through per-feature locale
 namespaces (`sessionArtifacts`, `workspacePresets`, `dynamicWorkspaces`,
 `powerSuitePromptHistoryPreview`, `powerSuiteInterrupted`, `powerSuiteSettings`,
-`powerSuiteProjectView`) so the en/zh dictionaries stay aligned. The client
-entry also injects the shell's `sessions` listing service for the Project view's
-session navigation and preset roster.
+`powerSuiteProjectView`, `powerSuiteAnnotation`) so the en/zh dictionaries stay
+aligned. The client entry also injects the shell's `sessions` listing service for
+the Project view's session navigation and preset roster.
 
 ### Dynamic Workspaces
 
@@ -424,6 +425,71 @@ card collapsed to header and footer. Layer mounting no longer relies on an inlin
 opacity style or an animation finishing, so a throttled/canceled animation cannot
 leave the content invisible.
 
+### UI element annotation
+
+A **browser-only** feature: it has no Host route, service, Session-log write, or
+profile change. One `//#region feature: ui element annotation` in
+[`src/client.js`](../src/client.js) is installed through `ctx.effect` by
+`installUiAnnotation(ctx)`, which registers a `shell.overlay` seat and a
+renderless `conversation.input.overlay` seat, injects one
+`<style data-power-suite-css="ui-annotation">`, creates the controller singleton,
+and returns a disposer. An install guard keeps reconnects/HMR idempotent: one
+launcher and one listener set. The overlay seat renders the launcher, rail,
+highlight layer, note popover, and feedback toast with React; the conversation
+seat keeps the module bridge (`sessionId`, `inputActions`, draft) current because
+the root overlay does not receive the Session hooks as props. Locale namespace
+`powerSuiteAnnotation`, class prefix `psa-`, DOM markers `data-psa-*`.
+
+The layout is a frame `padding-right` change, never a CSS transform. On
+activation the frame receives `data-psa-frame`, `padding-right = railWidth px`,
+and a `--psa-rail-width` custom property; the rail width is
+`clamp(188, round(0.116 * innerWidth), 236)` px. The frame's content box shrinks:
+the left sidebar keeps its width while the conversation column and the native
+right sidebar give up the rail width, and the shell's overlay layer still spans
+the frame so the rail occupies the freed strip. The padding transition is 180 ms
+and disabled under `prefers-reduced-motion`. Resize recomputes the layout
+(debounced): `innerWidth - leftSidebarWidth - rightSidebarWidth - railWidth >=
+560` keeps the shrink layout; otherwise the rail overlays the right edge and can
+collapse to 48 px. Exiting restores the frame's previous inline `padding-right`
+and rail-width property exactly (removing them only when the plugin set them) and
+clears the marker after the transition; the inline grid style is never touched.
+
+While active, window capture-phase listeners consume `pointerdown`, `pointerup`,
+`mousedown`, `mouseup`, `click`, `auxclick`, `dblclick`, `contextmenu`, and
+`dragstart` with `preventDefault` + `stopImmediatePropagation` except over
+`[data-psa-own]`, so a native control under the pointer (for example **New
+session**) cannot act. Hover and marquee pause while the pass-through modifier is
+held; the native events then reach the page unchanged and no click is
+synthesized. Candidates walk the event target's ancestor chain, prefer
+interactive/semantic elements over text leaves, skip the composer's editable
+internals (the composer region is the candidate), and produce a plain-JSON
+`ElementRef` with reliability-ordered selector candidates, a stable identity key,
+sanitized text, and a small deterministic text digest used for change detection
+(derived data only; no raw page text is kept in it). A DOM-revision-aware
+resolver re-finds the live node from the ordered candidates so scroll-frame
+lookups stay bounded without trusting a stale first hit. The reducer (`off | idle |
+inspect | selected | multi | collection`, a settings view flag, and transient
+pass-through/boxing/drag states) is a pure function covered by the Node suite
+through the factory's test seam.
+
+Insertion uses the composer's semantic API: `inputActions.captureInsertion()`
+captures `{ start, end, draftRev }` and `inputActions.insertText(text, span)`
+inserts without replacing the draft, in one undo step, and never sends; the
+quick-reference and batch serializers are pure functions in the region, and the
+editor is focused afterwards. With no conversation seat (Start page, no Session)
+the rail shows the open-a-Session notice, batch insert stays disabled, and the
+launcher, rail, and collection keep working. Two lifecycle boundaries are
+deliberate: exiting the mode removes the mode-scoped capture listeners, layout,
+rail DOM, hover/selection/box state, and pending rAF work; the plugin disposer
+additionally removes the always-on launcher resize handler, the style tag, React
+roots, and the rest. The collection is page-lifetime memory with Session-scoped
+entries (other-session entries are marked, refuse re-locate, and are excluded
+from batch insert); only browser-local state persists —
+`power-suite.ui-annotation.settings` (the two modifiers),
+`power-suite.ui-annotation.launcher` (position), and
+`power-suite.ui-annotation.rail-collapsed`. See
+[ui-annotation.md](ui-annotation.md).
+
 ### Slots used
 
 | Slot | Purpose |
@@ -432,9 +498,9 @@ leave the content invisible.
 | `sidebarRightTabs.register` | Artifacts guide card on the Start page |
 | `contextMenu.icon` | Workspace menu icon |
 | `contextMenus.register` (`workspace`) | Default agent preset submenu |
-| `conversation.input.overlay` | Renderless prompt-history keyboard seat and draft-attachment memory seat |
+| `conversation.input.overlay` | Renderless prompt-history keyboard seat, draft-attachment memory seat, and the annotation mode's Session bridge seat |
 | `conversation.input.dock` | Session hooks for the body-portaled prompt-history rail |
-| `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation and the standalone Project page (`power-suite.project-page`) |
+| `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation, the standalone Project page (`power-suite.project-page`), and the UI element annotation launcher/rail/popover |
 | `plugins.bundle.config` | Plugin settings page |
 | `sidebar.session.row.leading` | Interrupted-session badge |
 | `sidebar.workspaces.session.row.action` | Continue action |
@@ -452,6 +518,10 @@ leave the content invisible.
   artifact row or a fake interrupted state.
 - Pure state derivation lives in feature modules and is covered by
   `node:test`; UI wiring stays in `src/client.js`.
+- The UI element annotation mode stays browser-only: it adds no Host route,
+  service, Session-log write, or profile change. Its collection is page-lifetime
+  memory, and only its two browser-local modifiers, launcher position, and
+  rail-collapsed flag are persisted.
 
 ## Verification
 
