@@ -158,10 +158,15 @@ figure model, and the existing Host suites.
 injected into the running GUI at 1728×900; 0 page errors and 0 real same-origin
 API/plugin network failures in every run below):
 
-- Sidebar harness `test/browser/sidebar.e2e.mjs`: **39/39 PASS**, 40.9 s. It
+- Sidebar harness `test/browser/sidebar.e2e.mjs`: **41/41 PASS**, 70.6 s. It
   asserts the trailing grid (time right **209 px** for parent *and* child rows,
   action slot 233, disclosure 259, no child New-session control, hover reveal
-  without shift), the internal rainbow atmosphere (a clipped wrapper inside the
+  without shift), the multi-width grid invariant (parent and child time right
+  edges identical at natural/320/400 px row widths, disclosure at the row right
+  edge, clipped titles never under the trailing columns), inter-row spacing
+  (5 px item gap, 4 px parent→first child, 5 px child↔child, intact trunk/end
+  mask, hover reachable across the gaps), the internal rainbow atmosphere (a
+  clipped wrapper inside the
   row's own radius on the card parent/child rows, the owning native Workspace
   row and the native sidebar Session row, canvas painted inside the row's paint
   box, scrim above the canvas, content above the scrim, exactly three renderers,
