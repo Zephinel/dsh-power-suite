@@ -4384,7 +4384,7 @@ function buildScenarios(harness) {
       assertEqual(finalOverlay.raised, null, 'the scenario cleanup left data-psa-raised behind')
       const finalHovercard = await h.page.eval(probes.syntheticHovercardStyle)
       assertEqual(finalHovercard, null, 'the synthetic hovercard leaked after cleanup')
-      return `F1 z=150/restore exact; F2 card ${nativeCard.rect.width}x${nativeCard.rect.height} whole-card hover/selection; F3 stationary recompute; F4 state events + [data-psd-hovercard] pe/z (real card ${realHovercardPresent ? 'present' : 'absent in this branch'}); A2 uniqueSelector ${short(String(pageRecord.uniqueSelector).slice(0, 48))}; D1 reload kept ${reloadedEntries.length} records with resolved+missing; D15 refused at ${cappedEntries.length}`
+      return `F1 z=150/restore exact; F2 card ${nativeCard.rect.width}x${nativeCard.rect.height} whole-card hover/selection; F3 stationary recompute; F4 state events + [data-psd-hovercard] pe/z (real-card marker sampled while no card is showing: ${realHovercardPresent ? 'present' : 'not observed'}; the merged pin/select is asserted by 10b); A2 uniqueSelector ${short(String(pageRecord.uniqueSelector).slice(0, 48))}; D1 reload kept ${reloadedEntries.length} records with resolved+missing; D15 refused at ${cappedEntries.length}`
     },
 
     11: async () => {
