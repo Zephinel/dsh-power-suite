@@ -14582,6 +14582,33 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
+       * Insert one text block into the current Composer without sending it.
+       * @param {string} text - text to insert.
+       * @returns {boolean} whether insertion succeeded.
+       */
+      function insertIntoComposer(text) {
+        const actions = annotationBridge.inputActions
+        if (actions === null || typeof actions !== 'object'
+          || typeof actions.captureInsertion !== 'function' || typeof actions.insertText !== 'function') {
+          feedback(t('feedback.noComposer'), 'error')
+          return false
+        }
+        try {
+          const span = actions.captureInsertion()
+          if (actions.insertText(text, span) !== true) {
+            feedback(t('feedback.insertFailed'), 'error')
+            return false
+          }
+        } catch {
+          feedback(t('feedback.insertFailed'), 'error')
+          return false
+        }
+        annotationFocusComposer()
+        feedback(t('feedback.inserted'))
+        return true
+      }
+
+      /**
        * Insert the current selection as one quick reference (Phase 1 plain text).
        *
        * A3/T7: the annotation is committed first (if it is new), then the plain-text
