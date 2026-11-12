@@ -103,11 +103,17 @@ heading is added until the release is cut.
   (right-aligned, tabular numerals) → **New session action 22 px**
   (hover/focus-revealed) → **disclosure chevron 24 px** — so parent and nested
   subagent rows right-align their times on one column and no title can push the
-  controls; nested subagent rows no longer offer the New session action (their
-  action/disclosure columns are empty spacers; an interrupted child keeps only
-  Continue in the action slot), and the header joins the same grid. The row-body
-  hover pill stays content-paced while the action/chevron highlights keep fixed
-  22×22 / 24×26 geometry on one column.
+  controls; a flexible spacer between the content-paced title control and the
+  trailing grid keeps that grid right-anchored at **every card/sidebar width**
+  (short titles no longer leave the time floating mid-row). Nested subagent rows
+  no longer offer the New session action (their action/disclosure columns are
+  empty spacers; an interrupted child keeps only Continue in the action slot),
+  and the header joins the same grid. Rows get a clear vertical gap (5 px
+  between items, 4 px parent→first child, 5 px child↔child) so the current-row
+  atmosphere never touches its neighbours while the 1 px subagent trunk and its
+  last-child end mask stay coherent and hover actions remain reachable across
+  the gaps. The row-body hover pill stays content-paced while the action/chevron
+  highlights keep fixed 22×22 / 24×26 geometry on one column.
 - Running & recent current-highlight: the animated conic rainbow ring is replaced
   by a low-intensity animated rainbow **atmosphere painted inside the row's own
   rounded-rectangle highlight**, with the row's real content (title, time,
