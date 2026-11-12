@@ -792,6 +792,22 @@ package manifest.
   Class names are `psa-*` and DOM attributes are `data-psa-*`; every feature UI
   node is inside a `data-psa-own` **ancestor** (the marker guarantees exclusion
   even though not every node carries the attribute literally).
+- **Tooltip-like floating windows use the native session-row hover-card recipe** —
+  the requirement popover (`.psa-popover`), the hover detail card
+  (`.psa-detail-card`), and the expanded note editor (`.psa-note-editor`) are
+  deliberately **not** panel cards. They copy the shell's own session-row hover
+  preview card exactly: `background: var(--dsw-hovercard-bg, #2C2C2E)`,
+  `box-shadow: var(--dsw-shadow-lv3)`, no border, no `backdrop-filter`, and a
+  near-white content color. That hover-card background is a **fixed `#2C2C2E` in
+  both themes** (the native card defines the custom property on itself and does
+  not flip it for dark mode), so the annotation cards stay `#2C2C2E` in light and
+  dark instead of following `--dsw-alias-tooltip-bg` (whose dark value is
+  `#43454a`). Their inputs/buttons are tinted from the same near-white label color
+  so they stay readable on that background. The rail, launcher, marks, and the
+  undo toast keep the panel recipe. E2E scenario 12 discovers the real native
+  hover-card stylesheet rule, measures its computed background/shadow, and asserts
+  the computed background/shadow/border/backdrop of all three surfaces match it in
+  both emulated themes (expected background `rgb(44, 44, 46)` in both).
 - **Selector escaping** — candidate selectors use `globalThis.CSS` when
   available and a small fallback otherwise; the fallback escapes a leading digit
   as a hex escape (`#123abc` → `#\31 23abc`) rather than producing an invalid
