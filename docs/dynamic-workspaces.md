@@ -170,10 +170,15 @@ sidebar's panel tabs. It starts expanded.
   tooltip** recipe measured live: its left edge is **flush with the sidebar
   column's right edge** (same offset 0 as the native tooltip, no longer
   intruding into the sidebar), its top aligns with the hovered row's top (then
-  clamped to the viewport), and its chrome is the native borderless tooltip —
-  16 px radius, `--dsw-alias-tooltip-bg` surface, `--dsw-shadow-lv3` elevation,
-  12 x 16 px padding, 14/20 px title, 12/16 px path/time, and a 12/20 px status
-  line with a 10 px dot — all inherited from the shell font. The card is 320 px
+  clamped to the viewport), and its chrome is the native borderless session
+  hover card — 16 px radius, the shell's `--dsw-hovercard-bg` surface
+  (`#2C2C2E`) with its static title/secondary/tertiary text colours,
+  `--dsw-shadow-lv3` elevation, 12 x 16 px padding, 14/20 px title, 12/16 px
+  path/time, and a 12/20 px status line with a 10 px dot — all inherited from
+  the shell font. That surface is deliberately **theme-invariant**, exactly like
+  the native session hover card: the shell pins its own hover-card background to
+  #2C2C2E in both light and dark (the theme-dependent
+  `--dsw-alias-tooltip-bg` token is *not* used for this card). The card is 320 px
   wide (the native tooltip is 244 px; the card grows so each native figure row
   fits its label and right-aligned value on one line) with `max-height:
   min(560px, calc(100vh - 16px))` and internal scroll. It does not capture the
@@ -590,12 +595,23 @@ Plugin surfaces follow the shell's own recipes instead of bespoke chrome:
   code blocks use the shell code-font token `--ds-font-family-code` (the
   earlier `--dsw-font-code` name did not exist, so they silently fell back to a
   generic monospace).
-- **Borderless floating cards**: the row hover card, the hover Quick Look card
-  (`.dsa-quicklook`) and the prompt-history preview/search cards
-  (`.psp-rail-card`, `.psp-search-card`) are borderless: no outline/border and
-  no 0.5 px `--dsw-elevation-*` stroke ring — they use the native tooltip
-  elevation `--dsw-shadow-lv3` (0 0 1 px #0003, 0 0 4 px #00000005,
-  0 12 px 32 px #00000014) with a 16 px radius.
+- **Borderless floating cards on the native tooltip surface**: the row hover
+  card, the hover Quick Look card (`.dsa-quicklook`) and the prompt-history
+  preview/search cards (`.psp-rail-card`, `.psp-search-card`) are borderless: no
+  outline/border and no 0.5 px `--dsw-elevation-*` stroke ring — they use the
+  native tooltip elevation `--dsw-shadow-lv3` (0 0 1 px #0003, 0 0 4 px
+  #00000005, 0 12 px 32 px #00000014) with a 16 px radius. All four share the
+  native session hover card's **theme-invariant surface**:
+  `background: var(--dsw-hovercard-bg, #2C2C2E)` (the shell pins that token to
+  #2C2C2E in both themes, exactly like its own session hover card; the
+  theme-dependent `--dsw-alias-tooltip-bg` is deliberately not used), no
+  background-image and no backdrop filter, with the shell's static
+  title/secondary/tertiary text colours
+  (`--dsw-static-neutral-bluish-00`/`-300`/`-400`), and inner quick-look panels
+  left transparent so the whole card reads as one flat tooltip surface. The
+  sidebar E2E measures the live native tooltip in emulated light **and** dark
+  and asserts every one of the four cards computes the same background, border,
+  radius and elevation in both themes.
 - **Rainbow focus highlight for plugin inputs**: focused plugin text inputs and
   choice controls show the same flowing rainbow track that used to draw the
   current-chat ring, in place of a solid-colour focus border. The shared class
