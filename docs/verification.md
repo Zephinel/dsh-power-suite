@@ -161,9 +161,12 @@ API/plugin network failures in every run below):
 - Sidebar harness `test/browser/sidebar.e2e.mjs`: **39/39 PASS**, 40.9 s. It
   asserts the trailing grid (time right **209 px** for parent *and* child rows,
   action slot 233, disclosure 259, no child New-session control, hover reveal
-  without shift), the two-layer bottom-face rainbow smoke glow (inset 0, row
-  radius 12/8 px, haze + rim masks/animations, native Workspace row, static
-  reduced-motion 0.3/0.38, no layout shift, old ring/band gone), the 320 px
+  without shift), the internal rainbow atmosphere (a clipped wrapper inside the
+  row's own radius on the card parent/child rows, the owning native Workspace
+  row and the native sidebar Session row, canvas painted inside the row's paint
+  box, scrim above the canvas, content above the scrim, exactly three renderers,
+  static reduced-motion fill, no layout shift, old ring/band/pseudo layers
+  gone), the 320 px
   hover-card frame, the native figures (Session statistics / Token usage /
   Context usage with native formatting and honest cache-hit rounding, cold-row
   single read, hidden-when-absent), title-case buckets, fold persistence at
@@ -232,8 +235,9 @@ B6 figure totals, and the project-page removal.
   composer reference chips (single + grouped, send-time serialization, missing
   record blocks the send, plain-text fallback), and the rainbow input focus ring.
 - Dynamic Workspaces: fixed trailing grid with child rows lacking New session,
-  right-aligned times, the bottom-face rainbow smoke glow on the current card
-  row and its owning Workspace row, the native-aligned 320 px hover card with
+  right-aligned times, the internal rainbow atmosphere on the current card row,
+  its owning Workspace row and the native Session row, the native-aligned 320 px
+  hover card with
   native Session statistics / Token usage / Context usage figures (projection
   seam, one cold read, hidden-when-absent), the identity-glyph swap, title-case
   bucket labels, borderless native tooltip chrome, and fold persistence applied

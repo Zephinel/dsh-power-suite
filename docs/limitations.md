@@ -116,12 +116,15 @@
   the new Session can land elsewhere than the row's directory.
 - **Parent disclosure state is per page.** Each parent's show/hide of its
   subagent children is not persisted; only the two bucket folds are.
-- **Current highlight is decorative.** The open Session's card row and its
-  owning native Workspace row paint a rainbow smoke glow on the bottom face of
-  their rounded rectangle (no ring). It is `pointer-events: none`, follows the
-  rows on re-render, and becomes a static tint under `prefers-reduced-motion`;
-  the owning Workspace row is chosen from the Session's Workspace so a subagent
-  Session highlights its parent project's row.
+- **Current highlight is decorative.** The open Session's card row, its owning
+  native Workspace row, and the native sidebar Session row carry an internal
+  rainbow atmosphere clipped inside each row's own rounded rectangle (no ring,
+  no border, no outer glow); real text/controls stay above it under a faint
+  scrim. It is `pointer-events: none`, follows the rows on re-render and pauses
+  in hidden tabs, draws a static fill under `prefers-reduced-motion`, and is
+  removed with the marker on session switch/unload; the Workspace row is chosen
+  from the Session's Workspace, so a subagent Session highlights its parent
+  project's row as well.
 - **It depends on the shipped sidebar's internals** — the
   `[data-slot="sidebar.workspaces"]` wrapper, the `role="tree"` list, and
   `data-row-key="workspace:<id>"` rows. A DSH change to those anchors makes this

@@ -322,12 +322,16 @@ state is Host-backed: read baselines sync through `api/power-suite.read-acks`,
 and card retention/times use the Host `api/power-suite.session-activity` map
 where the catalog time is stale (native sidebar times stay catalog-based). The
 row of the Session currently open in the main view (`retainedBy.mainView > 0`)
-carries `.psd-run-current` / `aria-current="true"`, and the owning native
-Workspace row carries `data-psd-current-workspace`; both paint a low-key
-animated rainbow smoke glow on the bottom face of their own rounded rectangle
-(a blurred, breathing, hue-drifting gradient strip following the row's bottom
-radius), static under reduced motion, `pointer-events: none`, with no layout
-shift. The leading glyph has three states: the shell loading indicator while
+carries `.psd-run-current` / `aria-current="true"`, the owning native Workspace
+row carries `data-psd-current-workspace`, and the native sidebar Session row of
+that Session carries `data-psd-current-session`; all of them get an internal
+**rainbow atmosphere**: a clipped absolutely-positioned wrapper inside the row's
+own rounded rectangle containing a small Canvas-2D gas renderer (broad prism
+wash + drifting radial blobs, screen blend, low base opacity), then a faint dark
+contrast scrim, then the untouched real content raised above both layers. The
+effect is `pointer-events: none`, changes no geometry, runs only for highlighted
+rows (and pauses in hidden tabs), draws a single static frame under reduced
+motion, and is removed with the marker on session switch/unload. The leading glyph has three states: the shell loading indicator while
 running, the green done dot while a completion is unread, and the white
 `sparkling-line` glyph once the Session has been opened and the completion
 acknowledged (nested subagent rows use `robot-2-line`); the header's all-complete
