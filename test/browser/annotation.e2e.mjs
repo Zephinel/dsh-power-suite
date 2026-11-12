@@ -5026,18 +5026,22 @@ async function detectDwHovercardSupport(h) {
   await h.ensureActivatedStable()
   await h.ensureStatusPanel()
   const candidates = []
-  const psdPoint = await h.page.evaluate(`(() => {
-    for (const selector of ['.psd-group-toggle', '.psd-item', '.psd-panel-toggle', '.psd-panel']) {
+  // The DW hover card opens from a card *row* (`.psd-run-main` / `.psd-child-main`)
+  // on mouseenter; a panel/header element never opens it, so probing a header
+  // would always conclude "not installed". Prefer up to three visible card rows.
+  const psdPoints = await h.page.evaluate(`(() => {
+    const points = []
+    for (const selector of ['.psd-run-main', '.psd-child-main']) {
       for (const element of document.querySelectorAll(selector)) {
         const rect = element.getBoundingClientRect()
-        if (rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight) {
-          return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+        if (rect.width > 8 && rect.height > 4 && rect.top >= 0 && rect.bottom <= innerHeight && points.length < 3) {
+          points.push({ x: Math.round(rect.left + Math.min(40, rect.width / 2)), y: Math.round(rect.top + rect.height / 2) })
         }
       }
     }
-    return null
+    return points
   })()`)
-  if (psdPoint !== null) candidates.push(psdPoint)
+  if (Array.isArray(psdPoints)) for (const point of psdPoints) candidates.push(point)
   const workspace = await h.page.eval(probes.workspaceRowPoint)
   if (workspace !== null) candidates.push(workspace)
   const session = await h.page.eval(probes.sessionRowPoint, null)
