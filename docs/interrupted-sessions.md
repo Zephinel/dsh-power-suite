@@ -57,6 +57,12 @@ Host:
   ask and caches the answer per Session; `session/event` `turn/start` and
   `turn/end` events keep the cache current and an event epoch prevents a slow
   read from caching an older snapshot over a newer event. `&refresh=1` recomputes.
+- `GET /api/power-suite.interrupted-events` — an authenticated Server-Sent
+  Events stream. It sends `event: interrupted` frames only on Session
+  `turn/start` / `turn/end` boundaries, with
+  `{sessionId, parentSession, event}`; it starts with `retry: 10000`, sends a
+  `: ping` heartbeat every 25 s, and cleans each connection up on abort,
+  cancellation, enqueue failure or Host disposal.
 - `POST /api/power-suite.continue` — admits one implicit continuation after
   checking JSON content type, the Session's current interruption state, and a
   per-Session in-flight lock; duplicate requests get `409`.
@@ -74,10 +80,13 @@ Browser:
   route; it no longer submits a draft prompt.
 - Interruption reads are shared in one small client store, fetched two at a time
   and cached per Session. Every visible Session row is discovered independently
-  of its leading slot. The state is re-read when the Conversation opens, on
-  window focus or page visibility, on `connection/reset`/`online`, and every
-  20 seconds; a forced refresh keeps the current ready value visible instead of
-  downgrading it to loading.
+  of its leading slot. A per-page `EventSource` listens to the Host stream and
+  immediately refreshes known/watched `sessionId` + `parentSession` on a turn
+  boundary; `open` triggers a full refresh after reconnect. The state is also
+  re-read when the Conversation opens, on window focus/page visibility, on
+  `connection/reset`/`online`, and every 20 seconds as a fallback; a forced
+  refresh keeps the current ready value visible instead of downgrading it to
+  loading.
 
 ## Icons
 
@@ -110,16 +119,24 @@ same state, including after **Continue** starts a real new turn. There is no
 per-device interrupted-state file or localStorage value.
 
 A page that opens or switches to a Session fetches the state immediately. A page
-that is already open refreshes every **20 s**, and also on window focus,
-`visibilitychange`, `online`, and `connection/reset` after a Host reconnect.
-The initiating page clears the badge as soon as the Continue request is
-accepted; other pages normally follow within one poll. A stale page that still
-shows Continue during that window gets `409 session-busy` from the route and
-refreshes instead of starting a duplicate turn.
+that is already open holds one `EventSource` to the Host stream: a `turn/start`
+or `turn/end` from any device is pushed to every connected page and refreshes
+the affected Session (and its direct parent) immediately. The initiating page
+also clears the badge as soon as Continue is accepted; other pages receive the
+next boundary push. A stale page that still shows Continue gets `409
+session-busy` from the route and refreshes instead of starting a duplicate turn.
 
-Limit: there is no push/stream channel for this state, so two idle pages can lag
-by up to one poll interval. All devices must use the same Host (same
-`$DSH_HOME` and URL/token); different Hosts/profiles do not share state.
+Fallback: if `EventSource` is unavailable or the stream cannot connect (proxy,
+network, Host restart), the page keeps the 20 s poll and refreshes on window
+focus, `visibilitychange`, `online`, and `connection/reset`. Reconnects are
+automatic (`retry: 10000`) and an `open` event performs a full refresh, so a
+missed boundary is also recoverable by the fallback.
+
+Limit: each open browser tab holds one long-lived SSE connection; proxies may
+buffer `text/event-stream` despite `x-accel-buffering: no`, and there is no
+replay/`Last-Event-ID` (boundaries are invalidations, not a durable log). All
+devices must use the same Host (same `$DSH_HOME` and URL/token); different
+Hosts/profiles do not share state.
 
 ## Automatic refresh after a Host restart
 

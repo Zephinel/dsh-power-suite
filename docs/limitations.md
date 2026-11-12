@@ -66,8 +66,12 @@
   `blocked`, `forked`, completed turns and user/parent/hook cancellations are
   deliberate and stay unmarked. Continue retries the task, so a persistent cause
   can fail again and re-mark it.
-- The sidebar cache updates from live session events and a periodic refresh;
-  a very recent change from another device can lag by one poll interval.
+- The sidebar cache updates from live session events, a Host SSE invalidation
+  stream, and a periodic fallback refresh. With the SSE connection healthy a
+  boundary from another device is reflected immediately; without it (old
+  browser, proxy buffering, stream failure) the fallback can lag by one poll
+  interval. Each open tab holds one long-lived SSE connection and there is no
+  event replay, so a reconnect performs a full known-record refresh.
 
 ## Dynamic workspaces
 

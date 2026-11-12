@@ -38,6 +38,16 @@ heading is added until the release is cut.
   build `1c61a230…` got `--smoke`: 6/6 PASS with the 35-key seam, smoke-only
   evidence).
 
+### Added
+
+- Interrupted-state SSE stream: `GET /api/power-suite.interrupted-events`
+  pushes `turn/start`/`turn/end` invalidations (`{sessionId, parentSession,
+  event}`) to every connected browser page, so cross-device badges/Continue/
+  triangle state updates immediately instead of waiting for the 20 s poll. The
+  stream has a 25 s heartbeat, `retry: 10000`, one cleanup-safe connection per
+  tab, no event replay, and the existing poll/focus/visibility/reconnect cues
+  remain the fallback when EventSource or the stream is unavailable.
+
 ### Changed
 
 - Interrupted-session detection now covers **every unfinished turn ending**, not

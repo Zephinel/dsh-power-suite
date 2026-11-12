@@ -266,7 +266,10 @@ was `aborted` with the `disposed` or legacy cause, or when the log ends inside a
 open turn and the Agent is no longer running. Deliberate endings (`completed`,
 `blocked`, `forked`, user/parent/hook cancellation) are not marked. Results are
 cached and refreshed from `session/event`; the route supports a `refresh` query
-for explicit re-reads.
+for explicit re-reads. `GET /api/power-suite.interrupted-events` is an
+authenticated SSE stream that invalidates affected browser caches on
+`turn/start`/`turn/end` (`{sessionId, parentSession, event}`), with a 25 s
+heartbeat and the 20 s browser poll as fallback.
 
 ## Browser half
 
