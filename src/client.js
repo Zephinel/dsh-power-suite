@@ -9267,6 +9267,21 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     /** Debounce for the persisted annotation document (D1). */
     const ANNOTATION_PERSIST_DEBOUNCE_MS = 250
 
+    /** D5: single-slot undo window after a delete (newest delete replaces it). */
+    const ANNOTATION_UNDO_WINDOW_MS = 5000
+
+    /** A3/T6: hover-intent delay before the floating detail card appears. */
+    const ANNOTATION_DETAIL_HOVER_DELAY_MS = 120
+
+    /** A3/T6: grace period before the detail card closes after the pointer leaves. */
+    const ANNOTATION_DETAIL_CLOSE_DELAY_MS = 120
+
+    /** A3/T6: detail card size used before its first measurement (width is fixed). */
+    const ANNOTATION_DETAIL_SIZE = { width: 320, height: 240 }
+
+    /** A3/T6: the badge requirement summary is a one-line excerpt of this many characters. */
+    const ANNOTATION_MARK_SUMMARY_MAX = 18
+
     /** F2: a floating surface root needs at least this computed z-index. */
     const ANNOTATION_SURFACE_MIN_Z = 10
 
@@ -9329,10 +9344,32 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'popover.notePlaceholder': 'Describe the requested change',
       'popover.quickRef': 'Quick reference',
       'popover.add': 'Add to collection',
-      'popover.update': 'Update collection',
+      'popover.update': 'Update requirement',
+      'popover.commit': 'Mark requirement',
+      'popover.delete': 'Delete annotation',
       'popover.close': 'Close',
       'popover.copyLocator': 'Copy locator',
       'popover.ephemeralHint': 'Transient surface: this element can disappear when its card closes; the locator is kept.',
+      'detail.title': 'Annotation details',
+      'detail.requirement': 'Requirement',
+      'detail.emptyRequirement': 'No requirement yet',
+      'detail.addRequirement': 'Add requirement',
+      'detail.locator': 'Locator',
+      'detail.position': 'Position',
+      'detail.session': 'Session',
+      'detail.workspace': 'Workspace',
+      'detail.status': 'Status',
+      'detail.surfaceFloating': 'Floating surface (hover preview)',
+      'detail.ephemeral': 'Transient surface — may disappear',
+      'detail.quickRef': 'Quick reference',
+      'detail.edit': 'Edit requirement',
+      'detail.save': 'Save',
+      'detail.cancel': 'Cancel',
+      'detail.delete': 'Delete',
+      'detail.relocate': 'Go to element',
+      'detail.copyLocator': 'Copy locator',
+      'detail.close': 'Close',
+      'detail.marks': 'Marks are shown on the page while the mode is on',
       'collection.title': 'Collection',
       'collection.count': '{count} elements',
       'collection.countOne': '1 element',
@@ -9375,6 +9412,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'feedback.relocateOtherSession': 'This annotation belongs to another session',
       'feedback.locatorCopied': 'Locator copied',
       'feedback.locatorCopyFailed': 'Could not copy the locator',
+      'feedback.marked': 'Marked · {count} total',
+      'feedback.markUpdated': 'Requirement updated',
+      'feedback.markDeleted': 'Annotation deleted',
+      'feedback.undo': 'Undo',
+      'feedback.restored': 'Annotation restored',
       'feedback.batchEmpty': 'Nothing to insert from the current session',
       'insert.title': 'UI annotation',
       'insert.reference': 'Reference:',
@@ -9424,10 +9466,32 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'popover.notePlaceholder': '描述需要修改的内容',
       'popover.quickRef': '快速引用',
       'popover.add': '加入标注集',
-      'popover.update': '更新标注集',
+      'popover.update': '更新需求',
+      'popover.commit': '标记需求',
+      'popover.delete': '删除标注',
       'popover.close': '关闭',
       'popover.copyLocator': '复制定位器',
       'popover.ephemeralHint': '瞬态浮层：卡片关闭后该元素可能消失，仅保留定位信息。',
+      'detail.title': '标注详情',
+      'detail.requirement': '需求',
+      'detail.emptyRequirement': '尚未填写需求',
+      'detail.addRequirement': '添加需求',
+      'detail.locator': '定位',
+      'detail.position': '位置',
+      'detail.session': '会话',
+      'detail.workspace': '工作区',
+      'detail.status': '状态',
+      'detail.surfaceFloating': '浮动层（悬停预览）',
+      'detail.ephemeral': '瞬态浮层 — 可能消失',
+      'detail.quickRef': '快速引用',
+      'detail.edit': '编辑需求',
+      'detail.save': '保存',
+      'detail.cancel': '取消',
+      'detail.delete': '删除',
+      'detail.relocate': '定位到元素',
+      'detail.copyLocator': '复制定位器',
+      'detail.close': '关闭',
+      'detail.marks': '模式开启时页面会持续显示标注遮罩',
       'collection.title': '标注集',
       'collection.count': '{count} 项',
       'collection.countOne': '1 项',
@@ -9470,6 +9534,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'feedback.relocateOtherSession': '这条标注来自其他会话',
       'feedback.locatorCopied': '已复制定位器',
       'feedback.locatorCopyFailed': '复制定位器失败',
+      'feedback.marked': '已标记 · 共 {count} 条',
+      'feedback.markUpdated': '需求已更新',
+      'feedback.markDeleted': '标注已删除',
+      'feedback.undo': '撤销',
+      'feedback.restored': '标注已恢复',
       'feedback.batchEmpty': '当前会话没有可插入的标注',
       'insert.title': 'UI 标注',
       'insert.reference': '定位：',
@@ -10605,6 +10674,219 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
+     * Next collection `order` value: one past the highest existing order.
+     * @param {Array<object>} list - current entries.
+     * @returns {number} next order.
+     */
+    function nextAnnotationOrder(list) {
+      let highest = -1
+      for (const entry of Array.isArray(list) ? list : []) {
+        if (entry !== null && typeof entry === 'object' && typeof entry.order === 'number' && Number.isFinite(entry.order)) {
+          highest = Math.max(highest, Math.round(entry.order))
+        }
+      }
+      return highest + 1
+    }
+
+    /**
+     * Commit one record: insert a new annotation or update the existing identity in
+     * place (A3/T5). An update keeps `id`/`at`/`order`/`included` and refreshes the
+     * locator, non-empty note, `lastStatus`, and `updatedAt`; the cap is enforced at
+     * this single commit boundary (D15) instead of silently dropping a record.
+     * @param {Array<object>} list - current collection entries.
+     * @param {object} record - ElementRef v2 to commit.
+     * @param {number} [limit] - maximum record count, default 100.
+     * @param {number} [now] - epoch ms of this commit, default `record.updatedAt`/Date.now().
+     * @returns {{ list: Array<object>, added: boolean, updated: boolean, rejected: boolean }} result.
+     */
+    function upsertAnnotationRecord(list, record, limit, now) {
+      const current = Array.isArray(list) ? list : []
+      const cap = typeof limit === 'number' && Number.isFinite(limit) && limit >= 1 ? Math.round(limit) : ANNOTATION_RECORD_LIMIT
+      if (record === null || typeof record !== 'object' || Array.isArray(record)) {
+        return { list: current.slice(), added: false, updated: false, rejected: false }
+      }
+      const stamp = typeof now === 'number' && Number.isFinite(now) && now > 0
+        ? Math.round(now)
+        : (typeof record.updatedAt === 'number' && Number.isFinite(record.updatedAt) && record.updatedAt > 0 ? Math.round(record.updatedAt) : Date.now())
+      const key = identityKeyOf(record)
+      const sessionId = record.session !== null && typeof record.session === 'object' ? record.session.sessionId ?? null : null
+      const index = current.findIndex((entry) => {
+        if (entry === null || typeof entry !== 'object') return false
+        const entrySession = entry.session !== null && typeof entry.session === 'object' ? entry.session.sessionId ?? null : null
+        return identityKeyOf(entry) === key && entrySession === sessionId
+      })
+      if (index >= 0) {
+        const existing = current[index]
+        const next = current.slice()
+        const incomingNote = typeof record.note === 'string' ? record.note.trim() : ''
+        next[index] = {
+          ...record,
+          id: typeof existing.id === 'string' && existing.id.length > 0 ? existing.id : record.id,
+          at: typeof existing.at === 'number' && Number.isFinite(existing.at) ? existing.at : record.at,
+          order: typeof existing.order === 'number' && Number.isFinite(existing.order) ? existing.order : record.order,
+          updatedAt: stamp,
+          included: existing.included !== false,
+          lastStatus: typeof record.lastStatus === 'string' ? record.lastStatus : (existing.lastStatus ?? null),
+          note: incomingNote.length > 0 ? record.note : (typeof existing.note === 'string' ? existing.note : '')
+        }
+        return { list: next, added: false, updated: true, rejected: false }
+      }
+      if (current.length >= cap) return { list: current.slice(), added: false, updated: false, rejected: true }
+      return {
+        list: current.concat([{
+          ...record,
+          version: 2,
+          updatedAt: stamp,
+          // Commit order is the collection's insertion position, never the pick
+          // timestamp: the collection is an ordered list and persistence sorts by
+          // `order`, so a new record must land after the current last one.
+          order: nextAnnotationOrder(current),
+          included: record.included !== false,
+          lastStatus: typeof record.lastStatus === 'string' ? record.lastStatus : null
+        }]),
+        added: true,
+        updated: false,
+        rejected: false
+      }
+    }
+
+    /**
+     * Remove one record by id (A3/T5). Immutable; a missing id is a no-op copy.
+     * @param {Array<object>} list - current entries.
+     * @param {string} refId - record id.
+     * @returns {Array<object>} next entries.
+     */
+    function removeAnnotationRecord(list, refId) {
+      return collectionRemove(list, refId)
+    }
+
+    /**
+     * Restore one removed record at its original array position (A3/T5 undo).
+     * @param {Array<object>} list - current entries.
+     * @param {object} record - removed record.
+     * @param {number} [index] - original array index; clamped, default append.
+     * @returns {Array<object>} next entries.
+     */
+    function restoreAnnotationRecord(list, record, index) {
+      const current = Array.isArray(list) ? list : []
+      if (record === null || typeof record !== 'object' || Array.isArray(record)) return current.slice()
+      const at = typeof index === 'number' && Number.isFinite(index)
+        ? Math.min(Math.max(Math.round(index), 0), current.length)
+        : current.length
+      return current.slice(0, at).concat([record], current.slice(at))
+    }
+
+    /**
+     * Move one record one slot up or down and keep `order` contiguous (A3/T5;
+     * wired here for the Phase 2-B rail, which reuses the same action).
+     * @param {Array<object>} list - current entries.
+     * @param {string} refId - record id.
+     * @param {number} delta - -1 to move up (towards index 0), +1 to move down.
+     * @returns {Array<object>} next entries.
+     */
+    function moveAnnotationRecord(list, refId, delta) {
+      const current = Array.isArray(list) ? list.slice() : []
+      const index = current.findIndex((entry) => entry !== null && typeof entry === 'object' && entry.id === refId)
+      if (index < 0) return current
+      const step = delta === -1 || (typeof delta === 'number' && delta < 0) ? -1 : 1
+      const target = index + step
+      if (target < 0 || target >= current.length) return current
+      const next = current.slice()
+      const moved = next[index]
+      next[index] = next[target]
+      next[target] = moved
+      return next.map((entry, position) => (entry !== null && typeof entry === 'object' ? { ...entry, order: position } : entry))
+    }
+
+    /**
+     * Set one record's batch-include flag (A3/T5). The controller forces other-session
+     * records to `included: false`; the pure helper only applies what it is given.
+     * @param {Array<object>} list - current entries.
+     * @param {string} refId - record id.
+     * @param {boolean} included - whether the record participates in a batch.
+     * @returns {Array<object>} next entries.
+     */
+    function toggleAnnotationInclude(list, refId, included) {
+      if (!Array.isArray(list)) return []
+      const flag = included === true
+      return list.map((entry) => {
+        if (entry === null || typeof entry !== 'object' || entry.id !== refId) return entry
+        if (entry.included === flag) return entry
+        return { ...entry, included: flag }
+      })
+    }
+
+    /**
+     * Remove one record (or clear the whole list) while capturing the single-slot
+     * undo payload (A3/T5/D5). The newest removal replaces any previous slot.
+     * @param {Array<object>} list - current entries.
+     * @param {string} refId - record id to remove (ignored when kind is `clear`).
+     * @param {'single' | 'clear'} [kind] - removal shape, default `single`.
+     * @param {number} [at] - epoch ms of the removal.
+     * @returns {{ list: Array<object>, undo: object | null }} next entries and undo payload.
+     */
+    function annotationUndoRemove(list, refId, kind, at) {
+      const current = Array.isArray(list) ? list : []
+      const stamp = typeof at === 'number' && Number.isFinite(at) && at > 0 ? Math.round(at) : Date.now()
+      if (kind === 'clear') {
+        if (current.length === 0) return { list: current.slice(), undo: null }
+        return { list: [], undo: { kind: 'clear', records: current.slice(), at: stamp } }
+      }
+      const index = current.findIndex((entry) => entry !== null && typeof entry === 'object' && entry.id === refId)
+      if (index < 0) return { list: current.slice(), undo: null }
+      return {
+        list: collectionRemove(current, refId),
+        undo: { kind: 'single', record: current[index], index, at: stamp }
+      }
+    }
+
+    /**
+     * Apply one undo payload (A3/T5/D5): restore a single record at its original
+     * index, or rebuild a cleared collection in its original order.
+     * @param {Array<object>} list - current entries.
+     * @param {object | null} undo - payload returned by {@link annotationUndoRemove}.
+     * @returns {Array<object>} next entries.
+     */
+    function annotationUndoRestore(list, undo) {
+      const current = Array.isArray(list) ? list : []
+      if (undo === null || typeof undo !== 'object') return current.slice()
+      if (undo.kind === 'clear') {
+        const records = Array.isArray(undo.records) ? undo.records : []
+        if (records.length === 0) return current.slice()
+        const ids = new Set(current.map((entry) => (entry !== null && typeof entry === 'object' ? entry.id : null)))
+        const merged = current.concat(records.filter((record) => record !== null && typeof record === 'object' && !ids.has(record.id)))
+        const orderOf = (entry) => (typeof entry?.order === 'number' && Number.isFinite(entry.order) ? entry.order : 0)
+        const atOf = (entry) => (typeof entry?.at === 'number' && Number.isFinite(entry.at) ? entry.at : 0)
+        return merged.slice().sort((left, right) => (orderOf(left) - orderOf(right)) || (atOf(left) - atOf(right)))
+      }
+      if (undo.record === null || typeof undo.record !== 'object') return current.slice()
+      return restoreAnnotationRecord(current, undo.record, undo.index)
+    }
+
+    /**
+     * One-line requirement excerpt for a page mark badge (A3/T6): first non-empty
+     * line, whitespace collapsed, truncated to `max` characters with an ellipsis.
+     * @param {unknown} note - requirement text.
+     * @param {number} [max] - maximum characters, default 18.
+     * @returns {{ text: string, empty: boolean, truncated: boolean }} excerpt.
+     */
+    function annotationMarkerBadgeText(note, max) {
+      const source = typeof note === 'string' ? note : ''
+      const limit = typeof max === 'number' && Number.isFinite(max) && max > 1 ? Math.round(max) : ANNOTATION_MARK_SUMMARY_MAX
+      let line = ''
+      for (const candidate of source.split(/\r?\n/)) {
+        const collapsed = candidate.replace(/\s+/g, ' ').trim()
+        if (collapsed.length > 0) {
+          line = collapsed
+          break
+        }
+      }
+      if (line.length === 0) return { text: '', empty: true, truncated: false }
+      if (line.length <= limit) return { text: line, empty: false, truncated: false }
+      return { text: `${line.slice(0, Math.max(1, limit - 1)).trimEnd()}…`, empty: false, truncated: true }
+    }
+
+    /**
      * The initial annotation state: mode off, nothing selected, empty collection.
      * @returns {object} fresh state.
      */
@@ -10660,8 +10942,12 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
      * Actions: activate, deactivate, hover {targetId}, selectSingle {ref},
      * toggleMulti {ref}, setMulti {refs}, setNote {text}, beginEdit, endEdit,
      * openView {view}, collectionAdd {entry}, collectionUpdateNote {refId,
-     * note}, collectionRemove {refId}, collectionClear, passThrough {on},
-     * box {box}, feedback {feedback}, session {sessionId}, exitOne.
+     * note}, collectionRemove {refId}, collectionClear, annotationCommit {record},
+     * annotationUpdateNote {refId, note}, annotationRemove {refId},
+     * annotationRestore {record, index}, annotationUndo {undo},
+     * annotationInclude {refId, included}, annotationMove {refId, delta},
+     * passThrough {on}, box {box}, feedback {feedback}, session {sessionId},
+     * exitOne.
      * @param {object} state - current state.
      * @param {object} action - one action.
      * @returns {object} next state, or the same reference when unchanged.
@@ -10751,6 +11037,63 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           return { ...current, collection: collectionRemove(current.collection, payload.refId) }
         case 'collectionClear':
           return { ...current, collection: collectionClear() }
+        case 'annotationCommit': {
+          const record = payload.record !== null && typeof payload.record === 'object' ? payload.record : null
+          if (record === null) return current
+          const result = upsertAnnotationRecord(current.collection, record, ANNOTATION_RECORD_LIMIT, payload.now)
+          if (!result.added && !result.updated) return current
+          return { ...current, collection: result.list }
+        }
+        case 'annotationUpdateNote': {
+          const refId = typeof payload.refId === 'string' ? payload.refId : ''
+          if (refId.length === 0) return current
+          const note = typeof payload.note === 'string' ? payload.note : ''
+          const stamp = typeof payload.now === 'number' && Number.isFinite(payload.now) && payload.now > 0 ? Math.round(payload.now) : Date.now()
+          let changed = false
+          const collection = current.collection.map((entry) => {
+            if (entry === null || typeof entry !== 'object' || entry.id !== refId) return entry
+            changed = true
+            return { ...entry, note, updatedAt: stamp }
+          })
+          return changed ? { ...current, collection } : current
+        }
+        case 'annotationRemove': {
+          const next = removeAnnotationRecord(current.collection, payload.refId)
+          return next.length === current.collection.length ? current : { ...current, collection: next }
+        }
+        case 'annotationRestore': {
+          const record = payload.record !== null && typeof payload.record === 'object' ? payload.record : null
+          if (record === null) return current
+          return { ...current, collection: restoreAnnotationRecord(current.collection, record, payload.index) }
+        }
+        case 'annotationUndo': {
+          const undo = payload.undo !== null && typeof payload.undo === 'object' ? payload.undo : null
+          if (undo === null) return current
+          return { ...current, collection: annotationUndoRestore(current.collection, undo) }
+        }
+        case 'annotationInclude': {
+          const next = toggleAnnotationInclude(current.collection, payload.refId, payload.included)
+          let changed = false
+          for (let index = 0; index < next.length; index += 1) {
+            if (next[index] !== current.collection[index]) {
+              changed = true
+              break
+            }
+          }
+          return changed ? { ...current, collection: next } : current
+        }
+        case 'annotationMove': {
+          const delta = payload.delta === -1 ? -1 : 1
+          const next = moveAnnotationRecord(current.collection, payload.refId, delta)
+          let changed = false
+          for (let index = 0; index < next.length; index += 1) {
+            if (next[index] !== current.collection[index]) {
+              changed = true
+              break
+            }
+          }
+          return changed ? { ...current, collection: next } : current
+        }
         case 'passThrough': {
           const on = payload.on === true
           if (current.passThrough === on) return current
@@ -11098,6 +11441,51 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const maxX = Math.max(gap, width - rail - popoverWidth - gap)
       const maxY = Math.max(gap, height - popoverHeight - gap)
       return { x: Math.round(Math.min(Math.max(x, gap), maxX)), y: Math.round(Math.min(Math.max(y, gap), maxY)) }
+    }
+
+    /**
+     * Place the floating detail card beside a marked rect (A3/T6).
+     *
+     * Prefers the right side of the element aligned to its top, flips to the left
+     * when the card would cross the reserved rail strip, flips above when there is
+     * no room below, and finally clamps to an 8 px viewport margin.
+     * @param {{ x: number, y: number, width: number, height: number }} rect - mark rect.
+     * @param {{ width: number, height: number }} cardSize - measured/estimated card size.
+     * @param {{ width: number, height: number }} viewport - viewport size.
+     * @param {number} [railWidth] - reserved right strip width, default 0.
+     * @param {number} [margin] - minimum gap from every edge, default 8.
+     * @returns {{ x: number, y: number, placement: 'right' | 'left' }} clamped position.
+     */
+    function clampDetailCardPosition(rect, cardSize, viewport, railWidth, margin) {
+      const gap = typeof margin === 'number' && Number.isFinite(margin) && margin >= 0 ? margin : 8
+      const rail = typeof railWidth === 'number' && Number.isFinite(railWidth) && railWidth > 0 ? railWidth : 0
+      const width = viewport !== null && typeof viewport === 'object' && typeof viewport.width === 'number' ? viewport.width : 0
+      const height = viewport !== null && typeof viewport === 'object' && typeof viewport.height === 'number' ? viewport.height : 0
+      const cardWidth = cardSize !== null && typeof cardSize === 'object' && typeof cardSize.width === 'number' && cardSize.width > 0
+        ? cardSize.width
+        : ANNOTATION_DETAIL_SIZE.width
+      const cardHeight = cardSize !== null && typeof cardSize === 'object' && typeof cardSize.height === 'number' && cardSize.height > 0
+        ? cardSize.height
+        : ANNOTATION_DETAIL_SIZE.height
+      const target = rect !== null && typeof rect === 'object' ? rect : { x: 0, y: 0, width: 0, height: 0 }
+      const targetX = typeof target.x === 'number' && Number.isFinite(target.x) ? target.x : 0
+      const targetY = typeof target.y === 'number' && Number.isFinite(target.y) ? target.y : 0
+      const targetWidth = typeof target.width === 'number' && Number.isFinite(target.width) ? target.width : 0
+      const targetHeight = typeof target.height === 'number' && Number.isFinite(target.height) ? target.height : 0
+      const maxX = Math.max(gap, width - rail - cardWidth - gap)
+      const maxY = Math.max(gap, height - cardHeight - gap)
+      let placement = 'right'
+      let x = targetX + targetWidth + gap
+      if (x > maxX) {
+        placement = 'left'
+        x = targetX - cardWidth - gap
+      }
+      x = Math.round(Math.min(Math.max(x, gap), maxX))
+      // Align to the element's top; a card with no room below is bottom-aligned.
+      let y = targetY
+      if (y + cardHeight > height - gap) y = targetY + targetHeight - cardHeight
+      y = Math.round(Math.min(Math.max(y, gap), maxY))
+      return { x, y, placement }
     }
 
     /**
@@ -15089,7 +15477,16 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         parseAnnotationStore,
         serializeAnnotationStore,
         annotationSurfaceRoot,
-        annotationSurfaceLevels
+        annotationSurfaceLevels,
+        upsertAnnotationRecord,
+        removeAnnotationRecord,
+        restoreAnnotationRecord,
+        moveAnnotationRecord,
+        toggleAnnotationInclude,
+        annotationUndoRemove,
+        annotationUndoRestore,
+        annotationMarkerBadgeText,
+        clampDetailCardPosition
       }
     }
 

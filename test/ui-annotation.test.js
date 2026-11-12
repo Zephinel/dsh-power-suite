@@ -64,13 +64,17 @@ if (ui === undefined) {
     'annotationWorkspaceLabel', 'annotationRoutePath', 'normalizeAnnotationViewport',
     'buildStableAncestors', 'buildUniqueSelector', 'annotationLocatorText',
     'normalizeAnnotationRecord', 'parseAnnotationStore', 'serializeAnnotationStore',
-    'annotationSurfaceRoot', 'annotationSurfaceLevels'
+    'annotationSurfaceRoot', 'annotationSurfaceLevels',
+    'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
+    'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
+    'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition'
   ]
   /**
    * Frozen seam generation. 31 = round-1 audit, 32 = round-2 resolver, 35 =
    * audit-fix batch, 48 = A1/A2/persistence Phase 1 (surface picker, unique
-   * selector/ancestors, v2 record store). The E2E `ACCEPTED_SEAM_GENERATIONS`
-   * must accept exactly these counts.
+   * selector/ancestors, v2 record store), 57 = A3 Phase 2-A (record commit/undo/
+   * move/include helpers, mark badge excerpt, detail-card clamp). The E2E
+   * `ACCEPTED_SEAM_GENERATIONS` must accept exactly these counts.
    */
   const SEAM_GENERATION = SEAM_EXPORTS.length
   /** Accepted `Function.length` ranges from the frozen signatures (defaults reduce length). */
@@ -117,12 +121,21 @@ if (ui === undefined) {
     parseAnnotationStore: [1, 1],
     serializeAnnotationStore: [1, 2],
     annotationSurfaceRoot: [1, 2],
-    annotationSurfaceLevels: [1, 2]
+    annotationSurfaceLevels: [1, 2],
+    upsertAnnotationRecord: [2, 4],
+    removeAnnotationRecord: [2, 2],
+    restoreAnnotationRecord: [2, 3],
+    moveAnnotationRecord: [3, 3],
+    toggleAnnotationInclude: [3, 3],
+    annotationUndoRemove: [2, 4],
+    annotationUndoRestore: [2, 2],
+    annotationMarkerBadgeText: [1, 2],
+    clampDetailCardPosition: [3, 5]
   }
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 48, 'the frozen Phase 1 generation is pinned')
+    assert.equal(SEAM_GENERATION, 57, 'the frozen Phase 2-A generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -1664,6 +1677,216 @@ if (ui === undefined) {
     assert.equal(firstResult, firstNode)
     assert.equal(secondResult, replacement, 'the resolver must not memoize the first hit')
     assert.equal(calls, 2, 'every call re-queries the document')
+  })
+
+  //#endregion
+
+  //#region A3 Phase 2-A record actions, undo slot, marks and detail card
+
+  /**
+   * Build one committable record for the Phase 2-A tests.
+   * @param {string} name - accessible name (identity-bearing label).
+   * @param {string} [sessionId] - Session identity.
+   * @param {object} [overrides] - record overrides.
+   * @returns {object} record.
+   */
+  const recordOf = (name, sessionId = SESSION_A, overrides = {}) => ({
+    ...refOf({
+      name,
+      text: name,
+      attrs: [{ name: 'data-testid', value: `psa-${name.toLowerCase()}` }]
+    }, { sessionId, at: 1_700_000_000_000, order: 0 }),
+    note: '',
+    session: { sessionId, cwd: '/Users/dev/workspace-alpha', workspaceLabel: 'workspace-alpha' },
+    ...overrides
+  })
+
+  test('A3/T5: upsertAnnotationRecord inserts and updates by identity+session while keeping id/at/order', () => {
+    const first = recordOf('Alpha')
+    const inserted = ui.upsertAnnotationRecord([], first, 100, 1_000)
+    assert.equal(inserted.added, true)
+    assert.equal(inserted.updated, false)
+    assert.equal(inserted.rejected, false)
+    assert.equal(inserted.list.length, 1)
+    const stored = inserted.list[0]
+    assert.equal(stored.id, first.id)
+    assert.equal(stored.version, 2)
+    assert.equal(stored.updatedAt, 1_000, 'the commit stamp is written')
+
+    const changed = recordOf('Alpha', SESSION_A, { at: 5, order: 99, note: 'new requirement' })
+    changed.locator = { ...changed.locator, uniqueSelector: '[data-slot="alpha"]', uniqueVerified: true }
+    const updated = ui.upsertAnnotationRecord(inserted.list, changed, 100, 2_000)
+    assert.equal(updated.updated, true)
+    assert.equal(updated.added, false)
+    assert.equal(updated.list.length, 1, 'same identity+session never duplicates')
+    const merged = updated.list[0]
+    assert.equal(merged.id, stored.id, 'an update preserves the original id')
+    assert.equal(merged.at, stored.at, 'an update preserves the captured timestamp')
+    assert.equal(merged.order, stored.order, 'an update preserves the collection position')
+    assert.equal(merged.note, 'new requirement')
+    assert.equal(merged.updatedAt, 2_000)
+    assert.equal(merged.locator.uniqueSelector, '[data-slot="alpha"]')
+    assert.equal(merged.included, true)
+  })
+
+  test('A3/T5: an empty incoming note preserves the existing requirement and the cap refuses explicitly', () => {
+    const alpha = recordOf('Alpha', SESSION_A, { note: 'keep me' })
+    const committed = ui.upsertAnnotationRecord([], alpha, 100, 1_000).list
+    const blankNote = recordOf('Alpha', SESSION_A, { note: '   ' })
+    const updated = ui.upsertAnnotationRecord(committed, blankNote, 100, 2_000).list
+    assert.equal(updated[0].note, 'keep me', 'a blank re-save must not wipe the requirement')
+
+    const beta = ui.upsertAnnotationRecord(updated, recordOf('Beta'), 2, 3_000)
+    assert.equal(beta.list.length, 2)
+    const refused = ui.upsertAnnotationRecord(beta.list, recordOf('Gamma'), 2, 4_000)
+    assert.equal(refused.rejected, true, 'D15: the 101st/over-cap record is refused')
+    assert.equal(refused.added, false)
+    assert.equal(refused.list.length, 2, 'a refused commit never changes the list')
+    assert.equal(ui.upsertAnnotationRecord([], null, 100, 1).rejected, false, 'invalid input is ignored, not refused')
+  })
+
+  test('A3/T5: removeAnnotationRecord and restoreAnnotationRecord round-trip at the original position', () => {
+    const alpha = recordOf('Alpha')
+    const beta = recordOf('Beta')
+    const gamma = recordOf('Gamma')
+    const list = [alpha, beta, gamma]
+    const removed = ui.removeAnnotationRecord(list, beta.id)
+    assert.deepEqual(plain(removed.map((entry) => entry.id)), [alpha.id, gamma.id])
+    assert.deepEqual(plain(ui.removeAnnotationRecord(removed, 'psa-missing')), plain(removed), 'a missing id is a no-op')
+    const restored = ui.restoreAnnotationRecord(removed, beta, 1)
+    assert.deepEqual(plain(restored.map((entry) => entry.id)), [alpha.id, beta.id, gamma.id])
+    const appended = ui.restoreAnnotationRecord(removed, beta, 99)
+    assert.deepEqual(plain(appended.map((entry) => entry.id)), [alpha.id, gamma.id, beta.id], 'an out-of-range index appends')
+  })
+
+  test('A3/T5/D5: the undo slot captures one removal (or a clear) and restores it exactly', () => {
+    const alpha = recordOf('Alpha')
+    const beta = recordOf('Beta')
+    const gamma = recordOf('Gamma')
+    const first = ui.annotationUndoRemove([alpha, beta, gamma], beta.id, 'single', 5_000)
+    assert.deepEqual(plain(first.list.map((entry) => entry.id)), [alpha.id, gamma.id])
+    assert.equal(first.undo.kind, 'single')
+    assert.equal(first.undo.index, 1)
+    assert.equal(first.undo.at, 5_000)
+    assert.equal(first.undo.record.id, beta.id)
+    assert.deepEqual(plain(ui.annotationUndoRestore(first.list, first.undo).map((entry) => entry.id)), [alpha.id, beta.id, gamma.id])
+    assert.equal(ui.annotationUndoRemove([], 'psa-missing', 'single', 1).undo, null, 'a missing removal yields no undo slot')
+
+    const cleared = ui.annotationUndoRemove([alpha, beta], null, 'clear', 6_000)
+    assert.deepEqual(plain(cleared.list), [])
+    assert.equal(cleared.undo.kind, 'clear')
+    assert.equal(cleared.undo.records.length, 2)
+    assert.deepEqual(plain(ui.annotationUndoRestore([], cleared.undo).map((entry) => entry.id)), [alpha.id, beta.id])
+    assert.deepEqual(plain(ui.annotationUndoRestore([alpha], cleared.undo).map((entry) => entry.id)), [alpha.id, beta.id], 'restore never duplicates an existing id')
+  })
+
+  test('A3/T5: moveAnnotationRecord swaps neighbours, keeps order contiguous, and clamps at the edges', () => {
+    const alpha = recordOf('Alpha')
+    const beta = recordOf('Beta')
+    const gamma = recordOf('Gamma')
+    const start = [alpha, beta, gamma]
+    const up = ui.moveAnnotationRecord(start, beta.id, -1)
+    assert.deepEqual(plain(up.map((entry) => entry.id)), [beta.id, alpha.id, gamma.id])
+    assert.deepEqual(plain(up.map((entry) => entry.order)), [0, 1, 2], 'order stays contiguous after a move')
+    const down = ui.moveAnnotationRecord(start, beta.id, 1)
+    assert.deepEqual(plain(down.map((entry) => entry.id)), [alpha.id, gamma.id, beta.id])
+    assert.deepEqual(plain(ui.moveAnnotationRecord(start, alpha.id, -1)), plain(start), 'moving the first record up is a no-op')
+    assert.deepEqual(plain(ui.moveAnnotationRecord(start, gamma.id, 1)), plain(start), 'moving the last record down is a no-op')
+    assert.deepEqual(plain(ui.moveAnnotationRecord(start, 'psa-missing', 1)), plain(start))
+    assert.deepEqual(plain(start.map((entry) => entry.id)), [alpha.id, beta.id, gamma.id], 'the input list is never mutated')
+  })
+
+  test('A3/T5: toggleAnnotationInclude flips only the matching record', () => {
+    const alpha = recordOf('Alpha')
+    const beta = recordOf('Beta')
+    const list = [alpha, beta]
+    const off = ui.toggleAnnotationInclude(list, beta.id, false)
+    assert.equal(off[0].included, true)
+    assert.equal(off[1].included, false)
+    const same = ui.toggleAnnotationInclude(off, beta.id, false)
+    assert.equal(same[1], off[1], 'an unchanged flag keeps the same record reference')
+    assert.equal(ui.toggleAnnotationInclude(list, 'psa-missing', false)[0], alpha)
+    assert.equal(list[1].included, true, 'the input is never mutated')
+  })
+
+  test('A3/T5: the new reducer actions commit, move, include, edit, remove, restore and undo', () => {
+    const alpha = recordOf('Alpha')
+    const beta = recordOf('Beta')
+    let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
+    state = ui.reduceAnnotationState(state, { type: 'annotationCommit', record: alpha, now: 1_000 })
+    assert.equal(state.collection.length, 1)
+    assert.equal(state.collection[0].updatedAt, 1_000)
+    const again = ui.reduceAnnotationState(state, { type: 'annotationCommit', record: alpha, now: 1_000 })
+    assert.equal(again.collection.length, 1, 'a re-commit of the same identity never duplicates')
+    assert.equal(again.collection[0].id, state.collection[0].id, 'a re-commit keeps the record id')
+    state = ui.reduceAnnotationState(state, { type: 'annotationCommit', record: beta, now: 2_000 })
+    assert.equal(state.collection.length, 2)
+    assert.equal(state.collection[1].updatedAt, 2_000)
+    assert.deepEqual(plain(state.collection.map((entry) => entry.order)), [0, 1], 'a new commit gets the next order')
+
+    state = ui.reduceAnnotationState(state, { type: 'annotationInclude', refId: beta.id, included: false })
+    assert.equal(state.collection[1].included, false)
+    state = ui.reduceAnnotationState(state, { type: 'annotationMove', refId: beta.id, delta: -1 })
+    assert.deepEqual(plain(state.collection.map((entry) => entry.id)), [beta.id, alpha.id])
+    state = ui.reduceAnnotationState(state, { type: 'annotationUpdateNote', refId: beta.id, note: 'edited', now: 3_000 })
+    assert.equal(state.collection[0].note, 'edited')
+    assert.equal(state.collection[0].updatedAt, 3_000)
+    state = ui.reduceAnnotationState(state, { type: 'annotationRemove', refId: alpha.id })
+    assert.equal(state.collection.length, 1)
+    state = ui.reduceAnnotationState(state, { type: 'annotationRestore', record: alpha, index: 1 })
+    assert.deepEqual(plain(state.collection.map((entry) => entry.id)), [beta.id, alpha.id])
+    const cleared = ui.annotationUndoRemove(state.collection, null, 'clear', 4_000)
+    const emptied = ui.reduceAnnotationState(state, { type: 'collectionClear' })
+    assert.equal(emptied.collection.length, 0)
+    state = ui.reduceAnnotationState(emptied, { type: 'annotationUndo', undo: cleared.undo })
+    assert.equal(state.collection.length, 2, 'annotationUndo restores a cleared collection')
+    state = ui.reduceAnnotationState(state, { type: 'annotationUndo', undo: cleared.undo })
+    assert.equal(state.collection.length, 2, 'a repeated undo never duplicates records')
+    const deactivated = ui.reduceAnnotationState(state, { type: 'deactivate' })
+    assert.equal(deactivated.collection.length, 2, 'records survive deactivation')
+  })
+
+  test('A3/T6: annotationMarkerBadgeText keeps one excerpt line and truncates to the cap', () => {
+    const empty = ui.annotationMarkerBadgeText('   \n  ')
+    assert.deepEqual(plain(empty), { text: '', empty: true, truncated: false })
+    assert.deepEqual(plain(ui.annotationMarkerBadgeText('Fix   the   toolbar')), { text: 'Fix the toolbar', empty: false, truncated: false })
+    assert.deepEqual(plain(ui.annotationMarkerBadgeText('first line\nsecond line')).text, 'first line')
+    const long = ui.annotationMarkerBadgeText('0123456789abcdefghijKLMNOP')
+    assert.equal(plain(long).truncated, true)
+    assert.equal(plain(long).text.length, 18)
+    assert.equal(plain(long).text.endsWith('…'), true)
+    assert.equal(plain(ui.annotationMarkerBadgeText('0123456789abcdefghijKLMNOP', 10)).text.length, 10)
+    assert.equal(plain(ui.annotationMarkerBadgeText('tab\tand  spaces')).text, 'tab and spaces')
+  })
+
+  test('A3/T6: clampDetailCardPosition flips sides/verticals, reserves the rail and clamps margins', () => {
+    const viewport = { width: 1728, height: 900 }
+    const card = { width: 320, height: 240 }
+    const railWidth = 200
+    const right = ui.clampDetailCardPosition({ x: 100, y: 100, width: 80, height: 32 }, card, viewport, railWidth)
+    assert.deepEqual(plain(right), { x: 188, y: 100, placement: 'right' }, 'prefers the right side, top-aligned')
+    const left = ui.clampDetailCardPosition({ x: 1350, y: 100, width: 80, height: 32 }, card, viewport, railWidth)
+    assert.equal(plain(left).placement, 'left')
+    assert.equal(plain(left).x, 1022)
+    assert.ok(plain(left).x + card.width <= viewport.width - railWidth - 8)
+    const above = ui.clampDetailCardPosition({ x: 100, y: 850, width: 80, height: 20 }, card, viewport, railWidth)
+    assert.equal(plain(above).y, 630, 'a card with no room below is bottom-aligned to the element')
+    assert.ok(plain(above).y + card.height <= viewport.height - 8)
+    const clamped = ui.clampDetailCardPosition({ x: -100, y: -50, width: 40, height: 20 }, card, viewport, railWidth)
+    assert.deepEqual(plain({ x: clamped.x, y: clamped.y }), { x: 8, y: 8 })
+    const narrow = ui.clampDetailCardPosition({ x: 300, y: 100, width: 40, height: 20 }, card, { width: 400, height: 300 }, 0)
+    assert.equal(plain(narrow).placement, 'left')
+    assert.deepEqual(plain({ x: narrow.x, y: narrow.y }), { x: 8, y: 8 })
+    for (const rect of [
+      { x: 0, y: 0, width: 0, height: 0 },
+      { x: 1700, y: 890, width: 20, height: 5 },
+      { x: 860, y: 450, width: 10, height: 10 }
+    ]) {
+      const pos = ui.clampDetailCardPosition(rect, card, viewport, railWidth)
+      assert.ok(pos.x >= 8 && pos.y >= 8, `margins respected for ${JSON.stringify(rect)}`)
+      assert.ok(pos.x + card.width <= viewport.width - railWidth - 8, 'rail strip respected')
+      assert.ok(pos.y + card.height <= viewport.height - 8, 'bottom margin respected')
+    }
   })
 
   //#endregion
