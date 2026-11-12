@@ -10964,7 +10964,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
 
     /**
      * Choose the meaningful index in one candidate chain.
-     * @param {Array<{ element: Element, descriptor: object }>} chain - candidate chain.
+     * @param {Array<{ element: Element, insideComposer: boolean }>} chain - candidate chain.
      * @returns {number} chosen index, or -1.
      */
     function annotationPickChainIndex(chain) {
@@ -11552,7 +11552,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
-       * Re-clamp an unpinned popover with the last measured popover size.
+       * Re-clamp a pinned or target-anchored popover with the last measured size.
        * @returns {void}
        */
       function reclampPopoverWithMeasuredSize() {

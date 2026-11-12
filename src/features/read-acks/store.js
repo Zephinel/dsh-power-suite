@@ -176,23 +176,36 @@ export function createReadAckStore(dshHome) {
   const file = readAcksPath(dshHome)
   let state = null
   let chain = Promise.resolve()
-  const load = async () => {
-    if (state !== null) return state
-    let text = ''
-    try {
-      text = await readFile(file, 'utf8')
-    } catch (error) {
-      if (!isNotFound(error)) {
-        // Do NOT cache an empty state: a later record would overwrite the
-        // unreadable on-disk marks. The route turns this into a retryable 500.
-        const readError = new Error('read acknowledgements could not be read')
-        readError.code = READ_ACKS_READ_FAILED
-        throw readError
+  let loadPromise = null
+  const load = () => {
+    if (state !== null) return Promise.resolve(state)
+    if (loadPromise !== null) return loadPromise
+    const attempt = (async () => {
+      let text = ''
+      try {
+        text = await readFile(file, 'utf8')
+      } catch (error) {
+        if (!isNotFound(error)) {
+          // Do NOT cache an empty state: a later record would overwrite the
+          // unreadable on-disk marks. The route turns this into a retryable 500.
+          const readError = new Error('read acknowledgements could not be read')
+          readError.code = READ_ACKS_READ_FAILED
+          throw readError
+        }
+        text = ''
       }
-      text = ''
-    }
-    state = parseReadAcks(text)
-    return state
+      const parsed = parseReadAcks(text)
+      // Single-flight means at most one parse publishes; if a newer state was
+      // nevertheless published first, merge forward instead of clobbering it.
+      state = state === null ? parsed : mergeAcked(state, parsed)
+      return state
+    })()
+    loadPromise = attempt.catch((error) => {
+      // Allow a later get/record to retry the persisted read.
+      loadPromise = null
+      throw error
+    })
+    return loadPromise
   }
   const enqueue = (task) => {
     const run = chain.then(task, task)

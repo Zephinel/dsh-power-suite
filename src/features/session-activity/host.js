@@ -316,7 +316,15 @@ export function installSessionActivity(ctx, options = {}) {
   let seedSettled = false
   let seedBackoffUntil = 0
   const ensureLoaded = () => {
-    if (loadPromise === null) loadPromise = Promise.resolve(ledger.load()).catch(() => undefined)
+    if (loadPromise === null) {
+      loadPromise = Promise.resolve(ledger.load()).catch((error) => {
+        // A first-load failure (unreadable ledger) must be retryable: drop the
+        // cached wrapper and let a later request try again instead of serving
+        // the stale/empty memory forever.
+        loadPromise = null
+        throw error
+      })
+    }
     return loadPromise
   }
   const ensureSeeded = () => {
@@ -328,9 +336,11 @@ export function installSessionActivity(ctx, options = {}) {
           seedBackoffUntil = 0
         })
         .catch(() => {
-          // Listing/docs failure: keep serving the current map; back off the
-          // cold wait so a broken corpus cannot add 5 s to every request.
+          // Listing/docs/load failure: keep serving the current map, back off
+          // the cold wait, and reset the seed promise so a later request after
+          // the backoff retries load + baseline instead of caching failure.
           seedBackoffUntil = Date.now() + seedBackoffMs
+          seedPromise = null
         })
     }
     return seedPromise

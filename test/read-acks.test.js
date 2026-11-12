@@ -250,7 +250,7 @@ test('read-acks route rejects the wrong media type, malformed or oversized bodie
   }
 })
 
-test('an unreadable existing read-acks file is not replaced by an empty state', async () => {
+test('an unreadable read-acks file throws typed on first read and retries after recovery', async () => {
   const home = await temporaryHome()
   const file = readAcksPath(home)
   try {
@@ -258,22 +258,49 @@ test('an unreadable existing read-acks file is not replaced by an empty state', 
     await writeFile(file, serializeReadAcks({ 'session-existing': 1000 }), 'utf8')
     await chmod(file, 0o000)
     const store = createReadAckStore(home)
-    await assert.rejects(
-      store.record({ 'session-new': 2000 }),
-      (error) => error.code === READ_ACKS_READ_FAILED
-    )
-    await chmod(file, 0o600)
+    await assert.rejects(store.get(), (error) => error.code === READ_ACKS_READ_FAILED)
+    await assert.rejects(store.record({ 'session-new': 2000 }), (error) => error.code === READ_ACKS_READ_FAILED)
     // The unreadable load must not have cached/published an empty state.
+    await chmod(file, 0o600)
     const document = JSON.parse(await readFile(file, 'utf8'))
     assert.deepEqual(document.acked, { 'session-existing': 1000 })
-    const recovered = createReadAckStore(home)
-    assert.deepEqual(await recovered.get(), { 'session-existing': 1000 })
-    assert.deepEqual(await recovered.record({ 'session-new': 2000 }), {
+    // The same store retries after recovery: old + newly recorded entries merge.
+    assert.deepEqual(await store.get(), { 'session-existing': 1000 })
+    assert.deepEqual(await store.record({ 'session-new': 2000 }), {
+      'session-existing': 1000,
+      'session-new': 2000
+    })
+    assert.deepEqual(JSON.parse(await readFile(file, 'utf8')).acked, {
       'session-existing': 1000,
       'session-new': 2000
     })
   } finally {
     await chmod(file, 0o600).catch(() => {})
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('concurrent get()/record() rounds never clobber or drop acknowledged entries', async () => {
+  const home = await temporaryHome()
+  const file = readAcksPath(home)
+  try {
+    const store = createReadAckStore(home)
+    const expected = {}
+    for (let round = 0; round < 20; round += 1) {
+      const operations = []
+      for (let index = 0; index < 4; index += 1) operations.push(store.get())
+      for (let index = 0; index < 3; index += 1) {
+        const key = `session-${round}-${index}`
+        expected[key] = 1000 + round * 10 + index
+        operations.push(store.record({ [key]: expected[key] }))
+      }
+      await Promise.all(operations)
+    }
+    const finalState = await store.get()
+    assert.deepEqual(finalState, expected)
+    assert.deepEqual(JSON.parse(await readFile(file, 'utf8')).acked, expected)
+    assert.deepEqual(await createReadAckStore(home).get(), expected)
+  } finally {
     await rm(home, { recursive: true, force: true })
   }
 })

@@ -36,6 +36,9 @@ export const ACTIVITY_WRITE_DEBOUNCE_MS = 750
 /** Longest accepted Session id; ids are harness-generated UUID-ish strings. */
 export const MAX_ACTIVITY_SESSION_ID_LENGTH = 200
 
+/** Typed error raised when the durable ledger exists but cannot be read. */
+export const ACTIVITY_READ_FAILED = 'ACTIVITY_READ_FAILED'
+
 /**
  * Whether one filesystem error means "document absent" (legitimately empty).
  * @param {unknown} error - thrown error.
@@ -270,9 +273,12 @@ export function createActivityLedger(dshHome, options = {}) {
         if (!isNotFound(error)) {
           // Do not publish/cache an empty state and do not schedule an empty
           // rewrite: the existing document may hold historical entries. Keep
-          // memory, mark the read error, and allow a later load/write retry.
+          // memory, reset the single-flight promise, and reject with a typed
+          // error so the Host retries a later load instead of caching failure.
           loadPromise = null
-          return snapshot()
+          const readError = new Error('session activity ledger could not be read')
+          readError.code = ACTIVITY_READ_FAILED
+          throw readError
         }
         text = null
       }

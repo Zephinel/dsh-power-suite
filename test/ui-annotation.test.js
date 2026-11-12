@@ -982,7 +982,31 @@ if (ui === undefined) {
     assert.equal(ui.normalizeUserNote(''), '')
   })
 
-  test('cssIdentifier uses the platform CSS.escape even with the factory CSS constant', () => {
+  test('cssIdentifier/escapeSelectorValue use the platform CSS.escape when present', () => {
+    // The vm sandbox has no platform CSS by default; inject a sentinel before
+    // evaluation. A regression to the factory's local `const CSS` string would
+    // skip this path and fail these assertions.
+    const platform = loadClientModule({
+      globals: {
+        CSS: { escape: (value) => `sentinel:${value}` }
+      }
+    })
+    const platformUi = platform.hooks?.uiAnnotation
+    assert.equal(platformUi.cssIdentifier('123abc'), 'sentinel:123abc')
+    assert.equal(platformUi.cssIdentifier('#123abc'), 'sentinel:#123abc')
+    // escapeSelectorValue is not part of the frozen 35-key seam; assert at the
+    // source level that it uses the same platform path (the seam count is an
+    // E2E smoke gate, so adding a key would break that generation).
+    const source = client.source
+    const start = source.indexOf('function escapeSelectorValue')
+    const end = source.indexOf('function ', start + 10)
+    assert.ok(start > 0, 'escapeSelectorValue exists')
+    const body = source.slice(start, end)
+    assert.ok(body.includes('globalThis.CSS'), 'escapeSelectorValue uses the platform CSS global')
+    assert.ok(!/typeof CSS\s*===/.test(body), 'escapeSelectorValue no longer tests the shadowed local CSS string')
+  })
+
+  test('cssIdentifier keeps its conservative fallback when the platform CSS is absent', () => {
     assert.equal(ui.cssIdentifier('123abc'), '\\31 23abc')
     assert.equal(ui.cssIdentifier('#123abc'), '\\#123abc')
   })

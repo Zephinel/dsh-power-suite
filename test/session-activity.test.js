@@ -5,6 +5,7 @@ import path from 'node:path'
 import { test } from 'node:test'
 import {
   ACTIVITY_LEDGER_VERSION,
+  ACTIVITY_READ_FAILED,
   MAX_ACTIVITY_SESSIONS,
   activityLedgerPath,
   capActivitySessions,
@@ -163,14 +164,15 @@ test('an unreadable activity ledger is never replaced by an empty document', asy
     await writeFile(file, serializeActivityLedger({ 'session-old': 1000 }), 'utf8')
     await chmod(file, 0o000)
     const ledger = createActivityLedger(home)
-    assert.deepEqual(await ledger.load(), {})
+    await assert.rejects(ledger.load(), (error) => error.code === ACTIVITY_READ_FAILED)
     ledger.record({ 'session-new': 2000 })
     await ledger.flush()
     await chmod(file, 0o600)
     // The failed unreadable flush must not have written an empty document.
     const beforeRecovery = JSON.parse(await readFile(file, 'utf8'))
     assert.deepEqual(beforeRecovery.sessions, { 'session-old': 1000 })
-    // A later flush retries the read and merges instead of clobbering history.
+    // A later load/flush retries the read and merges instead of clobbering history.
+    await ledger.load()
     await ledger.flush()
     const afterRecovery = JSON.parse(await readFile(file, 'utf8'))
     assert.deepEqual(afterRecovery.sessions, { 'session-old': 1000, 'session-new': 2000 })
@@ -540,6 +542,46 @@ test('seed timeout backs off, then resumes with seeded values when it settles', 
     }
   }
   assert.deepEqual(seededBody, { sessions: { 'session-existing': 1000, 'session-seeded': 1234 } })
+  await cleanups[0]()
+})
+
+test('a fail-once ledger load is retried by a later route GET', async () => {
+  const state = {}
+  let loads = 0
+  const fakeLedger = {
+    async load() {
+      loads += 1
+      if (loads === 1) {
+        const error = new Error('unreadable ledger')
+        error.code = ACTIVITY_READ_FAILED
+        throw error
+      }
+      state['session-loaded'] = 2000
+    },
+    record(entries) { Object.assign(state, entries) },
+    snapshot() { return { ...state } },
+    async flush() {},
+    async dispose() {}
+  }
+  const { ctx, routes, cleanups } = makeContext({ records: [] })
+  installSessionActivity(ctx, {
+    ledger: fakeLedger,
+    seedWaitMs: 20,
+    seedBackoffMs: 30,
+    seedBaseline: async () => undefined
+  })
+  const route = routes.get(SESSION_ACTIVITY_ROUTE)
+  const first = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
+  assert.equal(first.status, 200)
+  assert.deepEqual(await first.json(), { sessions: {} })
+  assert.equal(loads, 1)
+  // After the bounded seed backoff, the next GET retries load and serves the
+  // recovered historical entries instead of caching the failure.
+  await new Promise((resolve) => setTimeout(resolve, 60))
+  const second = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
+  assert.equal(second.status, 200)
+  assert.deepEqual(await second.json(), { sessions: { 'session-loaded': 2000 } })
+  assert.ok(loads >= 2)
   await cleanups[0]()
 })
 

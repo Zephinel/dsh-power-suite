@@ -143,6 +143,9 @@ function createBrowserStubs(registrationBox, shared) {
  * @param {boolean} [options.hooksFlag=true] - set the §3.7 flag inside the
  *   sandbox; `false` materializes the production path, where the seam must not
  *   run.
+ * @param {object} [options.globals] - extra platform globals to install on the
+ *   vm sandbox before evaluation (e.g. a sentinel `CSS.escape` to prove the
+ *   platform path is exercised instead of the fallback).
  * @returns {{ hooks: object|undefined, factory: Function|null, registration: object|null, source: string, sourcePath: string|null }} the
  *   seam hook bag (`hooks.uiAnnotation` may be undefined before the feature
  *   region lands; `hooks` itself is undefined when `hooksFlag` is false), the
@@ -217,6 +220,9 @@ export function loadClientModule(options = {}) {
   // §3.7 seam: only the harness defines this global. Production never does, so
   // the factory's seam block stays inert there.
   if (options.hooksFlag !== false) sandbox.__POWER_SUITE_TEST_HOOKS__ = {}
+  if (options.globals !== null && typeof options.globals === 'object') {
+    Object.assign(sandbox, options.globals)
+  }
 
   // `window` must also be reachable from bare-global reads inside the script.
   sandbox.window = windowStubFromSandbox(sandbox, registrationBox, { document, localStorage, navigator })
