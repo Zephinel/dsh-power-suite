@@ -8047,6 +8047,21 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** Debounce for the persisted annotation document (D1). */
     const ANNOTATION_PERSIST_DEBOUNCE_MS = 250
 
+    /** D5: single-slot undo window after a delete (newest delete replaces it). */
+    const ANNOTATION_UNDO_WINDOW_MS = 5000
+
+    /** A3/T6: hover-intent delay before the floating detail card appears. */
+    const ANNOTATION_DETAIL_HOVER_DELAY_MS = 120
+
+    /** A3/T6: grace period before the detail card closes after the pointer leaves. */
+    const ANNOTATION_DETAIL_CLOSE_DELAY_MS = 120
+
+    /** A3/T6: detail card size used before its first measurement (width is fixed). */
+    const ANNOTATION_DETAIL_SIZE = { width: 320, height: 240 }
+
+    /** A3/T6: the badge requirement summary is a one-line excerpt of this many characters. */
+    const ANNOTATION_MARK_SUMMARY_MAX = 18
+
     /** F2: a floating surface root needs at least this computed z-index. */
     const ANNOTATION_SURFACE_MIN_Z = 10
 
@@ -8109,10 +8124,32 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'popover.notePlaceholder': 'Describe the requested change',
       'popover.quickRef': 'Quick reference',
       'popover.add': 'Add to collection',
-      'popover.update': 'Update collection',
+      'popover.update': 'Update requirement',
+      'popover.commit': 'Mark requirement',
+      'popover.delete': 'Delete annotation',
       'popover.close': 'Close',
       'popover.copyLocator': 'Copy locator',
       'popover.ephemeralHint': 'Transient surface: this element can disappear when its card closes; the locator is kept.',
+      'detail.title': 'Annotation details',
+      'detail.requirement': 'Requirement',
+      'detail.emptyRequirement': 'No requirement yet',
+      'detail.addRequirement': 'Add requirement',
+      'detail.locator': 'Locator',
+      'detail.position': 'Position',
+      'detail.session': 'Session',
+      'detail.workspace': 'Workspace',
+      'detail.status': 'Status',
+      'detail.surfaceFloating': 'Floating surface (hover preview)',
+      'detail.ephemeral': 'Transient surface — may disappear',
+      'detail.quickRef': 'Quick reference',
+      'detail.edit': 'Edit requirement',
+      'detail.save': 'Save',
+      'detail.cancel': 'Cancel',
+      'detail.delete': 'Delete',
+      'detail.relocate': 'Go to element',
+      'detail.copyLocator': 'Copy locator',
+      'detail.close': 'Close',
+      'detail.marks': 'Marks are shown on the page while the mode is on',
       'collection.title': 'Collection',
       'collection.count': '{count} elements',
       'collection.countOne': '1 element',
@@ -8155,6 +8192,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'feedback.relocateOtherSession': 'This annotation belongs to another session',
       'feedback.locatorCopied': 'Locator copied',
       'feedback.locatorCopyFailed': 'Could not copy the locator',
+      'feedback.marked': 'Marked · {count} total',
+      'feedback.markUpdated': 'Requirement updated',
+      'feedback.markDeleted': 'Annotation deleted',
+      'feedback.undo': 'Undo',
+      'feedback.restored': 'Annotation restored',
       'feedback.batchEmpty': 'Nothing to insert from the current session',
       'insert.title': 'UI annotation',
       'insert.reference': 'Reference:',
@@ -8204,10 +8246,32 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'popover.notePlaceholder': '描述需要修改的内容',
       'popover.quickRef': '快速引用',
       'popover.add': '加入标注集',
-      'popover.update': '更新标注集',
+      'popover.update': '更新需求',
+      'popover.commit': '标记需求',
+      'popover.delete': '删除标注',
       'popover.close': '关闭',
       'popover.copyLocator': '复制定位器',
       'popover.ephemeralHint': '瞬态浮层：卡片关闭后该元素可能消失，仅保留定位信息。',
+      'detail.title': '标注详情',
+      'detail.requirement': '需求',
+      'detail.emptyRequirement': '尚未填写需求',
+      'detail.addRequirement': '添加需求',
+      'detail.locator': '定位',
+      'detail.position': '位置',
+      'detail.session': '会话',
+      'detail.workspace': '工作区',
+      'detail.status': '状态',
+      'detail.surfaceFloating': '浮动层（悬停预览）',
+      'detail.ephemeral': '瞬态浮层 — 可能消失',
+      'detail.quickRef': '快速引用',
+      'detail.edit': '编辑需求',
+      'detail.save': '保存',
+      'detail.cancel': '取消',
+      'detail.delete': '删除',
+      'detail.relocate': '定位到元素',
+      'detail.copyLocator': '复制定位器',
+      'detail.close': '关闭',
+      'detail.marks': '模式开启时页面会持续显示标注遮罩',
       'collection.title': '标注集',
       'collection.count': '{count} 项',
       'collection.countOne': '1 项',
@@ -8250,6 +8314,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'feedback.relocateOtherSession': '这条标注来自其他会话',
       'feedback.locatorCopied': '已复制定位器',
       'feedback.locatorCopyFailed': '复制定位器失败',
+      'feedback.marked': '已标记 · 共 {count} 条',
+      'feedback.markUpdated': '需求已更新',
+      'feedback.markDeleted': '标注已删除',
+      'feedback.undo': '撤销',
+      'feedback.restored': '标注已恢复',
       'feedback.batchEmpty': '当前会话没有可插入的标注',
       'insert.title': 'UI 标注',
       'insert.reference': '定位：',
@@ -8266,13 +8335,21 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     /**
-     * Long-lived bridge to the mounted Composer seat. Always all-or-nothing: the
+     * Long-lived bridge to the mounted Composer seat.
+     *
+     * The annotation surface renders outside the Session-scope slot tree and has
+     * no Session list face on its own context, so the seat — which is a real
+     * Session-scoped slot and therefore receives the `useSessions` standard hook —
+     * mirrors the current Session's `cwd` here. Everything is all-or-nothing: the
      * Session id only exists while the seat's insertion actions do.
      */
-    const annotationBridge = { sessionId: null, inputActions: null }
+    const annotationBridge = { sessionId: null, inputActions: null, sessionCwd: null }
 
     /** Install guard: a remount must never register the surface twice. */
     let annotationInstalled = false
+
+    /** One-shot diagnostic for the Session-identity fallback (never fully silent). */
+    let annotationIdentityWarned = false
 
     /** The controller singleton, or `null` while the feature is uninstalled. */
     let annotationController = null
@@ -9385,6 +9462,219 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     /**
+     * Next collection `order` value: one past the highest existing order.
+     * @param {Array<object>} list - current entries.
+     * @returns {number} next order.
+     */
+    function nextAnnotationOrder(list) {
+      let highest = -1
+      for (const entry of Array.isArray(list) ? list : []) {
+        if (entry !== null && typeof entry === 'object' && typeof entry.order === 'number' && Number.isFinite(entry.order)) {
+          highest = Math.max(highest, Math.round(entry.order))
+        }
+      }
+      return highest + 1
+    }
+
+    /**
+     * Commit one record: insert a new annotation or update the existing identity in
+     * place (A3/T5). An update keeps `id`/`at`/`order`/`included` and refreshes the
+     * locator, non-empty note, `lastStatus`, and `updatedAt`; the cap is enforced at
+     * this single commit boundary (D15) instead of silently dropping a record.
+     * @param {Array<object>} list - current collection entries.
+     * @param {object} record - ElementRef v2 to commit.
+     * @param {number} [limit] - maximum record count, default 100.
+     * @param {number} [now] - epoch ms of this commit, default `record.updatedAt`/Date.now().
+     * @returns {{ list: Array<object>, added: boolean, updated: boolean, rejected: boolean }} result.
+     */
+    function upsertAnnotationRecord(list, record, limit, now) {
+      const current = Array.isArray(list) ? list : []
+      const cap = typeof limit === 'number' && Number.isFinite(limit) && limit >= 1 ? Math.round(limit) : ANNOTATION_RECORD_LIMIT
+      if (record === null || typeof record !== 'object' || Array.isArray(record)) {
+        return { list: current.slice(), added: false, updated: false, rejected: false }
+      }
+      const stamp = typeof now === 'number' && Number.isFinite(now) && now > 0
+        ? Math.round(now)
+        : (typeof record.updatedAt === 'number' && Number.isFinite(record.updatedAt) && record.updatedAt > 0 ? Math.round(record.updatedAt) : Date.now())
+      const key = identityKeyOf(record)
+      const sessionId = record.session !== null && typeof record.session === 'object' ? record.session.sessionId ?? null : null
+      const index = current.findIndex((entry) => {
+        if (entry === null || typeof entry !== 'object') return false
+        const entrySession = entry.session !== null && typeof entry.session === 'object' ? entry.session.sessionId ?? null : null
+        return identityKeyOf(entry) === key && entrySession === sessionId
+      })
+      if (index >= 0) {
+        const existing = current[index]
+        const next = current.slice()
+        const incomingNote = typeof record.note === 'string' ? record.note.trim() : ''
+        next[index] = {
+          ...record,
+          id: typeof existing.id === 'string' && existing.id.length > 0 ? existing.id : record.id,
+          at: typeof existing.at === 'number' && Number.isFinite(existing.at) ? existing.at : record.at,
+          order: typeof existing.order === 'number' && Number.isFinite(existing.order) ? existing.order : record.order,
+          updatedAt: stamp,
+          included: existing.included !== false,
+          lastStatus: typeof record.lastStatus === 'string' ? record.lastStatus : (existing.lastStatus ?? null),
+          note: incomingNote.length > 0 ? record.note : (typeof existing.note === 'string' ? existing.note : '')
+        }
+        return { list: next, added: false, updated: true, rejected: false }
+      }
+      if (current.length >= cap) return { list: current.slice(), added: false, updated: false, rejected: true }
+      return {
+        list: current.concat([{
+          ...record,
+          version: 2,
+          updatedAt: stamp,
+          // Commit order is the collection's insertion position, never the pick
+          // timestamp: the collection is an ordered list and persistence sorts by
+          // `order`, so a new record must land after the current last one.
+          order: nextAnnotationOrder(current),
+          included: record.included !== false,
+          lastStatus: typeof record.lastStatus === 'string' ? record.lastStatus : null
+        }]),
+        added: true,
+        updated: false,
+        rejected: false
+      }
+    }
+
+    /**
+     * Remove one record by id (A3/T5). Immutable; a missing id is a no-op copy.
+     * @param {Array<object>} list - current entries.
+     * @param {string} refId - record id.
+     * @returns {Array<object>} next entries.
+     */
+    function removeAnnotationRecord(list, refId) {
+      return collectionRemove(list, refId)
+    }
+
+    /**
+     * Restore one removed record at its original array position (A3/T5 undo).
+     * @param {Array<object>} list - current entries.
+     * @param {object} record - removed record.
+     * @param {number} [index] - original array index; clamped, default append.
+     * @returns {Array<object>} next entries.
+     */
+    function restoreAnnotationRecord(list, record, index) {
+      const current = Array.isArray(list) ? list : []
+      if (record === null || typeof record !== 'object' || Array.isArray(record)) return current.slice()
+      const at = typeof index === 'number' && Number.isFinite(index)
+        ? Math.min(Math.max(Math.round(index), 0), current.length)
+        : current.length
+      return current.slice(0, at).concat([record], current.slice(at))
+    }
+
+    /**
+     * Move one record one slot up or down and keep `order` contiguous (A3/T5;
+     * wired here for the Phase 2-B rail, which reuses the same action).
+     * @param {Array<object>} list - current entries.
+     * @param {string} refId - record id.
+     * @param {number} delta - -1 to move up (towards index 0), +1 to move down.
+     * @returns {Array<object>} next entries.
+     */
+    function moveAnnotationRecord(list, refId, delta) {
+      const current = Array.isArray(list) ? list.slice() : []
+      const index = current.findIndex((entry) => entry !== null && typeof entry === 'object' && entry.id === refId)
+      if (index < 0) return current
+      const step = delta === -1 || (typeof delta === 'number' && delta < 0) ? -1 : 1
+      const target = index + step
+      if (target < 0 || target >= current.length) return current
+      const next = current.slice()
+      const moved = next[index]
+      next[index] = next[target]
+      next[target] = moved
+      return next.map((entry, position) => (entry !== null && typeof entry === 'object' ? { ...entry, order: position } : entry))
+    }
+
+    /**
+     * Set one record's batch-include flag (A3/T5). The controller forces other-session
+     * records to `included: false`; the pure helper only applies what it is given.
+     * @param {Array<object>} list - current entries.
+     * @param {string} refId - record id.
+     * @param {boolean} included - whether the record participates in a batch.
+     * @returns {Array<object>} next entries.
+     */
+    function toggleAnnotationInclude(list, refId, included) {
+      if (!Array.isArray(list)) return []
+      const flag = included === true
+      return list.map((entry) => {
+        if (entry === null || typeof entry !== 'object' || entry.id !== refId) return entry
+        if (entry.included === flag) return entry
+        return { ...entry, included: flag }
+      })
+    }
+
+    /**
+     * Remove one record (or clear the whole list) while capturing the single-slot
+     * undo payload (A3/T5/D5). The newest removal replaces any previous slot.
+     * @param {Array<object>} list - current entries.
+     * @param {string} refId - record id to remove (ignored when kind is `clear`).
+     * @param {'single' | 'clear'} [kind] - removal shape, default `single`.
+     * @param {number} [at] - epoch ms of the removal.
+     * @returns {{ list: Array<object>, undo: object | null }} next entries and undo payload.
+     */
+    function annotationUndoRemove(list, refId, kind, at) {
+      const current = Array.isArray(list) ? list : []
+      const stamp = typeof at === 'number' && Number.isFinite(at) && at > 0 ? Math.round(at) : Date.now()
+      if (kind === 'clear') {
+        if (current.length === 0) return { list: current.slice(), undo: null }
+        return { list: [], undo: { kind: 'clear', records: current.slice(), at: stamp } }
+      }
+      const index = current.findIndex((entry) => entry !== null && typeof entry === 'object' && entry.id === refId)
+      if (index < 0) return { list: current.slice(), undo: null }
+      return {
+        list: collectionRemove(current, refId),
+        undo: { kind: 'single', record: current[index], index, at: stamp }
+      }
+    }
+
+    /**
+     * Apply one undo payload (A3/T5/D5): restore a single record at its original
+     * index, or rebuild a cleared collection in its original order.
+     * @param {Array<object>} list - current entries.
+     * @param {object | null} undo - payload returned by {@link annotationUndoRemove}.
+     * @returns {Array<object>} next entries.
+     */
+    function annotationUndoRestore(list, undo) {
+      const current = Array.isArray(list) ? list : []
+      if (undo === null || typeof undo !== 'object') return current.slice()
+      if (undo.kind === 'clear') {
+        const records = Array.isArray(undo.records) ? undo.records : []
+        if (records.length === 0) return current.slice()
+        const ids = new Set(current.map((entry) => (entry !== null && typeof entry === 'object' ? entry.id : null)))
+        const merged = current.concat(records.filter((record) => record !== null && typeof record === 'object' && !ids.has(record.id)))
+        const orderOf = (entry) => (typeof entry?.order === 'number' && Number.isFinite(entry.order) ? entry.order : 0)
+        const atOf = (entry) => (typeof entry?.at === 'number' && Number.isFinite(entry.at) ? entry.at : 0)
+        return merged.slice().sort((left, right) => (orderOf(left) - orderOf(right)) || (atOf(left) - atOf(right)))
+      }
+      if (undo.record === null || typeof undo.record !== 'object') return current.slice()
+      return restoreAnnotationRecord(current, undo.record, undo.index)
+    }
+
+    /**
+     * One-line requirement excerpt for a page mark badge (A3/T6): first non-empty
+     * line, whitespace collapsed, truncated to `max` characters with an ellipsis.
+     * @param {unknown} note - requirement text.
+     * @param {number} [max] - maximum characters, default 18.
+     * @returns {{ text: string, empty: boolean, truncated: boolean }} excerpt.
+     */
+    function annotationMarkerBadgeText(note, max) {
+      const source = typeof note === 'string' ? note : ''
+      const limit = typeof max === 'number' && Number.isFinite(max) && max > 1 ? Math.round(max) : ANNOTATION_MARK_SUMMARY_MAX
+      let line = ''
+      for (const candidate of source.split(/\r?\n/)) {
+        const collapsed = candidate.replace(/\s+/g, ' ').trim()
+        if (collapsed.length > 0) {
+          line = collapsed
+          break
+        }
+      }
+      if (line.length === 0) return { text: '', empty: true, truncated: false }
+      if (line.length <= limit) return { text: line, empty: false, truncated: false }
+      return { text: `${line.slice(0, Math.max(1, limit - 1)).trimEnd()}…`, empty: false, truncated: true }
+    }
+
+    /**
      * The initial annotation state: mode off, nothing selected, empty collection.
      * @returns {object} fresh state.
      */
@@ -9440,8 +9730,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * Actions: activate, deactivate, hover {targetId}, selectSingle {ref},
      * toggleMulti {ref}, setMulti {refs}, setNote {text}, beginEdit, endEdit,
      * openView {view}, collectionAdd {entry}, collectionUpdateNote {refId,
-     * note}, collectionRemove {refId}, collectionClear, passThrough {on},
-     * box {box}, feedback {feedback}, session {sessionId}, exitOne.
+     * note}, collectionRemove {refId}, collectionClear, annotationCommit {record},
+     * annotationUpdateNote {refId, note}, annotationRemove {refId},
+     * annotationRestore {record, index}, annotationUndo {undo},
+     * annotationInclude {refId, included}, annotationMove {refId, delta},
+     * passThrough {on}, box {box}, feedback {feedback}, session {sessionId},
+     * exitOne.
      * @param {object} state - current state.
      * @param {object} action - one action.
      * @returns {object} next state, or the same reference when unchanged.
@@ -9531,6 +9825,63 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           return { ...current, collection: collectionRemove(current.collection, payload.refId) }
         case 'collectionClear':
           return { ...current, collection: collectionClear() }
+        case 'annotationCommit': {
+          const record = payload.record !== null && typeof payload.record === 'object' ? payload.record : null
+          if (record === null) return current
+          const result = upsertAnnotationRecord(current.collection, record, ANNOTATION_RECORD_LIMIT, payload.now)
+          if (!result.added && !result.updated) return current
+          return { ...current, collection: result.list }
+        }
+        case 'annotationUpdateNote': {
+          const refId = typeof payload.refId === 'string' ? payload.refId : ''
+          if (refId.length === 0) return current
+          const note = typeof payload.note === 'string' ? payload.note : ''
+          const stamp = typeof payload.now === 'number' && Number.isFinite(payload.now) && payload.now > 0 ? Math.round(payload.now) : Date.now()
+          let changed = false
+          const collection = current.collection.map((entry) => {
+            if (entry === null || typeof entry !== 'object' || entry.id !== refId) return entry
+            changed = true
+            return { ...entry, note, updatedAt: stamp }
+          })
+          return changed ? { ...current, collection } : current
+        }
+        case 'annotationRemove': {
+          const next = removeAnnotationRecord(current.collection, payload.refId)
+          return next.length === current.collection.length ? current : { ...current, collection: next }
+        }
+        case 'annotationRestore': {
+          const record = payload.record !== null && typeof payload.record === 'object' ? payload.record : null
+          if (record === null) return current
+          return { ...current, collection: restoreAnnotationRecord(current.collection, record, payload.index) }
+        }
+        case 'annotationUndo': {
+          const undo = payload.undo !== null && typeof payload.undo === 'object' ? payload.undo : null
+          if (undo === null) return current
+          return { ...current, collection: annotationUndoRestore(current.collection, undo) }
+        }
+        case 'annotationInclude': {
+          const next = toggleAnnotationInclude(current.collection, payload.refId, payload.included)
+          let changed = false
+          for (let index = 0; index < next.length; index += 1) {
+            if (next[index] !== current.collection[index]) {
+              changed = true
+              break
+            }
+          }
+          return changed ? { ...current, collection: next } : current
+        }
+        case 'annotationMove': {
+          const delta = payload.delta === -1 ? -1 : 1
+          const next = moveAnnotationRecord(current.collection, payload.refId, delta)
+          let changed = false
+          for (let index = 0; index < next.length; index += 1) {
+            if (next[index] !== current.collection[index]) {
+              changed = true
+              break
+            }
+          }
+          return changed ? { ...current, collection: next } : current
+        }
         case 'passThrough': {
           const on = payload.on === true
           if (current.passThrough === on) return current
@@ -9878,6 +10229,51 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const maxX = Math.max(gap, width - rail - popoverWidth - gap)
       const maxY = Math.max(gap, height - popoverHeight - gap)
       return { x: Math.round(Math.min(Math.max(x, gap), maxX)), y: Math.round(Math.min(Math.max(y, gap), maxY)) }
+    }
+
+    /**
+     * Place the floating detail card beside a marked rect (A3/T6).
+     *
+     * Prefers the right side of the element aligned to its top, flips to the left
+     * when the card would cross the reserved rail strip, flips above when there is
+     * no room below, and finally clamps to an 8 px viewport margin.
+     * @param {{ x: number, y: number, width: number, height: number }} rect - mark rect.
+     * @param {{ width: number, height: number }} cardSize - measured/estimated card size.
+     * @param {{ width: number, height: number }} viewport - viewport size.
+     * @param {number} [railWidth] - reserved right strip width, default 0.
+     * @param {number} [margin] - minimum gap from every edge, default 8.
+     * @returns {{ x: number, y: number, placement: 'right' | 'left' }} clamped position.
+     */
+    function clampDetailCardPosition(rect, cardSize, viewport, railWidth, margin) {
+      const gap = typeof margin === 'number' && Number.isFinite(margin) && margin >= 0 ? margin : 8
+      const rail = typeof railWidth === 'number' && Number.isFinite(railWidth) && railWidth > 0 ? railWidth : 0
+      const width = viewport !== null && typeof viewport === 'object' && typeof viewport.width === 'number' ? viewport.width : 0
+      const height = viewport !== null && typeof viewport === 'object' && typeof viewport.height === 'number' ? viewport.height : 0
+      const cardWidth = cardSize !== null && typeof cardSize === 'object' && typeof cardSize.width === 'number' && cardSize.width > 0
+        ? cardSize.width
+        : ANNOTATION_DETAIL_SIZE.width
+      const cardHeight = cardSize !== null && typeof cardSize === 'object' && typeof cardSize.height === 'number' && cardSize.height > 0
+        ? cardSize.height
+        : ANNOTATION_DETAIL_SIZE.height
+      const target = rect !== null && typeof rect === 'object' ? rect : { x: 0, y: 0, width: 0, height: 0 }
+      const targetX = typeof target.x === 'number' && Number.isFinite(target.x) ? target.x : 0
+      const targetY = typeof target.y === 'number' && Number.isFinite(target.y) ? target.y : 0
+      const targetWidth = typeof target.width === 'number' && Number.isFinite(target.width) ? target.width : 0
+      const targetHeight = typeof target.height === 'number' && Number.isFinite(target.height) ? target.height : 0
+      const maxX = Math.max(gap, width - rail - cardWidth - gap)
+      const maxY = Math.max(gap, height - cardHeight - gap)
+      let placement = 'right'
+      let x = targetX + targetWidth + gap
+      if (x > maxX) {
+        placement = 'left'
+        x = targetX - cardWidth - gap
+      }
+      x = Math.round(Math.min(Math.max(x, gap), maxX))
+      // Align to the element's top; a card with no room below is bottom-aligned.
+      let y = targetY
+      if (y + cardHeight > height - gap) y = targetY + targetHeight - cardHeight
+      y = Math.round(Math.min(Math.max(y, gap), maxY))
+      return { x, y, placement }
     }
 
     /**
@@ -10883,7 +11279,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         popoverPinned: false,
         flashRefId: null,
         flashRect: null,
-        noteEditor: null
+        noteEditor: null,
+        // A3 Phase 2-A transient UI state (never persisted): page marks derived per
+        // geometry frame, the record under the pointer, the floating detail card,
+        // and the single-slot undo payload.
+        markRects: [],
+        markerHoverId: null,
+        detailCard: null,
+        markUndo: null
       })
 
       /** Installed window listeners, removed on deactivate. */
@@ -10896,6 +11299,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       let domObserver = null
       /** Resolved-node cache: `{ node, rev }` per ref id, reused only at the same revision. */
       const resolvedNodeCache = new Map()
+      /** Per-DOM-revision resolution status cache for the mark geometry (keeps scroll frames cheap). */
+      const markStatusCache = new Map()
+      let markStatusRevision = -1
       /** Hover identity tokens per element. */
       const elementTokens = new WeakMap()
       /** Chain and index of the last picked selection, for level up/down. */
@@ -10942,6 +11348,17 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       let persistTimer = null
       /** Last serialized records document, so no-op writes stay no-ops. */
       let persistedRecordsText = null
+      /** Hover-intent timer that opens the detail card after the pointer rests on a mark. */
+      let markerHoverTimer = null
+      /** Grace timer that closes the detail card after the pointer leaves the mark/card union. */
+      let detailCloseTimer = null
+      /** Single-slot undo expiry timer (5 s from the last delete). */
+      let undoExpireTimer = null
+      /** Mounted detail card element and its measured size, used for clamping/keep-open. */
+      let detailElement = null
+      let detailMeasuredSize = { width: ANNOTATION_DETAIL_SIZE.width, height: ANNOTATION_DETAIL_SIZE.height }
+      /** Pending detail-card measurement frame. */
+      let detailMeasureFrame = null
 
       /**
        * The current snapshot.
@@ -11209,6 +11626,19 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       function sessionIdentity(sessionId) {
         const id = typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null
         if (id === null) return { sessionId: null, cwd: null, workspaceLabel: null }
+        // Primary source: the Composer seat's Session-scope bridge. The annotation
+        // overlay is not a slot and `ctx.sessions` has no live list face here, so
+        // reading the bridge is the only reliable path (F-2).
+        if (annotationBridge.sessionId === id && typeof annotationBridge.sessionCwd === 'string' && annotationBridge.sessionCwd.length > 0) {
+          return {
+            sessionId: id,
+            cwd: annotationBridge.sessionCwd,
+            workspaceLabel: annotationWorkspaceLabel(annotationBridge.sessionCwd)
+          }
+        }
+        // Fallback for a record captured before the seat mirrored identity, or in
+        // an embedding without the seat. An unexpected failure is reported once
+        // instead of being swallowed silently.
         let cwd = null
         try {
           const sessions = ctx !== null && typeof ctx === 'object' ? ctx.sessions : null
@@ -11221,8 +11651,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             ? listSnapshot.byId[id]
             : null
           if (entry !== null && entry !== undefined && typeof entry.cwd === 'string' && entry.cwd.length > 0) cwd = entry.cwd
-        } catch {
-          // Identity is best effort; a missing Session row still yields a valid record.
+        } catch (error) {
+          if (!annotationIdentityWarned) {
+            annotationIdentityWarned = true
+            try {
+              console.warn('power-suite: annotation Session identity fallback failed', error)
+            } catch {
+              // Console may be unavailable in a hostile embedding.
+            }
+          }
         }
         return { sessionId: id, cwd, workspaceLabel: annotationWorkspaceLabel(cwd) }
       }
@@ -11348,6 +11785,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
        */
       function clearResolvedNodeCache() {
         resolvedNodeCache.clear()
+        markStatusCache.clear()
+        markStatusRevision = -1
         domRevision += 1
         if (domObserver !== null) {
           domObserver.disconnect()
@@ -11441,6 +11880,281 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const current = currentSessionId()
         if (current === null) return 'other'
         return ref?.session?.sessionId === current ? 'current' : 'other'
+      }
+
+      /**
+       * Whether one viewport point falls inside one rectangle.
+       * @param {{ x: number, y: number }} point - viewport point.
+       * @param {{ x: number, y: number, width: number, height: number }} rect - rectangle.
+       * @returns {boolean} whether inside.
+       */
+      function annotationPointInRect(point, rect) {
+        if (point === null || rect === null || typeof point !== 'object' || typeof rect !== 'object') return false
+        const x = typeof point.x === 'number' ? point.x : NaN
+        const y = typeof point.y === 'number' ? point.y : NaN
+        const left = typeof rect.x === 'number' ? rect.x : NaN
+        const top = typeof rect.y === 'number' ? rect.y : NaN
+        const width = typeof rect.width === 'number' ? rect.width : NaN
+        const height = typeof rect.height === 'number' ? rect.height : NaN
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(left) || !Number.isFinite(top)) return false
+        return x >= left && x <= left + width && y >= top && y <= top + height
+      }
+
+      /**
+       * Page marks for the current collection (A3/T6).
+       *
+       * Only a record of the current Session whose live target resolves (or
+       * resolves as changed) is drawn; a missing/ambiguous/other-Session record is
+       * never drawn because a mark would point at the wrong element. Geometry is
+       * recomputed on the existing geometry frames (scroll/resize/mutations).
+       * @param {object} state - annotation state.
+       * @returns {Array<object>} mark descriptors `{ id, index, rect, stale, summary, empty }`.
+       */
+      function markRectsOf(state) {
+        const marks = []
+        const collection = state !== null && typeof state === 'object' && Array.isArray(state.collection) ? state.collection : []
+        for (let index = 0; index < collection.length; index += 1) {
+          const entry = collection[index]
+          if (entry === null || typeof entry !== 'object') continue
+          if (collectionScopeOf(entry) !== 'current') continue
+          if (markStatusRevision !== domRevision) {
+            markStatusCache.clear()
+            markStatusRevision = domRevision
+          }
+          let status = markStatusCache.get(entry.id)
+          if (status === undefined) {
+            status = statusOf(entry)
+            markStatusCache.set(entry.id, status)
+          }
+          if (status !== 'resolved' && status !== 'changed') continue
+          const node = liveNode(entry)
+          if (node === null) continue
+          const rect = annotationRectOf(node)
+          if (rect === null || rect.width <= 0 || rect.height <= 0) continue
+          const excerpt = annotationMarkerBadgeText(entry.note)
+          marks.push({
+            id: entry.id,
+            index: index + 1,
+            rect,
+            stale: status === 'changed',
+            summary: excerpt.text,
+            empty: excerpt.empty
+          })
+        }
+        return marks
+      }
+
+      /**
+       * The mark under one viewport point, topmost (last drawn) first.
+       * @param {{ x: number, y: number }} point - viewport point.
+       * @param {Array<object>} marks - current mark descriptors.
+       * @returns {object | null} hit mark.
+       */
+      function findMarkAt(point, marks) {
+        const list = Array.isArray(marks) ? marks : []
+        for (let index = list.length - 1; index >= 0; index -= 1) {
+          const mark = list[index]
+          if (mark !== null && typeof mark === 'object' && mark.rect !== null && typeof mark.rect === 'object' && annotationPointInRect(point, mark.rect)) return mark
+        }
+        return null
+      }
+
+      /**
+       * The detail card's kept-open rectangle (pointer may enter it).
+       * @param {object} current - current snapshot.
+       * @returns {{ x: number, y: number, width: number, height: number } | null} card rect.
+       */
+      function detailCardRect(current) {
+        const card = current !== null && typeof current === 'object' ? current.detailCard : null
+        if (card === null || typeof card !== 'object') return null
+        return {
+          x: typeof card.x === 'number' ? card.x : 0,
+          y: typeof card.y === 'number' ? card.y : 0,
+          width: detailMeasuredSize.width,
+          height: detailMeasuredSize.height
+        }
+      }
+
+      /** Cancel the hover-intent timer that would open the detail card. @returns {void} */
+      function cancelMarkerHoverTimer() {
+        if (markerHoverTimer !== null) {
+          window.clearTimeout(markerHoverTimer)
+          markerHoverTimer = null
+        }
+      }
+
+      /** Cancel the pending detail-card close. @returns {void} */
+      function cancelDetailClose() {
+        if (detailCloseTimer !== null) {
+          window.clearTimeout(detailCloseTimer)
+          detailCloseTimer = null
+        }
+      }
+
+      /** Close the detail card and (by default) drop its marker-hover state. @param {{ keepMarker?: boolean }} [options] - close options. @returns {boolean} whether a card was open. */
+      function closeDetailCard(options) {
+        const settingsForClose = options !== null && typeof options === 'object' ? options : {}
+        cancelDetailClose()
+        cancelMarkerHoverTimer()
+        const current = snapshot()
+        const hadCard = current.detailCard !== null
+        if (hadCard) publish({ detailCard: null })
+        if (settingsForClose.keepMarker !== true && current.markerHoverId !== null) publish({ markerHoverId: null })
+        return hadCard
+      }
+
+      /**
+       * Open the detail card for one mark at its clamped position (A3/T6).
+       * @param {object} mark - mark descriptor from {@link markRectsOf}.
+       * @returns {void}
+       */
+      function openDetailCard(mark) {
+        if (!isActive() || mark === null || typeof mark !== 'object') return
+        const current = snapshot()
+        if (current.state.selection.length > 0) return
+        const position = clampDetailCardPosition(mark.rect, detailMeasuredSize, annotationViewport(), current.railWidth)
+        cancelDetailClose()
+        publish({
+          detailCard: {
+            refId: mark.id,
+            x: position.x,
+            y: position.y,
+            placement: position.placement,
+            mode: 'view'
+          }
+        })
+      }
+
+      /**
+       * Arm the hover-intent timer for one mark (120 ms, A3/T6).
+       * @param {object} mark - mark descriptor.
+       * @returns {void}
+       */
+      function scheduleMarkerHoverOpen(mark) {
+        cancelMarkerHoverTimer()
+        if (!isActive()) return
+        markerHoverTimer = window.setTimeout(() => {
+          markerHoverTimer = null
+          if (!isActive()) return
+          const current = snapshot()
+          if (current.state.selection.length > 0) return
+          const fresh = (Array.isArray(current.markRects) ? current.markRects : []).find((item) => item.id === mark.id)
+          if (fresh === undefined) return
+          openDetailCard(fresh)
+        }, ANNOTATION_DETAIL_HOVER_DELAY_MS)
+      }
+
+      /**
+       * Close the detail card after a 120 ms grace period unless the pointer is on
+       * the mark or inside the card (A3/T6 keep-open union).
+       * @returns {void}
+       */
+      function scheduleDetailClose() {
+        if (detailCloseTimer !== null) return
+        detailCloseTimer = window.setTimeout(() => {
+          detailCloseTimer = null
+          if (!isActive()) return
+          const current = snapshot()
+          if (current.detailCard === null) return
+          if (hoverPoint !== null && annotationPointInRect(hoverPoint, detailCardRect(current))) return
+          if (hoverPoint !== null) {
+            const hit = findMarkAt(hoverPoint, current.markRects)
+            if (hit !== null && hit.id === current.detailCard.refId) return
+          }
+          closeDetailCard()
+        }, ANNOTATION_DETAIL_CLOSE_DELAY_MS)
+      }
+
+      /**
+       * Recompute the detail position against its mark (scroll/resize/mutation).
+       * @returns {void}
+       */
+      function reclampDetailCard() {
+        const current = snapshot()
+        if (current.detailCard === null || typeof current.detailCard !== 'object') return
+        const mark = (Array.isArray(current.markRects) ? current.markRects : []).find((item) => item.id === current.detailCard.refId)
+        if (mark === undefined) return
+        const position = clampDetailCardPosition(mark.rect, detailMeasuredSize, annotationViewport(), current.railWidth)
+        if (position.x === current.detailCard.x && position.y === current.detailCard.y) return
+        publish({ detailCard: { ...current.detailCard, x: position.x, y: position.y, placement: position.placement } })
+      }
+
+      /**
+       * Marker-hover detection fed by pointer movement (A3/T6).
+       *
+       * The mark layer is pointer-transparent, so hit testing is numeric against
+       * the per-frame mark rects. A hit arms the 120 ms hover-intent timer; the
+       * pointer may then move into the detail card, which keeps it open.
+       * @param {{ x: number, y: number } | null} point - current viewport point.
+       * @returns {void}
+       */
+      function updateMarkerHover(point) {
+        if (!isActive() || point === null) return
+        const current = snapshot()
+        if (annotationPointInRect(point, detailCardRect(current))) {
+          cancelDetailClose()
+          return
+        }
+        const hit = findMarkAt(point, current.markRects)
+        const markerHoverId = hit !== null ? hit.id : null
+        if (current.markerHoverId !== markerHoverId) publish({ markerHoverId })
+        // The detail card and the popover are mutually exclusive: a draft selection
+        // always wins, and a click on the page closes the card before selecting.
+        if (current.state.selection.length > 0) {
+          if (current.detailCard !== null) closeDetailCard()
+          return
+        }
+        if (hit === null) {
+          if (current.detailCard !== null) scheduleDetailClose()
+          else cancelMarkerHoverTimer()
+          return
+        }
+        cancelDetailClose()
+        if (current.detailCard !== null) {
+          if (current.detailCard.refId === hit.id) return
+          closeDetailCard({ keepMarker: true })
+        }
+        scheduleMarkerHoverOpen(hit)
+      }
+
+      /** Track the mounted detail card for measurement. @param {Element | null} node - detail card root. @returns {void} */
+      function attachDetailNode(node) {
+        if (node === null || node === undefined) {
+          detachDetailNode()
+          return
+        }
+        if (!(node instanceof HTMLElement) || node === detailElement) return
+        detailElement = node
+        scheduleDetailMeasure()
+      }
+
+      /** Forget the mounted detail card. @returns {void} */
+      function detachDetailNode() {
+        detailElement = null
+        if (detailMeasureFrame !== null) {
+          window.cancelAnimationFrame(detailMeasureFrame)
+          detailMeasureFrame = null
+        }
+      }
+
+      /** Measure the detail card and re-clamp once its real size is known. @returns {void} */
+      function measureDetailCard() {
+        if (detailElement === null || typeof detailElement.getBoundingClientRect !== 'function') return
+        const rect = detailElement.getBoundingClientRect()
+        if (rect.width <= 0 || rect.height <= 0) return
+        const size = { width: Math.round(rect.width), height: Math.round(rect.height) }
+        const changed = size.width !== detailMeasuredSize.width || size.height !== detailMeasuredSize.height
+        detailMeasuredSize = size
+        if (changed) reclampDetailCard()
+      }
+
+      /** Schedule one coalesced detail-card measurement. @returns {void} */
+      function scheduleDetailMeasure() {
+        if (detailMeasureFrame !== null) return
+        detailMeasureFrame = window.requestAnimationFrame(() => {
+          detailMeasureFrame = null
+          measureDetailCard()
+        })
       }
 
       /**
@@ -11555,7 +12269,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const patch = deriveGeometry(nextState, current)
         store.set({ ...current, state: nextState, ...patch })
         // D1: every collection mutation schedules one debounced records write.
-        if (nextState.collection !== current.state.collection) scheduleAnnotationRecordsPersist()
+        if (nextState.collection !== current.state.collection) {
+          scheduleAnnotationRecordsPersist()
+          // A3/T6: marks are derived from the collection, so a commit/remove/restore
+          // must repaint them on the next geometry frame.
+          scheduleGeometry()
+          const card = snapshot().detailCard
+          if (card !== null && !nextState.collection.some((entry) => entry.id === card.refId)) closeDetailCard()
+        }
         return nextState
       }
 
@@ -11811,6 +12532,27 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             if (rect !== null) rects.push({ id: ref.id, rect })
           }
           patch.selectionRects = rects
+          // A3/T6: page marks are derived on the same rAF as the other geometry, so
+          // scroll/resize/DOM-mutation frames keep them glued to their elements.
+          patch.markRects = markRectsOf(current.state)
+          if (current.detailCard !== null) {
+            const cardMark = patch.markRects.find((mark) => mark.id === current.detailCard.refId)
+            const nextHover = current.markerHoverId !== null && patch.markRects.some((mark) => mark.id === current.markerHoverId)
+              ? current.markerHoverId
+              : null
+            if (nextHover !== current.markerHoverId) patch.markerHoverId = nextHover
+            if (cardMark === undefined) {
+              // The target stopped resolving (or moved out of the current Session):
+              // a card pointing at a missing element is worse than no card.
+              patch.detailCard = null
+              cancelDetailClose()
+            } else {
+              const position = clampDetailCardPosition(cardMark.rect, detailMeasuredSize, annotationViewport(), current.railWidth)
+              if (position.x !== current.detailCard.x || position.y !== current.detailCard.y) {
+                patch.detailCard = { ...current.detailCard, x: position.x, y: position.y, placement: position.placement }
+              }
+            }
+          }
           if (current.flashRefId !== null) {
             const flashRef = current.state.collection.find((entry) => entry.id === current.flashRefId)
             const flashNode = flashRef === undefined ? null : liveNode(flashRef)
@@ -11839,6 +12581,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           return
         }
         if (!blockEvent(event)) return
+        // A3/T6: a page press dismisses the hover card before the click selection.
+        closeDetailCard()
         if (event.button !== 0) {
           pointer = null
           return
@@ -11884,11 +12628,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           return
         }
         if (eventInsideOwn(event)) {
+          // The pointer may sit on our own detail card: that keeps it open. Any
+          // other own-surface hit (rail/popover) dismisses it via the no-hit path.
+          updateMarkerHover({ x: event.clientX, y: event.clientY })
           clearHover()
           return
         }
         hoverPoint = { x: event.clientX, y: event.clientY }
         scheduleHover()
+        updateMarkerHover(hoverPoint)
       }
 
       /**
@@ -12102,6 +12850,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const current = snapshot()
         const state = current.state
         if (state.phase === 'off') return
+        // A3/T6: the hover detail card is the first Esc rung (it was opened last).
+        if (current.detailCard !== null) {
+          closeDetailCard()
+          return
+        }
         if (current.noteEditor !== null) {
           closeNoteEditor()
           return
@@ -12182,6 +12935,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         popoverMeasureFrame = null
         if (persistTimer !== null) window.clearTimeout(persistTimer)
         persistTimer = null
+        if (markerHoverTimer !== null) window.clearTimeout(markerHoverTimer)
+        if (detailCloseTimer !== null) window.clearTimeout(detailCloseTimer)
+        if (undoExpireTimer !== null) window.clearTimeout(undoExpireTimer)
+        if (detailMeasureFrame !== null) window.cancelAnimationFrame(detailMeasureFrame)
+        markerHoverTimer = null
+        detailCloseTimer = null
+        undoExpireTimer = null
+        detailMeasureFrame = null
         resizeTimer = null
         frameObserverTimer = null
         feedbackTimer = null
@@ -12315,6 +13076,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           // active window, after the frame works so a failed activation never
           // leaves the shell chrome raised.
           capturePaintLayer()
+          scheduleGeometry()
         } catch (error) {
           try {
             dispatch({ type: 'deactivate' })
@@ -12364,6 +13126,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             hoverRecomputeTimer = null
           }
           lastPick = null
+          cancelMarkerHoverTimer()
+          cancelDetailClose()
+          closeDetailCard()
+          publish({ markRects: [], markerHoverId: null, markUndo: null })
           uninstallPageListeners()
           disconnectFrameObserver()
           restoreAnnotationLayout()
@@ -12560,38 +13326,67 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
 
       /**
-       * Add the current selection to the collection (add or update by identity).
-       * @returns {void}
+       * Commit the current selection into the collection (A3/T5/T7).
+       *
+       * This is the popover's primary action: it adds or updates the requirement,
+       * then auto-dismisses the popover + selection (spec §4.4) while the page marks
+       * stay visible. Multi-select keeps the Phase 1 batch wording but shares the
+       * same commit boundary. The 100-record cap is checked before any record is
+       * written (D15: explicit refusal, never a partial commit).
+       * @param {{ feedback?: boolean }} [options] - `feedback: false` suppresses the toast (quick reference).
+       * @returns {boolean} whether the selection was committed.
        */
-      function addSelectionToCollection() {
+      function commitSelection(options) {
+        const settingsForCommit = options !== null && typeof options === 'object' ? options : {}
         const current = snapshot()
         const state = current.state
-        if (state.selection.length === 0) return
+        if (state.selection.length === 0) return false
         const sessionId = annotationBridge.sessionId ?? state.sessionId ?? null
-        // D15: refuse explicitly at the commit boundary instead of silently
-        // dropping a record; the feedback toast is the visible refusal.
+        const identityMatches = (item, ref) => identityKeyOf(item) === identityKeyOf(ref)
+          && (item?.session?.sessionId ?? null) === (ref.session?.sessionId ?? sessionId)
         let additions = 0
         for (const ref of state.selection) {
-          const already = state.collection.some((item) => identityKeyOf(item) === identityKeyOf(ref)
-            && (item?.session?.sessionId ?? null) === (ref.session?.sessionId ?? sessionId))
-          if (!already) additions += 1
+          if (!state.collection.some((item) => identityMatches(item, ref))) additions += 1
         }
         if (state.collection.length + additions > ANNOTATION_RECORD_LIMIT) {
           feedback(t('collection.maxReached', { limit: ANNOTATION_RECORD_LIMIT }), 'error')
-          return
+          return false
         }
         let updated = false
         for (const ref of state.selection) {
+          const existing = snapshot().state.collection.some((item) => identityMatches(item, ref))
+          if (existing) updated = true
           const entry = {
             ...ref,
-            session: { sessionId: ref.session?.sessionId ?? sessionId },
+            // Preserve the full captured identity (cwd/workspaceLabel) on every
+            // commit path; dropping them silently would break D6 across a reload.
+            session: {
+              ...(ref.session !== null && typeof ref.session === 'object' ? ref.session : {}),
+              sessionId: ref.session?.sessionId ?? sessionId
+            },
             note: state.selection.length === 1 ? state.note : (ref.note ?? '')
           }
-          const existing = store.getSnapshot().state.collection.some((item) => identityKeyOf(item) === identityKeyOf(entry) && (item?.session?.sessionId ?? null) === (entry.session?.sessionId ?? null))
-          if (existing) updated = true
-          dispatch({ type: 'collectionAdd', entry })
+          dispatch({ type: 'annotationCommit', record: entry, now: Date.now() })
         }
-        feedback(updated ? t('feedback.updated') : t('feedback.added'))
+        // Auto-dismiss: close the popover/card, clear the selection, keep the marks
+        // that the commit just refreshed (spec §4.4).
+        closeDetailCard({ keepMarker: true })
+        dispatch({ type: 'selectSingle', ref: null })
+        if (settingsForCommit.feedback !== false) {
+          if (state.selection.length > 1) feedback(updated ? t('feedback.updated') : t('feedback.added'))
+          else if (updated) feedback(t('feedback.markUpdated'))
+          else feedback(t('feedback.marked', { count: snapshot().state.collection.length }))
+        }
+        return true
+      }
+
+      /**
+       * Add the current selection to the collection (legacy name used by the rail
+       * multi-select action; same commit boundary as the popover primary action).
+       * @returns {void}
+       */
+      function addSelectionToCollection() {
+        commitSelection()
       }
 
       /**
@@ -12621,13 +13416,23 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         return true
       }
 
-      /** Insert the current selection as one quick reference. @returns {void} */
+      /**
+       * Insert the current selection as one quick reference (Phase 1 plain text).
+       *
+       * A3/T7: the annotation is committed first (if it is new), then the plain-text
+       * block is inserted and the popover auto-closes. The native composer chip is
+       * Phase 2-B; until then this stays the Phase 1 insertion contract.
+       * @returns {void}
+       */
       function quickReference() {
         const state = snapshot().state
         const ref = state.selection[0]
         if (ref === undefined) return
-        const withStatus = { ...ref, status: statusOf(ref) }
-        insertIntoComposer(serializeQuickReference(withStatus, state.note, annotationInsertLabels(t)))
+        const note = state.note
+        const text = serializeQuickReference({ ...ref, note, status: statusOf(ref) }, note, annotationInsertLabels(t))
+        const committed = commitSelection({ feedback: false })
+        if (!committed) return
+        insertIntoComposer(text)
       }
 
       /** Insert every current-Session collection entry as one ordered batch request. @returns {void} */
@@ -12705,22 +13510,137 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
 
       /**
-       * Remove one collection entry.
+       * Publish the single-slot undo payload and (re)arm its 5 s expiry (D5).
+       * @param {object | null} undo - payload from `annotationUndoRemove`.
+       * @returns {void}
+       */
+      function setMarkUndo(undo) {
+        if (undoExpireTimer !== null) window.clearTimeout(undoExpireTimer)
+        undoExpireTimer = null
+        publish({ markUndo: undo })
+        if (undo !== null) {
+          undoExpireTimer = window.setTimeout(() => {
+            undoExpireTimer = null
+            publish({ markUndo: null })
+          }, ANNOTATION_UNDO_WINDOW_MS)
+        }
+      }
+
+      /**
+       * Remove one collection entry and show its 5 s undo toast (A3/T7/D4/D5).
+       * The newest removal replaces any previous undo slot.
        * @param {string} refId - ref id.
        * @returns {void}
        */
       function removeEntry(refId) {
-        dispatch({ type: 'collectionRemove', refId })
+        const current = snapshot()
+        if (!current.state.collection.some((entry) => entry.id === refId)) return
+        const removal = annotationUndoRemove(current.state.collection, refId, 'single', Date.now())
+        dispatch({ type: 'annotationRemove', refId })
         if (snapshot().noteEditor !== null && snapshot().noteEditor.refId === refId) publish({ noteEditor: null })
-        feedback(t('feedback.removed'))
+        if (snapshot().detailCard !== null && snapshot().detailCard.refId === refId) closeDetailCard()
+        setMarkUndo(removal.undo)
       }
 
-      /** Clear the collection. @returns {void} */
+      /** Remove the popover selection's existing collection record (danger X). @returns {void} */
+      function removeSelection() {
+        const state = snapshot().state
+        const ref = state.selection[0]
+        if (ref === undefined) return
+        const record = snapshot().state.collection.find((entry) => identityKeyOf(entry) === identityKeyOf(ref)
+          && (entry?.session?.sessionId ?? null) === (ref.session?.sessionId ?? null))
+        if (record === undefined) return
+        removeEntry(record.id)
+        dispatch({ type: 'selectSingle', ref: null })
+      }
+
+      /** Restore the single-slot undo payload (A3/T7/D5). @returns {void} */
+      function undoMark() {
+        const current = snapshot()
+        if (current.markUndo === null) return
+        const undo = current.markUndo
+        dispatch({ type: 'annotationUndo', undo })
+        setMarkUndo(null)
+        feedback(t('feedback.restored'))
+      }
+
+      /** Clear the collection, keeping its records in the same 5 s undo slot. @returns {void} */
       function clearCollection() {
-        if (snapshot().state.collection.length === 0) return
+        const current = snapshot()
+        if (current.state.collection.length === 0) return
+        const removal = annotationUndoRemove(current.state.collection, null, 'clear', Date.now())
         dispatch({ type: 'collectionClear' })
+        closeDetailCard()
         if (snapshot().noteEditor !== null) publish({ noteEditor: null })
-        feedback(t('feedback.cleared'))
+        setMarkUndo(removal.undo)
+      }
+
+      /**
+       * Open the detail card for a collection record by id (rail preview seam for
+       * Phase 2-B; the page path opens it through pointer hover).
+       * @param {string} refId - record id.
+       * @returns {boolean} whether the card opened.
+       */
+      function openDetailCardById(refId) {
+        const current = snapshot()
+        const mark = current.markRects.find((item) => item.id === refId)
+        if (mark === undefined) return false
+        openDetailCard(mark)
+        return snapshot().detailCard !== null
+      }
+
+      /** Enter the detail card's edit mode (requirement textarea). @returns {void} */
+      function beginDetailEdit() {
+        const current = snapshot()
+        if (current.detailCard === null) return
+        if (current.detailCard.mode === 'edit') return
+        publish({ detailCard: { ...current.detailCard, mode: 'edit' } })
+      }
+
+      /** Leave the detail card's edit mode without saving. @returns {void} */
+      function cancelDetailEdit() {
+        const current = snapshot()
+        if (current.detailCard === null || current.detailCard.mode !== 'edit') return
+        publish({ detailCard: { ...current.detailCard, mode: 'view' } })
+      }
+
+      /**
+       * Save one requirement from the detail card, bumping `updatedAt` (D4).
+       * @param {string} refId - record id.
+       * @param {string} note - requirement text.
+       * @returns {void}
+       */
+      function saveDetailNote(refId, note) {
+        if (typeof refId !== 'string' || refId.length === 0) return
+        dispatch({ type: 'annotationUpdateNote', refId, note: normalizeUserNote(note), now: Date.now() })
+        const current = snapshot()
+        if (current.detailCard !== null && current.detailCard.refId === refId) {
+          publish({ detailCard: { ...current.detailCard, mode: 'view' } })
+        }
+        feedback(t('feedback.markUpdated'))
+      }
+
+      /**
+       * Insert one collection record as a quick reference (Phase 1 plain text) from
+       * the detail card, then auto-dismiss the card (spec §4.4).
+       * @param {string} refId - record id.
+       * @returns {void}
+       */
+      function quickReferenceById(refId) {
+        const record = snapshot().state.collection.find((entry) => entry.id === refId)
+        if (record === undefined) return
+        const text = serializeQuickReference({ ...record, status: statusOf(record) }, record.note ?? '', annotationInsertLabels(t))
+        closeDetailCard()
+        insertIntoComposer(text)
+      }
+
+      /**
+       * Delete one record from the detail card (same undo toast as every other X).
+       * @param {string} refId - record id.
+       * @returns {void}
+       */
+      function deleteDetail(refId) {
+        removeEntry(refId)
       }
 
       /**
@@ -12785,7 +13705,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
        * @returns {void}
        */
       function sessionChanged(sessionId) {
+        closeDetailCard()
         dispatch({ type: 'session', sessionId })
+        scheduleGeometry()
       }
 
       // The launcher must obey the viewport for the whole plugin lifetime, not
@@ -12799,6 +13721,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         abortGestures()
         clearResolvedNodeCache()
         detachPopoverNode()
+        detachDetailNode()
+        cancelMarkerHoverTimer()
+        cancelDetailClose()
         uninstallPageListeners()
         disconnectFrameObserver()
         clearTimers()
@@ -12815,6 +13740,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         }
         annotationBridge.inputActions = null
         annotationBridge.sessionId = null
+        annotationBridge.sessionCwd = null
       }
 
       return {
@@ -12836,7 +13762,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         beginEdit,
         endEdit,
         addSelectionToCollection,
+        commitSelection,
         quickReference,
+        quickReferenceById,
         insertBatch,
         copyLocator,
         levelUp: () => shiftChain(1),
@@ -12844,7 +13772,17 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         setModifier,
         updateCollectionNote,
         removeEntry,
+        removeSelection,
+        undoMark,
         clearCollection,
+        openDetailCardById,
+        closeDetailCard,
+        beginDetailEdit,
+        cancelDetailEdit,
+        saveDetailNote,
+        deleteDetail,
+        attachDetailNode,
+        detachDetailNode,
         relocateEntry,
         openNoteEditor,
         closeNoteEditor,
@@ -12934,6 +13872,33 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-field{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
 .psa-field-label{min-width:0;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .psa-select{appearance:none;height:26px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-layer-1));color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;cursor:pointer}
+.psa-mark{position:fixed;box-sizing:border-box;border:1px solid color-mix(in srgb,var(--dsw-alias-state-business-primary) 62%,transparent);background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,transparent);border-radius:4px;pointer-events:none}
+.psa-mark[data-psa-mark-state=hovering]{border-width:1.5px;background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 12%,transparent)}
+.psa-mark[data-psa-mark-stale=changed]{border-style:dashed;border-color:var(--dsw-alias-state-warn-primary,var(--dsw-alias-state-business-primary))}
+.psa-mark-badge{position:absolute;top:-9px;right:-1px;box-sizing:border-box;max-width:240px;height:17px;padding:0 5px;display:inline-flex;align-items:center;gap:4px;border-radius:9px;border:1px solid var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-state-business-primary);font-family:inherit;font-size:10.5px;font-weight:500;line-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-mark[data-psa-mark-badge-inside=true] .psa-mark-badge{top:2px;right:2px}
+.psa-mark-badge[data-psa-mark-empty=true]{color:var(--dsw-alias-label-tertiary);border-color:var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent))}
+.psa-mark-badge[data-psa-mark-stale=changed]{border-color:var(--dsw-alias-state-warn-primary,var(--dsw-alias-state-business-primary));color:var(--dsw-alias-state-warn-primary,var(--dsw-alias-state-business-primary))}
+.psa-mark-badge-index{font-variant-numeric:tabular-nums;opacity:.85}
+.psa-mark-badge-text{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.psa-mark-badge-stale{font-weight:700}
+@media (prefers-reduced-motion:reduce){.psa-mark[data-psa-mark-state=flash]{animation:none;box-shadow:0 0 0 2px var(--dsw-alias-state-business-primary)}}
+.psa-detail-card{position:fixed;box-sizing:border-box;width:320px;max-height:min(60vh,420px);display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:auto;z-index:44;overflow:auto}
+.psa-detail-head{display:flex;align-items:center;gap:6px}
+.psa-detail-title{flex:1;min-width:0;font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-detail-section{display:flex;flex-direction:column;gap:3px}
+.psa-detail-label{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary)}
+.psa-detail-requirement{white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto;padding:4px 6px;border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-layer-1));color:var(--dsw-alias-label-primary)}
+.psa-detail-requirement[data-psa-detail-empty=true]{color:var(--dsw-alias-label-tertiary)}
+.psa-detail-meta{display:grid;grid-template-columns:auto minmax(0,1fr);gap:1px 8px;margin:0;font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary)}
+.psa-detail-meta dt{margin:0;white-space:nowrap}
+.psa-detail-meta dd{margin:0;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}
+.psa-detail-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px}
+.psa-detail-actions .psa-btn{width:auto;flex:none}
+.psa-detail-danger{color:var(--dsw-alias-state-error-primary)}
+.psa-detail-textarea{box-sizing:border-box;width:100%;min-height:64px;max-height:180px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
+.psa-undo-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:57;display:flex;align-items:center;gap:10px;max-width:min(520px,calc(100vw - 48px));padding:8px 10px 8px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 8px 24px rgb(0 0 0 / 18%));color:var(--dsw-alias-label-secondary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:auto}
+.psa-undo-toast .psa-btn{width:auto;min-height:24px;padding:2px 8px}
 .psa-popover{position:fixed;box-sizing:border-box;width:320px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;gap:8px;padding:10px 12px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:auto;z-index:45}
 .psa-popover-head{display:flex;align-items:center;gap:6px;cursor:grab;user-select:none}
 .psa-popover-title{flex:1;min-width:0;font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -12964,6 +13929,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-rainbow-field > .psa-popover-textarea,
 .psa-rainbow-field > .psa-entry-note,
 .psa-rainbow-field > .psa-note-editor-textarea,
+.psa-rainbow-field > .psa-detail-textarea,
 .psa-rainbow-field > .psa-select{position:relative;z-index:1;outline:none}
 @keyframes psa-ring-spin{to{--psa-ring-angle:360deg}}
 @keyframes psa-ring-hue{from{filter:hue-rotate(0deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}to{filter:hue-rotate(360deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}}
@@ -13041,13 +14007,35 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       const node = []
       node.push(React.createElement(AnnotationLauncher, { key: 'launcher', t, controller, snapshot }))
       if (active) {
-        node.push(React.createElement(AnnotationHighlights, { key: 'layer', snapshot }))
+        node.push(React.createElement(AnnotationHighlights, { key: 'layer', snapshot, t }))
         node.push(React.createElement(AnnotationRail, { key: 'rail', t, controller, snapshot }))
         if (state.phase === 'selected') {
           node.push(React.createElement(AnnotationPopover, { key: 'popover', t, controller, snapshot }))
         }
+        if (snapshot.detailCard !== null) {
+          node.push(React.createElement(AnnotationDetailCard, { key: 'detail', t, controller, snapshot }))
+        }
       }
       if (snapshot.noteEditor !== null) node.push(React.createElement(AnnotationNoteEditor, { key: 'note-editor', t, controller, snapshot }))
+      if (snapshot.markUndo !== null) {
+        const undo = snapshot.markUndo
+        node.push(React.createElement('div', {
+          key: 'undo-toast',
+          className: 'psa-undo-toast',
+          'data-psa-undo-toast': '',
+          'data-psa-own': '',
+          role: 'status',
+          'aria-live': 'polite'
+        },
+        React.createElement('span', { 'data-psa-undo-text': '' }, undo.kind === 'clear' ? t('feedback.cleared') : t('feedback.markDeleted')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-undo': '',
+          'data-psa-own': '',
+          onClick: () => controller.undoMark()
+        }, t('feedback.undo'))))
+      }
       if (state.feedback !== null) {
         node.push(React.createElement('div', {
           key: 'feedback',
@@ -13095,12 +14083,56 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
-     * Hover, selection, marquee, and re-locate flash rectangles.
-     * @param {{ snapshot: object }} props - surface props.
+     * The page mark badges for the current Session's resolved annotations (A3/T6).
+     *
+     * Marks are decorative overlay children only: `aria-hidden`, pointer-events
+     * none (CSS), and no attribute is ever written to the page's own elements.
+     * @param {object} snapshot - current annotation snapshot.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {Array<object>} mark elements.
+     */
+    function annotationMarkElements(snapshot, t) {
+      const marks = Array.isArray(snapshot.markRects) ? snapshot.markRects : []
+      const nodes = []
+      for (const mark of marks) {
+        const hovering = snapshot.markerHoverId === mark.id
+        const summary = mark.empty === true ? t('detail.emptyRequirement') : String(mark.summary ?? '')
+        const title = `#${mark.index} · ${summary}${mark.stale === true ? ` · ${t('popover.status.changed')}` : ''}`
+        const badgeInside = mark.rect !== null && typeof mark.rect === 'object' && typeof mark.rect.y === 'number' && mark.rect.y < 12
+        nodes.push(React.createElement('div', {
+          key: `mark-${mark.id}`,
+          className: 'psa-mark',
+          'data-psa-mark': '',
+          'data-psa-mark-id': mark.id,
+          'data-psa-mark-index': String(mark.index),
+          'data-psa-mark-state': hovering ? 'hovering' : 'marked',
+          'data-psa-mark-stale': mark.stale === true ? 'changed' : undefined,
+          'data-psa-mark-badge-inside': badgeInside ? 'true' : undefined,
+          'data-psa-own': '',
+          'aria-hidden': 'true',
+          style: annotationRectStyle(mark.rect)
+        },
+        React.createElement('span', {
+          className: 'psa-mark-badge',
+          'data-psa-mark-badge': '',
+          'data-psa-mark-empty': mark.empty === true ? 'true' : undefined,
+          'data-psa-mark-stale': mark.stale === true ? 'changed' : undefined,
+          title
+        },
+        React.createElement('span', { className: 'psa-mark-badge-index' }, `#${mark.index}`),
+        mark.stale === true ? React.createElement('span', { className: 'psa-mark-badge-stale', 'aria-hidden': 'true' }, '!') : null,
+        React.createElement('span', { className: 'psa-mark-badge-text' }, summary))))
+      }
+      return nodes
+    }
+
+    /**
+     * Hover, selection, marquee, mark, and re-locate flash rectangles.
+     * @param {{ snapshot: object, t: Function }} props - surface props.
      * @returns {object} the highlight layer.
      */
     function AnnotationHighlights(props) {
-      const { snapshot } = props
+      const { snapshot, t } = props
       const state = snapshot.state
       const boxes = []
       if (snapshot.hoverRect !== null) {
@@ -13143,6 +14175,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           style: annotationRectStyle(snapshot.boxRect)
         }))
       }
+      boxes.push(...annotationMarkElements(snapshot, t))
       return React.createElement('div', { className: 'psa-layer', 'data-psa-layer': '', 'data-psa-own': '' }, boxes)
     }
 
@@ -13527,6 +14560,179 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
+     * Hover detail card for one current-Session annotation (A3/T6).
+     *
+     * Opens after 120 ms of pointer rest on a page mark, anchored beside the mark
+     * with side/vertical flip and viewport clamping; the pointer may move into the
+     * card (keep-open union). It never steals focus on hover; explicit actions
+     * (Edit requirement / Add requirement) may focus their textarea.
+     * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
+     * @returns {object | null} the detail card.
+     */
+    function AnnotationDetailCard(props) {
+      const { t, controller, snapshot } = props
+      const card = snapshot.detailCard
+      /** Requirement draft; uncontrolled so hover reopen never fights the record value. */
+      const noteRef = React.useRef(null)
+      const setDetailNode = React.useCallback((node) => {
+        if (node === null) controller.detachDetailNode()
+        else controller.attachDetailNode(node)
+      }, [controller])
+      if (card === null) return null
+      const record = snapshot.state.collection.find((entry) => entry.id === card.refId)
+      if (record === undefined) return null
+      const status = controller.statusOf(record)
+      const editing = card.mode === 'edit'
+      const locator = annotationLocatorText(record)
+      const mark = (Array.isArray(snapshot.markRects) ? snapshot.markRects : []).find((item) => item.id === record.id)
+      const liveBounds = mark !== undefined && mark.rect !== null ? mark.rect : normalizeAnnotationBounds(record.bounds)
+      const bounds = liveBounds ?? { x: 0, y: 0, width: 0, height: 0 }
+      const positionText = `${Math.round(bounds.x)}, ${Math.round(bounds.y)} · ${Math.round(bounds.width)}×${Math.round(bounds.height)}`
+      const sessionId = record.session !== null && typeof record.session === 'object' ? record.session.sessionId : null
+      const sessionText = `${sessionShortLabel(sessionId) || t('insert.noSession')} · ${formatAnnotationTime(record.at)}`
+      const cwd = record.session !== null && typeof record.session === 'object' ? record.session.cwd : null
+      const workspaceText = (record.session !== null && typeof record.session === 'object' ? record.session.workspaceLabel : null)
+        || annotationWorkspaceLabel(cwd)
+        || '—'
+      const surface = record.locator !== null && typeof record.locator === 'object' ? record.locator.surface : 'page'
+      const ephemeral = record.locator !== null && typeof record.locator === 'object' && record.locator.ephemeral === true
+      const requirement = typeof record.note === 'string' ? record.note : ''
+      /**
+       * One metadata row.
+       * @param {string} label - localized label.
+       * @param {string} value - display value.
+       * @param {string} marker - data attribute for E2E.
+       * @returns {Array<object>} dt/dd pair.
+       */
+      const metaRow = (label, value, marker) => React.createElement(React.Fragment, null,
+        React.createElement('dt', null, label),
+        React.createElement('dd', { [marker]: '' }, value))
+      return React.createElement('div', {
+        ref: setDetailNode,
+        className: 'psa-detail-card',
+        'data-psa-detail': '',
+        'data-psa-own': '',
+        'data-psa-detail-ref': record.id,
+        'data-psa-detail-mode': card.mode,
+        'data-psa-status': status,
+        role: 'dialog',
+        'aria-label': t('detail.title'),
+        style: { left: `${card.x}px`, top: `${card.y}px` }
+      },
+      React.createElement('div', { className: 'psa-detail-head', 'data-psa-own': '' },
+        React.createElement('span', { className: 'psa-status-dot', 'data-psa-status': status, 'data-psa-own': '' }),
+        React.createElement('span', { className: 'psa-detail-title', 'data-psa-detail-title': '' }, elementLabel(record)),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-detail-close': '',
+          'data-psa-own': '',
+          'aria-label': t('detail.close'),
+          title: t('detail.close'),
+          onClick: () => controller.closeDetailCard()
+        }, RemixGlyph(REMIX_CLOSE_LINE, 14))),
+      React.createElement('div', { className: 'psa-detail-section', 'data-psa-own': '' },
+        React.createElement('span', { className: 'psa-detail-label' }, t('detail.requirement')),
+        editing
+          ? React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
+            React.createElement('textarea', {
+              key: `detail-note-${record.id}`,
+              className: 'psa-detail-textarea',
+              'data-psa-detail-note': '',
+              'data-psa-own': '',
+              ref: noteRef,
+              defaultValue: requirement,
+              rows: 3,
+              placeholder: t('popover.notePlaceholder'),
+              'aria-label': t('detail.requirement'),
+              autoFocus: true
+            }))
+          : React.createElement('div', {
+            className: 'psa-detail-requirement',
+            'data-psa-detail-requirement': '',
+            'data-psa-own': '',
+            'data-psa-detail-empty': requirement.length === 0 ? 'true' : undefined
+          }, requirement.length > 0 ? requirement : t('detail.emptyRequirement')),
+        !editing && requirement.length === 0
+          ? React.createElement('button', {
+            type: 'button',
+            className: 'psa-btn',
+            'data-psa-detail-add': '',
+            'data-psa-own': '',
+            style: { width: 'auto', alignSelf: 'flex-start' },
+            onClick: () => controller.beginDetailEdit()
+          }, t('detail.addRequirement'))
+          : null,
+        editing
+          ? React.createElement('div', { className: 'psa-detail-actions', 'data-psa-own': '' },
+            React.createElement('button', {
+              type: 'button',
+              className: 'psa-btn',
+              'data-psa-detail-cancel': '',
+              'data-psa-own': '',
+              onClick: () => controller.cancelDetailEdit()
+            }, t('detail.cancel')),
+            React.createElement('button', {
+              type: 'button',
+              className: 'psa-btn psa-btn-primary',
+              'data-psa-detail-save': '',
+              'data-psa-own': '',
+              onClick: () => {
+                const text = noteRef.current !== null && noteRef.current !== undefined ? noteRef.current.value : ''
+                controller.saveDetailNote(record.id, text)
+              }
+            }, t('detail.save')))
+          : null),
+      React.createElement('dl', { className: 'psa-detail-meta', 'data-psa-detail-meta': '', 'data-psa-own': '' },
+        metaRow(t('detail.status'), t(`popover.status.${status}`), 'data-psa-detail-status'),
+        metaRow(t('detail.locator'), locator, 'data-psa-detail-locator'),
+        metaRow(t('detail.position'), positionText, 'data-psa-detail-position'),
+        metaRow(t('detail.session'), sessionText, 'data-psa-detail-session'),
+        metaRow(t('detail.workspace'), workspaceText, 'data-psa-detail-workspace'),
+        surface === 'floating'
+          ? metaRow(t('detail.surfaceFloating'), ephemeral ? t('detail.ephemeral') : t('detail.surfaceFloating'), 'data-psa-detail-surface')
+          : null),
+      React.createElement('div', { className: 'psa-detail-actions', 'data-psa-own': '' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-detail-quick-ref': '',
+          'data-psa-own': '',
+          onClick: () => controller.quickReferenceById(record.id)
+        }, t('detail.quickRef')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-detail-edit': '',
+          'data-psa-own': '',
+          onClick: () => controller.beginDetailEdit()
+        }, t('detail.edit')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-detail-relocate': '',
+          'data-psa-own': '',
+          onClick: () => controller.relocateEntry(record.id)
+        }, t('detail.relocate')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-detail-copy-locator': '',
+          'data-psa-own': '',
+          onClick: () => controller.copyLocator(record.id)
+        }, t('detail.copyLocator')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn psa-detail-danger',
+          'data-psa-detail-delete': '',
+          'data-psa-own': '',
+          'aria-label': t('detail.delete'),
+          title: t('detail.delete'),
+          onClick: () => controller.deleteDetail(record.id)
+        }, RemixGlyph(REMIX_DELETE_BIN_LINE, 14))))
+    }
+
+    /**
      * The draggable element popover with the note editor and the two actions.
      * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
      * @returns {object | null} the popover.
@@ -13617,7 +14823,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           onClick: () => controller.levelDown()
         }, RemixGlyph(REMIX_ARROW_DOWN_LINE, 13)))),
       React.createElement('label', { className: 'psa-popover-note', 'data-psa-own': '' },
-        React.createElement('span', { className: 'psa-muted' }, t('popover.noteLabel')),
+        React.createElement('span', { className: 'psa-muted' }, t('detail.requirement')),
         React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
           React.createElement('textarea', {
             className: 'psa-popover-textarea',
@@ -13643,9 +14849,21 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           type: 'button',
           className: 'psa-btn psa-btn-primary',
           'data-psa-add': '',
+          'data-psa-commit': '',
           'data-psa-own': '',
-          onClick: () => controller.addSelectionToCollection()
-        }, inCollection ? t('popover.update') : t('popover.add'))))
+          onClick: () => controller.commitSelection()
+        }, inCollection ? t('popover.update') : t('popover.commit')),
+        inCollection
+          ? React.createElement('button', {
+            type: 'button',
+            className: 'psa-icon-btn psa-detail-danger',
+            'data-psa-popover-delete': '',
+            'data-psa-own': '',
+            'aria-label': t('popover.delete'),
+            title: t('popover.delete'),
+            onClick: () => controller.removeSelection()
+          }, RemixGlyph(REMIX_DELETE_BIN_LINE, 14))
+          : null))
     }
 
     /**
@@ -13698,9 +14916,22 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
      */
     function AnnotationSessionSeat(props) {
       const { sessionId, inputActions } = props
+      // Session-scoped slots receive the global `useSessions` standard hook. The
+      // annotation overlay itself is not a slot, so this seat mirrors the Session's
+      // workspace identity (cwd) into the bridge for record capture (F-2). The hook
+      // presence is fixed by the slot contract for this seat's lifetime.
+      const useSessions = typeof props.useSessions === 'function' ? props.useSessions : null
+      const sessionsList = useSessions !== null ? useSessions((state) => state) : null
+      const sessionCwd = sessionId !== undefined && sessionsList !== null && typeof sessionsList === 'object'
+        && sessionsList.byId !== null && typeof sessionsList.byId === 'object'
+        && typeof sessionsList.byId[sessionId]?.cwd === 'string'
+        && sessionsList.byId[sessionId].cwd.length > 0
+        ? sessionsList.byId[sessionId].cwd
+        : null
       React.useEffect(() => {
         annotationBridge.sessionId = typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null
         annotationBridge.inputActions = inputActions ?? null
+        annotationBridge.sessionCwd = sessionCwd
         if (annotationController !== null) annotationController.sessionChanged(annotationBridge.sessionId)
         return () => {
           // The bridge is all-or-nothing: a session id without its Composer actions (or the
@@ -13708,9 +14939,10 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           // seat unmounts (e.g. leaving the conversation for the Plugins view).
           annotationBridge.sessionId = null
           annotationBridge.inputActions = null
+          annotationBridge.sessionCwd = null
           if (annotationController !== null) annotationController.sessionChanged(null)
         }
-      }, [sessionId, inputActions])
+      }, [sessionId, inputActions, sessionCwd])
       return React.createElement('span', {
         style: { display: 'none' },
         'aria-hidden': true
@@ -13868,7 +15100,16 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         parseAnnotationStore,
         serializeAnnotationStore,
         annotationSurfaceRoot,
-        annotationSurfaceLevels
+        annotationSurfaceLevels,
+        upsertAnnotationRecord,
+        removeAnnotationRecord,
+        restoreAnnotationRecord,
+        moveAnnotationRecord,
+        toggleAnnotationInclude,
+        annotationUndoRemove,
+        annotationUndoRestore,
+        annotationMarkerBadgeText,
+        clampDetailCardPosition
       }
       // The dynamic-Workspaces hover card's native figures. Kept in its own
       // namespace so the annotation seam above stays byte-for-byte stable.

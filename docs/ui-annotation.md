@@ -29,14 +29,30 @@ page's content elements, never reads form values, and never sends the message.
 - **Pass-through** — holding the pass-through modifier gives the page its real
   native mouse behavior back, for the left and right buttons, without leaving the
   mode.
-- **Note popover** — element name, locator summary, live resolution status, an
-  ancestor lever, a note field, a **Copy locator** action, and two paths: insert
-  one reference into the composer, or add the element to the collection. Floating
-  surfaces are marked as transient in the popover.
+- **Requirement popover** — element name, locator summary, live resolution
+  status, an ancestor lever, the **requirement** field, **Copy locator**, and the
+  commit surface: **Mark requirement** / **Update requirement** (primary),
+  **Quick reference**, and **Delete annotation**. Committing a requirement closes
+  the popover and clears the selection automatically; floating surfaces are
+  marked as transient in the popover.
+- **Page marks** — every current-Session annotation whose target still resolves
+  stays visible on the page as a pointer-transparent overlay mask with a numbered
+  badge (`#3` plus a one-line requirement excerpt). Missing, ambiguous, and
+  other-Session records are deliberately not drawn.
+- **Hover detail card** — resting the pointer on a mark opens a floating card
+  beside it after about 120 ms: full requirement, locator, live position box,
+  Session + Workspace, status, transient marker, and the actions Quick reference,
+  Edit requirement (rainbow textarea with Save/Cancel), Go to element, Copy
+  locator, and Delete. The pointer may move into the card, focus is never stolen,
+  Esc closes it first, and it never covers the rail.
+- **Delete undo** — deleting an annotation from the popover, the detail card, or
+  a rail row (and **Clear**) immediately shows a 5 s undo toast with `role=status`
+  instead of a confirmation dialog; a newer deletion replaces the previous undo
+  slot.
 - **Collection** — an ordered list held in the rail with per-entry notes, copy
   locator, delete and re-locate actions, and a batch insert that produces one
   structured request for the model. It is persisted in the browser and restored
-  after a reload (up to 100 annotations).
+  after a reload (up to 100 annotations; the 101st commit is refused visibly).
 - **Input focus treatment** — annotation text fields and selects use the plugin's
   shared rainbow focus ring instead of a solid blue outline (see
   [focus treatment](#focus-treatment)).
@@ -267,7 +283,7 @@ Releasing the modifier returns to annotation behavior. Pass-through state is
 reset on window blur, so a modifier held during a focus change cannot leave the
 page in the wrong mode.
 
-## The note popover
+## The requirement popover
 
 Clicking a single selected element opens a compact popover near it. It is
 draggable by its header, clamped inside the viewport with an 8 px margin, and kept
@@ -306,12 +322,16 @@ It shows:
   sanitizer below;
 - the **Requested change** field uses the shared plugin rainbow focus ring (see
   [focus treatment](#focus-treatment)) instead of a solid outline;
-- **Quick reference** — inserts this one annotation into the current Session's
-  composer at the caret, preserving the existing draft and caret position, one
-  undo step, and never sending the message;
-- **Add to collection** / **Update collection** — the label and state follow
-  whether the element is already in the collection. Adding does not touch the
-  composer.
+- **Quick reference** — commits the requirement first when the element is not
+  yet in the collection, then inserts this one annotation into the current
+  Session's composer at the caret, preserving the existing draft and caret
+  position, one undo step, and never sending the message (the native inline
+  composer chip is Phase 2-B; this build inserts the Phase 1 plain-text block);
+- **Mark requirement** / **Update requirement** — the primary action. It adds or
+  updates the record and then auto-dismisses the popover and clears the
+  selection, keeping the page marks visible; it does not touch the composer;
+- **Delete annotation** — the danger X for an element that is already in the
+  collection. It deletes immediately (no confirmation) and shows the undo toast.
 
 With no Session composer mounted (for example on the Start page), insert actions
 are unavailable: the collection view shows **Open a session before inserting a
@@ -324,6 +344,37 @@ from the popover keeps the original position in the list and shows **Updated the
 existing collection entry**: a non-empty note replaces the stored one, while an
 empty note preserves the note already saved for that entry. It never creates a
 duplicate.
+
+## Page marks and the hover detail card
+
+While the mode is on, a current-Session annotation whose target still resolves is
+outlined on the page by a `.psa-mark` overlay mask with a `.psa-mark-badge`
+carrying its `#index` and a one-line requirement excerpt (18 characters, then an
+ellipsis; an empty requirement shows the empty placeholder). Marks are drawn only
+for records of the current Session in the **resolved** or **changed** state: a
+missing or ambiguous target, and every other-Session record, is not drawn at all,
+so a mark can never point at the wrong element. A changed target gets a
+warning-toned badge. Marks live inside the annotation layer with
+`pointer-events: none` and `aria-hidden`, never write an attribute or class onto
+the page's own elements, and follow the existing scroll/resize/DOM-mutation
+geometry frames. Under `prefers-reduced-motion` they are static.
+
+Resting the pointer on a mark for about 120 ms opens the **hover detail card**
+(`[data-psa-detail]`, `role="dialog"`): element name + status, the full
+requirement (`white-space: pre-wrap`, internally scrollable), the locator
+(`uniqueSelector || describeLocator`), the live `x, y · width×height` position,
+the Session short label with its timestamp, the Workspace label, the transient
+surface marker for floating records, and the action row Quick reference / Edit
+requirement / Go to element / Copy locator / Delete. The card is anchored beside
+the mark, flips to the left or above when there is no room, and clamps inside the
+viewport so it never covers the rail. The pointer may move into the card (the
+element-union-card is the keep-open area) and it closes about 120 ms after the
+pointer leaves; exactly one card is open at a time; opening the popover or
+pressing Esc closes it, and the page press that starts a new selection dismisses
+it first. It is opened by hover only and never steals focus; Edit requirement /
+Add requirement explicitly focus the rainbow-wrapped textarea, where Save bumps
+`updatedAt` and both Save and Cancel return to the read view. The popover and the
+detail card are mutually exclusive.
 
 ## The collection
 
@@ -647,8 +698,10 @@ package manifest.
 - **Two seats** — a `shell.overlay` seat (`AnnotationOverlay`) renders the
   launcher, rail, popover, and highlight layers; a renderless
   `conversation.input.overlay` seat (`AnnotationSessionSeat`) keeps the module's
-  bridge (`sessionId`, `inputActions` — the slot contract passes **no** `draft`
-  prop) current for the Session on screen and notifies the controller. The
+  bridge (`sessionId`, `inputActions`, and the Session's `cwd` — the slot
+  contract passes **no** `draft` prop, but the Session-scope seat does receive the
+  `useSessions` standard hook, which is how the Workspace identity reaches a
+  record) current for the Session on screen and notifies the controller. The
   composer itself remains the source of truth for the live draft/caret.
   Feature copy is registered under the `powerSuiteAnnotation` namespace and
   bound once with `ctx.locale.bind`, so both the overlay and the controller
@@ -778,7 +831,7 @@ plugin is installed, and its mode-dependent rules act only while
 
 ## Testing and verification
 
-Pure logic is covered by Node's test runner (**70** cases); live behavior is
+Pure logic is covered by Node's test runner (**204** cases); live behavior is
 exercised by a pre-merge acceptance harness, but **not every interaction has a
 single full-green live run** (see below and
 [verification.md](verification.md)).
@@ -817,7 +870,7 @@ dependency-free Node script that drives local Chrome over CDP. Run it from the
 repository root against a running GUI:
 
 ```bash
-node test/browser/annotation.e2e.mjs            # smoke + 11 scenarios + screenshots
+node test/browser/annotation.e2e.mjs            # smoke + 13 scenarios + screenshots
 node test/browser/annotation.e2e.mjs --smoke    # pipeline smoke only
 node test/browser/annotation.e2e.mjs --scenario 10 --no-shots  # one scenario (1-15), no captures
 ```
@@ -850,6 +903,37 @@ recorded these live results against the running GUI:
   the harness retries/limitations are documented in
   [`test/browser/README.md`](../test/browser/README.md).
 
+The Phase 2-A build (`feat/annotation-ux`, on top of the Phase 1 commit `1261846`)
+recorded these live results against the running GUI:
+
+- `npm test`: **204/204** pass; `npm run check`: exit 0 (18 modules, 10 test files,
+  pack dry-run included).
+- `--smoke`: **6/6**, 57-key seam (Phase 1 48 + the A3 Phase 2-A record-action,
+  undo, mark-badge and detail-clamp helpers), 0 page errors, 0 real network
+  failures.
+- New scenarios **12** (`page marks + hover detail card + edit + delete/undo +
+  other-Session exclusion + reduced motion`) and **14** (`reload restores
+  records/marks; a removed target reads missing in the rail and is not drawn`)
+  pass individually and in sequence.
+- Self-contained regression sequence `node test/browser/annotation.e2e.mjs --from
+  6 --no-shots` (smoke + scenarios 6, 7, 8, 9, 10, 12, 14, 15) recorded
+  **14 PASS / 1 SKIP / 0 FAIL** in 173 s with 0 page errors and 0 real network
+  failures; the SKIP row (`10b`) is still the cross-branch hovering-card pin.
+  Scenario 10 additionally proves in that run that a real captured record now
+  has `session.cwd` (absolute), `workspaceLabel` = cwd basename, matching
+  `sessionId`, plausible `bounds`, the captured `viewport`, and a query-free
+  route — the F-2 identity regression that Phase 1 persisted as nulls.
+- Scenario 4 (`multi-select; collection add/update/note/remove`) and the
+  S4→S5 sequence (multi add then ordered batch insert, draft preserved) pass on
+  the reworked commit surface; scenario 10 and scenario 12 pass standalone too.
+- Known evidence limits: one `--from 6` attempt on this build failed inside
+  scenario 10 when the **native DSH hover preview card did not appear within 5 s**
+  (the failing step is the pre-existing F2 hover-card probe, not an annotation
+  assertion; a rerun of the same sequence was green). The screen-capture pass was
+  not regenerated for Phase 2-A; the checked-in images remain from the earlier
+  round-2 build, and Phase 2-A screenshots were kept outside the repository as
+  working evidence.
+
 Historical round-1/round-2 acceptance evidence (pre-merge branches, 31/32/35-key
 seams) remains recorded in [verification.md](verification.md) and the harness
 README; it is not evidence for the Phase 1 build. The checked-in
@@ -866,8 +950,9 @@ Phase 2 UX pass along with the new detail card and marks.
 - Other modes: `--shots-only` captures the screenshots without assertions,
   `--assets` writes them to `docs/assets/` (the default is a temporary
   directory), `--client <path>` injects an alternate client file, `--scenario N`
-  or `--from N` runs a subset (scenario ids 1-15; 11,12,13,14 belong to the
-  Phase 2 UX work and are not in this build's order), `--no-shots` skips captures, `--headful` shows the
+  or `--from N` runs a subset (scenario ids 1-15; this build's order is
+  1-10, 12, 14, 15 — 11 and 13 are the Phase 2-B chip/rail work and are not
+  implemented yet), `--no-shots` skips captures, `--headful` shows the
   browser, and `--keep-open` leaves Chrome running for inspection.
 - Gate semantics: the exit code is `0` only when every check passes; `1` for any
   scenario failure, page error, real network/API failure, missing scenario row,
@@ -878,7 +963,9 @@ Phase 2 UX pass along with the new detail card and marks.
   generation (round-1 31 keys with `textDigest`; round-2 32 keys with
   `resolveNodeCandidate`; audit-fix 35 keys adding `normalizeUserNote`,
   `cssIdentifier` and `clampPopoverPositionToViewport`; Phase 1 48 keys adding the
-  floating-surface picker, verified selector/ancestors, and v2 record store), or does not mount the
+  floating-surface picker, verified selector/ancestors, and v2 record store; Phase
+  2-A 57 keys adding the record commit/remove/restore/move/include helpers, the
+  single-slot undo, the mark-badge excerpt, and the detail-card clamp), or does not mount the
   annotation surface. `full` and `--shots-only` with a feature-absent client
   record a **FAIL** row and exit non-zero; every requested scenario must produce
   a result row.
