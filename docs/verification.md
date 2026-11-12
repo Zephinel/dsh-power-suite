@@ -22,15 +22,15 @@ npm run pack:check
 
 Current evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round):
 
-- `npm test`: **201 tests, 201 passed, 0 failed, 0 skipped** after the 0.3.0
+- `npm test`: **202 tests, 202 passed, 0 failed, 0 skipped** after the 0.3.0
   Project-view removal (the 24 project-view tests were deleted with the page),
   including **14** read-acks, **22** session-activity Host tests, **7** extra
   interrupted-session tests (error/max-tokens/aborted-cause cases and SSE stream
-  frames), **11** Dynamic-Workspaces hover-card figure tests, and **91**
+  frames), **11** Dynamic-Workspaces hover-card figure tests, and **92**
   UI-element-annotation tests through the browser-factory test seam; per-file:
   dynamic-workspaces-stats 11, interrupted-host 20, interrupted-sessions 7,
   prompt-history 6, read-acks 14, session-activity 22, session-artifacts 16,
-  settings 6, ui-annotation 91, workspace-presets 8.
+  settings 6, ui-annotation 92, workspace-presets 8.
 - `npm run check`: passed (`16 modules, 10 test files`).
 - Interrupted-state SSE transport was verified with cookie auth: 200,
   `content-type: text/event-stream; charset=utf-8`, no-store/no-buffering, first
