@@ -473,8 +473,11 @@ restart the Host process; no DSH restart) after upgrading.
 
 ## Current-Session highlight
 
-The row for the Session the main conversation currently shows gets a soft,
-breathing rainbow wave, and so does the Workspace it belongs to:
+The row for the Session the main conversation currently shows gets a low-intensity
+animated rainbow "atmosphere" painted **inside its own rounded-rectangle highlight**,
+with the real title/time/action content layered above it. The same treatment is
+applied to the native Workspace row that owns the Session and, since B4 v3, to the
+native sidebar Session row of the open Session:
 
 - **Semantics**: the current Session is the client summary the main view retains
   (`retainedBy.mainView > 0`) — the same source the read-baseline effect trusts.
@@ -482,42 +485,57 @@ breathing rainbow wave, and so does the Workspace it belongs to:
   released, so opening a Session anywhere (card, native sidebar, elsewhere) moves
   the highlight immediately; exactly that row gets `.psd-run-current` (child:
   `.psd-child-current`) plus `aria-current="true"`. A nested subagent child gets
-  an absolute `.psd-child-wave` span (the child wrapper's pseudo-elements already
-  draw the tree connectors), and when a subagent Session is the open one the
-  highlight lands on its parent Session's Workspace. The highlight disappears
-  when the row leaves the card. Merely-running or unopened completed rows are
-  intentionally **not** highlighted.
-- **Visual**: the highlight is painted on the row's **own rounded rectangle**,
-  not on a detached band behind the text. Two stacked pseudo-element layers
-  cover the row box exactly (`inset: 0`, `border-radius: inherit`, clipped by
-  the row radius) and are masked so only the **bottom face** shows:
-  - a **faint rim** (`::after`): the 90° rainbow gradient, 2.8 px blur, masked to
-    a ~1.5 px line at the very bottom that fades out by 8 px — a quiet core that
-    follows the rounded bottom corners;
-  - a **wide feathered haze** (`::before`): the same rainbow gradient, 11 px
-    blur, at reduced saturation (.88), masked by a vertical low-alpha falloff
-    plus four large soft radial puffs, so the colour diffuses upward into the
-    row like spreading smoke and its upper edge is irregular and fully
-    feathered. The haze drifts across the row (22 s alternate), breathes
-    (10 s) and hue-cycles (36 s); the rim flows (14 s alternate) and breathes
-    (7 s).
-  The layers stay at ~28–43 % and ~34–50 % opacity, so the highlight is felt
-  more than seen and the row stays readable in light and dark themes. Nothing
-  animates on the row itself, no geometry changes (no layout shift), and
-  `prefers-reduced-motion: reduce` stops all animations leaving the static
-  bottom-face tint (smoke 30 %, rim 38 %). The effect is a plain CSS gradient,
-  so it needs no `@property`.
-- **Workspace row**: the native Workspace row of the current Session's project
-  is marked with `data-psd-current-workspace="true"` and gets the identical
-  two-layer bottom-face treatment inside its own rounded rectangle (the glow
-  canvas is the row's paint box; the native row keeps its own surface), so
-  opening a Session from the sidebar highlights the matching project entry too.
-  The attribute is removed when another Session is opened, when the row stops
-  owning the current Session, and on plugin unload; native nodes are never
-  otherwise modified (one marker attribute only).
-- **Feature-set alignment**: the wave replaces the previous "current-chat ring"
-  treatment entirely; no `.psd-child-ring` element, conic gradient, or rotation
-  animation remains.
+  the same atmosphere wrapper, and when a subagent Session is the open one the
+  highlight lands on its parent Session's Workspace. The native sidebar Session
+  row of the open Session carries `data-psd-current-session="true"` and the owning
+  native Workspace row carries `data-psd-current-workspace="true"`. The highlight
+  disappears when the row leaves the card. Merely-running or unopened completed
+  rows are intentionally **not** highlighted and never get a renderer.
+- **Visual / layer order**: the highlight is the row's **own rounded-rectangle
+  background**, now filled with a rainbow gas instead of a bottom-edge flourish.
+  Inside one clipped rounded rect, bottom to top:
+  1. the row's existing neutral surface stays untouched (the native rows keep
+     their own gray/business highlight; the plugin's own card rows stay
+     transparent);
+  2. `.psd-atmos` — an absolutely positioned wrapper (`inset: 0`,
+     `border-radius: inherit`, `overflow: hidden`, `pointer-events: none`) that
+     hosts a small self-contained **Canvas 2D gas renderer**. The canvas is
+     sized to the row box (DPR clamped to 1.25, ~30 fps) and paints a low broad
+     prism wash plus nine drifting/breathing radial blobs under
+     `mix-blend-mode: screen` and `blur(3px) saturate(1.18)`, giving the
+     "rainbow smoke inside the pill" flow. Config baseline: intensity .56,
+     spread 1.16, drift 1.2, stirring .58, breathing .22, blend .90,
+     vibrance 1.32, `prism` palette;
+  3. `.psd-atmos-scrim` — a faint dark gradient
+     (`rgba(16,18,22,.20)` → `rgba(16,18,22,.30)`, `z-index: 1` inside the
+     wrapper) above the canvas so the title/time/actions stay readable;
+  4. the real row content is raised to `position: relative; z-index: 2` — its
+     DOM, events, grid/columns and hover actions are unchanged.
+  The wrapper sits at `z-index: 0`, is `opacity: .62` while the row is active and
+  rises to `.8` on row hover (hover raises visibility slightly). Only highlighted
+  rows exist and animate; one renderer per highlighted row (max 3: card row +
+  native Workspace row + native Session row). A hidden tab pauses the RAF loop,
+  `prefers-reduced-motion: reduce` paints one static pastel frame and stops the
+  loop, and the renderer/canvas/listeners are destroyed as soon as the row stops
+  being highlighted. There is no rainbow border, ring or outer glow, and no
+  layout shift (the wrapper is absolutely positioned).
+- **Workspace and Session rows**: the native Workspace row of the current
+  Session's project is marked with `data-psd-current-workspace="true"`, and the
+  native sidebar Session row of the open Session with
+  `data-psd-current-session="true"`. Both get the identical injected
+  `.psd-atmos` wrapper + canvas + scrim as their first child (the wrapper covers
+  the row's paint box, so the native row's transparent inline borders are
+  respected) and their existing content children are raised to
+  `position: relative; z-index: 2` by CSS. The nodes are re-injected by the same
+  sidebar MutationObserver + reconcile loop that keeps the bucket headers alive,
+  so a native re-render cannot drop them; the marker attributes, wrapper,
+  renderer and canvas are removed when another Session is opened, when the row
+  stops owning the current Session, and on plugin unload. Native rows are never
+  otherwise modified.
+- **Feature-set alignment**: the atmosphere replaces both the previous
+  "current-chat ring" and the B4 bottom-face smoke-glow layers entirely; no
+  `.psd-child-ring`, no `.psd-child-wave`, no conic gradient and no
+  `psd-smoke-*`/`psd-glow-*`/`psd-wave-*` animation remains.
 
 ## Collapsing the buckets
 
@@ -803,13 +821,14 @@ The native **View options** menu picks how Sessions are grouped:
   cache identity uses a 32-bit FNV-1a hash of the archived-member subset; a
   collision can only cause a cache miss or a briefly stale snapshot, never wrong
   data beyond one poll. It is accepted as a NIT.
-- **The current-Session glow is an enhancement, not state.** Only the row of the
-  Session open in the main view (and its owning native Workspace row) gets the
-  bottom-face rainbow smoke; merely-running and unopened completed rows are not
-  highlighted. The glow is two masked CSS gradient layers, so it needs no
-  `@property`; reduced-motion users get a static tint. One marker attribute is
-  written on the native Workspace row and removed when the selection changes or
-  the plugin unloads.
+- **The current-Session atmosphere is an enhancement, not state.** Only the row
+  of the Session open in the main view (and its owning native Workspace row and
+  native Session row) gets the internal rainbow gas; merely-running and unopened
+  completed rows are not highlighted and never spawn a renderer. The gas is a
+  small Canvas 2D loop inside the row's clipped rounded rect (no WebGL, no
+  dependencies); reduced-motion users get one static frame and the RAF loop
+  stops. Two marker attributes are written on the native rows and removed when
+  the selection changes or the plugin unloads. A hidden tab pauses the loop.
 - **Row actions are hover/focus-revealed.** The main row's New session button,
   the child row's interrupted Continue, and the main row's Continue overlay are
   hidden until the row is hovered or keyboard-focused; a touch-only device has
