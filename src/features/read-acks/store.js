@@ -15,7 +15,7 @@
  * has been written, so a crash can never leave half a document behind.
  */
 
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 /** Store schema version; bump when the shape changes. */
@@ -32,6 +32,18 @@ export const MAX_READ_ACKS = 1000
 
 /** Longest accepted Session id; ids are harness-generated UUID-ish strings. */
 export const MAX_SESSION_ID_LENGTH = 200
+
+/** Typed error raised when the durable document exists but cannot be read. */
+export const READ_ACKS_READ_FAILED = 'READ_ACKS_READ_FAILED'
+
+/**
+ * Whether one filesystem error means "document absent" (legitimately empty).
+ * @param {unknown} error - thrown error.
+ * @returns {boolean} whether it is ENOENT.
+ */
+function isNotFound(error) {
+  return error !== null && typeof error === 'object' && error.code === 'ENOENT'
+}
 
 /**
  * Narrow parsed JSON to a plain object.
@@ -166,10 +178,17 @@ export function createReadAckStore(dshHome) {
   let chain = Promise.resolve()
   const load = async () => {
     if (state !== null) return state
-    let text
+    let text = ''
     try {
       text = await readFile(file, 'utf8')
-    } catch {
+    } catch (error) {
+      if (!isNotFound(error)) {
+        // Do NOT cache an empty state: a later record would overwrite the
+        // unreadable on-disk marks. The route turns this into a retryable 500.
+        const readError = new Error('read acknowledgements could not be read')
+        readError.code = READ_ACKS_READ_FAILED
+        throw readError
+      }
       text = ''
     }
     state = parseReadAcks(text)
@@ -195,9 +214,15 @@ export function createReadAckStore(dshHome) {
           || Object.entries(next).some(([id, baseline]) => current[id] !== baseline)
         if (changed) {
           await mkdir(path.dirname(file), { recursive: true, mode: 0o700 })
-          const temporary = `${file}.${process.pid}.${Date.now()}.tmp`
-          await writeFile(temporary, serializeReadAcks(next), { encoding: 'utf8', mode: 0o600 })
-          await rename(temporary, file)
+          const temporary = `${file}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+          try {
+            await writeFile(temporary, serializeReadAcks(next), { encoding: 'utf8', mode: 0o600 })
+            await rename(temporary, file)
+          } catch (error) {
+            // Best-effort cleanup; the rename target is untouched by a failed write.
+            await rm(temporary, { force: true }).catch(() => {})
+            throw error
+          }
           state = next
         }
         return { ...next }

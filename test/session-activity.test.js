@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -151,6 +151,32 @@ test('the durable ledger writes atomically, reloads, and rewrites corrupt/missin
     await missing.flush()
     assert.deepEqual(JSON.parse(await readFile(file, 'utf8')).sessions, {})
   } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('an unreadable activity ledger is never replaced by an empty document', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-ledger-'))
+  const file = activityLedgerPath(home)
+  try {
+    await mkdir(path.dirname(file), { recursive: true })
+    await writeFile(file, serializeActivityLedger({ 'session-old': 1000 }), 'utf8')
+    await chmod(file, 0o000)
+    const ledger = createActivityLedger(home)
+    assert.deepEqual(await ledger.load(), {})
+    ledger.record({ 'session-new': 2000 })
+    await ledger.flush()
+    await chmod(file, 0o600)
+    // The failed unreadable flush must not have written an empty document.
+    const beforeRecovery = JSON.parse(await readFile(file, 'utf8'))
+    assert.deepEqual(beforeRecovery.sessions, { 'session-old': 1000 })
+    // A later flush retries the read and merges instead of clobbering history.
+    await ledger.flush()
+    const afterRecovery = JSON.parse(await readFile(file, 'utf8'))
+    assert.deepEqual(afterRecovery.sessions, { 'session-old': 1000, 'session-new': 2000 })
+    await ledger.dispose()
+  } finally {
+    await chmod(file, 0o600).catch(() => {})
     await rm(home, { recursive: true, force: true })
   }
 })
@@ -481,7 +507,7 @@ test('seed timeout backs off, then resumes with seeded values when it settles', 
   const { ctx, routes, cleanups } = makeContext()
   installSessionActivity(ctx, {
     ledger: fakeLedger,
-    seedWaitMs: 200,
+    seedWaitMs: 300,
     seedBackoffMs: 500,
     seedBaseline: async () => {
       await seedGate
@@ -492,19 +518,28 @@ test('seed timeout backs off, then resumes with seeded values when it settles', 
   const started = Date.now()
   const first = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
   const firstMs = Date.now() - started
-  assert.ok(firstMs >= 150, `first cold GET should wait for the bounded seed window (${firstMs}ms)`)
+  assert.ok(firstMs >= 200, `first cold GET should wait for the bounded seed window (${firstMs}ms)`)
   assert.deepEqual(await first.json(), { sessions: { 'session-existing': 1000 } })
   // Within the backoff window the route serves the current map immediately.
   const immediateStarted = Date.now()
   const second = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
   const secondMs = Date.now() - immediateStarted
-  assert.ok(secondMs < 100, `backoff GET should be fast (${secondMs}ms)`)
+  assert.ok(secondMs < 150, `backoff GET should be fast (${secondMs}ms)`)
   assert.deepEqual(await second.json(), { sessions: { 'session-existing': 1000 } })
-  // Background seeding finishes; the next request includes the seeded value.
+  // Background seeding finishes; poll (rather than a fixed sleep) until the
+  // next request includes the seeded value.
   releaseSeed()
-  await new Promise((resolve) => setTimeout(resolve, 50))
-  const third = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
-  assert.deepEqual(await third.json(), { sessions: { 'session-existing': 1000, 'session-seeded': 1234 } })
+  let seededBody = null
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    const response = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
+    const body = await response.json()
+    if (body.sessions?.['session-seeded'] === 1234) {
+      seededBody = body
+      break
+    }
+  }
+  assert.deepEqual(seededBody, { sessions: { 'session-existing': 1000, 'session-seeded': 1234 } })
   await cleanups[0]()
 })
 

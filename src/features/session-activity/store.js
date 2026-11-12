@@ -37,6 +37,15 @@ export const ACTIVITY_WRITE_DEBOUNCE_MS = 750
 export const MAX_ACTIVITY_SESSION_ID_LENGTH = 200
 
 /**
+ * Whether one filesystem error means "document absent" (legitimately empty).
+ * @param {unknown} error - thrown error.
+ * @returns {boolean} whether it is ENOENT.
+ */
+function isNotFound(error) {
+  return error !== null && typeof error === 'object' && error.code === 'ENOENT'
+}
+
+/**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
  * @returns {boolean} whether it is a record.
@@ -190,7 +199,13 @@ export function createActivityLedger(dshHome, options = {}) {
     let external = {}
     try {
       external = parseActivityLedger(await readFile(file, 'utf8'))
-    } catch {
+    } catch (error) {
+      if (!isNotFound(error)) {
+        // An unreadable existing document may hold newer entries; never replace
+        // it with an empty/partial merge. The flush keeps dirty state and retries
+        // after the read recovers.
+        throw error
+      }
       external = {}
     }
     const merged = mergeActivitySessions(external, payload)
@@ -251,7 +266,14 @@ export function createActivityLedger(dshHome, options = {}) {
       let text = null
       try {
         text = await readFile(file, 'utf8')
-      } catch {
+      } catch (error) {
+        if (!isNotFound(error)) {
+          // Do not publish/cache an empty state and do not schedule an empty
+          // rewrite: the existing document may hold historical entries. Keep
+          // memory, mark the read error, and allow a later load/write retry.
+          loadPromise = null
+          return snapshot()
+        }
         text = null
       }
       // Parse validity is checked separately from the entry count: a valid

@@ -12,7 +12,7 @@
 
 import os from 'node:os'
 import path from 'node:path'
-import { createReadAckStore, isAckBaseline, isSessionId } from './store.js'
+import { READ_ACKS_READ_FAILED, createReadAckStore, isAckBaseline, isSessionId } from './store.js'
 
 /** Route serving and merging the read-acks document. */
 export const READ_ACKS_ROUTE = '/api/power-suite.read-acks'
@@ -81,7 +81,14 @@ export function installReadAcks(ctx, options = {}) {
     requestBody: 'buffered',
     fetch: async (request) => {
       if (request.method === 'GET') {
-        return sendJson(200, { acked: await store.get() })
+        try {
+          return sendJson(200, { acked: await store.get() })
+        } catch (error) {
+          if (error !== null && typeof error === 'object' && error.code === READ_ACKS_READ_FAILED) {
+            return sendJson(500, { code: 'store-read-failed', message: 'read acknowledgements could not be read' })
+          }
+          return sendJson(500, { code: 'store-failed', message: 'read acknowledgements could not be served' })
+        }
       }
       const mediaType = String(request.headers.get('content-type') ?? '')
         .split(';', 1)[0]
@@ -109,7 +116,12 @@ export function installReadAcks(ctx, options = {}) {
       let acked
       try {
         acked = await store.record(verdict.value)
-      } catch {
+      } catch (error) {
+        // A read failure means the on-disk marks could not be merged safely; do
+        // not overwrite them. The client treats both 5xx shapes as retryable.
+        if (error !== null && typeof error === 'object' && error.code === READ_ACKS_READ_FAILED) {
+          return sendJson(500, { code: 'store-read-failed', message: 'read acknowledgements could not be read' })
+        }
         // A disk/permission failure must keep the documented error contract;
         // the client retries the pending baselines on its next sync cycle.
         return sendJson(500, { code: 'store-failed', message: 'read acknowledgements could not be stored' })

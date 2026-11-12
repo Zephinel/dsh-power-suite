@@ -3640,7 +3640,8 @@ window.__ModuleLoader__.load({
      * @returns {string} selector-safe text.
      */
     function escapeSelectorValue(value) {
-      if (typeof CSS === 'object' && CSS !== null && typeof CSS.escape === 'function') return CSS.escape(value)
+      const platformCss = typeof globalThis !== 'undefined' ? globalThis.CSS : undefined
+      if (typeof platformCss === 'object' && platformCss !== null && typeof platformCss.escape === 'function') return platformCss.escape(value)
       return String(value).replace(/["\\]/g, '\\$&')
     }
 
@@ -5060,9 +5061,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (!response.ok) {
           // Permanent responses (other non-retryable 4xx: bad shape, too large,
           // media type, missing route, ...) drop that batch immediately so it
-          // can never block newer acks. 5xx (including store-failed), 408, 425,
-          // 429 and network/timeout failures stay queued for a later sync.
-          const retryable = response.status >= 500 || response.status === 408 || response.status === 425 || response.status === 429
+          // can never block newer acks. 5xx (including store-failed), 401/403
+          // (token/connection hiccup), 408, 425, 429 and network/timeout
+          // failures stay queued for a later sync.
+          const retryable = response.status >= 500 || response.status === 401 || response.status === 403
+            || response.status === 408 || response.status === 425 || response.status === 429
           return { merged: null, status: response.status, retryable }
         }
         const payload = await response.json()
@@ -5807,6 +5810,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               // A permanent 4xx already dropped this batch above; continue with
               // the next one rather than retrying it forever.
             }
+          } catch (error) {
+            // Bounded diagnostic, no retry loop here: pending entries stay
+            // queued for the next poll/focus cycle.
+            console.warn('[power-suite] read-acks push failed', error !== null && typeof error === 'object' && typeof error.message === 'string' ? error.message.slice(0, 200) : error)
           } finally {
             ackedPushInFlightRef.current = false
             ackedPushInFlightPromiseRef.current = null
@@ -5994,6 +6001,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                 })
               }
             }
+          } catch (error) {
+            // The card sync must never surface an unhandled rejection; the next
+            // poll/focus retries with the same pending state.
+            console.warn('[power-suite] activity/ack sync failed', error !== null && typeof error === 'object' && typeof error.message === 'string' ? error.message.slice(0, 200) : error)
           } finally {
             ackedSyncInFlightRef.current = false
           }
@@ -7217,6 +7228,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
     /** Window event that asks the seat to open one Workspace's Project page. */
     const PROJECT_PAGE_EVENT = 'power-suite:open-project'
+
+    /** Window event asking the UI annotation mode to deactivate (page takes over). */
+    const ANNOTATION_EXIT_EVENT = 'power-suite:ui-annotation-exit'
 
     /** Root attribute marking that the Project page is open (hides the prompt rail). */
     const PROJECT_PAGE_ATTR = 'data-power-suite-project-page'
@@ -9077,6 +9091,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const onOpen = (event) => {
           const workspaceId = event?.detail?.workspaceId
           if (typeof workspaceId !== 'string' || workspaceId.length === 0) return
+          // The project page covers the annotation layers (z-index) while its
+          // capture surface would keep swallowing page clicks; leave annotation
+          // mode first so exactly one Esc ladder and one pointer source remain.
+          window.dispatchEvent(new CustomEvent(ANNOTATION_EXIT_EVENT))
           setTarget({ workspaceId, title: projectWorkspaceTitle(ctx, workspaceId) })
         }
         window.addEventListener(PROJECT_PAGE_EVENT, onOpen)
@@ -9498,11 +9516,23 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     function cssIdentifier(id) {
       const text = String(id)
       try {
-        if (typeof CSS !== 'undefined' && CSS !== null && typeof CSS.escape === 'function') return CSS.escape(text)
+        const platformCss = typeof globalThis !== 'undefined' ? globalThis.CSS : undefined
+        if (platformCss !== undefined && platformCss !== null && typeof platformCss.escape === 'function') return platformCss.escape(text)
       } catch {
         // Fall through to the conservative escaper.
       }
-      return text.replace(/[^A-Za-z0-9_-]/g, (character) => `\\${character}`)
+      // CSS.escape fallback: a leading digit must become a hex escape, not a
+      // bare identifier start (`123abc` is invalid as an id selector).
+      let escaped = ''
+      for (let index = 0; index < text.length; index += 1) {
+        const character = text[index]
+        if (index === 0 && /[0-9]/.test(character)) {
+          escaped += `\\${character.codePointAt(0).toString(16)} `
+          continue
+        }
+        escaped += /[A-Za-z0-9_-]/.test(character) ? character : `\\${character}`
+      }
+      return escaped
     }
 
     /**
@@ -9524,6 +9554,25 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         text = `${text.slice(0, Math.max(1, limit - 1)).trimEnd()}…`
       }
       return text
+    }
+
+    /**
+     * Normalize one user-authored annotation note without redaction or truncation.
+     *
+     * Page-derived text goes through {@link sanitizeText} (collapse + secret
+     * redaction + limit); a note the user typed must survive verbatim, otherwise
+     * the inserted request disagrees with what the UI displayed. NUL/C0 control
+     * characters (except tab and newline) are removed, CRLF/CR is normalized to
+     * `\n`, and internal spaces/newlines are preserved. Multi-line notes are
+     * inserted as multi-line label content by both serializers.
+     * @param {unknown} value - raw user note.
+     * @returns {string} normalized note (empty for non-strings).
+     */
+    function normalizeUserNote(value) {
+      if (typeof value !== 'string' || value.length === 0) return ''
+      return value
+        .replace(/\r\n?/g, '\n')
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
     }
 
     /**
@@ -10209,7 +10258,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const emptyNote = typeof source.emptyNote === 'string' ? source.emptyNote : '—'
       const timeText = typeof source.time === 'string' ? source.time : formatAnnotationTime(ref?.at)
       const sessionText = sessionShortLabel(ref?.session?.sessionId) || (typeof source.noSession === 'string' ? source.noSession : '—')
-      const noteText = sanitizeText(note, 400) || emptyNote
+      const noteText = normalizeUserNote(note) || emptyNote
       const lines = [
         `${title} · ${elementLabel(ref)}`,
         annotationJoinLabel(reference, describeLocator(ref)),
@@ -10259,7 +10308,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const label = elementLabel(ref)
         lines.push(`${index + 1}. ${label}`)
         lines.push(`   ${annotationJoinLabel(reference, describeLocator(ref))}`)
-        lines.push(`   ${annotationJoinLabel(noteLabel, sanitizeText(note, 400) || emptyNote)}`)
+        lines.push(`   ${annotationJoinLabel(noteLabel, normalizeUserNote(note) || emptyNote)}`)
         const status = ref !== null && typeof ref === 'object' ? ref.status : undefined
         if (status === 'missing') lines.push(`   ${statusLabel}`)
         else if (status === 'ambiguous') lines.push(`   ${statusAmbiguous}`)
@@ -10426,6 +10475,32 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         x: Math.round(Math.min(Math.max(x, gap), maxX)),
         y: Math.round(Math.min(Math.max(y, gap), maxY))
       }
+    }
+
+    /**
+     * Clamp one existing popover position into the viewport (pinned drags).
+     * Unlike {@link clampPopoverPosition} this preserves the dragged offset and
+     * only moves the popover as far as needed to stay on-screen.
+     * @param {{ x: number, y: number }} position - current popover position.
+     * @param {object} popoverSize - measured popover size.
+     * @param {object} viewport - { width, height }.
+     * @param {number} railWidth - reserved annotation rail width.
+     * @param {number} [margin] - edge margin (default 8).
+     * @returns {{ x: number, y: number }} clamped position.
+     */
+    function clampPopoverPositionToViewport(position, popoverSize, viewport, railWidth, margin) {
+      const gap = typeof margin === 'number' && Number.isFinite(margin) && margin >= 0 ? margin : 8
+      const rail = typeof railWidth === 'number' && Number.isFinite(railWidth) && railWidth > 0 ? railWidth : 0
+      const width = viewport !== null && typeof viewport === 'object' && typeof viewport.width === 'number' ? viewport.width : 0
+      const height = viewport !== null && typeof viewport === 'object' && typeof viewport.height === 'number' ? viewport.height : 0
+      const popoverWidth = popoverSize !== null && typeof popoverSize === 'object' && typeof popoverSize.width === 'number' ? popoverSize.width : 320
+      const popoverHeight = popoverSize !== null && typeof popoverSize === 'object' && typeof popoverSize.height === 'number' ? popoverSize.height : 232
+      const point = position !== null && typeof position === 'object' ? position : { x: gap, y: gap }
+      const x = typeof point.x === 'number' && Number.isFinite(point.x) ? point.x : gap
+      const y = typeof point.y === 'number' && Number.isFinite(point.y) ? point.y : gap
+      const maxX = Math.max(gap, width - rail - popoverWidth - gap)
+      const maxY = Math.max(gap, height - popoverHeight - gap)
+      return { x: Math.round(Math.min(Math.max(x, gap), maxX)), y: Math.round(Math.min(Math.max(y, gap), maxY)) }
     }
 
     /**
@@ -10850,7 +10925,12 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     /**
      * Walk the ancestor chain of one target, nearest first.
      * @param {unknown} target - event target.
-     * @returns {Array<{ element: Element, descriptor: object }>} the chain.
+     * Descriptors are intentionally NOT built here: pointermove walks up to 16
+     * ancestors, and each descriptor reads full textContent twice (summary +
+     * digest). The chain keeps elements (+ composer membership) only; the
+     * descriptor is built lazily for the chosen element and ≤2 context ancestors
+     * in `refFromChain`.
+     * @returns {Array<{ element: Element, insideComposer: boolean }>} the chain.
      */
     function annotationCandidateChain(target) {
       const start = annotationStartNode(target)
@@ -10860,7 +10940,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       let depth = 0
       while (current !== null && current !== document.body && current !== document.documentElement && depth < 16) {
         const insideComposer = typeof current.closest === 'function' && current.closest('[data-conversation-region="composer"]') !== null
-        chain.push({ element: current, descriptor: annotationDescriptorOf(current, insideComposer) })
+        chain.push({ element: current, insideComposer })
         current = current.parentElement
         depth += 1
       }
@@ -11290,14 +11370,18 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       function refFromChain(chain, index, like) {
         const entry = chain[index]
         const bounds = annotationRectOf(entry.element)
+        const descriptor = annotationDescriptorOf(entry.element, entry.insideComposer)
         const context = {
           sessionId: annotationBridge.sessionId ?? annotationConversationSessionId(),
           at: like !== null && typeof like === 'object' && typeof like.at === 'number' ? like.at : Date.now(),
           order: like !== null && typeof like === 'object' && typeof like.order === 'number' ? like.order : Date.now() % 1000000,
           bounds,
-          levelChain: chain.slice(index + 1, index + 3).map((item) => item.descriptor.name || item.descriptor.component || item.descriptor.tag)
+          levelChain: chain.slice(index + 1, index + 3).map((item) => {
+            const ancestor = annotationDescriptorOf(item.element, item.insideComposer)
+            return ancestor.name || ancestor.component || ancestor.tag
+          })
         }
-        const ref = buildElementRef(entry.descriptor, context)
+        const ref = buildElementRef(descriptor, context)
         ref.note = like !== null && typeof like === 'object' && typeof like.note === 'string' ? like.note : ''
         return ref
       }
@@ -11473,12 +11557,17 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
        */
       function reclampPopoverWithMeasuredSize() {
         const current = snapshot()
-        if (current.state.phase !== 'selected' || current.popoverPinned || current.state.selection.length !== 1) return
+        if (current.state.phase !== 'selected' || current.state.selection.length !== 1) return
+        const viewport = annotationViewport()
+        if (current.popoverPinned && current.popoverPosition !== null) {
+          publish({ popoverPosition: clampPopoverPositionToViewport(current.popoverPosition, popoverMeasuredSize, viewport, current.railWidth) })
+          return
+        }
         const ref = current.state.selection[0]
         const node = liveNode(ref)
         const targetRect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref.bounds)
         if (targetRect === null) return
-        publish({ popoverPosition: clampPopoverPosition(targetRect, popoverMeasuredSize, annotationViewport(), current.railWidth) })
+        publish({ popoverPosition: clampPopoverPosition(targetRect, popoverMeasuredSize, viewport, current.railWidth) })
       }
 
       /**
@@ -11615,11 +11704,16 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         }
         const launcherPosition = clampLauncherForLayout(current.launcherPosition, size, isActive() ? railWidth : 0)
         const patch = { railWidth, layoutMode: mode, launcherPosition }
-        if (current.state.phase === 'selected' && current.selectionRects.length > 0 && current.popoverPosition !== null && current.popoverPinned === false) {
-          const ref = current.state.selection[0]
-          const node = ref === undefined ? null : liveNode(ref)
-          const rect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref?.bounds)
-          if (rect !== null) patch.popoverPosition = clampPopoverPosition(rect, popoverMeasuredSize, size, railWidth)
+        if (current.state.phase === 'selected' && current.selectionRects.length > 0 && current.popoverPosition !== null) {
+          if (current.popoverPinned) {
+            // A dragged/pinned popover keeps its offset but must stay on-screen.
+            patch.popoverPosition = clampPopoverPositionToViewport(current.popoverPosition, popoverMeasuredSize, size, railWidth)
+          } else {
+            const ref = current.state.selection[0]
+            const node = ref === undefined ? null : liveNode(ref)
+            const rect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref?.bounds)
+            if (rect !== null) patch.popoverPosition = clampPopoverPosition(rect, popoverMeasuredSize, size, railWidth)
+          }
         }
         publish(patch)
         persistLauncherPositionIfNeeded(launcherPosition, current.launcherPosition)
@@ -12792,7 +12886,12 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     const ANNOTATION_CSS = `
 [data-psa-frame="true"]{transition:padding-right .18s ease}
 @media (prefers-reduced-motion:reduce){[data-psa-frame="true"]{transition:none}}
-html[data-psa-active="true"] [data-psp-rail]{display:none}
+html[data-psa-active="true"] [data-psp-rail],
+html[data-psa-active="true"] [data-psp-search-card],
+html[data-psa-active="true"] [data-psp-preview-card],
+html[data-psa-active="true"] [data-psp-rail-divider],
+html[data-psa-active="true"] [data-psp-search-toggle]{display:none!important}
+html[data-power-suite-project-page="true"] [data-psa-launcher]{display:none!important}
 html[data-psa-active="true"]:not([data-psa-passthrough="true"]) body{cursor:crosshair}
 html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-launcher{position:fixed;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:50%;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);box-shadow:var(--dsw-elevation-panel,0 6px 24px rgb(0 0 0 / 18%));cursor:grab;pointer-events:auto;touch-action:none;user-select:none;z-index:50}
@@ -13596,6 +13695,22 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         return () => style.remove()
       }, 'power-suite: ui annotation stylesheet')
       ctx.effect(() => {
+        // The Project page owns the viewport (z-index) when open; leave
+        // annotation mode so its capture layer cannot swallow page input and
+        // only the page's Esc ladder stays active. The launcher reappears on
+        // close, with annotation mode still off.
+        const onExit = () => {
+          if (annotationController === null) return
+          try {
+            annotationController.deactivate()
+          } catch {
+            // Deactivation is defensive; never wedge the page open on failure.
+          }
+        }
+        window.addEventListener(ANNOTATION_EXIT_EVENT, onExit)
+        return () => window.removeEventListener(ANNOTATION_EXIT_EVENT, onExit)
+      }, 'power-suite: ui annotation exits for the project page')
+      ctx.effect(() => {
         try {
           annotationController = createAnnotationController(t, ctx)
         } catch (error) {
@@ -13689,6 +13804,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         serializeSettings,
         modifierMatches,
         sanitizeText,
+        normalizeUserNote,
         textDigest,
         sanitizeAttributeName,
         sanitizeAttributeValue,
@@ -13697,6 +13813,8 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         identityKeyOf,
         describeLocator,
         elementLabel,
+        cssIdentifier,
+        clampPopoverPositionToViewport,
         createAnnotationState,
         reduceAnnotationState,
         serializeQuickReference,

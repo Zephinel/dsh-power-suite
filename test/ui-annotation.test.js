@@ -19,6 +19,7 @@
  * global is only defined by this harness.
  */
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { loadClientModule } from './helpers/client-module.mjs'
 
@@ -50,8 +51,9 @@ if (ui === undefined) {
     'normalizeSettings', 'resolveModifierChange', 'parseStoredSettings', 'serializeSettings',
     'modifierMatches',
     'textDigest',
-    'sanitizeText', 'sanitizeAttributeName', 'sanitizeAttributeValue',
+    'sanitizeText', 'normalizeUserNote', 'sanitizeAttributeName', 'sanitizeAttributeValue',
     'buildElementRef', 'selectorCandidates', 'identityKeyOf', 'describeLocator', 'elementLabel',
+    'cssIdentifier', 'clampPopoverPositionToViewport',
     'createAnnotationState', 'reduceAnnotationState',
     'serializeQuickReference', 'serializeBatchRequest', 'batchScopeSplit',
     'resolveRefStatus',
@@ -68,6 +70,9 @@ if (ui === undefined) {
     modifierMatches: [2, 2],
     textDigest: [1, 1],
     sanitizeText: [1, 2],
+    normalizeUserNote: [1, 1],
+    cssIdentifier: [1, 1],
+    clampPopoverPositionToViewport: [3, 5],
     sanitizeAttributeName: [1, 1],
     sanitizeAttributeValue: [2, 2],
     buildElementRef: [2, 2],
@@ -919,6 +924,21 @@ if (ui === undefined) {
 
   //#endregion
 
+  test('candidate-chain creation collects elements only (no descriptor build)', () => {
+    const source = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8')
+    const start = source.indexOf('function annotationCandidateChain')
+    const end = source.indexOf('function annotationIsCandidate')
+    assert.ok(start > 0 && end > start, 'candidate chain sources are present')
+    const body = source.slice(start, end)
+    assert.ok(!body.includes('annotationDescriptorOf('), 'chain creation must not build descriptors')
+    assert.ok(body.includes('insideComposer'), 'chain entries carry composer membership only')
+    const refStart = source.indexOf('function refFromChain')
+    const refEnd = source.indexOf('function annotationConversationSessionId')
+    const refBody = source.slice(refStart, refEnd)
+    assert.ok(refBody.includes('annotationDescriptorOf(entry.element'), 'chosen descriptor is built lazily')
+    assert.ok(refBody.includes('slice(index + 1, index + 3)'), 'at most two context ancestors get descriptors')
+  })
+
   //#region serialization
 
   test('serializeQuickReference emits the four documented EN lines and the empty-note placeholder', () => {
@@ -933,6 +953,46 @@ if (ui === undefined) {
 
     const empty = ui.serializeQuickReference(ref, '', EN_LABELS)
     assert.ok(empty.replace(/\n+$/, '').endsWith(`${EN_LABELS.note} ${EN_LABELS.emptyNote}`))
+  })
+
+  test('user annotation notes survive verbatim: no redaction, no silent truncation, multi-line preserved', () => {
+    const ref = refOf({ tag: 'button', name: 'New session', text: 'New session' })
+    const longToken = 'x'.repeat(500)
+    const note = `data-psa-launcher https://example.com/path?q=1 123e4567-e89b-12d3-a456-426614174000 user@example.com ${longToken}\nsecond line\r\nthird line`
+    const quick = ui.serializeQuickReference(ref, note, EN_LABELS)
+    for (const fragment of ['data-psa-launcher', 'https://example.com/path?q=1', '123e4567-e89b-12d3-a456-426614174000', 'user@example.com', longToken]) {
+      assert.ok(quick.includes(fragment), `quick reference must preserve ${fragment.slice(0, 24)}`)
+    }
+    assert.ok(!quick.includes('[redacted]'), 'user note must not run through the page-text scrubber')
+    assert.ok(quick.includes('second line\nthird line'), 'multi-line note preserved with normalized LF')
+
+    const batch = ui.serializeBatchRequest([{ ref, note }], EN_LABELS)
+    for (const fragment of ['data-psa-launcher', 'https://example.com/path?q=1', longToken]) {
+      assert.ok(batch.includes(fragment), `batch request must preserve ${fragment.slice(0, 24)}`)
+    }
+    assert.ok(batch.includes('second line\nthird line'))
+    assert.ok(!batch.includes('[redacted]'))
+    assert.ok(!quick.includes('\r'), 'CRLF is normalized to LF')
+  })
+
+  test('normalizeUserNote strips NUL/C0 controls but preserves tab, spaces and line breaks', () => {
+    const normalized = ui.normalizeUserNote('a\u0000b\u0001c\t  d\r\ne\u007f')
+    assert.equal(normalized, 'abc\t  d\ne')
+    assert.equal(ui.normalizeUserNote(null), '')
+    assert.equal(ui.normalizeUserNote(''), '')
+  })
+
+  test('cssIdentifier uses the platform CSS.escape even with the factory CSS constant', () => {
+    assert.equal(ui.cssIdentifier('123abc'), '\\31 23abc')
+    assert.equal(ui.cssIdentifier('#123abc'), '\\#123abc')
+  })
+
+  test('clampPopoverPositionToViewport re-clamps a pinned position and preserves in-bounds offsets', () => {
+    const size = { width: 320, height: 240 }
+    const viewport = { width: 1200, height: 800 }
+    assert.deepEqual(plain(ui.clampPopoverPositionToViewport({ x: 5000, y: 5000 }, size, viewport, 0)), { x: 872, y: 552 })
+    assert.deepEqual(plain(ui.clampPopoverPositionToViewport({ x: 120, y: 90 }, size, viewport, 0)), { x: 120, y: 90 })
+    assert.deepEqual(plain(ui.clampPopoverPositionToViewport({ x: -50, y: -50 }, size, viewport, 0)), { x: 8, y: 8 })
   })
 
   test('serializeQuickReference marks a stale single reference and follows the ZH labels', () => {

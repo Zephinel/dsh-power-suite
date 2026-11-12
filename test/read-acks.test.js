@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import {
   MAX_READ_ACKS,
+  READ_ACKS_READ_FAILED,
   createReadAckStore,
   mergeAcked,
   normalizeAcked,
@@ -247,6 +248,59 @@ test('read-acks route rejects the wrong media type, malformed or oversized bodie
   } finally {
     await fixture.dispose()
   }
+})
+
+test('an unreadable existing read-acks file is not replaced by an empty state', async () => {
+  const home = await temporaryHome()
+  const file = readAcksPath(home)
+  try {
+    await mkdir(path.dirname(file), { recursive: true })
+    await writeFile(file, serializeReadAcks({ 'session-existing': 1000 }), 'utf8')
+    await chmod(file, 0o000)
+    const store = createReadAckStore(home)
+    await assert.rejects(
+      store.record({ 'session-new': 2000 }),
+      (error) => error.code === READ_ACKS_READ_FAILED
+    )
+    await chmod(file, 0o600)
+    // The unreadable load must not have cached/published an empty state.
+    const document = JSON.parse(await readFile(file, 'utf8'))
+    assert.deepEqual(document.acked, { 'session-existing': 1000 })
+    const recovered = createReadAckStore(home)
+    assert.deepEqual(await recovered.get(), { 'session-existing': 1000 })
+    assert.deepEqual(await recovered.record({ 'session-new': 2000 }), {
+      'session-existing': 1000,
+      'session-new': 2000
+    })
+  } finally {
+    await chmod(file, 0o600).catch(() => {})
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('read-acks route turns a read failure into no-store 500 store-read-failed', async () => {
+  const { ctx, routes } = makeContext()
+  const readError = new Error('unreadable')
+  readError.code = READ_ACKS_READ_FAILED
+  installReadAcks(ctx, {
+    store: {
+      async get() {
+        throw readError
+      },
+      async record() {
+        throw readError
+      }
+    }
+  })
+  const route = routes.get(READ_ACKS_ROUTE)
+  const getResponse = await route.fetch(new Request('http://host/api/power-suite.read-acks'))
+  assert.equal(getResponse.status, 500)
+  assert.equal(getResponse.headers.get('cache-control'), 'no-store')
+  assert.equal((await getResponse.json()).code, 'store-read-failed')
+  const postResponse = await route.fetch(postJson({ acked: { 'session-a': 1000 } }))
+  assert.equal(postResponse.status, 500)
+  assert.equal(postResponse.headers.get('cache-control'), 'no-store')
+  assert.equal((await postResponse.json()).code, 'store-read-failed')
 })
 
 test('read-acks POST maps store failures to a no-store 500', async () => {
