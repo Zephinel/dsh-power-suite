@@ -1,8 +1,9 @@
 # Browser end-to-end acceptance harness (UI element annotation)
 
 `annotation.e2e.mjs` drives the **real running DSH Web GUI** with a throwaway headless Chrome
-and asserts the nine acceptance scenarios of the UI element annotation mode
-(`/tmp/ps-annotation/CONTRACT.md` §4.2 and the review-round hardening spec H1–H13). It injects
+and asserts the eleven acceptance scenarios of the UI element annotation mode
+(`/tmp/ps-annotation/CONTRACT.md` §4.2, the review-round hardening spec H1–H13, and the
+Phase 1 floating-surface / v2-record / rainbow-focus checks). It injects
 this worktree's `src/client.js` into the live page without touching the installed checkout, the
 profile or the launchd service.
 
@@ -34,7 +35,7 @@ node test/browser/annotation.e2e.mjs
    inserts into a non-blank session. The **non-blank auto-restore → create-fresh** branch is
    implemented but was **not exercised in this environment** (the restored draft was always
    blank); that path has no live-run evidence.
-6. Runs the nine scenarios with **real CDP input** (`Input.dispatchMouseEvent`,
+6. Runs the eleven scenarios with **real CDP input** (`Input.dispatchMouseEvent`,
    `Input.dispatchKeyEvent`, modifier bitmask Alt=1 Ctrl=2 Meta=4 Shift=8; real wheel and
    `Input.insertText`). Nothing is synthesized for blocking / pass-through / drag assertions.
 7. Collects page errors (`Runtime.exceptionThrown` + error-level `Runtime.consoleAPICalled`),
@@ -71,13 +72,13 @@ node test/browser/annotation.e2e.mjs
 ## Options
 
 ```text
-node test/browser/annotation.e2e.mjs                 full run: smoke + 9 scenarios + screenshots
+node test/browser/annotation.e2e.mjs                 full run: smoke + 11 scenarios + screenshots
 node test/browser/annotation.e2e.mjs --smoke         pipeline + feature-surface smoke only
 node test/browser/annotation.e2e.mjs --shots-only    five screenshots only (no scenario assertions)
 node test/browser/annotation.e2e.mjs --assets        write screenshots to docs/assets instead of /tmp
 node test/browser/annotation.e2e.mjs --client PATH   inject a different client.js (e.g. a baseline)
-node test/browser/annotation.e2e.mjs --scenario 8    run exactly one scenario (validation: 1..9)
-node test/browser/annotation.e2e.mjs --from 7        run scenarios 7-9
+node test/browser/annotation.e2e.mjs --scenario 8    run exactly one scenario (validation: 1..15)
+node test/browser/annotation.e2e.mjs --from 7        run scenarios 7-10 and 15 (ids in SCENARIO_ORDER)
 node test/browser/annotation.e2e.mjs --no-shots      skip screenshots
 node test/browser/annotation.e2e.mjs --keep-open     leave Chrome running (prints pid/CDP/profile)
 node test/browser/annotation.e2e.mjs --headful       show the browser window
@@ -93,20 +94,76 @@ reviewed files) to publish `docs/assets/annotation-idle.png`, `annotation-mode.p
 
 - `--smoke` is a pipeline-only mode, but it still fails (non-zero exit) when the injected client
   fails to load, does not expose a documented test-seam generation (the harness accepts the
-  round-1 **31-key**, round-2 **32-key** (`resolveNodeCandidate`), and current
-  audit-fix **35-key** generations; every generation requires `textDigest`), or
+  round-1 **31-key**, round-2 **32-key** (`resolveNodeCandidate`), audit-fix **35-key**, and
+  Phase 1 **48-key** generations; every generation requires `textDigest`), or
   does not mount the annotation surface.
 - `full` / `--shots-only` with a client that has no annotation feature: a **FAIL** row is
   recorded and the process exits non-zero. A feature-absent client can never produce a green
   run. Example proof: `node test/browser/annotation.e2e.mjs --client /tmp/ps-annotation/baseline-client.js`
   → `FAIL gate-feature`, exit 1.
-- Invalid selections are argument errors: `--scenario 10`, `--from 10` and a missing value exit
+- Invalid selections are argument errors: `--scenario 16`, `--from 16` and a missing value exit
   **2** with a message; they never run silently with zero scenarios.
 - Every requested scenario must produce a result row; a missing row is recorded as FAIL.
 - Exit code contract (N6): `0` only when every check passes; `1` for any scenario failure,
   page error, real network/API failure, missing scenario row, feature gate failure or harness
-  fatal error; `2` only for usage/argument errors (`--scenario 10`, `--from 10`, missing value,
+  fatal error; `2` only for usage/argument errors (`--scenario 16`, `--from 16`, missing value,
   `Network` setup failure is NOT a usage error and exits 1).
+
+## Current evidence (Phase 1 annotation build)
+
+Phase 1 (`feat/annotation-ux`, `src/client.js` md5 `151e0380b8283b79934c92126919c136`,
+commit `d68e6a9` plus the final evidence commit), Node v24.22.2, live GUI at 1728x900,
+`/tmp/ps-annotation/CONTRACT.md`-style harness with the **48-key** seam. Every log was
+written under `.tmp-work/` during the branch (gitignored, external development artifacts).
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Unit model | `npm test` | **193/193** pass, 0 skip (`test/ui-annotation.test.js`: 70 cases) |
+| Repository gate | `npm run check` | exit 0 (syntax + manifest + pack dry-run) |
+| Smoke | `node test/browser/annotation.e2e.mjs --smoke` | **6/6**, seam 48 keys, 0 page errors, 0 real network failures |
+| Floating surfaces / v2 / persistence / cap | `node test/browser/annotation.e2e.mjs --scenario 10 --no-shots` | **PASS**, plus explicit **SKIP** row `10b` (plugin-hovercard pin owned by the sidebar branch) |
+| Rainbow focus ring | `node test/browser/annotation.e2e.mjs --scenario 15 --no-shots` | **PASS** (ring on popover/settings/collection/editor inputs, `outline:none`, stable rect, reduced-motion static ring) |
+| Self-contained late sequence | `node test/browser/annotation.e2e.mjs --from 6 --no-shots` | smoke + S6,S7,S8,S9,S10,S15: **12 PASS / 1 SKIP / 0 FAIL**, 143.0 s, 0 page errors, 0 real network failures, exit 0 |
+| Full suite attempt 1 | `node test/browser/annotation.e2e.mjs --no-shots` | **stalled inside scenario 6** after S1-S5 passed (killed after ~4 min in S6; log has `PASS 1..5` only) |
+| Full suite attempt 2 | same | **stalled inside scenario 6** after S1-S5 passed (killed after ~5 min in S6, ~7 min total) |
+
+The two full-run stalls reproduce the pre-existing late-run headless-renderer/CDP stall
+documented below (scenario 6 passes in the shorter `--from 6` sequence and standalone on the
+same build); they are reported as harness/live-GUI timing, not dismissed, and **no single
+all-green full-suite run exists** for this build. Sessions touched in the recorded runs:
+`session-8cbac527-8ef9-4d7e-9c02-6ab5a4236c71`, `session-1e273273-4316-46f5-84c8-199bfc0812a2`,
+`session-d29fc9a7-9151-47dc-aeeb-41d739e34455`; no message was sent and no setting changed.
+
+Visual evidence for the Phase 1 behaviors was captured through the same CDP harness into
+`.tmp-work/shots2/` (not committed; the existing `docs/assets/annotation-*.png` set belongs to
+the earlier round): `10-floating-card-hover.png` (whole-card hover outline, overlay z=150 over
+card z=100), `10-floating-card-popover.png` (floating/ephemeral popover with Copy locator),
+`10-floating-drill.png` (Child drilled to a 20 px inner row), `15-rainbow-focus.png` and
+`15-settings-focus.png` (shared-recipe focus ring: `psa-ring-spin, psa-ring-hue` at
+`3.2s, 14s`).
+
+## Current evidence (Phase 2-A annotation build)
+
+Phase 2-A (`feat/annotation-ux`, on top of the Phase 1 commit `1261846`), Node v24.22.2,
+live GUI at 1728x900, **57-key** seam. Logs/screenshots are external development evidence
+under `.tmp-work/` (gitignored).
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Unit model | `npm test` | **204/204** pass, 0 skip |
+| Repository gate | `npm run check` | exit 0 (18 modules, 10 test files) |
+| Smoke | `node test/browser/annotation.e2e.mjs --smoke` | **6/6**, seam 57 keys, 0 page errors, 0 real network failures |
+| Marks + detail + delete/undo + other-Session | `node test/browser/annotation.e2e.mjs --scenario 12 --no-shots` | **PASS** (2 marks with `#index`/requirement badges and `pointer-events:none`, hover detail card with full requirement/Session/Workspace/position/actions, keep-open and no focus steal, detail edit persisted and `updatedAt` bumped, delete → `role=status` undo toast → restore, other-Session record not drawn after reload, reduced-motion static) |
+| Reload restores marks; removed target missing | `node test/browser/annotation.e2e.mjs --scenario 14 --no-shots` | **PASS** (2 records restored, only the live target drawn, rail `missing`/`resolved` statuses) |
+| F-2 Session/Workspace identity | `node test/browser/annotation.e2e.mjs --scenario 10 --no-shots` | **PASS**, incl. new assertions: `session.cwd` absolute non-null, `workspaceLabel` = cwd basename, record `sessionId` = current Session, plausible `bounds`, captured `viewport`, query-free route |
+| Multi-select / collection rework | `--scenario 4`, and S4→S5 sequence `--from 4 --no-shots` | **PASS** (S4 3 shift selections, add/update/note/remove; S5 draft preserved + ordered batch blocks) |
+| Self-contained late sequence | `node test/browser/annotation.e2e.mjs --from 6 --no-shots` | smoke + S6,S7,S8,S9,S10,S12,S14,S15: **14 PASS / 1 SKIP / 0 FAIL**, 173.3 s, 0 page errors, 0 real network failures, exit 0 |
+| Native hover-card flake | one earlier `--from 6` attempt | **FAIL inside scenario 10 before any annotation assertion**: the native DSH hover preview card (`probes.nativeHoverCard`) did not appear within 5 s; the same sequence reran green. Pre-existing live-GUI/harness timing, not a Phase 2-A assertion. |
+
+The new scenarios are self-contained (each clears the persisted document and creates/verifies a
+blank Session) and the runner's reload helper re-selects the record-owning Session through the
+native sidebar row when the shell restores a different "last viewed" Session after a reload.
+Scenario 10 now also guards the F-2 regression that Phase 1 silently persisted `cwd:null`.
 
 ## Current evidence (round 2, pre-merge annotation build)
 
@@ -181,7 +238,7 @@ log `/tmp/psa-shots-round2.log`), all capture assertions passing: `annotation-id
 
 | # | Scenario | Oracle |
 |---|----------|--------|
-| smoke | Pipeline + feature surface | injection factory ran; the seam matches a documented generation and count — **31 keys** on the round-1 seam, **32 keys** on the round-2 generation with `resolveNodeCandidate`, **35 keys** on the current audit-fix generation (adds `normalizeUserNote`, `cssIdentifier`, `clampPopoverPositionToViewport`); the harness requires a documented count, always requires `textDigest`, requires `resolveNodeCandidate` for round-2+, and requires the three audit-fix keys on the 35-key generation; the rail is a descendant of `[data-shell-overlay]`; exactly one launcher; the annotation stylesheet hides the native prompt-history rail while active; blank session verified |
+| smoke | Pipeline + feature surface | injection factory ran; the seam matches a documented generation and count — **31 keys** on the round-1 seam, **32 keys** on the round-2 generation with `resolveNodeCandidate`, **35 keys** on the audit-fix generation (adds `normalizeUserNote`, `cssIdentifier`, `clampPopoverPositionToViewport`), **48 keys** on the Phase 1 generation (adds `buildUniqueSelector`, `buildStableAncestors`, `parseAnnotationStore`, `serializeAnnotationStore`, `annotationSurfaceRoot`, `annotationSurfaceLevels`, `annotationLocatorText`, `normalizeAnnotationRecord`, `RECORDS_STORAGE_KEY`, `RECORD_LIMIT`, …); the harness requires a documented count, always requires `textDigest`, requires `resolveNodeCandidate` for round-2+, and requires the generation-specific keys; the rail is a descendant of `[data-shell-overlay]`; exactly one launcher; the annotation stylesheet hides the native prompt-history rail while active; blank session verified |
 | 1 | Activate via a real launcher click; layout shrinks and the rail appears and stays; native New Session is blocked | activation polls `html[data-psa-active]` + `[data-psa-rail]`, then re-verifies the rail twice 500 ms apart (**N1**); if the rail disappears it exits, retries activation once, re-verifies, and otherwise fails with the live environment snapshot. Then: `frame[data-psa-frame]`, `padding-right` equals computed rail width (±2 px), inline grid untouched; rail is **right-anchored** (`rail.right == innerWidth ±2`, `rail.left == innerWidth - railWidth ±2`); blocked real click: 0 hits on the native control's own listeners, ≥1 `preventDefault`, session id / sidebar row count / view unchanged |
 | 2 | Alt pass-through restores real native semantics; no-session notice; native context menu is not intercepted | Real Alt+click on New Session reaches the native handler and opens a conversation; `html[data-psa-passthrough]` only while held; the rail shows `[data-psa-no-session]` while no session is mounted and hides it once one is; hover outline absent while the modifier is held (F10); contextmenu oracle via `Event.prototype.preventDefault` log plus a document-start bubble-phase recorder: blocked right-click is prevented, never reaches the bubble listener, Alt+right-click appears exactly once with `defaultPrevented === false` |
 | 3 | Wheel scrolling and browser shortcuts are untouched; marquee; Esc ladder | native scrollable scrollTop changes and 0 wheel `preventDefault` (conversation scroll region when scrollable, otherwise the sidebar list — stated in the evidence); Meta+K / Control+L / plain letters delivered with `defaultPrevented === false`; Shift+drag draws `[data-psa-box]` and selects ≥1 candidate; F6 Esc ladder: first Esc ends note editing and keeps the popover + typed note, second Esc clears the selection, third Esc leaves the mode |
@@ -191,6 +248,8 @@ log `/tmp/psa-shots-round2.log`), all capture assertions passing: `annotation-id
 | 7 | Exit cleans up completely and restores a pre-existing inline layout | a sentinel `padding-right: 13px` is set on the layout frame before activation; exit restores it exactly; a MutationObserver timeline must contain a record with `data-psa-active === null` while `data-psa-frame` is still present and the sentinel padding is restored (the reverse transition); the marker must then disappear within **up to 15 s** of polling (raised from 5 s only to tolerate a busy main thread; the disappearance is still required, never ignored); `--psa-rail-width` removed; inline grid equal to pre-mode; 0 overlay nodes; launcher exactly once and inactive; native New Session works again |
 | 8 | Launcher drag/resize/scroll/reload geometry; interrupted gesture cleanup | F5: starting a launcher drag and leaving the mode with Esc neither toggles the mode nor persists the position and leaves no `data-psa-dragging`/box node; real mouse drags clamp with the 8 px margin (a drag retry after a CDP timeout happens only when the launcher position is verified unchanged); after the 1000x700 viewport override the launcher is polled until fully inside; a missing scrollable region is a FAIL; wheel scroll does not move the launcher; after reload the mode is off by default and the remembered position is restored |
 | 9 | Collection view keeps the rail/frame geometry; exit restores the baseline | opening/closing the collection leaves frame padding and canvas width unchanged, rail stays in the right strip without a wide drawer; exit restores the pre-mode canvas width and inline grid |
+| 10 | Floating surfaces, F3 stationary recompute, F4 annotation-side contract, v2 records, reload persistence, 100-record cap | F1: `[data-shell-overlay]` inline z-index becomes `150 !important` (`data-psa-raised` set) and the computed value is greater than the native hover card's z-index; exit restores the exact captured inline value/priority and marker. F2: hovering a sidebar row, then moving the real pointer onto the native hover preview card outlines the **whole card** (±2 px), the `.psa-hover` border tokens are byte-identical to an ordinary control's, and a synthetic floating panel proves whole-surface selection plus Child drill (smaller inner row inside the panel) and Parent restore. F3: a fixed z-index-500 layer inserted under a stationary pointer moves the outline to it within ~2 s, and removal returns the outline. F4 (annotation side): `power-suite:ui-annotation-state` fires `{active:true/false}`; a synthetic `[data-psd-hovercard]` node becomes `pointer-events:auto`/`z-index:120` only while active (rule inert when off). A2: the duplicate-label New session control reports **Resolved** with an anchored `uniqueSelector` (`data-slot` anchor + `nth-of-type`), and the persisted record carries v2 keys, ancestors, route (no query), Session id/cwd without HTML/JS-path/XPath leakage. D1: two records (one floating/one page) are written to `localStorage` under `power-suite.ui-annotation.annotations`, survive `Page.reload()`, keep the note, and re-resolve as Resolved + Missing. D15: a seeded 100-record document loads 100 rows and the 101st add is refused with a visible message while the stored count stays 100. A separate explicit **SKIP** row (`10b`) covers the plugin-hovercard pin, which is owned by the dynamic-workspaces branch (no `[data-psd-hovercard]` element in this build). |
+| 15 | Rainbow input focus ring (shared recipe) | on the popover textarea, the settings select, the collection row note, and the expanded note editor: a `.psa-rainbow-field` wrapper paints the `::after` ring with `opacity:1`, animations `psa-ring-spin, psa-ring-hue` at `3.2s, 14s`, the control's `outline-style:none`, and a stable rect (no layout shift); `prefers-reduced-motion: reduce` → `animation-name:none` with the ring still visible; exiting the mode restores the paint layer. |
 
 Page errors must be **0** and real network/API failures must be **0** for the run to exit 0.
 Non-JS console/log errors are printed with full detail for triage; the live GUI currently emits

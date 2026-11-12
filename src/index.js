@@ -8,7 +8,6 @@
  */
 
 import { installInterruptedSessions } from './features/interrupted-sessions/host.js'
-import { installProjectView } from './features/project-view/host.js'
 import { installPromptHistory } from './features/prompt-history/host.js'
 import { installReadAcks } from './features/read-acks/host.js'
 import { installSessionActivity } from './features/session-activity/host.js'
@@ -47,7 +46,6 @@ export function apply(ctx) {
   installPromptHistory(ctx)
   installInterruptedSessions(ctx)
   installSettings(ctx)
-  installProjectView(ctx)
   installReadAcks(ctx)
   installSessionActivity(ctx)
 }

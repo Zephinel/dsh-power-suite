@@ -48,6 +48,7 @@ if (ui === undefined) {
   /** Every key CONTRACT.md §3.7 freezes on `hooks.uiAnnotation`, and nothing else. */
   const SEAM_EXPORTS = [
     'DEFAULT_SETTINGS', 'MODIFIER_CHOICES', 'SETTINGS_STORAGE_KEY',
+    'RECORDS_STORAGE_KEY', 'RECORD_LIMIT',
     'normalizeSettings', 'resolveModifierChange', 'parseStoredSettings', 'serializeSettings',
     'modifierMatches',
     'textDigest',
@@ -59,8 +60,23 @@ if (ui === undefined) {
     'resolveRefStatus',
     'resolveNodeCandidate',
     'clampLauncherPosition', 'clampPopoverPosition', 'computeRailWidth', 'layoutModeFor',
-    'collectionAdd', 'collectionRemove', 'collectionClear', 'collectionSetNote'
+    'collectionAdd', 'collectionRemove', 'collectionClear', 'collectionSetNote',
+    'annotationWorkspaceLabel', 'annotationRoutePath', 'normalizeAnnotationViewport',
+    'buildStableAncestors', 'buildUniqueSelector', 'annotationLocatorText',
+    'normalizeAnnotationRecord', 'parseAnnotationStore', 'serializeAnnotationStore',
+    'annotationSurfaceRoot', 'annotationSurfaceLevels',
+    'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
+    'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
+    'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition'
   ]
+  /**
+   * Frozen seam generation. 31 = round-1 audit, 32 = round-2 resolver, 35 =
+   * audit-fix batch, 48 = A1/A2/persistence Phase 1 (surface picker, unique
+   * selector/ancestors, v2 record store), 57 = A3 Phase 2-A (record commit/undo/
+   * move/include helpers, mark badge excerpt, detail-card clamp). The E2E
+   * `ACCEPTED_SEAM_GENERATIONS` must accept exactly these counts.
+   */
+  const SEAM_GENERATION = SEAM_EXPORTS.length
   /** Accepted `Function.length` ranges from the frozen signatures (defaults reduce length). */
   const SEAM_ARITIES = {
     normalizeSettings: [1, 1],
@@ -91,14 +107,35 @@ if (ui === undefined) {
     clampPopoverPosition: [3, 5],
     computeRailWidth: [1, 2],
     layoutModeFor: [3, 3],
-    collectionAdd: [2, 2],
+    collectionAdd: [2, 3],
     collectionRemove: [2, 2],
     collectionClear: [0, 0],
-    collectionSetNote: [3, 3]
+    collectionSetNote: [3, 3],
+    annotationWorkspaceLabel: [1, 1],
+    annotationRoutePath: [1, 1],
+    normalizeAnnotationViewport: [1, 1],
+    buildStableAncestors: [1, 1],
+    buildUniqueSelector: [2, 2],
+    annotationLocatorText: [1, 1],
+    normalizeAnnotationRecord: [1, 2],
+    parseAnnotationStore: [1, 1],
+    serializeAnnotationStore: [1, 2],
+    annotationSurfaceRoot: [1, 2],
+    annotationSurfaceLevels: [1, 2],
+    upsertAnnotationRecord: [2, 4],
+    removeAnnotationRecord: [2, 2],
+    restoreAnnotationRecord: [2, 3],
+    moveAnnotationRecord: [3, 3],
+    toggleAnnotationInclude: [3, 3],
+    annotationUndoRemove: [2, 4],
+    annotationUndoRestore: [2, 2],
+    annotationMarkerBadgeText: [1, 2],
+    clampDetailCardPosition: [3, 5]
   }
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
+    assert.equal(SEAM_GENERATION, 57, 'the frozen Phase 2-A generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -199,6 +236,7 @@ if (ui === undefined) {
     status: 'Status: target no longer resolves (locator only)',
     statusAmbiguous: 'Status: multiple matches (locator only)',
     statusChanged: 'Status: target changed (locator only)',
+    statusEphemeral: 'Status: transient surface no longer present (locator only)',
     batchHeader: 'Please adjust the UI elements below. Each item lists its reference and the requested change.',
     skipped: '({count} annotation(s) from other sessions skipped)',
     time: '14:05'
@@ -536,7 +574,7 @@ if (ui === undefined) {
 
   test('buildElementRef produces a serializable ElementRef and the identity key survives re-selection', () => {
     const ref = refOf({ tag: 'button', role: 'button', name: 'New session', text: 'New session' })
-    assert.equal(ref.version, 1)
+    assert.equal(ref.version, 2)
     assert.match(ref.id, /^psa-\d+-[a-z0-9]+$/i)
     assert.equal(ref.at, 1_700_000_000_000)
     assert.equal(ref.order, 1)
@@ -598,8 +636,8 @@ if (ui === undefined) {
     }, { order: 4 })
     assert.equal(input.component, 'input')
     assert.equal(input.locator.tag, 'input')
-    assert.deepEqual(Object.keys(input).sort(), ['at', 'bounds', 'component', 'context', 'id', 'locator', 'note', 'order', 'session', 'text', 'textDigest', 'version'])
-    assert.deepEqual(Object.keys(input.locator).sort(), ['candidates', 'key', 'name', 'path', 'role', 'tag'])
+    assert.deepEqual(Object.keys(input).sort(), ['at', 'bounds', 'component', 'context', 'id', 'included', 'lastStatus', 'locator', 'note', 'order', 'route', 'session', 'text', 'textDigest', 'updatedAt', 'version', 'viewport'])
+    assert.deepEqual(Object.keys(input.locator).sort(), ['ancestors', 'candidates', 'ephemeral', 'key', 'name', 'path', 'role', 'surface', 'tag', 'uniqueSelector', 'uniqueVerified'])
     assert.equal(input.locator.name, 'Search sessions', 'the accessible name survives')
     assert.equal(input.text, '', 'an input contributes no value text')
 
@@ -638,7 +676,7 @@ if (ui === undefined) {
     assert.notEqual(ref.textDigest, ui.textDigest(ref.text), 'the digest covers the full text, not the truncated summary')
     const plain = refOf({ name: 'Plain target', text: 'plain' })
     assert.equal(plain.textDigest, '', 'the descriptor owns digest computation; an absent digest stays empty')
-    assert.deepEqual(Object.keys(plain).sort(), ['at', 'bounds', 'component', 'context', 'id', 'locator', 'note', 'order', 'session', 'text', 'textDigest', 'version'])
+    assert.deepEqual(Object.keys(plain).sort(), ['at', 'bounds', 'component', 'context', 'id', 'included', 'lastStatus', 'locator', 'note', 'order', 'route', 'session', 'text', 'textDigest', 'updatedAt', 'version', 'viewport'])
   })
 
   test('sanitized text is applied when building a ref, even for hostile descriptor text', () => {
@@ -932,12 +970,358 @@ if (ui === undefined) {
     const body = source.slice(start, end)
     assert.ok(!body.includes('annotationDescriptorOf('), 'chain creation must not build descriptors')
     assert.ok(body.includes('insideComposer'), 'chain entries carry composer membership only')
-    const refStart = source.indexOf('function refFromChain')
-    const refEnd = source.indexOf('function annotationConversationSessionId')
+    const refStart = source.indexOf('function refForLevel')
+    const refEnd = source.indexOf('function pickLevels')
+    assert.ok(refStart > 0 && refEnd > refStart, 'level ref sources are present')
     const refBody = source.slice(refStart, refEnd)
-    assert.ok(refBody.includes('annotationDescriptorOf(entry.element'), 'chosen descriptor is built lazily')
-    assert.ok(refBody.includes('slice(index + 1, index + 3)'), 'at most two context ancestors get descriptors')
+    assert.ok(refBody.includes('annotationDescriptorOf(element'), 'chosen descriptor is built lazily')
+    assert.ok(refBody.includes('chain.slice(1, 3)'), 'at most two context ancestors get descriptors')
   })
+
+  //#region A1/F2 floating-surface picking (Phase 1)
+
+  /** One fake chain entry. @param {string} id - fake element id. @returns {object} chain entry. */
+  const chainEntry = (id) => ({ element: { id }, insideComposer: false })
+
+  test('A1/F2: annotationSurfaceRoot picks the outermost contiguous floating ancestor and never crosses it', () => {
+    const ids = (list) => list.map(chainEntry)
+    const floating = (element) => element.id === 'card' || element.id === 'inner'
+    // text row -> inner absolute layer -> fixed card -> static portal: root is the card.
+    const surface = ui.annotationSurfaceRoot(ids(['text', 'inner', 'card', 'portal', 'page']), floating)
+    assert.deepEqual(plain(surface), { root: { id: 'card' }, index: 2 })
+    // A static page chain has no surface at all.
+    assert.equal(ui.annotationSurfaceRoot(ids(['button', 'static', 'page']), () => false), null)
+    // A floating ancestor above a static break is a different run; the nearer run wins.
+    const broken = ui.annotationSurfaceRoot(ids(['text', 'inner', 'static', 'outer']), (element) => element.id === 'inner' || element.id === 'outer')
+    assert.deepEqual(plain(broken), { root: { id: 'inner' }, index: 1 }, 'the static ancestor ends the contiguous run')
+    // Empty chain and default DOM predicate on non-DOM objects stay inert, never throw.
+    assert.equal(ui.annotationSurfaceRoot([]), null)
+    assert.equal(ui.annotationSurfaceRoot(ids(['plain'])), null)
+  })
+
+  /**
+   * One DOM-free accessor set for annotationSurfaceLevels.
+   * @param {object[]} descendants - fake descendant elements.
+   * @returns {object} accessors.
+   */
+  const surfaceAccess = (descendants) => ({
+    descendants: () => descendants,
+    isCandidate: (element) => element.candidate === true,
+    isOwn: (element) => element.own === true,
+    visible: (element) => element.hidden !== true,
+    rectOf: (element) => ({ x: 0, y: 0, width: element.width ?? 20, height: element.height ?? 20 }),
+    textOf: (element) => element.text ?? '',
+    childCount: (element) => (element.children ?? []).length,
+    insideComposer: () => false
+  })
+
+  test('A1/F2: annotationSurfaceLevels is root-first, ordered, filtered and capped', () => {
+    const root = { id: 'card' }
+    const title = { id: 'title', text: 'Session title' }
+    const nested = { id: 'nested', text: 'Nested', children: [{}] }
+    const control = { id: 'control', candidate: true, text: 'Open' }
+    const hidden = { id: 'hidden', hidden: true, text: 'invisible' }
+    const own = { id: 'own', own: true, text: ' ours ' }
+    const levels = ui.annotationSurfaceLevels(root, surfaceAccess([title, nested, control, hidden, own]))
+    assert.deepEqual(plain(levels).map((level) => level.element.id), ['card', 'title', 'control'],
+      'root first, then text blocks and candidates in document order; nested/own/hidden are excluded')
+    assert.equal(levels[0].element, root)
+    assert.equal(ui.annotationSurfaceLevels(null, surfaceAccess([])).length, 0)
+    const many = Array.from({ length: 30 }, (_, index) => ({ id: `row-${index}`, text: `row ${index}` }))
+    assert.equal(ui.annotationSurfaceLevels(root, surfaceAccess(many)).length, 12, 'inner levels are capped at 12')
+  })
+
+  //#endregion
+
+  //#region A2 ElementRef v2 capture
+
+  test('A2/D11: buildUniqueSelector verifies self and anchored candidates with the injected query engine', () => {
+    const node = (tagName) => ({ tagName })
+    const byTag = (tagName) => (selector) => (selector.includes(tagName.toUpperCase()) ? [] : [])
+    // Own data attribute: one hit -> verified.
+    const selfDescriptor = {
+      tag: 'button',
+      attrs: [
+        { name: 'data-slot', value: 'sidebar.new-session' },
+        { name: 'class', value: 'ignored_class' }
+      ],
+      anchorPaths: []
+    }
+    const selfSelector = 'button[data-slot="sidebar.new-session"]'
+    assert.deepEqual(
+      plain(ui.buildUniqueSelector(selfDescriptor, (selector) => (selector === selfSelector ? [node('BUTTON')] : []))),
+      { selector: selfSelector, verified: true }
+    )
+    // Duplicate aria-label -> anchored structural path, never a class name.
+    const duplicateDescriptor = {
+      tag: 'button',
+      attrs: [{ name: 'aria-label', value: 'New session' }],
+      anchorPaths: [{ selector: 'div[data-slot="sidebar"]', steps: [{ tag: 'div', index: 1 }, { tag: 'button', index: 1 }] }]
+    }
+    const anchoredSelector = 'div[data-slot="sidebar"] > div:nth-of-type(1) > button:nth-of-type(1)'
+    const anchored = ui.buildUniqueSelector(duplicateDescriptor, (selector) => {
+      if (selector === 'button[aria-label="New session"]') return [node('BUTTON'), node('BUTTON')]
+      if (selector === anchoredSelector) return [node('BUTTON')]
+      return []
+    })
+    assert.deepEqual(plain(anchored), { selector: anchoredSelector, verified: true })
+    // Nothing unique -> honest null, never an unverified guess.
+    assert.deepEqual(plain(ui.buildUniqueSelector(duplicateDescriptor, () => [node('BUTTON'), node('BUTTON')])), { selector: null, verified: false })
+    // A generated id is not used as an anchor, and no query engine -> no selector.
+    const dynamicId = ui.buildUniqueSelector({ tag: 'div', attrs: [{ name: 'id', value: ':r7:' }], anchorPaths: [] }, () => [node('DIV')])
+    assert.deepEqual(plain(dynamicId), { selector: null, verified: false })
+    assert.deepEqual(plain(ui.buildUniqueSelector({ tag: 'div', attrs: [], anchorPaths: [] })), { selector: null, verified: false })
+  })
+
+  test('A2: buildStableAncestors keeps only sanitized identity attributes, bounded to three', () => {
+    const ancestors = ui.buildStableAncestors([
+      { tag: 'DIV', attrs: [{ name: 'data-slot', value: 'sidebar' }, { name: 'class', value: 'x' }, { name: 'style', value: 'y' }] },
+      { tag: 'div', attrs: [{ name: 'id', value: ':r4:' }] },
+      { tag: 'div', attrs: [{ name: 'aria-label', value: 'Session card' }] },
+      { tag: 'span', attrs: [{ name: 'data-row-key', value: REAL_ROW_KEY }] },
+      { tag: 'section', attrs: [{ name: 'data-testid', value: 'ignored-by-cap' }] }
+    ])
+    assert.equal(ancestors.length, 3)
+    assert.deepEqual(plain(ancestors[0]), { tag: 'div', attrs: { 'data-slot': 'sidebar' } })
+    assert.deepEqual(plain(ancestors[1]), { tag: 'div', attrs: { 'aria-label': 'Session card' } })
+    assert.deepEqual(plain(ancestors[2]), { tag: 'span', attrs: { 'data-row-key': REAL_ROW_KEY } })
+    // A secret-shaped aria-label is rejected by the attribute sanitizer, so that ancestor is dropped.
+    assert.deepEqual(plain(ui.buildStableAncestors([
+      { tag: 'div', attrs: [{ name: 'aria-label', value: 'mail alice@example.com' }] },
+      { tag: 'body', attrs: [{ name: 'data-slot', value: 'root' }] }
+    ])), [])
+    assert.deepEqual(plain(ui.buildStableAncestors(null)), [])
+  })
+
+  test('A2: buildElementRef v2 carries identity/surface fields and no HTML, styles or query expressions', () => {
+    const descriptor = descriptorOf({
+      tag: 'div',
+      component: 'container',
+      name: 'Hover card',
+      attrs: [{ name: 'data-row-key', value: REAL_WORKSPACE_KEY }],
+      uniqueSelector: `div[data-row-key="${REAL_WORKSPACE_KEY}"]`,
+      uniqueVerified: true,
+      ancestors: [{ tag: 'div', attrs: [{ name: 'data-slot', value: 'sidebar' }] }]
+    })
+    const ref = refOf(descriptor, {
+      cwd: '/Users/rexxin/Development/dsh-power-suite',
+      route: '/session/abc?token=secret#frag',
+      viewport: { width: 1728, height: 900 },
+      surface: 'floating'
+    })
+    assert.equal(ref.version, 2)
+    assert.equal(ref.locator.surface, 'floating')
+    assert.equal(ref.locator.ephemeral, true, 'a floating surface is transient by definition')
+    assert.equal(ref.locator.uniqueSelector, `div[data-row-key="${REAL_WORKSPACE_KEY}"]`)
+    assert.equal(ref.locator.uniqueVerified, true)
+    assert.deepEqual(plain(ref.locator.ancestors), [{ tag: 'div', attrs: { 'data-slot': 'sidebar' } }])
+    assert.equal(ref.session.cwd, '/Users/rexxin/Development/dsh-power-suite')
+    assert.equal(ref.session.workspaceLabel, 'dsh-power-suite', 'the Workspace label is the cwd basename')
+    assert.equal(ref.route, '/session/abc', 'query/fragment never reach the record')
+    assert.deepEqual(plain(ref.viewport), { width: 1728, height: 900 })
+    assert.equal(ref.updatedAt, ref.at)
+    assert.equal(ref.included, true)
+    assert.equal(ref.lastStatus, 'resolved')
+    const serialized = JSON.stringify(ref)
+    for (const forbidden of ['outerHTML', 'innerHTML', 'querySelector', 'xpath', 'XPath', '<div', 'getComputedStyle']) {
+      assert.ok(!serialized.includes(forbidden), `record must not contain ${forbidden}`)
+    }
+    const pageRef = refOf()
+    assert.equal(pageRef.locator.surface, 'page')
+    assert.equal(pageRef.locator.ephemeral, false)
+    assert.equal(pageRef.locator.uniqueSelector, null)
+    assert.equal(pageRef.locator.uniqueVerified, false)
+    assert.deepEqual(plain(pageRef.locator.ancestors), [])
+    assert.equal(pageRef.route, '/', 'an absent route falls back to /')
+  })
+
+  test('A2: workspace label and route path helpers keep identity local and query-free', () => {
+    assert.equal(ui.annotationWorkspaceLabel('/Users/me/projects/dsh-power-suite'), 'dsh-power-suite')
+    assert.equal(ui.annotationWorkspaceLabel('/Users/me/projects/dsh-power-suite/'), 'dsh-power-suite')
+    assert.equal(ui.annotationWorkspaceLabel('C:\\work\\plugin'), 'plugin')
+    assert.equal(ui.annotationWorkspaceLabel(''), null)
+    assert.equal(ui.annotationWorkspaceLabel(null), null)
+    assert.equal(ui.annotationWorkspaceLabel('x'.repeat(120)).length, 80)
+    assert.equal(ui.annotationRoutePath('/session/abc'), '/session/abc')
+    assert.equal(ui.annotationRoutePath('/session/abc?token=secret#x'), '/session/abc')
+    assert.equal(ui.annotationRoutePath(''), '/')
+    assert.equal(ui.annotationRoutePath('plugins'), '/plugins')
+    assert.deepEqual(plain(ui.normalizeAnnotationViewport({ width: 1728, height: 900 })), { width: 1728, height: 900 })
+    assert.equal(ui.normalizeAnnotationViewport({ width: 0, height: 900 }), null)
+    assert.equal(ui.normalizeAnnotationViewport(null), null)
+  })
+
+  test('A2: describeLocator and annotationLocatorText prefer the verified unique selector', () => {
+    const ref = refOf({
+      tag: 'button',
+      name: 'New session',
+      attrs: [{ name: 'aria-label', value: 'New session' }],
+      uniqueSelector: 'div[data-slot="sidebar"] > div:nth-of-type(1) > button:nth-of-type(1)',
+      uniqueVerified: true
+    })
+    assert.ok(ui.describeLocator(ref).includes('div[data-slot="sidebar"]'))
+    assert.equal(ui.annotationLocatorText(ref), 'div[data-slot="sidebar"] > div:nth-of-type(1) > button:nth-of-type(1)')
+    const fallback = refOf({ tag: 'button', name: 'Save', attrs: [{ name: 'aria-label', value: 'Save' }] })
+    assert.equal(ui.annotationLocatorText(fallback), '[aria-label="Save"]', 'best ordered candidate when no unique selector exists')
+    const structural = refOf({ tag: 'div', role: '', name: '', component: 'container' })
+    assert.equal(ui.annotationLocatorText(structural), 'div', 'the structural path is the last locator fallback')
+  })
+
+  test('A2: resolveRefStatus prefers a verified unique selector and falls back to v1 candidates', () => {
+    const uniqueSelector = 'div[data-slot="sidebar"] > button:nth-of-type(1)'
+    const ref = refOf({
+      tag: 'button',
+      name: 'New session',
+      attrs: [{ name: 'aria-label', value: 'New session' }],
+      uniqueSelector,
+      uniqueVerified: true
+    })
+    const liveInfo = (element) => ({
+      isConnected: true,
+      expectedText: element.textContent,
+      textContent: element.textContent,
+      expectedDigest: '',
+      actualDigest: '',
+      expectedName: 'New session',
+      actualName: 'New session'
+    })
+    const one = { tagName: 'BUTTON', textContent: 'New session' }
+    const two = { tagName: 'BUTTON', textContent: 'New session' }
+    const base = { candidates: ref.locator.candidates, expectedTag: 'button', liveInfo }
+    assert.equal(ui.resolveRefStatus({ ...base, uniqueSelector, queryAll: (selector) => (selector === uniqueSelector ? [one] : []) }), 'resolved')
+    assert.equal(ui.resolveRefStatus({ ...base, uniqueSelector, queryAll: (selector) => (selector === uniqueSelector ? [one, two] : []) }), 'ambiguous',
+      'a unique selector matching several elements is real ambiguity')
+    // Zero unique hits: the v1 label candidate still resolves the control.
+    const labelSelector = ref.locator.candidates.find((candidate) => candidate.kind === 'label')?.value
+    assert.ok(typeof labelSelector === 'string' && labelSelector.length > 0)
+    assert.equal(ui.resolveRefStatus({ ...base, uniqueSelector, queryAll: (selector) => (selector === labelSelector ? [one] : []) }), 'resolved')
+  })
+
+  test('A2: a missing ephemeral target serializes its own transient status line', () => {
+    const floating = refOf({ name: 'Hover card row' }, { surface: 'floating' })
+    const text = ui.serializeQuickReference({ ...floating, status: 'missing' }, 'Fix the row', EN_LABELS)
+    const lines = text.replace(/\n+$/, '').split('\n')
+    assert.equal(lines[4], EN_LABELS.statusEphemeral)
+    const page = refOf({ name: 'Toolbar button' })
+    const pageLines = ui.serializeQuickReference({ ...page, status: 'missing' }, 'Fix it', EN_LABELS).replace(/\n+$/, '').split('\n')
+    assert.equal(pageLines[4], EN_LABELS.status)
+  })
+
+  //#endregion
+
+  //#region D1/D15 persistence: v2 record document and explicit cap
+
+  /**
+   * One distinct record for persistence/cap tests.
+   * @param {number} index - record index.
+   * @returns {object} v2 record.
+   */
+  const recordAt = (index) => refOf({
+    tag: 'button',
+    name: `Control ${index}`,
+    attrs: [{ name: 'data-row-key', value: `workspace:${String(index).padStart(8, '0')}-0000-4000-8000-000000000000` }]
+  }, { order: index, at: 1_700_000_000_000 + index, sessionId: SESSION_A })
+
+  test('D1: normalizeAnnotationRecord whitelists v2, tolerates v1 and drops invalid records', () => {
+    const record = {
+      ...recordAt(1),
+      note: '  keep\nthis  ',
+      included: false,
+      lastStatus: 'ambiguous',
+      extra: 'not persisted',
+      outerHTML: '<button>no</button>'
+    }
+    const normalized = ui.normalizeAnnotationRecord(record, 3)
+    assert.equal(normalized.version, 2)
+    assert.equal(normalized.note, '  keep\nthis  ', 'the user note survives verbatim')
+    assert.equal(normalized.included, false)
+    assert.equal(normalized.lastStatus, 'ambiguous')
+    assert.equal('extra' in normalized, false)
+    assert.equal('outerHTML' in normalized, false)
+    assert.equal(normalized.locator.surface, 'page')
+    assert.equal(normalized.locator.ephemeral, false)
+    assert.equal(normalized.route, '/')
+    assert.deepEqual(plain(normalized.session), { sessionId: SESSION_A, cwd: null, workspaceLabel: null })
+
+    const v1 = {
+      version: 1,
+      id: 'psa-old-1',
+      at: 1_700_000_000_000,
+      order: 2,
+      session: { sessionId: SESSION_A },
+      locator: {
+        tag: 'button',
+        role: 'button',
+        name: 'Legacy',
+        candidates: [{ kind: 'label', value: '[aria-label="Legacy"]', reliability: 0.8 }],
+        key: 'label:[aria-label="Legacy"]|button|button',
+        path: 'button'
+      },
+      component: 'button',
+      text: 'Legacy',
+      textDigest: 'deadbeef',
+      context: '',
+      bounds: { x: 1, y: 2, width: 3, height: 4 },
+      note: ''
+    }
+    const upgraded = ui.normalizeAnnotationRecord(v1, 0)
+    assert.equal(upgraded.version, 2)
+    assert.equal(upgraded.locator.uniqueSelector, null)
+    assert.equal(upgraded.locator.uniqueVerified, false)
+    assert.deepEqual(plain(upgraded.locator.ancestors), [])
+    assert.equal(upgraded.locator.surface, 'page')
+    assert.equal(upgraded.id, 'psa-old-1', 'v1 identity is preserved')
+    for (const bad of [null, undefined, 'x', [], { id: 'x' }, { version: 9, id: 'x', locator: { tag: 'div', candidates: [{ kind: 'tag', value: 'div', reliability: 0.2 }] } }, { id: 'x', locator: { tag: 'div', candidates: [] } }, { locator: { tag: 'div', candidates: [{ kind: 'tag', value: 'div', reliability: 0.2 }] } }]) {
+      assert.equal(ui.normalizeAnnotationRecord(bad), null, `dropped: ${JSON.stringify(bad)}`)
+    }
+  })
+
+  test('D1: parseAnnotationStore tolerates bad documents and serializeAnnotationStore round-trips', () => {
+    const empty = { version: 2, updatedAt: 0, records: [] }
+    for (const bad of [null, undefined, '', 'not json', 'null', '42', '"text"', JSON.stringify({ version: 9, records: [recordAt(1)] })]) {
+      assert.deepEqual(plain(ui.parseAnnotationStore(bad)), empty, `empty store for ${String(bad).slice(0, 24)}`)
+    }
+    const second = recordAt(2)
+    const first = recordAt(1)
+    const serialized = ui.serializeAnnotationStore([second, first, second], 1_800_000_000_000)
+    const parsed = ui.parseAnnotationStore(serialized)
+    assert.equal(parsed.version, 2)
+    assert.equal(parsed.updatedAt, 1_800_000_000_000)
+    assert.deepEqual(plain(parsed.records).map((record) => record.order), [1, 2], 'ordered by order, duplicate ids removed')
+    assert.equal(ui.serializeAnnotationStore(parsed.records, 1_800_000_000_000), serialized, 'serialization is deterministic')
+    const many = Array.from({ length: 130 }, (_, index) => recordAt(index))
+    const capped = ui.parseAnnotationStore(ui.serializeAnnotationStore(many, 1))
+    assert.equal(capped.records.length, 100, 'the store is capped at the record limit')
+    assert.equal(ui.RECORD_LIMIT, 100)
+    assert.equal(ui.RECORDS_STORAGE_KEY, 'power-suite.ui-annotation.annotations')
+    // A bare legacy array is tolerated but every record is still validated.
+    const arrayDoc = ui.parseAnnotationStore(JSON.stringify([recordAt(3), { bogus: true }]))
+    assert.equal(arrayDoc.records.length, 1)
+    assert.equal(arrayDoc.records[0].order, 3)
+  })
+
+  test('D15: collectionAdd refuses the 101st record explicitly and reducer state stays unchanged', () => {
+    let list = []
+    for (let index = 0; index < 100; index += 1) {
+      list = ui.collectionAdd(list, entryOf(recordAt(index), `note ${index}`), 100).list
+    }
+    assert.equal(list.length, 100)
+    const overflow = ui.collectionAdd(list, entryOf(recordAt(999), 'overflow'), 100)
+    assert.equal(overflow.rejected, true)
+    assert.equal(overflow.added, false)
+    assert.equal(overflow.list.length, 100)
+    assert.equal(list.length, 100, 'the input list is not mutated')
+    // Updating an existing record at the cap is still allowed.
+    const updated = ui.collectionAdd(list, entryOf(recordAt(5), 'updated note'), 100)
+    assert.equal(updated.rejected, false)
+    assert.equal(updated.updated, true)
+    let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
+    state = { ...state, collection: list }
+    const overflowState = ui.reduceAnnotationState(state, { type: 'collectionAdd', entry: entryOf(recordAt(999), 'overflow') })
+    assert.equal(overflowState, state, 'a refused add returns the same state reference')
+  })
+
+  //#endregion
 
   //#region serialization
 
@@ -1296,6 +1680,257 @@ if (ui === undefined) {
   })
 
   //#endregion
+
+  //#region A3 Phase 2-A record actions, undo slot, marks and detail card
+
+  /**
+   * Build one committable record for the Phase 2-A tests.
+   * @param {string} name - accessible name (identity-bearing label).
+   * @param {string} [sessionId] - Session identity.
+   * @param {object} [overrides] - record overrides.
+   * @returns {object} record.
+   */
+  const recordOf = (name, sessionId = SESSION_A, overrides = {}) => ({
+    ...refOf({
+      name,
+      text: name,
+      attrs: [{ name: 'data-testid', value: `psa-${name.toLowerCase()}` }]
+    }, { sessionId, at: 1_700_000_000_000, order: 0 }),
+    note: '',
+    session: { sessionId, cwd: '/Users/dev/workspace-alpha', workspaceLabel: 'workspace-alpha' },
+    ...overrides
+  })
+
+  test('A3/T5: upsertAnnotationRecord inserts and updates by identity+session while keeping id/at/order', () => {
+    const first = recordOf('Alpha')
+    const inserted = ui.upsertAnnotationRecord([], first, 100, 1_000)
+    assert.equal(inserted.added, true)
+    assert.equal(inserted.updated, false)
+    assert.equal(inserted.rejected, false)
+    assert.equal(inserted.list.length, 1)
+    const stored = inserted.list[0]
+    assert.equal(stored.id, first.id)
+    assert.equal(stored.version, 2)
+    assert.equal(stored.updatedAt, 1_000, 'the commit stamp is written')
+
+    const changed = recordOf('Alpha', SESSION_A, { at: 5, order: 99, note: 'new requirement' })
+    changed.locator = { ...changed.locator, uniqueSelector: '[data-slot="alpha"]', uniqueVerified: true }
+    const updated = ui.upsertAnnotationRecord(inserted.list, changed, 100, 2_000)
+    assert.equal(updated.updated, true)
+    assert.equal(updated.added, false)
+    assert.equal(updated.list.length, 1, 'same identity+session never duplicates')
+    const merged = updated.list[0]
+    assert.equal(merged.id, stored.id, 'an update preserves the original id')
+    assert.equal(merged.at, stored.at, 'an update preserves the captured timestamp')
+    assert.equal(merged.order, stored.order, 'an update preserves the collection position')
+    assert.equal(merged.note, 'new requirement')
+    assert.equal(merged.updatedAt, 2_000)
+    assert.equal(merged.locator.uniqueSelector, '[data-slot="alpha"]')
+    assert.equal(merged.included, true)
+  })
+
+  test('A3/T5: an empty incoming note preserves the existing requirement and the cap refuses explicitly', () => {
+    const alpha = recordOf('Alpha', SESSION_A, { note: 'keep me' })
+    const committed = ui.upsertAnnotationRecord([], alpha, 100, 1_000).list
+    const blankNote = recordOf('Alpha', SESSION_A, { note: '   ' })
+    const updated = ui.upsertAnnotationRecord(committed, blankNote, 100, 2_000).list
+    assert.equal(updated[0].note, 'keep me', 'a blank re-save must not wipe the requirement')
+
+    const beta = ui.upsertAnnotationRecord(updated, recordOf('Beta'), 2, 3_000)
+    assert.equal(beta.list.length, 2)
+    const refused = ui.upsertAnnotationRecord(beta.list, recordOf('Gamma'), 2, 4_000)
+    assert.equal(refused.rejected, true, 'D15: the 101st/over-cap record is refused')
+    assert.equal(refused.added, false)
+    assert.equal(refused.list.length, 2, 'a refused commit never changes the list')
+    assert.equal(ui.upsertAnnotationRecord([], null, 100, 1).rejected, false, 'invalid input is ignored, not refused')
+  })
+
+  test('A3/T5: removeAnnotationRecord and restoreAnnotationRecord round-trip at the original position', () => {
+    const alpha = recordOf('Alpha')
+    const beta = recordOf('Beta')
+    const gamma = recordOf('Gamma')
+    const list = [alpha, beta, gamma]
+    const removed = ui.removeAnnotationRecord(list, beta.id)
+    assert.deepEqual(plain(removed.map((entry) => entry.id)), [alpha.id, gamma.id])
+    assert.deepEqual(plain(ui.removeAnnotationRecord(removed, 'psa-missing')), plain(removed), 'a missing id is a no-op')
+    const restored = ui.restoreAnnotationRecord(removed, beta, 1)
+    assert.deepEqual(plain(restored.map((entry) => entry.id)), [alpha.id, beta.id, gamma.id])
+    const appended = ui.restoreAnnotationRecord(removed, beta, 99)
+    assert.deepEqual(plain(appended.map((entry) => entry.id)), [alpha.id, gamma.id, beta.id], 'an out-of-range index appends')
+  })
+
+  test('A3/T5/D5: the undo slot captures one removal (or a clear) and restores it exactly', () => {
+    const alpha = recordOf('Alpha')
+    const beta = recordOf('Beta')
+    const gamma = recordOf('Gamma')
+    const first = ui.annotationUndoRemove([alpha, beta, gamma], beta.id, 'single', 5_000)
+    assert.deepEqual(plain(first.list.map((entry) => entry.id)), [alpha.id, gamma.id])
+    assert.equal(first.undo.kind, 'single')
+    assert.equal(first.undo.index, 1)
+    assert.equal(first.undo.at, 5_000)
+    assert.equal(first.undo.record.id, beta.id)
+    assert.deepEqual(plain(ui.annotationUndoRestore(first.list, first.undo).map((entry) => entry.id)), [alpha.id, beta.id, gamma.id])
+    assert.equal(ui.annotationUndoRemove([], 'psa-missing', 'single', 1).undo, null, 'a missing removal yields no undo slot')
+
+    const cleared = ui.annotationUndoRemove([alpha, beta], null, 'clear', 6_000)
+    assert.deepEqual(plain(cleared.list), [])
+    assert.equal(cleared.undo.kind, 'clear')
+    assert.equal(cleared.undo.records.length, 2)
+    assert.deepEqual(plain(ui.annotationUndoRestore([], cleared.undo).map((entry) => entry.id)), [alpha.id, beta.id])
+    assert.deepEqual(plain(ui.annotationUndoRestore([alpha], cleared.undo).map((entry) => entry.id)), [alpha.id, beta.id], 'restore never duplicates an existing id')
+  })
+
+  test('A3/T5: moveAnnotationRecord swaps neighbours, keeps order contiguous, and clamps at the edges', () => {
+    const alpha = recordOf('Alpha')
+    const beta = recordOf('Beta')
+    const gamma = recordOf('Gamma')
+    const start = [alpha, beta, gamma]
+    const up = ui.moveAnnotationRecord(start, beta.id, -1)
+    assert.deepEqual(plain(up.map((entry) => entry.id)), [beta.id, alpha.id, gamma.id])
+    assert.deepEqual(plain(up.map((entry) => entry.order)), [0, 1, 2], 'order stays contiguous after a move')
+    const down = ui.moveAnnotationRecord(start, beta.id, 1)
+    assert.deepEqual(plain(down.map((entry) => entry.id)), [alpha.id, gamma.id, beta.id])
+    assert.deepEqual(plain(ui.moveAnnotationRecord(start, alpha.id, -1)), plain(start), 'moving the first record up is a no-op')
+    assert.deepEqual(plain(ui.moveAnnotationRecord(start, gamma.id, 1)), plain(start), 'moving the last record down is a no-op')
+    assert.deepEqual(plain(ui.moveAnnotationRecord(start, 'psa-missing', 1)), plain(start))
+    assert.deepEqual(plain(start.map((entry) => entry.id)), [alpha.id, beta.id, gamma.id], 'the input list is never mutated')
+  })
+
+  test('A3/T5: toggleAnnotationInclude flips only the matching record', () => {
+    const alpha = recordOf('Alpha')
+    const beta = recordOf('Beta')
+    const list = [alpha, beta]
+    const off = ui.toggleAnnotationInclude(list, beta.id, false)
+    assert.equal(off[0].included, true)
+    assert.equal(off[1].included, false)
+    const same = ui.toggleAnnotationInclude(off, beta.id, false)
+    assert.equal(same[1], off[1], 'an unchanged flag keeps the same record reference')
+    assert.equal(ui.toggleAnnotationInclude(list, 'psa-missing', false)[0], alpha)
+    assert.equal(list[1].included, true, 'the input is never mutated')
+  })
+
+  test('A3/T5: the new reducer actions commit, move, include, edit, remove, restore and undo', () => {
+    const alpha = recordOf('Alpha')
+    const beta = recordOf('Beta')
+    let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
+    state = ui.reduceAnnotationState(state, { type: 'annotationCommit', record: alpha, now: 1_000 })
+    assert.equal(state.collection.length, 1)
+    assert.equal(state.collection[0].updatedAt, 1_000)
+    const again = ui.reduceAnnotationState(state, { type: 'annotationCommit', record: alpha, now: 1_000 })
+    assert.equal(again.collection.length, 1, 'a re-commit of the same identity never duplicates')
+    assert.equal(again.collection[0].id, state.collection[0].id, 'a re-commit keeps the record id')
+    state = ui.reduceAnnotationState(state, { type: 'annotationCommit', record: beta, now: 2_000 })
+    assert.equal(state.collection.length, 2)
+    assert.equal(state.collection[1].updatedAt, 2_000)
+    assert.deepEqual(plain(state.collection.map((entry) => entry.order)), [0, 1], 'a new commit gets the next order')
+
+    state = ui.reduceAnnotationState(state, { type: 'annotationInclude', refId: beta.id, included: false })
+    assert.equal(state.collection[1].included, false)
+    state = ui.reduceAnnotationState(state, { type: 'annotationMove', refId: beta.id, delta: -1 })
+    assert.deepEqual(plain(state.collection.map((entry) => entry.id)), [beta.id, alpha.id])
+    state = ui.reduceAnnotationState(state, { type: 'annotationUpdateNote', refId: beta.id, note: 'edited', now: 3_000 })
+    assert.equal(state.collection[0].note, 'edited')
+    assert.equal(state.collection[0].updatedAt, 3_000)
+    state = ui.reduceAnnotationState(state, { type: 'annotationRemove', refId: alpha.id })
+    assert.equal(state.collection.length, 1)
+    state = ui.reduceAnnotationState(state, { type: 'annotationRestore', record: alpha, index: 1 })
+    assert.deepEqual(plain(state.collection.map((entry) => entry.id)), [beta.id, alpha.id])
+    const cleared = ui.annotationUndoRemove(state.collection, null, 'clear', 4_000)
+    const emptied = ui.reduceAnnotationState(state, { type: 'collectionClear' })
+    assert.equal(emptied.collection.length, 0)
+    state = ui.reduceAnnotationState(emptied, { type: 'annotationUndo', undo: cleared.undo })
+    assert.equal(state.collection.length, 2, 'annotationUndo restores a cleared collection')
+    state = ui.reduceAnnotationState(state, { type: 'annotationUndo', undo: cleared.undo })
+    assert.equal(state.collection.length, 2, 'a repeated undo never duplicates records')
+    const deactivated = ui.reduceAnnotationState(state, { type: 'deactivate' })
+    assert.equal(deactivated.collection.length, 2, 'records survive deactivation')
+  })
+
+  test('A3/T6: annotationMarkerBadgeText keeps one excerpt line and truncates to the cap', () => {
+    const empty = ui.annotationMarkerBadgeText('   \n  ')
+    assert.deepEqual(plain(empty), { text: '', empty: true, truncated: false })
+    assert.deepEqual(plain(ui.annotationMarkerBadgeText('Fix   the   toolbar')), { text: 'Fix the toolbar', empty: false, truncated: false })
+    assert.deepEqual(plain(ui.annotationMarkerBadgeText('first line\nsecond line')).text, 'first line')
+    const long = ui.annotationMarkerBadgeText('0123456789abcdefghijKLMNOP')
+    assert.equal(plain(long).truncated, true)
+    assert.equal(plain(long).text.length, 18)
+    assert.equal(plain(long).text.endsWith('…'), true)
+    assert.equal(plain(ui.annotationMarkerBadgeText('0123456789abcdefghijKLMNOP', 10)).text.length, 10)
+    assert.equal(plain(ui.annotationMarkerBadgeText('tab\tand  spaces')).text, 'tab and spaces')
+  })
+
+  test('A3/T6: clampDetailCardPosition flips sides/verticals, reserves the rail and clamps margins', () => {
+    const viewport = { width: 1728, height: 900 }
+    const card = { width: 320, height: 240 }
+    const railWidth = 200
+    const right = ui.clampDetailCardPosition({ x: 100, y: 100, width: 80, height: 32 }, card, viewport, railWidth)
+    assert.deepEqual(plain(right), { x: 188, y: 100, placement: 'right' }, 'prefers the right side, top-aligned')
+    const left = ui.clampDetailCardPosition({ x: 1350, y: 100, width: 80, height: 32 }, card, viewport, railWidth)
+    assert.equal(plain(left).placement, 'left')
+    assert.equal(plain(left).x, 1022)
+    assert.ok(plain(left).x + card.width <= viewport.width - railWidth - 8)
+    const above = ui.clampDetailCardPosition({ x: 100, y: 850, width: 80, height: 20 }, card, viewport, railWidth)
+    assert.equal(plain(above).y, 630, 'a card with no room below is bottom-aligned to the element')
+    assert.ok(plain(above).y + card.height <= viewport.height - 8)
+    const clamped = ui.clampDetailCardPosition({ x: -100, y: -50, width: 40, height: 20 }, card, viewport, railWidth)
+    assert.deepEqual(plain({ x: clamped.x, y: clamped.y }), { x: 8, y: 8 })
+    const narrow = ui.clampDetailCardPosition({ x: 300, y: 100, width: 40, height: 20 }, card, { width: 400, height: 300 }, 0)
+    assert.equal(plain(narrow).placement, 'left')
+    assert.deepEqual(plain({ x: narrow.x, y: narrow.y }), { x: 8, y: 8 })
+    for (const rect of [
+      { x: 0, y: 0, width: 0, height: 0 },
+      { x: 1700, y: 890, width: 20, height: 5 },
+      { x: 860, y: 450, width: 10, height: 10 }
+    ]) {
+      const pos = ui.clampDetailCardPosition(rect, card, viewport, railWidth)
+      assert.ok(pos.x >= 8 && pos.y >= 8, `margins respected for ${JSON.stringify(rect)}`)
+      assert.ok(pos.x + card.width <= viewport.width - railWidth - 8, 'rail strip respected')
+      assert.ok(pos.y + card.height <= viewport.height - 8, 'bottom margin respected')
+    }
+  })
+
+  //#endregion
+
+  test('A3/T6: the mark overlay is pointer-transparent and the detail card keeps its markers', () => {
+    const source = client.source
+    assert.equal(typeof source, 'string')
+    const cssStart = source.indexOf('const ANNOTATION_CSS')
+    assert.ok(cssStart >= 0, 'the annotation stylesheet exists')
+    const css = source.slice(cssStart, source.indexOf('\n    `', cssStart))
+    assert.ok(css.includes('.psa-mark{'), 'the page mark rule exists')
+    const markRule = css.slice(css.indexOf('.psa-mark{'), css.indexOf('}', css.indexOf('.psa-mark{')))
+    assert.ok(markRule.includes('pointer-events:none'), 'page marks must never intercept pointer events')
+    assert.ok(css.includes('.psa-mark-badge{'), 'the mark badge rule exists')
+    assert.ok(css.includes('.psa-detail-card{'), 'the detail card rule exists')
+    assert.ok(css.includes('prefers-reduced-motion'), 'reduced-motion handling is present')
+    assert.ok(source.includes("'data-psa-mark': ''"), 'marks are rendered with the data-psa-mark marker')
+    assert.ok(source.includes("'data-psa-mark-id': mark.id"), 'marks expose their record id')
+    assert.ok(source.includes("'data-psa-detail': ''"), 'the detail card is rendered with data-psa-detail')
+    assert.ok(source.includes("'data-psa-undo-toast': ''"), 'the delete undo toast is rendered')
+    assert.ok(source.includes('role: \'status\''), 'the undo toast is a polite status region')
+    assert.ok(source.includes('function AnnotationDetailCard'), 'the detail card component exists')
+    assert.ok(source.includes('function annotationMarkElements'), 'the mark element builder exists')
+  })
+
+  test('A2/F-2: the Session seat bridges cwd and record capture prefers it over the ctx fallback', () => {
+    const source = client.source
+    assert.equal(typeof source, 'string')
+    const seatStart = source.indexOf('function AnnotationSessionSeat')
+    assert.ok(seatStart >= 0, 'the annotation Session seat exists')
+    const seatEnd = source.indexOf('\n    function ', seatStart + 'function AnnotationSessionSeat'.length)
+    const seat = source.slice(seatStart, seatEnd > 0 ? seatEnd : source.length)
+    assert.ok(seat.includes('props.useSessions'), 'the seat must read the slot contract useSessions hook')
+    assert.ok(seat.includes('sessionCwd'), 'the seat must derive the Session cwd')
+    assert.ok(seat.includes('annotationBridge.sessionCwd'), 'the seat must mirror cwd into the bridge')
+    const identityStart = source.indexOf('function sessionIdentity')
+    const identityEnd = source.indexOf('\n      function ', identityStart + 'function sessionIdentity'.length)
+    const identity = source.slice(identityStart, identityEnd > 0 ? identityEnd : source.length)
+    assert.ok(identity.includes('annotationBridge.sessionCwd'), 'record capture must prefer the bridged cwd')
+    assert.ok(identity.includes('annotationWorkspaceLabel(annotationBridge.sessionCwd)'), 'the workspace label is the bridged cwd basename')
+    assert.ok(identity.includes('annotationIdentityWarned'), 'the fallback failure is reported once instead of swallowed')
+    assert.ok(source.includes('const annotationBridge = { sessionId: null, inputActions: null, sessionCwd: null }'),
+      'the bridge declares the cwd slot explicitly')
+  })
 
   //#region geometry and layout
 

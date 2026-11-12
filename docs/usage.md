@@ -162,9 +162,6 @@ reduces it to a strip. Exit with the rail's exit control, the launcher, or Esc.
   Re-adding the same element keeps its position and updates its note — or leaves
   the saved note untouched when the note field is empty — instead of creating a
   duplicate.
-- Opening the **Project page** exits annotation mode and hides the launcher, so
-  annotation is not usable while that page is open; close the page and the
-  launcher returns with annotation still off.
 - Esc steps back one layer at a time: an active note edit ends first (the text
   stays), then the selection clears, then the mode turns off. From the
   collection or settings view, Esc first returns to the status view.
@@ -198,45 +195,6 @@ title. Hover the row and choose **Continue** to retry it; the continuation is
 implicit — it does not appear as a user message in the transcript, while the
 composer submit control uses a play icon until the new turn starts. Deliberate
 user/hook/parent cancellations and completed turns stay unmarked.
-
-## Project view
-
-**Click a Workspace's title/folder area in the sidebar** to open its Project
-page. This is the only entry: the page is a **standalone surface in the content
-area right of the left sidebar**, not a conversation view tab, so the
-conversation header switcher stays **Chat / Trajectory / Statistics**. The
-leading chevron still folds the Workspace group, and the row's context menu, New
-Session button, Session rows, drags, and modified clicks keep their native
-behavior.
-
-The page starts at the left sidebar's right edge and fills the rest of the
-window, so it covers the composer/input box, the right sidebar, and the history
-rails (including the prompt-history rail, which is hidden while the page is open
-and restored on close) while the **left Workspaces sidebar stays visible and
-clickable** — click another Workspace there to switch the page in place (folding
-the sidebar re-measures the page; there is no shell control to hide it, and if it
-is absent the page fills the viewport). The page's **single Refresh control** is
-in its top bar. **Esc** or the page's back control closes it and
-restores the conversation, current Session, draft, selected view, and sidebar
-states exactly. **Open Workspace**, **New Session**, and clicking a Session in
-the page's lists close the page first and then navigate; refresh, Copy project
-path, Settings, and Runs expansion stay inside the page.
-
-- **Overview** — project header (Active/Inactive, path, created/last active,
-  Open Workspace, New Session, refresh, more menu with Copy project path), four
-  stat cards (Running sessions, Completed today, Total runs, Avg duration), a
-  six-Session preview, the grouping/archiving explainer, and recent activity.
-- **Sessions** — All/Running/Completed/Interrupted chips with counts, title
-  search, and click-to-open rows (run count, relative update, Subagent marker).
-- **Runs** — turns newest first with Running/Completed/Interrupted/Stopped/Failed
-  chips and counts, a Session filter, an **Include jobs** toggle, and search.
-  Expand a turn to see its nested job rows (kind, label, status, duration,
-  detail); a running turn shows live elapsed time. **Show more** pages by 60, and
-  a capped snapshot says how many measured runs are shown.
-- **Settings** — change the Workspace's default agent preset (Follow global
-  default, Standard, PTC, Minimal, Cordis) with a Saved acknowledgement, read the
-  grouping windows (edit them on the Plugins page), and copy/open the workspace
-  path.
 
 ## Settings
 

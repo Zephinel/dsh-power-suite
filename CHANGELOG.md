@@ -40,6 +40,22 @@ heading is added until the release is cut.
 
 ### Added
 
+- Native session figures in the Running & recent row hover card: for the hovered
+  Session (parent or nested subagent row) the card appends **Session statistics**
+  (`{turns} turns {steps} steps`, LLM time, tool time, average TTFT, TPS in the
+  native duration/speed recipes), **Token usage** (exact grouped total =
+  billed input + output, honest cache-hit percentage that never rounds a partial
+  hit to 100, uncached/cached/cache-write/output exact counts), and **Context
+  usage** (`{percent} of context used`, `~used / window`, and `~`-prefixed
+  System prompt / Tool definitions / Messages composition rows). Values come from
+  the existing `sessions` inject's `projectionsBySession` — live Sessions are
+  push-seeded and need no request; a cold (persisted) Session gets exactly one
+  deduplicated `refreshProjections` read on first hover, and the card fills the
+  figures in as they land with no loading state. Each section is omitted entirely
+  when its data is absent, so an empty Session keeps the plain card. The card
+  grows to 320 px (still flush on the sidebar edge with the same native tooltip
+  chrome) and clamps at `min(560px, 100vh - 16px)`; subagent cards gain a compact
+  Session-title line. No Host route, new inject, or package dependency.
 - Interrupted-state SSE stream: `GET /api/power-suite.interrupted-events`
   pushes `turn/start`/`turn/end` invalidations (`{sessionId, parentSession,
   event}`) to every connected browser page, so cross-device badges/Continue/
@@ -50,6 +66,11 @@ heading is added until the release is cut.
 
 ### Changed
 
+- Running & recent identity glyphs swapped: the panel header's all-complete
+  indicator now paints the DeepSeek brand glyph (`deepseek-fill`) and an
+  acknowledged finished parent row paints the sparkling-line glyph. Sizes,
+  scales, colours, glyph columns, the running pulse dot, the unread green dot,
+  and the nested subagent robot glyph are unchanged, as is all state logic.
 - Interrupted-session detection now covers **every unfinished turn ending**, not
   only Host restarts/crashes: any `turn/end` reason `error` (quota/usage limit,
   request timeout, transport/network failure, rate limit, malformed response,
@@ -65,9 +86,7 @@ heading is added until the release is cut.
   truncation**) and inserted verbatim (multi-line notes can exceed single-line
   layouts); hover uses a lazy element-only candidate chain with descriptors
   built only for the chosen element and ≤2 context ancestors (0 `textContent`
-  reads on hover); opening the Project page dispatches
-  `power-suite:ui-annotation-exit` and hides the launcher (annotation is not
-  usable while the page is open; the page's Esc ladder runs first); the whole
+  reads on hover); the whole
   prompt-history rail family is hidden in annotation mode; selector escaping uses
   `globalThis.CSS` with a leading-digit hex fallback (`#123abc` → `#\31 23abc`);
   pinned popovers re-clamp on resize while keeping their dragged offset; the
@@ -99,6 +118,17 @@ heading is added until the release is cut.
   the backoff a GET may serve current/empty memory `200`). Selection families no
   longer list PTC mode (`ptc-mode` is a message-source key; `tool/ptc-dispatch`
   remains activity).
+
+### Removed
+
+- Standalone Project detail page: the `project-view` feature is removed —
+  `src/features/project-view/{host.js,fold.js}`, the `//#region feature: project
+  view` browser region and its `installProjectView` call, the 24 project-view
+  tests, `docs/project-view.md`, the five `docs/assets/project-*.png`
+  screenshots, and the `GET /api/power-suite.project` route. Clicking a
+  Workspace's title in the sidebar performs the native expand/collapse again,
+  and the default agent preset stays available from the Workspace context
+  menu. Removing the page needs no data migration: it persisted no state.
 
 ## [0.2.0] — undated development snapshot
 

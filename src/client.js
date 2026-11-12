@@ -727,16 +727,16 @@ window.__ModuleLoader__.load({
      * both surfaces can use it; content comes from the artifacts preview route.
      */
     const QUICKLOOK_CSS = `
-.dsa-quicklook{position:fixed;z-index:1000;box-sizing:border-box;display:flex;flex-direction:column;max-height:min(560px,calc(100vh - 32px));overflow:hidden;border-radius:20px;border:1px solid var(--dsw-alias-border-l2,transparent);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-primary);box-shadow:0 12px 36px rgb(0 0 0 / 16%),0 2px 8px rgb(0 0 0 / 6%);animation:dsa-quicklook-in .16s cubic-bezier(.22,1,.36,1)}
+.dsa-quicklook{position:fixed;z-index:1000;box-sizing:border-box;display:flex;flex-direction:column;max-height:min(560px,calc(100vh - 32px));overflow:hidden;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);animation:dsa-quicklook-in .16s cubic-bezier(.22,1,.36,1)}
 .dsa-quicklook-header{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--dsw-alias-border-l2,transparent);min-width:0;flex:none}
 .dsa-quicklook-title{min-width:0;flex:1}
-.dsa-quicklook-name{font-size:14px;font-weight:600;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsa-quicklook-name{font-size:14px;font-weight:500;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsa-quicklook-meta{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:16px}
 .dsa-quicklook-body{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--dsw-alias-bg-layer-2,transparent)}
 .dsa-quicklook-layer{position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:center;overflow:auto;background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-layer-1))}
 .dsa-quicklook-layer-media{align-items:center}
 .dsa-quicklook-layer .dsa-quicklook-image,.dsa-quicklook-layer .dsa-quicklook-media{margin:auto}
-.dsa-quicklook-text{margin:0;padding:16px 20px;box-sizing:border-box;align-self:stretch;width:100%;font-family:var(--dsw-font-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;line-height:17px;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-secondary)}
+.dsa-quicklook-text{margin:0;padding:16px 20px;box-sizing:border-box;align-self:stretch;width:100%;font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;line-height:17px;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-secondary)}
 .dsa-quicklook-image{display:block;max-width:100%;max-height:360px;object-fit:contain}
 .dsa-quicklook-frame{width:100%;height:340px;border:0;background:#fff;align-self:stretch}
 .dsa-quicklook-media{max-width:100%;max-height:340px}
@@ -747,7 +747,7 @@ window.__ModuleLoader__.load({
 .dsa-quicklook-action{appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:0;width:32px;height:32px;flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;text-decoration:none;transition:background .15s ease,color .15s ease}
 .dsa-quicklook-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dsa-quicklook-loading{padding:48px 20px;color:var(--dsw-alias-label-tertiary);font-size:13px}
-.dsa-quicklook-resize{position:absolute;left:0;bottom:0;z-index:3;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:nesw-resize;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-layer-2));border:1px solid var(--dsw-alias-border-l2,transparent);border-left:0;border-bottom:0;border-radius:0 10px 0 19px;box-shadow:2px -2px 6px rgb(0 0 0 / 6%);transition:background .15s ease,color .15s ease}
+.dsa-quicklook-resize{position:absolute;left:0;bottom:0;z-index:3;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:nesw-resize;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-layer-2));border:0;border-radius:0 var(--dsw-radius-sm,8px) 0 var(--dsw-radius-lg,16px);transition:background .15s ease,color .15s ease}
 .dsa-quicklook-resize:hover{color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-interactive-bg-hover)}
 @keyframes dsa-quicklook-in{from{opacity:0}to{opacity:1}}
 .dsa-quicklook[data-resizing=true]{user-select:none}
@@ -759,7 +759,7 @@ window.__ModuleLoader__.load({
 .dsa-md li{margin:0 0 2px}
 .dsa-md blockquote{margin:0 0 9px;padding:0 0 0 10px;border-left:2px solid var(--dsw-alias-border-l3,var(--dsw-alias-border-l2));color:var(--dsw-alias-label-secondary)}
 .dsa-md pre{margin:0 0 9px;padding:8px 10px;overflow:auto;border-radius:6px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));font-size:11px;line-height:16px}
-.dsa-md code{font-family:var(--dsw-font-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));padding:0 3px;border-radius:3px}
+.dsa-md code{font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));padding:0 3px;border-radius:3px}
 .dsa-md pre code{background:transparent;padding:0;font-size:inherit}
 .dsa-md a{color:var(--dsw-alias-link);text-decoration:none}
 .dsa-md a:hover{text-decoration:underline}
@@ -767,7 +767,7 @@ window.__ModuleLoader__.load({
 .dsa-md img{display:block;max-width:100%;height:auto;margin:0 0 9px;border-radius:4px}
 .dsa-md table{border-collapse:collapse;margin:0 0 9px;font-size:11.5px;max-width:100%}
 .dsa-md th,.dsa-md td{border:1px solid var(--dsw-alias-border-l3,var(--dsw-alias-border-l2));padding:3px 7px;text-align:left;vertical-align:top}
-.dsa-code{font-family:var(--dsw-font-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;line-height:17.5px;white-space:pre;display:block;padding:16px 20px;color:var(--dsw-alias-label-secondary);align-self:stretch;width:100%;box-sizing:border-box;overflow:auto}
+.dsa-code{font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;line-height:17.5px;white-space:pre;display:block;padding:16px 20px;color:var(--dsw-alias-label-secondary);align-self:stretch;width:100%;box-sizing:border-box;overflow:auto}
 .dsa-code .tok-comment{color:var(--dsw-alias-label-tertiary);font-style:italic}
 .dsa-code .tok-string{color:var(--dsw-alias-state-success-primary)}
 .dsa-code .tok-keyword{color:var(--dsw-alias-state-business-primary)}
@@ -3410,7 +3410,6 @@ window.__ModuleLoader__.load({
 .dps-choice-option input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
 .dps-choice-text{white-space:nowrap;padding:4px 10px;border-radius:8px;font-size:12.5px;line-height:18px;color:var(--dsw-alias-label-secondary)}
 .dps-choice-option[data-selected=true] .dps-choice-text{background:var(--dsw-alias-bg-layer-4,var(--dsw-alias-bg-layer-3));color:var(--dsw-alias-label-primary)}
-.dps-choice-option input:focus-visible+.dps-choice-text{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .dps-choice-option input:disabled+.dps-choice-text{opacity:.5;cursor:default}
 .dps-visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 `
@@ -3485,7 +3484,7 @@ window.__ModuleLoader__.load({
 
       const modifierOptions = PROMPT_HISTORY_MODIFIERS.map((mode) => React.createElement('label', {
         key: mode,
-        className: 'dps-choice-option',
+        className: 'dps-choice-option psf-rainbow-focus',
         'data-selected': mode === current ? 'true' : undefined
       },
       React.createElement('input', {
@@ -3500,7 +3499,7 @@ window.__ModuleLoader__.load({
 
       const recentOptions = RECENT_SESSION_MINUTES.map((minutes) => React.createElement('label', {
         key: minutes,
-        className: 'dps-choice-option',
+        className: 'dps-choice-option psf-rainbow-focus',
         'data-selected': minutes === currentRecent ? 'true' : undefined
       },
       React.createElement('input', {
@@ -3515,7 +3514,7 @@ window.__ModuleLoader__.load({
 
       const activeOptions = ACTIVE_PROJECT_DAYS.map((days) => React.createElement('label', {
         key: days,
-        className: 'dps-choice-option',
+        className: 'dps-choice-option psf-rainbow-focus',
         'data-selected': days === currentActive ? 'true' : undefined
       },
       React.createElement('input', {
@@ -4424,6 +4423,17 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** Highest number of rows the summary card lists before "view all". */
     const DW_PANEL_LIMIT = 5
 
+    /**
+     * Width of the row hover card in pixels. The native session tooltip is
+     * 244 px wide; the card grows to 320 px so each of the three native figure
+     * sections fits its label and right-aligned value on one line. The left
+     * edge still sits flush on the sidebar column's right edge.
+     */
+    const DW_HOVERCARD_WIDTH = 320
+
+    /** Viewport-clamped ceiling for the row hover card once the figures show. */
+    const DW_HOVERCARD_MAX_HEIGHT = 560
+
     /** Minutes a finished Session stays in the card by default. */
     const DW_DEFAULT_RECENT_MINUTES = 120
 
@@ -4478,6 +4488,29 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'hover.subagentsOne': '1 subagent',
       'hover.open': 'Click to open',
       'hover.newSession': 'New session in this directory',
+      'stats.title': 'Session statistics',
+      'stats.counts': '{turns} turns {steps} steps',
+      'stats.llmTime': 'LLM time',
+      'stats.toolTime': 'Tool time',
+      'stats.ttft': 'Avg time to first token (TTFT)',
+      'stats.speed': 'Tokens per second (TPS)',
+      'usage.title': 'Token usage',
+      'usage.cacheHit': 'Cache hit',
+      'usage.input': 'Uncached input',
+      'usage.cacheRead': 'Cached input',
+      'usage.cacheWrite': 'Cache write',
+      'usage.output': 'Output',
+      'usage.count': '{count} tok',
+      'context.aria': '{percent} of context used',
+      'context.system': 'System prompt',
+      'context.tools': 'Tool definitions',
+      'context.messages': 'Messages',
+      'tokensPerSecond': '{tps} tok/s',
+      'number.thousand': '{value}K',
+      'number.million': '{value}M',
+      'number.groupSeparator': ',',
+      'duration.compactSeconds': '{seconds}s',
+      'duration.compactMinutes': '{minutes}m{seconds}s',
       'count': '{count}',
       'group.active': 'Active Projects',
       'group.inactive': 'Inactive Projects',
@@ -4515,6 +4548,29 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'hover.subagentsOne': '1 个子代理',
       'hover.open': '点击打开',
       'hover.newSession': '在相同目录新建 Session',
+      'stats.title': '会话统计',
+      'stats.counts': '{turns} 轮 {steps} 步',
+      'stats.llmTime': '模型用时',
+      'stats.toolTime': '工具调用用时',
+      'stats.ttft': '首 token 平均（TTFT）',
+      'stats.speed': '输出速度（TPS）',
+      'usage.title': 'Token 用量',
+      'usage.cacheHit': '缓存命中',
+      'usage.input': '未缓存输入',
+      'usage.cacheRead': '缓存读取',
+      'usage.cacheWrite': '缓存写入',
+      'usage.output': '输出',
+      'usage.count': '{count} tok',
+      'context.aria': '上下文已用 {percent}',
+      'context.system': '系统提示词',
+      'context.tools': '工具定义',
+      'context.messages': '对话消息',
+      'tokensPerSecond': '{tps} tok/s',
+      'number.thousand': '{value}K',
+      'number.million': '{value}M',
+      'number.groupSeparator': ',',
+      'duration.compactSeconds': '{seconds}秒',
+      'duration.compactMinutes': '{minutes}分{seconds}秒',
       'count': '{count}',
       'group.active': '活跃项目',
       'group.inactive': '非活跃项目',
@@ -4527,17 +4583,18 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'time.hour': '{n}小时',
       'time.day': '{n}天',
       'duration.seconds': '{s}秒',
-      'duration.minutes': '{m}分 {s}秒',
-      'duration.hours': '{h}小时 {m}分'
+      'duration.minutes': '{m}分{s}秒',
+      'duration.hours': '{h}时{m}分'
     }
 
     const DW_CSS = `
 .psd-panel-slot{flex:none;min-width:0;display:block}
 .psd-panel{margin:2px 8px 6px;border:0.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);overflow:hidden}
 .psd-panel-head{display:flex;align-items:center;gap:2px;padding:2px 4px 2px 2px}
-.psd-panel-toggle{appearance:none;display:flex;align-items:center;gap:8px;flex:1;min-width:0;height:30px;box-sizing:border-box;padding:0 8px 0 17px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;font-weight:600;text-align:left;cursor:pointer}
+.psd-panel-toggle{appearance:none;display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0;height:30px;box-sizing:border-box;padding:0 8px 0 17px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:var(--dsw-font-xs-13-line-height,20px);font-weight:500;text-align:left;cursor:pointer}
 .psd-panel-toggle:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .psd-panel-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psd-panel-head-spacer{flex:1 1 auto;min-width:8px}
 .psd-panel-chevron{appearance:none;flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:30px;box-sizing:border-box;padding:0;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .psd-panel-chevron:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
 .psd-panel-chevron:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
@@ -4548,9 +4605,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-pulse::after{content:'';position:absolute;inset:-4px;border-radius:50%;corner-shape:round;border:1px solid var(--dsw-alias-state-business-primary);opacity:.45;animation:psd-pulse 2s var(--ds-ease-in-out,ease) infinite}
 @keyframes psd-pulse{0%{transform:scale(.7);opacity:.6}70%{transform:scale(1.25);opacity:0}100%{transform:scale(1.25);opacity:0}}
 @media (prefers-reduced-motion: reduce){.psd-pulse::after{animation:none}}
-.psd-panel-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary)}
+.psd-panel-title{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary)}
 .psd-count{flex:none;min-width:18px;padding:0 6px;box-sizing:border-box;border-radius:var(--dsw-radius-xs,4px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-size:11px;line-height:18px;text-align:center;font-variant-numeric:tabular-nums}
-.psd-panel-link{flex:none;appearance:none;display:inline-flex;align-items:center;box-sizing:border-box;height:30px;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;line-height:18px;padding:0 8px;border-radius:var(--dsw-radius-md,8px);cursor:pointer;white-space:nowrap}
+.psd-panel-link{flex:none;appearance:none;display:inline-flex;align-items:center;box-sizing:border-box;height:30px;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:var(--dsw-font-xxs-12-font-size,12px);line-height:var(--dsw-font-xxs-12-line-height,18px);padding:0 8px;border-radius:var(--dsw-radius-md,8px);cursor:pointer;white-space:nowrap}
 .psd-panel-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .psd-panel-link:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psd-chevron{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);transition:transform 160ms var(--ds-ease-in-out,ease)}
@@ -4559,68 +4616,96 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-panel-empty{padding:6px 10px 8px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:17px;display:flex;flex-direction:column;gap:2px}
 .psd-panel-empty strong{color:var(--dsw-alias-label-secondary);font-weight:500}
 .psd-item{display:flex;flex-direction:column;min-width:0}
-.psd-run{display:flex;align-items:center;gap:2px;min-width:0;min-height:28px;padding:0 0 0 7px;border-radius:var(--dsw-radius-md,8px)}
-.psd-run-main:hover{background:var(--dsw-alias-interactive-bg-hover)}
-@property --psd-ring-angle{syntax:'<angle>';inherits:false;initial-value:0deg}
-.psd-run-current{position:relative;isolation:isolate}
-.psd-run-current::before{content:'';position:absolute;inset:-2px;border-radius:calc(var(--dsw-radius-md,8px) + 2px);padding:2px;background:conic-gradient(from var(--psd-ring-angle,0deg),#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;z-index:0;filter:saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}
-.psd-run-current > *{position:relative;z-index:1}
-.psd-child-ring{content:'';position:absolute;inset:-1px;border-radius:calc(var(--dsw-radius-sm,6px) + 1px);padding:2px;background:conic-gradient(from var(--psd-ring-angle,0deg),#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;z-index:0;filter:saturate(.92) drop-shadow(0 0 4px rgba(178,150,255,.32))}
-.psd-child-current{position:relative;isolation:isolate}
-.psd-child-current > *:not(.psd-child-ring){position:relative;z-index:1}
-@keyframes psd-ring-spin{to{--psd-ring-angle:360deg}}
-@keyframes psd-ring-hue{from{filter:hue-rotate(0deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}to{filter:hue-rotate(360deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}}
-.psd-run-current::before,.psd-child-ring{animation:psd-ring-spin 3.2s linear infinite,psd-ring-hue 14s linear infinite}
-@media (prefers-reduced-motion: reduce){.psd-run-current::before,.psd-child-ring{animation:none}}
+.psd-run{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:28px;padding:0 0 0 7px;border-radius:var(--dsw-radius-md,8px);cursor:pointer}
+.psd-run-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - 76px);align-items:center;padding:4px 0 4px 8px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-run:hover:not(:has(.psd-run-toggle:hover)) .psd-run-main{background-color:var(--dsw-alias-interactive-bg-hover)}
+.psd-run-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psd-run-time{flex:none;width:48px;text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
+.psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
+.psd-run-head{display:flex;align-items:center;gap:8px;min-width:0;flex:0 1 auto}
+.psd-run-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
+.psd-run-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
+.psd-run-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap;color:var(--dsw-alias-label-primary);font-size:14px;line-height:20px}
+[data-clipped='true'].psd-run-title,[data-clipped='true'].psd-child-title{mask-image:linear-gradient(to right,#000 calc(100% - var(--psd-title-fade,28px)),#0000)}
 .psd-run-toggle{appearance:none;position:relative;z-index:1;flex:none;width:24px;height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .psd-run-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-run-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-run-toggle .psd-chevron{transition:transform 160ms var(--ds-ease-in-out,ease)}
 .psd-run-toggle[aria-expanded='false'] .psd-chevron{transform:rotate(-90deg)}
 .psd-run-toggle-spacer{flex:none;width:24px}
-.psd-run-main{appearance:none;display:flex;flex:1;min-width:0;align-items:center;padding:4px 8px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.psd-run-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-children{position:relative;display:flex;flex-direction:column;gap:1px;margin:0 0 4px 22px;padding-left:9px;border-left:1px solid var(--dsw-alias-border-l2)}
-.psd-child{position:relative;display:flex;align-items:center;gap:2px;min-width:0;padding:0 4px 0 0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;text-align:left}
-.psd-child-main{appearance:none;display:flex;align-items:center;gap:7px;flex:1;min-width:0;padding:3px 3px 3px 4px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-child{position:relative;display:flex;align-items:center;gap:2px;min-width:0;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:18px;text-align:left;cursor:pointer}
+.psd-child-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - 76px);align-items:center;gap:7px;padding:3px 0 3px 4px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-child:hover .psd-child-main{background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-child::before{content:'';position:absolute;left:-10px;top:50%;width:14px;height:1px;background:var(--dsw-alias-border-l2);pointer-events:none}
 .psd-child:last-child::after{content:'';position:absolute;left:-10px;top:calc(50% + 1px);bottom:-1px;width:2px;background:var(--dsw-alias-bg-layer-1);pointer-events:none}
-.psd-child:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-child-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-child-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
-.psd-child-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.psd-child-time{flex:none;color:var(--dsw-alias-label-tertiary);font-size:10.5px;line-height:16px;font-variant-numeric:tabular-nums}
-.psd-run-head{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
-.psd-run-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
-.psd-run-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
+.psd-child-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap}
+.psd-child-time{flex:none;width:48px;text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
-.psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
-.psd-run-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary);font-size:13px;line-height:19px}
-.psd-run-time{flex:none;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:17px;font-variant-numeric:tabular-nums}
-.psd-hovercard{position:fixed;z-index:1000;box-sizing:border-box;width:300px;max-height:320px;overflow:hidden;padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,var(--dsw-shadow-lv2,none));color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;pointer-events:none}
-.psd-hovercard-title{font-size:13px;line-height:19px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.psd-hovercard-path{margin-top:2px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:15px;white-space:normal;word-break:break-all;overflow-wrap:anywhere;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
-.psd-hovercard-row{display:flex;gap:6px;margin-top:6px;min-width:0}
-.psd-hovercard-key{flex:none;min-width:62px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}
-.psd-hovercard-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px}
-.psd-run-actions{display:flex;align-items:center;gap:2px;flex:none;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
+.psd-hovercard{position:fixed;z-index:1000;box-sizing:border-box;width:${DW_HOVERCARD_WIDTH}px;max-height:min(${DW_HOVERCARD_MAX_HEIGHT}px,calc(100vh - 16px));overflow-x:hidden;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-alias-tooltip-bg,#2c2c2e);color:#fff;box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;font-size:12px;line-height:16px;pointer-events:none}
+.psd-hovercard::-webkit-scrollbar{display:none;width:0;height:0}
+.psd-hovercard-content{display:flex;flex-direction:column;gap:8px}
+.psd-hovercard-title{color:#fff;font-size:14px;line-height:20px;font-weight:400;overflow-wrap:break-word}
+.psd-hovercard-session{color:#fff;font-size:13px;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.psd-hovercard-path{color:#cfd3d6;font-size:12px;line-height:16px;white-space:normal;word-break:break-all;overflow-wrap:anywhere;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
+.psd-hovercard-time{color:#cfd3d6;font-size:12px;line-height:16px}
+.psd-hovercard-status{display:flex;align-items:center;gap:8px;color:#adb2b8;font-size:12px;line-height:20px}
+.psd-hovercard-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--dsw-alias-state-business-primary)}
+.psd-hovercard-dot[data-state='done']{background:var(--dsw-alias-state-success-primary)}
+.psd-hovercard-row{display:flex;gap:8px;min-width:0;font-size:12px;line-height:16px}
+.psd-hovercard-key{flex:none;color:#adb2b8}
+.psd-hovercard-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#cfd3d6}
+.psd-hovercard-section{display:flex;flex-direction:column;gap:2px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12)}
+.psd-hovercard-section-head{display:flex;align-items:baseline;gap:8px;min-width:0;font-size:12px;line-height:16px}
+.psd-hovercard-section-title{flex:none;color:#fff}
+.psd-hovercard-section-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#cfd3d6;font-variant-numeric:tabular-nums}
+.psd-hovercard-row-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#cfd3d6;font-variant-numeric:tabular-nums}
+.psd-run{--psd-title-fade:calc(var(--psd-action-width,22px) + 6px)}
+.psd-child{--psd-title-fade:calc(var(--psd-action-width,22px) + 6px)}
+.psd-run-actions{position:absolute;z-index:2;top:50%;right:76px;transform:translateY(-50%);display:flex;align-items:center;justify-content:flex-end;gap:2px;min-width:22px;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
 .psd-run:hover .psd-run-actions,.psd-run:focus-within .psd-run-actions,.psd-child:hover .psd-run-actions,.psd-child:focus-within .psd-run-actions{opacity:1;pointer-events:auto}
 .psd-row-action{appearance:none;display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
 .psd-row-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-row-action:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-row-action[data-variant='continue']{color:var(--dsw-alias-state-warn-primary)}
-.psd-row-action[data-hidden='true']{visibility:hidden;pointer-events:none}
 .psd-interrupted{flex:none;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary)}
 @media (prefers-reduced-motion: reduce){.psd-run-actions{transition:none}}
 .psd-group-header{flex:none;display:block;margin:3px 0 0}
 .psd-group-header[data-group='inactive']{margin-top:10px;padding-top:3px;border-top:0.5px solid var(--dsw-alias-border-l1)}
-.psd-group-toggle{appearance:none;display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;padding:4px 8px 4px 10px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;line-height:16px;font-weight:600;letter-spacing:.02em;text-align:left;cursor:pointer}
+.psd-group-toggle{appearance:none;display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;padding:4px 8px 4px 10px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:20px;font-weight:500;text-align:left;cursor:pointer}
 .psd-group-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
 .psd-group-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-group-toggle[aria-expanded='false'] .psd-chevron{transform:rotate(-90deg)}
-.psd-group-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase}
+.psd-group-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .psd-group-count{flex:none;min-width:16px;padding:0 5px;border-radius:var(--dsw-radius-xs,4px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font-size:10px;line-height:16px;text-align:center;font-variant-numeric:tabular-nums;font-weight:500}
-
+/* Shared rainbow focus ring for plugin inputs. Replaces solid-color focus borders;
+   used by the prompt-history search field and the settings choice pills, and
+   available to the annotation note editors once that surface is rewritten. */
+@property --psf-ring-angle{syntax:'<angle>';inherits:false;initial-value:0deg}
+.psf-rainbow-focus{position:relative}
+.psf-rainbow-focus::after{content:'';position:absolute;inset:-2px;border-radius:calc(var(--dsw-radius-sm,8px) + 2px);padding:2px;background:conic-gradient(from var(--psf-ring-angle,0deg),#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:0;transition:opacity 140ms var(--ds-ease-in-out,ease);filter:saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38));z-index:2}
+.psf-rainbow-focus:focus-within::after,.psf-rainbow-focus:focus-visible::after{opacity:1;animation:psf-ring-spin 3.2s linear infinite,psf-ring-hue 14s linear infinite}
+@keyframes psf-ring-spin{to{--psf-ring-angle:360deg}}
+@keyframes psf-ring-hue{from{filter:hue-rotate(0deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}to{filter:hue-rotate(360deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}}
+@media (prefers-reduced-motion: reduce){.psf-rainbow-focus:focus-within::after,.psf-rainbow-focus:focus-visible::after{animation:none}}
+@media (forced-colors: active){.psf-rainbow-focus::after{display:none}.psf-rainbow-focus:focus-within{outline:2px solid Highlight;outline-offset:1px}}
+/* Current-session highlight: a soft rainbow wave behind the bottom of the row
+   content (replaces the old conic ring). The same wave runs behind the matching
+   native Workspace row and is marked by data-psd-current-workspace. */
+.psd-run-current,.psd-child-current{position:relative;isolation:isolate}
+.psd-run-current::before{content:'';position:absolute;left:6px;right:6px;bottom:0;height:12px;border-radius:8px;background:linear-gradient(90deg,#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4);background-size:220% 100%;pointer-events:none;z-index:0;opacity:.3;filter:blur(6px) saturate(.9);mask-image:linear-gradient(90deg,#0000,#000 18%,#000 82%,#0000);animation:psd-wave-slide 9s linear infinite,psd-wave-breathe 3.6s ease-in-out infinite,psd-wave-hue 14s linear infinite}
+.psd-child-wave{position:absolute;left:4px;right:6px;bottom:0;height:10px;border-radius:8px;background:linear-gradient(90deg,#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4);background-size:220% 100%;pointer-events:none;z-index:0;opacity:.28;filter:blur(5px) saturate(.9);mask-image:linear-gradient(90deg,#0000,#000 18%,#000 82%,#0000);animation:psd-wave-slide 9s linear infinite,psd-wave-breathe 3.6s ease-in-out infinite,psd-wave-hue 14s linear infinite}
+.psd-run-current > *{position:relative;z-index:1}
+.psd-child-current > *:not(.psd-child-wave){position:relative;z-index:1}
+[data-psd-current-workspace='true']{position:relative;isolation:isolate}
+[data-psd-current-workspace='true']::after{content:'';position:absolute;left:10px;right:10px;bottom:2px;height:10px;border-radius:8px;background:linear-gradient(90deg,#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4);background-size:220% 100%;pointer-events:none;z-index:0;opacity:.28;filter:blur(5px) saturate(.9);mask-image:linear-gradient(90deg,#0000,#000 18%,#000 82%,#0000);animation:psd-wave-slide 9s linear infinite,psd-wave-breathe 3.6s ease-in-out infinite,psd-wave-hue 14s linear infinite}
+[data-psd-current-workspace='true'] > *{position:relative;z-index:1}
+@keyframes psd-wave-slide{0%{background-position:0 50%}100%{background-position:220% 50%}}
+@keyframes psd-wave-breathe{0%,100%{opacity:.2;transform:scaleX(.97)}50%{opacity:.4;transform:scaleX(1.03)}}
+@keyframes psd-wave-hue{from{filter:hue-rotate(0deg) blur(5px) saturate(.9)}50%{filter:hue-rotate(180deg) blur(6px) saturate(.92)}to{filter:hue-rotate(360deg) blur(5px) saturate(.9)}}
+@media (prefers-reduced-motion: reduce){.psd-run-current::before,.psd-child-wave,[data-psd-current-workspace='true']::after{animation:none;opacity:.26;transform:none;filter:blur(5px) saturate(.9)}}
 `
 
     /**
@@ -4739,6 +4824,263 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const date = new Date(at)
       const pad = (value) => String(value).padStart(2, '0')
       return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Native session figures (statistics, token usage, context) for the row hover card.
+    //
+    // The values arrive as Host projections (`sessionStats`, `tokenUsage`,
+    // `contextPressure`, `contextBreakdown`) on the Session list snapshot. Every
+    // formatter below copies the native client's recipe verbatim so the figures
+    // read exactly like the shell's Session statistics / Token usage dialogs and
+    // the composer ContextMeter panel. They are pure: plain data plus the
+    // namespace-bound translate seat, no React and no DOM.
+    // ---------------------------------------------------------------------------------------
+
+    /**
+     * Compact token count in the native style: `517 / 12.2K / 517K / 1.2M`.
+     * @param {number} value - non-negative token count.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {string} compact display text.
+     */
+    function dwFormatCompactTokens(value, t) {
+      const scaled = (candidate) => candidate >= 100
+        ? String(Math.round(candidate))
+        : String(Math.round(candidate * 10) / 10)
+      if (value < 1e3) return String(value)
+      if (value < 1e6) return t('number.thousand', { value: scaled(value / 1e3) })
+      return t('number.million', { value: scaled(value / 1e6) })
+    }
+
+    /**
+     * Exact token count with the native locale-owned digit grouping.
+     * @param {number} value - non-negative token count.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {string} grouped display text.
+     */
+    function dwFormatExactTokens(value, t) {
+      const digits = String(value)
+      const groups = []
+      for (let end = digits.length; end > 0; end -= 3) {
+        groups.unshift(digits.slice(Math.max(0, end - 3), end))
+      }
+      return groups.join(t('number.groupSeparator'))
+    }
+
+    /**
+     * Compact duration in the native recipe: `45.2s` under a minute, `2m42s`
+     * from there on.
+     * @param {number} ms - duration in milliseconds.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {string} duration text.
+     */
+    function dwFormatStatsDuration(ms, t) {
+      const seconds = ms / 1e3
+      if (seconds < 60) return t('duration.compactSeconds', { seconds: Math.round(seconds * 10) / 10 })
+      const whole = Math.round(seconds)
+      return t('duration.compactMinutes', { minutes: Math.floor(whole / 60), seconds: whole % 60 })
+    }
+
+    /**
+     * Decode throughput in the native recipe: whole tokens from ten up, one
+     * decimal below, with the `tok/s` unit when the decode time is known.
+     * @param {number} decodeTokens - tokens produced while decoding.
+     * @param {number} decodeMs - decode time in milliseconds.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {string | null} display text, or null when there is no decode time.
+     */
+    function dwFormatTps(decodeTokens, decodeMs, t) {
+      if (!(decodeMs > 0)) return null
+      const tps = Math.max(0, decodeTokens / (decodeMs / 1e3))
+      const displayed = tps >= 10 ? String(Math.round(tps)) : String(Math.round(tps * 10) / 10)
+      return t('tokensPerSecond', { tps: displayed })
+    }
+
+    /** Round a cache-read ratio to exact percentage units, positive ties up. */
+    function dwRoundedPercentUnits(cacheReadTokens, denominator, decimalPlaces) {
+      const scale = (decimalPlaces === 0 ? 1 : 10) * 100
+      const doubledScale = scale * 2
+      const denominatorQuotient = Math.floor(denominator / doubledScale)
+      const denominatorRemainder = denominator % doubledScale
+      let lower = 0
+      let upper = scale
+      while (lower < upper) {
+        const candidate = Math.floor((lower + upper + 1) / 2)
+        const factor = candidate * 2 - 1
+        if (cacheReadTokens >= factor * denominatorQuotient + Math.ceil(factor * denominatorRemainder / doubledScale)) lower = candidate
+        else upper = candidate - 1
+      }
+      return lower
+    }
+
+    /** Render percentage units with an optional tenths digit. */
+    function dwDisplayPercentUnits(units, decimalPlaces) {
+      if (decimalPlaces === 0) return String(units)
+      const whole = Math.floor(units / 10)
+      const tenths = units % 10
+      return tenths === 0 ? String(whole) : `${whole}.${tenths}`
+    }
+
+    /**
+     * Display-ready cache-hit share that never rounds a partial hit up to 100
+     * (the native honesty case: 999 999 / 1 000 000 reads `99.9999`, not
+     * `100`). A full hit returns `100`; no billed input returns null.
+     * @param {number} cacheReadTokens - prompt tokens served from cache.
+     * @param {number} billedInputTokens - all prompt-side billing buckets.
+     * @returns {string | null} percentage text without the percent sign.
+     */
+    function dwCacheHitPercent(cacheReadTokens, billedInputTokens) {
+      if (billedInputTokens === 0) return null
+      const missedInputTokens = billedInputTokens - cacheReadTokens
+      if (missedInputTokens === 0) return '100'
+      const roundedUnits = dwRoundedPercentUnits(cacheReadTokens, billedInputTokens, 0)
+      if (roundedUnits < 100) return dwDisplayPercentUnits(roundedUnits, 0)
+      let distinguishingPlaces = 1
+      let scaledDoubleGap = missedInputTokens * 200
+      const denominatorTens = Math.floor(billedInputTokens / 10)
+      while (scaledDoubleGap <= denominatorTens) {
+        scaledDoubleGap *= 10
+        distinguishingPlaces += 1
+      }
+      const denominatorOnes = billedInputTokens % 10
+      let roundedLoss = 5
+      for (let loss = 1; loss < 5; loss += 1) {
+        const factor = loss * 2 + 1
+        const threshold = factor * denominatorTens + Math.floor(factor * denominatorOnes / 10)
+        if (scaledDoubleGap <= threshold) {
+          roundedLoss = loss
+          break
+        }
+      }
+      return `99.${'9'.repeat(distinguishingPlaces - 1)}${10 - roundedLoss}`
+    }
+
+    /** Sum the three disjoint prompt-side billing buckets. */
+    function dwBilledInputTokens(usage) {
+      return usage.uncachedInputTokens + usage.cacheReadTokens + usage.cacheWriteTokens
+    }
+
+    /**
+     * Bounded context occupancy from the independently updated pressure fields.
+     * @param {object | undefined} pressure - latest `contextPressure` value.
+     * @returns {{ percent: number, usedTokens: number, contextWindow: number } | null}
+     *   occupancy, or null until both numerator and capacity are known.
+     */
+    function dwContextOccupancy(pressure) {
+      if (pressure === null || typeof pressure !== 'object') return null
+      const usedTokens = pressure.projectedTokens ?? pressure.pressureTokens
+      if (typeof usedTokens !== 'number' || !Number.isFinite(usedTokens)) return null
+      if (typeof pressure.contextWindow !== 'number' || !Number.isFinite(pressure.contextWindow)) return null
+      return {
+        percent: Math.min(100, Math.round(usedTokens / pressure.contextWindow * 100)),
+        usedTokens,
+        contextWindow: pressure.contextWindow
+      }
+    }
+
+    /** A finite non-negative metric, else 0 (projection values can be absent). */
+    function dwMetric(value) {
+      return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
+    }
+
+    /** A finite non-negative whole count, else 0. */
+    function dwCount(value) {
+      return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0
+    }
+
+    /**
+     * Normalize one `sessionStats` projection into display data, applying the
+     * native visibility rule (no section before the Session took a step).
+     * @param {object | undefined} stats - `sessionStats` projection value.
+     * @returns {object | null} normalized stats, or null when hidden.
+     */
+    function dwNormalizeSessionStats(stats) {
+      if (stats === null || typeof stats !== 'object') return null
+      const normalized = {
+        turns: dwCount(stats.turns),
+        steps: dwCount(stats.steps),
+        llmMs: dwMetric(stats.llmMs),
+        toolMs: dwMetric(stats.toolMs),
+        ttftMs: dwMetric(stats.ttftMs),
+        ttftSteps: dwCount(stats.ttftSteps),
+        decodeMs: dwMetric(stats.decodeMs),
+        decodeTokens: dwMetric(stats.decodeTokens)
+      }
+      return normalized.steps === 0 ? null : normalized
+    }
+
+    /**
+     * Normalize one `tokenUsage` projection into display data. The whole-dialog
+     * emptiness rule is native: no section when the Session billed nothing.
+     * @param {object | undefined} usage - `tokenUsage` projection value.
+     * @returns {object | null} normalized usage, or null when hidden.
+     */
+    function dwNormalizeTokenUsage(usage) {
+      if (usage === null || typeof usage !== 'object') return null
+      const normalized = {
+        uncachedInputTokens: dwCount(usage.uncachedInputTokens),
+        cacheReadTokens: dwCount(usage.cacheReadTokens),
+        cacheWriteTokens: dwCount(usage.cacheWriteTokens),
+        outputTokens: dwCount(usage.outputTokens)
+      }
+      normalized.billedInputTokens = dwBilledInputTokens(normalized)
+      if (normalized.billedInputTokens === 0 && normalized.outputTokens === 0) return null
+      normalized.totalTokens = normalized.billedInputTokens + normalized.outputTokens
+      normalized.cacheHitPercent = dwCacheHitPercent(normalized.cacheReadTokens, normalized.billedInputTokens)
+      return normalized
+    }
+
+    /**
+     * Normalize the context projections into display data. The heuristic
+     * breakdown is a separate estimator: it is only ever shown as its own
+     * `~`-prefixed composition rows, never as parts of the provider pressure.
+     * @param {object | undefined} pressure - `contextPressure` projection value.
+     * @param {object | undefined} breakdown - `contextBreakdown` projection value.
+     * @returns {object | null} normalized context, or null when hidden.
+     */
+    function dwNormalizeContext(pressure, breakdown) {
+      const occupancy = dwContextOccupancy(pressure)
+      if (occupancy === null) return null
+      const composition = breakdown !== null && typeof breakdown === 'object'
+        ? {
+            systemTokens: dwCount(breakdown.systemTokens),
+            toolsTokens: dwCount(breakdown.toolsTokens),
+            messageTokens: dwCount(breakdown.messageTokens)
+          }
+        : null
+      return { ...occupancy, breakdown: composition }
+    }
+
+    /**
+     * Whether a projection record still needs the one-shot cold read: the
+     * statistics/context values have not arrived yet and no read has been
+     * attempted (or is in flight). Live Sessions are push-seeded and need no
+     * request; error / migration states are never retried.
+     * @param {object | undefined} record - `projectionsBySession[id]`.
+     * @returns {boolean} whether to call `refreshProjections` once.
+     */
+    function dwNeedsProjectionRead(record) {
+      if (record === null || record === undefined || typeof record !== 'object') return true
+      const values = record.values
+      if (values === null || typeof values !== 'object') return true
+      if (values.sessionStats !== undefined && values.contextBreakdown !== undefined) return false
+      const state = record.state
+      return state === undefined || state === null || state === 'idle'
+    }
+
+    /**
+     * Shape the three hover-card figure sections from one Session's projection
+     * values. Each section is omitted entirely when its data is absent.
+     * @param {object | undefined} values - projection values for the Session.
+     * @returns {{ stats: object | null, usage: object | null, context: object | null }}
+     */
+    function dwProjectionSections(values) {
+      const source = values !== null && typeof values === 'object' ? values : {}
+      return {
+        stats: dwNormalizeSessionStats(source.sessionStats),
+        usage: dwNormalizeTokenUsage(source.tokenUsage),
+        context: dwNormalizeContext(source.contextPressure, source.contextBreakdown)
+      }
     }
 
     /**
@@ -4879,6 +5221,61 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     function dwWriteFolds(folds) {
       try {
         window.localStorage.setItem(DW_FOLD_KEY, JSON.stringify({ active: folds.active, inactive: folds.inactive }))
+      } catch {
+        // A storage-denied browser keeps the in-memory state only.
+      }
+    }
+
+    /**
+     * localStorage key holding the last observed Active/Inactive bucket of every
+     * Workspace. On reload the Session store is still empty for the first paint,
+     * so without this cache every native section classifies as Inactive and a
+     * persisted fold visibly does not apply until the stores hydrate.
+     */
+    const DW_BUCKET_KEY = 'power-suite.dynamic-workspaces.buckets'
+
+    /** Document version of the persisted bucket-classification cache. */
+    const DW_BUCKET_VERSION = 1
+
+    /** Cache key used for the native ungrouped section (no `workspace:` suffix). */
+    const DW_BUCKET_UNGROUPED = '__ungrouped__'
+
+    /**
+     * Read the last observed bucket classification of each Workspace, degrading
+     * to an empty map on a corrupt, missing, or storage-denied document.
+     * @returns {Map<string, boolean>} workspace id (or the ungrouped key) → active.
+     */
+    function dwReadBucketCache() {
+      const cache = new Map()
+      try {
+        const raw = window.localStorage.getItem(DW_BUCKET_KEY)
+        if (raw === null) return cache
+        const value = JSON.parse(raw)
+        const source = value !== null && typeof value === 'object' && value.workspaces !== null && typeof value.workspaces === 'object'
+          ? value.workspaces
+          : null
+        if (source === null) return cache
+        for (const [id, bucket] of Object.entries(source)) {
+          if (typeof id !== 'string' || id.length === 0) continue
+          if (bucket !== 'active' && bucket !== 'inactive') continue
+          cache.set(id, bucket === 'active')
+        }
+      } catch {
+        // A corrupt document or a storage-denied browser starts empty.
+      }
+      return cache
+    }
+
+    /**
+     * Persist the last observed bucket classification of each Workspace.
+     * @param {Map<string, boolean>} cache - workspace id (or ungrouped) → active.
+     * @returns {void}
+     */
+    function dwWriteBucketCache(cache) {
+      try {
+        const workspaces = {}
+        for (const [id, active] of cache) workspaces[id] = active ? 'active' : 'inactive'
+        window.localStorage.setItem(DW_BUCKET_KEY, JSON.stringify({ version: DW_BUCKET_VERSION, workspaces }))
       } catch {
         // A storage-denied browser keeps the in-memory state only.
       }
@@ -5409,35 +5806,121 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     function DwRowActionCluster({ t, interruptedT, row, interrupted, onNewSession }) {
       const continueLabel = interruptedT('continue.aria')
       const newLabel = t('hover.newSession')
-      return React.createElement('span', { className: 'psd-run-actions' },
-        React.createElement('button', {
+      // The New session slot is reserved on every row so the button lands on one
+      // fixed column; Continue exists only on interrupted rows and is drawn to its
+      // left, so adding it never moves the New session button or the time.
+      const buttons = []
+      if (interrupted) {
+        buttons.push(React.createElement('button', {
+          key: 'continue',
           type: 'button',
           className: 'psd-row-action',
           'data-variant': 'continue',
-          'data-hidden': interrupted ? undefined : 'true',
-          disabled: !interrupted,
-          tabIndex: interrupted ? 0 : -1,
           'aria-label': continueLabel,
           title: continueLabel,
           onClick: (event) => {
             event.preventDefault()
             event.stopPropagation()
-            if (!interrupted) return
             requestContinue(row.id)
           }
-        }, React.createElement(RemixIcon, { path: REMIX_PLAY_FILL, size: 12 })),
-        React.createElement('button', {
-          type: 'button',
-          className: 'psd-row-action',
-          'data-variant': 'new-session',
-          'aria-label': newLabel,
-          title: newLabel,
-          onClick: (event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            onNewSession(row)
-          }
-        }, React.createElement(DwNewChatGlyph)))
+        }, React.createElement(RemixIcon, { path: REMIX_PLAY_FILL, size: 12 })))
+      }
+      buttons.push(React.createElement('button', {
+        key: 'new-session',
+        type: 'button',
+        className: 'psd-row-action',
+        'data-variant': 'new-session',
+        'aria-label': newLabel,
+        title: newLabel,
+        onClick: (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onNewSession(row)
+        }
+      }, React.createElement(DwNewChatGlyph)))
+      return React.createElement('span', { className: 'psd-run-actions' }, buttons)
+    }
+
+    /**
+     * One native-figure section of the row hover card: a header line (label plus
+     * a right-aligned headline value) and right-aligned key/value rows, matching
+     * the shell's Session-statistics dialog list.
+     * @param {object} props - section props.
+     * @param {string} props.title - left-hand section label.
+     * @param {string} [props.value] - right-aligned headline value.
+     * @param {Array<[string, string]>} props.rows - label/value row pairs.
+     * @returns {object} the section element.
+     */
+    function DwHovercardSection({ title, value, rows }) {
+      return React.createElement('div', { className: 'psd-hovercard-section' },
+        React.createElement('div', { className: 'psd-hovercard-section-head' },
+          React.createElement('span', { className: 'psd-hovercard-section-title' }, title),
+          value === undefined ? null : React.createElement('span', { className: 'psd-hovercard-section-value' }, value)),
+        rows.map(([label, text]) => React.createElement('div', { className: 'psd-hovercard-row', key: label },
+          React.createElement('span', { className: 'psd-hovercard-key' }, label),
+          React.createElement('span', { className: 'psd-hovercard-row-value' }, text))))
+    }
+
+    /**
+     * The three native figures the shell shows for a Session, appended to the
+     * hover card: Session statistics, Token usage, and context occupancy with
+     * the heuristic composition. Each section is omitted entirely when its
+     * projection data is absent, so a Session with no data keeps the plain card.
+     * @param {object} props - component props.
+     * @param {{ stats: object | null, usage: object | null, context: object | null }} props.sections -
+     *   normalized sections from {@link dwProjectionSections}.
+     * @param {Function} props.t - namespace-bound translate.
+     * @returns {object | null} the fragment, or null when no section has data.
+     */
+    function DwHovercardProjectionSections({ sections, t }) {
+      if (sections === null || typeof sections !== 'object') return null
+      const { stats, usage, context } = sections
+      const blocks = []
+      if (stats !== null) {
+        const rows = []
+        if (stats.llmMs > 0) rows.push([t('stats.llmTime'), dwFormatStatsDuration(stats.llmMs, t)])
+        if (stats.toolMs > 0) rows.push([t('stats.toolTime'), dwFormatStatsDuration(stats.toolMs, t)])
+        if (stats.ttftSteps > 0) rows.push([t('stats.ttft'), dwFormatStatsDuration(stats.ttftMs / stats.ttftSteps, t)])
+        const speed = dwFormatTps(stats.decodeTokens, stats.decodeMs, t)
+        if (speed !== null) rows.push([t('stats.speed'), speed])
+        blocks.push(React.createElement(DwHovercardSection, {
+          key: 'stats',
+          title: t('stats.title'),
+          value: t('stats.counts', { turns: stats.turns, steps: stats.steps }),
+          rows
+        }))
+      }
+      if (usage !== null) {
+        const exact = (value) => t('usage.count', { count: dwFormatExactTokens(value, t) })
+        const rows = []
+        if (usage.cacheHitPercent !== null) rows.push([t('usage.cacheHit'), `${usage.cacheHitPercent}%`])
+        rows.push([t('usage.input'), exact(usage.uncachedInputTokens)])
+        rows.push([t('usage.cacheRead'), exact(usage.cacheReadTokens)])
+        if (usage.cacheWriteTokens !== 0) rows.push([t('usage.cacheWrite'), exact(usage.cacheWriteTokens)])
+        rows.push([t('usage.output'), exact(usage.outputTokens)])
+        blocks.push(React.createElement(DwHovercardSection, {
+          key: 'usage',
+          title: t('usage.title'),
+          value: exact(usage.totalTokens),
+          rows
+        }))
+      }
+      if (context !== null) {
+        const rows = []
+        if (context.breakdown !== null) {
+          rows.push([t('context.system'), `~${dwFormatCompactTokens(context.breakdown.systemTokens, t)}`])
+          rows.push([t('context.tools'), `~${dwFormatCompactTokens(context.breakdown.toolsTokens, t)}`])
+          rows.push([t('context.messages'), `~${dwFormatCompactTokens(context.breakdown.messageTokens, t)}`])
+        }
+        blocks.push(React.createElement(DwHovercardSection, {
+          key: 'context',
+          title: t('context.aria', { percent: `${context.percent}%` }),
+          value: `~${dwFormatCompactTokens(context.usedTokens, t)} / ${dwFormatCompactTokens(context.contextWindow, t)}`,
+          rows
+        }))
+      }
+      if (blocks.length === 0) return null
+      return React.createElement(React.Fragment, null, blocks)
     }
 
     /**
@@ -5448,7 +5931,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     function DynamicRunningPanel(props) {
       const {
         t, rows, expanded, showAll, now, durations, childrenByParent, collapsedParents, acked,
-        onToggle, onToggleAll, onToggleChildren, onOpen, interruptedT, onNewSession, currentSessionId
+        onToggle, onToggleAll, onToggleChildren, onOpen, interruptedT, onNewSession, currentSessionId,
+        projections, onEnsureProjections
       } = props
       const visible = expanded && !showAll ? rows.slice(0, DW_PANEL_LIMIT) : rows
       const canExpand = rows.length > DW_PANEL_LIMIT
@@ -5485,10 +5969,19 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
 
       // Hover detail card for one row: the row itself only carries the title,
-      // state and time; the workspace and other facts live in the card. The card
-      // anchors to the panel's right edge (not the row's), so it sits entirely
-      // outside the sidebar and can never cover the row's trailing actions.
+      // state and time; the workspace and other facts live in the card. Like the
+      // native sidebar tooltip it starts flush on the sidebar column's right edge
+      // and on the hovered row's top, so it sits entirely outside the sidebar and
+      // can never cover the row's trailing actions.
       const [hover, setHover] = React.useState(null)
+      // Whether the UI annotation mode is active; while it is, a shown hovercard is
+      // pinned (pointer-interactive, marked with data-psd-pinned) so it can be
+      // inspected and annotated. Normal mode never sets the marker.
+      const [annotationActive, setAnnotationActive] = React.useState(
+        () => document.documentElement.getAttribute('data-psa-active') === 'true'
+      )
+      const hoverCardRef = React.useRef(null)
+      const panelRootRef = React.useRef(null)
       const hoverTimer = React.useRef(null)
       const clearHoverTimer = () => {
         if (hoverTimer.current !== null) {
@@ -5515,20 +6008,98 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           window.removeEventListener('resize', dismiss)
         }
       }, [hover])
+      // Native-style right-edge fade: mask a row title only while it actually
+      // overflows its fixed column, so a short title never loses its last glyphs
+      // to the gradient. Runs after every render (row titles/time update live).
+      const measureClippedTitles = React.useCallback(() => {
+        const root = panelRootRef.current
+        if (!(root instanceof HTMLElement)) return
+        for (const title of root.querySelectorAll('.psd-run-title,.psd-child-title')) {
+          const clipped = title.scrollWidth > title.clientWidth + 1
+          if (clipped) {
+            if (title.getAttribute('data-clipped') !== 'true') title.setAttribute('data-clipped', 'true')
+          } else if (title.hasAttribute('data-clipped')) {
+            title.removeAttribute('data-clipped')
+          }
+        }
+      }, [])
+      React.useLayoutEffect(() => {
+        measureClippedTitles()
+      })
+      React.useEffect(() => {
+        const root = panelRootRef.current
+        if (!(root instanceof HTMLElement) || typeof ResizeObserver === 'undefined') return undefined
+        const observer = new ResizeObserver(() => measureClippedTitles())
+        observer.observe(root)
+        return () => observer.disconnect()
+      }, [measureClippedTitles])
+      // Keep the card inside the viewport (native tooltips are clamped at the
+      // bottom edge); measuring after mount avoids guessing the content height.
+      // Projection values land asynchronously for cold Sessions and grow the
+      // card, so re-clamp whenever the Session list snapshot changes.
+      React.useLayoutEffect(() => {
+        if (hover === null) return
+        const element = hoverCardRef.current
+        if (!(element instanceof HTMLElement)) return
+        const maxTop = Math.max(8, window.innerHeight - element.offsetHeight - 8)
+        if (hover.top > maxTop) {
+          setHover((previous) => (previous === null ? previous : { ...previous, top: maxTop }))
+        }
+      }, [hover, projections])
+      // Every Session id asked for once per seat lifetime: cold (persisted)
+      // Sessions carry only summary projections, so the hover trigger starts one
+      // `refreshProjections` read and the card fills in when the values arrive.
+      // Nothing is polled, and error / migration states are never retried.
+      const projectionRequestsRef = React.useRef(new Set())
+      const ensureRowProjections = (sessionId) => {
+        if (typeof onEnsureProjections !== 'function') return
+        if (projectionRequestsRef.current.has(sessionId)) return
+        if (!dwNeedsProjectionRead(projections?.[sessionId])) return
+        projectionRequestsRef.current.add(sessionId)
+        onEnsureProjections(sessionId)
+      }
       const showHover = (row, element) => {
+        ensureRowProjections(row.id)
         clearHoverTimer()
         hoverTimer.current = window.setTimeout(() => {
           if (!(element instanceof HTMLElement) || !element.isConnected) return
           const rect = element.getBoundingClientRect()
+          // Native row tooltips start flush on the sidebar column's right edge and
+          // on the hovered row's top. Fall back to the old panel anchor only when
+          // the sidebar column cannot be identified.
+          const sidebar = element.closest('[class*="_sidebarCol"]')
           const panel = element.closest('.psd-panel')
-          const anchorRight = panel instanceof HTMLElement ? panel.getBoundingClientRect().right : rect.right
-          setHover({ row, top: Math.round(rect.top), anchorRight: Math.round(anchorRight) })
+          const anchorLeft = sidebar instanceof HTMLElement
+            ? Math.round(sidebar.getBoundingClientRect().right)
+            : panel instanceof HTMLElement
+              ? Math.round(panel.getBoundingClientRect().right + 10)
+              : Math.round(rect.right)
+          setHover({ row, top: Math.round(rect.top), anchorLeft })
         }, 260)
       }
       const hideHover = () => {
         clearHoverTimer()
+        // While the annotation mode is active the hovercard becomes an annotatable
+        // surface: it stays open when the pointer leaves the row so the pointer can
+        // travel onto the card itself (the annotation stylesheet makes it
+        // pointer-interactive only in that mode).
+        if (document.documentElement.getAttribute('data-psa-active') === 'true') return
         hoverTimer.current = window.setTimeout(() => setHover(null), 140)
       }
+      // The annotation mode broadcasts its state; leaving the mode must never
+      // leave a pinned hovercard behind, entering it must cancel a pending hide.
+      React.useEffect(() => {
+        const onAnnotationState = (event) => {
+          const active = event instanceof CustomEvent && event.detail !== null && typeof event.detail === 'object'
+            ? event.detail.active === true
+            : false
+          setAnnotationActive(active)
+          if (active) clearHoverTimer()
+          else setHover(null)
+        }
+        document.addEventListener('power-suite:ui-annotation-state', onAnnotationState)
+        return () => document.removeEventListener('power-suite:ui-annotation-state', onAnnotationState)
+      }, [])
 
       const headChildren = [
         React.createElement('button', {
@@ -5542,10 +6113,13 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         React.createElement('span', { className: 'psd-indicator', 'aria-hidden': true },
           anyRunning
             ? React.createElement('span', { className: 'psd-pulse' })
-            : React.createElement('span', { className: 'psd-spark' }, RemixGlyph(DW_SPARKLING_LINE, 14))),
+            // Identity glyph swap (user-requested): the all-complete header mark is
+            // the DeepSeek brand glyph; the read parent-row mark is the sparkle.
+            : React.createElement('span', { className: 'psd-spark' }, RemixGlyph(DW_DEEPSEEK_FILL, 14))),
         React.createElement('span', { className: 'psd-panel-title' }, t('panel.title')),
         React.createElement('span', { className: 'psd-count' }, t('count', { count: rows.length })))
       ]
+      headChildren.push(React.createElement('span', { key: 'spacer', className: 'psd-panel-head-spacer', 'aria-hidden': true }))
       if (expanded && canExpand) {
         headChildren.push(React.createElement('button', {
           key: 'all',
@@ -5563,7 +6137,16 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         'aria-label': expanded ? t('panel.collapse') : t('panel.expand'),
         onClick: onToggle
       }, React.createElement('span', { className: 'psd-chevron' }, React.createElement(DwChevron, null))))
-      const children = [React.createElement('div', { key: 'head', className: 'psd-panel-head' }, headChildren)]
+      const head = React.createElement('div', {
+        key: 'head',
+        className: 'psd-panel-head',
+        onClick: (event) => {
+          const target = event.target
+          if (target instanceof Element && target.closest('button') !== null) return
+          onToggle()
+        }
+      }, headChildren)
+      const children = [head]
       if (expanded) {
         const body = []
         if (rows.length === 0) {
@@ -5583,6 +6166,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             const collapsed = collapsedParents.has(row.id)
             const hasChildren = rowChildren.length > 0
             const interrupted = rowInterrupted(row.id)
+            // Fixed trailing columns keep the same controls on one vertical line for
+            // every parent and child row: [actions 46][time 36][chevron 24], each
+            // separated by the 2 px row gap. The title takes the remaining width and
+            // fades out at its right edge only while it is actually clipped.
             body.push(React.createElement('div', {
               key: row.id,
               className: 'psd-item',
@@ -5590,7 +6177,17 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             },
             React.createElement('div', {
               className: isCurrent(row.id) ? 'psd-run psd-run-current' : 'psd-run',
-              'data-state': row.state
+              'data-state': row.state,
+              'aria-current': isCurrent(row.id) ? 'true' : undefined,
+              'data-actions': interrupted ? 'continue+new' : 'new',
+              style: { '--psd-action-width': interrupted ? '46px' : '22px' },
+              onClick: (event) => {
+                const target = event.target
+                if (target instanceof Element && target.closest('button') !== null) return
+                onOpen(row.id)
+              },
+              onMouseEnter: (event) => showHover(row, event.currentTarget),
+              onMouseLeave: hideHover
             },
               React.createElement('button', {
                 type: 'button',
@@ -5598,8 +6195,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                 'aria-current': isCurrent(row.id) ? 'true' : undefined,
                 'aria-label': t('panel.open', { title: row.title }),
                 onClick: () => onOpen(row.id),
-                onMouseEnter: (event) => showHover(row, event.currentTarget),
-                onMouseLeave: hideHover,
                 onFocus: (event) => showHover(row, event.currentTarget),
                 onBlur: hideHover
               },
@@ -5609,7 +6204,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                   : !isRead(row.id, row.updatedAt)
                     ? React.createElement(StateDot, { state: 'done', size: 14, className: 'psd-run-glyph' })
                     : React.createElement('span', { className: 'psd-run-brand', 'aria-hidden': true },
-                      RemixGlyph(DW_DEEPSEEK_FILL, 14, undefined, 0.82)),
+                      RemixGlyph(DW_SPARKLING_LINE, 14, undefined, 0.82)),
                 interrupted
                   ? React.createElement('span', {
                     className: 'psd-interrupted',
@@ -5618,8 +6213,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                     title: interruptedTitle(row.id)
                   }, RemixGlyph(REMIX_WARNING_FILL, 13))
                   : null,
-                React.createElement('span', { className: 'psd-run-title' }, row.title),
-                React.createElement('span', { className: 'psd-run-time' }, time))),
+                React.createElement('span', { className: 'psd-run-title' }, row.title))),
               React.createElement(DwRowActionCluster, {
                 t,
                 interruptedT,
@@ -5627,6 +6221,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                 interrupted,
                 onNewSession
               }),
+              React.createElement('span', { className: 'psd-run-time' }, time),
               hasChildren
                 ? React.createElement('button', {
                   type: 'button',
@@ -5640,6 +6235,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               ? React.createElement('div', { className: 'psd-children' }, rowChildren.map((child) => {
                 const childRow = {
                   ...row,
+                  kind: 'child',
                   id: child.id,
                   title: child.title,
                   state: child.state,
@@ -5653,10 +6249,20 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                 return React.createElement('div', {
                   key: child.id,
                   className: childCurrent ? 'psd-child psd-child-current' : 'psd-child',
-                  'data-state': child.state
+                  'data-state': child.state,
+                  'aria-current': childCurrent ? 'true' : undefined,
+                  'data-actions': childInterrupted ? 'continue+new' : 'new',
+                  style: { '--psd-action-width': childInterrupted ? '46px' : '22px' },
+                  onClick: (event) => {
+                    const target = event.target
+                    if (target instanceof Element && target.closest('button') !== null) return
+                    onOpen(child.id)
+                  },
+                  onMouseEnter: (event) => showHover(childRow, event.currentTarget),
+                  onMouseLeave: hideHover
                 },
                 childCurrent
-                  ? React.createElement('span', { key: 'ring', className: 'psd-child-ring', 'aria-hidden': true })
+                  ? React.createElement('span', { key: 'wave', className: 'psd-child-wave', 'aria-hidden': true })
                   : null,
                 React.createElement('button', {
                   type: 'button',
@@ -5664,8 +6270,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                   'aria-current': childCurrent ? 'true' : undefined,
                   'aria-label': t('panel.open', { title: child.title }),
                   onClick: () => onOpen(child.id),
-                  onMouseEnter: (event) => showHover(childRow, event.currentTarget),
-                  onMouseLeave: hideHover,
                   onFocus: (event) => showHover(childRow, event.currentTarget),
                   onBlur: hideHover
                 },
@@ -5684,15 +6288,16 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                     title: interruptedTitle(child.id)
                   }, RemixGlyph(REMIX_WARNING_FILL, 13))
                   : null,
-                React.createElement('span', { className: 'psd-child-title' }, child.title),
-                React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t))),
+                React.createElement('span', { className: 'psd-child-title' }, child.title)),
                 React.createElement(DwRowActionCluster, {
                   t,
                   interruptedT,
                   row: childRow,
                   interrupted: childInterrupted,
                   onNewSession
-                }))
+                }),
+                React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t)),
+                React.createElement('span', { className: 'psd-run-toggle-spacer', 'aria-hidden': true }))
               }))
               : null))
           }
@@ -5708,33 +6313,58 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               ? dwFormatRelative(now - row.updatedAt, t)
               : dwFormatDuration(now - duration.at, t))
           : dwFormatRelative(now - row.updatedAt, t)
-        const cardTop = Math.round(Math.max(8, Math.min(hover.top - 8, window.innerHeight - 320)))
-        const cardLeft = Math.round(Math.min(hover.anchorRight + 10, window.innerWidth - 300 - 8))
+        const cardLeft = Math.round(Math.max(8, Math.min(hover.anchorLeft, window.innerWidth - DW_HOVERCARD_WIDTH - 8)))
         children.push(React.createElement('div', {
           key: 'hover',
+          ref: hoverCardRef,
           className: 'psd-hovercard',
           role: 'tooltip',
           'aria-hidden': true,
-          style: { top: cardTop, left: cardLeft }
+          'data-psd-hovercard': '',
+          'data-psd-pinned': annotationActive ? 'true' : undefined,
+          onMouseLeave: () => {
+            clearHoverTimer()
+            setHover(null)
+          },
+          style: { top: Math.round(hover.top), left: cardLeft }
         },
-        React.createElement('div', { className: 'psd-hovercard-title' }, row.workspace),
-        row.workspacePath.length === 0
-          ? null
-          : React.createElement('div', { className: 'psd-hovercard-path' }, row.workspacePath),
-        React.createElement('div', { className: 'psd-hovercard-row' },
-          React.createElement('span', { className: 'psd-hovercard-key' }, t('hover.status')),
-          React.createElement('span', { className: 'psd-hovercard-value' },
-            `${running ? t('hover.running') : t('hover.done')} · ${statusTime}`)),
-        React.createElement('div', { className: 'psd-hovercard-row' },
-          React.createElement('span', { className: 'psd-hovercard-key' }, t('hover.updated')),
-          React.createElement('span', { className: 'psd-hovercard-value' }, dwFormatAbsoluteTime(row.updatedAt))),
-        row.subagents > 0
-          ? React.createElement('div', { className: 'psd-hovercard-row' },
-            React.createElement('span', { className: 'psd-hovercard-key' },
-              row.subagents === 1 ? t('hover.subagentsOne') : t('hover.subagents', { count: row.subagents })))
-          : null))
+        React.createElement('div', { className: 'psd-hovercard-content' },
+          React.createElement('div', { className: 'psd-hovercard-title' }, row.workspace),
+          // A subagent row's card is titled with the owning Workspace, so add the
+          // hovered Session's own compact title to say which subagent it is.
+          row.kind === 'child'
+            ? React.createElement('div', { className: 'psd-hovercard-session' }, row.title)
+            : null,
+          row.workspacePath.length === 0
+            ? null
+            : React.createElement('div', { className: 'psd-hovercard-path' }, row.workspacePath),
+          React.createElement('div', { className: 'psd-hovercard-time' }, dwFormatRelative(now - row.updatedAt, t)),
+          React.createElement('div', { className: 'psd-hovercard-status' },
+            React.createElement('span', {
+              className: 'psd-hovercard-dot',
+              'data-state': running ? 'running' : 'done',
+              'aria-hidden': true
+            }),
+            React.createElement('span', null,
+              `${running ? t('hover.running') : t('hover.done')} · ${statusTime}`)),
+          // Remaining native-tooltip-style detail rows.
+          React.createElement('div', { className: 'psd-hovercard-row' },
+            React.createElement('span', { className: 'psd-hovercard-key' }, t('hover.updated')),
+            React.createElement('span', { className: 'psd-hovercard-value' }, dwFormatAbsoluteTime(row.updatedAt))),
+          row.subagents > 0
+            ? React.createElement('div', { className: 'psd-hovercard-row' },
+              React.createElement('span', { className: 'psd-hovercard-key' },
+                row.subagents === 1 ? t('hover.subagentsOne') : t('hover.subagents', { count: row.subagents })))
+            : null,
+          // The three native figures for this Session (parent or nested
+          // subagent). Each section is omitted when the projection has no data,
+          // so an empty Session keeps exactly the card it has today.
+          React.createElement(DwHovercardProjectionSections, {
+            sections: dwProjectionSections(projections?.[row.id]?.values),
+            t
+          }))))
       }
-      return React.createElement('div', { className: 'psd-panel' }, children)
+      return React.createElement('div', { ref: panelRootRef, className: 'psd-panel' }, children)
     }
 
     /**
@@ -5787,6 +6417,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
       const mountsRef = React.useRef(null)
       const latestRef = React.useRef(null)
+      const mainViewRef = React.useRef({ ids: new Set(), currentId: null })
+      const bucketCacheRef = React.useRef(dwReadBucketCache())
+      const markedWorkspaceRef = React.useRef(new Set())
       const aliveRef = React.useRef(true)
       const applyScheduledRef = React.useRef(false)
       const durationsRef = React.useRef(new Map())
@@ -5942,19 +6575,24 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const runningParents = dwRunningSubagentParents(sessions, statuses)
       const workspaces = workspaceSnapshot?.items ?? []
       const archivedIds = new Set(workspaceSnapshot?.archivedSessionIds ?? [])
-      // The rainbow ring marks the Session the main conversation currently shows.
-      // The client summary's `retainedBy.mainView` counter is the same source the
-      // read-baseline effect trusts, so the highlight follows every way of
-      // opening a Session (card, sidebar, elsewhere).
-      let currentSessionId = null
+      // The current Session is the one the main conversation shows. The client
+      // summary's `retainedBy.mainView` counter is the same source the read-baseline
+      // effect trusts; a Session that just gained retention wins over an older one
+      // that is still being released, so opening a Session anywhere (card, native
+      // sidebar, elsewhere) moves the highlight immediately.
+      const mainViewIds = []
       if (sessions !== null && typeof sessions === 'object' && Array.isArray(sessions.ids)) {
         for (const id of sessions.ids) {
-          if ((sessions.byId?.[id]?.retainedBy?.mainView ?? 0) > 0) {
-            currentSessionId = id
-            break
-          }
+          if ((sessions.byId?.[id]?.retainedBy?.mainView ?? 0) > 0) mainViewIds.push(id)
         }
       }
+      const previousMain = mainViewRef.current
+      const newlyRetained = mainViewIds.find((id) => !previousMain.ids.has(id))
+      let currentSessionId = null
+      if (newlyRetained !== undefined) currentSessionId = newlyRetained
+      else if (previousMain.currentId !== null && mainViewIds.includes(previousMain.currentId)) currentSessionId = previousMain.currentId
+      else currentSessionId = mainViewIds[0] ?? null
+      mainViewRef.current = { ids: new Set(mainViewIds), currentId: currentSessionId }
       const runningRows = dwRunningRows(sessions, statuses, workspaces, t, runningParents, archivedIds, sessionActivity)
       const recentRows = dwRecentRows(sessions, statuses, workspaces, t, now, runningParents, archivedIds, windows.recentMs, sessionActivity)
       const panelRows = runningRows.concat(recentRows)
@@ -5973,7 +6611,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (!runningIds.has(id)) durationsRef.current.delete(id)
       }
 
-      latestRef.current = { sessions, statuses, workspaces: workspaceSnapshot, folds, windows, activity: sessionActivity }
+      latestRef.current = { sessions, statuses, workspaces: workspaceSnapshot, folds, windows, activity: sessionActivity, currentSessionId }
 
       // Read state is derived at render time from the acknowledged baseline:
       // opening a Session raises its baseline to the observed `updatedAt`, and a
@@ -6079,26 +6717,42 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (refs === null || latest === null) return
         if (!(refs.list instanceof HTMLElement) || refs.activeHeader.isConnected !== true) return
         const workspaces = latest.workspaces?.items ?? []
-        const activity = dwActiveSessions(
-          latest.sessions,
-          latest.statuses,
-          workspaces,
-          Date.now(),
-          new Set(latest.workspaces?.archivedSessionIds ?? []),
-          latest.windows.activeMs,
-          latest.activity ?? {}
-        )
+        // First paint after a reload happens before the Session catalog hydrates,
+        // and an empty catalog classifies every section as Inactive — a persisted
+        // Active fold would visibly paint expanded and then collapse. During that
+        // pre-hydration pass only, reuse the last observed bucket classification;
+        // live data always wins as soon as the catalog exists.
+        const sessionIds = Array.isArray(latest.sessions?.ids) ? latest.sessions.ids : []
+        const cachedBuckets = bucketCacheRef.current
+        // `phase` is the shell catalog's pending → ready edge; older shell builds do
+        // not expose it, so an empty id list also counts as not hydrated.
+        const catalogPhase = latest.sessions?.phase
+        const catalogReady = catalogPhase === 'ready' || (catalogPhase === undefined && sessionIds.length > 0)
+        const useCachedBuckets = !catalogReady && cachedBuckets.size > 0
+        const activity = useCachedBuckets
+          ? null
+          : dwActiveSessions(
+            latest.sessions,
+            latest.statuses,
+            workspaces,
+            Date.now(),
+            new Set(latest.workspaces?.archivedSessionIds ?? []),
+            latest.windows.activeMs,
+            latest.activity ?? {}
+          )
         const activeIds = new Set()
         const recencyByWorkspace = new Map()
         let ungroupedActive = false
-        for (const row of activity.rows) {
-          const workspaceId = activity.workspaceOf.get(row.id)
-          if (workspaceId === undefined) {
-            ungroupedActive = true
-            continue
+        if (activity !== null) {
+          for (const row of activity.rows) {
+            const workspaceId = activity.workspaceOf.get(row.id)
+            if (workspaceId === undefined) {
+              ungroupedActive = true
+              continue
+            }
+            activeIds.add(workspaceId)
+            recencyByWorkspace.set(workspaceId, Math.max(recencyByWorkspace.get(workspaceId) ?? 0, row.updatedAt))
           }
-          activeIds.add(workspaceId)
-          recencyByWorkspace.set(workspaceId, Math.max(recencyByWorkspace.get(workspaceId) ?? 0, row.updatedAt))
         }
         const sections = []
         let domIndex = 0
@@ -6109,26 +6763,77 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           if (row === null) { domIndex += 1; continue }
           const key = row.getAttribute('data-row-key') ?? ''
           const workspaceId = key.slice('workspace:'.length)
-          const active = workspaceId.length === 0 ? ungroupedActive : activeIds.has(workspaceId)
-          sections.push({ element: child, active, domIndex, recency: recencyByWorkspace.get(workspaceId) ?? 0 })
+          const cacheKey = workspaceId.length === 0 ? DW_BUCKET_UNGROUPED : workspaceId
+          const active = useCachedBuckets
+            ? cachedBuckets.get(cacheKey) === true
+            : (workspaceId.length === 0 ? ungroupedActive : activeIds.has(workspaceId))
+          sections.push({ element: child, row, workspaceId, cacheKey, active, domIndex, recency: recencyByWorkspace.get(workspaceId) ?? 0 })
           domIndex += 1
         }
         const activeSections = sections.filter((section) => section.active)
         const inactiveSections = sections.filter((section) => !section.active)
         activeSections.sort((left, right) => (right.recency - left.recency) || (left.domIndex - right.domIndex))
         const ordered = [...activeSections, ...inactiveSections]
+        // Only touch the native inline style when it actually changes: redundant
+        // writes would retrigger the style observer below in a loop.
         ordered.forEach((section, index) => {
-          section.element.style.order = String((section.active ? 100 : 5001) + index)
+          const order = String((section.active ? 100 : 5001) + index)
+          if (section.element.style.order !== order) section.element.style.order = order
         })
         for (const section of sections) {
           const collapsed = section.active ? latest.folds.active : latest.folds.inactive
-          section.element.style.display = collapsed ? 'none' : ''
+          const display = collapsed ? 'none' : ''
+          if (section.element.style.display !== display) section.element.style.display = display
         }
-        refs.activeHeader.style.order = '0'
-        refs.inactiveHeader.style.order = '5000'
+        if (refs.activeHeader.style.order !== '0') refs.activeHeader.style.order = '0'
+        if (refs.inactiveHeader.style.order !== '5000') refs.inactiveHeader.style.order = '5000'
         const empty = sections.length === 0
-        refs.activeHeader.style.display = empty ? 'none' : ''
-        refs.inactiveHeader.style.display = empty ? 'none' : ''
+        const headerDisplay = empty ? 'none' : ''
+        if (refs.activeHeader.style.display !== headerDisplay) refs.activeHeader.style.display = headerDisplay
+        if (refs.inactiveHeader.style.display !== headerDisplay) refs.inactiveHeader.style.display = headerDisplay
+        // Current-Session marker: the native Workspace row that owns the Session
+        // open in the main view carries the same rainbow wave as the card row.
+        const marked = markedWorkspaceRef.current
+        for (const element of marked) element.removeAttribute('data-psd-current-workspace')
+        marked.clear()
+        let currentWorkspaceKey = null
+        if (typeof latest.currentSessionId === 'string' && latest.currentSessionId.length > 0) {
+          let owner = dwOwningWorkspace(latest.currentSessionId, workspaces)
+          if (owner === null) {
+            // A subagent Session opened from a card child row has no own Workspace
+            // entry; its parent Session's Workspace is the project the user opened.
+            const summary = latest.sessions?.byId?.[latest.currentSessionId]
+            const parentId = summary !== null && typeof summary === 'object' && typeof summary.parentId === 'string'
+              ? summary.parentId
+              : ''
+            if (parentId.length > 0) owner = dwOwningWorkspace(parentId, workspaces)
+          }
+          currentWorkspaceKey = owner !== null && typeof owner.workspaceId === 'string' && owner.workspaceId.length > 0
+            ? owner.workspaceId
+            : DW_BUCKET_UNGROUPED
+        }
+        if (currentWorkspaceKey !== null) {
+          for (const section of sections) {
+            if (section.cacheKey !== currentWorkspaceKey) continue
+            section.row.setAttribute('data-psd-current-workspace', 'true')
+            marked.add(section.row)
+            break
+          }
+        }
+        // Remember this classification so the next reload can apply persisted
+        // folds before the stores hydrate (see useCachedBuckets above).
+        if (activity !== null) {
+          let changed = cachedBuckets.size !== sections.length
+          const next = new Map()
+          for (const section of sections) {
+            next.set(section.cacheKey, section.active)
+            if (!changed && cachedBuckets.get(section.cacheKey) !== section.active) changed = true
+          }
+          if (changed) {
+            bucketCacheRef.current = next
+            dwWriteBucketCache(next)
+          }
+        }
         const counts = { active: activeSections.length, inactive: inactiveSections.length }
         if (aliveRef.current) {
           setGroupCounts((previous) => (
@@ -6167,7 +6872,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             reconcile()
             scheduleApply()
           })
-          observer.observe(sidebar, { childList: true, subtree: true })
+          // Attribute watches catch a native re-render that resets an inline
+          // `display`/`order` we already applied; every write above compares the
+          // current value first, so this cannot loop on our own updates.
+          observer.observe(sidebar, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] })
         }
 
         const reconcile = () => {
@@ -6216,6 +6924,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             if (refs.panel instanceof HTMLElement) refs.panel.remove()
             if (refs.activeHeader instanceof HTMLElement) refs.activeHeader.remove()
             if (refs.inactiveHeader instanceof HTMLElement) refs.inactiveHeader.remove()
+            for (const element of markedWorkspaceRef.current) element.removeAttribute('data-psd-current-workspace')
+            markedWorkspaceRef.current.clear()
             if (refs.list instanceof HTMLElement) {
               refs.list.style.display = ''
               refs.list.style.flexDirection = ''
@@ -6251,6 +6961,23 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }, [scheduleApply])
 
       if (mounts === null) return null
+      // The list snapshot already carries every projection value the Host pushes
+      // for live Sessions; a cold (persisted) Session gets one one-shot read when
+      // its row is hovered. Both stay client-only: no Host route, no new inject.
+      const sessionProjections = sessions !== null && typeof sessions === 'object'
+        ? sessions.projectionsBySession
+        : undefined
+      const ensureProjections = (sessionId) => {
+        if (parentSessions === null || parentSessions === undefined) return
+        if (typeof parentSessions.refreshProjections !== 'function') return
+        try {
+          const pending = parentSessions.refreshProjections(sessionId)
+          if (pending !== null && pending !== undefined && typeof pending.catch === 'function') pending.catch(() => {})
+        } catch {
+          // A Host without the projection units leaves the figures out; the card
+          // itself still renders.
+        }
+      }
       const portal = []
       portal.push(ReactDOM.createPortal(React.createElement(DynamicRunningPanel, {
         t,
@@ -6264,6 +6991,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         acked: ackedBaselines,
         currentSessionId,
         interruptedT,
+        projections: sessionProjections,
+        onEnsureProjections: ensureProjections,
         onNewSession: openNewSession,
         onToggle: () => setPanelExpanded((value) => !value),
         onToggleAll: () => setShowAll((value) => !value),
@@ -6399,11 +7128,13 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psp-search-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
 .psp-search-toggle[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psp-search-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
-.psp-rail-card{position:fixed;z-index:61;box-sizing:border-box;overflow:hidden;padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,none);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}
+.psp-rail-card{position:fixed;z-index:61;box-sizing:border-box;overflow:hidden;padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-shadow-lv3,none);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}
 .psp-rail-card-text{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:6;overflow:hidden;white-space:pre-wrap;word-break:break-word;font:var(--dsw-font-xs-strong-13,inherit);font-family:inherit;font-size:13px;font-weight:500;line-height:20px}
 .psp-rail-card-time{margin-top:4px;color:var(--dsw-alias-label-caption,var(--dsw-alias-label-tertiary));font:var(--dsw-font-xxs-12,inherit);font-family:inherit;font-size:12px;line-height:18px}
-.psp-search-card{position:fixed;z-index:61;display:flex;flex-direction:column;gap:4px;box-sizing:border-box;overflow:hidden;width:min(300px,calc(100vw - 40px));padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,none);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:16px}
+.psp-search-card{position:fixed;z-index:61;display:flex;flex-direction:column;gap:4px;box-sizing:border-box;overflow:hidden;width:min(300px,calc(100vw - 40px));padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-shadow-lv3,none);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:16px}
 .psp-search-row{display:flex;align-items:center;gap:6px}
+.psp-search-field{position:relative;display:flex;flex:1;min-width:0;height:22px;align-items:center;border-radius:var(--dsw-radius-sm,8px)}
+.psf-rainbow-focus.psp-search-field::after{inset:-3px;border-radius:calc(var(--dsw-radius-sm,8px) + 3px)}
 .psp-search-icon{flex:none;color:var(--dsw-alias-label-tertiary)}
 .psp-search-input{flex:1;min-width:0;height:22px;margin:0;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:18px;outline:none}
 .psp-search-input::placeholder{color:var(--dsw-alias-label-tertiary)}
@@ -6964,17 +7695,20 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       },
       React.createElement('div', { className: 'psp-search-row' },
         RemixGlyph(REMIX_SEARCH_LINE, 13, 'psp-search-icon'),
-        React.createElement('input', {
-          ref: searchRef,
-          type: 'text',
-          className: 'psp-search-input',
-          value: query,
-          placeholder: t('search.placeholder'),
-          'aria-label': t('search.aria'),
-          autoComplete: 'off',
-          spellCheck: false,
-          onChange: (event) => setQuery(event.target.value)
-        })),
+        // The rainbow ring illustrates the input's active state (shared with the
+        // annotation note editors); the input itself stays borderless.
+        React.createElement('span', { className: 'psp-search-field psf-rainbow-focus' },
+          React.createElement('input', {
+            ref: searchRef,
+            type: 'text',
+            className: 'psp-search-input',
+            value: query,
+            placeholder: t('search.placeholder'),
+            'aria-label': t('search.aria'),
+            autoComplete: 'off',
+            spellCheck: false,
+            onChange: (event) => setQuery(event.target.value)
+          }))),
       React.createElement('div', { className: 'psp-search-count' },
         t('count.filtered', { count: marks.length, total: prompts.length })),
       needle.length > 0 && marks.length === 0
@@ -7257,1966 +7991,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
     //#endregion
 
-    //#region feature: project view
-    /** Copy namespace of the standalone Project page. */
-    const PROJECT_VIEW_NS = 'powerSuiteProjectView'
-
-    /** Invisible shell.overlay seat that owns the standalone page. */
-    const PROJECT_PAGE_SEAT_ID = 'power-suite.project-page'
-
-    /** Window event that asks the seat to open one Workspace's Project page. */
-    const PROJECT_PAGE_EVENT = 'power-suite:open-project'
-
-    /** Window event asking the UI annotation mode to deactivate (page takes over). */
+    /**
+     * Window event that asks the UI annotation mode to deactivate.
+     * The standalone Project page was its only dispatcher; the event kept its
+     * annotation listener until that region is rewritten.
+     */
     const ANNOTATION_EXIT_EVENT = 'power-suite:ui-annotation-exit'
-
-    /** Root attribute marking that the Project page is open (hides the prompt rail). */
-    const PROJECT_PAGE_ATTR = 'data-power-suite-project-page'
-
-    /** Host route serving one Workspace's project snapshot. */
-    const PROJECT_ROUTE = 'api/power-suite.project'
-
-    /** Snapshot polling cadence while the tab is visible. */
-    const PROJECT_VIEW_POLL_MS = 15_000
-
-    /** Runs rendered in one batch before "show more" grows the window. */
-    const PROJECT_VIEW_RUN_PAGE = 60
-
-    /** Local element factory; keeps the region readable without JSX. */
-    const psv = React.createElement
-
-    // Remix Icon paths (Apache-2.0, https://remixicon.com), inlined here so the
-    // view needs no icon package at runtime.
-    const PsvFolderLine = 'M4 5V19H20V7H11.5858L9.5858 5H4ZM12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z'
-    const PsvPlayFill = 'M19.376 12.4161L8.77735 19.4818C8.54759 19.635 8.23715 19.5729 8.08397 19.3432C8.02922 19.261 8 19.1645 8 19.0658V4.93433C8 4.65928 8.22296 4.43633 8.49801 4.43633C8.59669 4.43633 8.69321 4.46566 8.77539 4.52041L19.374 11.5861C19.6038 11.7393 19.6658 12.0498 19.5126 12.2796C19.4759 12.3347 19.4293 12.3812 19.376 12.4161Z'
-    const PsvCheckCircle = 'M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM11.0026 16L18.0737 8.9289L16.6595 7.51469L11.0026 13.1716L8.17421 10.3431L6.75999 11.7574L11.0026 16Z'
-    const PsvStackLine = 'M4 3H20C20.5523 3 21 3.44772 21 4V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V4C3 3.44772 3.44772 3 4 3ZM5 5V19H19V5H5ZM7 8H10V10H7V8ZM7 12H12V14H7V12ZM7 16H9V18H7V16ZM14 8H17V10H14V8ZM14 12H17V14H14V12Z'
-    const PsvTimerLine = 'M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM13 12H17V14H11V7H13V12Z'
-    const PsvPlusLine = 'M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z'
-    const PsvExternalLine = 'M10 3V5H5V19H19V14H21V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V4C3 3.44772 3.44772 3 4 3H10ZM13 3H21V11H19V6.41421L10.7071 14.7071L9.29289 13.2929L17.5858 5H13V3Z'
-    const PsvMoreLine = 'M12 3C12.5523 3 13 3.44772 13 4C13 4.55228 12.5523 5 12 5C11.4477 5 11 4.55228 11 4C11 3.44772 11.4477 3 12 3ZM12 11C12.5523 11 13 11.4477 13 12C13 12.5523 12.5523 13 12 13C11.4477 13 11 12.5523 11 12C11 11.4477 11.4477 11 12 11ZM12 19C12.5523 19 13 19.4477 13 20C13 20.5523 12.5523 21 12 21C11.4477 21 11 20.5523 11 20C11 19.4477 11.4477 19 12 19Z'
-    const PsvChevronDown = 'M12 13.1716L6.34315 7.51472L4.92893 8.92893L12 16L19.0711 8.92893L17.6569 7.51472L12 13.1716Z'
-    const PsvChevronRight = 'M13.1716 12L7.51472 17.6569L8.92893 19.0711L16 12L8.92893 4.92893L7.51472 6.34315L13.1716 12Z'
-    const PsvActivityLine = 'M11 2V6.5L15.5 9L11 11.5V22H9V11.5L4.5 9L9 6.5V2H11ZM13 2H18V4H13V2ZM13 6H20V8H13V6ZM13 10H18V12H13V10Z'
-    const PsvChevronLeftLine = 'M10.8284 12L16.4853 17.6569L15.0711 19.0711L8 12L15.0711 4.92893L16.4853 6.34315L10.8284 12Z'
-
-    /** Copy for the standalone Project page. */
-    const PROJECT_VIEW_EN = {
-      'tabs.label': 'Project sections',
-      'page.close': 'Close project page',
-      'page.label': 'Project page',
-      'tab.overview': 'Overview',
-      'tab.sessions': 'Sessions',
-      'tab.runs': 'Runs',
-      'tab.settings': 'Settings',
-      'state.loading': 'Loading project…',
-      'state.error': 'Could not load this project.',
-      'state.retry': 'Retry',
-      'state.empty.title': 'Workspace not found',
-      'state.empty.hint': 'This Workspace is no longer in the registry. Close the page and refresh the sidebar.',
-      'header.titleFallback': 'Untitled project',
-      'header.active': 'Active',
-      'header.inactive': 'Inactive',
-      'header.created': 'Created {date}',
-      'header.lastActive': 'Last active {time}',
-      'action.openWorkspace': 'Open Workspace',
-      'action.newSession': 'New Session',
-      'action.more': 'More actions',
-      'action.refresh': 'Refresh',
-      'action.copyPath': 'Copy project path',
-      'action.copied': 'Copied',
-      'stat.running': 'Running sessions',
-      'stat.completedToday': 'Completed today',
-      'stat.totalRuns': 'Total runs',
-      'stat.average': 'Avg duration',
-      'stat.none': '—',
-      'overview.sessions.sub': '{count} sessions',
-      'stat.running.hint': 'Sessions of this Workspace running right now.',
-      'stat.completedToday.hint': 'Turns that completed since local midnight, measured from the newest sessions.',
-      'stat.totalRuns.hint': 'Turns recorded in the measured sessions.',
-      'stat.average.hint': 'Mean duration of completed turns that carry timing.',
-      'stat.truncated': 'Measured from the newest {count} sessions',
-      'overview.sessions.title': 'Sessions',
-      'overview.sessions.viewAll': 'View all',
-      'overview.sessions.empty': 'No sessions yet',
-      'overview.explain.title': 'Dynamic bucketing & auto-archiving',
-      'overview.explain.body': 'The sidebar keeps this Workspace in Active Projects while a Session runs or its last activity is inside the active window ({days}). Finished Sessions stay in the Running & recent card for {minutes}. Both windows are edited on the Plugins page.',
-      'unit.daysOne': '1 day',
-      'unit.days': '{n} days',
-      'unit.minutesOne': '1 minute',
-      'unit.minutes': '{n} minutes',
-      'overview.explain.activity.title': 'Activity detection',
-      'overview.explain.activity.body': 'A running Session, or activity inside the active window.',
-      'overview.explain.grouping.title': 'Auto-bucketing',
-      'overview.explain.grouping.body': 'Active and Inactive groups follow the active window.',
-      'overview.explain.archive.title': 'Archive & wake',
-      'overview.explain.archive.body': 'Archiving is not implemented yet; Inactive only means outside the window.',
-      'overview.activity.title': 'Recent activity',
-      'overview.activity.empty': 'No measured activity yet.',
-      'activity.kind.run-completed': 'Turn completed',
-      'activity.kind.run-failed': 'Turn failed',
-      'activity.kind.run-interrupted': 'Turn interrupted',
-      'activity.kind.run-stopped': 'Turn stopped',
-      'activity.kind.session-updated': 'Session activity',
-      'activity.turn': 'Turn {turn}',
-      'sessions.filter.all': 'All',
-      'sessions.filter.running': 'Running',
-      'sessions.filter.completed': 'Completed',
-      'sessions.filter.interrupted': 'Interrupted',
-      'sessions.search.placeholder': 'Search sessions',
-      'sessions.search.aria': 'Search sessions by title',
-      'sessions.empty': 'No sessions match this filter.',
-      'sessions.untitled': 'Untitled session',
-      'sessions.runs': '{count} runs',
-      'sessions.runsOne': '1 run',
-      'sessions.updated': 'Updated {time}',
-      'sessions.subagent': 'Subagent',
-      'status.running': 'Running',
-      'status.completed': 'Completed',
-      'status.interrupted': 'Interrupted',
-      'status.failed': 'Failed',
-      'status.stopped': 'Stopped',
-      'status.notStarted': 'Not started',
-      'runs.filter.all': 'All',
-      'runs.filter.running': 'Running',
-      'runs.filter.completed': 'Completed',
-      'runs.filter.interrupted': 'Interrupted',
-      'runs.filter.failed': 'Failed',
-      'runs.filter.stopped': 'Stopped',
-      'runs.sessionFilter.all': 'All sessions',
-      'runs.sessionFilter.label': 'Filter runs by session',
-      'runs.search.placeholder': 'Search runs or jobs',
-      'runs.search.aria': 'Search runs by session, turn, or job',
-      'runs.includeJobs': 'Include jobs',
-      'runs.includeJobs.hint': 'Show the job records folded under each turn.',
-      'runs.empty': 'No runs match this filter.',
-      'runs.turn': 'Turn {turn}',
-      'runs.started': 'Started {time}',
-      'runs.toolCalls': '{count} tool calls',
-      'runs.toolCallsOne': '1 tool call',
-      'runs.jobs': '{count} jobs',
-      'runs.jobsOne': '1 job',
-      'runs.expand': 'Show jobs of turn {turn}',
-      'runs.collapse': 'Hide jobs of turn {turn}',
-      'runs.jobsEmpty': 'No job records in this turn.',
-      'runs.jobsCapped': 'Showing {shown} of {total} jobs.',
-      'runs.more': 'Show {count} more runs',
-      'runs.capped': 'The newest {shown} of {total} measured runs are shown.',
-      'runs.live': 'running',
-      'settings.preset.title': 'Default agent preset',
-      'settings.preset.hint': 'New Sessions in this Workspace start under this preset. Follow global default otherwise.',
-      'settings.preset.global': 'Follow global default',
-      'settings.preset.loading': 'Loading presets…',
-      'settings.preset.unavailable': 'Presets are unavailable right now.',
-      'settings.preset.saveFailed': 'Could not save the preset.',
-      'settings.preset.saved': 'Saved',
-      'settings.windows.title': 'Grouping windows',
-      'settings.windows.body': 'Finished Sessions stay in the Running & recent card for {minutes}; the project stays Active for {days} after its last activity. Edit these on the Plugins page — this view only reads them.',
-      'settings.path.title': 'Workspace path',
-      'settings.warnings': '{count} Session logs could not be read.',
-      'duration.seconds': '{s}s',
-      'duration.minutes': '{m}m {s}s',
-      'duration.hours': '{h}h {m}m',
-      'duration.days': '{d}d {h}h',
-      'time.now': 'now',
-      'time.minutes': '{n}m ago',
-      'time.hours': '{n}h ago',
-      'time.days': '{n}d ago',
-      'time.unknown': 'unknown',
-      'preset.standard': 'Standard',
-      'preset.ptc': 'PTC',
-      'preset.minimal': 'Minimal',
-      'preset.cordis': 'Cordis'
-    }
-    const PROJECT_VIEW_ZH = {
-      'tabs.label': '项目分区',
-      'page.close': '关闭项目页',
-      'page.label': '项目页',
-      'tab.overview': '项目概览',
-      'tab.sessions': '会话管理',
-      'tab.runs': '运行记录',
-      'tab.settings': '设置',
-      'state.loading': '正在加载项目…',
-      'state.error': '无法加载项目数据。',
-      'state.retry': '重试',
-      'state.empty.title': '找不到工作区',
-      'state.empty.hint': '该工作区已不在注册表中。请关闭页面并刷新侧边栏。',
-      'header.titleFallback': '未命名项目',
-      'header.active': '活跃',
-      'header.inactive': '非活跃',
-      'header.created': '创建于 {date}',
-      'header.lastActive': '最近活跃 {time}',
-      'action.openWorkspace': '打开工作区',
-      'action.newSession': '新建 Session',
-      'action.more': '更多操作',
-      'action.refresh': '刷新',
-      'action.copyPath': '复制项目路径',
-      'action.copied': '已复制',
-      'stat.running': '运行中的会话',
-      'stat.completedToday': '今日完成',
-      'stat.totalRuns': '累计运行',
-      'stat.average': '平均时长',
-      'stat.none': '—',
-      'overview.sessions.sub': '{count} 个会话',
-      'stat.running.hint': '当前工作区正在运行的会话数。',
-      'stat.completedToday.hint': '本地时间今日内完成的回合数（基于最新测得的会话）。',
-      'stat.totalRuns.hint': '已测会话中记录的回合总数。',
-      'stat.average.hint': '有时长数据的已完成回合的平均时长。',
-      'stat.truncated': '统计基于最新 {count} 个会话',
-      'overview.sessions.title': '会话列表',
-      'overview.sessions.viewAll': '查看全部',
-      'overview.sessions.empty': '暂无会话',
-      'overview.explain.title': '动态分组与自动归档',
-      'overview.explain.body': '只要有会话正在运行，或最后一次活动仍在活跃窗口（{days}）内，侧边栏就把该工作区保留在「活跃项目」中。完成的会话在「进行中与最近活跃」卡片里保留 {minutes}。两个窗口都在 Plugins 页修改。',
-      'unit.daysOne': '1 天',
-      'unit.days': '{n} 天',
-      'unit.minutesOne': '1 分钟',
-      'unit.minutes': '{n} 分钟',
-      'overview.explain.activity.title': '活动检测',
-      'overview.explain.activity.body': '会话正在运行，或活动发生在活跃窗口内。',
-      'overview.explain.grouping.title': '自动分组',
-      'overview.explain.grouping.body': '「活跃项目」与「非活跃项目」按活跃窗口归类。',
-      'overview.explain.archive.title': '归档与唤醒',
-      'overview.explain.archive.body': '归档尚未实现；「非活跃」仅表示超出活跃窗口。',
-      'overview.activity.title': '最近动态',
-      'overview.activity.empty': '暂无活动记录。',
-      'activity.kind.run-completed': '回合完成',
-      'activity.kind.run-failed': '回合失败',
-      'activity.kind.run-interrupted': '回合中断',
-      'activity.kind.run-stopped': '回合停止',
-      'activity.kind.session-updated': '会话动态',
-      'activity.turn': '第 {turn} 回合',
-      'sessions.filter.all': '全部',
-      'sessions.filter.running': '运行中',
-      'sessions.filter.completed': '已完成',
-      'sessions.filter.interrupted': '已中断',
-      'sessions.search.placeholder': '搜索会话',
-      'sessions.search.aria': '按标题搜索会话',
-      'sessions.empty': '没有符合条件的会话。',
-      'sessions.untitled': '未命名会话',
-      'sessions.runs': '{count} 次运行',
-      'sessions.runsOne': '1 次运行',
-      'sessions.updated': '更新于 {time}',
-      'sessions.subagent': '子代理',
-      'status.running': '运行中',
-      'status.completed': '已完成',
-      'status.interrupted': '已中断',
-      'status.failed': '失败',
-      'status.stopped': '已停止',
-      'status.notStarted': '未开始',
-      'runs.filter.all': '全部',
-      'runs.filter.running': '运行中',
-      'runs.filter.completed': '已完成',
-      'runs.filter.interrupted': '已中断',
-      'runs.filter.failed': '失败',
-      'runs.filter.stopped': '已停止',
-      'runs.sessionFilter.all': '全部会话',
-      'runs.sessionFilter.label': '按会话筛选运行记录',
-      'runs.search.placeholder': '搜索运行或 Job',
-      'runs.search.aria': '按会话、回合或 Job 搜索运行记录',
-      'runs.includeJobs': '包含 Job',
-      'runs.includeJobs.hint': '显示折叠在每个回合下的 Job 记录。',
-      'runs.empty': '没有符合条件的运行记录。',
-      'runs.turn': '第 {turn} 回合',
-      'runs.started': '开始于 {time}',
-      'runs.toolCalls': '{count} 次工具调用',
-      'runs.toolCallsOne': '1 次工具调用',
-      'runs.jobs': '{count} 个 Job',
-      'runs.jobsOne': '1 个 Job',
-      'runs.expand': '展开第 {turn} 回合的 Job',
-      'runs.collapse': '收起第 {turn} 回合的 Job',
-      'runs.jobsEmpty': '本回合没有 Job 记录。',
-      'runs.jobsCapped': '显示 {shown} / {total} 个 Job。',
-      'runs.more': '再显示 {count} 条运行记录',
-      'runs.capped': '仅显示最新 {shown} / 共 {total} 条已测运行记录。',
-      'runs.live': '运行中',
-      'settings.preset.title': '默认 Agent 预设',
-      'settings.preset.hint': '该工作区新建 Session 时使用此预设，否则跟随全局默认。',
-      'settings.preset.global': '跟随全局默认',
-      'settings.preset.loading': '正在读取预设…',
-      'settings.preset.unavailable': '预设暂不可用。',
-      'settings.preset.saveFailed': '保存预设失败。',
-      'settings.preset.saved': '已保存',
-      'settings.windows.title': '分组窗口',
-      'settings.windows.body': '完成的会话在「进行中与最近活跃」卡片中保留 {minutes}；项目在最后一次活动后 {days} 内保持活跃。请在 Plugins 页修改，本视图只读取。',
-      'settings.path.title': '工作区路径',
-      'settings.warnings': '有 {count} 个会话日志无法读取。',
-      'duration.seconds': '{s}s',
-      'duration.minutes': '{m}m {s}s',
-      'duration.hours': '{h}h {m}m',
-      'duration.days': '{d}d {h}h',
-      'time.now': '刚刚',
-      'time.minutes': '{n} 分钟前',
-      'time.hours': '{n} 小时前',
-      'time.days': '{n} 天前',
-      'time.unknown': '未知',
-      'preset.standard': '标准',
-      'preset.ptc': 'PTC',
-      'preset.minimal': '极简',
-      'preset.cordis': 'Cordis'
-    }
-
-    const PROJECT_VIEW_CSS = `
-.psv-page{position:fixed;top:0;left:0;z-index:200;display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);animation:psv-page-in .14s ease-out}
-.psv-page .psv-root{flex:1 1 auto;min-height:0}
-html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='true'] [data-psp-preview-card],html[${PROJECT_PAGE_ATTR}='true'] [data-psp-search-card],html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail-divider],html[${PROJECT_PAGE_ATTR}='true'] [data-psp-search-toggle]{display:none!important}
-.psv-page-bar{flex:none;display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
-.psv-page-back{width:30px;height:30px;flex:none}
-.psv-page-title{min-width:0;font-size:15px;font-weight:600;line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psv-page-spacer{flex:1 1 auto}
-@keyframes psv-page-in{from{opacity:0}to{opacity:1}}
-@media (prefers-reduced-motion:reduce){.psv-page{animation:none}}
-.psv-root{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;height:100%;box-sizing:border-box;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px;overflow:hidden;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-1))}
-.psv-tabbar{flex:none;display:flex;align-items:center;gap:8px;padding:8px 24px 0;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
-.psv-tabs{display:flex;align-items:center;gap:2px;min-width:0;overflow-x:auto;scrollbar-width:none}
-.psv-tabs::-webkit-scrollbar{display:none}
-.psv-tab{appearance:none;position:relative;box-sizing:border-box;height:36px;padding:0 12px;border:0;border-radius:var(--dsw-radius-sm,6px) var(--dsw-radius-sm,6px) 0 0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:20px;cursor:pointer;white-space:nowrap}
-.psv-tab:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
-.psv-tab[aria-selected=true]{color:var(--dsw-alias-label-primary);font-weight:600}
-.psv-tab[aria-selected=true]::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;border-radius:2px;background:var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary))}
-.psv-tab:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
-.psv-tabbar-actions{display:flex;align-items:center;gap:4px;margin-left:auto;padding-bottom:6px}
-.psv-iconbtn{appearance:none;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
-.psv-iconbtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.psv-iconbtn:disabled{opacity:.55;cursor:default}
-.psv-iconbtn:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
-@keyframes psv-spin{to{transform:rotate(360deg)}}
-.psv-iconbtn[data-busy=true] svg{animation:psv-spin .9s linear infinite}
-.psv-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 24px 44px;box-sizing:border-box}
-.psv-inner{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
-.psv-card{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
-.psv-header{display:flex;flex-direction:column;gap:14px;padding:18px 20px}
-.psv-header-main{display:flex;align-items:flex-start;gap:14px;min-width:0;flex-wrap:wrap}
-.psv-mark{flex:none;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-state-business-primary)}
-.psv-title-wrap{min-width:0;flex:1 1 260px;display:flex;flex-direction:column;gap:4px}
-.psv-title-row{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap}
-.psv-title{margin:0;min-width:0;font-size:18px;font-weight:600;line-height:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psv-badge{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:999px;font-size:11.5px;font-weight:500;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);white-space:nowrap}
-.psv-badge[data-state=active]{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary)}
-.psv-badge-dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
-.psv-desc{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psv-desc code{font-family:var(--dsw-font-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;color:var(--dsw-alias-label-secondary);background:transparent}
-.psv-actions{display:flex;align-items:center;gap:8px;flex:none;margin-left:auto}
-.psv-btn{appearance:none;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;line-height:18px;cursor:pointer;white-space:nowrap}
-.psv-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.psv-btn[data-variant=primary]{border-color:transparent;background:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-bg-layer-1)}
-.psv-btn[data-variant=primary]:hover{filter:brightness(1.06)}
-.psv-btn:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px}
-.psv-btn:disabled{opacity:.6;cursor:default}
-.psv-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-.psv-stat{display:flex;align-items:center;gap:12px;min-width:0;padding:14px 16px}
-.psv-stat-icon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)}
-.psv-stat[data-tone=success] .psv-stat-icon{color:var(--dsw-alias-state-success-primary)}
-.psv-stat[data-tone=business] .psv-stat-icon{color:var(--dsw-alias-state-business-primary)}
-.psv-stat[data-tone=warn] .psv-stat-icon{color:var(--dsw-alias-state-warn-primary)}
-.psv-stat-body{min-width:0;display:flex;flex-direction:column;gap:1px}
-.psv-stat-label{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psv-stat-value{font-size:20px;font-weight:600;line-height:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psv-section{display:flex;flex-direction:column;gap:10px}
-.psv-section-head{display:flex;align-items:center;gap:10px;min-width:0}
-.psv-section-title{margin:0;font-size:14px;font-weight:600;line-height:20px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psv-section-sub{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.psv-section-actions{display:flex;align-items:center;gap:8px;margin-left:auto;flex:none}
-.psv-list{display:flex;flex-direction:column}
-.psv-row{appearance:none;box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;min-width:0}
-.psv-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.psv-row:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
-.psv-row+.psv-row{border-top:1px solid var(--dsw-alias-border-l1)}
-.psv-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-label-tertiary)}
-.psv-dot[data-status=running]{background:var(--dsw-alias-state-business-primary)}
-.psv-dot[data-status=completed]{background:var(--dsw-alias-state-success-primary)}
-.psv-dot[data-status=interrupted]{background:var(--dsw-alias-state-warn-primary)}
-.psv-dot[data-status=failed]{background:var(--dsw-alias-state-error-primary)}
-.psv-dot[data-status=stopped]{background:var(--dsw-alias-label-tertiary)}
-.psv-row-main{min-width:0;flex:1 1 auto;display:flex;flex-direction:column;gap:1px}
-.psv-row-title{font-size:13px;line-height:19px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psv-row-meta{display:flex;align-items:center;gap:8px;color:var(--dsw-alias-label-tertiary);font-size:11.5px;line-height:16px;min-width:0;white-space:nowrap;overflow:hidden}
-.psv-row-side{flex:none;display:flex;align-items:center;gap:8px;color:var(--dsw-alias-label-tertiary);font-size:11.5px;line-height:16px;white-space:nowrap}
-.psv-status-chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:var(--dsw-radius-sm,6px);border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px;white-space:nowrap}
-.psv-status-chip[data-status=running]{color:var(--dsw-alias-state-business-primary);border-color:var(--dsw-alias-state-business-primary)}
-.psv-status-chip[data-status=completed]{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary)}
-.psv-status-chip[data-status=interrupted]{color:var(--dsw-alias-state-warn-primary);border-color:var(--dsw-alias-state-warn-primary)}
-.psv-status-chip[data-status=failed]{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary)}
-.psv-filterbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
-.psv-chips{display:flex;align-items:center;gap:4px;flex-wrap:wrap;min-width:0}
-.psv-chip{appearance:none;box-sizing:border-box;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;cursor:pointer;white-space:nowrap}
-.psv-chip:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.psv-chip[data-active=true]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l3)}
-.psv-chip-count{color:var(--dsw-alias-label-tertiary);font-size:11px}
-.psv-chip[data-active=true] .psv-chip-count{color:var(--dsw-alias-label-secondary)}
-.psv-chip:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
-.psv-search{position:relative;display:flex;align-items:center;gap:6px;box-sizing:border-box;height:28px;min-width:180px;max-width:260px;flex:1 1 180px;padding:0 9px;border:1px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-tertiary)}
-.psv-search:focus-within{border-color:var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary))}
-.psv-search input{flex:1;min-width:0;height:100%;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;outline:none}
-.psv-search input::placeholder{color:var(--dsw-alias-label-tertiary)}
-.psv-toggle{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md,8px);color:var(--dsw-alias-label-secondary);font-size:12px;cursor:pointer;user-select:none;white-space:nowrap}
-.psv-toggle input{appearance:none;margin:0;width:26px;height:15px;border-radius:999px;background:var(--dsw-alias-border-l3);position:relative;cursor:pointer;transition:background .15s ease}
-.psv-toggle input::after{content:"";position:absolute;top:2px;left:2px;width:11px;height:11px;border-radius:50%;background:var(--dsw-alias-bg-layer-1);transition:transform .15s ease}
-.psv-toggle input:checked{background:var(--dsw-alias-state-business-primary)}
-.psv-toggle input:checked::after{transform:translateX(11px)}
-.psv-toggle input:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px}
-.psv-dd{position:relative;display:inline-flex;flex:none}
-.psv-dd-trigger{appearance:none;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;height:28px;max-width:220px;padding:0 9px;border:1px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
-.psv-dd-trigger:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.psv-dd-trigger>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.psv-dd-trigger:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
-.psv-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:50;box-sizing:border-box;min-width:190px;max-width:min(320px,calc(100vw - 48px));max-height:320px;overflow-y:auto;padding:4px;border:1px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-elevation-panel,none)}
-.psv-menu[data-align=end]{left:auto;right:0}
-.psv-menu-item{appearance:none;box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:inherit;font:inherit;font-size:12.5px;line-height:18px;text-align:left;cursor:pointer;white-space:nowrap}
-.psv-menu-item:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.psv-menu-item:disabled{opacity:.5;cursor:default}
-.psv-menu-item:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-1px}
-.psv-menu-item>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.psv-menu-check{margin-left:auto;flex:none;display:inline-flex;color:var(--dsw-alias-state-business-primary)}
-.psv-empty{padding:26px 16px;text-align:center;color:var(--dsw-alias-label-tertiary);font-size:12.5px;line-height:18px}
-.psv-state{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:24px 20px}
-.psv-state-title{font-size:14px;font-weight:600;line-height:20px}
-.psv-state-body{color:var(--dsw-alias-label-tertiary);font-size:12.5px;line-height:18px}
-.psv-note{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font-size:11.5px;line-height:17px}
-.psv-activity{display:flex;flex-direction:column}
-.psv-activity-row{display:flex;align-items:center;gap:10px;padding:8px 10px;min-width:0}
-.psv-activity-row+.psv-activity-row{border-top:1px solid var(--dsw-alias-border-l1)}
-.psv-activity-kind{flex:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary)}
-.psv-activity-kind[data-kind=run-completed]{color:var(--dsw-alias-state-success-primary)}
-.psv-activity-kind[data-kind=run-failed]{color:var(--dsw-alias-state-error-primary)}
-.psv-activity-kind[data-kind=run-interrupted]{color:var(--dsw-alias-state-warn-primary)}
-.psv-activity-kind[data-kind=session-updated]{color:var(--dsw-alias-state-business-primary)}
-.psv-activity-main{min-width:0;flex:1;display:flex;flex-direction:column;gap:1px}
-.psv-activity-title{font-size:12.5px;line-height:18px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psv-activity-meta{color:var(--dsw-alias-label-tertiary);font-size:11.5px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psv-activity-time{flex:none;color:var(--dsw-alias-label-tertiary);font-size:11.5px;line-height:16px;white-space:nowrap}
-.psv-explainer{display:flex;flex-direction:column;gap:12px;padding:16px 18px}
-.psv-explainer-head{display:flex;align-items:flex-start;gap:12px;min-width:0}
-.psv-explainer-icon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-state-business-primary)}
-.psv-explainer-copy{min-width:0;display:flex;flex-direction:column;gap:3px}
-.psv-explainer-title{font-size:14px;font-weight:600;line-height:20px}
-.psv-explainer-body{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
-.psv-explainer-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-.psv-explainer-step{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md,8px);min-width:0}
-.psv-explainer-step-title{font-size:12.5px;font-weight:600;line-height:18px}
-.psv-explainer-step-body{color:var(--dsw-alias-label-tertiary);font-size:11.5px;line-height:17px}
-.psv-run{display:flex;flex-direction:column;min-width:0}
-.psv-run+.psv-run{border-top:1px solid var(--dsw-alias-border-l1)}
-.psv-run-head{appearance:none;display:flex;align-items:center;gap:10px;width:100%;min-width:0;padding:9px 10px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.psv-run-head:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.psv-run-head:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
-.psv-run-chevron{flex:none;display:inline-flex;color:var(--dsw-alias-label-tertiary);transition:transform .12s ease}
-.psv-run[data-open=true] .psv-run-chevron{transform:rotate(90deg)}
-.psv-run-main{min-width:0;flex:1 1 auto;display:flex;flex-direction:column;gap:1px}
-.psv-run-title{display:flex;align-items:center;gap:8px;min-width:0;font-size:13px;line-height:19px;font-weight:500}
-.psv-run-session{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.psv-run-turn{flex:none;color:var(--dsw-alias-label-tertiary);font-weight:400;font-size:11.5px;line-height:16px;border:1px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-xs,4px);padding:0 5px}
-.psv-run-meta{display:flex;align-items:center;gap:10px;color:var(--dsw-alias-label-tertiary);font-size:11.5px;line-height:16px;min-width:0;white-space:nowrap;overflow:hidden}
-.psv-run-side{flex:none;display:flex;align-items:center;gap:8px;color:var(--dsw-alias-label-tertiary);font-size:11.5px;line-height:16px;white-space:nowrap}
-.psv-jobs{margin:0 10px 8px 34px;display:flex;flex-direction:column;border-left:1px solid var(--dsw-alias-border-l2);padding-left:10px}
-.psv-job{display:flex;align-items:center;gap:8px;padding:4px 0;min-width:0;color:var(--dsw-alias-label-secondary);font-size:11.5px;line-height:17px}
-.psv-job-kind{flex:none;display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:var(--dsw-radius-xs,4px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-size:10.5px;line-height:14px;white-space:nowrap}
-.psv-job-label{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary)}
-.psv-job-status{flex:none}
-.psv-job-meta{flex:none;color:var(--dsw-alias-label-tertiary)}
-.psv-job-detail{flex:none;max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary)}
-.psv-jobs-note{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;padding:2px 0}
-.psv-loadmore{display:flex;justify-content:center;padding:8px 0 2px}
-.psv-footer-note{padding:2px 10px 0;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}
-.psv-settings{display:flex;flex-direction:column;gap:16px}
-.psv-field{display:flex;flex-direction:column;gap:6px;padding:14px 16px}
-.psv-field-label{font-size:12.5px;font-weight:600;line-height:18px}
-.psv-field-hint{color:var(--dsw-alias-label-tertiary);font-size:11.5px;line-height:17px}
-.psv-field-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
-.psv-path{display:flex;align-items:center;gap:8px;min-width:0}
-.psv-path-text{font-family:var(--dsw-font-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;line-height:18px;color:var(--dsw-alias-label-secondary);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.psv-toast{display:inline-flex;align-items:center;gap:5px;color:var(--dsw-alias-state-success-primary);font-size:11.5px;line-height:16px}
-.psv-error-text{color:var(--dsw-alias-state-error-primary);font-size:11.5px;line-height:16px}
-.psv-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-@media (max-width:920px){.psv-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.psv-explainer-grid{grid-template-columns:1fr}.psv-tabbar{padding-left:14px}.psv-scroll{padding:16px 14px 40px}}
-@media (max-width:640px){.psv-stats{grid-template-columns:1fr}.psv-actions{margin-left:0;width:100%;flex-wrap:wrap}.psv-run-side{display:none}}
-@media (prefers-reduced-motion:reduce){.psv-tab,.psv-btn,.psv-chip,.psv-toggle input,.psv-toggle input::after,.psv-run-chevron,.psv-iconbtn svg{transition:none;animation:none}}
-`
-
-    /**
-     * Format one measured duration for compact display.
-     * @param {number | null} ms - milliseconds, or null.
-     * @param {Function} t - namespace-bound translate.
-     * @returns {string} duration text, or an em dash when unknown.
-     */
-    function psvDuration(ms, t) {
-      if (!Number.isFinite(ms) || ms < 0) return t('stat.none')
-      const total = Math.max(0, Math.round(ms / 1000))
-      const days = Math.floor(total / 86400)
-      const hours = Math.floor((total % 86400) / 3600)
-      const minutes = Math.floor((total % 3600) / 60)
-      const seconds = total % 60
-      if (days > 0) return t('duration.days', { d: days, h: hours })
-      if (hours > 0) return t('duration.hours', { h: hours, m: minutes })
-      if (minutes > 0) return t('duration.minutes', { m: minutes, s: seconds })
-      return t('duration.seconds', { s: seconds })
-    }
-
-    /**
-     * Format the distance from `at` to `now` in coarse units.
-     * @param {number | null} at - epoch milliseconds.
-     * @param {number} now - current epoch milliseconds.
-     * @param {Function} t - namespace-bound translate.
-     * @returns {string} relative label.
-     */
-    function psvRelative(at, now, t) {
-      if (!Number.isFinite(at)) return t('time.unknown')
-      const total = Math.max(0, Math.floor((now - at) / 1000))
-      if (total < 45) return t('time.now')
-      const minutes = Math.floor(total / 60)
-      if (minutes < 60) return t('time.minutes', { n: minutes })
-      const hours = Math.floor(minutes / 60)
-      if (hours < 24) return t('time.hours', { n: hours })
-      return t('time.days', { n: Math.floor(hours / 24) })
-    }
-
-    /**
-     * Full local timestamp, used as an exact-time tooltip and date value.
-     * @param {number | null} at - epoch milliseconds.
-     * @returns {string} localized timestamp, or an empty string.
-     */
-    function psvExact(at) {
-      return Number.isFinite(at) ? new Date(at).toLocaleString() : ''
-    }
-
-    /**
-     * Local calendar date for one timestamp.
-     * @param {number | null} at - epoch milliseconds.
-     * @returns {string} localized date, or an empty string.
-     */
-    function psvDate(at) {
-      if (!Number.isFinite(at)) return ''
-      const date = new Date(at)
-      return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString()
-    }
-
-    /**
-     * Display title of one measured Session: the log's own title, then the
-     * browser's list row, then a localized placeholder. The Host never invents
-     * a title it cannot read from the log.
-     * @param {object} row - session row from the snapshot.
-     * @param {object} sessionsSnapshot - browser Session list snapshot.
-     * @param {Function} t - namespace-bound translate.
-     * @returns {string} display title.
-     */
-    function psvSessionTitle(row, sessionsSnapshot, t) {
-      if (row !== null && typeof row === 'object' && typeof row.title === 'string' && row.title.length > 0) return row.title
-      const sessionId = row !== null && typeof row === 'object' ? row.sessionId : undefined
-      const summary = typeof sessionId === 'string' && sessionsSnapshot !== null && typeof sessionsSnapshot === 'object'
-        ? sessionsSnapshot.byId?.[sessionId]
-        : undefined
-      if (summary !== undefined && summary !== null) {
-        if (typeof summary.title === 'string' && summary.title.length > 0) return summary.title
-        if (typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0) return summary.displayTitle
-      }
-      return t('sessions.untitled')
-    }
-
-    /**
-     * Run-status filter list, in display order.
-     * @returns {string[]} status ids.
-     */
-    function psvRunStatuses() {
-      return ['running', 'completed', 'interrupted', 'failed', 'stopped']
-    }
-
-    /**
-     * Session status of one measured row.
-     * @param {object} row - session row from the snapshot.
-     * @returns {'running'|'interrupted'|'completed'|'notStarted'} status.
-     */
-    function psvSessionStatus(row) {
-      if (row?.running === true) return 'running'
-      if (row?.interrupted === true) return 'interrupted'
-      if (Number.isFinite(row?.runCount) && row.runCount > 0) return 'completed'
-      return 'notStarted'
-    }
-
-    /**
-     * Read the browser Session list snapshot through a source, tolerating a
-     * deployment without the Session service.
-     * @param {object | undefined} source - observable source.
-     * @returns {object} the snapshot.
-     */
-    function usePsvSessions(source) {
-      const subscribe = React.useCallback((listener) => {
-        if (source === undefined || source === null || typeof source.subscribe !== 'function') return () => {}
-        return source.subscribe(listener)
-      }, [source])
-      const getSnapshot = React.useCallback(() => {
-        if (source === undefined || source === null || typeof source.getSnapshot !== 'function') return { ids: [], byId: {} }
-        return source.getSnapshot()
-      }, [source])
-      return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-    }
-
-    /**
-     * Tick `now` forward so relative labels and live elapsed times stay current.
-     * @param {number} intervalMs - tick interval.
-     * @returns {number} current epoch milliseconds.
-     */
-    function usePsvNow(intervalMs) {
-      const [now, setNow] = React.useState(() => Date.now())
-      React.useEffect(() => {
-        const timer = window.setInterval(() => setNow(Date.now()), intervalMs)
-        return () => window.clearInterval(timer)
-      }, [intervalMs])
-      return now
-    }
-
-    /**
-     * Fetch the Host project snapshot for one Workspace and keep it warm.
-     *
-     * The Workspace id is the only key. Polling refreshes silently; a manual
-     * refresh sets the refresh flag and asks the Host to bypass its cache.
-     * A Workspace switch aborts the previous request and drops its snapshot, so
-     * a slower earlier answer can never overwrite the newer Workspace's data.
-     * @param {string | null} workspaceId - Workspace identity to measure.
-     * @returns {{ state: object, refreshing: boolean, refresh: Function }} snapshot state.
-     */
-    function usePsvProject(workspaceId) {
-      const [state, setState] = React.useState({ status: 'loading', workspaceId: null, snapshot: null, error: null })
-      const [nonce, setNonce] = React.useState(0)
-      const [refreshing, setRefreshing] = React.useState(false)
-      const manualRef = React.useRef(false)
-      React.useEffect(() => {
-        if (typeof workspaceId !== 'string' || workspaceId.length === 0) {
-          setState({ status: 'loading', workspaceId: null, snapshot: null, error: null })
-          return undefined
-        }
-        let disposed = false
-        const controller = new AbortController()
-        let inFlight = false
-        const load = async (manual) => {
-          if (inFlight) return
-          inFlight = true
-          if (manual) setRefreshing(true)
-          try {
-            const suffix = manual ? '&refresh=1' : ''
-            const response = await fetch(appUrl(`${PROJECT_ROUTE}?workspaceId=${encodeURIComponent(workspaceId)}${suffix}`), {
-              signal: controller.signal,
-              credentials: 'same-origin',
-              headers: { accept: 'application/json' }
-            })
-            if (!response.ok) {
-              if (response.status === 404) {
-                let body = null
-                try {
-                  body = await response.json()
-                } catch {
-                  body = null
-                }
-                if (body !== null && typeof body === 'object' && body.code === 'workspace-not-found') {
-                  if (!disposed) setState({ status: 'empty', workspaceId, snapshot: null, error: null })
-                  return
-                }
-              }
-              throw new Error(`HTTP ${response.status}`)
-            }
-            const snapshot = await response.json()
-            if (disposed) return
-            setState({ status: 'ready', workspaceId, snapshot, error: null })
-          } catch (error) {
-            if (disposed || controller.signal.aborted) return
-            const message = error instanceof Error && error.message.length > 0 ? error.message : 'request failed'
-            setState((previous) => previous.snapshot !== null && previous.workspaceId === workspaceId
-              ? { ...previous, status: 'ready' }
-              : { status: 'error', workspaceId, snapshot: null, error: message })
-          } finally {
-            inFlight = false
-            if (!disposed) setRefreshing(false)
-          }
-        }
-        setState((previous) => previous.workspaceId === workspaceId && previous.snapshot !== null
-          ? previous
-          : { status: 'loading', workspaceId, snapshot: null, error: null })
-        const manual = manualRef.current
-        manualRef.current = false
-        load(manual)
-        const timer = window.setInterval(() => load(false), PROJECT_VIEW_POLL_MS)
-        const onFocus = () => load(false)
-        window.addEventListener('focus', onFocus)
-        return () => {
-          disposed = true
-          controller.abort()
-          window.clearInterval(timer)
-          window.removeEventListener('focus', onFocus)
-        }
-      }, [workspaceId, nonce])
-      const refresh = React.useCallback(() => {
-        manualRef.current = true
-        setNonce((value) => value + 1)
-      }, [])
-      return { state, refreshing, refresh }
-    }
-
-    /**
-     * Chevron for one run row.
-     * @param {{ open: boolean }} props - open state.
-     * @returns {object} the element.
-     */
-    function PsvRunChevron({ open }) {
-      return psv('span', { className: 'psv-run-chevron', 'aria-hidden': 'true' },
-        RemixGlyph(open ? PsvChevronDown : PsvChevronRight, 14))
-    }
-
-    /**
-     * One status dot with an accessible hidden label.
-     * @param {{ status: string, label: string }} props - status and its text.
-     * @returns {object} the element.
-     */
-    function PsvStatusDot({ status, label }) {
-      return psv('span', { className: 'psv-dot', 'data-status': status, role: 'img', 'aria-label': label })
-    }
-
-    /**
-     * One compact status chip.
-     * @param {{ status: string, label: string }} props - status and its text.
-     * @returns {object} the element.
-     */
-    function PsvStatusChip({ status, label }) {
-      return psv('span', { className: 'psv-status-chip', 'data-status': status }, label)
-    }
-
-    /**
-     * Accessible dropdown trigger + menu with outside-press and Escape close,
-     * arrow-key navigation, and focus return to the trigger.
-     * @param {object} props - dropdown props.
-     * @param {Function} props.t - namespace-bound translate.
-     * @param {string} props.label - accessible trigger label.
-     * @param {object} props.trigger - trigger content.
-     * @param {'start'|'end'} [props.align] - menu alignment.
-     * @param {string} [props.className] - extra root class.
-     * @param {Function} props.renderItems - receives `close`.
-     * @returns {object} the dropdown element.
-     */
-    function PsvDropdown({ t, label, trigger, align = 'start', className, renderItems }) {
-      const [open, setOpen] = React.useState(false)
-      const rootRef = React.useRef(null)
-      const triggerRef = React.useRef(null)
-      const menuRef = React.useRef(null)
-      React.useEffect(() => {
-        if (!open) return undefined
-        const focusTimer = window.setTimeout(() => {
-          const menu = menuRef.current
-          if (menu === null) return
-          const target = menu.querySelector('[data-checked=true]') ?? menu.querySelector('button:not([disabled])')
-          if (target instanceof HTMLElement) target.focus()
-        }, 0)
-        const onPointer = (event) => {
-          const root = rootRef.current
-          if (root !== null && event.target instanceof Node && root.contains(event.target)) return
-          setOpen(false)
-        }
-        const onKey = (event) => {
-          if (event.key !== 'Escape') return
-          event.preventDefault()
-          event.stopPropagation()
-          setOpen(false)
-          const target = triggerRef.current
-          if (target instanceof HTMLElement) target.focus()
-        }
-        document.addEventListener('pointerdown', onPointer, true)
-        document.addEventListener('keydown', onKey, true)
-        return () => {
-          window.clearTimeout(focusTimer)
-          document.removeEventListener('pointerdown', onPointer, true)
-          document.removeEventListener('keydown', onKey, true)
-        }
-      }, [open])
-      const onMenuKeyDown = (event) => {
-        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Home' && event.key !== 'End') return
-        const menu = menuRef.current
-        if (menu === null) return
-        const items = [...menu.querySelectorAll('button:not([disabled])')].filter((node) => node instanceof HTMLElement)
-        if (items.length === 0) return
-        event.preventDefault()
-        const index = items.indexOf(document.activeElement)
-        let next = 0
-        if (event.key === 'ArrowDown') next = index < 0 ? 0 : (index + 1) % items.length
-        else if (event.key === 'ArrowUp') next = index <= 0 ? items.length - 1 : index - 1
-        else if (event.key === 'End') next = items.length - 1
-        items[next].focus()
-      }
-      return psv('div', { className: `psv-dd ${className ?? ''}`, ref: rootRef },
-        psv('button', {
-          ref: triggerRef,
-          type: 'button',
-          className: 'psv-dd-trigger',
-          'aria-haspopup': 'menu',
-          'aria-expanded': open ? 'true' : 'false',
-          'aria-label': label,
-          title: label,
-          onClick: () => setOpen((value) => !value)
-        }, trigger, RemixGlyph(PsvChevronDown, 12)),
-        open
-          ? psv('div', {
-            ref: menuRef,
-            className: 'psv-menu',
-            role: 'menu',
-            'data-align': align,
-            'aria-label': label,
-            onKeyDown: onMenuKeyDown
-          }, renderItems(() => setOpen(false)))
-          : null)
-    }
-
-    /**
-     * One selectable menu row.
-     * @param {object} props - item props.
-     * @param {boolean} [props.checked] - radio selection; omit for a plain item.
-     * @param {boolean} [props.disabled] - disabled state.
-     * @param {Function} props.onSelect - selection handler.
-     * @returns {object} the menu row.
-     */
-    function PsvMenuItem({ checked, disabled = false, onSelect, children }) {
-      return psv('button', {
-        type: 'button',
-        role: checked === undefined ? 'menuitem' : 'menuitemradio',
-        className: 'psv-menu-item',
-        'data-checked': checked === true ? 'true' : undefined,
-        'aria-checked': checked === undefined ? undefined : checked ? 'true' : 'false',
-        disabled,
-        onClick: () => {
-          if (!disabled) onSelect()
-        }
-      }, psv('span', null, children), checked === true ? psv('span', { className: 'psv-menu-check' }, RemixGlyph(REMIX_CHECK_LINE, 14)) : null)
-    }
-
-    /**
-     * Four stat cards derived from the Host snapshot.
-     * @param {object} props - stat props.
-     * @returns {object} the stat grid.
-     */
-    function PsvStatCards({ stats, t }) {
-      const truncated = stats?.truncated === true && Number.isFinite(stats.measuredSessions)
-      const cards = [
-        { id: 'running', icon: PsvPlayFill, tone: 'business', value: String(stats?.runningSessions ?? 0), hint: t('stat.running.hint') },
-        { id: 'completedToday', icon: PsvCheckCircle, tone: 'success', value: String(stats?.completedToday ?? 0), hint: t('stat.completedToday.hint') },
-        { id: 'totalRuns', icon: PsvStackLine, tone: 'business', value: String(stats?.totalRuns ?? 0), hint: t('stat.totalRuns.hint') },
-        { id: 'average', icon: PsvTimerLine, tone: 'warn', value: Number.isFinite(stats?.averageDurationMs) ? psvDuration(stats.averageDurationMs, t) : t('stat.none'), hint: t('stat.average.hint') }
-      ]
-      return psv('div', { className: 'psv-stats', 'data-psv-stats': '' },
-        cards.map((card) => psv('div', { key: card.id, className: 'psv-card psv-stat', 'data-tone': card.tone, title: card.hint },
-          psv('span', { className: 'psv-stat-icon', 'aria-hidden': 'true' }, RemixGlyph(card.icon, 18)),
-          psv('div', { className: 'psv-stat-body' },
-            psv('span', { className: 'psv-stat-label' }, t(`stat.${card.id}`)),
-            psv('span', { className: 'psv-stat-value' }, card.value)))),
-        truncated
-          ? psv('div', { className: 'psv-footer-note', style: { gridColumn: '1 / -1' } }, t('stat.truncated', { count: stats.measuredSessions }))
-          : null)
-    }
-
-    /**
-     * Project header: identity, Active badge, facts, and the three actions.
-     * @param {object} props - header props.
-     * @returns {object} the header card.
-     */
-    function PsvProjectHeader({ project, copy, nav, refresh, t }) {
-      const [copied, setCopied] = React.useState(false)
-      const copyTimer = React.useRef(null)
-      React.useEffect(() => () => {
-        if (copyTimer.current !== null) window.clearTimeout(copyTimer.current)
-      }, [])
-      const copyPath = async () => {
-        const copiedOk = await copy(project.path)
-        if (!copiedOk) return
-        setCopied(true)
-        if (copyTimer.current !== null) window.clearTimeout(copyTimer.current)
-        copyTimer.current = window.setTimeout(() => {
-          copyTimer.current = null
-          setCopied(false)
-        }, 1600)
-      }
-      const openWorkspace = () => {
-        try {
-          const pending = nav.openWorkspace(project.workspaceId)
-          if (pending !== null && pending !== undefined && typeof pending.then === 'function') {
-            pending.catch((error) => console.warn('[power-suite] open workspace failed', error !== null && typeof error === 'object' && typeof error.message === 'string' ? error.message : error))
-          }
-        } catch (error) {
-          console.warn('[power-suite] open workspace failed', error)
-        }
-      }
-      const newSession = () => {
-        try {
-          nav.startSession(project.workspaceId)
-        } catch (error) {
-          console.warn('[power-suite] new session failed', error)
-        }
-      }
-      const created = psvDate(Date.parse(project.createdAt))
-      const lastActive = Number.isFinite(project.lastActivityAt) ? psvRelative(project.lastActivityAt, Date.now(), t) : t('time.unknown')
-      const title = project.title.length > 0 ? project.title : t('header.titleFallback')
-      const badge = psv('span', { className: 'psv-badge', 'data-state': project.state === 'active' ? 'active' : 'inactive' },
-        psv('span', { className: 'psv-badge-dot', 'aria-hidden': 'true' }),
-        project.state === 'active' ? t('header.active') : t('header.inactive'))
-      const facts = psv('div', { className: 'psv-desc', title: project.path },
-        psv('code', null, project.path),
-        created.length > 0 ? ` · ${t('header.created', { date: created })}` : '',
-        ` · ${t('header.lastActive', { time: lastActive })}`)
-      const titleWrap = psv('div', { className: 'psv-title-wrap' },
-        psv('div', { className: 'psv-title-row' },
-          psv('h1', { className: 'psv-title', title }, title),
-          badge),
-        facts)
-      const openButton = psv('button', { type: 'button', className: 'psv-btn', onClick: openWorkspace },
-        RemixGlyph(PsvExternalLine, 14), t('action.openWorkspace'))
-      const newButton = psv('button', { type: 'button', className: 'psv-btn', 'data-variant': 'primary', onClick: newSession },
-        RemixGlyph(PsvPlusLine, 14), t('action.newSession'))
-      const moreMenu = psv(PsvDropdown, {
-        t,
-        label: t('action.more'),
-        align: 'end',
-        className: '',
-        trigger: RemixGlyph(PsvMoreLine, 16),
-        renderItems: (close) => [
-          psv(PsvMenuItem, { key: 'refresh', onSelect: () => { close(); refresh() } }, t('action.refresh')),
-          psv(PsvMenuItem, { key: 'copy', onSelect: () => { close(); void copyPath() } },
-            copied ? t('action.copied') : t('action.copyPath'))
-        ]
-      })
-      const actions = psv('div', { className: 'psv-actions' }, openButton, newButton, moreMenu)
-      const main = psv('div', { className: 'psv-header-main' },
-        psv('span', { className: 'psv-mark', 'aria-hidden': 'true' }, RemixGlyph(PsvFolderLine, 22)),
-        titleWrap,
-        actions)
-      const toast = copied
-        ? psv('div', { className: 'psv-toast', role: 'status' }, RemixGlyph(REMIX_CHECK_LINE, 13), t('action.copied'))
-        : null
-      return psv('div', { className: 'psv-card psv-header', 'data-psv-header': '' }, main, toast)
-    }
-
-    //#region feature: project view — overview
-    /**
-     * Overview tab: recent sessions, the grouping explainer, and recent activity.
-     * @param {object} props - overview props.
-     * @returns {object} the overview content.
-     */
-    function PsvOverviewTab({ snapshot, sessionsSnapshot, t, now, settings, onOpenSession, onViewAll }) {
-      const sessions = Array.isArray(snapshot.sessions) ? snapshot.sessions : []
-      const preview = [...sessions]
-        .sort((left, right) => (right.lastActivityAt ?? 0) - (left.lastActivityAt ?? 0))
-        .slice(0, 6)
-      const project = snapshot.project ?? {}
-      const windows = settings?.value ?? {}
-      const days = Number.isFinite(project.activeWindowDays) ? project.activeWindowDays : windows.activeProjectDays ?? 7
-      const minutes = Number.isFinite(project.recentSessionMinutes) ? project.recentSessionMinutes : windows.recentSessionMinutes ?? 120
-      const activity = Array.isArray(snapshot.recentActivity) ? snapshot.recentActivity : []
-      const daysLabel = days === 1 ? t('unit.daysOne') : t('unit.days', { n: days })
-      const minutesLabel = minutes === 1 ? t('unit.minutesOne') : t('unit.minutes', { n: minutes })
-      return psv('div', { className: 'psv-section' },
-        psv('div', { className: 'psv-card psv-section' },
-          psv('div', { className: 'psv-section-head', style: { padding: '14px 16px 0' } },
-            psv('h2', { className: 'psv-section-title' }, t('overview.sessions.title')),
-            psv('span', { className: 'psv-section-sub' }, t('overview.sessions.sub', { count: sessions.length })),
-            psv('div', { className: 'psv-section-actions' },
-              psv('button', { type: 'button', className: 'psv-btn', onClick: onViewAll }, t('overview.sessions.viewAll')))),
-          preview.length === 0
-            ? psv('div', { className: 'psv-empty' }, t('overview.sessions.empty'))
-            : psv('div', { className: 'psv-list', style: { padding: '4px 6px 8px' } },
-              preview.map((row) => {
-                const status = psvSessionStatus(row)
-                const title = psvSessionTitle(row, sessionsSnapshot, t)
-                return psv('button', {
-                  key: row.sessionId,
-                  type: 'button',
-                  className: 'psv-row',
-                  onClick: () => onOpenSession(row.sessionId),
-                  title
-                },
-                psv(PsvStatusDot, { status, label: t(`status.${status}`) }),
-                psv('span', { className: 'psv-row-main' },
-                  psv('span', { className: 'psv-row-title' }, title),
-                  psv('span', { className: 'psv-row-meta' },
-                    psv('span', null, typeof row.runCount === 'number' && row.runCount === 1 ? t('sessions.runsOne') : t('sessions.runs', { count: row.runCount ?? 0 })),
-                    psv('span', null, t('sessions.updated', { time: psvRelative(row.lastActivityAt, now, t) })))),
-                psv('span', { className: 'psv-row-side' },
-                  psv(PsvStatusChip, { status, label: t(`status.${status}`) })))
-              }))),
-        psv('div', { className: 'psv-card psv-explainer' },
-          psv('div', { className: 'psv-explainer-head' },
-            psv('span', { className: 'psv-explainer-icon', 'aria-hidden': 'true' }, RemixGlyph(PsvActivityLine, 20)),
-            psv('div', { className: 'psv-explainer-copy' },
-              psv('span', { className: 'psv-explainer-title' }, t('overview.explain.title')),
-              psv('span', { className: 'psv-explainer-body' }, t('overview.explain.body', { days: daysLabel, minutes: minutesLabel })))),
-          psv('div', { className: 'psv-explainer-grid' },
-            psv('div', { className: 'psv-explainer-step' },
-              psv('span', { className: 'psv-explainer-step-title' }, t('overview.explain.activity.title')),
-              psv('span', { className: 'psv-explainer-step-body' }, t('overview.explain.activity.body'))),
-            psv('div', { className: 'psv-explainer-step' },
-              psv('span', { className: 'psv-explainer-step-title' }, t('overview.explain.grouping.title')),
-              psv('span', { className: 'psv-explainer-step-body' }, t('overview.explain.grouping.body'))),
-            psv('div', { className: 'psv-explainer-step' },
-              psv('span', { className: 'psv-explainer-step-title' }, t('overview.explain.archive.title')),
-              psv('span', { className: 'psv-explainer-step-body' }, t('overview.explain.archive.body'))))),
-        psv('div', { className: 'psv-card psv-section' },
-          psv('div', { className: 'psv-section-head', style: { padding: '14px 16px 0' } },
-            psv('h2', { className: 'psv-section-title' }, t('overview.activity.title'))),
-          activity.length === 0
-            ? psv('div', { className: 'psv-empty' }, t('overview.activity.empty'))
-            : psv('div', { className: 'psv-activity', style: { padding: '4px 8px 8px' } },
-              activity.map((row, index) => {
-                const kind = typeof row.kind === 'string' ? row.kind : 'session-updated'
-                const title = psvSessionTitle(row, sessionsSnapshot, t)
-                const detail = typeof row.detail === 'string' && /^turn \d+$/.test(row.detail)
-                  ? t('activity.turn', { turn: row.detail.slice(5) })
-                  : t(`activity.kind.${kind}`)
-                const kindIcon = kind === 'run-failed' ? PsvActivityLine : kind === 'session-updated' ? PsvFolderLine : kind === 'run-interrupted' ? PsvTimerLine : PsvCheckCircle
-                return psv('div', { key: `${kind}:${row.sessionId}:${index}`, className: 'psv-activity-row' },
-                  psv('span', { className: 'psv-activity-kind', 'data-kind': kind, 'aria-hidden': 'true' }, RemixGlyph(kindIcon, 15)),
-                  psv('span', { className: 'psv-activity-main' },
-                    psv('span', { className: 'psv-activity-title' }, title),
-                    psv('span', { className: 'psv-activity-meta' }, detail)),
-                  psv('span', { className: 'psv-activity-time', title: psvExact(row.at) }, psvRelative(row.at, now, t)))
-              }))))
-    }
-    //#endregion
-
-    //#region feature: project view — sessions
-    /**
-     * Sessions tab: status filter counts, title search, and the full session list.
-     * @param {object} props - sessions props.
-     * @returns {object} the sessions content.
-     */
-    function PsvSessionsTab({ snapshot, sessionsSnapshot, t, now, onOpenSession }) {
-      const [filter, setFilter] = React.useState('all')
-      const [query, setQuery] = React.useState('')
-      const rows = Array.isArray(snapshot.sessions) ? snapshot.sessions : []
-      const counted = rows.map((row) => ({ row, status: psvSessionStatus(row) }))
-      const counts = {
-        all: counted.length,
-        running: counted.filter((entry) => entry.status === 'running').length,
-        completed: counted.filter((entry) => entry.status === 'completed').length,
-        interrupted: counted.filter((entry) => entry.status === 'interrupted').length
-      }
-      const needle = query.trim().toLowerCase()
-      const filtered = counted.filter((entry) => {
-        if (filter !== 'all' && entry.status !== filter) return false
-        if (needle.length === 0) return true
-        return psvSessionTitle(entry.row, sessionsSnapshot, t).toLowerCase().includes(needle)
-      })
-      filtered.sort((left, right) => {
-        if (left.status === 'running' && right.status !== 'running') return -1
-        if (right.status === 'running' && left.status !== 'running') return 1
-        return (right.row.lastActivityAt ?? 0) - (left.row.lastActivityAt ?? 0)
-      })
-      const chips = ['all', 'running', 'completed', 'interrupted']
-      return psv('div', { className: 'psv-card psv-section', 'data-psv-sessions': '' },
-        psv('div', { className: 'psv-section-head', style: { padding: '14px 16px 0' } },
-          psv('h2', { className: 'psv-section-title' }, t('overview.sessions.title')),
-          psv('span', { className: 'psv-section-sub' }, t('overview.sessions.sub', { count: rows.length }))),
-        psv('div', { className: 'psv-filterbar', style: { padding: '8px 16px 4px' } },
-          psv('div', { className: 'psv-chips', role: 'group', 'aria-label': t('overview.sessions.title') },
-            chips.map((id) => psv('button', {
-              key: id,
-              type: 'button',
-              className: 'psv-chip',
-              'data-active': filter === id ? 'true' : 'false',
-              'aria-pressed': filter === id ? 'true' : 'false',
-              onClick: () => setFilter(id)
-            }, t(`sessions.filter.${id}`), psv('span', { className: 'psv-chip-count' }, String(counts[id] ?? 0))))),
-          psv('label', { className: 'psv-search' },
-            RemixGlyph(REMIX_SEARCH_LINE, 13),
-            psv('input', {
-              type: 'text',
-              value: query,
-              placeholder: t('sessions.search.placeholder'),
-              'aria-label': t('sessions.search.aria'),
-              autoComplete: 'off',
-              spellCheck: false,
-              onChange: (event) => setQuery(event.target.value)
-            }))),
-        filtered.length === 0
-          ? psv('div', { className: 'psv-empty' }, t('sessions.empty'))
-          : psv('div', { className: 'psv-list', style: { padding: '2px 6px 8px' } },
-            filtered.map(({ row }) => {
-              const status = psvSessionStatus(row)
-              const title = psvSessionTitle(row, sessionsSnapshot, t)
-              return psv('button', {
-                key: row.sessionId,
-                type: 'button',
-                className: 'psv-row',
-                title,
-                onClick: () => onOpenSession(row.sessionId)
-              },
-              psv(PsvStatusDot, { status, label: t(`status.${status}`) }),
-              psv('span', { className: 'psv-row-main' },
-                psv('span', { className: 'psv-row-title' }, title),
-                psv('span', { className: 'psv-row-meta' },
-                  psv('span', null, (row.runCount ?? 0) === 1 ? t('sessions.runsOne') : t('sessions.runs', { count: row.runCount ?? 0 })),
-                  psv('span', null, t('sessions.updated', { time: psvRelative(row.lastActivityAt, now, t) })),
-                  row.origin === 'subagent' ? psv('span', null, t('sessions.subagent')) : null)),
-              psv('span', { className: 'psv-row-side' },
-                psv(PsvStatusChip, { status, label: t(`status.${status}`) })))
-            })))
-    }
-    //#endregion
-
-    //#region feature: project view — runs
-    /**
-     * Jobs folded under one expanded run.
-     * @param {object} props - jobs props.
-     * @returns {object | null} the nested job rows.
-     */
-    function PsvRunJobs({ run, t }) {
-      const jobs = Array.isArray(run.jobs) ? run.jobs : []
-      if (jobs.length === 0) return psv('div', { className: 'psv-jobs' }, psv('div', { className: 'psv-jobs-note' }, t('runs.jobsEmpty')))
-      return psv('div', { className: 'psv-jobs', role: 'group', 'aria-label': t('runs.turn', { turn: run.turn }) },
-        jobs.map((job) => psv('div', { key: job.jobId, className: 'psv-job', title: `${job.label}${job.detail !== null && job.detail !== undefined ? ` — ${job.detail}` : ''}` },
-          psv('span', { className: 'psv-job-kind' }, job.kind ?? 'job'),
-          psv('span', { className: 'psv-job-label' }, job.label !== undefined && job.label.length > 0 ? job.label : job.jobId),
-          psv('span', { className: 'psv-job-status' }, psv(PsvStatusChip, { status: job.status === 'killed' ? 'stopped' : job.status === 'failed' ? 'failed' : job.status === 'running' ? 'running' : 'completed', label: t(`status.${job.status === 'killed' ? 'stopped' : job.status === 'failed' ? 'failed' : job.status === 'running' ? 'running' : 'completed'}`) })),
-          psv('span', { className: 'psv-job-meta' }, psvDuration(job.durationMs, t)),
-          job.detail !== null && job.detail !== undefined && job.detail.length > 0
-            ? psv('span', { className: 'psv-job-detail' }, job.detail)
-            : null)),
-        run.jobCount > jobs.length
-          ? psv('div', { className: 'psv-jobs-note' }, t('runs.jobsCapped', { shown: jobs.length, total: run.jobCount }))
-          : null)
-    }
-
-    /**
-     * Runs tab: the combined turn record with nested job rows, status/session
-     * filters, a text search, and a job-visibility toggle.
-     * @param {object} props - runs props.
-     * @returns {object} the runs content.
-     */
-    function PsvRunsTab({ snapshot, sessionsSnapshot, t, now }) {
-      const [status, setStatus] = React.useState('all')
-      const [sessionFilter, setSessionFilter] = React.useState('all')
-      const [includeJobs, setIncludeJobs] = React.useState(true)
-      const [query, setQuery] = React.useState('')
-      const [expanded, setExpanded] = React.useState(() => new Set())
-      const [visible, setVisible] = React.useState(PROJECT_VIEW_RUN_PAGE)
-      const runs = Array.isArray(snapshot.runs) ? snapshot.runs : []
-      const statuses = psvRunStatuses()
-      const counts = { all: runs.length }
-      for (const id of statuses) counts[id] = runs.filter((run) => run.status === id).length
-      const needle = query.trim().toLowerCase()
-      const sessionRows = [...(Array.isArray(snapshot.sessions) ? snapshot.sessions : [])]
-        .sort((left, right) => (right.lastActivityAt ?? 0) - (left.lastActivityAt ?? 0))
-      const filtered = runs.filter((run) => {
-        if (status !== 'all' && run.status !== status) return false
-        if (sessionFilter !== 'all' && run.sessionId !== sessionFilter) return false
-        if (needle.length === 0) return true
-        const title = psvSessionTitle({ ...run, sessionId: run.sessionId, title: run.sessionTitle }, sessionsSnapshot, t).toLowerCase()
-        if (title.includes(needle)) return true
-        if (`turn ${run.turn}`.includes(needle)) return true
-        return Array.isArray(run.jobs) && run.jobs.some((job) => typeof job.label === 'string' && job.label.toLowerCase().includes(needle))
-      })
-      const shownRuns = filtered.slice(0, visible)
-      const hasRunning = filtered.some((run) => run.status === 'running')
-      const tick = usePsvNow(hasRunning ? 1000 : 30000)
-      const currentNow = Math.max(now, tick)
-      const toggleRun = (runId) => {
-        setExpanded((previous) => {
-          const next = new Set(previous)
-          if (next.has(runId)) next.delete(runId)
-          else next.add(runId)
-          return next
-        })
-      }
-      const sessionLabel = sessionFilter === 'all'
-        ? t('runs.sessionFilter.all')
-        : psvSessionTitle(sessionRows.find((row) => row.sessionId === sessionFilter) ?? null, sessionsSnapshot, t)
-      return psv('div', { className: 'psv-card psv-section', 'data-psv-runs': '' },
-        psv('div', { className: 'psv-section-head', style: { padding: '14px 16px 0' } },
-          psv('h2', { className: 'psv-section-title' }, t('tab.runs')),
-          psv('span', { className: 'psv-section-sub' }, t('sessions.runs', { count: filtered.length }))),
-        psv('div', { className: 'psv-filterbar', style: { padding: '8px 16px 4px' } },
-          psv('div', { className: 'psv-chips', role: 'group', 'aria-label': t('tab.runs') },
-            ['all', ...statuses].map((id) => psv('button', {
-              key: id,
-              type: 'button',
-              className: 'psv-chip',
-              'data-active': status === id ? 'true' : 'false',
-              'aria-pressed': status === id ? 'true' : 'false',
-              onClick: () => {
-                setStatus(id)
-                setVisible(PROJECT_VIEW_RUN_PAGE)
-              }
-            }, t(`runs.filter.${id}`), psv('span', { className: 'psv-chip-count' }, String(counts[id] ?? 0))))),
-          psv(PsvDropdown, {
-            t,
-            label: t('runs.sessionFilter.label'),
-            trigger: psv('span', null, sessionLabel),
-            renderItems: (close) => [
-              psv(PsvMenuItem, {
-                key: 'all',
-                checked: sessionFilter === 'all',
-                onSelect: () => {
-                  setSessionFilter('all')
-                  setVisible(PROJECT_VIEW_RUN_PAGE)
-                  close()
-                }
-              }, t('runs.sessionFilter.all')),
-              ...sessionRows.map((row) => psv(PsvMenuItem, {
-                key: row.sessionId,
-                checked: sessionFilter === row.sessionId,
-                onSelect: () => {
-                  setSessionFilter(row.sessionId)
-                  setVisible(PROJECT_VIEW_RUN_PAGE)
-                  close()
-                }
-              }, psvSessionTitle(row, sessionsSnapshot, t)))
-            ]
-          }),
-          psv('label', { className: 'psv-toggle', title: t('runs.includeJobs.hint') },
-            psv('input', {
-              type: 'checkbox',
-              checked: includeJobs,
-              onChange: (event) => setIncludeJobs(event.target.checked)
-            }),
-            t('runs.includeJobs')),
-          psv('label', { className: 'psv-search' },
-            RemixGlyph(REMIX_SEARCH_LINE, 13),
-            psv('input', {
-              type: 'text',
-              value: query,
-              placeholder: t('runs.search.placeholder'),
-              'aria-label': t('runs.search.aria'),
-              autoComplete: 'off',
-              spellCheck: false,
-              onChange: (event) => {
-                setQuery(event.target.value)
-                setVisible(PROJECT_VIEW_RUN_PAGE)
-              }
-            }))),
-        filtered.length === 0
-          ? psv('div', { className: 'psv-empty' }, t('runs.empty'))
-          : psv('div', { className: 'psv-list', style: { padding: '2px 6px 4px' } },
-            shownRuns.map((run) => {
-              const open = expanded.has(run.id)
-              const sessionTitle = psvSessionTitle({ sessionId: run.sessionId, title: run.sessionTitle }, sessionsSnapshot, t)
-              const duration = Number.isFinite(run.endedAt) && Number.isFinite(run.startedAt)
-                ? run.endedAt - run.startedAt
-                : Number.isFinite(run.startedAt) && run.status === 'running'
-                  ? currentNow - run.startedAt
-                  : null
-              const expandable = includeJobs && (run.jobCount > 0)
-              return psv('div', { key: run.id, className: 'psv-run', 'data-open': open ? 'true' : 'false', 'data-status': run.status },
-                psv('button', {
-                  type: 'button',
-                  className: 'psv-run-head',
-                  'aria-expanded': expandable ? (open ? 'true' : 'false') : undefined,
-                  'aria-label': expandable
-                    ? open ? t('runs.collapse', { turn: run.turn }) : t('runs.expand', { turn: run.turn })
-                    : t('runs.turn', { turn: run.turn }),
-                  onClick: expandable ? () => toggleRun(run.id) : undefined
-                },
-                expandable ? psv(PsvRunChevron, { open }) : psv('span', { className: 'psv-run-chevron', 'aria-hidden': 'true' }),
-                psv(PsvStatusDot, { status: run.status, label: t(`status.${run.status}`) }),
-                psv('span', { className: 'psv-run-main' },
-                  psv('span', { className: 'psv-run-title' },
-                    psv('span', { className: 'psv-run-session' }, sessionTitle),
-                    psv('span', { className: 'psv-run-turn' }, t('runs.turn', { turn: run.turn }))),
-                  psv('span', { className: 'psv-run-meta' },
-                    psv('span', { title: psvExact(run.startedAt) }, t('runs.started', { time: psvRelative(run.startedAt, currentNow, t) })),
-                    psv('span', null, (run.toolCalls ?? 0) === 1 ? t('runs.toolCallsOne') : t('runs.toolCalls', { count: run.toolCalls ?? 0 })),
-                    psv('span', null, (run.jobCount ?? 0) === 1 ? t('runs.jobsOne') : t('runs.jobs', { count: run.jobCount ?? 0 })))),
-                psv('span', { className: 'psv-run-side' },
-                  psv(PsvStatusChip, { status: run.status, label: t(`status.${run.status}`) }),
-                  psv('span', { title: psvExact(run.endedAt) }, psvDuration(duration, t)))),
-                open && includeJobs ? psv(PsvRunJobs, { run, t }) : null)
-            })),
-        visible < filtered.length
-          ? psv('div', { className: 'psv-loadmore' },
-            psv('button', {
-              type: 'button',
-              className: 'psv-btn',
-              onClick: () => setVisible((value) => value + PROJECT_VIEW_RUN_PAGE)
-            }, t('runs.more', { count: Math.min(PROJECT_VIEW_RUN_PAGE, filtered.length - visible) })))
-          : null,
-        snapshot.limits !== undefined && snapshot.limits.runsTruncated === true
-          ? psv('div', { className: 'psv-footer-note' }, t('runs.capped', {
-            shown: runs.length,
-            total: Number.isFinite(snapshot.limits.totalRunsMeasured) ? snapshot.limits.totalRunsMeasured : runs.length
-          }))
-          : null)
-    }
-    //#endregion
-
-    //#region feature: project view — settings
-    /**
-     * Settings tab: the Workspace default preset, the read-only grouping
-     * windows, the Workspace path, and the open action.
-     * @param {object} props - settings props.
-     * @returns {object} the settings content.
-     */
-    function PsvSettingsTab({ snapshot, t, presetRoster, presetRead, presetWrite, presetName, nav }) {
-      const project = snapshot.project ?? {}
-      const workspaceId = project.workspaceId
-      const settings = React.useSyncExternalStore(subscribeSettings, settingsSnapshot, settingsSnapshot)
-      const [roster, setRoster] = React.useState({ status: 'loading', presets: [] })
-      const [current, setCurrent] = React.useState(undefined)
-      const [saving, setSaving] = React.useState(false)
-      const [error, setError] = React.useState(false)
-      const [saved, setSaved] = React.useState(false)
-      React.useEffect(() => {
-        void loadSettings()
-      }, [])
-      React.useEffect(() => {
-        let cancelled = false
-        const controller = new AbortController()
-        setRoster({ status: 'loading', presets: [] })
-        setCurrent(undefined)
-        Promise.all([presetRoster(), presetRead(workspaceId, controller.signal)])
-          .then(([result, stored]) => {
-            if (cancelled) return
-            if (result.ok !== true) {
-              setRoster({ status: 'error', presets: [] })
-              return
-            }
-            setRoster({ status: 'ready', presets: Array.isArray(result.presets) ? result.presets : [] })
-            setCurrent(typeof stored === 'string' ? stored : null)
-          })
-          .catch(() => {
-            if (!cancelled) setRoster({ status: 'error', presets: [] })
-          })
-        return () => {
-          cancelled = true
-          controller.abort()
-        }
-      }, [workspaceId])
-      const savePreset = async (preset) => {
-        if (saving) return
-        setSaving(true)
-        setError(false)
-        setSaved(false)
-        try {
-          await presetWrite(workspaceId, preset)
-          setCurrent(preset)
-          setSaved(true)
-          window.setTimeout(() => setSaved(false), 1600)
-        } catch {
-          setError(true)
-        } finally {
-          setSaving(false)
-        }
-      }
-      const presets = roster.presets
-      const currentRow = current === null || current === undefined ? undefined : presets.find((preset) => preset.id === current)
-      const currentLabel = current === undefined
-        ? t('settings.preset.loading')
-        : current === null
-          ? t('settings.preset.global')
-          : currentRow === undefined ? current : presetName(currentRow)
-      const values = settings !== null && settings !== undefined && settings.value !== null && settings.value !== undefined ? settings.value : DEFAULT_SETTINGS
-      const days = Number.isFinite(project.activeWindowDays) ? project.activeWindowDays : values.activeProjectDays
-      const minutes = Number.isFinite(project.recentSessionMinutes) ? project.recentSessionMinutes : values.recentSessionMinutes
-      const daysLabel = days === 1 ? t('unit.daysOne') : t('unit.days', { n: days })
-      const minutesLabel = minutes === 1 ? t('unit.minutesOne') : t('unit.minutes', { n: minutes })
-      const openWorkspace = () => {
-        try {
-          const pending = nav.openWorkspace(workspaceId)
-          if (pending !== null && pending !== undefined && typeof pending.then === 'function') {
-            pending.catch((error) => console.warn('[power-suite] open workspace failed', error !== null && typeof error === 'object' && typeof error.message === 'string' ? error.message : error))
-          }
-        } catch (failure) {
-          console.warn('[power-suite] open workspace failed', failure)
-        }
-      }
-      return psv('div', { className: 'psv-settings', 'data-psv-settings': '' },
-        psv('div', { className: 'psv-card psv-field' },
-          psv('span', { className: 'psv-field-label' }, t('settings.preset.title')),
-          psv('span', { className: 'psv-field-hint' }, t('settings.preset.hint')),
-          roster.status === 'loading'
-            ? psv('span', { className: 'psv-field-hint' }, t('settings.preset.loading'))
-            : roster.status === 'error'
-              ? psv('span', { className: 'psv-error-text' }, t('settings.preset.unavailable'))
-              : psv('div', { className: 'psv-field-row' },
-                psv(PsvDropdown, {
-                  t,
-                  label: t('settings.preset.title'),
-                  trigger: psv('span', null, currentLabel),
-                  renderItems: (close) => [
-                    psv(PsvMenuItem, {
-                      key: 'global',
-                      checked: current === null,
-                      onSelect: () => {
-                        close()
-                        void savePreset(null)
-                      }
-                    }, t('settings.preset.global')),
-                    ...presets.map((preset) => psv(PsvMenuItem, {
-                      key: preset.id,
-                      checked: current === preset.id,
-                      disabled: preset.broken !== undefined,
-                      onSelect: () => {
-                        close()
-                        void savePreset(preset.id)
-                      }
-                    }, presetName(preset)))
-                  ]
-                }),
-                saving ? psv('span', { className: 'psv-field-hint' }, t('state.loading')) : null,
-                saved ? psv('span', { className: 'psv-toast', role: 'status' }, RemixGlyph(REMIX_CHECK_LINE, 13), t('settings.preset.saved')) : null,
-                error ? psv('span', { className: 'psv-error-text', role: 'alert' }, t('settings.preset.saveFailed')) : null)),
-        psv('div', { className: 'psv-card psv-field' },
-          psv('span', { className: 'psv-field-label' }, t('settings.windows.title')),
-          psv('span', { className: 'psv-field-hint' }, t('settings.windows.body', { minutes: minutesLabel, days: daysLabel }))),
-        psv('div', { className: 'psv-card psv-field' },
-          psv('span', { className: 'psv-field-label' }, t('settings.path.title')),
-          psv('div', { className: 'psv-field-row' },
-            psv('span', { className: 'psv-path' }, RemixGlyph(PsvFolderLine, 14), psv('span', { className: 'psv-path-text' }, project.path)),
-            psv('button', {
-              type: 'button',
-              className: 'psv-btn',
-              onClick: () => {
-                void copyText(project.path)
-              }
-            }, RemixGlyph(REMIX_FILE_COPY_LINE, 14), t('action.copyPath')),
-            psv('button', { type: 'button', className: 'psv-btn', onClick: openWorkspace },
-              RemixGlyph(PsvExternalLine, 14), t('action.openWorkspace')))))
-    }
-    //#endregion
-
-    /**
-     * The standalone Project page body: the four-tab project detail rendered
-     * inside the fixed page surface the seat positions over the conversation
-     * column. Every navigation action closes the page afterwards so the user
-     * lands on the Session/Workspace the action opened instead of on a page
-     * hiding the change.
-     * @param {object} props - page services, Workspace target, and close callback.
-     * @returns {object} the Project page element.
-     */
-    function ProjectPage(props) {
-      const t = props.t
-      const workspaceId = typeof props.workspaceId === 'string' ? props.workspaceId : ''
-      const { state, refreshing, refresh } = usePsvProject(workspaceId)
-      const sessionsSnapshot = usePsvSessions(props.sessionsSource)
-      const now = usePsvNow(15000)
-      // Page-level state (tab, filters, searches, expanded rows) intentionally
-      // survives Workspace switches: this component instance stays mounted and
-      // only the data hook follows `workspaceId`. Documented as intended UX.
-      const [tab, setTab] = React.useState('overview')
-      const snapshot = state.snapshot
-      const close = props.onClose
-      const navigation = React.useMemo(() => {
-        const run = (action) => {
-          try {
-            return action()
-          } catch (error) {
-            console.warn('[power-suite] project page navigation failed', error)
-            return undefined
-          }
-        }
-        return {
-          openSession: (sessionId) => {
-            run(() => props.uiWorkspace.openSession(sessionId))
-            close()
-          },
-          openWorkspace: (id) => {
-            // Fire-and-forget UI navigation: hand the promise back so the
-            // header/settings callers can attach their rejection guard.
-            const pending = run(() => props.uiWorkspace.openWorkspace(id))
-            close()
-            return pending
-          },
-          startSession: (id) => {
-            run(() => props.uiWorkspace.startSession(id))
-            close()
-          }
-        }
-      }, [close, props.uiWorkspace])
-      const settingsValue = React.useSyncExternalStore(subscribeSettings, settingsSnapshot, settingsSnapshot)
-      const tabs = [
-        { id: 'overview', key: 'tab.overview' },
-        { id: 'sessions', key: 'tab.sessions' },
-        { id: 'runs', key: 'tab.runs' },
-        { id: 'settings', key: 'tab.settings' }
-      ]
-      const tabRefs = React.useRef([])
-      const onTabKeyDown = (event) => {
-        const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End']
-        if (!keys.includes(event.key)) return
-        event.preventDefault()
-        const index = tabs.findIndex((entry) => entry.id === tab)
-        let next = 0
-        if (event.key === 'ArrowLeft') next = index <= 0 ? tabs.length - 1 : index - 1
-        else if (event.key === 'ArrowRight') next = index < 0 ? 0 : (index + 1) % tabs.length
-        else if (event.key === 'End') next = tabs.length - 1
-        setTab(tabs[next].id)
-        const target = tabRefs.current[next]
-        if (target instanceof HTMLElement) target.focus()
-      }
-      const project = snapshot !== null && snapshot !== undefined ? snapshot.project : null
-      const pageTitle = project !== null && typeof project.title === 'string' && project.title.length > 0
-        ? project.title
-        : (typeof props.workspaceTitle === 'string' && props.workspaceTitle.length > 0
-          ? props.workspaceTitle
-          : t('header.titleFallback'))
-      const pageBar = psv('div', { className: 'psv-page-bar' },
-        psv('button', {
-          type: 'button',
-          className: 'psv-iconbtn psv-page-back',
-          'aria-label': t('page.close'),
-          title: t('page.close'),
-          onClick: close
-        }, RemixGlyph(PsvChevronLeftLine, 18)),
-        psv('span', { className: 'psv-page-title', title: pageTitle }, pageTitle),
-        project !== null && project.state !== undefined
-          ? psv('span', { className: 'psv-badge', 'data-state': project.state === 'active' ? 'active' : 'inactive' },
-            psv('span', { className: 'psv-badge-dot', 'aria-hidden': 'true' }),
-            project.state === 'active' ? t('header.active') : t('header.inactive'))
-          : null,
-        psv('span', { className: 'psv-page-spacer' }),
-        psv('div', { className: 'psv-tabbar-actions' },
-          psv('button', {
-            type: 'button',
-            className: 'psv-iconbtn',
-            'aria-label': t('action.refresh'),
-            title: t('action.refresh'),
-            'data-busy': refreshing ? 'true' : undefined,
-            disabled: refreshing,
-            onClick: refresh
-          }, RemixGlyph(REMIX_REFRESH_LINE, 15))))
-      const tabBar = psv('div', { className: 'psv-tabbar' },
-        psv('div', { className: 'psv-tabs', role: 'tablist', 'aria-label': t('tabs.label'), onKeyDown: onTabKeyDown },
-          tabs.map((entry, index) => psv('button', {
-            key: entry.id,
-            ref: (node) => {
-              tabRefs.current[index] = node
-            },
-            id: `psv-tab-${entry.id}`,
-            type: 'button',
-            role: 'tab',
-            className: 'psv-tab',
-            'aria-selected': tab === entry.id ? 'true' : 'false',
-            'aria-controls': `psv-panel-${entry.id}`,
-            tabIndex: tab === entry.id ? 0 : -1,
-            onClick: () => setTab(entry.id)
-          }, t(entry.key)))))
-      let content = null
-      if (state.status === 'loading') {
-        content = psv('div', { className: 'psv-card psv-state', role: 'status' },
-          psv('span', { className: 'psv-state-title' }, t('state.loading')),
-          psv(StateDot, { state: 'ongoing', size: 10 }))
-      } else if (state.status === 'empty') {
-        content = psv('div', { className: 'psv-card psv-state' },
-          psv('span', { className: 'psv-state-title' }, t('state.empty.title')),
-          psv('span', { className: 'psv-state-body' }, t('state.empty.hint')),
-          psv('button', { type: 'button', className: 'psv-btn', onClick: close }, t('page.close')))
-      } else if (state.status === 'error') {
-        content = psv('div', { className: 'psv-card psv-state' },
-          psv('span', { className: 'psv-state-title' }, t('state.error')),
-          psv('button', { type: 'button', className: 'psv-btn', onClick: refresh }, t('state.retry')))
-      } else if (snapshot !== null) {
-        const warnings = Array.isArray(snapshot.warnings) ? snapshot.warnings : []
-        let panel = null
-        if (tab === 'overview') {
-          panel = psv(PsvOverviewTab, {
-            snapshot,
-            sessionsSnapshot,
-            t,
-            now,
-            settings: settingsValue,
-            onOpenSession: navigation.openSession,
-            onViewAll: () => setTab('sessions')
-          })
-        } else if (tab === 'sessions') {
-          panel = psv(PsvSessionsTab, { snapshot, sessionsSnapshot, t, now, onOpenSession: navigation.openSession })
-        } else if (tab === 'runs') {
-          panel = psv(PsvRunsTab, { snapshot, sessionsSnapshot, t, now })
-        } else {
-          panel = psv(PsvSettingsTab, {
-            snapshot,
-            t,
-            nav: navigation,
-            presetRoster: props.presetRoster,
-            presetRead: props.presetRead,
-            presetWrite: props.presetWrite,
-            presetName: props.presetName
-          })
-        }
-        content = psv('div', { className: 'psv-inner' },
-          psv(PsvProjectHeader, {
-            project: snapshot.project,
-            copy: props.copy,
-            nav: navigation,
-            refresh,
-            t
-          }),
-          psv(PsvStatCards, { stats: snapshot.stats, t }),
-          warnings.length > 0
-            ? psv('div', { className: 'psv-note', role: 'status' }, t('settings.warnings', { count: warnings.length }))
-            : null,
-          psv('div', { id: `psv-panel-${tab}`, role: 'tabpanel', 'aria-labelledby': `psv-tab-${tab}`, tabIndex: -1 }, panel))
-      }
-      return psv('div', { className: 'psv-root', 'data-psv-root': '' },
-        psv('style', null, PROJECT_VIEW_CSS),
-        pageBar,
-        tabBar,
-        psv('div', { className: 'psv-scroll' }, content))
-    }
-
-    //#region feature: project view — sidebar entry
-    /** Attribute-value prefix of one sidebar Workspace row. */
-    const PROJECT_WORKSPACE_ROW_PREFIX = 'workspace:'
-
-    /** Pointer movement above this many CSS pixels counts as a drag, not a click. */
-    const PROJECT_WORKSPACE_DRAG_SLOP = 6
-
-    /**
-     * Whether one click target belongs to a control the native Workspace row
-     * owns: fold chevron, row actions, generic buttons/links/editables, or a
-     * nested Session row. Those clicks must never open the Project page.
-     * @param {unknown} target - click target.
-     * @returns {boolean} whether the click stays native.
-     */
-    function projectWorkspaceRowControl(target) {
-      if (!(target instanceof Element)) return true
-      if (target.closest('[data-row-key^="session:"]') !== null) return true
-      return target.closest('[data-context-menu-trigger], button, a, input, select, textarea, [role="button"], [role="tab"], [contenteditable="true"], [class*="rowActions"], [class*="chevron"]') !== null
-    }
-
-    /**
-     * The Client Workspace service, read lazily because this feature does not
-     * declare it as a hard dependency: a deployment whose Workspace UI is
-     * absent must still load the rest of the suite.
-     * @param {object} ctx - client root context.
-     * @returns {object | undefined} the Workspace service.
-     */
-    function projectWorkspacesService(ctx) {
-      if (typeof ctx.get !== 'function') return undefined
-      try {
-        return ctx.get('workspaces')
-      } catch {
-        return undefined
-      }
-    }
-
-    /**
-     * Install the sidebar Workspace-row entry: one document-level capture click
-     * handler that turns a plain click on a Workspace row (title/folder area)
-     * into opening this Workspace's standalone Project page. Chevron folds, row
-     * action buttons, Session rows, drags, modified clicks, and non-primary
-     * buttons stay fully native. A touch/no-hover tap on the title/folder area is
-     * intentionally the page entry; only the native small chevron folds the
-     * Workspace. Opening the page changes neither the current Session nor the
-     * conversation view: the handler only dispatches PROJECT_PAGE_EVENT and the
-     * shell.overlay seat reacts to it.
-     * @param {object} ctx - client root context.
-     * @returns {Function} cleanup.
-     */
-    function installProjectWorkspaceEntry(ctx) {
-      let pressed = null
-      let dragged = false
-      const resetPress = () => {
-        pressed = null
-        dragged = false
-      }
-      const onPointerDown = (event) => {
-        if (event.button !== 0) {
-          resetPress()
-          return
-        }
-        pressed = { x: event.clientX, y: event.clientY }
-        dragged = false
-      }
-      const onPointerMove = (event) => {
-        if (pressed === null || dragged) return
-        if (Math.abs(event.clientX - pressed.x) > PROJECT_WORKSPACE_DRAG_SLOP
-          || Math.abs(event.clientY - pressed.y) > PROJECT_WORKSPACE_DRAG_SLOP) dragged = true
-      }
-      const onDragStart = () => {
-        dragged = true
-      }
-      const onClick = (event) => {
-        const start = pressed
-        const wasDragged = dragged
-        resetPress()
-        if (wasDragged || event.button !== 0) return
-        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
-        if (event.detail > 0 && start !== null
-          && (Math.abs(event.clientX - start.x) > PROJECT_WORKSPACE_DRAG_SLOP
-            || Math.abs(event.clientY - start.y) > PROJECT_WORKSPACE_DRAG_SLOP)) return
-        if (projectWorkspaceRowControl(event.target)) return
-        const row = event.target instanceof Element
-          ? event.target.closest(`[data-row-key^="${PROJECT_WORKSPACE_ROW_PREFIX}"]`)
-          : null
-        if (!(row instanceof HTMLElement)) return
-        const key = row.getAttribute('data-row-key') ?? ''
-        const workspaceId = key.slice(PROJECT_WORKSPACE_ROW_PREFIX.length)
-        if (workspaceId.length === 0) return
-        // Keep the native row behavior when the services this feature needs are
-        // absent, instead of swallowing the click for nothing.
-        if (ctx.uiWorkspace === undefined) return
-        const workspacesService = projectWorkspacesService(ctx)
-        if (workspacesService?.list === undefined) return
-        let known = false
-        try {
-          const snapshot = workspacesService.list.getSnapshot()
-          const items = snapshot !== null && snapshot !== undefined && Array.isArray(snapshot.items) ? snapshot.items : []
-          known = items.some((item) => item !== null && typeof item === 'object' && item.workspaceId === workspaceId)
-        } catch {
-          known = false
-        }
-        if (!known) return
-        event.preventDefault()
-        event.stopPropagation()
-        window.dispatchEvent(new CustomEvent(PROJECT_PAGE_EVENT, { detail: { workspaceId } }))
-      }
-      document.addEventListener('pointerdown', onPointerDown, true)
-      document.addEventListener('pointermove', onPointerMove, true)
-      document.addEventListener('dragstart', onDragStart, true)
-      document.addEventListener('click', onClick, true)
-      return () => {
-        document.removeEventListener('pointerdown', onPointerDown, true)
-        document.removeEventListener('pointermove', onPointerMove, true)
-        document.removeEventListener('dragstart', onDragStart, true)
-        document.removeEventListener('click', onClick, true)
-      }
-    }
-    //#endregion
-
-    //#region feature: project view — standalone page
-    /**
-     * Resolve one Workspace's display title from the live Workspace snapshot so
-     * the page top bar can show it before its own snapshot loads. Fail-soft: a
-     * missing Workspace service or row just yields null and the page falls back
-     * to the loaded snapshot's title.
-     * @param {object} ctx - client root context.
-     * @param {string} workspaceId - Workspace identity.
-     * @returns {string | null} the title, or null when unavailable.
-     */
-    function projectWorkspaceTitle(ctx, workspaceId) {
-      const workspaces = projectWorkspacesService(ctx)
-      if (workspaces?.list === undefined) return null
-      try {
-        const snapshot = workspaces.list.getSnapshot()
-        const items = snapshot !== null && snapshot !== undefined && Array.isArray(snapshot.items) ? snapshot.items : []
-        const workspace = items.find((item) => item !== null && typeof item === 'object' && item.workspaceId === workspaceId)
-        return workspace !== undefined && typeof workspace.title === 'string' && workspace.title.length > 0
-          ? workspace.title
-          : null
-      } catch {
-        return null
-      }
-    }
-
-    /** Fallback page area used before the first measurement lands. */
-    function fallbackProjectPageArea() {
-      return { left: 0, top: 0, width: Math.max(0, window.innerWidth), height: Math.max(0, window.innerHeight) }
-    }
-
-    /**
-     * Measure the content area right of the left Workspaces sidebar.
-     *
-     * The sidebar slot (`[data-slot="sidebar"]`, the same shell contract the
-     * suite's other decorations use) renders as `display: contents`; its first
-     * element child is the docked box that owns the visible width. A zero-width
-     * or absent sidebar (hidden/rail-less layout) puts the page at the viewport
-     * left edge instead. The page always ends at the viewport's right edge, so an
-     * open right sidebar and the history rails stay covered.
-     * @returns {{ left: number, top: number, width: number, height: number }} page geometry.
-     */
-    function measureProjectPageArea() {
-      const viewportWidth = Math.max(0, window.innerWidth)
-      const viewportHeight = Math.max(0, window.innerHeight)
-      const slot = document.querySelector('[data-slot="sidebar"]')
-      let sidebarRight = 0
-      if (slot !== null) {
-        let box = slot
-        let rect = box.getBoundingClientRect()
-        if (!(rect.width > 0) && slot.firstElementChild !== null) {
-          box = slot.firstElementChild
-          rect = box.getBoundingClientRect()
-        }
-        if (rect.width > 0) sidebarRight = Math.round(rect.right)
-      }
-      const left = Math.max(0, Math.min(sidebarRight, viewportWidth))
-      return {
-        left,
-        top: 0,
-        width: Math.max(0, viewportWidth - left),
-        height: viewportHeight
-      }
-    }
-
-    /**
-     * Keep the page aligned with the content area right of the left sidebar.
-     *
-     * Re-measures through one rAF-coalesced callback driven by a ResizeObserver
-     * on the sidebar slot, its docked child, and their container (expand,
-     * rail/collapse, hide), plus window resize and a scoped MutationObserver for
-     * a replaced sidebar subtree. A light interval only covers CSS transitions
-     * that resize without observer callbacks; state updates are identity-guarded
-     * so it cannot re-render needlessly. Everything is cleaned up on close.
-     * @param {boolean} open - whether the page is open.
-     * @returns {{ left: number, top: number, width: number, height: number }} current page geometry.
-     */
-    function useProjectPageArea(open) {
-      const [area, setArea] = React.useState(() => fallbackProjectPageArea())
-      React.useEffect(() => {
-        if (!open) return undefined
-        let disposed = false
-        let frame = null
-        const apply = () => {
-          frame = null
-          if (disposed) return
-          const next = measureProjectPageArea()
-          setArea((previous) => previous.left === next.left
-            && previous.top === next.top
-            && previous.width === next.width
-            && previous.height === next.height
-            ? previous
-            : next)
-        }
-        const schedule = () => {
-          if (frame === null) frame = window.requestAnimationFrame(apply)
-        }
-        schedule()
-        const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null
-        const observed = new Set()
-        const observeSidebar = () => {
-          if (observer === null) return
-          const slot = document.querySelector('[data-slot="sidebar"]')
-          for (const target of [slot, slot?.firstElementChild ?? null, slot?.parentElement ?? null]) {
-            if (target === null || observed.has(target)) continue
-            observed.add(target)
-            observer.observe(target)
-          }
-          const body = document.body
-          if (body !== null && !observed.has(body)) {
-            observed.add(body)
-            observer.observe(body)
-          }
-        }
-        observeSidebar()
-        const mutation = typeof MutationObserver === 'function' && typeof document.body !== 'undefined'
-          ? new MutationObserver(() => {
-            observeSidebar()
-            schedule()
-          })
-          : null
-        const mutationRoot = document.querySelector('[data-slot="sidebar"]')?.parentElement ?? document.body
-        if (mutation !== null && mutationRoot !== null) {
-          mutation.observe(mutationRoot, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] })
-        }
-        window.addEventListener('resize', schedule)
-        const interval = window.setInterval(schedule, 500)
-        return () => {
-          disposed = true
-          if (frame !== null) window.cancelAnimationFrame(frame)
-          if (observer !== null) observer.disconnect()
-          if (mutation !== null) mutation.disconnect()
-          window.removeEventListener('resize', schedule)
-          window.clearInterval(interval)
-        }
-      }, [open])
-      return area
-    }
-
-    /**
-     * Invisible seat that owns the standalone Project page: it listens for the
-     * sidebar entry's window event, keeps the open Workspace, and renders one
-     * page instance over the content area right of the left sidebar (which stays
-     * visible and interactive). Switching Workspace from that sidebar updates
-     * this same instance (its data hook aborts stale requests); Esc or the close
-     * control unmounts it and returns to the untouched conversation, composer,
-     * and sidebar state.
-     * @param {object} props - slot props plus the bound locale, client context, and workspace navigation.
-     * @returns {object | null} the page, or null while closed.
-     */
-    function ProjectPageSeat({ t, ctx, uiWorkspace, ...props }) {
-      const [target, setTarget] = React.useState(null)
-      const open = target !== null
-      const area = useProjectPageArea(open)
-      const close = React.useCallback(() => setTarget(null), [])
-      React.useEffect(() => {
-        const onOpen = (event) => {
-          const workspaceId = event?.detail?.workspaceId
-          if (typeof workspaceId !== 'string' || workspaceId.length === 0) return
-          // The project page covers the annotation layers (z-index) while its
-          // capture surface would keep swallowing page clicks; leave annotation
-          // mode first so exactly one Esc ladder and one pointer source remain.
-          window.dispatchEvent(new CustomEvent(ANNOTATION_EXIT_EVENT))
-          setTarget({ workspaceId, title: projectWorkspaceTitle(ctx, workspaceId) })
-        }
-        window.addEventListener(PROJECT_PAGE_EVENT, onOpen)
-        return () => window.removeEventListener(PROJECT_PAGE_EVENT, onOpen)
-      }, [ctx])
-      React.useEffect(() => {
-        if (!open) return undefined
-        const root = document.documentElement
-        root.setAttribute(PROJECT_PAGE_ATTR, 'true')
-        return () => root.removeAttribute(PROJECT_PAGE_ATTR)
-      }, [open])
-      React.useEffect(() => {
-        if (!open) return undefined
-        const onKeyDown = (event) => {
-          if (event.key !== 'Escape') return
-          // A page dropdown/menu handles Escape itself in document capture and
-          // stops propagation. While one is open the first Escape must close
-          // only that menu; the next Escape (no menu) closes the page.
-          const page = document.querySelector('[data-psv-page]')
-          if (page !== null && page.querySelector('.psv-menu') !== null) return
-          event.preventDefault()
-          event.stopPropagation()
-          close()
-        }
-        window.addEventListener('keydown', onKeyDown, true)
-        return () => window.removeEventListener('keydown', onKeyDown, true)
-      }, [open, close])
-      if (target === null) return null
-      const pageProps = {
-        ...props,
-        t,
-        uiWorkspace,
-        onClose: close,
-        workspaceId: target.workspaceId,
-        workspaceTitle: target.title,
-        sessionsSource: ctx.sessions?.list,
-        copy: copyText,
-        presetRoster: () => readPresetRoster(ctx),
-        presetRead: (workspaceId, signal) => readWorkspacePreset(workspaceId, signal),
-        presetWrite: (workspaceId, preset) => writeWorkspacePreset(workspaceId, preset),
-        presetName: (preset) => presetDisplayName(t, preset)
-      }
-      return psv('div', {
-        className: 'psv-page',
-        'data-psv-page': '',
-        'data-workspace': target.workspaceId,
-        'data-area-left': String(area.left),
-        role: 'dialog',
-        'aria-label': t('page.label'),
-        style: {
-          left: `${area.left}px`,
-          top: `${area.top}px`,
-          width: `${area.width}px`,
-          height: `${area.height}px`
-        }
-      }, psv(ProjectPage, pageProps))
-    }
-    //#endregion
-
-    /**
-     * Register the standalone Project page seat, its sidebar entry, and its
-     * locale dictionaries. The conversation view registration is intentionally
-     * gone: Project is a page of its own, opened from a Workspace row.
-     * @param {object} ctx - client root context.
-     * @returns {void}
-     */
-    function installProjectView(ctx) {
-      const t = ctx.locale.bind(PROJECT_VIEW_NS)
-      ctx.effect(() => ctx.locale.register(PROJECT_VIEW_NS, {
-        en: PROJECT_VIEW_EN,
-        zh: PROJECT_VIEW_ZH
-      }), 'power-suite: project view dictionaries')
-      ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-        name: 'shell.overlay',
-        id: PROJECT_PAGE_SEAT_ID
-      }, (props) => React.createElement(ProjectPageSeat, {
-        ...props,
-        t,
-        ctx,
-        uiWorkspace: ctx.uiWorkspace
-      }))), 'power-suite: project page seat')
-      ctx.effect(() => installProjectWorkspaceEntry(ctx), 'power-suite: project view workspace entry')
-    }
-    //#endregion
 
     //#region feature: ui element annotation
     //
@@ -9254,6 +8034,53 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     const LAUNCHER_STORAGE_KEY = 'power-suite.ui-annotation.launcher'
     const RAIL_STORAGE_KEY = 'power-suite.ui-annotation.rail-collapsed'
 
+    /**
+     * Persisted annotation records. Unlike the other keys this one holds page
+     * identity (locator, route, cwd) and user notes, so it is versioned and
+     * validated: a v2 document `{ version, updatedAt, records }`.
+     */
+    const ANNOTATION_RECORDS_STORAGE_KEY = 'power-suite.ui-annotation.annotations'
+
+    /** Hard cap on persisted/collected annotations (D15: explicit refusal, never silent loss). */
+    const ANNOTATION_RECORD_LIMIT = 100
+
+    /** Debounce for the persisted annotation document (D1). */
+    const ANNOTATION_PERSIST_DEBOUNCE_MS = 250
+
+    /** D5: single-slot undo window after a delete (newest delete replaces it). */
+    const ANNOTATION_UNDO_WINDOW_MS = 5000
+
+    /** A3/T6: hover-intent delay before the floating detail card appears. */
+    const ANNOTATION_DETAIL_HOVER_DELAY_MS = 120
+
+    /** A3/T6: grace period before the detail card closes after the pointer leaves. */
+    const ANNOTATION_DETAIL_CLOSE_DELAY_MS = 120
+
+    /** A3/T6: detail card size used before its first measurement (width is fixed). */
+    const ANNOTATION_DETAIL_SIZE = { width: 320, height: 240 }
+
+    /** A3/T6: the badge requirement summary is a one-line excerpt of this many characters. */
+    const ANNOTATION_MARK_SUMMARY_MAX = 18
+
+    /** F2: a floating surface root needs at least this computed z-index. */
+    const ANNOTATION_SURFACE_MIN_Z = 10
+
+    /** F2: inner drill levels are capped so a card with many rows stays navigable. */
+    const ANNOTATION_SURFACE_MAX_LEVELS = 12
+
+    /** F1: annotation paint layer z-index: above native hover cards (100), below modals (1000)/menus (1100). */
+    const ANNOTATION_PAINT_Z = 150
+
+    /** Root marker for the raised paint layer, asserted by the live E2E. */
+    const ANNOTATION_RAISED_ATTR = 'data-psa-raised'
+
+    /**
+     * Module event announced when the mode turns on/off. The dynamic-workspaces
+     * feature owns the dependent hover-card pinning behavior; this annotation
+     * region only dispatches the state (D3: ownership split).
+     */
+    const ANNOTATION_STATE_EVENT = 'power-suite:ui-annotation-state'
+
     /** The two configurable modifiers, in native select order. */
     const MODIFIER_CHOICES = ['alt', 'ctrl', 'meta', 'shift']
 
@@ -9282,6 +8109,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'rail.addMulti': 'Add {count} to collection',
       'rail.clearSelection': 'Clear selection',
       'rail.selectedName': 'Selected element',
+      'rail.surfaceFloating': 'Floating surface (hover preview)',
+      'rail.surfaceTransient': 'transient',
       'popover.aria': 'Element annotation',
       'popover.drag': 'Drag popover',
       'popover.statusLabel': 'Target',
@@ -9295,8 +8124,32 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'popover.notePlaceholder': 'Describe the requested change',
       'popover.quickRef': 'Quick reference',
       'popover.add': 'Add to collection',
-      'popover.update': 'Update collection',
+      'popover.update': 'Update requirement',
+      'popover.commit': 'Mark requirement',
+      'popover.delete': 'Delete annotation',
       'popover.close': 'Close',
+      'popover.copyLocator': 'Copy locator',
+      'popover.ephemeralHint': 'Transient surface: this element can disappear when its card closes; the locator is kept.',
+      'detail.title': 'Annotation details',
+      'detail.requirement': 'Requirement',
+      'detail.emptyRequirement': 'No requirement yet',
+      'detail.addRequirement': 'Add requirement',
+      'detail.locator': 'Locator',
+      'detail.position': 'Position',
+      'detail.session': 'Session',
+      'detail.workspace': 'Workspace',
+      'detail.status': 'Status',
+      'detail.surfaceFloating': 'Floating surface (hover preview)',
+      'detail.ephemeral': 'Transient surface — may disappear',
+      'detail.quickRef': 'Quick reference',
+      'detail.edit': 'Edit requirement',
+      'detail.save': 'Save',
+      'detail.cancel': 'Cancel',
+      'detail.delete': 'Delete',
+      'detail.relocate': 'Go to element',
+      'detail.copyLocator': 'Copy locator',
+      'detail.close': 'Close',
+      'detail.marks': 'Marks are shown on the page while the mode is on',
       'collection.title': 'Collection',
       'collection.count': '{count} elements',
       'collection.countOne': '1 element',
@@ -9312,6 +8165,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'collection.crossSession': '{count} from other sessions will be skipped',
       'collection.noteEditorTitle': 'Note',
       'collection.noteEditorClose': 'Close',
+      'collection.copyLocator': 'Copy locator',
+      'collection.maxReached': 'The collection is full ({limit} annotations). Remove entries before adding more.',
       'settings.title': 'Settings',
       'settings.passThrough': 'Pass-through modifier',
       'settings.multi': 'Multi-select modifier',
@@ -9335,6 +8190,13 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'feedback.relocated': 'Moved to the element',
       'feedback.relocateFailed': 'The element cannot be located ({status})',
       'feedback.relocateOtherSession': 'This annotation belongs to another session',
+      'feedback.locatorCopied': 'Locator copied',
+      'feedback.locatorCopyFailed': 'Could not copy the locator',
+      'feedback.marked': 'Marked · {count} total',
+      'feedback.markUpdated': 'Requirement updated',
+      'feedback.markDeleted': 'Annotation deleted',
+      'feedback.undo': 'Undo',
+      'feedback.restored': 'Annotation restored',
       'feedback.batchEmpty': 'Nothing to insert from the current session',
       'insert.title': 'UI annotation',
       'insert.reference': 'Reference:',
@@ -9344,6 +8206,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'insert.emptyNote': '—',
       'insert.batchHeader': 'Please adjust the UI elements below. Each item lists its reference and the requested change.',
       'insert.status': 'Status: target no longer resolves (locator only)',
+      'insert.statusEphemeral': 'Status: transient surface no longer present (locator only)',
       'insert.statusAmbiguous': 'Status: target matches more than one element (locator only)',
       'insert.statusChanged': 'Status: target content changed',
       'insert.skipped': '({count} annotation(s) from other sessions skipped)'
@@ -9368,6 +8231,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'rail.addMulti': '将 {count} 个加入标注集',
       'rail.clearSelection': '取消选择',
       'rail.selectedName': '已选元素',
+      'rail.surfaceFloating': '浮动层（悬停预览）',
+      'rail.surfaceTransient': '瞬态',
       'popover.aria': '元素标注',
       'popover.drag': '拖动浮层',
       'popover.statusLabel': '目标',
@@ -9381,8 +8246,32 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'popover.notePlaceholder': '描述需要修改的内容',
       'popover.quickRef': '快速引用',
       'popover.add': '加入标注集',
-      'popover.update': '更新标注集',
+      'popover.update': '更新需求',
+      'popover.commit': '标记需求',
+      'popover.delete': '删除标注',
       'popover.close': '关闭',
+      'popover.copyLocator': '复制定位器',
+      'popover.ephemeralHint': '瞬态浮层：卡片关闭后该元素可能消失，仅保留定位信息。',
+      'detail.title': '标注详情',
+      'detail.requirement': '需求',
+      'detail.emptyRequirement': '尚未填写需求',
+      'detail.addRequirement': '添加需求',
+      'detail.locator': '定位',
+      'detail.position': '位置',
+      'detail.session': '会话',
+      'detail.workspace': '工作区',
+      'detail.status': '状态',
+      'detail.surfaceFloating': '浮动层（悬停预览）',
+      'detail.ephemeral': '瞬态浮层 — 可能消失',
+      'detail.quickRef': '快速引用',
+      'detail.edit': '编辑需求',
+      'detail.save': '保存',
+      'detail.cancel': '取消',
+      'detail.delete': '删除',
+      'detail.relocate': '定位到元素',
+      'detail.copyLocator': '复制定位器',
+      'detail.close': '关闭',
+      'detail.marks': '模式开启时页面会持续显示标注遮罩',
       'collection.title': '标注集',
       'collection.count': '{count} 项',
       'collection.countOne': '1 项',
@@ -9398,6 +8287,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'collection.crossSession': '另有 {count} 条来自其他会话，插入时将跳过',
       'collection.noteEditorTitle': '备注',
       'collection.noteEditorClose': '关闭',
+      'collection.copyLocator': '复制定位器',
+      'collection.maxReached': '标注集已满（{limit} 条）。请先移除条目再添加。',
       'settings.title': '设置',
       'settings.passThrough': '透传修饰键',
       'settings.multi': '多选修饰键',
@@ -9421,6 +8312,13 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'feedback.relocated': '已定位到该元素',
       'feedback.relocateFailed': '无法定位该元素（{status}）',
       'feedback.relocateOtherSession': '这条标注来自其他会话',
+      'feedback.locatorCopied': '已复制定位器',
+      'feedback.locatorCopyFailed': '复制定位器失败',
+      'feedback.marked': '已标记 · 共 {count} 条',
+      'feedback.markUpdated': '需求已更新',
+      'feedback.markDeleted': '标注已删除',
+      'feedback.undo': '撤销',
+      'feedback.restored': '标注已恢复',
       'feedback.batchEmpty': '当前会话没有可插入的标注',
       'insert.title': 'UI 标注',
       'insert.reference': '定位：',
@@ -9430,19 +8328,28 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'insert.emptyNote': '—',
       'insert.batchHeader': '请调整以下 UI 元素，每项都附有定位和修改说明。',
       'insert.status': '状态：目标已无法定位（仅保留定位信息）',
+      'insert.statusEphemeral': '状态：瞬态浮层已不存在（仅保留定位信息）',
       'insert.statusAmbiguous': '状态：目标匹配到多个元素（仅保留定位信息）',
       'insert.statusChanged': '状态：目标内容已变化',
       'insert.skipped': '（已跳过 {count} 条来自其他会话的标注）'
     }
 
     /**
-     * Long-lived bridge to the mounted Composer seat. Always all-or-nothing: the
+     * Long-lived bridge to the mounted Composer seat.
+     *
+     * The annotation surface renders outside the Session-scope slot tree and has
+     * no Session list face on its own context, so the seat — which is a real
+     * Session-scoped slot and therefore receives the `useSessions` standard hook —
+     * mirrors the current Session's `cwd` here. Everything is all-or-nothing: the
      * Session id only exists while the seat's insertion actions do.
      */
-    const annotationBridge = { sessionId: null, inputActions: null }
+    const annotationBridge = { sessionId: null, inputActions: null, sessionCwd: null }
 
     /** Install guard: a remount must never register the surface twice. */
     let annotationInstalled = false
+
+    /** One-shot diagnostic for the Session-identity fallback (never fully silent). */
+    let annotationIdentityWarned = false
 
     /** The controller singleton, or `null` while the feature is uninstalled. */
     let annotationController = null
@@ -9457,6 +8364,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     const REMIX_LIST_CHECK_2 = 'M11 4H21V6H11V4ZM11 8H17V10H11V8ZM11 14H21V16H11V14ZM11 18H17V20H11V18ZM3 4H9V10H3V4ZM5 6V8H7V6H5ZM3 14H9V20H3V14ZM5 16V18H7V16H5Z'
     const REMIX_SETTINGS_3_LINE = 'M8.68637 4.0001L10.293 2.39348C11.6835 1.00295 13.9379 1.00295 15.3284 2.39348L16.935 4.0001H19.2427C20.8995 4.0001 22.2427 5.34325 22.2427 7.0001V9.30772L23.8492 10.9143C25.2398 12.3048 25.2398 14.5592 23.8492 15.9497L22.2427 17.5564V19.864C22.2427 21.5208 20.8995 22.864 19.2427 22.864H16.935L15.3284 24.4706C13.9379 25.8611 11.6835 25.8611 10.293 24.4706L8.68637 22.864H6.37874C4.72189 22.864 3.37874 21.5208 3.37874 19.864V17.5564L1.77212 15.9497C0.381596 14.5592 0.381596 12.3048 1.77212 10.9143L3.37874 9.30772V7.0001C3.37874 5.34325 4.72189 4.0001 6.37874 4.0001H8.68637ZM13.9143 4.41431C13.1332 3.63326 11.8669 3.63326 11.0858 4.41431L8.9431 6.55701H6.37874C5.82645 6.55701 5.37874 7.00472 5.37874 7.55701V10.1214L3.23603 12.2641C2.45498 13.0451 2.45498 14.3114 3.23603 15.0925L5.37874 17.2352V19.864C5.37874 20.4163 5.82645 20.864 6.37874 20.864H9.00754L11.0858 22.9423C11.8669 23.7234 13.1332 23.7234 13.9143 22.9423L15.9925 20.864H18.6213C19.1736 20.864 19.6213 20.4163 19.6213 19.864V17.2352L21.764 15.0925C22.5451 14.3114 22.5451 13.0451 21.764 12.2641L19.6213 10.1214V7.55701C19.6213 7.00472 19.1736 6.55701 18.6213 6.55701H16.0569L13.9143 4.41431ZM12.6213 13.864C13.7259 13.864 14.6213 12.9686 14.6213 11.864C14.6213 10.7595 13.7259 9.86402 12.6213 9.86402C11.5167 9.86402 10.6213 10.7595 10.6213 11.864C10.6213 12.9686 11.5167 13.864 12.6213 13.864Z'
 
+    const REMIX_ANNOTATION_COPY_LINE = 'M6.9998 6V3C6.9998 2.44772 7.44752 2 7.9998 2H19.9998C20.5521 2 20.9998 2.44772 20.9998 3V17C20.9998 17.5523 20.5521 18 19.9998 18H16.9998V20.9991C16.9998 21.5519 16.5499 22 15.993 22H4.00666C3.45059 22 3 21.5554 3 20.9991L3.0026 7.00087C3.0027 6.44811 3.45264 6 4.00942 6H6.9998ZM5.00242 8L5.00019 20H14.9998V8H5.00242ZM8.9998 6H16.9998V16H18.9998V4H8.9998V6Z'
     /** Control and zero-width characters stripped from every captured string. */
     const ANNOTATION_CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g
 
@@ -9765,6 +8673,38 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
+     * Workspace display label derived from one Session's working directory.
+     *
+     * The full `cwd` is persisted (D6) so a record can name its Workspace across
+     * reloads; only the basename is shown. Trailing separators are ignored and
+     * both platforms' separators are accepted.
+     * @param {unknown} cwd - absolute working directory.
+     * @returns {string | null} display label, or null when unavailable.
+     */
+    function annotationWorkspaceLabel(cwd) {
+      if (typeof cwd !== 'string' || cwd.length === 0) return null
+      const parts = cwd.split(/[\\/]+/).filter((part) => part.length > 0)
+      const label = parts.length > 0 ? parts[parts.length - 1] : ''
+      if (label.length === 0) return null
+      return label.length > 80 ? `${label.slice(0, 79)}…` : label
+    }
+
+    /**
+     * Normalize one navigation pathname for the persisted record.
+     *
+     * Only the pathname is kept: query strings and fragments can carry tokens and
+     * are never stored (D11 privacy contract).
+     * @param {unknown} pathname - location.pathname or a raw route string.
+     * @returns {string} `/`-leading path without query/fragment.
+     */
+    function annotationRoutePath(pathname) {
+      if (typeof pathname !== 'string' || pathname.length === 0) return '/'
+      const cut = pathname.split(/[?#]/)[0]
+      const path = cut.startsWith('/') ? cut : `/${cut}`
+      return path.length > 300 ? path.slice(0, 300) : path
+    }
+
+    /**
      * Format one epoch-ms timestamp as local 24-hour HH:MM.
      * @param {unknown} at - epoch milliseconds.
      * @returns {string} clock label.
@@ -9812,6 +8752,19 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const parts = ['x', 'y', 'width', 'height'].map((key) => (typeof bounds[key] === 'number' && Number.isFinite(bounds[key]) ? Math.round(bounds[key]) : null))
       if (parts.some((part) => part === null)) return null
       return { x: parts[0], y: parts[1], width: parts[2], height: parts[3] }
+    }
+
+    /**
+     * Normalize one captured viewport size.
+     * @param {unknown} viewport - possibly partial `{ width, height }`.
+     * @returns {{ width: number, height: number } | null} normalized size, or null.
+     */
+    function normalizeAnnotationViewport(viewport) {
+      if (viewport === null || typeof viewport !== 'object') return null
+      const width = typeof viewport.width === 'number' && Number.isFinite(viewport.width) && viewport.width > 0 ? Math.round(viewport.width) : null
+      const height = typeof viewport.height === 'number' && Number.isFinite(viewport.height) && viewport.height > 0 ? Math.round(viewport.height) : null
+      if (width === null || height === null) return null
+      return { width, height }
     }
 
     /**
@@ -9904,6 +8857,178 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       return tag === 'input' || tag === 'select' || tag === 'textarea' || tag === 'button'
     }
 
+    /** Stable ancestors kept on a record: bounded so one annotation stays a locator, not a page dump. */
+    const ANNOTATION_MAX_ANCESTORS = 3
+
+    /** Attribute names that may anchor a verified unique selector, most reliable first. */
+    const UNIQUE_SELECTOR_ATTRIBUTES = [
+      'data-row-key',
+      'data-conversation-region',
+      'data-testid',
+      'data-slot',
+      'data-conversation-session'
+    ]
+
+    /** Attribute names kept on one persisted stable-ancestor entry. */
+    const STABLE_ANCESTOR_ATTRIBUTES = new Set([
+      'data-row-key',
+      'data-conversation-region',
+      'data-conversation-session',
+      'data-testid',
+      'data-slot',
+      'id',
+      'aria-label'
+    ])
+
+    /**
+     * Normalize the bounded, sanitized stable-ancestor list of one record.
+     *
+     * Only identity-shaped attributes survive (no class/style/text): each value
+     * goes through the same sanitizer as a locator candidate, and a generated
+     * `id` is dropped like it is everywhere else.
+     * @param {Array<object>} entries - nearest-first `[{ tag, attrs: [{ name, value }] }]`.
+     * @returns {Array<{ tag: string, attrs: Record<string, string> }>} up to three entries.
+     */
+    function buildStableAncestors(entries) {
+      const list = Array.isArray(entries) ? entries : []
+      const result = []
+      for (const entry of list) {
+        if (result.length >= ANNOTATION_MAX_ANCESTORS) break
+        if (entry === null || typeof entry !== 'object') continue
+        const tag = typeof entry.tag === 'string' ? entry.tag.trim().toLowerCase() : ''
+        if (tag.length === 0 || tag === 'body' || tag === 'html') continue
+        const attrs = Array.isArray(entry.attrs) ? entry.attrs : []
+        const kept = {}
+        for (const attr of attrs) {
+          if (attr === null || typeof attr !== 'object') continue
+          const name = typeof attr.name === 'string' ? attr.name.trim().toLowerCase() : ''
+          if (!STABLE_ANCESTOR_ATTRIBUTES.has(name)) continue
+          const value = sanitizeAttributeValue(name, attr.value)
+          if (value === null) continue
+          if (name === 'id' && isDynamicValue(value)) continue
+          kept[name] = value
+        }
+        if (Object.keys(kept).length === 0) continue
+        result.push({ tag, attrs: kept })
+      }
+      return result
+    }
+
+    /**
+     * Build one verified-unique CSS selector for a captured element.
+     *
+     * Candidate order: the element's own stable data/id/aria-label attribute, then
+     * the nearest stable ancestor plus a `tag:nth-of-type(n)` relative path (at
+     * most six steps). Class names are never used, and every candidate is checked
+     * with the injected `queryAll`, so `uniqueVerified` is truthful rather than
+     * hopeful. Pure: the caller injects the query engine, which is how the unit
+     * seam tests the algorithm without a DOM (D11).
+     * @param {object} descriptor - `{ tag, attrs: [{ name, value }], anchorPaths?: [{ selector, steps: [{ tag, index }] }] }`.
+     * @param {Function} queryAll - selector => iterable of element-likes with `tagName`.
+     * @returns {{ selector: string | null, verified: boolean }} the verified selector, or a null fallback.
+     */
+    function buildUniqueSelector(descriptor, queryAll) {
+      const none = { selector: null, verified: false }
+      if (typeof queryAll !== 'function') return none
+      const source = descriptor !== null && typeof descriptor === 'object' ? descriptor : {}
+      const tag = typeof source.tag === 'string' ? source.tag.trim().toLowerCase() : ''
+      if (tag.length === 0) return none
+      const attrs = Array.isArray(source.attrs) ? source.attrs : []
+      /**
+       * Read one already-captured attribute, re-sanitizing it.
+       * @param {string} name - attribute name.
+       * @returns {string | null} safe value.
+       */
+      const attrValue = (name) => {
+        const attr = attrs.find((item) => item !== null && typeof item === 'object' && item.name === name)
+        if (attr === undefined) return null
+        return sanitizeAttributeValue(name, attr.value)
+      }
+      /**
+       * Whether a selector matches exactly one element and that element has the expected tag.
+       * @param {string} selector - candidate selector.
+       * @returns {boolean} whether it is unique for this tag.
+       */
+      const matchesOne = (selector) => {
+        let list
+        try {
+          list = queryAll(selector)
+        } catch {
+          return false
+        }
+        if (list === null || list === undefined || typeof list[Symbol.iterator] !== 'function') return false
+        let count = 0
+        for (const element of list) {
+          if (element === null || typeof element !== 'object') continue
+          if (typeof element.tagName !== 'string') continue
+          if (element.tagName.toLowerCase() !== tag) continue
+          count += 1
+          if (count > 1) return false
+        }
+        return count === 1
+      }
+      for (const name of UNIQUE_SELECTOR_ATTRIBUTES) {
+        const value = attrValue(name)
+        if (value === null) continue
+        const selector = `${tag}[${name}="${cssString(value)}"]`
+        if (matchesOne(selector)) return { selector, verified: true }
+      }
+      const id = attrValue('id')
+      if (id !== null && !isDynamicValue(id)) {
+        const selector = `#${cssIdentifier(id)}`
+        if (matchesOne(selector)) return { selector, verified: true }
+      }
+      const label = attrValue('aria-label')
+      if (label !== null) {
+        const selector = `${tag}[aria-label="${cssString(label)}"]`
+        if (matchesOne(selector)) return { selector, verified: true }
+      }
+      const anchors = Array.isArray(source.anchorPaths) ? source.anchorPaths : []
+      for (const anchor of anchors) {
+        if (anchor === null || typeof anchor !== 'object') continue
+        if (typeof anchor.selector !== 'string' || anchor.selector.length === 0) continue
+        const steps = Array.isArray(anchor.steps) ? anchor.steps.slice(0, 6) : []
+        if (steps.length === 0) continue
+        const tail = []
+        let usable = true
+        for (const step of steps) {
+          const stepTag = step !== null && typeof step === 'object' && typeof step.tag === 'string' ? step.tag.trim().toLowerCase() : ''
+          const index = step !== null && typeof step === 'object' && typeof step.index === 'number' && Number.isFinite(step.index) && step.index >= 1
+            ? Math.round(step.index)
+            : 1
+          if (stepTag.length === 0) {
+            usable = false
+            break
+          }
+          tail.push(`${stepTag}:nth-of-type(${index})`)
+        }
+        if (!usable) continue
+        const selector = `${anchor.selector} > ${tail.join(' > ')}`
+        if (matchesOne(selector)) return { selector, verified: true }
+      }
+      return none
+    }
+
+    /**
+     * Text used by the "Copy locator" action: the verified unique selector when
+     * present, else the best ordered candidate, else the structural path.
+     * @param {object} ref - ElementRef.
+     * @returns {string} locator text (empty only for a malformed ref).
+     */
+    function annotationLocatorText(ref) {
+      const locator = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : {}
+      const unique = typeof locator.uniqueSelector === 'string' && locator.uniqueSelector.length > 0 ? locator.uniqueSelector : ''
+      if (unique.length > 0) return unique
+      const candidates = Array.isArray(locator.candidates) ? locator.candidates : []
+      const best = candidates.find((candidate) => candidate !== null && typeof candidate === 'object'
+        && typeof candidate.value === 'string' && candidate.value.length > 0
+        && candidate.kind !== 'tag' && candidate.kind !== 'path')
+      if (best !== undefined) return best.value
+      const path = typeof locator.path === 'string' && locator.path.length > 0 ? locator.path : ''
+      if (path.length > 0) return path
+      return describeLocator(ref)
+    }
+
     /**
      * Stable identity key for one element, used for collection de-duplication.
      * @param {string} tag - lowercase tag name.
@@ -9926,9 +9051,15 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
-     * Build one serializable ElementRef (never a DOM node, never HTML).
-     * @param {object} descriptor - { tag, id, role, name, attrs, text, component, path, tagPath, isEditable, insideComposer }.
-     * @param {object} context - { sessionId, at, order, bounds, levelChain }.
+     * Build one serializable ElementRef v2 (never a DOM node, never HTML).
+     *
+     * v2 adds the identity and "find it again" fields the audit approved (D11):
+     * a verified unique selector, bounded sanitized stable ancestors, the surface
+     * kind / ephemeral flag, Session Workspace identity, route, and a viewport
+     * snapshot. It deliberately carries no outerHTML, JS path, XPath, computed
+     * styles, or input values.
+     * @param {object} descriptor - { tag, id, role, name, attrs, text, component, path, tagPath, isEditable, insideComposer, uniqueSelector?, uniqueVerified?, ancestors? }.
+     * @param {object} context - { sessionId, at, order, bounds, levelChain, cwd?, workspaceLabel?, route?, viewport?, surface? }.
      * @returns {object} the ElementRef.
      */
     function buildElementRef(descriptor, context) {
@@ -9942,19 +9073,36 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const order = typeof scope.order === 'number' && Number.isFinite(scope.order) ? scope.order : 0
       const bounds = normalizeAnnotationBounds(scope.bounds) ?? { x: 0, y: 0, width: 0, height: 0 }
       const sessionId = typeof scope.sessionId === 'string' && scope.sessionId.length > 0 ? scope.sessionId : null
+      const cwd = typeof scope.cwd === 'string' && scope.cwd.length > 0 ? scope.cwd : null
+      const workspaceLabel = typeof scope.workspaceLabel === 'string' && scope.workspaceLabel.length > 0
+        ? scope.workspaceLabel
+        : annotationWorkspaceLabel(cwd)
+      const surface = scope.surface === 'floating' ? 'floating' : 'page'
+      const uniqueSelector = typeof source.uniqueSelector === 'string' && source.uniqueSelector.length > 0
+        ? source.uniqueSelector
+        : null
       return {
-        version: 1,
+        version: 2,
         id: `psa-${order}-${annotationRandomToken(6)}`,
         at,
+        updatedAt: at,
         order,
-        session: { sessionId },
+        session: { sessionId, cwd, workspaceLabel },
+        route: annotationRoutePath(scope.route),
         locator: {
           tag,
           role: sanitizeText(source.role, 32),
           name: sanitizeText(source.name, 60),
           candidates,
           key: identityKeyForCandidates(tag, source, candidates),
-          path: typeof source.path === 'string' ? source.path : ''
+          path: typeof source.path === 'string' ? source.path : '',
+          uniqueSelector,
+          uniqueVerified: uniqueSelector !== null && source.uniqueVerified === true,
+          ancestors: buildStableAncestors(source.ancestors),
+          surface,
+          // A floating surface is transient by definition: it can disappear when
+          // the card/menu closes, so its locator is the only thing that survives.
+          ephemeral: surface === 'floating'
         },
         component: typeof source.component === 'string' && source.component.length > 0 ? source.component : 'other',
         text: sanitizeText(source.text, 80),
@@ -9962,7 +9110,13 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         textDigest: typeof source.textDigest === 'string' ? source.textDigest : '',
         context: contextLabels.join(' › '),
         bounds,
-        note: ''
+        viewport: normalizeAnnotationViewport(scope.viewport),
+        note: '',
+        // Phase 1 keeps the collection semantics: every collected record is part of
+        // the batch. Phase 2 owns the per-item include toggle.
+        included: true,
+        // Capture-time resolution status; Phase 2 refreshes it for the detail card.
+        lastStatus: 'resolved'
       }
     }
 
@@ -9989,10 +9143,13 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const name = typeof locator.name === 'string' ? locator.name : ''
       const candidates = Array.isArray(locator.candidates) ? locator.candidates : []
       const stable = candidates.find((candidate) => candidate !== null && typeof candidate === 'object' && candidate.kind !== 'tag' && candidate.kind !== 'path')
+      const unique = typeof locator.uniqueSelector === 'string' && locator.uniqueSelector.length > 0 ? locator.uniqueSelector : ''
       const head = name.length > 0 ? `${tag} "${name}"` : tag
-      const tail = stable !== undefined
-        ? stable.value
-        : (typeof locator.path === 'string' && locator.path.length > 0 ? locator.path : '')
+      const tail = unique.length > 0
+        ? unique
+        : (stable !== undefined
+          ? stable.value
+          : (typeof locator.path === 'string' && locator.path.length > 0 ? locator.path : ''))
       const summary = tail.length > 0 ? `${head} · ${tail}` : head
       return summary.length > 160 ? `${summary.slice(0, 159)}…` : summary
     }
@@ -10011,16 +9168,230 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       return typeof locator.tag === 'string' && locator.tag.length > 0 ? locator.tag : 'element'
     }
 
+    /** Locator candidate kinds persisted by the resolver. */
+    const ANNOTATION_CANDIDATE_KINDS = new Set(['data', 'id', 'label', 'role', 'tag', 'path'])
+
+    /** Resolution statuses a persisted record may carry (display-only in Phase 1). */
+    const ANNOTATION_STATUS_VALUES = new Set(['resolved', 'ambiguous', 'missing', 'changed'])
+
+    /**
+     * Accept one stored selector string from localStorage.
+     *
+     * Records are untrusted input after a reload: only a bounded selector-shaped
+     * string survives, and it is still passed through `querySelectorAll` inside a
+     * try/catch by the resolver. No HTML can be stored or executed (D11/D14).
+     * @param {unknown} value - raw stored value.
+     * @returns {string | null} safe selector text.
+     */
+    function sanitizeStoredSelector(value) {
+      if (typeof value !== 'string') return null
+      const text = value.replace(ANNOTATION_CONTROL_CHARS, ' ').replace(/\s+/g, ' ').trim()
+      if (text.length === 0 || text.length > 400) return null
+      if (text.includes('<') || text.includes('javascript:')) return null
+      return text
+    }
+
+    /**
+     * Normalize one stored locator candidate list.
+     * @param {unknown} raw - raw candidate array.
+     * @returns {Array<{ kind: string, value: string, reliability: number }>} at most six candidates.
+     */
+    function normalizeStoredCandidates(raw) {
+      if (!Array.isArray(raw)) return []
+      const result = []
+      const seen = new Set()
+      for (const item of raw) {
+        if (item === null || typeof item !== 'object') continue
+        const kind = typeof item.kind === 'string' && ANNOTATION_CANDIDATE_KINDS.has(item.kind) ? item.kind : ''
+        const value = sanitizeStoredSelector(item.value)
+        if (kind.length === 0 || value === null || seen.has(value)) continue
+        seen.add(value)
+        const reliability = typeof item.reliability === 'number' && Number.isFinite(item.reliability)
+          ? Math.min(1, Math.max(0, item.reliability))
+          : 0.1
+        result.push({ kind, value, reliability })
+      }
+      result.sort((left, right) => right.reliability - left.reliability)
+      return result.slice(0, 6)
+    }
+
+    /**
+     * Normalize one persisted AnnotationRecord (v2, v1 tolerated).
+     *
+     * This is the storage boundary: every field is whitelisted, every string
+     * sanitized, and invalid records are dropped instead of repaired into
+     * something that claims a target it cannot resolve. `note` is user-authored
+     * and survives verbatim (no redaction, no truncation) like the draft itself.
+     * @param {unknown} raw - parsed record.
+     * @param {number} [fallbackOrder] - order to use when the record has none.
+     * @returns {object | null} normalized record, or null when it must be dropped.
+     */
+    function normalizeAnnotationRecord(raw, fallbackOrder) {
+      if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null
+      const version = raw.version
+      if (version !== undefined && version !== 1 && version !== 2) return null
+      const id = typeof raw.id === 'string' && raw.id.length > 0 && raw.id.length <= 120 ? raw.id : ''
+      if (id.length === 0) return null
+      const rawLocator = raw.locator !== null && typeof raw.locator === 'object' ? raw.locator : null
+      if (rawLocator === null) return null
+      const candidates = normalizeStoredCandidates(rawLocator.candidates)
+      if (candidates.length === 0) return null
+      const tag = (typeof rawLocator.tag === 'string' ? rawLocator.tag.trim().toLowerCase().slice(0, 40) : '') || 'element'
+      const path = typeof rawLocator.path === 'string' ? sanitizeStoredSelector(rawLocator.path) ?? '' : ''
+      const role = typeof rawLocator.role === 'string' ? sanitizeText(rawLocator.role, 32) : ''
+      const name = typeof rawLocator.name === 'string' ? sanitizeText(rawLocator.name, 60) : ''
+      const text = typeof raw.text === 'string' ? sanitizeText(raw.text, 80) : ''
+      const key = typeof rawLocator.key === 'string' && rawLocator.key.length > 0 && rawLocator.key.length <= 300
+        ? rawLocator.key
+        : identityKeyForCandidates(tag, { path, role, text }, candidates)
+      const uniqueSelector = sanitizeStoredSelector(rawLocator.uniqueSelector)
+      const uniqueVerified = uniqueSelector !== null && rawLocator.uniqueVerified === true
+      const surface = rawLocator.surface === 'floating' ? 'floating' : 'page'
+      const ancestorInput = Array.isArray(rawLocator.ancestors) ? rawLocator.ancestors : []
+      const ancestors = buildStableAncestors(ancestorInput.map((entry) => {
+        const item = entry !== null && typeof entry === 'object' ? entry : {}
+        const attrs = item.attrs !== null && typeof item.attrs === 'object' && !Array.isArray(item.attrs)
+          ? Object.entries(item.attrs).map(([attrName, attrValue]) => ({ name: attrName, value: attrValue }))
+          : []
+        return { tag: item.tag, attrs }
+      }))
+      const rawSession = raw.session !== null && typeof raw.session === 'object' ? raw.session : {}
+      const sessionId = typeof rawSession.sessionId === 'string' && rawSession.sessionId.length > 0 && rawSession.sessionId.length <= 120
+        ? rawSession.sessionId
+        : null
+      const cwd = typeof rawSession.cwd === 'string' && rawSession.cwd.length > 0 && rawSession.cwd.length <= 4096
+        ? rawSession.cwd.replace(ANNOTATION_CONTROL_CHARS, '')
+        : null
+      const workspaceLabel = typeof rawSession.workspaceLabel === 'string' && rawSession.workspaceLabel.length > 0
+        ? sanitizeText(rawSession.workspaceLabel, 80)
+        : annotationWorkspaceLabel(cwd)
+      const at = typeof raw.at === 'number' && Number.isFinite(raw.at) && raw.at > 0 ? Math.round(raw.at) : 0
+      const updatedAt = typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) && raw.updatedAt > 0 ? Math.round(raw.updatedAt) : at
+      const order = typeof raw.order === 'number' && Number.isFinite(raw.order) && raw.order >= 0
+        ? Math.round(raw.order)
+        : (typeof fallbackOrder === 'number' && Number.isFinite(fallbackOrder) ? Math.round(fallbackOrder) : 0)
+      const component = typeof raw.component === 'string' && raw.component.length > 0 ? raw.component.slice(0, 32) : 'other'
+      const context = typeof raw.context === 'string' ? sanitizeText(raw.context, 120) : ''
+      const textDigestValue = typeof raw.textDigest === 'string' && /^[0-9a-f]{0,8}$/.test(raw.textDigest) ? raw.textDigest : ''
+      const lastStatus = typeof raw.lastStatus === 'string' && ANNOTATION_STATUS_VALUES.has(raw.lastStatus) ? raw.lastStatus : null
+      return {
+        version: 2,
+        id,
+        at,
+        updatedAt,
+        order,
+        session: { sessionId, cwd, workspaceLabel },
+        route: annotationRoutePath(raw.route),
+        locator: {
+          tag,
+          role,
+          name,
+          candidates,
+          key,
+          path,
+          uniqueSelector,
+          uniqueVerified,
+          ancestors,
+          surface,
+          ephemeral: surface === 'floating'
+        },
+        component,
+        text,
+        textDigest: textDigestValue,
+        context,
+        bounds: normalizeAnnotationBounds(raw.bounds) ?? { x: 0, y: 0, width: 0, height: 0 },
+        viewport: normalizeAnnotationViewport(raw.viewport),
+        note: normalizeUserNote(raw.note),
+        included: raw.included !== false,
+        lastStatus
+      }
+    }
+
+    /**
+     * Parse the persisted annotation document.
+     *
+     * Tolerant by contract: bad JSON, unknown document versions, malformed records,
+     * and extra fields never throw; valid records are normalized, invalid ones
+     * dropped, duplicates removed, and the list capped at the record limit.
+     * @param {unknown} text - raw localStorage value.
+     * @returns {{ version: number, updatedAt: number, records: Array<object> }} sanitized document.
+     */
+    function parseAnnotationStore(text) {
+      const empty = { version: 2, updatedAt: 0, records: [] }
+      if (typeof text !== 'string' || text.length === 0) return empty
+      let parsed
+      try {
+        parsed = JSON.parse(text)
+      } catch {
+        return empty
+      }
+      let rawRecords
+      if (Array.isArray(parsed)) {
+        // Tolerate the bare-array shape while still validating every record.
+        rawRecords = parsed
+      } else if (parsed !== null && typeof parsed === 'object') {
+        const version = parsed.version
+        if (version !== undefined && version !== 1 && version !== 2) return empty
+        rawRecords = Array.isArray(parsed.records) ? parsed.records : []
+      } else {
+        return empty
+      }
+      const updatedAt = parsed !== null && typeof parsed === 'object' && typeof parsed.updatedAt === 'number' && Number.isFinite(parsed.updatedAt)
+        ? Math.round(parsed.updatedAt)
+        : 0
+      const records = []
+      const seen = new Set()
+      for (let index = 0; index < rawRecords.length; index += 1) {
+        if (records.length >= ANNOTATION_RECORD_LIMIT) break
+        const record = normalizeAnnotationRecord(rawRecords[index], index)
+        if (record === null) continue
+        if (seen.has(record.id)) continue
+        seen.add(record.id)
+        records.push(record)
+      }
+      records.sort((left, right) => (left.order - right.order) || (left.at - right.at))
+      return { version: 2, updatedAt, records }
+    }
+
+    /**
+     * Serialize the persisted annotation document.
+     * @param {Array<object>} records - collection records.
+     * @param {number} updatedAt - epoch ms of this write.
+     * @returns {string} JSON document, records normalized and capped.
+     */
+    function serializeAnnotationStore(records, updatedAt) {
+      const list = []
+      const seen = new Set()
+      const input = Array.isArray(records) ? records : []
+      for (let index = 0; index < input.length; index += 1) {
+        if (list.length >= ANNOTATION_RECORD_LIMIT) break
+        const record = normalizeAnnotationRecord(input[index], index)
+        if (record === null) continue
+        if (seen.has(record.id)) continue
+        seen.add(record.id)
+        list.push(record)
+      }
+      list.sort((left, right) => (left.order - right.order) || (left.at - right.at))
+      const at = typeof updatedAt === 'number' && Number.isFinite(updatedAt) && updatedAt > 0 ? Math.round(updatedAt) : Date.now()
+      return JSON.stringify({ version: 2, updatedAt: at, records: list })
+    }
+
     /**
      * One ordered collection entry list update, never mutating the input.
+     *
+     * The record cap is enforced here, at the single commit boundary (D15): an
+     * add that would exceed the limit is refused explicitly (`rejected: true`)
+     * instead of silently dropping the oldest record or the new one.
      * @param {Array<object>} list - current entries (ElementRefs with `note`).
      * @param {object} entry - ElementRef to add or update.
-     * @returns {{ list: Array<object>, added: boolean, updated: boolean }} next list and what happened.
+     * @param {number} [limit] - maximum record count, default 100.
+     * @returns {{ list: Array<object>, added: boolean, updated: boolean, rejected: boolean }} next list and what happened.
      */
-    function collectionAdd(list, entry) {
+    function collectionAdd(list, entry, limit) {
       const current = Array.isArray(list) ? list : []
+      const cap = typeof limit === 'number' && Number.isFinite(limit) && limit >= 1 ? Math.round(limit) : ANNOTATION_RECORD_LIMIT
       const ref = entry !== null && typeof entry === 'object' && entry.ref !== null && typeof entry.ref === 'object' ? entry.ref : entry
-      if (ref === null || typeof ref !== 'object') return { list: current.slice(), added: false, updated: false }
+      if (ref === null || typeof ref !== 'object') return { list: current.slice(), added: false, updated: false, rejected: false }
       const key = identityKeyOf(ref)
       const sessionId = ref.session !== null && typeof ref.session === 'object' ? ref.session.sessionId ?? null : null
       const index = current.findIndex((item) => {
@@ -10045,9 +9416,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
             ? ref.note
             : (typeof existing.note === 'string' ? existing.note : '')
         }
-        return { list: next, added: false, updated: true }
+        return { list: next, added: false, updated: true, rejected: false }
       }
-      return { list: current.concat([ref]), added: true, updated: false }
+      if (current.length >= cap) return { list: current.slice(), added: false, updated: false, rejected: true }
+      return { list: current.concat([ref]), added: true, updated: false, rejected: false }
     }
 
     /**
@@ -10087,6 +9459,219 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         if (ref === null || typeof ref !== 'object' || ref.id !== refId) return entry
         return { ...ref, note: text }
       })
+    }
+
+    /**
+     * Next collection `order` value: one past the highest existing order.
+     * @param {Array<object>} list - current entries.
+     * @returns {number} next order.
+     */
+    function nextAnnotationOrder(list) {
+      let highest = -1
+      for (const entry of Array.isArray(list) ? list : []) {
+        if (entry !== null && typeof entry === 'object' && typeof entry.order === 'number' && Number.isFinite(entry.order)) {
+          highest = Math.max(highest, Math.round(entry.order))
+        }
+      }
+      return highest + 1
+    }
+
+    /**
+     * Commit one record: insert a new annotation or update the existing identity in
+     * place (A3/T5). An update keeps `id`/`at`/`order`/`included` and refreshes the
+     * locator, non-empty note, `lastStatus`, and `updatedAt`; the cap is enforced at
+     * this single commit boundary (D15) instead of silently dropping a record.
+     * @param {Array<object>} list - current collection entries.
+     * @param {object} record - ElementRef v2 to commit.
+     * @param {number} [limit] - maximum record count, default 100.
+     * @param {number} [now] - epoch ms of this commit, default `record.updatedAt`/Date.now().
+     * @returns {{ list: Array<object>, added: boolean, updated: boolean, rejected: boolean }} result.
+     */
+    function upsertAnnotationRecord(list, record, limit, now) {
+      const current = Array.isArray(list) ? list : []
+      const cap = typeof limit === 'number' && Number.isFinite(limit) && limit >= 1 ? Math.round(limit) : ANNOTATION_RECORD_LIMIT
+      if (record === null || typeof record !== 'object' || Array.isArray(record)) {
+        return { list: current.slice(), added: false, updated: false, rejected: false }
+      }
+      const stamp = typeof now === 'number' && Number.isFinite(now) && now > 0
+        ? Math.round(now)
+        : (typeof record.updatedAt === 'number' && Number.isFinite(record.updatedAt) && record.updatedAt > 0 ? Math.round(record.updatedAt) : Date.now())
+      const key = identityKeyOf(record)
+      const sessionId = record.session !== null && typeof record.session === 'object' ? record.session.sessionId ?? null : null
+      const index = current.findIndex((entry) => {
+        if (entry === null || typeof entry !== 'object') return false
+        const entrySession = entry.session !== null && typeof entry.session === 'object' ? entry.session.sessionId ?? null : null
+        return identityKeyOf(entry) === key && entrySession === sessionId
+      })
+      if (index >= 0) {
+        const existing = current[index]
+        const next = current.slice()
+        const incomingNote = typeof record.note === 'string' ? record.note.trim() : ''
+        next[index] = {
+          ...record,
+          id: typeof existing.id === 'string' && existing.id.length > 0 ? existing.id : record.id,
+          at: typeof existing.at === 'number' && Number.isFinite(existing.at) ? existing.at : record.at,
+          order: typeof existing.order === 'number' && Number.isFinite(existing.order) ? existing.order : record.order,
+          updatedAt: stamp,
+          included: existing.included !== false,
+          lastStatus: typeof record.lastStatus === 'string' ? record.lastStatus : (existing.lastStatus ?? null),
+          note: incomingNote.length > 0 ? record.note : (typeof existing.note === 'string' ? existing.note : '')
+        }
+        return { list: next, added: false, updated: true, rejected: false }
+      }
+      if (current.length >= cap) return { list: current.slice(), added: false, updated: false, rejected: true }
+      return {
+        list: current.concat([{
+          ...record,
+          version: 2,
+          updatedAt: stamp,
+          // Commit order is the collection's insertion position, never the pick
+          // timestamp: the collection is an ordered list and persistence sorts by
+          // `order`, so a new record must land after the current last one.
+          order: nextAnnotationOrder(current),
+          included: record.included !== false,
+          lastStatus: typeof record.lastStatus === 'string' ? record.lastStatus : null
+        }]),
+        added: true,
+        updated: false,
+        rejected: false
+      }
+    }
+
+    /**
+     * Remove one record by id (A3/T5). Immutable; a missing id is a no-op copy.
+     * @param {Array<object>} list - current entries.
+     * @param {string} refId - record id.
+     * @returns {Array<object>} next entries.
+     */
+    function removeAnnotationRecord(list, refId) {
+      return collectionRemove(list, refId)
+    }
+
+    /**
+     * Restore one removed record at its original array position (A3/T5 undo).
+     * @param {Array<object>} list - current entries.
+     * @param {object} record - removed record.
+     * @param {number} [index] - original array index; clamped, default append.
+     * @returns {Array<object>} next entries.
+     */
+    function restoreAnnotationRecord(list, record, index) {
+      const current = Array.isArray(list) ? list : []
+      if (record === null || typeof record !== 'object' || Array.isArray(record)) return current.slice()
+      const at = typeof index === 'number' && Number.isFinite(index)
+        ? Math.min(Math.max(Math.round(index), 0), current.length)
+        : current.length
+      return current.slice(0, at).concat([record], current.slice(at))
+    }
+
+    /**
+     * Move one record one slot up or down and keep `order` contiguous (A3/T5;
+     * wired here for the Phase 2-B rail, which reuses the same action).
+     * @param {Array<object>} list - current entries.
+     * @param {string} refId - record id.
+     * @param {number} delta - -1 to move up (towards index 0), +1 to move down.
+     * @returns {Array<object>} next entries.
+     */
+    function moveAnnotationRecord(list, refId, delta) {
+      const current = Array.isArray(list) ? list.slice() : []
+      const index = current.findIndex((entry) => entry !== null && typeof entry === 'object' && entry.id === refId)
+      if (index < 0) return current
+      const step = delta === -1 || (typeof delta === 'number' && delta < 0) ? -1 : 1
+      const target = index + step
+      if (target < 0 || target >= current.length) return current
+      const next = current.slice()
+      const moved = next[index]
+      next[index] = next[target]
+      next[target] = moved
+      return next.map((entry, position) => (entry !== null && typeof entry === 'object' ? { ...entry, order: position } : entry))
+    }
+
+    /**
+     * Set one record's batch-include flag (A3/T5). The controller forces other-session
+     * records to `included: false`; the pure helper only applies what it is given.
+     * @param {Array<object>} list - current entries.
+     * @param {string} refId - record id.
+     * @param {boolean} included - whether the record participates in a batch.
+     * @returns {Array<object>} next entries.
+     */
+    function toggleAnnotationInclude(list, refId, included) {
+      if (!Array.isArray(list)) return []
+      const flag = included === true
+      return list.map((entry) => {
+        if (entry === null || typeof entry !== 'object' || entry.id !== refId) return entry
+        if (entry.included === flag) return entry
+        return { ...entry, included: flag }
+      })
+    }
+
+    /**
+     * Remove one record (or clear the whole list) while capturing the single-slot
+     * undo payload (A3/T5/D5). The newest removal replaces any previous slot.
+     * @param {Array<object>} list - current entries.
+     * @param {string} refId - record id to remove (ignored when kind is `clear`).
+     * @param {'single' | 'clear'} [kind] - removal shape, default `single`.
+     * @param {number} [at] - epoch ms of the removal.
+     * @returns {{ list: Array<object>, undo: object | null }} next entries and undo payload.
+     */
+    function annotationUndoRemove(list, refId, kind, at) {
+      const current = Array.isArray(list) ? list : []
+      const stamp = typeof at === 'number' && Number.isFinite(at) && at > 0 ? Math.round(at) : Date.now()
+      if (kind === 'clear') {
+        if (current.length === 0) return { list: current.slice(), undo: null }
+        return { list: [], undo: { kind: 'clear', records: current.slice(), at: stamp } }
+      }
+      const index = current.findIndex((entry) => entry !== null && typeof entry === 'object' && entry.id === refId)
+      if (index < 0) return { list: current.slice(), undo: null }
+      return {
+        list: collectionRemove(current, refId),
+        undo: { kind: 'single', record: current[index], index, at: stamp }
+      }
+    }
+
+    /**
+     * Apply one undo payload (A3/T5/D5): restore a single record at its original
+     * index, or rebuild a cleared collection in its original order.
+     * @param {Array<object>} list - current entries.
+     * @param {object | null} undo - payload returned by {@link annotationUndoRemove}.
+     * @returns {Array<object>} next entries.
+     */
+    function annotationUndoRestore(list, undo) {
+      const current = Array.isArray(list) ? list : []
+      if (undo === null || typeof undo !== 'object') return current.slice()
+      if (undo.kind === 'clear') {
+        const records = Array.isArray(undo.records) ? undo.records : []
+        if (records.length === 0) return current.slice()
+        const ids = new Set(current.map((entry) => (entry !== null && typeof entry === 'object' ? entry.id : null)))
+        const merged = current.concat(records.filter((record) => record !== null && typeof record === 'object' && !ids.has(record.id)))
+        const orderOf = (entry) => (typeof entry?.order === 'number' && Number.isFinite(entry.order) ? entry.order : 0)
+        const atOf = (entry) => (typeof entry?.at === 'number' && Number.isFinite(entry.at) ? entry.at : 0)
+        return merged.slice().sort((left, right) => (orderOf(left) - orderOf(right)) || (atOf(left) - atOf(right)))
+      }
+      if (undo.record === null || typeof undo.record !== 'object') return current.slice()
+      return restoreAnnotationRecord(current, undo.record, undo.index)
+    }
+
+    /**
+     * One-line requirement excerpt for a page mark badge (A3/T6): first non-empty
+     * line, whitespace collapsed, truncated to `max` characters with an ellipsis.
+     * @param {unknown} note - requirement text.
+     * @param {number} [max] - maximum characters, default 18.
+     * @returns {{ text: string, empty: boolean, truncated: boolean }} excerpt.
+     */
+    function annotationMarkerBadgeText(note, max) {
+      const source = typeof note === 'string' ? note : ''
+      const limit = typeof max === 'number' && Number.isFinite(max) && max > 1 ? Math.round(max) : ANNOTATION_MARK_SUMMARY_MAX
+      let line = ''
+      for (const candidate of source.split(/\r?\n/)) {
+        const collapsed = candidate.replace(/\s+/g, ' ').trim()
+        if (collapsed.length > 0) {
+          line = collapsed
+          break
+        }
+      }
+      if (line.length === 0) return { text: '', empty: true, truncated: false }
+      if (line.length <= limit) return { text: line, empty: false, truncated: false }
+      return { text: `${line.slice(0, Math.max(1, limit - 1)).trimEnd()}…`, empty: false, truncated: true }
     }
 
     /**
@@ -10145,8 +9730,12 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
      * Actions: activate, deactivate, hover {targetId}, selectSingle {ref},
      * toggleMulti {ref}, setMulti {refs}, setNote {text}, beginEdit, endEdit,
      * openView {view}, collectionAdd {entry}, collectionUpdateNote {refId,
-     * note}, collectionRemove {refId}, collectionClear, passThrough {on},
-     * box {box}, feedback {feedback}, session {sessionId}, exitOne.
+     * note}, collectionRemove {refId}, collectionClear, annotationCommit {record},
+     * annotationUpdateNote {refId, note}, annotationRemove {refId},
+     * annotationRestore {record, index}, annotationUndo {undo},
+     * annotationInclude {refId, included}, annotationMove {refId, delta},
+     * passThrough {on}, box {box}, feedback {feedback}, session {sessionId},
+     * exitOne.
      * @param {object} state - current state.
      * @param {object} action - one action.
      * @returns {object} next state, or the same reference when unchanged.
@@ -10236,6 +9825,63 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           return { ...current, collection: collectionRemove(current.collection, payload.refId) }
         case 'collectionClear':
           return { ...current, collection: collectionClear() }
+        case 'annotationCommit': {
+          const record = payload.record !== null && typeof payload.record === 'object' ? payload.record : null
+          if (record === null) return current
+          const result = upsertAnnotationRecord(current.collection, record, ANNOTATION_RECORD_LIMIT, payload.now)
+          if (!result.added && !result.updated) return current
+          return { ...current, collection: result.list }
+        }
+        case 'annotationUpdateNote': {
+          const refId = typeof payload.refId === 'string' ? payload.refId : ''
+          if (refId.length === 0) return current
+          const note = typeof payload.note === 'string' ? payload.note : ''
+          const stamp = typeof payload.now === 'number' && Number.isFinite(payload.now) && payload.now > 0 ? Math.round(payload.now) : Date.now()
+          let changed = false
+          const collection = current.collection.map((entry) => {
+            if (entry === null || typeof entry !== 'object' || entry.id !== refId) return entry
+            changed = true
+            return { ...entry, note, updatedAt: stamp }
+          })
+          return changed ? { ...current, collection } : current
+        }
+        case 'annotationRemove': {
+          const next = removeAnnotationRecord(current.collection, payload.refId)
+          return next.length === current.collection.length ? current : { ...current, collection: next }
+        }
+        case 'annotationRestore': {
+          const record = payload.record !== null && typeof payload.record === 'object' ? payload.record : null
+          if (record === null) return current
+          return { ...current, collection: restoreAnnotationRecord(current.collection, record, payload.index) }
+        }
+        case 'annotationUndo': {
+          const undo = payload.undo !== null && typeof payload.undo === 'object' ? payload.undo : null
+          if (undo === null) return current
+          return { ...current, collection: annotationUndoRestore(current.collection, undo) }
+        }
+        case 'annotationInclude': {
+          const next = toggleAnnotationInclude(current.collection, payload.refId, payload.included)
+          let changed = false
+          for (let index = 0; index < next.length; index += 1) {
+            if (next[index] !== current.collection[index]) {
+              changed = true
+              break
+            }
+          }
+          return changed ? { ...current, collection: next } : current
+        }
+        case 'annotationMove': {
+          const delta = payload.delta === -1 ? -1 : 1
+          const next = moveAnnotationRecord(current.collection, payload.refId, delta)
+          let changed = false
+          for (let index = 0; index < next.length; index += 1) {
+            if (next[index] !== current.collection[index]) {
+              changed = true
+              break
+            }
+          }
+          return changed ? { ...current, collection: next } : current
+        }
         case 'passThrough': {
           const on = payload.on === true
           if (current.passThrough === on) return current
@@ -10303,9 +9949,16 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         annotationJoinLabel(sessionLabel, `${sessionText} · ${timeText}`),
         annotationJoinLabel(noteLabel, noteText)
       ]
-      // A stale or ambiguous target is called out explicitly, locator only.
+      // A stale or ambiguous target is called out explicitly, locator only. A
+      // transient floating-surface target says it is gone, not that it moved.
       const status = ref !== null && typeof ref === 'object' ? ref.status : undefined
-      if (status === 'missing') lines.push(typeof source.status === 'string' ? source.status : 'Status: target no longer resolves (locator only)')
+      const ephemeral = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object'
+        && ref.locator.ephemeral === true
+      if (status === 'missing') {
+        lines.push(ephemeral && typeof source.statusEphemeral === 'string'
+          ? source.statusEphemeral
+          : (typeof source.status === 'string' ? source.status : 'Status: target no longer resolves (locator only)'))
+      }
       else if (status === 'ambiguous') lines.push(typeof source.statusAmbiguous === 'string' ? source.statusAmbiguous : 'Status: target matches more than one element (locator only)')
       else if (status === 'changed') lines.push(typeof source.statusChanged === 'string' ? source.statusChanged : 'Status: target content changed')
       lines.push('')
@@ -10327,6 +9980,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const noteLabel = typeof source.note === 'string' ? source.note : 'Note:'
       const emptyNote = typeof source.emptyNote === 'string' ? source.emptyNote : '—'
       const statusLabel = typeof source.status === 'string' ? source.status : 'Status: target no longer resolves (locator only)'
+      const statusEphemeral = typeof source.statusEphemeral === 'string'
+        ? source.statusEphemeral
+        : 'Status: transient surface no longer present (locator only)'
       const statusAmbiguous = typeof source.statusAmbiguous === 'string' ? source.statusAmbiguous : 'Status: target matches more than one element (locator only)'
       const statusChanged = typeof source.statusChanged === 'string' ? source.statusChanged : 'Status: target content changed'
       const skippedTemplate = typeof source.skipped === 'string' ? source.skipped : '({count} annotation(s) from other sessions skipped)'
@@ -10348,7 +10004,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         lines.push(`   ${annotationJoinLabel(reference, describeLocator(ref))}`)
         lines.push(`   ${annotationJoinLabel(noteLabel, normalizeUserNote(note) || emptyNote)}`)
         const status = ref !== null && typeof ref === 'object' ? ref.status : undefined
-        if (status === 'missing') lines.push(`   ${statusLabel}`)
+        const ephemeral = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object'
+          && ref.locator.ephemeral === true
+        if (status === 'missing') lines.push(`   ${ephemeral ? statusEphemeral : statusLabel}`)
         else if (status === 'ambiguous') lines.push(`   ${statusAmbiguous}`)
         else if (status === 'changed') lines.push(`   ${statusChanged}`)
         if (index < entries.length - 1) lines.push('')
@@ -10391,7 +10049,39 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       let genericMatch = null
       const hasStableCandidate = ordered.some((candidate) => candidate !== null && typeof candidate === 'object'
         && (candidate.kind === 'data' || candidate.kind === 'id' || candidate.kind === 'label'))
-      for (const candidate of ordered) {
+      /**
+       * Collect the tag-matching hits of one selector without throwing.
+       * @param {string} selector - selector to query.
+       * @returns {Array<object> | null} hits, or null when the query failed.
+       */
+      const queryTagged = (selector) => {
+        let matches
+        try {
+          matches = queryAll(selector)
+        } catch {
+          return null
+        }
+        if (matches === null || matches === undefined) return null
+        if (typeof matches[Symbol.iterator] !== 'function') return null
+        const list = []
+        for (const element of matches) {
+          if (element === null || typeof element !== 'object') continue
+          if (typeof element.tagName !== 'string') continue
+          if (tag.length === 0 || element.tagName.toLowerCase() === tag) list.push(element)
+        }
+        return list
+      }
+      // A selector verified unique at capture is the strongest locator: a single
+      // hit resolves (the liveInfo checks below still detect a changed element),
+      // several hits are genuine ambiguity, and no hit falls through to the v1
+      // candidate walk so an older locator keeps working.
+      const uniqueSelector = typeof source.uniqueSelector === 'string' && source.uniqueSelector.length > 0 ? source.uniqueSelector : ''
+      if (uniqueSelector.length > 0) {
+        const hits = queryTagged(uniqueSelector)
+        if (hits !== null && hits.length > 1) return 'ambiguous'
+        if (hits !== null && hits.length === 1) unique = hits[0]
+      }
+      if (unique === null) for (const candidate of ordered) {
         if (candidate === null || typeof candidate !== 'object' || typeof candidate.value !== 'string' || candidate.value.length === 0) continue
         let matches
         try {
@@ -10542,6 +10232,51 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
+     * Place the floating detail card beside a marked rect (A3/T6).
+     *
+     * Prefers the right side of the element aligned to its top, flips to the left
+     * when the card would cross the reserved rail strip, flips above when there is
+     * no room below, and finally clamps to an 8 px viewport margin.
+     * @param {{ x: number, y: number, width: number, height: number }} rect - mark rect.
+     * @param {{ width: number, height: number }} cardSize - measured/estimated card size.
+     * @param {{ width: number, height: number }} viewport - viewport size.
+     * @param {number} [railWidth] - reserved right strip width, default 0.
+     * @param {number} [margin] - minimum gap from every edge, default 8.
+     * @returns {{ x: number, y: number, placement: 'right' | 'left' }} clamped position.
+     */
+    function clampDetailCardPosition(rect, cardSize, viewport, railWidth, margin) {
+      const gap = typeof margin === 'number' && Number.isFinite(margin) && margin >= 0 ? margin : 8
+      const rail = typeof railWidth === 'number' && Number.isFinite(railWidth) && railWidth > 0 ? railWidth : 0
+      const width = viewport !== null && typeof viewport === 'object' && typeof viewport.width === 'number' ? viewport.width : 0
+      const height = viewport !== null && typeof viewport === 'object' && typeof viewport.height === 'number' ? viewport.height : 0
+      const cardWidth = cardSize !== null && typeof cardSize === 'object' && typeof cardSize.width === 'number' && cardSize.width > 0
+        ? cardSize.width
+        : ANNOTATION_DETAIL_SIZE.width
+      const cardHeight = cardSize !== null && typeof cardSize === 'object' && typeof cardSize.height === 'number' && cardSize.height > 0
+        ? cardSize.height
+        : ANNOTATION_DETAIL_SIZE.height
+      const target = rect !== null && typeof rect === 'object' ? rect : { x: 0, y: 0, width: 0, height: 0 }
+      const targetX = typeof target.x === 'number' && Number.isFinite(target.x) ? target.x : 0
+      const targetY = typeof target.y === 'number' && Number.isFinite(target.y) ? target.y : 0
+      const targetWidth = typeof target.width === 'number' && Number.isFinite(target.width) ? target.width : 0
+      const targetHeight = typeof target.height === 'number' && Number.isFinite(target.height) ? target.height : 0
+      const maxX = Math.max(gap, width - rail - cardWidth - gap)
+      const maxY = Math.max(gap, height - cardHeight - gap)
+      let placement = 'right'
+      let x = targetX + targetWidth + gap
+      if (x > maxX) {
+        placement = 'left'
+        x = targetX - cardWidth - gap
+      }
+      x = Math.round(Math.min(Math.max(x, gap), maxX))
+      // Align to the element's top; a card with no room below is bottom-aligned.
+      let y = targetY
+      if (y + cardHeight > height - gap) y = targetY + targetHeight - cardHeight
+      y = Math.round(Math.min(Math.max(y, gap), maxY))
+      return { x, y, placement }
+    }
+
+    /**
      * Compute the rail width for one viewport.
      * @param {number} viewportWidth - window inner width.
      * @param {boolean} [collapsed] - whether the rail is collapsed to its strip, default false.
@@ -10569,7 +10304,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     //#endregion
 
     /** Selector set of elements the picker treats as meaningful, nearest first. */
-    const ANNOTATION_CANDIDATE_SELECTOR = 'button, a, input, select, textarea, [role="button"], [role="tab"], [role="menuitem"], [role="link"], [role="dialog"], [role="list"], [role="listitem"], [role="treeitem"], [role="combobox"], [role="textbox"], [data-row-key], [data-conversation-region], [aria-label], h1, h2, h3, h4, h5, h6, li, td, pre, p, code, nav, aside, main, section'
+    const ANNOTATION_CANDIDATE_SELECTOR = 'button, a, input, select, textarea, [role="button"], [role="tab"], [role="menuitem"], [role="link"], [role="dialog"], [role="menu"], [role="tooltip"], [role="list"], [role="listitem"], [role="treeitem"], [role="combobox"], [role="textbox"], [data-row-key], [data-conversation-region], [aria-label], h1, h2, h3, h4, h5, h6, li, td, pre, p, code, nav, aside, main, section'
 
     /** Estimated popover size used for clamping. */
     const ANNOTATION_POPOVER_SIZE = { width: 320, height: 248 }
@@ -10905,6 +10640,117 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
+     * The strongest stable attribute selector of one element (no class names).
+     * @param {Element} element - live element.
+     * @returns {{ name: string, value: string, selector: string } | null} candidate, or null.
+     */
+    function annotationStableSelectorCandidate(element) {
+      if (element === null || typeof element !== 'object' || typeof element.getAttribute !== 'function') return null
+      const tag = typeof element.tagName === 'string' ? element.tagName.toLowerCase() : ''
+      if (tag.length === 0) return null
+      const names = [...UNIQUE_SELECTOR_ATTRIBUTES, 'id', 'aria-label']
+      for (const name of names) {
+        const raw = element.getAttribute(name)
+        if (raw === null || raw.length === 0) continue
+        const value = sanitizeAttributeValue(name, raw)
+        if (value === null) continue
+        if (name === 'id' && isDynamicValue(value)) continue
+        const selector = name === 'id'
+          ? `#${cssIdentifier(value)}`
+          : `${tag}[${name}="${cssString(value)}"]`
+        return { name, value, selector }
+      }
+      return null
+    }
+
+    /**
+     * Relative `tag:nth-of-type(n)` steps from one ancestor down to one element.
+     * @param {Element} element - target element.
+     * @param {Element} ancestor - ancestor to start from.
+     * @returns {Array<{ tag: string, index: number }> | null} steps, or null when the ancestor is not on the path.
+     */
+    function annotationStructuralSteps(element, ancestor) {
+      if (element === null || ancestor === null || element === ancestor) return null
+      const steps = []
+      let current = element
+      let depth = 0
+      while (current !== null && current !== ancestor && depth < 8) {
+        const tag = typeof current.tagName === 'string' ? current.tagName.toLowerCase() : ''
+        if (tag.length === 0) return null
+        let index = 1
+        let sibling = current.previousElementSibling
+        while (sibling !== null) {
+          if (sibling.tagName === current.tagName) index += 1
+          sibling = sibling.previousElementSibling
+        }
+        steps.push({ tag, index })
+        current = current.parentElement
+        depth += 1
+      }
+      if (current !== ancestor) return null
+      steps.reverse()
+      return steps
+    }
+
+    /**
+     * Stable-anchor selector candidates for one element: the nearest stable
+     * ancestors (up to three) plus the structural steps to reach the element.
+     * @param {Element} element - live element.
+     * @returns {Array<{ selector: string, steps: Array<{ tag: string, index: number }> }>} anchors, nearest first.
+     */
+    function annotationAnchorPaths(element) {
+      const anchors = []
+      let current = element === null || typeof element !== 'object' ? null : element.parentElement
+      let depth = 0
+      while (current !== null && current !== undefined && current !== document.body && current !== document.documentElement && depth < 10 && anchors.length < 3) {
+        const stable = annotationStableSelectorCandidate(current)
+        if (stable !== null) {
+          const steps = annotationStructuralSteps(element, current)
+          if (steps !== null && steps.length > 0) anchors.push({ selector: stable.selector, steps })
+        }
+        current = current.parentElement
+        depth += 1
+      }
+      return anchors
+    }
+
+    /**
+     * Sanitized attribute pairs of one element, shaped for the record normalizer.
+     * @param {Element} element - live element.
+     * @returns {Array<{ name: string, value: string }>} sanitized pairs.
+     */
+    function annotationSanitizedAttributes(element) {
+      const attrs = []
+      if (element === null || typeof element !== 'object' || typeof element.attributes === 'undefined' || element.attributes === null) return attrs
+      for (const attribute of Array.from(element.attributes)) {
+        const name = sanitizeAttributeName(attribute.name)
+        if (name === null) continue
+        const value = sanitizeAttributeValue(name, attribute.value)
+        if (value === null) continue
+        attrs.push({ name, value })
+      }
+      return attrs
+    }
+
+    /**
+     * Stable ancestors of one element, nearest first, bounded by the record schema.
+     * @param {Element} element - live element.
+     * @returns {Array<{ tag: string, attrs: Array<{ name: string, value: string }> }>} ancestor entries.
+     */
+    function annotationStableAncestorEntries(element) {
+      const entries = []
+      let current = element === null || typeof element !== 'object' ? null : element.parentElement
+      let depth = 0
+      while (current !== null && current !== undefined && current !== document.body && current !== document.documentElement && depth < 10 && entries.length < ANNOTATION_MAX_ANCESTORS) {
+        const attrs = annotationSanitizedAttributes(current)
+        if (attrs.length > 0) entries.push({ tag: current.tagName.toLowerCase(), attrs })
+        current = current.parentElement
+        depth += 1
+      }
+      return entries
+    }
+
+    /**
      * Build the descriptor consumed by `buildElementRef` from a live element.
      * @param {Element} element - candidate element.
      * @param {boolean} insideComposer - whether the element is the composer region.
@@ -10923,6 +10769,14 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
       const role = sanitizeText(element.getAttribute('role') ?? '', 32) || annotationRoleOf(tag, element)
       const pathInfo = annotationTagPath(element)
+      // A verified unique selector costs a handful of querySelectorAll calls at
+      // select time (never on the pointermove hot path) and is the locator that
+      // fixes duplicate-label controls such as `New session` (A2/D11).
+      const unique = buildUniqueSelector({
+        tag,
+        attrs,
+        anchorPaths: annotationAnchorPaths(element)
+      }, (selector) => document.querySelectorAll(selector))
       return {
         tag,
         id: annotationStableId(element),
@@ -10935,7 +10789,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         path: pathInfo.selector,
         tagPath: pathInfo.parts,
         isEditable,
-        insideComposer: insideComposer === true
+        insideComposer: insideComposer === true,
+        uniqueSelector: unique.selector,
+        uniqueVerified: unique.verified,
+        ancestors: annotationStableAncestorEntries(element)
       }
     }
 
@@ -11001,11 +10858,162 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
+     * Computed z-index of one element, as a number, or null when it participates
+     * in no explicit stacking layer (`z-index: auto`).
+     * @param {Element} element - live element.
+     * @returns {number | null} computed z-index.
+     */
+    function annotationComputedZIndex(element) {
+      if (element === null || typeof element !== 'object') return null
+      const style = window.getComputedStyle(element)
+      if (style === null || typeof style !== 'object') return null
+      const raw = style.zIndex
+      if (typeof raw !== 'string' || raw.length === 0 || raw === 'auto') return null
+      const value = Number.parseInt(raw, 10)
+      return Number.isFinite(value) ? value : null
+    }
+
+    /**
+     * Whether one element is a floating surface box: out of normal flow, with an
+     * explicit stacking layer, a real box, and no annotation UI inside it.
+     *
+     * The test intentionally uses computed style, never hashed DSH class names,
+     * so a DSH rebuild cannot silently disable the surface picker. `<svg>` and
+     * zero-size decorations are excluded; our own nodes are never targets.
+     * @param {Element} element - live element.
+     * @returns {boolean} whether the element is a floating box.
+     */
+    function annotationFloatingBox(element) {
+      if (element === null || typeof element !== 'object') return false
+      if (typeof element.tagName !== 'string') return false
+      const tag = element.tagName.toLowerCase()
+      if (tag === 'html' || tag === 'body' || tag === 'svg') return false
+      if (typeof element.closest !== 'function') return false
+      if (element.closest('[data-psa-own]') !== null) return false
+      if (!annotationElementVisible(element)) return false
+      const style = window.getComputedStyle(element)
+      if (style === null || typeof style !== 'object') return false
+      if (style.position !== 'fixed' && style.position !== 'absolute') return false
+      const zIndex = annotationComputedZIndex(element)
+      return zIndex !== null && zIndex >= ANNOTATION_SURFACE_MIN_Z
+    }
+
+    /**
+     * The outermost floating surface of one candidate chain (F2).
+     *
+     * The hit element may be a static text row inside a body-level portal card;
+     * the first floating ancestor starts the surface run, and the run is extended
+     * upward while ancestors are themselves floating boxes, so the returned root
+     * is the whole card rather than its inner layer. Selection never crosses the
+     * root to page ancestors behind the surface.
+     * @param {Array<{ element: Element, insideComposer: boolean }>} chain - candidate chain, nearest first.
+     * @param {(element: Element) => boolean} [isFloating] - injectable predicate for unit tests.
+     * @returns {{ root: Element, index: number } | null} surface root and its chain index.
+     */
+    function annotationSurfaceRoot(chain, isFloating) {
+      const entries = Array.isArray(chain) ? chain : []
+      const floating = typeof isFloating === 'function' ? isFloating : annotationFloatingBox
+      for (let index = 0; index < entries.length; index += 1) {
+        const element = entries[index] !== null && typeof entries[index] === 'object' ? entries[index].element : null
+        if (element === null || element === undefined) continue
+        let matched
+        try {
+          matched = floating(element)
+        } catch {
+          matched = false
+        }
+        if (!matched) continue
+        let root = element
+        let rootIndex = index
+        let above = index + 1
+        while (above < entries.length) {
+          const ancestor = entries[above] !== null && typeof entries[above] === 'object' ? entries[above].element : null
+          if (ancestor === null || ancestor === undefined) break
+          let ancestorFloating
+          try {
+            ancestorFloating = floating(ancestor)
+          } catch {
+            ancestorFloating = false
+          }
+          if (!ancestorFloating) break
+          root = ancestor
+          rootIndex = above
+          above += 1
+        }
+        return { root, index: rootIndex }
+      }
+      return null
+    }
+
+    /**
+     * DOM accessors used by {@link annotationSurfaceLevels}; injectable so the
+     * level algorithm is unit-testable without a browser.
+     * @returns {object} accessor set.
+     */
+    function annotationSurfaceAccess() {
+      return {
+        descendants: (root) => (typeof root.querySelectorAll === 'function' ? Array.from(root.querySelectorAll('*')) : []),
+        isCandidate: (element) => annotationIsCandidate(element),
+        isOwn: (element) => typeof element.closest === 'function' && element.closest('[data-psa-own]') !== null,
+        visible: (element) => annotationElementVisible(element),
+        rectOf: (element) => annotationRectOf(element),
+        textOf: (element) => (typeof element.innerText === 'string' ? element.innerText : (element.textContent ?? '')).trim(),
+        childCount: (element) => (typeof element.children?.length === 'number' ? element.children.length : 0),
+        insideComposer: (element) => typeof element.closest === 'function' && element.closest('[data-conversation-region="composer"]') !== null
+      }
+    }
+
+    /**
+     * Drill levels of one floating surface: the whole root first, then its inner
+     * candidate controls and text rows in document order (F2).
+     *
+     * A level is either a normal candidate (`button`, `[aria-label]`, row, …) or a
+     * text block: an element with no element children, non-empty text, and a box
+     * of at least 8×8. That second rule is what lets a hover card's title/path
+     * rows be selected even though they carry no role or aria attribute.
+     * @param {Element} root - surface root element.
+     * @param {object} [access] - accessor set (tests inject a DOM-free one).
+     * @returns {Array<{ element: Element, insideComposer: boolean }>} levels, root first, capped.
+     */
+    function annotationSurfaceLevels(root, access) {
+      if (root === null || root === undefined || typeof root !== 'object') return []
+      const api = access !== null && typeof access === 'object' ? { ...annotationSurfaceAccess(), ...access } : annotationSurfaceAccess()
+      const levels = [{ element: root, insideComposer: api.insideComposer(root) === true }]
+      const seen = new Set([root])
+      const descendants = api.descendants(root)
+      for (const element of descendants) {
+        if (levels.length >= ANNOTATION_SURFACE_MAX_LEVELS) break
+        if (element === null || element === undefined || typeof element !== 'object') continue
+        if (seen.has(element)) continue
+        if (api.isOwn(element)) continue
+        const box = api.rectOf(element)
+        if (box === null || box === undefined || box.width <= 0 || box.height <= 0) continue
+        if (!api.visible(element)) continue
+        const candidate = api.isCandidate(element) === true
+        const textBlock = !candidate
+          && api.childCount(element) === 0
+          && api.textOf(element).length > 0
+          && box.width >= 8
+          && box.height >= 8
+        if (!candidate && !textBlock) continue
+        seen.add(element)
+        levels.push({ element, insideComposer: api.insideComposer(element) === true })
+      }
+      return levels
+    }
+
+    /**
      * Choose the meaningful index in one candidate chain.
+     *
+     * A hit inside a floating surface defaults to the surface root (the whole
+     * card), never to a page ancestor behind it; everything else keeps the v1
+     * semantic-candidate-then-solid-box behavior.
      * @param {Array<{ element: Element, insideComposer: boolean }>} chain - candidate chain.
      * @returns {number} chosen index, or -1.
      */
     function annotationPickChainIndex(chain) {
+      const surface = annotationSurfaceRoot(chain)
+      if (surface !== null) return surface.index
       for (let index = 0; index < chain.length; index += 1) {
         if (annotationIsCandidate(chain[index].element)) return index
       }
@@ -11026,8 +11034,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
      * unique generic match is remembered as the fallback (R1).
      *
      * Pure: `queryAll(selector)` and `elementLike.tagName` are injected, so this is
-     * shared with the unit-test seam.
-     * @param {{ candidates?: Array<object>, expectedTag?: string, queryAll?: Function }} input - resolver input.
+     * shared with the unit-test seam. A capture-verified unique selector is tried
+     * first; one hit is the node, several hits are genuine ambiguity, and no hit
+     * falls back to the ordered v1 candidates (D11).
+     * @param {{ candidates?: Array<object>, expectedTag?: string, queryAll?: Function, uniqueSelector?: string }} input - resolver input.
      * @returns {object | null} the unique element-like object, or null.
      */
     function resolveNodeCandidate(input) {
@@ -11038,6 +11048,25 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const ordered = Array.isArray(candidates)
         ? candidates.slice().sort((left, right) => (right?.reliability ?? 0) - (left?.reliability ?? 0))
         : []
+      const uniqueSelector = typeof source.uniqueSelector === 'string' && source.uniqueSelector.length > 0 ? source.uniqueSelector : ''
+      if (uniqueSelector.length > 0) {
+        let uniqueHits = null
+        try {
+          uniqueHits = queryAll(uniqueSelector)
+        } catch {
+          uniqueHits = null
+        }
+        if (uniqueHits !== null && uniqueHits !== undefined && typeof uniqueHits[Symbol.iterator] === 'function') {
+          const tagged = []
+          for (const element of uniqueHits) {
+            if (element === null || typeof element !== 'object') continue
+            if (typeof element.tagName !== 'string') continue
+            if (tag.length === 0 || element.tagName.toLowerCase() === tag) tagged.push(element)
+          }
+          if (tagged.length > 1) return null
+          if (tagged.length === 1) return tagged[0]
+        }
+      }
       let genericMatch = null
       for (const candidate of ordered) {
         if (candidate === null || typeof candidate !== 'object' || typeof candidate.value !== 'string' || candidate.value.length === 0) continue
@@ -11084,6 +11113,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       return resolveNodeCandidate({
         candidates: locator.candidates,
         expectedTag: locator.tag,
+        uniqueSelector: typeof locator.uniqueSelector === 'string' ? locator.uniqueSelector : '',
         queryAll: (selector) => document.querySelectorAll(selector)
       })
     }
@@ -11132,6 +11162,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         emptyNote: t('insert.emptyNote'),
         batchHeader: t('insert.batchHeader'),
         status: t('insert.status'),
+        statusEphemeral: t('insert.statusEphemeral'),
         statusAmbiguous: t('insert.statusAmbiguous'),
         statusChanged: t('insert.statusChanged'),
         skipped: t('insert.skipped')
@@ -11230,8 +11261,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       let settings = parseStoredSettings(annotationReadStorage(SETTINGS_STORAGE_KEY))
       let railCollapsed = annotationReadStorage(RAIL_STORAGE_KEY) === 'true'
       const viewport = annotationViewport()
+      // Records are the feature's data spine: they survive reloads, so the store
+      // starts from the validated persisted document instead of an empty list (D1).
+      const storedRecords = parseAnnotationStore(annotationReadStorage(ANNOTATION_RECORDS_STORAGE_KEY)).records
       const store = createAnnotationStore({
-        state: createAnnotationState(),
+        state: { ...createAnnotationState(), collection: storedRecords },
         settings: { ...settings },
         launcherPosition: clampLauncherPosition(readLauncherPosition(), viewport, ANNOTATION_LAUNCHER_SIZE),
         launcherDragging: false,
@@ -11245,7 +11279,14 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         popoverPinned: false,
         flashRefId: null,
         flashRect: null,
-        noteEditor: null
+        noteEditor: null,
+        // A3 Phase 2-A transient UI state (never persisted): page marks derived per
+        // geometry frame, the record under the pointer, the floating detail card,
+        // and the single-slot undo payload.
+        markRects: [],
+        markerHoverId: null,
+        detailCard: null,
+        markUndo: null
       })
 
       /** Installed window listeners, removed on deactivate. */
@@ -11258,6 +11299,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       let domObserver = null
       /** Resolved-node cache: `{ node, rev }` per ref id, reused only at the same revision. */
       const resolvedNodeCache = new Map()
+      /** Per-DOM-revision resolution status cache for the mark geometry (keeps scroll frames cheap). */
+      const markStatusCache = new Map()
+      let markStatusRevision = -1
       /** Hover identity tokens per element. */
       const elementTokens = new WeakMap()
       /** Chain and index of the last picked selection, for level up/down. */
@@ -11268,6 +11312,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       let hoverPoint = null
       /** Hover rAF handle. */
       let hoverFrame = null
+      /** F3 debounce: recompute hover/geometry after DOM mutations while the pointer stands still. */
+      let hoverRecomputeTimer = null
       /** Geometry rAF handle. */
       let geometryFrame = null
       /** Resize debounce timer. */
@@ -11296,6 +11342,23 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       let popoverMeasureFrame = null
       /** Monotonic hover token. */
       let tokenSeq = 0
+      /** F1: inline z-index captured from `[data-shell-overlay]` before raising it. */
+      let paintSnapshot = null
+      /** Pending records-persistence debounce timer (D1). */
+      let persistTimer = null
+      /** Last serialized records document, so no-op writes stay no-ops. */
+      let persistedRecordsText = null
+      /** Hover-intent timer that opens the detail card after the pointer rests on a mark. */
+      let markerHoverTimer = null
+      /** Grace timer that closes the detail card after the pointer leaves the mark/card union. */
+      let detailCloseTimer = null
+      /** Single-slot undo expiry timer (5 s from the last delete). */
+      let undoExpireTimer = null
+      /** Mounted detail card element and its measured size, used for clamping/keep-open. */
+      let detailElement = null
+      let detailMeasuredSize = { width: ANNOTATION_DETAIL_SIZE.width, height: ANNOTATION_DETAIL_SIZE.height }
+      /** Pending detail-card measurement frame. */
+      let detailMeasureFrame = null
 
       /**
        * The current snapshot.
@@ -11398,30 +11461,83 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
-       * Build one ref from a chain position, preserving the order/timestamp of the
+       * Build one ref from one drill level, preserving the order/timestamp of the
        * ref it replaces (level up/down must not churn collection identity).
-       * @param {Array<object>} chain - candidate chain.
-       * @param {number} index - chosen chain index.
+       *
+       * The descriptor is built lazily for the chosen element plus at most two
+       * context ancestors, so walking the hover chain stays cheap; the v2 capture
+       * fields (unique selector, ancestors, session/route identity, surface) are
+       * added here at select time, never on the pointermove hot path.
+       * @param {{ element: Element, insideComposer: boolean }} level - chosen level.
        * @param {object | null} like - ref being replaced, when any.
+       * @param {'page' | 'floating'} [surface] - whether the level is a floating surface.
        * @returns {object} new ElementRef.
        */
-      function refFromChain(chain, index, like) {
-        const entry = chain[index]
-        const bounds = annotationRectOf(entry.element)
-        const descriptor = annotationDescriptorOf(entry.element, entry.insideComposer)
+      function refForLevel(level, like, surface) {
+        const element = level.element
+        const bounds = annotationRectOf(element)
+        const descriptor = annotationDescriptorOf(element, level.insideComposer)
+        // The chain above the chosen element supplies the <=2 context labels and
+        // never builds more descriptors than that (F5 performance contract).
+        const chain = annotationCandidateChain(element)
+        const levelChain = chain.slice(1, 3).map((item) => {
+          const ancestor = annotationDescriptorOf(item.element, item.insideComposer)
+          return ancestor.name || ancestor.component || ancestor.tag
+        })
+        const sessionId = annotationBridge.sessionId ?? annotationConversationSessionId()
+        const identity = sessionIdentity(sessionId)
         const context = {
-          sessionId: annotationBridge.sessionId ?? annotationConversationSessionId(),
+          sessionId: identity.sessionId,
+          cwd: identity.cwd,
+          workspaceLabel: identity.workspaceLabel,
+          route: currentRoute(),
+          viewport: annotationViewport(),
+          surface: surface === 'floating' ? 'floating' : 'page',
           at: like !== null && typeof like === 'object' && typeof like.at === 'number' ? like.at : Date.now(),
           order: like !== null && typeof like === 'object' && typeof like.order === 'number' ? like.order : Date.now() % 1000000,
           bounds,
-          levelChain: chain.slice(index + 1, index + 3).map((item) => {
-            const ancestor = annotationDescriptorOf(item.element, item.insideComposer)
-            return ancestor.name || ancestor.component || ancestor.tag
-          })
+          levelChain
         }
         const ref = buildElementRef(descriptor, context)
         ref.note = like !== null && typeof like === 'object' && typeof like.note === 'string' ? like.note : ''
         return ref
+      }
+
+      /**
+       * Drill levels for one pick: an ordinary page pick walks the v1 ancestor
+       * chain (Parent = next entry), a floating-surface pick returns the root
+       * plus its inner candidates/text rows (Child = next entry). The single
+       * `entries`/`index`/`parentStep` shape keeps both directions honest.
+       * @param {Array<object>} chain - candidate chain, nearest first.
+       * @returns {{ entries: Array<object>, index: number, parentStep: number, surface: 'page' | 'floating' }} pick levels.
+       */
+      function pickLevels(chain) {
+        const surface = annotationSurfaceRoot(chain)
+        if (surface !== null) {
+          const levels = annotationSurfaceLevels(surface.root)
+          return {
+            entries: levels.length > 0 ? levels : [{ element: surface.root, insideComposer: false }],
+            index: 0,
+            parentStep: -1,
+            surface: 'floating'
+          }
+        }
+        return {
+          entries: chain.map((entry) => ({ element: entry.element, insideComposer: entry.insideComposer })),
+          index: annotationPickChainIndex(chain),
+          parentStep: 1,
+          surface: 'page'
+        }
+      }
+
+      /**
+       * Build the ref of one lastPick level with its preserved note.
+       * @param {object} pick - lastPick shape.
+       * @param {object | null} like - ref being replaced, when any.
+       * @returns {object} new ElementRef.
+       */
+      function refFromPick(pick, like) {
+        return refForLevel(pick.entries[pick.index], like, pick.surface)
       }
 
       /**
@@ -11436,6 +11552,206 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
+       * Capture the raised paint layer (F1): remember the shell overlay's own
+       * inline z-index value and priority, then raise it above native hover cards
+       * (z=100) while staying below native modals (1000) and menus (1100).
+       *
+       * `!important` is used so a React re-render that rewrites the inline style
+       * cannot silently drop the raise; exit restores the captured pair exactly.
+       * @returns {void}
+       */
+      function capturePaintLayer() {
+        const overlay = document.querySelector('[data-shell-overlay]')
+        if (!(overlay instanceof HTMLElement)) return
+        if (paintSnapshot !== null && paintSnapshot.element === overlay) {
+          if (overlay.style.getPropertyValue('z-index') !== String(ANNOTATION_PAINT_Z)) {
+            overlay.style.setProperty('z-index', String(ANNOTATION_PAINT_Z), 'important')
+            document.documentElement.setAttribute(ANNOTATION_RAISED_ATTR, 'true')
+          }
+          return
+        }
+        if (paintSnapshot !== null) restorePaintLayer()
+        paintSnapshot = {
+          element: overlay,
+          index: {
+            value: overlay.style.getPropertyValue('z-index'),
+            priority: overlay.style.getPropertyPriority('z-index')
+          }
+        }
+        overlay.style.setProperty('z-index', String(ANNOTATION_PAINT_Z), 'important')
+        document.documentElement.setAttribute(ANNOTATION_RAISED_ATTR, 'true')
+      }
+
+      /**
+       * Restore the paint layer to the exact captured inline z-index state (F1).
+       * @returns {void}
+       */
+      function restorePaintLayer() {
+        document.documentElement.removeAttribute(ANNOTATION_RAISED_ATTR)
+        if (paintSnapshot === null) return
+        const saved = paintSnapshot
+        paintSnapshot = null
+        const element = saved.element
+        if (element === null || element === undefined || typeof element.style !== 'object') return
+        const index = saved.index
+        if (index.value === '' && index.priority === '') element.style.removeProperty('z-index')
+        else element.style.setProperty('z-index', index.value, index.priority)
+      }
+
+      /**
+       * Announce mode state for the dynamic-workspaces hover-card pinning (D3).
+       * The dependent behavior is owned by that feature; this side only reports
+       * state. Dispatched on `document` with bubbling so both document- and
+       * window-level listeners observe it.
+       * @param {boolean} active - whether annotation mode just turned on/off.
+       * @returns {void}
+       */
+      function announceAnnotationState(active) {
+        try {
+          document.dispatchEvent(new CustomEvent(ANNOTATION_STATE_EVENT, {
+            detail: { active: active === true },
+            bubbles: true
+          }))
+        } catch {
+          // Announcement is contract glue; a hostile embedding must not break the mode.
+        }
+      }
+
+      /**
+       * Session identity enrichment for captured records (D6): full `cwd` is
+       * persisted (local only), the Workspace label is its basename.
+       * @param {string | null} sessionId - Session identity.
+       * @returns {{ sessionId: string | null, cwd: string | null, workspaceLabel: string | null }} identity.
+       */
+      function sessionIdentity(sessionId) {
+        const id = typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null
+        if (id === null) return { sessionId: null, cwd: null, workspaceLabel: null }
+        // Primary source: the Composer seat's Session-scope bridge. The annotation
+        // overlay is not a slot and `ctx.sessions` has no live list face here, so
+        // reading the bridge is the only reliable path (F-2).
+        if (annotationBridge.sessionId === id && typeof annotationBridge.sessionCwd === 'string' && annotationBridge.sessionCwd.length > 0) {
+          return {
+            sessionId: id,
+            cwd: annotationBridge.sessionCwd,
+            workspaceLabel: annotationWorkspaceLabel(annotationBridge.sessionCwd)
+          }
+        }
+        // Fallback for a record captured before the seat mirrored identity, or in
+        // an embedding without the seat. An unexpected failure is reported once
+        // instead of being swallowed silently.
+        let cwd = null
+        try {
+          const sessions = ctx !== null && typeof ctx === 'object' ? ctx.sessions : null
+          const list = sessions !== null && typeof sessions === 'object' ? sessions.list : null
+          const listSnapshot = list !== null && typeof list === 'object' && typeof list.getSnapshot === 'function'
+            ? list.getSnapshot()
+            : null
+          const entry = listSnapshot !== null && listSnapshot !== undefined
+            && listSnapshot.byId !== null && typeof listSnapshot.byId === 'object'
+            ? listSnapshot.byId[id]
+            : null
+          if (entry !== null && entry !== undefined && typeof entry.cwd === 'string' && entry.cwd.length > 0) cwd = entry.cwd
+        } catch (error) {
+          if (!annotationIdentityWarned) {
+            annotationIdentityWarned = true
+            try {
+              console.warn('power-suite: annotation Session identity fallback failed', error)
+            } catch {
+              // Console may be unavailable in a hostile embedding.
+            }
+          }
+        }
+        return { sessionId: id, cwd, workspaceLabel: annotationWorkspaceLabel(cwd) }
+      }
+
+      /** @returns {string} current SPA route pathname, never query or fragment. */
+      function currentRoute() {
+        try {
+          const location = window.location
+          return annotationRoutePath(location !== null && typeof location === 'object' ? location.pathname : '/')
+        } catch {
+          return '/'
+        }
+      }
+
+      /**
+       * Write the persisted records document now (D1). No-op when nothing changed.
+       * @returns {void}
+       */
+      function flushAnnotationRecords() {
+        if (persistTimer !== null) {
+          window.clearTimeout(persistTimer)
+          persistTimer = null
+        }
+        let text
+        try {
+          text = serializeAnnotationStore(snapshot().state.collection, Date.now())
+        } catch {
+          return
+        }
+        if (text === persistedRecordsText) return
+        persistedRecordsText = text
+        annotationWriteStorage(ANNOTATION_RECORDS_STORAGE_KEY, text)
+      }
+
+      /**
+       * Debounce one records write after a collection mutation (D1: 250 ms).
+       * @returns {void}
+       */
+      function scheduleAnnotationRecordsPersist() {
+        if (persistTimer !== null) window.clearTimeout(persistTimer)
+        persistTimer = window.setTimeout(() => {
+          persistTimer = null
+          flushAnnotationRecords()
+        }, ANNOTATION_PERSIST_DEBOUNCE_MS)
+      }
+
+      /**
+       * Copy the best locator of one record ("Copy locator", D10) and report the
+       * outcome through the feedback toast. Uses the verified unique selector when
+       * present, else the best ordered candidate.
+       * @param {string} [refId] - collection entry id; omitted means the current selection.
+       * @returns {boolean} whether a copy was attempted synchronously.
+       */
+      function copyLocator(refId) {
+        const current = snapshot().state
+        const ref = typeof refId === 'string' && refId.length > 0
+          ? current.collection.find((entry) => entry.id === refId)
+          : current.selection[0]
+        if (ref === undefined || ref === null) return false
+        const text = annotationLocatorText(ref)
+        if (typeof text !== 'string' || text.length === 0) {
+          feedback(t('feedback.locatorCopyFailed'), 'error')
+          return false
+        }
+        let clipboard = null
+        try {
+          clipboard = typeof navigator !== 'undefined' && navigator !== null ? navigator.clipboard : null
+        } catch {
+          clipboard = null
+        }
+        if (clipboard === null || clipboard === undefined || typeof clipboard.writeText !== 'function') {
+          feedback(t('feedback.locatorCopyFailed'), 'error')
+          return false
+        }
+        try {
+          const result = clipboard.writeText(text)
+          if (result !== null && typeof result === 'object' && typeof result.then === 'function') {
+            result.then(
+              () => feedback(t('feedback.locatorCopied')),
+              () => feedback(t('feedback.locatorCopyFailed'), 'error')
+            )
+          } else {
+            feedback(t('feedback.locatorCopied'))
+          }
+          return true
+        } catch {
+          feedback(t('feedback.locatorCopyFailed'), 'error')
+          return false
+        }
+      }
+
+      /**
        * Start the body mutation observer that feeds the resolved-node revision.
        * Only childList/characterData are observed: an attribute-only change keeps
        * the same node, so it cannot swap the element identity we resolved (R1/R4).
@@ -11447,6 +11763,17 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         if (typeof document === 'undefined' || document.body === null) return
         domObserver = new MutationObserver(() => {
           domRevision += 1
+          // F3: a floating card that appears/expands under a stationary pointer has
+          // no pointermove to trigger a recompute. Re-resolve after a short debounce
+          // so the outline follows the DOM rather than lagging on the old target.
+          if (!isActive() || hoverPoint === null || snapshot().state.passThrough) return
+          if (hoverRecomputeTimer !== null) window.clearTimeout(hoverRecomputeTimer)
+          hoverRecomputeTimer = window.setTimeout(() => {
+            hoverRecomputeTimer = null
+            if (!isActive() || hoverPoint === null) return
+            scheduleHover()
+            scheduleGeometry()
+          }, 60)
         })
         domObserver.observe(document.body, { childList: true, subtree: true, characterData: true })
       }
@@ -11458,6 +11785,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
        */
       function clearResolvedNodeCache() {
         resolvedNodeCache.clear()
+        markStatusCache.clear()
+        markStatusRevision = -1
         domRevision += 1
         if (domObserver !== null) {
           domObserver.disconnect()
@@ -11503,6 +11832,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         return resolveRefStatus({
           candidates: ref.locator.candidates,
           expectedTag: ref.locator.tag,
+          uniqueSelector: typeof ref.locator.uniqueSelector === 'string' ? ref.locator.uniqueSelector : '',
           queryAll: (selector) => document.querySelectorAll(selector),
           liveInfo: (element) => {
             const elementText = typeof element.textContent === 'string' ? element.textContent : ''
@@ -11550,6 +11880,281 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const current = currentSessionId()
         if (current === null) return 'other'
         return ref?.session?.sessionId === current ? 'current' : 'other'
+      }
+
+      /**
+       * Whether one viewport point falls inside one rectangle.
+       * @param {{ x: number, y: number }} point - viewport point.
+       * @param {{ x: number, y: number, width: number, height: number }} rect - rectangle.
+       * @returns {boolean} whether inside.
+       */
+      function annotationPointInRect(point, rect) {
+        if (point === null || rect === null || typeof point !== 'object' || typeof rect !== 'object') return false
+        const x = typeof point.x === 'number' ? point.x : NaN
+        const y = typeof point.y === 'number' ? point.y : NaN
+        const left = typeof rect.x === 'number' ? rect.x : NaN
+        const top = typeof rect.y === 'number' ? rect.y : NaN
+        const width = typeof rect.width === 'number' ? rect.width : NaN
+        const height = typeof rect.height === 'number' ? rect.height : NaN
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(left) || !Number.isFinite(top)) return false
+        return x >= left && x <= left + width && y >= top && y <= top + height
+      }
+
+      /**
+       * Page marks for the current collection (A3/T6).
+       *
+       * Only a record of the current Session whose live target resolves (or
+       * resolves as changed) is drawn; a missing/ambiguous/other-Session record is
+       * never drawn because a mark would point at the wrong element. Geometry is
+       * recomputed on the existing geometry frames (scroll/resize/mutations).
+       * @param {object} state - annotation state.
+       * @returns {Array<object>} mark descriptors `{ id, index, rect, stale, summary, empty }`.
+       */
+      function markRectsOf(state) {
+        const marks = []
+        const collection = state !== null && typeof state === 'object' && Array.isArray(state.collection) ? state.collection : []
+        for (let index = 0; index < collection.length; index += 1) {
+          const entry = collection[index]
+          if (entry === null || typeof entry !== 'object') continue
+          if (collectionScopeOf(entry) !== 'current') continue
+          if (markStatusRevision !== domRevision) {
+            markStatusCache.clear()
+            markStatusRevision = domRevision
+          }
+          let status = markStatusCache.get(entry.id)
+          if (status === undefined) {
+            status = statusOf(entry)
+            markStatusCache.set(entry.id, status)
+          }
+          if (status !== 'resolved' && status !== 'changed') continue
+          const node = liveNode(entry)
+          if (node === null) continue
+          const rect = annotationRectOf(node)
+          if (rect === null || rect.width <= 0 || rect.height <= 0) continue
+          const excerpt = annotationMarkerBadgeText(entry.note)
+          marks.push({
+            id: entry.id,
+            index: index + 1,
+            rect,
+            stale: status === 'changed',
+            summary: excerpt.text,
+            empty: excerpt.empty
+          })
+        }
+        return marks
+      }
+
+      /**
+       * The mark under one viewport point, topmost (last drawn) first.
+       * @param {{ x: number, y: number }} point - viewport point.
+       * @param {Array<object>} marks - current mark descriptors.
+       * @returns {object | null} hit mark.
+       */
+      function findMarkAt(point, marks) {
+        const list = Array.isArray(marks) ? marks : []
+        for (let index = list.length - 1; index >= 0; index -= 1) {
+          const mark = list[index]
+          if (mark !== null && typeof mark === 'object' && mark.rect !== null && typeof mark.rect === 'object' && annotationPointInRect(point, mark.rect)) return mark
+        }
+        return null
+      }
+
+      /**
+       * The detail card's kept-open rectangle (pointer may enter it).
+       * @param {object} current - current snapshot.
+       * @returns {{ x: number, y: number, width: number, height: number } | null} card rect.
+       */
+      function detailCardRect(current) {
+        const card = current !== null && typeof current === 'object' ? current.detailCard : null
+        if (card === null || typeof card !== 'object') return null
+        return {
+          x: typeof card.x === 'number' ? card.x : 0,
+          y: typeof card.y === 'number' ? card.y : 0,
+          width: detailMeasuredSize.width,
+          height: detailMeasuredSize.height
+        }
+      }
+
+      /** Cancel the hover-intent timer that would open the detail card. @returns {void} */
+      function cancelMarkerHoverTimer() {
+        if (markerHoverTimer !== null) {
+          window.clearTimeout(markerHoverTimer)
+          markerHoverTimer = null
+        }
+      }
+
+      /** Cancel the pending detail-card close. @returns {void} */
+      function cancelDetailClose() {
+        if (detailCloseTimer !== null) {
+          window.clearTimeout(detailCloseTimer)
+          detailCloseTimer = null
+        }
+      }
+
+      /** Close the detail card and (by default) drop its marker-hover state. @param {{ keepMarker?: boolean }} [options] - close options. @returns {boolean} whether a card was open. */
+      function closeDetailCard(options) {
+        const settingsForClose = options !== null && typeof options === 'object' ? options : {}
+        cancelDetailClose()
+        cancelMarkerHoverTimer()
+        const current = snapshot()
+        const hadCard = current.detailCard !== null
+        if (hadCard) publish({ detailCard: null })
+        if (settingsForClose.keepMarker !== true && current.markerHoverId !== null) publish({ markerHoverId: null })
+        return hadCard
+      }
+
+      /**
+       * Open the detail card for one mark at its clamped position (A3/T6).
+       * @param {object} mark - mark descriptor from {@link markRectsOf}.
+       * @returns {void}
+       */
+      function openDetailCard(mark) {
+        if (!isActive() || mark === null || typeof mark !== 'object') return
+        const current = snapshot()
+        if (current.state.selection.length > 0) return
+        const position = clampDetailCardPosition(mark.rect, detailMeasuredSize, annotationViewport(), current.railWidth)
+        cancelDetailClose()
+        publish({
+          detailCard: {
+            refId: mark.id,
+            x: position.x,
+            y: position.y,
+            placement: position.placement,
+            mode: 'view'
+          }
+        })
+      }
+
+      /**
+       * Arm the hover-intent timer for one mark (120 ms, A3/T6).
+       * @param {object} mark - mark descriptor.
+       * @returns {void}
+       */
+      function scheduleMarkerHoverOpen(mark) {
+        cancelMarkerHoverTimer()
+        if (!isActive()) return
+        markerHoverTimer = window.setTimeout(() => {
+          markerHoverTimer = null
+          if (!isActive()) return
+          const current = snapshot()
+          if (current.state.selection.length > 0) return
+          const fresh = (Array.isArray(current.markRects) ? current.markRects : []).find((item) => item.id === mark.id)
+          if (fresh === undefined) return
+          openDetailCard(fresh)
+        }, ANNOTATION_DETAIL_HOVER_DELAY_MS)
+      }
+
+      /**
+       * Close the detail card after a 120 ms grace period unless the pointer is on
+       * the mark or inside the card (A3/T6 keep-open union).
+       * @returns {void}
+       */
+      function scheduleDetailClose() {
+        if (detailCloseTimer !== null) return
+        detailCloseTimer = window.setTimeout(() => {
+          detailCloseTimer = null
+          if (!isActive()) return
+          const current = snapshot()
+          if (current.detailCard === null) return
+          if (hoverPoint !== null && annotationPointInRect(hoverPoint, detailCardRect(current))) return
+          if (hoverPoint !== null) {
+            const hit = findMarkAt(hoverPoint, current.markRects)
+            if (hit !== null && hit.id === current.detailCard.refId) return
+          }
+          closeDetailCard()
+        }, ANNOTATION_DETAIL_CLOSE_DELAY_MS)
+      }
+
+      /**
+       * Recompute the detail position against its mark (scroll/resize/mutation).
+       * @returns {void}
+       */
+      function reclampDetailCard() {
+        const current = snapshot()
+        if (current.detailCard === null || typeof current.detailCard !== 'object') return
+        const mark = (Array.isArray(current.markRects) ? current.markRects : []).find((item) => item.id === current.detailCard.refId)
+        if (mark === undefined) return
+        const position = clampDetailCardPosition(mark.rect, detailMeasuredSize, annotationViewport(), current.railWidth)
+        if (position.x === current.detailCard.x && position.y === current.detailCard.y) return
+        publish({ detailCard: { ...current.detailCard, x: position.x, y: position.y, placement: position.placement } })
+      }
+
+      /**
+       * Marker-hover detection fed by pointer movement (A3/T6).
+       *
+       * The mark layer is pointer-transparent, so hit testing is numeric against
+       * the per-frame mark rects. A hit arms the 120 ms hover-intent timer; the
+       * pointer may then move into the detail card, which keeps it open.
+       * @param {{ x: number, y: number } | null} point - current viewport point.
+       * @returns {void}
+       */
+      function updateMarkerHover(point) {
+        if (!isActive() || point === null) return
+        const current = snapshot()
+        if (annotationPointInRect(point, detailCardRect(current))) {
+          cancelDetailClose()
+          return
+        }
+        const hit = findMarkAt(point, current.markRects)
+        const markerHoverId = hit !== null ? hit.id : null
+        if (current.markerHoverId !== markerHoverId) publish({ markerHoverId })
+        // The detail card and the popover are mutually exclusive: a draft selection
+        // always wins, and a click on the page closes the card before selecting.
+        if (current.state.selection.length > 0) {
+          if (current.detailCard !== null) closeDetailCard()
+          return
+        }
+        if (hit === null) {
+          if (current.detailCard !== null) scheduleDetailClose()
+          else cancelMarkerHoverTimer()
+          return
+        }
+        cancelDetailClose()
+        if (current.detailCard !== null) {
+          if (current.detailCard.refId === hit.id) return
+          closeDetailCard({ keepMarker: true })
+        }
+        scheduleMarkerHoverOpen(hit)
+      }
+
+      /** Track the mounted detail card for measurement. @param {Element | null} node - detail card root. @returns {void} */
+      function attachDetailNode(node) {
+        if (node === null || node === undefined) {
+          detachDetailNode()
+          return
+        }
+        if (!(node instanceof HTMLElement) || node === detailElement) return
+        detailElement = node
+        scheduleDetailMeasure()
+      }
+
+      /** Forget the mounted detail card. @returns {void} */
+      function detachDetailNode() {
+        detailElement = null
+        if (detailMeasureFrame !== null) {
+          window.cancelAnimationFrame(detailMeasureFrame)
+          detailMeasureFrame = null
+        }
+      }
+
+      /** Measure the detail card and re-clamp once its real size is known. @returns {void} */
+      function measureDetailCard() {
+        if (detailElement === null || typeof detailElement.getBoundingClientRect !== 'function') return
+        const rect = detailElement.getBoundingClientRect()
+        if (rect.width <= 0 || rect.height <= 0) return
+        const size = { width: Math.round(rect.width), height: Math.round(rect.height) }
+        const changed = size.width !== detailMeasuredSize.width || size.height !== detailMeasuredSize.height
+        detailMeasuredSize = size
+        if (changed) reclampDetailCard()
+      }
+
+      /** Schedule one coalesced detail-card measurement. @returns {void} */
+      function scheduleDetailMeasure() {
+        if (detailMeasureFrame !== null) return
+        detailMeasureFrame = window.requestAnimationFrame(() => {
+          detailMeasureFrame = null
+          measureDetailCard()
+        })
       }
 
       /**
@@ -11663,6 +12268,15 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         if (nextState === current.state) return current.state
         const patch = deriveGeometry(nextState, current)
         store.set({ ...current, state: nextState, ...patch })
+        // D1: every collection mutation schedules one debounced records write.
+        if (nextState.collection !== current.state.collection) {
+          scheduleAnnotationRecordsPersist()
+          // A3/T6: marks are derived from the collection, so a commit/remove/restore
+          // must repaint them on the next geometry frame.
+          scheduleGeometry()
+          const card = snapshot().detailCard
+          if (card !== null && !nextState.collection.some((entry) => entry.id === card.refId)) closeDetailCard()
+        }
         return nextState
       }
 
@@ -11918,6 +12532,27 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
             if (rect !== null) rects.push({ id: ref.id, rect })
           }
           patch.selectionRects = rects
+          // A3/T6: page marks are derived on the same rAF as the other geometry, so
+          // scroll/resize/DOM-mutation frames keep them glued to their elements.
+          patch.markRects = markRectsOf(current.state)
+          if (current.detailCard !== null) {
+            const cardMark = patch.markRects.find((mark) => mark.id === current.detailCard.refId)
+            const nextHover = current.markerHoverId !== null && patch.markRects.some((mark) => mark.id === current.markerHoverId)
+              ? current.markerHoverId
+              : null
+            if (nextHover !== current.markerHoverId) patch.markerHoverId = nextHover
+            if (cardMark === undefined) {
+              // The target stopped resolving (or moved out of the current Session):
+              // a card pointing at a missing element is worse than no card.
+              patch.detailCard = null
+              cancelDetailClose()
+            } else {
+              const position = clampDetailCardPosition(cardMark.rect, detailMeasuredSize, annotationViewport(), current.railWidth)
+              if (position.x !== current.detailCard.x || position.y !== current.detailCard.y) {
+                patch.detailCard = { ...current.detailCard, x: position.x, y: position.y, placement: position.placement }
+              }
+            }
+          }
           if (current.flashRefId !== null) {
             const flashRef = current.state.collection.find((entry) => entry.id === current.flashRefId)
             const flashNode = flashRef === undefined ? null : liveNode(flashRef)
@@ -11946,6 +12581,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           return
         }
         if (!blockEvent(event)) return
+        // A3/T6: a page press dismisses the hover card before the click selection.
+        closeDetailCard()
         if (event.button !== 0) {
           pointer = null
           return
@@ -11991,11 +12628,15 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           return
         }
         if (eventInsideOwn(event)) {
+          // The pointer may sit on our own detail card: that keeps it open. Any
+          // other own-surface hit (rail/popover) dismisses it via the no-hit path.
+          updateMarkerHover({ x: event.clientX, y: event.clientY })
           clearHover()
           return
         }
         hoverPoint = { x: event.clientX, y: event.clientY }
         scheduleHover()
+        updateMarkerHover(hoverPoint)
       }
 
       /**
@@ -12040,10 +12681,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const element = annotationEventElement(event)
         if (element === null) return
         const chain = annotationCandidateChain(element)
-        const index = annotationPickChainIndex(chain)
-        if (index < 0) return
-        const ref = refFromChain(chain, index, null)
-        lastPick = { chain, index }
+        const levels = pickLevels(chain)
+        if (levels.index < 0) return
+        const ref = refFromPick(levels, null)
+        lastPick = levels
         dispatch({ type: 'selectSingle', ref })
       }
 
@@ -12056,13 +12697,13 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const element = annotationEventElement(event)
         if (element === null) return
         const chain = annotationCandidateChain(element)
-        const index = annotationPickChainIndex(chain)
-        if (index < 0) return
+        const levels = pickLevels(chain)
+        if (levels.index < 0) return
         const state = snapshot().state
-        const existing = state.selection.find((item) => identityKeyOf(item) === identityKeyOf(refFromChain(chain, index, null)))
+        const existing = state.selection.find((item) => identityKeyOf(item) === identityKeyOf(refFromPick(levels, null)))
         const like = existing !== undefined ? { ...existing, note: state.note } : null
-        const ref = refFromChain(chain, index, like)
-        lastPick = { chain, index }
+        const ref = refFromPick(levels, like)
+        lastPick = levels
         dispatch({ type: 'toggleMulti', ref })
       }
 
@@ -12081,9 +12722,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const seen = new Set()
         for (const element of elements) {
           const chain = annotationCandidateChain(element)
-          const index = annotationPickChainIndex(chain)
-          if (index < 0) continue
-          const ref = refFromChain(chain, index, null)
+          const levels = pickLevels(chain)
+          if (levels.index < 0) continue
+          const ref = refFromPick(levels, null)
           const key = identityKeyOf(ref)
           if (seen.has(key)) continue
           seen.add(key)
@@ -12191,7 +12832,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
        * @returns {void}
        */
       function onVisibilityChange() {
-        if (document.visibilityState === 'hidden' && isActive()) {
+        if (document.visibilityState === 'hidden') {
+          // D1: a hidden tab is the last reliable moment to persist records.
+          flushAnnotationRecords()
+          if (!isActive()) return
           if (snapshot().state.passThrough) setPassThrough(false)
           clearHover()
         }
@@ -12206,6 +12850,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const current = snapshot()
         const state = current.state
         if (state.phase === 'off') return
+        // A3/T6: the hover detail card is the first Esc rung (it was opened last).
+        if (current.detailCard !== null) {
+          closeDetailCard()
+          return
+        }
         if (current.noteEditor !== null) {
           closeNoteEditor()
           return
@@ -12273,8 +12922,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       function clearTimers() {
         if (hoverFrame !== null) window.cancelAnimationFrame(hoverFrame)
         if (geometryFrame !== null) window.cancelAnimationFrame(geometryFrame)
+        if (hoverRecomputeTimer !== null) window.clearTimeout(hoverRecomputeTimer)
         hoverFrame = null
         geometryFrame = null
+        hoverRecomputeTimer = null
         if (resizeTimer !== null) window.clearTimeout(resizeTimer)
         if (frameObserverTimer !== null) window.clearTimeout(frameObserverTimer)
         if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
@@ -12282,6 +12933,16 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         if (frameRestoreTimer !== null) window.clearTimeout(frameRestoreTimer)
         if (popoverMeasureFrame !== null) window.cancelAnimationFrame(popoverMeasureFrame)
         popoverMeasureFrame = null
+        if (persistTimer !== null) window.clearTimeout(persistTimer)
+        persistTimer = null
+        if (markerHoverTimer !== null) window.clearTimeout(markerHoverTimer)
+        if (detailCloseTimer !== null) window.clearTimeout(detailCloseTimer)
+        if (undoExpireTimer !== null) window.clearTimeout(undoExpireTimer)
+        if (detailMeasureFrame !== null) window.cancelAnimationFrame(detailMeasureFrame)
+        markerHoverTimer = null
+        detailCloseTimer = null
+        undoExpireTimer = null
+        detailMeasureFrame = null
         resizeTimer = null
         frameObserverTimer = null
         feedbackTimer = null
@@ -12368,6 +13029,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const immediate = settingsForRestore.immediate === true || prefersReducedMotion()
         const frame = annotationLayoutFrame()
         const snapshotFrame = frameSnapshot === null ? null : frameSnapshot.frame
+        restorePaintLayer()
         document.documentElement.removeAttribute('data-psa-active')
         document.documentElement.removeAttribute('data-psa-passthrough')
         if (frameRestoreTimer !== null) {
@@ -12405,8 +13067,16 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         document.documentElement.setAttribute('data-psa-active', 'true')
         try {
           installPageListeners()
+          // F3 needs the body observer even before any record resolves, because a
+          // floating card can appear under a stationary pointer with no selection.
+          ensureDomObserver()
           dispatch({ type: 'activate' })
           updateLayout()
+          // F1: raise the paint layer above native hover cards for the whole
+          // active window, after the frame works so a failed activation never
+          // leaves the shell chrome raised.
+          capturePaintLayer()
+          scheduleGeometry()
         } catch (error) {
           try {
             dispatch({ type: 'deactivate' })
@@ -12418,13 +13088,19 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           clearResolvedNodeCache()
           clearTimers()
           restoreAnnotationLayout({ immediate: true })
+          announceAnnotationState(false)
           throw error
         }
+        // F4: tell the dynamic-workspaces feature the mode is on (D3 split).
+        announceAnnotationState(true)
         feedback(t('feedback.modeOn'))
       }
 
       /** Turn annotation mode off and restore the exact original layout. @returns {void} */
       function deactivate() {
+        // F4: announce before teardown so the dependent hover card cannot outlive
+        // the mode; a defensive call while already off is harmless.
+        announceAnnotationState(false)
         if (!isActive()) {
           // Defensive cleanup: no state says "active", but an interrupted activation or a
           // foreign removal could still have page-level leftovers. None of these calls
@@ -12435,6 +13111,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           disconnectFrameObserver()
           clearResolvedNodeCache()
           restoreAnnotationLayout()
+          flushAnnotationRecords()
           return
         }
         try {
@@ -12444,10 +13121,19 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           // UI-state refresh below is best effort.
           abortGestures()
           clearResolvedNodeCache()
+          if (hoverRecomputeTimer !== null) {
+            window.clearTimeout(hoverRecomputeTimer)
+            hoverRecomputeTimer = null
+          }
           lastPick = null
+          cancelMarkerHoverTimer()
+          cancelDetailClose()
+          closeDetailCard()
+          publish({ markRects: [], markerHoverId: null, markUndo: null })
           uninstallPageListeners()
           disconnectFrameObserver()
           restoreAnnotationLayout()
+          flushAnnotationRecords()
           if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
           feedbackTimer = null
           try {
@@ -12640,26 +13326,67 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
-       * Add the current selection to the collection (add or update by identity).
+       * Commit the current selection into the collection (A3/T5/T7).
+       *
+       * This is the popover's primary action: it adds or updates the requirement,
+       * then auto-dismisses the popover + selection (spec §4.4) while the page marks
+       * stay visible. Multi-select keeps the Phase 1 batch wording but shares the
+       * same commit boundary. The 100-record cap is checked before any record is
+       * written (D15: explicit refusal, never a partial commit).
+       * @param {{ feedback?: boolean }} [options] - `feedback: false` suppresses the toast (quick reference).
+       * @returns {boolean} whether the selection was committed.
+       */
+      function commitSelection(options) {
+        const settingsForCommit = options !== null && typeof options === 'object' ? options : {}
+        const current = snapshot()
+        const state = current.state
+        if (state.selection.length === 0) return false
+        const sessionId = annotationBridge.sessionId ?? state.sessionId ?? null
+        const identityMatches = (item, ref) => identityKeyOf(item) === identityKeyOf(ref)
+          && (item?.session?.sessionId ?? null) === (ref.session?.sessionId ?? sessionId)
+        let additions = 0
+        for (const ref of state.selection) {
+          if (!state.collection.some((item) => identityMatches(item, ref))) additions += 1
+        }
+        if (state.collection.length + additions > ANNOTATION_RECORD_LIMIT) {
+          feedback(t('collection.maxReached', { limit: ANNOTATION_RECORD_LIMIT }), 'error')
+          return false
+        }
+        let updated = false
+        for (const ref of state.selection) {
+          const existing = snapshot().state.collection.some((item) => identityMatches(item, ref))
+          if (existing) updated = true
+          const entry = {
+            ...ref,
+            // Preserve the full captured identity (cwd/workspaceLabel) on every
+            // commit path; dropping them silently would break D6 across a reload.
+            session: {
+              ...(ref.session !== null && typeof ref.session === 'object' ? ref.session : {}),
+              sessionId: ref.session?.sessionId ?? sessionId
+            },
+            note: state.selection.length === 1 ? state.note : (ref.note ?? '')
+          }
+          dispatch({ type: 'annotationCommit', record: entry, now: Date.now() })
+        }
+        // Auto-dismiss: close the popover/card, clear the selection, keep the marks
+        // that the commit just refreshed (spec §4.4).
+        closeDetailCard({ keepMarker: true })
+        dispatch({ type: 'selectSingle', ref: null })
+        if (settingsForCommit.feedback !== false) {
+          if (state.selection.length > 1) feedback(updated ? t('feedback.updated') : t('feedback.added'))
+          else if (updated) feedback(t('feedback.markUpdated'))
+          else feedback(t('feedback.marked', { count: snapshot().state.collection.length }))
+        }
+        return true
+      }
+
+      /**
+       * Add the current selection to the collection (legacy name used by the rail
+       * multi-select action; same commit boundary as the popover primary action).
        * @returns {void}
        */
       function addSelectionToCollection() {
-        const current = snapshot()
-        const state = current.state
-        if (state.selection.length === 0) return
-        const sessionId = annotationBridge.sessionId ?? state.sessionId ?? null
-        let updated = false
-        for (const ref of state.selection) {
-          const entry = {
-            ...ref,
-            session: { sessionId: ref.session?.sessionId ?? sessionId },
-            note: state.selection.length === 1 ? state.note : (ref.note ?? '')
-          }
-          const existing = store.getSnapshot().state.collection.some((item) => identityKeyOf(item) === identityKeyOf(entry) && (item?.session?.sessionId ?? null) === (entry.session?.sessionId ?? null))
-          if (existing) updated = true
-          dispatch({ type: 'collectionAdd', entry })
-        }
-        feedback(updated ? t('feedback.updated') : t('feedback.added'))
+        commitSelection()
       }
 
       /**
@@ -12689,13 +13416,23 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         return true
       }
 
-      /** Insert the current selection as one quick reference. @returns {void} */
+      /**
+       * Insert the current selection as one quick reference (Phase 1 plain text).
+       *
+       * A3/T7: the annotation is committed first (if it is new), then the plain-text
+       * block is inserted and the popover auto-closes. The native composer chip is
+       * Phase 2-B; until then this stays the Phase 1 insertion contract.
+       * @returns {void}
+       */
       function quickReference() {
         const state = snapshot().state
         const ref = state.selection[0]
         if (ref === undefined) return
-        const withStatus = { ...ref, status: statusOf(ref) }
-        insertIntoComposer(serializeQuickReference(withStatus, state.note, annotationInsertLabels(t)))
+        const note = state.note
+        const text = serializeQuickReference({ ...ref, note, status: statusOf(ref) }, note, annotationInsertLabels(t))
+        const committed = commitSelection({ feedback: false })
+        if (!committed) return
+        insertIntoComposer(text)
       }
 
       /** Insert every current-Session collection entry as one ordered batch request. @returns {void} */
@@ -12730,10 +13467,12 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const state = snapshot().state
         const ref = state.selection[0]
         if (ref === undefined || lastPick === null) return
-        const nextIndex = lastPick.index + delta
-        if (nextIndex < 0 || nextIndex >= lastPick.chain.length) return
-        lastPick = { chain: lastPick.chain, index: nextIndex }
-        const nextRef = refFromChain(lastPick.chain, nextIndex, { ...ref, note: state.note })
+        // `delta` is the Parent/Child direction in the old chain model (+1 parent);
+        // a floating pick reverses it because its entry 0 is the whole card.
+        const nextIndex = lastPick.index + delta * lastPick.parentStep
+        if (nextIndex < 0 || nextIndex >= lastPick.entries.length) return
+        lastPick = { ...lastPick, index: nextIndex }
+        const nextRef = refFromPick(lastPick, { ...ref, note: state.note })
         dispatch({ type: 'selectSingle', ref: nextRef })
       }
 
@@ -12771,22 +13510,137 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
-       * Remove one collection entry.
+       * Publish the single-slot undo payload and (re)arm its 5 s expiry (D5).
+       * @param {object | null} undo - payload from `annotationUndoRemove`.
+       * @returns {void}
+       */
+      function setMarkUndo(undo) {
+        if (undoExpireTimer !== null) window.clearTimeout(undoExpireTimer)
+        undoExpireTimer = null
+        publish({ markUndo: undo })
+        if (undo !== null) {
+          undoExpireTimer = window.setTimeout(() => {
+            undoExpireTimer = null
+            publish({ markUndo: null })
+          }, ANNOTATION_UNDO_WINDOW_MS)
+        }
+      }
+
+      /**
+       * Remove one collection entry and show its 5 s undo toast (A3/T7/D4/D5).
+       * The newest removal replaces any previous undo slot.
        * @param {string} refId - ref id.
        * @returns {void}
        */
       function removeEntry(refId) {
-        dispatch({ type: 'collectionRemove', refId })
+        const current = snapshot()
+        if (!current.state.collection.some((entry) => entry.id === refId)) return
+        const removal = annotationUndoRemove(current.state.collection, refId, 'single', Date.now())
+        dispatch({ type: 'annotationRemove', refId })
         if (snapshot().noteEditor !== null && snapshot().noteEditor.refId === refId) publish({ noteEditor: null })
-        feedback(t('feedback.removed'))
+        if (snapshot().detailCard !== null && snapshot().detailCard.refId === refId) closeDetailCard()
+        setMarkUndo(removal.undo)
       }
 
-      /** Clear the collection. @returns {void} */
+      /** Remove the popover selection's existing collection record (danger X). @returns {void} */
+      function removeSelection() {
+        const state = snapshot().state
+        const ref = state.selection[0]
+        if (ref === undefined) return
+        const record = snapshot().state.collection.find((entry) => identityKeyOf(entry) === identityKeyOf(ref)
+          && (entry?.session?.sessionId ?? null) === (ref.session?.sessionId ?? null))
+        if (record === undefined) return
+        removeEntry(record.id)
+        dispatch({ type: 'selectSingle', ref: null })
+      }
+
+      /** Restore the single-slot undo payload (A3/T7/D5). @returns {void} */
+      function undoMark() {
+        const current = snapshot()
+        if (current.markUndo === null) return
+        const undo = current.markUndo
+        dispatch({ type: 'annotationUndo', undo })
+        setMarkUndo(null)
+        feedback(t('feedback.restored'))
+      }
+
+      /** Clear the collection, keeping its records in the same 5 s undo slot. @returns {void} */
       function clearCollection() {
-        if (snapshot().state.collection.length === 0) return
+        const current = snapshot()
+        if (current.state.collection.length === 0) return
+        const removal = annotationUndoRemove(current.state.collection, null, 'clear', Date.now())
         dispatch({ type: 'collectionClear' })
+        closeDetailCard()
         if (snapshot().noteEditor !== null) publish({ noteEditor: null })
-        feedback(t('feedback.cleared'))
+        setMarkUndo(removal.undo)
+      }
+
+      /**
+       * Open the detail card for a collection record by id (rail preview seam for
+       * Phase 2-B; the page path opens it through pointer hover).
+       * @param {string} refId - record id.
+       * @returns {boolean} whether the card opened.
+       */
+      function openDetailCardById(refId) {
+        const current = snapshot()
+        const mark = current.markRects.find((item) => item.id === refId)
+        if (mark === undefined) return false
+        openDetailCard(mark)
+        return snapshot().detailCard !== null
+      }
+
+      /** Enter the detail card's edit mode (requirement textarea). @returns {void} */
+      function beginDetailEdit() {
+        const current = snapshot()
+        if (current.detailCard === null) return
+        if (current.detailCard.mode === 'edit') return
+        publish({ detailCard: { ...current.detailCard, mode: 'edit' } })
+      }
+
+      /** Leave the detail card's edit mode without saving. @returns {void} */
+      function cancelDetailEdit() {
+        const current = snapshot()
+        if (current.detailCard === null || current.detailCard.mode !== 'edit') return
+        publish({ detailCard: { ...current.detailCard, mode: 'view' } })
+      }
+
+      /**
+       * Save one requirement from the detail card, bumping `updatedAt` (D4).
+       * @param {string} refId - record id.
+       * @param {string} note - requirement text.
+       * @returns {void}
+       */
+      function saveDetailNote(refId, note) {
+        if (typeof refId !== 'string' || refId.length === 0) return
+        dispatch({ type: 'annotationUpdateNote', refId, note: normalizeUserNote(note), now: Date.now() })
+        const current = snapshot()
+        if (current.detailCard !== null && current.detailCard.refId === refId) {
+          publish({ detailCard: { ...current.detailCard, mode: 'view' } })
+        }
+        feedback(t('feedback.markUpdated'))
+      }
+
+      /**
+       * Insert one collection record as a quick reference (Phase 1 plain text) from
+       * the detail card, then auto-dismiss the card (spec §4.4).
+       * @param {string} refId - record id.
+       * @returns {void}
+       */
+      function quickReferenceById(refId) {
+        const record = snapshot().state.collection.find((entry) => entry.id === refId)
+        if (record === undefined) return
+        const text = serializeQuickReference({ ...record, status: statusOf(record) }, record.note ?? '', annotationInsertLabels(t))
+        closeDetailCard()
+        insertIntoComposer(text)
+      }
+
+      /**
+       * Delete one record from the detail card (same undo toast as every other X).
+       * @param {string} refId - record id.
+       * @returns {void}
+       */
+      function deleteDetail(refId) {
+        removeEntry(refId)
       }
 
       /**
@@ -12851,7 +13705,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
        * @returns {void}
        */
       function sessionChanged(sessionId) {
+        closeDetailCard()
         dispatch({ type: 'session', sessionId })
+        scheduleGeometry()
       }
 
       // The launcher must obey the viewport for the whole plugin lifetime, not
@@ -12860,14 +13716,19 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
 
       /** Tear everything down (plugin unmount). @returns {void} */
       function dispose() {
+        announceAnnotationState(false)
         window.removeEventListener('resize', onInstalledResize)
         abortGestures()
         clearResolvedNodeCache()
         detachPopoverNode()
+        detachDetailNode()
+        cancelMarkerHoverTimer()
+        cancelDetailClose()
         uninstallPageListeners()
         disconnectFrameObserver()
         clearTimers()
         restoreAnnotationLayout({ immediate: true })
+        flushAnnotationRecords()
         if (flashTimer !== null) window.clearTimeout(flashTimer)
         flashTimer = null
         pointer = null
@@ -12879,6 +13740,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         }
         annotationBridge.inputActions = null
         annotationBridge.sessionId = null
+        annotationBridge.sessionCwd = null
       }
 
       return {
@@ -12900,14 +13762,27 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         beginEdit,
         endEdit,
         addSelectionToCollection,
+        commitSelection,
         quickReference,
+        quickReferenceById,
         insertBatch,
+        copyLocator,
         levelUp: () => shiftChain(1),
         levelDown: () => shiftChain(-1),
         setModifier,
         updateCollectionNote,
         removeEntry,
+        removeSelection,
+        undoMark,
         clearCollection,
+        openDetailCardById,
+        closeDetailCard,
+        beginDetailEdit,
+        cancelDetailEdit,
+        saveDetailNote,
+        deleteDetail,
+        attachDetailNode,
+        detachDetailNode,
         relocateEntry,
         openNoteEditor,
         closeNoteEditor,
@@ -12929,7 +13804,11 @@ html[data-psa-active="true"] [data-psp-search-card],
 html[data-psa-active="true"] [data-psp-preview-card],
 html[data-psa-active="true"] [data-psp-rail-divider],
 html[data-psa-active="true"] [data-psp-search-toggle]{display:none!important}
-html[data-power-suite-project-page="true"] [data-psa-launcher]{display:none!important}
+/* F4 (annotation side, D3): while the mode is on, the dynamic-workspaces
+   hover card becomes hit-testable and sits above page content but below the
+   annotation paint layer (z=150). The pin/lifetime behavior itself is owned by
+   the dynamic-workspaces feature, which listens to power-suite:ui-annotation-state. */
+html[data-psa-active="true"] [data-psd-hovercard]{pointer-events:auto;z-index:120!important}
 html[data-psa-active="true"]:not([data-psa-passthrough="true"]) body{cursor:crosshair}
 html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-launcher{position:fixed;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:50%;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);box-shadow:var(--dsw-elevation-panel,0 6px 24px rgb(0 0 0 / 18%));cursor:grab;pointer-events:auto;touch-action:none;user-select:none;z-index:50}
@@ -12987,29 +13866,80 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-status-dot[data-psa-status=missing]{background:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-tertiary))}
 .psa-entry-locator{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .psa-entry-note{box-sizing:border-box;width:100%;min-height:34px;max-height:72px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
-.psa-entry-note:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psa-entry-actions{display:flex;justify-content:flex-end;gap:2px}
 .psa-empty{display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center;padding:18px 6px;border:1px dashed var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px)}
 .psa-empty-title{color:var(--dsw-alias-label-primary);font-weight:500}
 .psa-field{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
 .psa-field-label{min-width:0;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .psa-select{appearance:none;height:26px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-layer-1));color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;cursor:pointer}
-.psa-select:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.psa-mark{position:fixed;box-sizing:border-box;border:1px solid color-mix(in srgb,var(--dsw-alias-state-business-primary) 62%,transparent);background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,transparent);border-radius:4px;pointer-events:none}
+.psa-mark[data-psa-mark-state=hovering]{border-width:1.5px;background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 12%,transparent)}
+.psa-mark[data-psa-mark-stale=changed]{border-style:dashed;border-color:var(--dsw-alias-state-warn-primary,var(--dsw-alias-state-business-primary))}
+.psa-mark-badge{position:absolute;top:-9px;right:-1px;box-sizing:border-box;max-width:240px;height:17px;padding:0 5px;display:inline-flex;align-items:center;gap:4px;border-radius:9px;border:1px solid var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-state-business-primary);font-family:inherit;font-size:10.5px;font-weight:500;line-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-mark[data-psa-mark-badge-inside=true] .psa-mark-badge{top:2px;right:2px}
+.psa-mark-badge[data-psa-mark-empty=true]{color:var(--dsw-alias-label-tertiary);border-color:var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent))}
+.psa-mark-badge[data-psa-mark-stale=changed]{border-color:var(--dsw-alias-state-warn-primary,var(--dsw-alias-state-business-primary));color:var(--dsw-alias-state-warn-primary,var(--dsw-alias-state-business-primary))}
+.psa-mark-badge-index{font-variant-numeric:tabular-nums;opacity:.85}
+.psa-mark-badge-text{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.psa-mark-badge-stale{font-weight:700}
+@media (prefers-reduced-motion:reduce){.psa-mark[data-psa-mark-state=flash]{animation:none;box-shadow:0 0 0 2px var(--dsw-alias-state-business-primary)}}
+.psa-detail-card{position:fixed;box-sizing:border-box;width:320px;max-height:min(60vh,420px);display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:auto;z-index:44;overflow:auto}
+.psa-detail-head{display:flex;align-items:center;gap:6px}
+.psa-detail-title{flex:1;min-width:0;font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-detail-section{display:flex;flex-direction:column;gap:3px}
+.psa-detail-label{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary)}
+.psa-detail-requirement{white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto;padding:4px 6px;border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-layer-1));color:var(--dsw-alias-label-primary)}
+.psa-detail-requirement[data-psa-detail-empty=true]{color:var(--dsw-alias-label-tertiary)}
+.psa-detail-meta{display:grid;grid-template-columns:auto minmax(0,1fr);gap:1px 8px;margin:0;font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary)}
+.psa-detail-meta dt{margin:0;white-space:nowrap}
+.psa-detail-meta dd{margin:0;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}
+.psa-detail-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px}
+.psa-detail-actions .psa-btn{width:auto;flex:none}
+.psa-detail-danger{color:var(--dsw-alias-state-error-primary)}
+.psa-detail-textarea{box-sizing:border-box;width:100%;min-height:64px;max-height:180px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
+.psa-undo-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:57;display:flex;align-items:center;gap:10px;max-width:min(520px,calc(100vw - 48px));padding:8px 10px 8px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 8px 24px rgb(0 0 0 / 18%));color:var(--dsw-alias-label-secondary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:auto}
+.psa-undo-toast .psa-btn{width:auto;min-height:24px;padding:2px 8px}
 .psa-popover{position:fixed;box-sizing:border-box;width:320px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;gap:8px;padding:10px 12px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:auto;z-index:45}
 .psa-popover-head{display:flex;align-items:center;gap:6px;cursor:grab;user-select:none}
 .psa-popover-title{flex:1;min-width:0;font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psa-popover-ref{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-popover-ref{display:flex;align-items:center;gap:4px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;min-width:0}
+.psa-popover-ref .psa-truncate{flex:1;min-width:0}
+.psa-popover-ref .psa-icon-btn{width:20px;height:20px}
 .psa-popover-status{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:16px}
 .psa-levels{display:inline-flex;align-items:center;gap:2px;margin-left:auto}
 .psa-popover-note{display:flex;flex-direction:column;gap:4px}
 .psa-popover-textarea{box-sizing:border-box;width:100%;min-height:56px;max-height:150px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
-.psa-popover-textarea:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psa-popover-actions{display:flex;gap:6px}
 .psa-popover-actions .psa-btn{flex:1;justify-content:center}
 .psa-note-editor{position:fixed;box-sizing:border-box;width:300px;display:flex;flex-direction:column;gap:6px;padding:10px 12px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:auto;z-index:55}
 .psa-note-editor-textarea{box-sizing:border-box;width:100%;min-height:96px;max-height:220px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
 .psa-feedback{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:56;max-width:min(520px,calc(100vw - 48px));padding:8px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 8px 24px rgb(0 0 0 / 18%));color:var(--dsw-alias-label-secondary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:none}
 .psa-feedback[data-psa-kind=error]{color:var(--dsw-alias-state-error-primary)}
+/* B3: rainbow circulating focus ring for annotation inputs. Values are copied from
+   the shared dynamic-workspaces recipe (.psf-rainbow-focus) so every plugin input
+   reads as one effect: identical conic stops, the same 140ms fade, 3.2s ring spin
+   plus 14s hue drift, and the same reduced-motion/forced-colors fallbacks. The
+   wrapper owns the ring; the control keeps its border and loses the solid focus
+   outline, so keyboard focus stays visible without layout shift. */
+@property --psa-ring-angle{syntax:'<angle>';inherits:false;initial-value:0deg}
+.psa-rainbow-field{position:relative;display:block;min-width:0}
+.psa-field > .psa-rainbow-field{flex:none}
+.psa-rainbow-field::after{content:'';position:absolute;inset:-2px;border-radius:calc(var(--dsw-radius-sm,8px) + 2px);padding:2px;background:conic-gradient(from var(--psa-ring-angle,0deg),#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:0;transition:opacity 140ms var(--ds-ease-in-out,ease);filter:saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38));z-index:2}
+.psa-rainbow-field:focus-within::after,.psa-rainbow-field:focus-visible::after{opacity:1;animation:psa-ring-spin 3.2s linear infinite,psa-ring-hue 14s linear infinite}
+.psa-rainbow-field > .psa-popover-textarea,
+.psa-rainbow-field > .psa-entry-note,
+.psa-rainbow-field > .psa-note-editor-textarea,
+.psa-rainbow-field > .psa-detail-textarea,
+.psa-rainbow-field > .psa-select{position:relative;z-index:1;outline:none}
+@keyframes psa-ring-spin{to{--psa-ring-angle:360deg}}
+@keyframes psa-ring-hue{from{filter:hue-rotate(0deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}to{filter:hue-rotate(360deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}}
+@media (prefers-reduced-motion:reduce){
+.psa-rainbow-field:focus-within::after,.psa-rainbow-field:focus-visible::after{animation:none}
+}
+@media (forced-colors:active){
+.psa-rainbow-field::after{display:none}
+.psa-rainbow-field:focus-within{outline:2px solid Highlight;outline-offset:1px}
+}
 `
 
     /**
@@ -13077,13 +14007,35 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       const node = []
       node.push(React.createElement(AnnotationLauncher, { key: 'launcher', t, controller, snapshot }))
       if (active) {
-        node.push(React.createElement(AnnotationHighlights, { key: 'layer', snapshot }))
+        node.push(React.createElement(AnnotationHighlights, { key: 'layer', snapshot, t }))
         node.push(React.createElement(AnnotationRail, { key: 'rail', t, controller, snapshot }))
         if (state.phase === 'selected') {
           node.push(React.createElement(AnnotationPopover, { key: 'popover', t, controller, snapshot }))
         }
+        if (snapshot.detailCard !== null) {
+          node.push(React.createElement(AnnotationDetailCard, { key: 'detail', t, controller, snapshot }))
+        }
       }
       if (snapshot.noteEditor !== null) node.push(React.createElement(AnnotationNoteEditor, { key: 'note-editor', t, controller, snapshot }))
+      if (snapshot.markUndo !== null) {
+        const undo = snapshot.markUndo
+        node.push(React.createElement('div', {
+          key: 'undo-toast',
+          className: 'psa-undo-toast',
+          'data-psa-undo-toast': '',
+          'data-psa-own': '',
+          role: 'status',
+          'aria-live': 'polite'
+        },
+        React.createElement('span', { 'data-psa-undo-text': '' }, undo.kind === 'clear' ? t('feedback.cleared') : t('feedback.markDeleted')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-undo': '',
+          'data-psa-own': '',
+          onClick: () => controller.undoMark()
+        }, t('feedback.undo'))))
+      }
       if (state.feedback !== null) {
         node.push(React.createElement('div', {
           key: 'feedback',
@@ -13131,12 +14083,56 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
-     * Hover, selection, marquee, and re-locate flash rectangles.
-     * @param {{ snapshot: object }} props - surface props.
+     * The page mark badges for the current Session's resolved annotations (A3/T6).
+     *
+     * Marks are decorative overlay children only: `aria-hidden`, pointer-events
+     * none (CSS), and no attribute is ever written to the page's own elements.
+     * @param {object} snapshot - current annotation snapshot.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {Array<object>} mark elements.
+     */
+    function annotationMarkElements(snapshot, t) {
+      const marks = Array.isArray(snapshot.markRects) ? snapshot.markRects : []
+      const nodes = []
+      for (const mark of marks) {
+        const hovering = snapshot.markerHoverId === mark.id
+        const summary = mark.empty === true ? t('detail.emptyRequirement') : String(mark.summary ?? '')
+        const title = `#${mark.index} · ${summary}${mark.stale === true ? ` · ${t('popover.status.changed')}` : ''}`
+        const badgeInside = mark.rect !== null && typeof mark.rect === 'object' && typeof mark.rect.y === 'number' && mark.rect.y < 12
+        nodes.push(React.createElement('div', {
+          key: `mark-${mark.id}`,
+          className: 'psa-mark',
+          'data-psa-mark': '',
+          'data-psa-mark-id': mark.id,
+          'data-psa-mark-index': String(mark.index),
+          'data-psa-mark-state': hovering ? 'hovering' : 'marked',
+          'data-psa-mark-stale': mark.stale === true ? 'changed' : undefined,
+          'data-psa-mark-badge-inside': badgeInside ? 'true' : undefined,
+          'data-psa-own': '',
+          'aria-hidden': 'true',
+          style: annotationRectStyle(mark.rect)
+        },
+        React.createElement('span', {
+          className: 'psa-mark-badge',
+          'data-psa-mark-badge': '',
+          'data-psa-mark-empty': mark.empty === true ? 'true' : undefined,
+          'data-psa-mark-stale': mark.stale === true ? 'changed' : undefined,
+          title
+        },
+        React.createElement('span', { className: 'psa-mark-badge-index' }, `#${mark.index}`),
+        mark.stale === true ? React.createElement('span', { className: 'psa-mark-badge-stale', 'aria-hidden': 'true' }, '!') : null,
+        React.createElement('span', { className: 'psa-mark-badge-text' }, summary))))
+      }
+      return nodes
+    }
+
+    /**
+     * Hover, selection, marquee, mark, and re-locate flash rectangles.
+     * @param {{ snapshot: object, t: Function }} props - surface props.
      * @returns {object} the highlight layer.
      */
     function AnnotationHighlights(props) {
-      const { snapshot } = props
+      const { snapshot, t } = props
       const state = snapshot.state
       const boxes = []
       if (snapshot.hoverRect !== null) {
@@ -13179,6 +14175,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           style: annotationRectStyle(snapshot.boxRect)
         }))
       }
+      boxes.push(...annotationMarkElements(snapshot, t))
       return React.createElement('div', { className: 'psa-layer', 'data-psa-layer': '', 'data-psa-own': '' }, boxes)
     }
 
@@ -13288,6 +14285,13 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           React.createElement('div', { className: 'psa-status-line psa-status-strong' }, status),
           selection.length === 1
             ? React.createElement('div', { className: 'psa-muted psa-truncate', title: elementLabel(selection[0]) }, `${t('rail.selectedName')} · ${elementLabel(selection[0])}`)
+            : null,
+          selection.length === 1 && selection[0]?.locator?.surface === 'floating'
+            ? React.createElement('div', {
+              className: 'psa-muted',
+              'data-psa-surface-badge': 'floating',
+              'data-psa-own': ''
+            }, `${t('rail.surfaceFloating')} · ${t('rail.surfaceTransient')}`)
             : null,
           React.createElement('div', { className: 'psa-muted' }, hint))
       ]
@@ -13425,24 +14429,34 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
             'aria-label': t(`popover.status.${status}`)
           })),
       React.createElement('div', { className: 'psa-entry-locator', title: locator }, locator),
-      React.createElement('textarea', {
-        className: 'psa-entry-note',
-        'data-psa-entry-note': '',
-        'data-psa-own': '',
-        rows: 2,
-        value: typeof entry.note === 'string' ? entry.note : '',
-        placeholder: t('collection.notePlaceholder'),
-        'aria-label': t('collection.notePlaceholder'),
-        onChange: (event) => {
-          const textarea = event.currentTarget
-          if (textarea !== null && typeof textarea === 'object') {
-            textarea.style.height = 'auto'
-            textarea.style.height = `${Math.min(textarea.scrollHeight ?? 34, 72)}px`
+      React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
+        React.createElement('textarea', {
+          className: 'psa-entry-note',
+          'data-psa-entry-note': '',
+          'data-psa-own': '',
+          rows: 2,
+          value: typeof entry.note === 'string' ? entry.note : '',
+          placeholder: t('collection.notePlaceholder'),
+          'aria-label': t('collection.notePlaceholder'),
+          onChange: (event) => {
+            const textarea = event.currentTarget
+            if (textarea !== null && typeof textarea === 'object') {
+              textarea.style.height = 'auto'
+              textarea.style.height = `${Math.min(textarea.scrollHeight ?? 34, 72)}px`
+            }
+            controller.updateCollectionNote(entry.id, textarea === null ? '' : textarea.value)
           }
-          controller.updateCollectionNote(entry.id, textarea === null ? '' : textarea.value)
-        }
-      }),
+        })),
       React.createElement('div', { className: 'psa-entry-actions' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-entry-copy-locator': '',
+          'data-psa-own': '',
+          'aria-label': t('collection.copyLocator'),
+          title: t('collection.copyLocator'),
+          onClick: () => controller.copyLocator(entry.id)
+        }, RemixGlyph(REMIX_ANNOTATION_COPY_LINE, 13)),
         React.createElement('button', {
           type: 'button',
           className: 'psa-icon-btn',
@@ -13513,13 +14527,14 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         'data-psa-own': ''
       },
       React.createElement('span', { className: 'psa-field-label' }, t(labelKey)),
-      React.createElement('select', {
-        className: 'psa-select',
-        'data-psa-own': '',
-        [dataAttribute]: '',
-        value,
-        onChange: (event) => controller.setModifier(fieldName, event.target.value)
-      }, MODIFIER_CHOICES.map((choice) => React.createElement('option', { key: choice, value: choice }, t(`modifier.${choice}`)))))
+      React.createElement('span', { className: 'psa-rainbow-field', 'data-psa-own': '' },
+        React.createElement('select', {
+          className: 'psa-select',
+          'data-psa-own': '',
+          [dataAttribute]: '',
+          value,
+          onChange: (event) => controller.setModifier(fieldName, event.target.value)
+        }, MODIFIER_CHOICES.map((choice) => React.createElement('option', { key: choice, value: choice }, t(`modifier.${choice}`))))))
       const message = snapshot.state.feedback === null ? '' : snapshot.state.feedback.text
       return React.createElement('div', { className: 'psa-rail-section' },
         React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
@@ -13545,6 +14560,179 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
+     * Hover detail card for one current-Session annotation (A3/T6).
+     *
+     * Opens after 120 ms of pointer rest on a page mark, anchored beside the mark
+     * with side/vertical flip and viewport clamping; the pointer may move into the
+     * card (keep-open union). It never steals focus on hover; explicit actions
+     * (Edit requirement / Add requirement) may focus their textarea.
+     * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
+     * @returns {object | null} the detail card.
+     */
+    function AnnotationDetailCard(props) {
+      const { t, controller, snapshot } = props
+      const card = snapshot.detailCard
+      /** Requirement draft; uncontrolled so hover reopen never fights the record value. */
+      const noteRef = React.useRef(null)
+      const setDetailNode = React.useCallback((node) => {
+        if (node === null) controller.detachDetailNode()
+        else controller.attachDetailNode(node)
+      }, [controller])
+      if (card === null) return null
+      const record = snapshot.state.collection.find((entry) => entry.id === card.refId)
+      if (record === undefined) return null
+      const status = controller.statusOf(record)
+      const editing = card.mode === 'edit'
+      const locator = annotationLocatorText(record)
+      const mark = (Array.isArray(snapshot.markRects) ? snapshot.markRects : []).find((item) => item.id === record.id)
+      const liveBounds = mark !== undefined && mark.rect !== null ? mark.rect : normalizeAnnotationBounds(record.bounds)
+      const bounds = liveBounds ?? { x: 0, y: 0, width: 0, height: 0 }
+      const positionText = `${Math.round(bounds.x)}, ${Math.round(bounds.y)} · ${Math.round(bounds.width)}×${Math.round(bounds.height)}`
+      const sessionId = record.session !== null && typeof record.session === 'object' ? record.session.sessionId : null
+      const sessionText = `${sessionShortLabel(sessionId) || t('insert.noSession')} · ${formatAnnotationTime(record.at)}`
+      const cwd = record.session !== null && typeof record.session === 'object' ? record.session.cwd : null
+      const workspaceText = (record.session !== null && typeof record.session === 'object' ? record.session.workspaceLabel : null)
+        || annotationWorkspaceLabel(cwd)
+        || '—'
+      const surface = record.locator !== null && typeof record.locator === 'object' ? record.locator.surface : 'page'
+      const ephemeral = record.locator !== null && typeof record.locator === 'object' && record.locator.ephemeral === true
+      const requirement = typeof record.note === 'string' ? record.note : ''
+      /**
+       * One metadata row.
+       * @param {string} label - localized label.
+       * @param {string} value - display value.
+       * @param {string} marker - data attribute for E2E.
+       * @returns {Array<object>} dt/dd pair.
+       */
+      const metaRow = (label, value, marker) => React.createElement(React.Fragment, null,
+        React.createElement('dt', null, label),
+        React.createElement('dd', { [marker]: '' }, value))
+      return React.createElement('div', {
+        ref: setDetailNode,
+        className: 'psa-detail-card',
+        'data-psa-detail': '',
+        'data-psa-own': '',
+        'data-psa-detail-ref': record.id,
+        'data-psa-detail-mode': card.mode,
+        'data-psa-status': status,
+        role: 'dialog',
+        'aria-label': t('detail.title'),
+        style: { left: `${card.x}px`, top: `${card.y}px` }
+      },
+      React.createElement('div', { className: 'psa-detail-head', 'data-psa-own': '' },
+        React.createElement('span', { className: 'psa-status-dot', 'data-psa-status': status, 'data-psa-own': '' }),
+        React.createElement('span', { className: 'psa-detail-title', 'data-psa-detail-title': '' }, elementLabel(record)),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-detail-close': '',
+          'data-psa-own': '',
+          'aria-label': t('detail.close'),
+          title: t('detail.close'),
+          onClick: () => controller.closeDetailCard()
+        }, RemixGlyph(REMIX_CLOSE_LINE, 14))),
+      React.createElement('div', { className: 'psa-detail-section', 'data-psa-own': '' },
+        React.createElement('span', { className: 'psa-detail-label' }, t('detail.requirement')),
+        editing
+          ? React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
+            React.createElement('textarea', {
+              key: `detail-note-${record.id}`,
+              className: 'psa-detail-textarea',
+              'data-psa-detail-note': '',
+              'data-psa-own': '',
+              ref: noteRef,
+              defaultValue: requirement,
+              rows: 3,
+              placeholder: t('popover.notePlaceholder'),
+              'aria-label': t('detail.requirement'),
+              autoFocus: true
+            }))
+          : React.createElement('div', {
+            className: 'psa-detail-requirement',
+            'data-psa-detail-requirement': '',
+            'data-psa-own': '',
+            'data-psa-detail-empty': requirement.length === 0 ? 'true' : undefined
+          }, requirement.length > 0 ? requirement : t('detail.emptyRequirement')),
+        !editing && requirement.length === 0
+          ? React.createElement('button', {
+            type: 'button',
+            className: 'psa-btn',
+            'data-psa-detail-add': '',
+            'data-psa-own': '',
+            style: { width: 'auto', alignSelf: 'flex-start' },
+            onClick: () => controller.beginDetailEdit()
+          }, t('detail.addRequirement'))
+          : null,
+        editing
+          ? React.createElement('div', { className: 'psa-detail-actions', 'data-psa-own': '' },
+            React.createElement('button', {
+              type: 'button',
+              className: 'psa-btn',
+              'data-psa-detail-cancel': '',
+              'data-psa-own': '',
+              onClick: () => controller.cancelDetailEdit()
+            }, t('detail.cancel')),
+            React.createElement('button', {
+              type: 'button',
+              className: 'psa-btn psa-btn-primary',
+              'data-psa-detail-save': '',
+              'data-psa-own': '',
+              onClick: () => {
+                const text = noteRef.current !== null && noteRef.current !== undefined ? noteRef.current.value : ''
+                controller.saveDetailNote(record.id, text)
+              }
+            }, t('detail.save')))
+          : null),
+      React.createElement('dl', { className: 'psa-detail-meta', 'data-psa-detail-meta': '', 'data-psa-own': '' },
+        metaRow(t('detail.status'), t(`popover.status.${status}`), 'data-psa-detail-status'),
+        metaRow(t('detail.locator'), locator, 'data-psa-detail-locator'),
+        metaRow(t('detail.position'), positionText, 'data-psa-detail-position'),
+        metaRow(t('detail.session'), sessionText, 'data-psa-detail-session'),
+        metaRow(t('detail.workspace'), workspaceText, 'data-psa-detail-workspace'),
+        surface === 'floating'
+          ? metaRow(t('detail.surfaceFloating'), ephemeral ? t('detail.ephemeral') : t('detail.surfaceFloating'), 'data-psa-detail-surface')
+          : null),
+      React.createElement('div', { className: 'psa-detail-actions', 'data-psa-own': '' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-detail-quick-ref': '',
+          'data-psa-own': '',
+          onClick: () => controller.quickReferenceById(record.id)
+        }, t('detail.quickRef')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-detail-edit': '',
+          'data-psa-own': '',
+          onClick: () => controller.beginDetailEdit()
+        }, t('detail.edit')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-detail-relocate': '',
+          'data-psa-own': '',
+          onClick: () => controller.relocateEntry(record.id)
+        }, t('detail.relocate')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-detail-copy-locator': '',
+          'data-psa-own': '',
+          onClick: () => controller.copyLocator(record.id)
+        }, t('detail.copyLocator')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn psa-detail-danger',
+          'data-psa-detail-delete': '',
+          'data-psa-own': '',
+          'aria-label': t('detail.delete'),
+          title: t('detail.delete'),
+          onClick: () => controller.deleteDetail(record.id)
+        }, RemixGlyph(REMIX_DELETE_BIN_LINE, 14))))
+    }
+
+    /**
      * The draggable element popover with the note editor and the two actions.
      * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
      * @returns {object | null} the popover.
@@ -13561,11 +14749,15 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       const status = controller.statusOf(ref)
       const inCollection = controller.isInCollection(ref)
       const locator = describeLocator(ref)
+      const surface = ref?.locator?.surface === 'floating' ? 'floating' : 'page'
+      const ephemeral = surface === 'floating'
       return React.createElement('div', {
         ref: setPopoverNode,
         className: 'psa-popover',
         'data-psa-popover': '',
         'data-psa-own': '',
+        'data-psa-surface': surface,
+        'data-psa-ephemeral': ephemeral ? 'true' : undefined,
         role: 'dialog',
         'aria-label': t('popover.aria'),
         style: { left: `${snapshot.popoverPosition.x}px`, top: `${snapshot.popoverPosition.y}px` }
@@ -13586,7 +14778,24 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         title: t('popover.close'),
         onClick: () => controller.clearSelection()
       }, RemixGlyph(REMIX_CLOSE_LINE, 14))),
-      React.createElement('div', { className: 'psa-popover-ref', 'data-psa-popover-ref': '', title: locator }, locator),
+      React.createElement('div', { className: 'psa-popover-ref', 'data-psa-popover-ref': '', title: locator },
+        React.createElement('span', { className: 'psa-truncate', 'data-psa-own': '' }, locator),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-popover-copy-locator': '',
+          'data-psa-own': '',
+          'aria-label': t('popover.copyLocator'),
+          title: t('popover.copyLocator'),
+          onClick: () => controller.copyLocator()
+        }, RemixGlyph(REMIX_ANNOTATION_COPY_LINE, 13))),
+      ephemeral
+        ? React.createElement('div', {
+          className: 'psa-muted',
+          'data-psa-ephemeral-hint': '',
+          'data-psa-own': ''
+        }, t('popover.ephemeralHint'))
+        : null,
       React.createElement('div', {
         className: 'psa-popover-status',
         'data-psa-popover-status': '',
@@ -13614,19 +14823,20 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           onClick: () => controller.levelDown()
         }, RemixGlyph(REMIX_ARROW_DOWN_LINE, 13)))),
       React.createElement('label', { className: 'psa-popover-note', 'data-psa-own': '' },
-        React.createElement('span', { className: 'psa-muted' }, t('popover.noteLabel')),
-        React.createElement('textarea', {
-          className: 'psa-popover-textarea',
-          'data-psa-note': '',
-          'data-psa-own': '',
-          rows: 3,
-          value: state.note,
-          placeholder: t('popover.notePlaceholder'),
-          'aria-label': t('popover.noteLabel'),
-          onChange: (event) => controller.updateNote(event.target.value),
-          onFocus: () => controller.beginEdit(),
-          onBlur: () => controller.endEdit()
-        })),
+        React.createElement('span', { className: 'psa-muted' }, t('detail.requirement')),
+        React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
+          React.createElement('textarea', {
+            className: 'psa-popover-textarea',
+            'data-psa-note': '',
+            'data-psa-own': '',
+            rows: 3,
+            value: state.note,
+            placeholder: t('popover.notePlaceholder'),
+            'aria-label': t('popover.noteLabel'),
+            onChange: (event) => controller.updateNote(event.target.value),
+            onFocus: () => controller.beginEdit(),
+            onBlur: () => controller.endEdit()
+          }))),
       React.createElement('div', { className: 'psa-popover-actions' },
         React.createElement('button', {
           type: 'button',
@@ -13639,9 +14849,21 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           type: 'button',
           className: 'psa-btn psa-btn-primary',
           'data-psa-add': '',
+          'data-psa-commit': '',
           'data-psa-own': '',
-          onClick: () => controller.addSelectionToCollection()
-        }, inCollection ? t('popover.update') : t('popover.add'))))
+          onClick: () => controller.commitSelection()
+        }, inCollection ? t('popover.update') : t('popover.commit')),
+        inCollection
+          ? React.createElement('button', {
+            type: 'button',
+            className: 'psa-icon-btn psa-detail-danger',
+            'data-psa-popover-delete': '',
+            'data-psa-own': '',
+            'aria-label': t('popover.delete'),
+            title: t('popover.delete'),
+            onClick: () => controller.removeSelection()
+          }, RemixGlyph(REMIX_DELETE_BIN_LINE, 14))
+          : null))
     }
 
     /**
@@ -13673,16 +14895,17 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           onClick: () => controller.closeNoteEditor()
         }, RemixGlyph(REMIX_CLOSE_LINE, 14))),
       React.createElement('div', { className: 'psa-muted psa-truncate' }, elementLabel(entry)),
-      React.createElement('textarea', {
-        className: 'psa-note-editor-textarea',
-        'data-psa-own': '',
-        value: typeof entry.note === 'string' ? entry.note : '',
-        placeholder: t('collection.notePlaceholder'),
-        'aria-label': t('collection.notePlaceholder'),
-        autoFocus: true,
-        onChange: (event) => controller.updateCollectionNote(entry.id, event.target.value),
-        onBlur: () => controller.closeNoteEditor()
-      }))
+      React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
+        React.createElement('textarea', {
+          className: 'psa-note-editor-textarea',
+          'data-psa-own': '',
+          value: typeof entry.note === 'string' ? entry.note : '',
+          placeholder: t('collection.notePlaceholder'),
+          'aria-label': t('collection.notePlaceholder'),
+          autoFocus: true,
+          onChange: (event) => controller.updateCollectionNote(entry.id, event.target.value),
+          onBlur: () => controller.closeNoteEditor()
+        })))
     }
 
     /**
@@ -13693,9 +14916,22 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
      */
     function AnnotationSessionSeat(props) {
       const { sessionId, inputActions } = props
+      // Session-scoped slots receive the global `useSessions` standard hook. The
+      // annotation overlay itself is not a slot, so this seat mirrors the Session's
+      // workspace identity (cwd) into the bridge for record capture (F-2). The hook
+      // presence is fixed by the slot contract for this seat's lifetime.
+      const useSessions = typeof props.useSessions === 'function' ? props.useSessions : null
+      const sessionsList = useSessions !== null ? useSessions((state) => state) : null
+      const sessionCwd = sessionId !== undefined && sessionsList !== null && typeof sessionsList === 'object'
+        && sessionsList.byId !== null && typeof sessionsList.byId === 'object'
+        && typeof sessionsList.byId[sessionId]?.cwd === 'string'
+        && sessionsList.byId[sessionId].cwd.length > 0
+        ? sessionsList.byId[sessionId].cwd
+        : null
       React.useEffect(() => {
         annotationBridge.sessionId = typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null
         annotationBridge.inputActions = inputActions ?? null
+        annotationBridge.sessionCwd = sessionCwd
         if (annotationController !== null) annotationController.sessionChanged(annotationBridge.sessionId)
         return () => {
           // The bridge is all-or-nothing: a session id without its Composer actions (or the
@@ -13703,9 +14939,10 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           // seat unmounts (e.g. leaving the conversation for the Plugins view).
           annotationBridge.sessionId = null
           annotationBridge.inputActions = null
+          annotationBridge.sessionCwd = null
           if (annotationController !== null) annotationController.sessionChanged(null)
         }
-      }, [sessionId, inputActions])
+      }, [sessionId, inputActions, sessionCwd])
       return React.createElement('span', {
         style: { display: 'none' },
         'aria-hidden': true
@@ -13732,22 +14969,6 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         document.head.appendChild(style)
         return () => style.remove()
       }, 'power-suite: ui annotation stylesheet')
-      ctx.effect(() => {
-        // The Project page owns the viewport (z-index) when open; leave
-        // annotation mode so its capture layer cannot swallow page input and
-        // only the page's Esc ladder stays active. The launcher reappears on
-        // close, with annotation mode still off.
-        const onExit = () => {
-          if (annotationController === null) return
-          try {
-            annotationController.deactivate()
-          } catch {
-            // Deactivation is defensive; never wedge the page open on failure.
-          }
-        }
-        window.addEventListener(ANNOTATION_EXIT_EVENT, onExit)
-        return () => window.removeEventListener(ANNOTATION_EXIT_EVENT, onExit)
-      }, 'power-suite: ui annotation exits for the project page')
       ctx.effect(() => {
         try {
           annotationController = createAnnotationController(t, ctx)
@@ -13823,7 +15044,6 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       installInterruptedSessions(ctx)
       installQuickLook(ctx)
       installSettingsPage(ctx)
-      installProjectView(ctx)
       installUiAnnotation(ctx)
     }
 
@@ -13836,6 +15056,8 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         DEFAULT_SETTINGS: ANNOTATION_DEFAULT_SETTINGS,
         MODIFIER_CHOICES,
         SETTINGS_STORAGE_KEY,
+        RECORDS_STORAGE_KEY: ANNOTATION_RECORDS_STORAGE_KEY,
+        RECORD_LIMIT: ANNOTATION_RECORD_LIMIT,
         normalizeSettings,
         resolveModifierChange,
         parseStoredSettings,
@@ -13867,7 +15089,42 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         collectionAdd,
         collectionRemove,
         collectionClear,
-        collectionSetNote
+        collectionSetNote,
+        annotationWorkspaceLabel,
+        annotationRoutePath,
+        normalizeAnnotationViewport,
+        buildStableAncestors,
+        buildUniqueSelector,
+        annotationLocatorText,
+        normalizeAnnotationRecord,
+        parseAnnotationStore,
+        serializeAnnotationStore,
+        annotationSurfaceRoot,
+        annotationSurfaceLevels,
+        upsertAnnotationRecord,
+        removeAnnotationRecord,
+        restoreAnnotationRecord,
+        moveAnnotationRecord,
+        toggleAnnotationInclude,
+        annotationUndoRemove,
+        annotationUndoRestore,
+        annotationMarkerBadgeText,
+        clampDetailCardPosition
+      }
+      // The dynamic-Workspaces hover card's native figures. Kept in its own
+      // namespace so the annotation seam above stays byte-for-byte stable.
+      globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesStats = {
+        DW_EN,
+        DW_ZH,
+        dwProjectionSections,
+        dwNeedsProjectionRead,
+        dwFormatCompactTokens,
+        dwFormatExactTokens,
+        dwFormatStatsDuration,
+        dwFormatTps,
+        dwCacheHitPercent,
+        dwBilledInputTokens,
+        dwContextOccupancy
       }
     }
 
