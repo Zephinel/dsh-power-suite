@@ -1912,6 +1912,26 @@ if (ui === undefined) {
     assert.ok(source.includes('function annotationMarkElements'), 'the mark element builder exists')
   })
 
+  test('A2/F-2: the Session seat bridges cwd and record capture prefers it over the ctx fallback', () => {
+    const source = client.source
+    assert.equal(typeof source, 'string')
+    const seatStart = source.indexOf('function AnnotationSessionSeat')
+    assert.ok(seatStart >= 0, 'the annotation Session seat exists')
+    const seatEnd = source.indexOf('\n    function ', seatStart + 'function AnnotationSessionSeat'.length)
+    const seat = source.slice(seatStart, seatEnd > 0 ? seatEnd : source.length)
+    assert.ok(seat.includes('props.useSessions'), 'the seat must read the slot contract useSessions hook')
+    assert.ok(seat.includes('sessionCwd'), 'the seat must derive the Session cwd')
+    assert.ok(seat.includes('annotationBridge.sessionCwd'), 'the seat must mirror cwd into the bridge')
+    const identityStart = source.indexOf('function sessionIdentity')
+    const identityEnd = source.indexOf('\n      function ', identityStart + 'function sessionIdentity'.length)
+    const identity = source.slice(identityStart, identityEnd > 0 ? identityEnd : source.length)
+    assert.ok(identity.includes('annotationBridge.sessionCwd'), 'record capture must prefer the bridged cwd')
+    assert.ok(identity.includes('annotationWorkspaceLabel(annotationBridge.sessionCwd)'), 'the workspace label is the bridged cwd basename')
+    assert.ok(identity.includes('annotationIdentityWarned'), 'the fallback failure is reported once instead of swallowed')
+    assert.ok(source.includes('const annotationBridge = { sessionId: null, inputActions: null, sessionCwd: null }'),
+      'the bridge declares the cwd slot explicitly')
+  })
+
   //#region geometry and layout
 
   test('clampLauncherPosition keeps the launcher fully inside the viewport with an 8px margin', () => {

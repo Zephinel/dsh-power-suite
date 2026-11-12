@@ -647,8 +647,10 @@ package manifest.
 - **Two seats** — a `shell.overlay` seat (`AnnotationOverlay`) renders the
   launcher, rail, popover, and highlight layers; a renderless
   `conversation.input.overlay` seat (`AnnotationSessionSeat`) keeps the module's
-  bridge (`sessionId`, `inputActions` — the slot contract passes **no** `draft`
-  prop) current for the Session on screen and notifies the controller. The
+  bridge (`sessionId`, `inputActions`, and the Session's `cwd` — the slot
+  contract passes **no** `draft` prop, but the Session-scope seat does receive the
+  `useSessions` standard hook, which is how the Workspace identity reaches a
+  record) current for the Session on screen and notifies the controller. The
   composer itself remains the source of truth for the live draft/caret.
   Feature copy is registered under the `powerSuiteAnnotation` namespace and
   bound once with `ctx.locale.bind`, so both the overlay and the controller

@@ -2153,6 +2153,10 @@ const probes = {
         uniqueVerified: record?.locator?.uniqueVerified ?? null,
         ancestorCount: Array.isArray(record?.locator?.ancestors) ? record.locator.ancestors.length : null,
         candidateCount: Array.isArray(record?.locator?.candidates) ? record.locator.candidates.length : null,
+        context: record?.context ?? null,
+        component: record?.component ?? null,
+        bounds: record?.bounds ?? null,
+        viewport: record?.viewport ?? null,
         keys: Object.keys(record ?? {}).sort(),
         locatorKeys: Object.keys(record?.locator ?? {}).sort(),
       })),
@@ -4135,6 +4139,28 @@ function buildScenarios(harness) {
       for (const forbidden of ['outerHTML', 'innerHTML', 'querySelector', 'xpath', 'computedStyle', 'value']) {
         assert(!JSON.stringify(pageRecord).includes(forbidden), `D11: the persisted record leaks ${forbidden}`)
       }
+      // A2/F-2: Session identity must actually resolve (cwd + workspace basename),
+      // not silently persist nulls; bounds/viewport are real capture data.
+      const sessionCwd = String(pageRecord.session?.cwd ?? '')
+      const workspaceLabel = String(pageRecord.session?.workspaceLabel ?? '')
+      const recordSessionId = String(pageRecord.session?.sessionId ?? '')
+      assert(recordSessionId.length > 0, 'A2/F-2: the persisted record has no sessionId')
+      assertEqual(recordSessionId, await h.refreshSession(), 'A2/F-2: the persisted record belongs to another Session')
+      assert(sessionCwd.length > 0, 'A2/F-2: the persisted record has no session.cwd (identity enrichment did not resolve)')
+      assert(sessionCwd.startsWith('/'), `A2/F-2: session.cwd is not an absolute path (${short(sessionCwd)})`)
+      assert(workspaceLabel.length > 0, 'A2/F-2: the persisted record has no workspaceLabel')
+      assertEqual(workspaceLabel, sessionCwd.split('/').filter(Boolean).pop(), 'A2/F-2: workspaceLabel is not the cwd basename')
+      const bounds = pageRecord.bounds
+      assert(bounds !== null && typeof bounds === 'object', 'A2/D11: the persisted record has no bounds')
+      assert(Number.isFinite(bounds.width) && bounds.width > 0, `A2/D11: bounds.width is not plausible (${JSON.stringify(bounds)})`)
+      assert(Number.isFinite(bounds.height) && bounds.height > 0, `A2/D11: bounds.height is not plausible (${JSON.stringify(bounds)})`)
+      assert(Number.isFinite(bounds.x) && Number.isFinite(bounds.y), `A2/D11: bounds x/y are not finite (${JSON.stringify(bounds)})`)
+      assert(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= VIEWPORT.width + 1 && bounds.y + bounds.height <= VIEWPORT.height + 1,
+        `A2/D11: bounds are outside the captured viewport (${JSON.stringify(bounds)})`)
+      const captureViewport = pageRecord.viewport
+      assert(captureViewport !== null && typeof captureViewport === 'object', 'A2/D11: the persisted record has no viewport')
+      assertEqual(captureViewport.width, VIEWPORT.width, 'A2/D11: captured viewport width')
+      assertEqual(captureViewport.height, VIEWPORT.height, 'A2/D11: captured viewport height')
       const routePath = String(pageRecord.route || '')
       assert(routePath.startsWith('/') && !routePath.includes('?') && !routePath.includes('#'), `D11: route is not a query-free pathname (${short(routePath)})`)
 
@@ -4327,9 +4353,9 @@ function buildScenarios(harness) {
         : String(sessionId || '').slice(0, 8)
       assert(detail.session && detail.session.includes(sessionShort), `the detail card session label is wrong: ${detail.session}`)
       assert(detail.workspace && detail.workspace.length > 0, 'the detail card is missing the workspace label')
-      if (recordA.session && recordA.session.workspaceLabel) {
-        assertEqual(detail.workspace, recordA.session.workspaceLabel, 'detail workspace label mismatch')
-      }
+      assert(detail.workspace !== '—', 'the detail card shows the empty workspace placeholder for a captured record (F-2)')
+      assert(recordA.session && recordA.session.workspaceLabel, 'the persisted record has no workspaceLabel (F-2)')
+      assertEqual(detail.workspace, recordA.session.workspaceLabel, 'detail workspace label mismatch')
       assert(detail.buttons.quickRef && detail.buttons.edit && detail.buttons.relocate && detail.buttons.copy && detail.buttons.delete,
         `the detail card is missing actions: ${JSON.stringify(detail.buttons)}`)
       assert(detail.rect.x >= 0 && detail.rect.y >= 0, `the detail card overflows the viewport: ${JSON.stringify(detail.rect)}`)

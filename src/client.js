@@ -9555,13 +9555,21 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
-     * Long-lived bridge to the mounted Composer seat. Always all-or-nothing: the
+     * Long-lived bridge to the mounted Composer seat.
+     *
+     * The annotation surface renders outside the Session-scope slot tree and has
+     * no Session list face on its own context, so the seat — which is a real
+     * Session-scoped slot and therefore receives the `useSessions` standard hook —
+     * mirrors the current Session's `cwd` here. Everything is all-or-nothing: the
      * Session id only exists while the seat's insertion actions do.
      */
-    const annotationBridge = { sessionId: null, inputActions: null }
+    const annotationBridge = { sessionId: null, inputActions: null, sessionCwd: null }
 
     /** Install guard: a remount must never register the surface twice. */
     let annotationInstalled = false
+
+    /** One-shot diagnostic for the Session-identity fallback (never fully silent). */
+    let annotationIdentityWarned = false
 
     /** The controller singleton, or `null` while the feature is uninstalled. */
     let annotationController = null
@@ -12838,6 +12846,19 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       function sessionIdentity(sessionId) {
         const id = typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null
         if (id === null) return { sessionId: null, cwd: null, workspaceLabel: null }
+        // Primary source: the Composer seat's Session-scope bridge. The annotation
+        // overlay is not a slot and `ctx.sessions` has no live list face here, so
+        // reading the bridge is the only reliable path (F-2).
+        if (annotationBridge.sessionId === id && typeof annotationBridge.sessionCwd === 'string' && annotationBridge.sessionCwd.length > 0) {
+          return {
+            sessionId: id,
+            cwd: annotationBridge.sessionCwd,
+            workspaceLabel: annotationWorkspaceLabel(annotationBridge.sessionCwd)
+          }
+        }
+        // Fallback for a record captured before the seat mirrored identity, or in
+        // an embedding without the seat. An unexpected failure is reported once
+        // instead of being swallowed silently.
         let cwd = null
         try {
           const sessions = ctx !== null && typeof ctx === 'object' ? ctx.sessions : null
@@ -12850,8 +12871,15 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
             ? listSnapshot.byId[id]
             : null
           if (entry !== null && entry !== undefined && typeof entry.cwd === 'string' && entry.cwd.length > 0) cwd = entry.cwd
-        } catch {
-          // Identity is best effort; a missing Session row still yields a valid record.
+        } catch (error) {
+          if (!annotationIdentityWarned) {
+            annotationIdentityWarned = true
+            try {
+              console.warn('power-suite: annotation Session identity fallback failed', error)
+            } catch {
+              // Console may be unavailable in a hostile embedding.
+            }
+          }
         }
         return { sessionId: id, cwd, workspaceLabel: annotationWorkspaceLabel(cwd) }
       }
@@ -14932,6 +14960,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         }
         annotationBridge.inputActions = null
         annotationBridge.sessionId = null
+        annotationBridge.sessionCwd = null
       }
 
       return {
@@ -16107,9 +16136,22 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
      */
     function AnnotationSessionSeat(props) {
       const { sessionId, inputActions } = props
+      // Session-scoped slots receive the global `useSessions` standard hook. The
+      // annotation overlay itself is not a slot, so this seat mirrors the Session's
+      // workspace identity (cwd) into the bridge for record capture (F-2). The hook
+      // presence is fixed by the slot contract for this seat's lifetime.
+      const useSessions = typeof props.useSessions === 'function' ? props.useSessions : null
+      const sessionsList = useSessions !== null ? useSessions((state) => state) : null
+      const sessionCwd = sessionId !== undefined && sessionsList !== null && typeof sessionsList === 'object'
+        && sessionsList.byId !== null && typeof sessionsList.byId === 'object'
+        && typeof sessionsList.byId[sessionId]?.cwd === 'string'
+        && sessionsList.byId[sessionId].cwd.length > 0
+        ? sessionsList.byId[sessionId].cwd
+        : null
       React.useEffect(() => {
         annotationBridge.sessionId = typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null
         annotationBridge.inputActions = inputActions ?? null
+        annotationBridge.sessionCwd = sessionCwd
         if (annotationController !== null) annotationController.sessionChanged(annotationBridge.sessionId)
         return () => {
           // The bridge is all-or-nothing: a session id without its Composer actions (or the
@@ -16117,9 +16159,10 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           // seat unmounts (e.g. leaving the conversation for the Plugins view).
           annotationBridge.sessionId = null
           annotationBridge.inputActions = null
+          annotationBridge.sessionCwd = null
           if (annotationController !== null) annotationController.sessionChanged(null)
         }
-      }, [sessionId, inputActions])
+      }, [sessionId, inputActions, sessionCwd])
       return React.createElement('span', {
         style: { display: 'none' },
         'aria-hidden': true
