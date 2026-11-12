@@ -303,7 +303,9 @@ interactive/semantic elements over text leaves, skip the composer's editable
 internals (the composer region is the candidate), and produce a plain-JSON
 `ElementRef` with reliability-ordered selector candidates, a stable identity key,
 sanitized text, and a small deterministic text digest used for change detection
-(derived data only; no raw page text is kept in it). The reducer (`off | idle |
+(derived data only; no raw page text is kept in it). A DOM-revision-aware
+resolver re-finds the live node from the ordered candidates so scroll-frame
+lookups stay bounded without trusting a stale first hit. The reducer (`off | idle |
 inspect | selected | multi | collection`, a settings view flag, and transient
 pass-through/boxing/drag states) is a pure function covered by the Node suite
 through the factory's test seam.

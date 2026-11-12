@@ -456,15 +456,19 @@ and inserts text through the composer that is already mounted.
   candidates, never by what is typed in it.
 - **Sensitive attributes** — attribute names that look like
   `token`, `secret`, `password`, `passwd`, `authorization`, or `cookie` are
-  dropped, and values that look like bearer tokens, `sk-…` keys, emails, or long
-  unbroken base64/hex strings are redacted. The element's `id` is sanitized at
-  the same boundary before it can become a selector candidate, so an
-  email- or secret-shaped `id` is never used as a locator or identity key. Known
-  DSH data attributes keep their namespaced and UUID values (for example
-  `data-row-key="session:<uuid>"`), because those are stable identities rather
-  than opaque secrets. Text summaries are whitespace-collapsed, stripped of
-  control and zero-width characters, redact emails and token-like strings, and
-  truncate to 80 characters with an ellipsis.
+  dropped. Values are sanitized for known secret shapes: ASCII email addresses,
+  `sk-…` keys, long unbroken base64/hex strings, case-insensitive `sk-` and
+  `bearer ` prefixes, AWS access-key IDs, and JWT triples. The element's `id` is
+  sanitized at the same boundary before it can become a selector candidate, so
+  an `id` in one of those shapes is not used as a locator or identity key;
+  unicode emails and arbitrary unknown secret shapes are not claimed to be
+  recognized. Known DSH data attributes keep their namespaced and UUID values
+  (for example `data-row-key="session:<uuid>"` and
+  `data-conversation-session="session-<uuid>"`), because those are stable
+  identities rather than opaque secrets. Text summaries are whitespace-collapsed,
+  stripped of control and zero-width characters, redact the sanitizer's email,
+  bearer, `sk-`, and long-token patterns, and truncate to 80 characters with an
+  ellipsis.
 - **Canvas-rendered content** — has no DOM target, so it has no DOM candidate and
   is not selectable. The feature never reads pixels.
 - **Portals** — body-level DSH menus, popovers, and dialogs are ordinary DOM, so
@@ -534,8 +538,8 @@ package manifest.
   and the E2E injector), the factory publishes its pure helpers under
   `__POWER_SUITE_TEST_HOOKS__.uiAnnotation`: settings normalization and modifier
   conflict resolution, text/attribute sanitizers, selector candidates,
-  `buildElementRef`, a deterministic text digest, locator descriptions, the
-  reducer, quick-reference and batch
+  `buildElementRef`, a deterministic text digest, a DOM node resolver, locator
+  descriptions, the reducer, quick-reference and batch
   serializers, `batchScopeSplit`, `resolveRefStatus`, position clamps, rail width
   and layout mode, and the collection list helpers. Production never defines the
   flag.
@@ -611,22 +615,32 @@ service are never modified.
   directory), `--client <path>` injects an alternate client file, `--scenario N`
   or `--from N` runs a subset, `--no-shots` skips captures, `--headful` shows the
   browser, and `--keep-open` leaves Chrome running for inspection.
-- Gate semantics: `--smoke` is pipeline-only but exits non-zero when the
-  injected client cannot load, does not expose the 31-key test seam, or does not
-  mount the annotation surface. `full` and `--shots-only` with a client that
-  lacks the feature record a **FAIL** row and exit non-zero; invalid scenario
-  selections (`--scenario 10`, `--from 10`, a missing value) are argument errors
-  that exit 2; every requested scenario must produce a result row, and the run
-  fails on any scenario failure, page error, or real network/API failure.
+- Gate semantics: the exit code is `0` only when every check passes; `1` for any
+  scenario failure, page error, real network/API failure, missing scenario row,
+  feature-gate failure, or harness fatal error; `2` only for usage/argument errors
+  (`--scenario 10`, `--from 10`, a missing value). A failed `Network.enable` is a
+  gate failure (exit 1), not a usage error. `--smoke` is pipeline-only but still
+  fails when the injected client cannot load, does not expose the documented
+  seam generation (31 keys on the round-1 generation with `textDigest`; exactly
+  32 once the `resolveNodeCandidate` key is present), or does not mount the
+  annotation surface. `full` and `--shots-only` with a feature-absent client
+  record a **FAIL** row and exit non-zero; every requested scenario must produce
+  a result row.
 - Blank Session and privacy preconditions: before any capture or interaction the
-  harness verifies the Session is blank — zero transcript messages, an empty
-  composer draft, and no attachments — and otherwise creates a genuinely fresh
-  blank Session through the native New session action. It never types into a
-  non-blank Session. Every capture is made with the privacy guard applied and
-  asserted (blur on the native sidebar and conversation header, plus a blur/hide
-  shield over the conversation content; the composer and annotation rail stay
-  crisp), and it checks the 1728 x 900 frame, a right-anchored rail, the launcher
-  clear of the rail footer, and the popover fully inside the viewport.
+  harness requires all of these at once — a `[data-conversation-session]` root,
+  `[data-conversation-region="composer"]`, a Lexical
+  `[data-lexical-editor="true"]` inside it, the Chat view
+  `[data-conversation-region="chat"]`, zero transcript messages, zero turns, an
+  empty composer draft, and no draft attachments. Otherwise it creates a
+  genuinely fresh blank Session through the native "New session in <workspace>"
+  hover action and aborts explicitly if that is impossible; it never types into a
+  non-blank Session. The non-blank-auto-restore branch is implemented but **was
+  not triggered in this environment** (the restored draft was always blank), so
+  there is no live evidence for it. Every capture is made with the privacy guard
+  applied and asserted (blur on the native sidebar and conversation header, plus
+  a blur/hide shield over the conversation content; the composer and annotation
+  rail stay crisp), and it checks the 1728 x 900 frame, a right-anchored rail, the
+  launcher clear of the rail footer, and the popover fully inside the viewport.
 - Side effects: each run launches throwaway headless Chrome and creates or reuses
   blank Sessions in the live GUI through the native New Session control. Every
   Session the harness opens or creates is tracked once and printed with the
@@ -637,23 +651,43 @@ service are never modified.
   cleared before the captures so the screenshots show the default launcher
   position. Chrome and the temporary profile are removed even on failure.
 - Mixed-scope coverage: scenario 6 asserts a collection holding one current and
-  one other-session entry — only the current entry is inserted, the other-session
-  skip line is present, and the other entry is marked.
+  one other-session entry. The truly removed target must read `missing` and insert
+  the explicit `Status: target no longer resolves` line; a row rebuilt by sidebar
+  virtualization accepts `missing`, `ambiguous`, `changed`, or `resolved` (that
+  tolerance applies to the rebuilt row only). Only the current entry is inserted;
+  the skip line's extracted count must equal the other-scope entry count (EN
+  `(N annotation(s) from other sessions skipped)` / ZH `另有 N 条…`); a leak check
+  over every other-scope entry's name, note, and locator text (tokens of 6+
+  characters) proves none of it reaches the composer; and re-locate is invoked on
+  the other-scope row's own control, must show `This annotation belongs to
+  another session` / `这条标注来自其他会话`, and must not scroll the canvas.
+- Network predicate: a failure counts only when the request is same-origin
+  http(s) (its origin equals the GUI URL origin) and either a
+  `Network.responseReceived` for a `Document`/`Fetch`/`XHR` request has status
+  ≥ 400, or any `/api/` or `/plugins` path fails to load; a non-canceled
+  `Network.loadingFailed` on a same-origin `Fetch`/`XHR`/`Document`/`Script`/
+  `Stylesheet` also counts. Third-party origins, `favicon.ico`,
+  `chrome-extension:`/`data:`/`blob:` URLs, and same-origin static requests
+  outside the DSH API/plugin routes are ignored and counted as network noise. A
+  failed `Network.enable` is reported (`network domain: NOT ENABLED`), records a
+  `FAIL gate-network` row, and fails the run.
 - Output: a PASS/FAIL table for the scenarios plus collected page errors and
-  real same-origin API/network failures; the script exits 0 only when the smoke
-  checks and every scenario pass with 0 page errors and no real network failures.
+  network failures under that predicate; the script exits 0 only when the smoke
+  checks and every scenario pass with 0 page errors and no real network failure.
   The smoke run takes about 5 seconds, `--shots-only` about 35 seconds, and the
   full 9-scenario run 8–10 minutes on the live GUI. Benign DSH-internal telemetry
   WebSocket 403s are printed but do not fail the run (they are neither page errors
-  nor same-origin HTTP failures). Known evidence limits are recorded in
-  [`test/browser/README.md`](../test/browser/README.md) and
+  nor real network failures under the predicate). Known evidence limits are
+  recorded in [`test/browser/README.md`](../test/browser/README.md) and
   [verification.md](verification.md): after roughly 7 minutes of continuous
-  automation the headless renderer can stall real input (a scenario-8 timeout;
-  scenarios 8-9 pass deterministically in a short `--from 8` run on the same
-  build), native context-menu visuals are not observable so the oracle is
-  event-level, wheel scrolling is asserted on the nearest scrollable region,
-  zero-area picker behavior is unit-tested only, and the run is single-device and
-  single-language (ZH copy is unit-tested rather than exercised end to end).
+  automation the headless renderer can stall real input before a scenario's
+  product assertion completes (scenarios 8-9 pass in a short `--from 8` run on
+  the same build; the cause is not proven), native context-menu visuals are not
+  observable so the oracle is event-level, wheel scrolling is asserted on the
+  nearest scrollable region, zero-area picker behavior is unit-tested only, and
+  the run is single-device and single-language (ZH copy is unit-tested rather
+  than exercised end to end). The final five screenshots come from one logged
+  `--shots-only --assets` run whose log path is recorded in the harness README.
 
 [`test/browser/README.md`](../test/browser/README.md) carries the same
 prerequisites, options, side effects, and known evidence limits. See
