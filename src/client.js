@@ -9254,6 +9254,38 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     const LAUNCHER_STORAGE_KEY = 'power-suite.ui-annotation.launcher'
     const RAIL_STORAGE_KEY = 'power-suite.ui-annotation.rail-collapsed'
 
+    /**
+     * Persisted annotation records. Unlike the other keys this one holds page
+     * identity (locator, route, cwd) and user notes, so it is versioned and
+     * validated: a v2 document `{ version, updatedAt, records }`.
+     */
+    const ANNOTATION_RECORDS_STORAGE_KEY = 'power-suite.ui-annotation.annotations'
+
+    /** Hard cap on persisted/collected annotations (D15: explicit refusal, never silent loss). */
+    const ANNOTATION_RECORD_LIMIT = 100
+
+    /** Debounce for the persisted annotation document (D1). */
+    const ANNOTATION_PERSIST_DEBOUNCE_MS = 250
+
+    /** F2: a floating surface root needs at least this computed z-index. */
+    const ANNOTATION_SURFACE_MIN_Z = 10
+
+    /** F2: inner drill levels are capped so a card with many rows stays navigable. */
+    const ANNOTATION_SURFACE_MAX_LEVELS = 12
+
+    /** F1: annotation paint layer z-index: above native hover cards (100), below modals (1000)/menus (1100). */
+    const ANNOTATION_PAINT_Z = 150
+
+    /** Root marker for the raised paint layer, asserted by the live E2E. */
+    const ANNOTATION_RAISED_ATTR = 'data-psa-raised'
+
+    /**
+     * Module event announced when the mode turns on/off. The dynamic-workspaces
+     * feature owns the dependent hover-card pinning behavior; this annotation
+     * region only dispatches the state (D3: ownership split).
+     */
+    const ANNOTATION_STATE_EVENT = 'power-suite:ui-annotation-state'
+
     /** The two configurable modifiers, in native select order. */
     const MODIFIER_CHOICES = ['alt', 'ctrl', 'meta', 'shift']
 
@@ -9282,6 +9314,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'rail.addMulti': 'Add {count} to collection',
       'rail.clearSelection': 'Clear selection',
       'rail.selectedName': 'Selected element',
+      'rail.surfaceFloating': 'Floating surface (hover preview)',
+      'rail.surfaceTransient': 'transient',
       'popover.aria': 'Element annotation',
       'popover.drag': 'Drag popover',
       'popover.statusLabel': 'Target',
@@ -9297,6 +9331,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'popover.add': 'Add to collection',
       'popover.update': 'Update collection',
       'popover.close': 'Close',
+      'popover.copyLocator': 'Copy locator',
+      'popover.ephemeralHint': 'Transient surface: this element can disappear when its card closes; the locator is kept.',
       'collection.title': 'Collection',
       'collection.count': '{count} elements',
       'collection.countOne': '1 element',
@@ -9312,6 +9348,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'collection.crossSession': '{count} from other sessions will be skipped',
       'collection.noteEditorTitle': 'Note',
       'collection.noteEditorClose': 'Close',
+      'collection.copyLocator': 'Copy locator',
+      'collection.maxReached': 'The collection is full ({limit} annotations). Remove entries before adding more.',
       'settings.title': 'Settings',
       'settings.passThrough': 'Pass-through modifier',
       'settings.multi': 'Multi-select modifier',
@@ -9335,6 +9373,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'feedback.relocated': 'Moved to the element',
       'feedback.relocateFailed': 'The element cannot be located ({status})',
       'feedback.relocateOtherSession': 'This annotation belongs to another session',
+      'feedback.locatorCopied': 'Locator copied',
+      'feedback.locatorCopyFailed': 'Could not copy the locator',
       'feedback.batchEmpty': 'Nothing to insert from the current session',
       'insert.title': 'UI annotation',
       'insert.reference': 'Reference:',
@@ -9344,6 +9384,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'insert.emptyNote': '—',
       'insert.batchHeader': 'Please adjust the UI elements below. Each item lists its reference and the requested change.',
       'insert.status': 'Status: target no longer resolves (locator only)',
+      'insert.statusEphemeral': 'Status: transient surface no longer present (locator only)',
       'insert.statusAmbiguous': 'Status: target matches more than one element (locator only)',
       'insert.statusChanged': 'Status: target content changed',
       'insert.skipped': '({count} annotation(s) from other sessions skipped)'
@@ -9368,6 +9409,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'rail.addMulti': '将 {count} 个加入标注集',
       'rail.clearSelection': '取消选择',
       'rail.selectedName': '已选元素',
+      'rail.surfaceFloating': '浮动层（悬停预览）',
+      'rail.surfaceTransient': '瞬态',
       'popover.aria': '元素标注',
       'popover.drag': '拖动浮层',
       'popover.statusLabel': '目标',
@@ -9383,6 +9426,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'popover.add': '加入标注集',
       'popover.update': '更新标注集',
       'popover.close': '关闭',
+      'popover.copyLocator': '复制定位器',
+      'popover.ephemeralHint': '瞬态浮层：卡片关闭后该元素可能消失，仅保留定位信息。',
       'collection.title': '标注集',
       'collection.count': '{count} 项',
       'collection.countOne': '1 项',
@@ -9398,6 +9443,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'collection.crossSession': '另有 {count} 条来自其他会话，插入时将跳过',
       'collection.noteEditorTitle': '备注',
       'collection.noteEditorClose': '关闭',
+      'collection.copyLocator': '复制定位器',
+      'collection.maxReached': '标注集已满（{limit} 条）。请先移除条目再添加。',
       'settings.title': '设置',
       'settings.passThrough': '透传修饰键',
       'settings.multi': '多选修饰键',
@@ -9421,6 +9468,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'feedback.relocated': '已定位到该元素',
       'feedback.relocateFailed': '无法定位该元素（{status}）',
       'feedback.relocateOtherSession': '这条标注来自其他会话',
+      'feedback.locatorCopied': '已复制定位器',
+      'feedback.locatorCopyFailed': '复制定位器失败',
       'feedback.batchEmpty': '当前会话没有可插入的标注',
       'insert.title': 'UI 标注',
       'insert.reference': '定位：',
@@ -9430,6 +9479,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'insert.emptyNote': '—',
       'insert.batchHeader': '请调整以下 UI 元素，每项都附有定位和修改说明。',
       'insert.status': '状态：目标已无法定位（仅保留定位信息）',
+      'insert.statusEphemeral': '状态：瞬态浮层已不存在（仅保留定位信息）',
       'insert.statusAmbiguous': '状态：目标匹配到多个元素（仅保留定位信息）',
       'insert.statusChanged': '状态：目标内容已变化',
       'insert.skipped': '（已跳过 {count} 条来自其他会话的标注）'
@@ -9457,6 +9507,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     const REMIX_LIST_CHECK_2 = 'M11 4H21V6H11V4ZM11 8H17V10H11V8ZM11 14H21V16H11V14ZM11 18H17V20H11V18ZM3 4H9V10H3V4ZM5 6V8H7V6H5ZM3 14H9V20H3V14ZM5 16V18H7V16H5Z'
     const REMIX_SETTINGS_3_LINE = 'M8.68637 4.0001L10.293 2.39348C11.6835 1.00295 13.9379 1.00295 15.3284 2.39348L16.935 4.0001H19.2427C20.8995 4.0001 22.2427 5.34325 22.2427 7.0001V9.30772L23.8492 10.9143C25.2398 12.3048 25.2398 14.5592 23.8492 15.9497L22.2427 17.5564V19.864C22.2427 21.5208 20.8995 22.864 19.2427 22.864H16.935L15.3284 24.4706C13.9379 25.8611 11.6835 25.8611 10.293 24.4706L8.68637 22.864H6.37874C4.72189 22.864 3.37874 21.5208 3.37874 19.864V17.5564L1.77212 15.9497C0.381596 14.5592 0.381596 12.3048 1.77212 10.9143L3.37874 9.30772V7.0001C3.37874 5.34325 4.72189 4.0001 6.37874 4.0001H8.68637ZM13.9143 4.41431C13.1332 3.63326 11.8669 3.63326 11.0858 4.41431L8.9431 6.55701H6.37874C5.82645 6.55701 5.37874 7.00472 5.37874 7.55701V10.1214L3.23603 12.2641C2.45498 13.0451 2.45498 14.3114 3.23603 15.0925L5.37874 17.2352V19.864C5.37874 20.4163 5.82645 20.864 6.37874 20.864H9.00754L11.0858 22.9423C11.8669 23.7234 13.1332 23.7234 13.9143 22.9423L15.9925 20.864H18.6213C19.1736 20.864 19.6213 20.4163 19.6213 19.864V17.2352L21.764 15.0925C22.5451 14.3114 22.5451 13.0451 21.764 12.2641L19.6213 10.1214V7.55701C19.6213 7.00472 19.1736 6.55701 18.6213 6.55701H16.0569L13.9143 4.41431ZM12.6213 13.864C13.7259 13.864 14.6213 12.9686 14.6213 11.864C14.6213 10.7595 13.7259 9.86402 12.6213 9.86402C11.5167 9.86402 10.6213 10.7595 10.6213 11.864C10.6213 12.9686 11.5167 13.864 12.6213 13.864Z'
 
+    const REMIX_ANNOTATION_COPY_LINE = 'M6.9998 6V3C6.9998 2.44772 7.44752 2 7.9998 2H19.9998C20.5521 2 20.9998 2.44772 20.9998 3V17C20.9998 17.5523 20.5521 18 19.9998 18H16.9998V20.9991C16.9998 21.5519 16.5499 22 15.993 22H4.00666C3.45059 22 3 21.5554 3 20.9991L3.0026 7.00087C3.0027 6.44811 3.45264 6 4.00942 6H6.9998ZM5.00242 8L5.00019 20H14.9998V8H5.00242ZM8.9998 6H16.9998V16H18.9998V4H8.9998V6Z'
     /** Control and zero-width characters stripped from every captured string. */
     const ANNOTATION_CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g
 
@@ -9765,6 +9816,38 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
+     * Workspace display label derived from one Session's working directory.
+     *
+     * The full `cwd` is persisted (D6) so a record can name its Workspace across
+     * reloads; only the basename is shown. Trailing separators are ignored and
+     * both platforms' separators are accepted.
+     * @param {unknown} cwd - absolute working directory.
+     * @returns {string | null} display label, or null when unavailable.
+     */
+    function annotationWorkspaceLabel(cwd) {
+      if (typeof cwd !== 'string' || cwd.length === 0) return null
+      const parts = cwd.split(/[\\/]+/).filter((part) => part.length > 0)
+      const label = parts.length > 0 ? parts[parts.length - 1] : ''
+      if (label.length === 0) return null
+      return label.length > 80 ? `${label.slice(0, 79)}…` : label
+    }
+
+    /**
+     * Normalize one navigation pathname for the persisted record.
+     *
+     * Only the pathname is kept: query strings and fragments can carry tokens and
+     * are never stored (D11 privacy contract).
+     * @param {unknown} pathname - location.pathname or a raw route string.
+     * @returns {string} `/`-leading path without query/fragment.
+     */
+    function annotationRoutePath(pathname) {
+      if (typeof pathname !== 'string' || pathname.length === 0) return '/'
+      const cut = pathname.split(/[?#]/)[0]
+      const path = cut.startsWith('/') ? cut : `/${cut}`
+      return path.length > 300 ? path.slice(0, 300) : path
+    }
+
+    /**
      * Format one epoch-ms timestamp as local 24-hour HH:MM.
      * @param {unknown} at - epoch milliseconds.
      * @returns {string} clock label.
@@ -9812,6 +9895,19 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const parts = ['x', 'y', 'width', 'height'].map((key) => (typeof bounds[key] === 'number' && Number.isFinite(bounds[key]) ? Math.round(bounds[key]) : null))
       if (parts.some((part) => part === null)) return null
       return { x: parts[0], y: parts[1], width: parts[2], height: parts[3] }
+    }
+
+    /**
+     * Normalize one captured viewport size.
+     * @param {unknown} viewport - possibly partial `{ width, height }`.
+     * @returns {{ width: number, height: number } | null} normalized size, or null.
+     */
+    function normalizeAnnotationViewport(viewport) {
+      if (viewport === null || typeof viewport !== 'object') return null
+      const width = typeof viewport.width === 'number' && Number.isFinite(viewport.width) && viewport.width > 0 ? Math.round(viewport.width) : null
+      const height = typeof viewport.height === 'number' && Number.isFinite(viewport.height) && viewport.height > 0 ? Math.round(viewport.height) : null
+      if (width === null || height === null) return null
+      return { width, height }
     }
 
     /**
@@ -9904,6 +10000,178 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       return tag === 'input' || tag === 'select' || tag === 'textarea' || tag === 'button'
     }
 
+    /** Stable ancestors kept on a record: bounded so one annotation stays a locator, not a page dump. */
+    const ANNOTATION_MAX_ANCESTORS = 3
+
+    /** Attribute names that may anchor a verified unique selector, most reliable first. */
+    const UNIQUE_SELECTOR_ATTRIBUTES = [
+      'data-row-key',
+      'data-conversation-region',
+      'data-testid',
+      'data-slot',
+      'data-conversation-session'
+    ]
+
+    /** Attribute names kept on one persisted stable-ancestor entry. */
+    const STABLE_ANCESTOR_ATTRIBUTES = new Set([
+      'data-row-key',
+      'data-conversation-region',
+      'data-conversation-session',
+      'data-testid',
+      'data-slot',
+      'id',
+      'aria-label'
+    ])
+
+    /**
+     * Normalize the bounded, sanitized stable-ancestor list of one record.
+     *
+     * Only identity-shaped attributes survive (no class/style/text): each value
+     * goes through the same sanitizer as a locator candidate, and a generated
+     * `id` is dropped like it is everywhere else.
+     * @param {Array<object>} entries - nearest-first `[{ tag, attrs: [{ name, value }] }]`.
+     * @returns {Array<{ tag: string, attrs: Record<string, string> }>} up to three entries.
+     */
+    function buildStableAncestors(entries) {
+      const list = Array.isArray(entries) ? entries : []
+      const result = []
+      for (const entry of list) {
+        if (result.length >= ANNOTATION_MAX_ANCESTORS) break
+        if (entry === null || typeof entry !== 'object') continue
+        const tag = typeof entry.tag === 'string' ? entry.tag.trim().toLowerCase() : ''
+        if (tag.length === 0 || tag === 'body' || tag === 'html') continue
+        const attrs = Array.isArray(entry.attrs) ? entry.attrs : []
+        const kept = {}
+        for (const attr of attrs) {
+          if (attr === null || typeof attr !== 'object') continue
+          const name = typeof attr.name === 'string' ? attr.name.trim().toLowerCase() : ''
+          if (!STABLE_ANCESTOR_ATTRIBUTES.has(name)) continue
+          const value = sanitizeAttributeValue(name, attr.value)
+          if (value === null) continue
+          if (name === 'id' && isDynamicValue(value)) continue
+          kept[name] = value
+        }
+        if (Object.keys(kept).length === 0) continue
+        result.push({ tag, attrs: kept })
+      }
+      return result
+    }
+
+    /**
+     * Build one verified-unique CSS selector for a captured element.
+     *
+     * Candidate order: the element's own stable data/id/aria-label attribute, then
+     * the nearest stable ancestor plus a `tag:nth-of-type(n)` relative path (at
+     * most six steps). Class names are never used, and every candidate is checked
+     * with the injected `queryAll`, so `uniqueVerified` is truthful rather than
+     * hopeful. Pure: the caller injects the query engine, which is how the unit
+     * seam tests the algorithm without a DOM (D11).
+     * @param {object} descriptor - `{ tag, attrs: [{ name, value }], anchorPaths?: [{ selector, steps: [{ tag, index }] }] }`.
+     * @param {Function} queryAll - selector => iterable of element-likes with `tagName`.
+     * @returns {{ selector: string | null, verified: boolean }} the verified selector, or a null fallback.
+     */
+    function buildUniqueSelector(descriptor, queryAll) {
+      const none = { selector: null, verified: false }
+      if (typeof queryAll !== 'function') return none
+      const source = descriptor !== null && typeof descriptor === 'object' ? descriptor : {}
+      const tag = typeof source.tag === 'string' ? source.tag.trim().toLowerCase() : ''
+      if (tag.length === 0) return none
+      const attrs = Array.isArray(source.attrs) ? source.attrs : []
+      /**
+       * Read one already-captured attribute, re-sanitizing it.
+       * @param {string} name - attribute name.
+       * @returns {string | null} safe value.
+       */
+      const attrValue = (name) => {
+        const attr = attrs.find((item) => item !== null && typeof item === 'object' && item.name === name)
+        if (attr === undefined) return null
+        return sanitizeAttributeValue(name, attr.value)
+      }
+      /**
+       * Whether a selector matches exactly one element and that element has the expected tag.
+       * @param {string} selector - candidate selector.
+       * @returns {boolean} whether it is unique for this tag.
+       */
+      const matchesOne = (selector) => {
+        let list
+        try {
+          list = queryAll(selector)
+        } catch {
+          return false
+        }
+        if (list === null || list === undefined || typeof list[Symbol.iterator] !== 'function') return false
+        let count = 0
+        for (const element of list) {
+          if (element === null || typeof element !== 'object') continue
+          if (typeof element.tagName !== 'string') continue
+          if (element.tagName.toLowerCase() !== tag) continue
+          count += 1
+          if (count > 1) return false
+        }
+        return count === 1
+      }
+      for (const name of UNIQUE_SELECTOR_ATTRIBUTES) {
+        const value = attrValue(name)
+        if (value === null) continue
+        const selector = `${tag}[${name}="${cssString(value)}"]`
+        if (matchesOne(selector)) return { selector, verified: true }
+      }
+      const id = attrValue('id')
+      if (id !== null && !isDynamicValue(id)) {
+        const selector = `#${cssIdentifier(id)}`
+        if (matchesOne(selector)) return { selector, verified: true }
+      }
+      const label = attrValue('aria-label')
+      if (label !== null) {
+        const selector = `${tag}[aria-label="${cssString(label)}"]`
+        if (matchesOne(selector)) return { selector, verified: true }
+      }
+      const anchors = Array.isArray(source.anchorPaths) ? source.anchorPaths : []
+      for (const anchor of anchors) {
+        if (anchor === null || typeof anchor !== 'object') continue
+        if (typeof anchor.selector !== 'string' || anchor.selector.length === 0) continue
+        const steps = Array.isArray(anchor.steps) ? anchor.steps.slice(0, 6) : []
+        if (steps.length === 0) continue
+        const tail = []
+        let usable = true
+        for (const step of steps) {
+          const stepTag = step !== null && typeof step === 'object' && typeof step.tag === 'string' ? step.tag.trim().toLowerCase() : ''
+          const index = step !== null && typeof step === 'object' && typeof step.index === 'number' && Number.isFinite(step.index) && step.index >= 1
+            ? Math.round(step.index)
+            : 1
+          if (stepTag.length === 0) {
+            usable = false
+            break
+          }
+          tail.push(`${stepTag}:nth-of-type(${index})`)
+        }
+        if (!usable) continue
+        const selector = `${anchor.selector} > ${tail.join(' > ')}`
+        if (matchesOne(selector)) return { selector, verified: true }
+      }
+      return none
+    }
+
+    /**
+     * Text used by the "Copy locator" action: the verified unique selector when
+     * present, else the best ordered candidate, else the structural path.
+     * @param {object} ref - ElementRef.
+     * @returns {string} locator text (empty only for a malformed ref).
+     */
+    function annotationLocatorText(ref) {
+      const locator = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : {}
+      const unique = typeof locator.uniqueSelector === 'string' && locator.uniqueSelector.length > 0 ? locator.uniqueSelector : ''
+      if (unique.length > 0) return unique
+      const candidates = Array.isArray(locator.candidates) ? locator.candidates : []
+      const best = candidates.find((candidate) => candidate !== null && typeof candidate === 'object'
+        && typeof candidate.value === 'string' && candidate.value.length > 0
+        && candidate.kind !== 'tag' && candidate.kind !== 'path')
+      if (best !== undefined) return best.value
+      const path = typeof locator.path === 'string' && locator.path.length > 0 ? locator.path : ''
+      if (path.length > 0) return path
+      return describeLocator(ref)
+    }
+
     /**
      * Stable identity key for one element, used for collection de-duplication.
      * @param {string} tag - lowercase tag name.
@@ -9926,9 +10194,15 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
-     * Build one serializable ElementRef (never a DOM node, never HTML).
-     * @param {object} descriptor - { tag, id, role, name, attrs, text, component, path, tagPath, isEditable, insideComposer }.
-     * @param {object} context - { sessionId, at, order, bounds, levelChain }.
+     * Build one serializable ElementRef v2 (never a DOM node, never HTML).
+     *
+     * v2 adds the identity and "find it again" fields the audit approved (D11):
+     * a verified unique selector, bounded sanitized stable ancestors, the surface
+     * kind / ephemeral flag, Session Workspace identity, route, and a viewport
+     * snapshot. It deliberately carries no outerHTML, JS path, XPath, computed
+     * styles, or input values.
+     * @param {object} descriptor - { tag, id, role, name, attrs, text, component, path, tagPath, isEditable, insideComposer, uniqueSelector?, uniqueVerified?, ancestors? }.
+     * @param {object} context - { sessionId, at, order, bounds, levelChain, cwd?, workspaceLabel?, route?, viewport?, surface? }.
      * @returns {object} the ElementRef.
      */
     function buildElementRef(descriptor, context) {
@@ -9942,19 +10216,36 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const order = typeof scope.order === 'number' && Number.isFinite(scope.order) ? scope.order : 0
       const bounds = normalizeAnnotationBounds(scope.bounds) ?? { x: 0, y: 0, width: 0, height: 0 }
       const sessionId = typeof scope.sessionId === 'string' && scope.sessionId.length > 0 ? scope.sessionId : null
+      const cwd = typeof scope.cwd === 'string' && scope.cwd.length > 0 ? scope.cwd : null
+      const workspaceLabel = typeof scope.workspaceLabel === 'string' && scope.workspaceLabel.length > 0
+        ? scope.workspaceLabel
+        : annotationWorkspaceLabel(cwd)
+      const surface = scope.surface === 'floating' ? 'floating' : 'page'
+      const uniqueSelector = typeof source.uniqueSelector === 'string' && source.uniqueSelector.length > 0
+        ? source.uniqueSelector
+        : null
       return {
-        version: 1,
+        version: 2,
         id: `psa-${order}-${annotationRandomToken(6)}`,
         at,
+        updatedAt: at,
         order,
-        session: { sessionId },
+        session: { sessionId, cwd, workspaceLabel },
+        route: annotationRoutePath(scope.route),
         locator: {
           tag,
           role: sanitizeText(source.role, 32),
           name: sanitizeText(source.name, 60),
           candidates,
           key: identityKeyForCandidates(tag, source, candidates),
-          path: typeof source.path === 'string' ? source.path : ''
+          path: typeof source.path === 'string' ? source.path : '',
+          uniqueSelector,
+          uniqueVerified: uniqueSelector !== null && source.uniqueVerified === true,
+          ancestors: buildStableAncestors(source.ancestors),
+          surface,
+          // A floating surface is transient by definition: it can disappear when
+          // the card/menu closes, so its locator is the only thing that survives.
+          ephemeral: surface === 'floating'
         },
         component: typeof source.component === 'string' && source.component.length > 0 ? source.component : 'other',
         text: sanitizeText(source.text, 80),
@@ -9962,7 +10253,13 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         textDigest: typeof source.textDigest === 'string' ? source.textDigest : '',
         context: contextLabels.join(' › '),
         bounds,
-        note: ''
+        viewport: normalizeAnnotationViewport(scope.viewport),
+        note: '',
+        // Phase 1 keeps the collection semantics: every collected record is part of
+        // the batch. Phase 2 owns the per-item include toggle.
+        included: true,
+        // Capture-time resolution status; Phase 2 refreshes it for the detail card.
+        lastStatus: 'resolved'
       }
     }
 
@@ -9989,10 +10286,13 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const name = typeof locator.name === 'string' ? locator.name : ''
       const candidates = Array.isArray(locator.candidates) ? locator.candidates : []
       const stable = candidates.find((candidate) => candidate !== null && typeof candidate === 'object' && candidate.kind !== 'tag' && candidate.kind !== 'path')
+      const unique = typeof locator.uniqueSelector === 'string' && locator.uniqueSelector.length > 0 ? locator.uniqueSelector : ''
       const head = name.length > 0 ? `${tag} "${name}"` : tag
-      const tail = stable !== undefined
-        ? stable.value
-        : (typeof locator.path === 'string' && locator.path.length > 0 ? locator.path : '')
+      const tail = unique.length > 0
+        ? unique
+        : (stable !== undefined
+          ? stable.value
+          : (typeof locator.path === 'string' && locator.path.length > 0 ? locator.path : ''))
       const summary = tail.length > 0 ? `${head} · ${tail}` : head
       return summary.length > 160 ? `${summary.slice(0, 159)}…` : summary
     }
@@ -10011,16 +10311,230 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       return typeof locator.tag === 'string' && locator.tag.length > 0 ? locator.tag : 'element'
     }
 
+    /** Locator candidate kinds persisted by the resolver. */
+    const ANNOTATION_CANDIDATE_KINDS = new Set(['data', 'id', 'label', 'role', 'tag', 'path'])
+
+    /** Resolution statuses a persisted record may carry (display-only in Phase 1). */
+    const ANNOTATION_STATUS_VALUES = new Set(['resolved', 'ambiguous', 'missing', 'changed'])
+
+    /**
+     * Accept one stored selector string from localStorage.
+     *
+     * Records are untrusted input after a reload: only a bounded selector-shaped
+     * string survives, and it is still passed through `querySelectorAll` inside a
+     * try/catch by the resolver. No HTML can be stored or executed (D11/D14).
+     * @param {unknown} value - raw stored value.
+     * @returns {string | null} safe selector text.
+     */
+    function sanitizeStoredSelector(value) {
+      if (typeof value !== 'string') return null
+      const text = value.replace(ANNOTATION_CONTROL_CHARS, ' ').replace(/\s+/g, ' ').trim()
+      if (text.length === 0 || text.length > 400) return null
+      if (text.includes('<') || text.includes('javascript:')) return null
+      return text
+    }
+
+    /**
+     * Normalize one stored locator candidate list.
+     * @param {unknown} raw - raw candidate array.
+     * @returns {Array<{ kind: string, value: string, reliability: number }>} at most six candidates.
+     */
+    function normalizeStoredCandidates(raw) {
+      if (!Array.isArray(raw)) return []
+      const result = []
+      const seen = new Set()
+      for (const item of raw) {
+        if (item === null || typeof item !== 'object') continue
+        const kind = typeof item.kind === 'string' && ANNOTATION_CANDIDATE_KINDS.has(item.kind) ? item.kind : ''
+        const value = sanitizeStoredSelector(item.value)
+        if (kind.length === 0 || value === null || seen.has(value)) continue
+        seen.add(value)
+        const reliability = typeof item.reliability === 'number' && Number.isFinite(item.reliability)
+          ? Math.min(1, Math.max(0, item.reliability))
+          : 0.1
+        result.push({ kind, value, reliability })
+      }
+      result.sort((left, right) => right.reliability - left.reliability)
+      return result.slice(0, 6)
+    }
+
+    /**
+     * Normalize one persisted AnnotationRecord (v2, v1 tolerated).
+     *
+     * This is the storage boundary: every field is whitelisted, every string
+     * sanitized, and invalid records are dropped instead of repaired into
+     * something that claims a target it cannot resolve. `note` is user-authored
+     * and survives verbatim (no redaction, no truncation) like the draft itself.
+     * @param {unknown} raw - parsed record.
+     * @param {number} [fallbackOrder] - order to use when the record has none.
+     * @returns {object | null} normalized record, or null when it must be dropped.
+     */
+    function normalizeAnnotationRecord(raw, fallbackOrder) {
+      if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null
+      const version = raw.version
+      if (version !== undefined && version !== 1 && version !== 2) return null
+      const id = typeof raw.id === 'string' && raw.id.length > 0 && raw.id.length <= 120 ? raw.id : ''
+      if (id.length === 0) return null
+      const rawLocator = raw.locator !== null && typeof raw.locator === 'object' ? raw.locator : null
+      if (rawLocator === null) return null
+      const candidates = normalizeStoredCandidates(rawLocator.candidates)
+      if (candidates.length === 0) return null
+      const tag = (typeof rawLocator.tag === 'string' ? rawLocator.tag.trim().toLowerCase().slice(0, 40) : '') || 'element'
+      const path = typeof rawLocator.path === 'string' ? sanitizeStoredSelector(rawLocator.path) ?? '' : ''
+      const role = typeof rawLocator.role === 'string' ? sanitizeText(rawLocator.role, 32) : ''
+      const name = typeof rawLocator.name === 'string' ? sanitizeText(rawLocator.name, 60) : ''
+      const text = typeof raw.text === 'string' ? sanitizeText(raw.text, 80) : ''
+      const key = typeof rawLocator.key === 'string' && rawLocator.key.length > 0 && rawLocator.key.length <= 300
+        ? rawLocator.key
+        : identityKeyForCandidates(tag, { path, role, text }, candidates)
+      const uniqueSelector = sanitizeStoredSelector(rawLocator.uniqueSelector)
+      const uniqueVerified = uniqueSelector !== null && rawLocator.uniqueVerified === true
+      const surface = rawLocator.surface === 'floating' ? 'floating' : 'page'
+      const ancestorInput = Array.isArray(rawLocator.ancestors) ? rawLocator.ancestors : []
+      const ancestors = buildStableAncestors(ancestorInput.map((entry) => {
+        const item = entry !== null && typeof entry === 'object' ? entry : {}
+        const attrs = item.attrs !== null && typeof item.attrs === 'object' && !Array.isArray(item.attrs)
+          ? Object.entries(item.attrs).map(([attrName, attrValue]) => ({ name: attrName, value: attrValue }))
+          : []
+        return { tag: item.tag, attrs }
+      }))
+      const rawSession = raw.session !== null && typeof raw.session === 'object' ? raw.session : {}
+      const sessionId = typeof rawSession.sessionId === 'string' && rawSession.sessionId.length > 0 && rawSession.sessionId.length <= 120
+        ? rawSession.sessionId
+        : null
+      const cwd = typeof rawSession.cwd === 'string' && rawSession.cwd.length > 0 && rawSession.cwd.length <= 4096
+        ? rawSession.cwd.replace(ANNOTATION_CONTROL_CHARS, '')
+        : null
+      const workspaceLabel = typeof rawSession.workspaceLabel === 'string' && rawSession.workspaceLabel.length > 0
+        ? sanitizeText(rawSession.workspaceLabel, 80)
+        : annotationWorkspaceLabel(cwd)
+      const at = typeof raw.at === 'number' && Number.isFinite(raw.at) && raw.at > 0 ? Math.round(raw.at) : 0
+      const updatedAt = typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) && raw.updatedAt > 0 ? Math.round(raw.updatedAt) : at
+      const order = typeof raw.order === 'number' && Number.isFinite(raw.order) && raw.order >= 0
+        ? Math.round(raw.order)
+        : (typeof fallbackOrder === 'number' && Number.isFinite(fallbackOrder) ? Math.round(fallbackOrder) : 0)
+      const component = typeof raw.component === 'string' && raw.component.length > 0 ? raw.component.slice(0, 32) : 'other'
+      const context = typeof raw.context === 'string' ? sanitizeText(raw.context, 120) : ''
+      const textDigestValue = typeof raw.textDigest === 'string' && /^[0-9a-f]{0,8}$/.test(raw.textDigest) ? raw.textDigest : ''
+      const lastStatus = typeof raw.lastStatus === 'string' && ANNOTATION_STATUS_VALUES.has(raw.lastStatus) ? raw.lastStatus : null
+      return {
+        version: 2,
+        id,
+        at,
+        updatedAt,
+        order,
+        session: { sessionId, cwd, workspaceLabel },
+        route: annotationRoutePath(raw.route),
+        locator: {
+          tag,
+          role,
+          name,
+          candidates,
+          key,
+          path,
+          uniqueSelector,
+          uniqueVerified,
+          ancestors,
+          surface,
+          ephemeral: surface === 'floating'
+        },
+        component,
+        text,
+        textDigest: textDigestValue,
+        context,
+        bounds: normalizeAnnotationBounds(raw.bounds) ?? { x: 0, y: 0, width: 0, height: 0 },
+        viewport: normalizeAnnotationViewport(raw.viewport),
+        note: normalizeUserNote(raw.note),
+        included: raw.included !== false,
+        lastStatus
+      }
+    }
+
+    /**
+     * Parse the persisted annotation document.
+     *
+     * Tolerant by contract: bad JSON, unknown document versions, malformed records,
+     * and extra fields never throw; valid records are normalized, invalid ones
+     * dropped, duplicates removed, and the list capped at the record limit.
+     * @param {unknown} text - raw localStorage value.
+     * @returns {{ version: number, updatedAt: number, records: Array<object> }} sanitized document.
+     */
+    function parseAnnotationStore(text) {
+      const empty = { version: 2, updatedAt: 0, records: [] }
+      if (typeof text !== 'string' || text.length === 0) return empty
+      let parsed
+      try {
+        parsed = JSON.parse(text)
+      } catch {
+        return empty
+      }
+      let rawRecords
+      if (Array.isArray(parsed)) {
+        // Tolerate the bare-array shape while still validating every record.
+        rawRecords = parsed
+      } else if (parsed !== null && typeof parsed === 'object') {
+        const version = parsed.version
+        if (version !== undefined && version !== 1 && version !== 2) return empty
+        rawRecords = Array.isArray(parsed.records) ? parsed.records : []
+      } else {
+        return empty
+      }
+      const updatedAt = parsed !== null && typeof parsed === 'object' && typeof parsed.updatedAt === 'number' && Number.isFinite(parsed.updatedAt)
+        ? Math.round(parsed.updatedAt)
+        : 0
+      const records = []
+      const seen = new Set()
+      for (let index = 0; index < rawRecords.length; index += 1) {
+        if (records.length >= ANNOTATION_RECORD_LIMIT) break
+        const record = normalizeAnnotationRecord(rawRecords[index], index)
+        if (record === null) continue
+        if (seen.has(record.id)) continue
+        seen.add(record.id)
+        records.push(record)
+      }
+      records.sort((left, right) => (left.order - right.order) || (left.at - right.at))
+      return { version: 2, updatedAt, records }
+    }
+
+    /**
+     * Serialize the persisted annotation document.
+     * @param {Array<object>} records - collection records.
+     * @param {number} updatedAt - epoch ms of this write.
+     * @returns {string} JSON document, records normalized and capped.
+     */
+    function serializeAnnotationStore(records, updatedAt) {
+      const list = []
+      const seen = new Set()
+      const input = Array.isArray(records) ? records : []
+      for (let index = 0; index < input.length; index += 1) {
+        if (list.length >= ANNOTATION_RECORD_LIMIT) break
+        const record = normalizeAnnotationRecord(input[index], index)
+        if (record === null) continue
+        if (seen.has(record.id)) continue
+        seen.add(record.id)
+        list.push(record)
+      }
+      list.sort((left, right) => (left.order - right.order) || (left.at - right.at))
+      const at = typeof updatedAt === 'number' && Number.isFinite(updatedAt) && updatedAt > 0 ? Math.round(updatedAt) : Date.now()
+      return JSON.stringify({ version: 2, updatedAt: at, records: list })
+    }
+
     /**
      * One ordered collection entry list update, never mutating the input.
+     *
+     * The record cap is enforced here, at the single commit boundary (D15): an
+     * add that would exceed the limit is refused explicitly (`rejected: true`)
+     * instead of silently dropping the oldest record or the new one.
      * @param {Array<object>} list - current entries (ElementRefs with `note`).
      * @param {object} entry - ElementRef to add or update.
-     * @returns {{ list: Array<object>, added: boolean, updated: boolean }} next list and what happened.
+     * @param {number} [limit] - maximum record count, default 100.
+     * @returns {{ list: Array<object>, added: boolean, updated: boolean, rejected: boolean }} next list and what happened.
      */
-    function collectionAdd(list, entry) {
+    function collectionAdd(list, entry, limit) {
       const current = Array.isArray(list) ? list : []
+      const cap = typeof limit === 'number' && Number.isFinite(limit) && limit >= 1 ? Math.round(limit) : ANNOTATION_RECORD_LIMIT
       const ref = entry !== null && typeof entry === 'object' && entry.ref !== null && typeof entry.ref === 'object' ? entry.ref : entry
-      if (ref === null || typeof ref !== 'object') return { list: current.slice(), added: false, updated: false }
+      if (ref === null || typeof ref !== 'object') return { list: current.slice(), added: false, updated: false, rejected: false }
       const key = identityKeyOf(ref)
       const sessionId = ref.session !== null && typeof ref.session === 'object' ? ref.session.sessionId ?? null : null
       const index = current.findIndex((item) => {
@@ -10045,9 +10559,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
             ? ref.note
             : (typeof existing.note === 'string' ? existing.note : '')
         }
-        return { list: next, added: false, updated: true }
+        return { list: next, added: false, updated: true, rejected: false }
       }
-      return { list: current.concat([ref]), added: true, updated: false }
+      if (current.length >= cap) return { list: current.slice(), added: false, updated: false, rejected: true }
+      return { list: current.concat([ref]), added: true, updated: false, rejected: false }
     }
 
     /**
@@ -10303,9 +10818,16 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         annotationJoinLabel(sessionLabel, `${sessionText} · ${timeText}`),
         annotationJoinLabel(noteLabel, noteText)
       ]
-      // A stale or ambiguous target is called out explicitly, locator only.
+      // A stale or ambiguous target is called out explicitly, locator only. A
+      // transient floating-surface target says it is gone, not that it moved.
       const status = ref !== null && typeof ref === 'object' ? ref.status : undefined
-      if (status === 'missing') lines.push(typeof source.status === 'string' ? source.status : 'Status: target no longer resolves (locator only)')
+      const ephemeral = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object'
+        && ref.locator.ephemeral === true
+      if (status === 'missing') {
+        lines.push(ephemeral && typeof source.statusEphemeral === 'string'
+          ? source.statusEphemeral
+          : (typeof source.status === 'string' ? source.status : 'Status: target no longer resolves (locator only)'))
+      }
       else if (status === 'ambiguous') lines.push(typeof source.statusAmbiguous === 'string' ? source.statusAmbiguous : 'Status: target matches more than one element (locator only)')
       else if (status === 'changed') lines.push(typeof source.statusChanged === 'string' ? source.statusChanged : 'Status: target content changed')
       lines.push('')
@@ -10327,6 +10849,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const noteLabel = typeof source.note === 'string' ? source.note : 'Note:'
       const emptyNote = typeof source.emptyNote === 'string' ? source.emptyNote : '—'
       const statusLabel = typeof source.status === 'string' ? source.status : 'Status: target no longer resolves (locator only)'
+      const statusEphemeral = typeof source.statusEphemeral === 'string'
+        ? source.statusEphemeral
+        : 'Status: transient surface no longer present (locator only)'
       const statusAmbiguous = typeof source.statusAmbiguous === 'string' ? source.statusAmbiguous : 'Status: target matches more than one element (locator only)'
       const statusChanged = typeof source.statusChanged === 'string' ? source.statusChanged : 'Status: target content changed'
       const skippedTemplate = typeof source.skipped === 'string' ? source.skipped : '({count} annotation(s) from other sessions skipped)'
@@ -10348,7 +10873,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         lines.push(`   ${annotationJoinLabel(reference, describeLocator(ref))}`)
         lines.push(`   ${annotationJoinLabel(noteLabel, normalizeUserNote(note) || emptyNote)}`)
         const status = ref !== null && typeof ref === 'object' ? ref.status : undefined
-        if (status === 'missing') lines.push(`   ${statusLabel}`)
+        const ephemeral = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object'
+          && ref.locator.ephemeral === true
+        if (status === 'missing') lines.push(`   ${ephemeral ? statusEphemeral : statusLabel}`)
         else if (status === 'ambiguous') lines.push(`   ${statusAmbiguous}`)
         else if (status === 'changed') lines.push(`   ${statusChanged}`)
         if (index < entries.length - 1) lines.push('')
@@ -10391,7 +10918,39 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       let genericMatch = null
       const hasStableCandidate = ordered.some((candidate) => candidate !== null && typeof candidate === 'object'
         && (candidate.kind === 'data' || candidate.kind === 'id' || candidate.kind === 'label'))
-      for (const candidate of ordered) {
+      /**
+       * Collect the tag-matching hits of one selector without throwing.
+       * @param {string} selector - selector to query.
+       * @returns {Array<object> | null} hits, or null when the query failed.
+       */
+      const queryTagged = (selector) => {
+        let matches
+        try {
+          matches = queryAll(selector)
+        } catch {
+          return null
+        }
+        if (matches === null || matches === undefined) return null
+        if (typeof matches[Symbol.iterator] !== 'function') return null
+        const list = []
+        for (const element of matches) {
+          if (element === null || typeof element !== 'object') continue
+          if (typeof element.tagName !== 'string') continue
+          if (tag.length === 0 || element.tagName.toLowerCase() === tag) list.push(element)
+        }
+        return list
+      }
+      // A selector verified unique at capture is the strongest locator: a single
+      // hit resolves (the liveInfo checks below still detect a changed element),
+      // several hits are genuine ambiguity, and no hit falls through to the v1
+      // candidate walk so an older locator keeps working.
+      const uniqueSelector = typeof source.uniqueSelector === 'string' && source.uniqueSelector.length > 0 ? source.uniqueSelector : ''
+      if (uniqueSelector.length > 0) {
+        const hits = queryTagged(uniqueSelector)
+        if (hits !== null && hits.length > 1) return 'ambiguous'
+        if (hits !== null && hits.length === 1) unique = hits[0]
+      }
+      if (unique === null) for (const candidate of ordered) {
         if (candidate === null || typeof candidate !== 'object' || typeof candidate.value !== 'string' || candidate.value.length === 0) continue
         let matches
         try {
@@ -10569,7 +11128,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     //#endregion
 
     /** Selector set of elements the picker treats as meaningful, nearest first. */
-    const ANNOTATION_CANDIDATE_SELECTOR = 'button, a, input, select, textarea, [role="button"], [role="tab"], [role="menuitem"], [role="link"], [role="dialog"], [role="list"], [role="listitem"], [role="treeitem"], [role="combobox"], [role="textbox"], [data-row-key], [data-conversation-region], [aria-label], h1, h2, h3, h4, h5, h6, li, td, pre, p, code, nav, aside, main, section'
+    const ANNOTATION_CANDIDATE_SELECTOR = 'button, a, input, select, textarea, [role="button"], [role="tab"], [role="menuitem"], [role="link"], [role="dialog"], [role="menu"], [role="tooltip"], [role="list"], [role="listitem"], [role="treeitem"], [role="combobox"], [role="textbox"], [data-row-key], [data-conversation-region], [aria-label], h1, h2, h3, h4, h5, h6, li, td, pre, p, code, nav, aside, main, section'
 
     /** Estimated popover size used for clamping. */
     const ANNOTATION_POPOVER_SIZE = { width: 320, height: 248 }
@@ -10905,6 +11464,117 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
+     * The strongest stable attribute selector of one element (no class names).
+     * @param {Element} element - live element.
+     * @returns {{ name: string, value: string, selector: string } | null} candidate, or null.
+     */
+    function annotationStableSelectorCandidate(element) {
+      if (element === null || typeof element !== 'object' || typeof element.getAttribute !== 'function') return null
+      const tag = typeof element.tagName === 'string' ? element.tagName.toLowerCase() : ''
+      if (tag.length === 0) return null
+      const names = [...UNIQUE_SELECTOR_ATTRIBUTES, 'id', 'aria-label']
+      for (const name of names) {
+        const raw = element.getAttribute(name)
+        if (raw === null || raw.length === 0) continue
+        const value = sanitizeAttributeValue(name, raw)
+        if (value === null) continue
+        if (name === 'id' && isDynamicValue(value)) continue
+        const selector = name === 'id'
+          ? `#${cssIdentifier(value)}`
+          : `${tag}[${name}="${cssString(value)}"]`
+        return { name, value, selector }
+      }
+      return null
+    }
+
+    /**
+     * Relative `tag:nth-of-type(n)` steps from one ancestor down to one element.
+     * @param {Element} element - target element.
+     * @param {Element} ancestor - ancestor to start from.
+     * @returns {Array<{ tag: string, index: number }> | null} steps, or null when the ancestor is not on the path.
+     */
+    function annotationStructuralSteps(element, ancestor) {
+      if (element === null || ancestor === null || element === ancestor) return null
+      const steps = []
+      let current = element
+      let depth = 0
+      while (current !== null && current !== ancestor && depth < 8) {
+        const tag = typeof current.tagName === 'string' ? current.tagName.toLowerCase() : ''
+        if (tag.length === 0) return null
+        let index = 1
+        let sibling = current.previousElementSibling
+        while (sibling !== null) {
+          if (sibling.tagName === current.tagName) index += 1
+          sibling = sibling.previousElementSibling
+        }
+        steps.push({ tag, index })
+        current = current.parentElement
+        depth += 1
+      }
+      if (current !== ancestor) return null
+      steps.reverse()
+      return steps
+    }
+
+    /**
+     * Stable-anchor selector candidates for one element: the nearest stable
+     * ancestors (up to three) plus the structural steps to reach the element.
+     * @param {Element} element - live element.
+     * @returns {Array<{ selector: string, steps: Array<{ tag: string, index: number }> }>} anchors, nearest first.
+     */
+    function annotationAnchorPaths(element) {
+      const anchors = []
+      let current = element === null || typeof element !== 'object' ? null : element.parentElement
+      let depth = 0
+      while (current !== null && current !== undefined && current !== document.body && current !== document.documentElement && depth < 10 && anchors.length < 3) {
+        const stable = annotationStableSelectorCandidate(current)
+        if (stable !== null) {
+          const steps = annotationStructuralSteps(element, current)
+          if (steps !== null && steps.length > 0) anchors.push({ selector: stable.selector, steps })
+        }
+        current = current.parentElement
+        depth += 1
+      }
+      return anchors
+    }
+
+    /**
+     * Sanitized attribute pairs of one element, shaped for the record normalizer.
+     * @param {Element} element - live element.
+     * @returns {Array<{ name: string, value: string }>} sanitized pairs.
+     */
+    function annotationSanitizedAttributes(element) {
+      const attrs = []
+      if (element === null || typeof element !== 'object' || typeof element.attributes === 'undefined' || element.attributes === null) return attrs
+      for (const attribute of Array.from(element.attributes)) {
+        const name = sanitizeAttributeName(attribute.name)
+        if (name === null) continue
+        const value = sanitizeAttributeValue(name, attribute.value)
+        if (value === null) continue
+        attrs.push({ name, value })
+      }
+      return attrs
+    }
+
+    /**
+     * Stable ancestors of one element, nearest first, bounded by the record schema.
+     * @param {Element} element - live element.
+     * @returns {Array<{ tag: string, attrs: Array<{ name: string, value: string }> }>} ancestor entries.
+     */
+    function annotationStableAncestorEntries(element) {
+      const entries = []
+      let current = element === null || typeof element !== 'object' ? null : element.parentElement
+      let depth = 0
+      while (current !== null && current !== undefined && current !== document.body && current !== document.documentElement && depth < 10 && entries.length < ANNOTATION_MAX_ANCESTORS) {
+        const attrs = annotationSanitizedAttributes(current)
+        if (attrs.length > 0) entries.push({ tag: current.tagName.toLowerCase(), attrs })
+        current = current.parentElement
+        depth += 1
+      }
+      return entries
+    }
+
+    /**
      * Build the descriptor consumed by `buildElementRef` from a live element.
      * @param {Element} element - candidate element.
      * @param {boolean} insideComposer - whether the element is the composer region.
@@ -10923,6 +11593,14 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
       const role = sanitizeText(element.getAttribute('role') ?? '', 32) || annotationRoleOf(tag, element)
       const pathInfo = annotationTagPath(element)
+      // A verified unique selector costs a handful of querySelectorAll calls at
+      // select time (never on the pointermove hot path) and is the locator that
+      // fixes duplicate-label controls such as `New session` (A2/D11).
+      const unique = buildUniqueSelector({
+        tag,
+        attrs,
+        anchorPaths: annotationAnchorPaths(element)
+      }, (selector) => document.querySelectorAll(selector))
       return {
         tag,
         id: annotationStableId(element),
@@ -10935,7 +11613,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         path: pathInfo.selector,
         tagPath: pathInfo.parts,
         isEditable,
-        insideComposer: insideComposer === true
+        insideComposer: insideComposer === true,
+        uniqueSelector: unique.selector,
+        uniqueVerified: unique.verified,
+        ancestors: annotationStableAncestorEntries(element)
       }
     }
 
@@ -11001,11 +11682,162 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
+     * Computed z-index of one element, as a number, or null when it participates
+     * in no explicit stacking layer (`z-index: auto`).
+     * @param {Element} element - live element.
+     * @returns {number | null} computed z-index.
+     */
+    function annotationComputedZIndex(element) {
+      if (element === null || typeof element !== 'object') return null
+      const style = window.getComputedStyle(element)
+      if (style === null || typeof style !== 'object') return null
+      const raw = style.zIndex
+      if (typeof raw !== 'string' || raw.length === 0 || raw === 'auto') return null
+      const value = Number.parseInt(raw, 10)
+      return Number.isFinite(value) ? value : null
+    }
+
+    /**
+     * Whether one element is a floating surface box: out of normal flow, with an
+     * explicit stacking layer, a real box, and no annotation UI inside it.
+     *
+     * The test intentionally uses computed style, never hashed DSH class names,
+     * so a DSH rebuild cannot silently disable the surface picker. `<svg>` and
+     * zero-size decorations are excluded; our own nodes are never targets.
+     * @param {Element} element - live element.
+     * @returns {boolean} whether the element is a floating box.
+     */
+    function annotationFloatingBox(element) {
+      if (element === null || typeof element !== 'object') return false
+      if (typeof element.tagName !== 'string') return false
+      const tag = element.tagName.toLowerCase()
+      if (tag === 'html' || tag === 'body' || tag === 'svg') return false
+      if (typeof element.closest !== 'function') return false
+      if (element.closest('[data-psa-own]') !== null) return false
+      if (!annotationElementVisible(element)) return false
+      const style = window.getComputedStyle(element)
+      if (style === null || typeof style !== 'object') return false
+      if (style.position !== 'fixed' && style.position !== 'absolute') return false
+      const zIndex = annotationComputedZIndex(element)
+      return zIndex !== null && zIndex >= ANNOTATION_SURFACE_MIN_Z
+    }
+
+    /**
+     * The outermost floating surface of one candidate chain (F2).
+     *
+     * The hit element may be a static text row inside a body-level portal card;
+     * the first floating ancestor starts the surface run, and the run is extended
+     * upward while ancestors are themselves floating boxes, so the returned root
+     * is the whole card rather than its inner layer. Selection never crosses the
+     * root to page ancestors behind the surface.
+     * @param {Array<{ element: Element, insideComposer: boolean }>} chain - candidate chain, nearest first.
+     * @param {(element: Element) => boolean} [isFloating] - injectable predicate for unit tests.
+     * @returns {{ root: Element, index: number } | null} surface root and its chain index.
+     */
+    function annotationSurfaceRoot(chain, isFloating) {
+      const entries = Array.isArray(chain) ? chain : []
+      const floating = typeof isFloating === 'function' ? isFloating : annotationFloatingBox
+      for (let index = 0; index < entries.length; index += 1) {
+        const element = entries[index] !== null && typeof entries[index] === 'object' ? entries[index].element : null
+        if (element === null || element === undefined) continue
+        let matched
+        try {
+          matched = floating(element)
+        } catch {
+          matched = false
+        }
+        if (!matched) continue
+        let root = element
+        let rootIndex = index
+        let above = index + 1
+        while (above < entries.length) {
+          const ancestor = entries[above] !== null && typeof entries[above] === 'object' ? entries[above].element : null
+          if (ancestor === null || ancestor === undefined) break
+          let ancestorFloating
+          try {
+            ancestorFloating = floating(ancestor)
+          } catch {
+            ancestorFloating = false
+          }
+          if (!ancestorFloating) break
+          root = ancestor
+          rootIndex = above
+          above += 1
+        }
+        return { root, index: rootIndex }
+      }
+      return null
+    }
+
+    /**
+     * DOM accessors used by {@link annotationSurfaceLevels}; injectable so the
+     * level algorithm is unit-testable without a browser.
+     * @returns {object} accessor set.
+     */
+    function annotationSurfaceAccess() {
+      return {
+        descendants: (root) => (typeof root.querySelectorAll === 'function' ? Array.from(root.querySelectorAll('*')) : []),
+        isCandidate: (element) => annotationIsCandidate(element),
+        isOwn: (element) => typeof element.closest === 'function' && element.closest('[data-psa-own]') !== null,
+        visible: (element) => annotationElementVisible(element),
+        rectOf: (element) => annotationRectOf(element),
+        textOf: (element) => (typeof element.innerText === 'string' ? element.innerText : (element.textContent ?? '')).trim(),
+        childCount: (element) => (typeof element.children?.length === 'number' ? element.children.length : 0),
+        insideComposer: (element) => typeof element.closest === 'function' && element.closest('[data-conversation-region="composer"]') !== null
+      }
+    }
+
+    /**
+     * Drill levels of one floating surface: the whole root first, then its inner
+     * candidate controls and text rows in document order (F2).
+     *
+     * A level is either a normal candidate (`button`, `[aria-label]`, row, …) or a
+     * text block: an element with no element children, non-empty text, and a box
+     * of at least 8×8. That second rule is what lets a hover card's title/path
+     * rows be selected even though they carry no role or aria attribute.
+     * @param {Element} root - surface root element.
+     * @param {object} [access] - accessor set (tests inject a DOM-free one).
+     * @returns {Array<{ element: Element, insideComposer: boolean }>} levels, root first, capped.
+     */
+    function annotationSurfaceLevels(root, access) {
+      if (root === null || root === undefined || typeof root !== 'object') return []
+      const api = access !== null && typeof access === 'object' ? { ...annotationSurfaceAccess(), ...access } : annotationSurfaceAccess()
+      const levels = [{ element: root, insideComposer: api.insideComposer(root) === true }]
+      const seen = new Set([root])
+      const descendants = api.descendants(root)
+      for (const element of descendants) {
+        if (levels.length >= ANNOTATION_SURFACE_MAX_LEVELS) break
+        if (element === null || element === undefined || typeof element !== 'object') continue
+        if (seen.has(element)) continue
+        if (api.isOwn(element)) continue
+        const box = api.rectOf(element)
+        if (box === null || box === undefined || box.width <= 0 || box.height <= 0) continue
+        if (!api.visible(element)) continue
+        const candidate = api.isCandidate(element) === true
+        const textBlock = !candidate
+          && api.childCount(element) === 0
+          && api.textOf(element).length > 0
+          && box.width >= 8
+          && box.height >= 8
+        if (!candidate && !textBlock) continue
+        seen.add(element)
+        levels.push({ element, insideComposer: api.insideComposer(element) === true })
+      }
+      return levels
+    }
+
+    /**
      * Choose the meaningful index in one candidate chain.
+     *
+     * A hit inside a floating surface defaults to the surface root (the whole
+     * card), never to a page ancestor behind it; everything else keeps the v1
+     * semantic-candidate-then-solid-box behavior.
      * @param {Array<{ element: Element, insideComposer: boolean }>} chain - candidate chain.
      * @returns {number} chosen index, or -1.
      */
     function annotationPickChainIndex(chain) {
+      const surface = annotationSurfaceRoot(chain)
+      if (surface !== null) return surface.index
       for (let index = 0; index < chain.length; index += 1) {
         if (annotationIsCandidate(chain[index].element)) return index
       }
@@ -11026,8 +11858,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
      * unique generic match is remembered as the fallback (R1).
      *
      * Pure: `queryAll(selector)` and `elementLike.tagName` are injected, so this is
-     * shared with the unit-test seam.
-     * @param {{ candidates?: Array<object>, expectedTag?: string, queryAll?: Function }} input - resolver input.
+     * shared with the unit-test seam. A capture-verified unique selector is tried
+     * first; one hit is the node, several hits are genuine ambiguity, and no hit
+     * falls back to the ordered v1 candidates (D11).
+     * @param {{ candidates?: Array<object>, expectedTag?: string, queryAll?: Function, uniqueSelector?: string }} input - resolver input.
      * @returns {object | null} the unique element-like object, or null.
      */
     function resolveNodeCandidate(input) {
@@ -11038,6 +11872,25 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const ordered = Array.isArray(candidates)
         ? candidates.slice().sort((left, right) => (right?.reliability ?? 0) - (left?.reliability ?? 0))
         : []
+      const uniqueSelector = typeof source.uniqueSelector === 'string' && source.uniqueSelector.length > 0 ? source.uniqueSelector : ''
+      if (uniqueSelector.length > 0) {
+        let uniqueHits = null
+        try {
+          uniqueHits = queryAll(uniqueSelector)
+        } catch {
+          uniqueHits = null
+        }
+        if (uniqueHits !== null && uniqueHits !== undefined && typeof uniqueHits[Symbol.iterator] === 'function') {
+          const tagged = []
+          for (const element of uniqueHits) {
+            if (element === null || typeof element !== 'object') continue
+            if (typeof element.tagName !== 'string') continue
+            if (tag.length === 0 || element.tagName.toLowerCase() === tag) tagged.push(element)
+          }
+          if (tagged.length > 1) return null
+          if (tagged.length === 1) return tagged[0]
+        }
+      }
       let genericMatch = null
       for (const candidate of ordered) {
         if (candidate === null || typeof candidate !== 'object' || typeof candidate.value !== 'string' || candidate.value.length === 0) continue
@@ -11084,6 +11937,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       return resolveNodeCandidate({
         candidates: locator.candidates,
         expectedTag: locator.tag,
+        uniqueSelector: typeof locator.uniqueSelector === 'string' ? locator.uniqueSelector : '',
         queryAll: (selector) => document.querySelectorAll(selector)
       })
     }
@@ -11132,6 +11986,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         emptyNote: t('insert.emptyNote'),
         batchHeader: t('insert.batchHeader'),
         status: t('insert.status'),
+        statusEphemeral: t('insert.statusEphemeral'),
         statusAmbiguous: t('insert.statusAmbiguous'),
         statusChanged: t('insert.statusChanged'),
         skipped: t('insert.skipped')
@@ -11230,8 +12085,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       let settings = parseStoredSettings(annotationReadStorage(SETTINGS_STORAGE_KEY))
       let railCollapsed = annotationReadStorage(RAIL_STORAGE_KEY) === 'true'
       const viewport = annotationViewport()
+      // Records are the feature's data spine: they survive reloads, so the store
+      // starts from the validated persisted document instead of an empty list (D1).
+      const storedRecords = parseAnnotationStore(annotationReadStorage(ANNOTATION_RECORDS_STORAGE_KEY)).records
       const store = createAnnotationStore({
-        state: createAnnotationState(),
+        state: { ...createAnnotationState(), collection: storedRecords },
         settings: { ...settings },
         launcherPosition: clampLauncherPosition(readLauncherPosition(), viewport, ANNOTATION_LAUNCHER_SIZE),
         launcherDragging: false,
@@ -11268,6 +12126,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       let hoverPoint = null
       /** Hover rAF handle. */
       let hoverFrame = null
+      /** F3 debounce: recompute hover/geometry after DOM mutations while the pointer stands still. */
+      let hoverRecomputeTimer = null
       /** Geometry rAF handle. */
       let geometryFrame = null
       /** Resize debounce timer. */
@@ -11296,6 +12156,12 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       let popoverMeasureFrame = null
       /** Monotonic hover token. */
       let tokenSeq = 0
+      /** F1: inline z-index captured from `[data-shell-overlay]` before raising it. */
+      let paintSnapshot = null
+      /** Pending records-persistence debounce timer (D1). */
+      let persistTimer = null
+      /** Last serialized records document, so no-op writes stay no-ops. */
+      let persistedRecordsText = null
 
       /**
        * The current snapshot.
@@ -11398,30 +12264,83 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
-       * Build one ref from a chain position, preserving the order/timestamp of the
+       * Build one ref from one drill level, preserving the order/timestamp of the
        * ref it replaces (level up/down must not churn collection identity).
-       * @param {Array<object>} chain - candidate chain.
-       * @param {number} index - chosen chain index.
+       *
+       * The descriptor is built lazily for the chosen element plus at most two
+       * context ancestors, so walking the hover chain stays cheap; the v2 capture
+       * fields (unique selector, ancestors, session/route identity, surface) are
+       * added here at select time, never on the pointermove hot path.
+       * @param {{ element: Element, insideComposer: boolean }} level - chosen level.
        * @param {object | null} like - ref being replaced, when any.
+       * @param {'page' | 'floating'} [surface] - whether the level is a floating surface.
        * @returns {object} new ElementRef.
        */
-      function refFromChain(chain, index, like) {
-        const entry = chain[index]
-        const bounds = annotationRectOf(entry.element)
-        const descriptor = annotationDescriptorOf(entry.element, entry.insideComposer)
+      function refForLevel(level, like, surface) {
+        const element = level.element
+        const bounds = annotationRectOf(element)
+        const descriptor = annotationDescriptorOf(element, level.insideComposer)
+        // The chain above the chosen element supplies the <=2 context labels and
+        // never builds more descriptors than that (F5 performance contract).
+        const chain = annotationCandidateChain(element)
+        const levelChain = chain.slice(1, 3).map((item) => {
+          const ancestor = annotationDescriptorOf(item.element, item.insideComposer)
+          return ancestor.name || ancestor.component || ancestor.tag
+        })
+        const sessionId = annotationBridge.sessionId ?? annotationConversationSessionId()
+        const identity = sessionIdentity(sessionId)
         const context = {
-          sessionId: annotationBridge.sessionId ?? annotationConversationSessionId(),
+          sessionId: identity.sessionId,
+          cwd: identity.cwd,
+          workspaceLabel: identity.workspaceLabel,
+          route: currentRoute(),
+          viewport: annotationViewport(),
+          surface: surface === 'floating' ? 'floating' : 'page',
           at: like !== null && typeof like === 'object' && typeof like.at === 'number' ? like.at : Date.now(),
           order: like !== null && typeof like === 'object' && typeof like.order === 'number' ? like.order : Date.now() % 1000000,
           bounds,
-          levelChain: chain.slice(index + 1, index + 3).map((item) => {
-            const ancestor = annotationDescriptorOf(item.element, item.insideComposer)
-            return ancestor.name || ancestor.component || ancestor.tag
-          })
+          levelChain
         }
         const ref = buildElementRef(descriptor, context)
         ref.note = like !== null && typeof like === 'object' && typeof like.note === 'string' ? like.note : ''
         return ref
+      }
+
+      /**
+       * Drill levels for one pick: an ordinary page pick walks the v1 ancestor
+       * chain (Parent = next entry), a floating-surface pick returns the root
+       * plus its inner candidates/text rows (Child = next entry). The single
+       * `entries`/`index`/`parentStep` shape keeps both directions honest.
+       * @param {Array<object>} chain - candidate chain, nearest first.
+       * @returns {{ entries: Array<object>, index: number, parentStep: number, surface: 'page' | 'floating' }} pick levels.
+       */
+      function pickLevels(chain) {
+        const surface = annotationSurfaceRoot(chain)
+        if (surface !== null) {
+          const levels = annotationSurfaceLevels(surface.root)
+          return {
+            entries: levels.length > 0 ? levels : [{ element: surface.root, insideComposer: false }],
+            index: 0,
+            parentStep: -1,
+            surface: 'floating'
+          }
+        }
+        return {
+          entries: chain.map((entry) => ({ element: entry.element, insideComposer: entry.insideComposer })),
+          index: annotationPickChainIndex(chain),
+          parentStep: 1,
+          surface: 'page'
+        }
+      }
+
+      /**
+       * Build the ref of one lastPick level with its preserved note.
+       * @param {object} pick - lastPick shape.
+       * @param {object | null} like - ref being replaced, when any.
+       * @returns {object} new ElementRef.
+       */
+      function refFromPick(pick, like) {
+        return refForLevel(pick.entries[pick.index], like, pick.surface)
       }
 
       /**
@@ -11436,6 +12355,186 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
+       * Capture the raised paint layer (F1): remember the shell overlay's own
+       * inline z-index value and priority, then raise it above native hover cards
+       * (z=100) while staying below native modals (1000) and menus (1100).
+       *
+       * `!important` is used so a React re-render that rewrites the inline style
+       * cannot silently drop the raise; exit restores the captured pair exactly.
+       * @returns {void}
+       */
+      function capturePaintLayer() {
+        const overlay = document.querySelector('[data-shell-overlay]')
+        if (!(overlay instanceof HTMLElement)) return
+        if (paintSnapshot !== null && paintSnapshot.element === overlay) {
+          if (overlay.style.getPropertyValue('z-index') !== String(ANNOTATION_PAINT_Z)) {
+            overlay.style.setProperty('z-index', String(ANNOTATION_PAINT_Z), 'important')
+            document.documentElement.setAttribute(ANNOTATION_RAISED_ATTR, 'true')
+          }
+          return
+        }
+        if (paintSnapshot !== null) restorePaintLayer()
+        paintSnapshot = {
+          element: overlay,
+          index: {
+            value: overlay.style.getPropertyValue('z-index'),
+            priority: overlay.style.getPropertyPriority('z-index')
+          }
+        }
+        overlay.style.setProperty('z-index', String(ANNOTATION_PAINT_Z), 'important')
+        document.documentElement.setAttribute(ANNOTATION_RAISED_ATTR, 'true')
+      }
+
+      /**
+       * Restore the paint layer to the exact captured inline z-index state (F1).
+       * @returns {void}
+       */
+      function restorePaintLayer() {
+        document.documentElement.removeAttribute(ANNOTATION_RAISED_ATTR)
+        if (paintSnapshot === null) return
+        const saved = paintSnapshot
+        paintSnapshot = null
+        const element = saved.element
+        if (element === null || element === undefined || typeof element.style !== 'object') return
+        const index = saved.index
+        if (index.value === '' && index.priority === '') element.style.removeProperty('z-index')
+        else element.style.setProperty('z-index', index.value, index.priority)
+      }
+
+      /**
+       * Announce mode state for the dynamic-workspaces hover-card pinning (D3).
+       * The dependent behavior is owned by that feature; this side only reports
+       * state. Dispatched on `document` with bubbling so both document- and
+       * window-level listeners observe it.
+       * @param {boolean} active - whether annotation mode just turned on/off.
+       * @returns {void}
+       */
+      function announceAnnotationState(active) {
+        try {
+          document.dispatchEvent(new CustomEvent(ANNOTATION_STATE_EVENT, {
+            detail: { active: active === true },
+            bubbles: true
+          }))
+        } catch {
+          // Announcement is contract glue; a hostile embedding must not break the mode.
+        }
+      }
+
+      /**
+       * Session identity enrichment for captured records (D6): full `cwd` is
+       * persisted (local only), the Workspace label is its basename.
+       * @param {string | null} sessionId - Session identity.
+       * @returns {{ sessionId: string | null, cwd: string | null, workspaceLabel: string | null }} identity.
+       */
+      function sessionIdentity(sessionId) {
+        const id = typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null
+        if (id === null) return { sessionId: null, cwd: null, workspaceLabel: null }
+        let cwd = null
+        try {
+          const sessions = ctx !== null && typeof ctx === 'object' ? ctx.sessions : null
+          const list = sessions !== null && typeof sessions === 'object' ? sessions.list : null
+          const listSnapshot = list !== null && typeof list === 'object' && typeof list.getSnapshot === 'function'
+            ? list.getSnapshot()
+            : null
+          const entry = listSnapshot !== null && listSnapshot !== undefined
+            && listSnapshot.byId !== null && typeof listSnapshot.byId === 'object'
+            ? listSnapshot.byId[id]
+            : null
+          if (entry !== null && entry !== undefined && typeof entry.cwd === 'string' && entry.cwd.length > 0) cwd = entry.cwd
+        } catch {
+          // Identity is best effort; a missing Session row still yields a valid record.
+        }
+        return { sessionId: id, cwd, workspaceLabel: annotationWorkspaceLabel(cwd) }
+      }
+
+      /** @returns {string} current SPA route pathname, never query or fragment. */
+      function currentRoute() {
+        try {
+          const location = window.location
+          return annotationRoutePath(location !== null && typeof location === 'object' ? location.pathname : '/')
+        } catch {
+          return '/'
+        }
+      }
+
+      /**
+       * Write the persisted records document now (D1). No-op when nothing changed.
+       * @returns {void}
+       */
+      function flushAnnotationRecords() {
+        if (persistTimer !== null) {
+          window.clearTimeout(persistTimer)
+          persistTimer = null
+        }
+        let text
+        try {
+          text = serializeAnnotationStore(snapshot().state.collection, Date.now())
+        } catch {
+          return
+        }
+        if (text === persistedRecordsText) return
+        persistedRecordsText = text
+        annotationWriteStorage(ANNOTATION_RECORDS_STORAGE_KEY, text)
+      }
+
+      /**
+       * Debounce one records write after a collection mutation (D1: 250 ms).
+       * @returns {void}
+       */
+      function scheduleAnnotationRecordsPersist() {
+        if (persistTimer !== null) window.clearTimeout(persistTimer)
+        persistTimer = window.setTimeout(() => {
+          persistTimer = null
+          flushAnnotationRecords()
+        }, ANNOTATION_PERSIST_DEBOUNCE_MS)
+      }
+
+      /**
+       * Copy the best locator of one record ("Copy locator", D10) and report the
+       * outcome through the feedback toast. Uses the verified unique selector when
+       * present, else the best ordered candidate.
+       * @param {string} [refId] - collection entry id; omitted means the current selection.
+       * @returns {boolean} whether a copy was attempted synchronously.
+       */
+      function copyLocator(refId) {
+        const current = snapshot().state
+        const ref = typeof refId === 'string' && refId.length > 0
+          ? current.collection.find((entry) => entry.id === refId)
+          : current.selection[0]
+        if (ref === undefined || ref === null) return false
+        const text = annotationLocatorText(ref)
+        if (typeof text !== 'string' || text.length === 0) {
+          feedback(t('feedback.locatorCopyFailed'), 'error')
+          return false
+        }
+        let clipboard = null
+        try {
+          clipboard = typeof navigator !== 'undefined' && navigator !== null ? navigator.clipboard : null
+        } catch {
+          clipboard = null
+        }
+        if (clipboard === null || clipboard === undefined || typeof clipboard.writeText !== 'function') {
+          feedback(t('feedback.locatorCopyFailed'), 'error')
+          return false
+        }
+        try {
+          const result = clipboard.writeText(text)
+          if (result !== null && typeof result === 'object' && typeof result.then === 'function') {
+            result.then(
+              () => feedback(t('feedback.locatorCopied')),
+              () => feedback(t('feedback.locatorCopyFailed'), 'error')
+            )
+          } else {
+            feedback(t('feedback.locatorCopied'))
+          }
+          return true
+        } catch {
+          feedback(t('feedback.locatorCopyFailed'), 'error')
+          return false
+        }
+      }
+
+      /**
        * Start the body mutation observer that feeds the resolved-node revision.
        * Only childList/characterData are observed: an attribute-only change keeps
        * the same node, so it cannot swap the element identity we resolved (R1/R4).
@@ -11447,6 +12546,17 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         if (typeof document === 'undefined' || document.body === null) return
         domObserver = new MutationObserver(() => {
           domRevision += 1
+          // F3: a floating card that appears/expands under a stationary pointer has
+          // no pointermove to trigger a recompute. Re-resolve after a short debounce
+          // so the outline follows the DOM rather than lagging on the old target.
+          if (!isActive() || hoverPoint === null || snapshot().state.passThrough) return
+          if (hoverRecomputeTimer !== null) window.clearTimeout(hoverRecomputeTimer)
+          hoverRecomputeTimer = window.setTimeout(() => {
+            hoverRecomputeTimer = null
+            if (!isActive() || hoverPoint === null) return
+            scheduleHover()
+            scheduleGeometry()
+          }, 60)
         })
         domObserver.observe(document.body, { childList: true, subtree: true, characterData: true })
       }
@@ -11503,6 +12613,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         return resolveRefStatus({
           candidates: ref.locator.candidates,
           expectedTag: ref.locator.tag,
+          uniqueSelector: typeof ref.locator.uniqueSelector === 'string' ? ref.locator.uniqueSelector : '',
           queryAll: (selector) => document.querySelectorAll(selector),
           liveInfo: (element) => {
             const elementText = typeof element.textContent === 'string' ? element.textContent : ''
@@ -11663,6 +12774,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         if (nextState === current.state) return current.state
         const patch = deriveGeometry(nextState, current)
         store.set({ ...current, state: nextState, ...patch })
+        // D1: every collection mutation schedules one debounced records write.
+        if (nextState.collection !== current.state.collection) scheduleAnnotationRecordsPersist()
         return nextState
       }
 
@@ -12040,10 +13153,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const element = annotationEventElement(event)
         if (element === null) return
         const chain = annotationCandidateChain(element)
-        const index = annotationPickChainIndex(chain)
-        if (index < 0) return
-        const ref = refFromChain(chain, index, null)
-        lastPick = { chain, index }
+        const levels = pickLevels(chain)
+        if (levels.index < 0) return
+        const ref = refFromPick(levels, null)
+        lastPick = levels
         dispatch({ type: 'selectSingle', ref })
       }
 
@@ -12056,13 +13169,13 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const element = annotationEventElement(event)
         if (element === null) return
         const chain = annotationCandidateChain(element)
-        const index = annotationPickChainIndex(chain)
-        if (index < 0) return
+        const levels = pickLevels(chain)
+        if (levels.index < 0) return
         const state = snapshot().state
-        const existing = state.selection.find((item) => identityKeyOf(item) === identityKeyOf(refFromChain(chain, index, null)))
+        const existing = state.selection.find((item) => identityKeyOf(item) === identityKeyOf(refFromPick(levels, null)))
         const like = existing !== undefined ? { ...existing, note: state.note } : null
-        const ref = refFromChain(chain, index, like)
-        lastPick = { chain, index }
+        const ref = refFromPick(levels, like)
+        lastPick = levels
         dispatch({ type: 'toggleMulti', ref })
       }
 
@@ -12081,9 +13194,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const seen = new Set()
         for (const element of elements) {
           const chain = annotationCandidateChain(element)
-          const index = annotationPickChainIndex(chain)
-          if (index < 0) continue
-          const ref = refFromChain(chain, index, null)
+          const levels = pickLevels(chain)
+          if (levels.index < 0) continue
+          const ref = refFromPick(levels, null)
           const key = identityKeyOf(ref)
           if (seen.has(key)) continue
           seen.add(key)
@@ -12191,7 +13304,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
        * @returns {void}
        */
       function onVisibilityChange() {
-        if (document.visibilityState === 'hidden' && isActive()) {
+        if (document.visibilityState === 'hidden') {
+          // D1: a hidden tab is the last reliable moment to persist records.
+          flushAnnotationRecords()
+          if (!isActive()) return
           if (snapshot().state.passThrough) setPassThrough(false)
           clearHover()
         }
@@ -12273,8 +13389,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       function clearTimers() {
         if (hoverFrame !== null) window.cancelAnimationFrame(hoverFrame)
         if (geometryFrame !== null) window.cancelAnimationFrame(geometryFrame)
+        if (hoverRecomputeTimer !== null) window.clearTimeout(hoverRecomputeTimer)
         hoverFrame = null
         geometryFrame = null
+        hoverRecomputeTimer = null
         if (resizeTimer !== null) window.clearTimeout(resizeTimer)
         if (frameObserverTimer !== null) window.clearTimeout(frameObserverTimer)
         if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
@@ -12282,6 +13400,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         if (frameRestoreTimer !== null) window.clearTimeout(frameRestoreTimer)
         if (popoverMeasureFrame !== null) window.cancelAnimationFrame(popoverMeasureFrame)
         popoverMeasureFrame = null
+        if (persistTimer !== null) window.clearTimeout(persistTimer)
+        persistTimer = null
         resizeTimer = null
         frameObserverTimer = null
         feedbackTimer = null
@@ -12368,6 +13488,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const immediate = settingsForRestore.immediate === true || prefersReducedMotion()
         const frame = annotationLayoutFrame()
         const snapshotFrame = frameSnapshot === null ? null : frameSnapshot.frame
+        restorePaintLayer()
         document.documentElement.removeAttribute('data-psa-active')
         document.documentElement.removeAttribute('data-psa-passthrough')
         if (frameRestoreTimer !== null) {
@@ -12405,8 +13526,15 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         document.documentElement.setAttribute('data-psa-active', 'true')
         try {
           installPageListeners()
+          // F3 needs the body observer even before any record resolves, because a
+          // floating card can appear under a stationary pointer with no selection.
+          ensureDomObserver()
           dispatch({ type: 'activate' })
           updateLayout()
+          // F1: raise the paint layer above native hover cards for the whole
+          // active window, after the frame works so a failed activation never
+          // leaves the shell chrome raised.
+          capturePaintLayer()
         } catch (error) {
           try {
             dispatch({ type: 'deactivate' })
@@ -12418,13 +13546,19 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           clearResolvedNodeCache()
           clearTimers()
           restoreAnnotationLayout({ immediate: true })
+          announceAnnotationState(false)
           throw error
         }
+        // F4: tell the dynamic-workspaces feature the mode is on (D3 split).
+        announceAnnotationState(true)
         feedback(t('feedback.modeOn'))
       }
 
       /** Turn annotation mode off and restore the exact original layout. @returns {void} */
       function deactivate() {
+        // F4: announce before teardown so the dependent hover card cannot outlive
+        // the mode; a defensive call while already off is harmless.
+        announceAnnotationState(false)
         if (!isActive()) {
           // Defensive cleanup: no state says "active", but an interrupted activation or a
           // foreign removal could still have page-level leftovers. None of these calls
@@ -12435,6 +13569,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           disconnectFrameObserver()
           clearResolvedNodeCache()
           restoreAnnotationLayout()
+          flushAnnotationRecords()
           return
         }
         try {
@@ -12444,10 +13579,15 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           // UI-state refresh below is best effort.
           abortGestures()
           clearResolvedNodeCache()
+          if (hoverRecomputeTimer !== null) {
+            window.clearTimeout(hoverRecomputeTimer)
+            hoverRecomputeTimer = null
+          }
           lastPick = null
           uninstallPageListeners()
           disconnectFrameObserver()
           restoreAnnotationLayout()
+          flushAnnotationRecords()
           if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
           feedbackTimer = null
           try {
@@ -12648,6 +13788,18 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const state = current.state
         if (state.selection.length === 0) return
         const sessionId = annotationBridge.sessionId ?? state.sessionId ?? null
+        // D15: refuse explicitly at the commit boundary instead of silently
+        // dropping a record; the feedback toast is the visible refusal.
+        let additions = 0
+        for (const ref of state.selection) {
+          const already = state.collection.some((item) => identityKeyOf(item) === identityKeyOf(ref)
+            && (item?.session?.sessionId ?? null) === (ref.session?.sessionId ?? sessionId))
+          if (!already) additions += 1
+        }
+        if (state.collection.length + additions > ANNOTATION_RECORD_LIMIT) {
+          feedback(t('collection.maxReached', { limit: ANNOTATION_RECORD_LIMIT }), 'error')
+          return
+        }
         let updated = false
         for (const ref of state.selection) {
           const entry = {
@@ -12730,10 +13882,12 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const state = snapshot().state
         const ref = state.selection[0]
         if (ref === undefined || lastPick === null) return
-        const nextIndex = lastPick.index + delta
-        if (nextIndex < 0 || nextIndex >= lastPick.chain.length) return
-        lastPick = { chain: lastPick.chain, index: nextIndex }
-        const nextRef = refFromChain(lastPick.chain, nextIndex, { ...ref, note: state.note })
+        // `delta` is the Parent/Child direction in the old chain model (+1 parent);
+        // a floating pick reverses it because its entry 0 is the whole card.
+        const nextIndex = lastPick.index + delta * lastPick.parentStep
+        if (nextIndex < 0 || nextIndex >= lastPick.entries.length) return
+        lastPick = { ...lastPick, index: nextIndex }
+        const nextRef = refFromPick(lastPick, { ...ref, note: state.note })
         dispatch({ type: 'selectSingle', ref: nextRef })
       }
 
@@ -12860,6 +14014,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
 
       /** Tear everything down (plugin unmount). @returns {void} */
       function dispose() {
+        announceAnnotationState(false)
         window.removeEventListener('resize', onInstalledResize)
         abortGestures()
         clearResolvedNodeCache()
@@ -12868,6 +14023,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         disconnectFrameObserver()
         clearTimers()
         restoreAnnotationLayout({ immediate: true })
+        flushAnnotationRecords()
         if (flashTimer !== null) window.clearTimeout(flashTimer)
         flashTimer = null
         pointer = null
@@ -12902,6 +14058,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         addSelectionToCollection,
         quickReference,
         insertBatch,
+        copyLocator,
         levelUp: () => shiftChain(1),
         levelDown: () => shiftChain(-1),
         setModifier,
@@ -12929,7 +14086,11 @@ html[data-psa-active="true"] [data-psp-search-card],
 html[data-psa-active="true"] [data-psp-preview-card],
 html[data-psa-active="true"] [data-psp-rail-divider],
 html[data-psa-active="true"] [data-psp-search-toggle]{display:none!important}
-html[data-power-suite-project-page="true"] [data-psa-launcher]{display:none!important}
+/* F4 (annotation side, D3): while the mode is on, the dynamic-workspaces
+   hover card becomes hit-testable and sits above page content but below the
+   annotation paint layer (z=150). The pin/lifetime behavior itself is owned by
+   the dynamic-workspaces feature, which listens to power-suite:ui-annotation-state. */
+html[data-psa-active="true"] [data-psd-hovercard]{pointer-events:auto;z-index:120!important}
 html[data-psa-active="true"]:not([data-psa-passthrough="true"]) body{cursor:crosshair}
 html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-launcher{position:fixed;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:50%;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);box-shadow:var(--dsw-elevation-panel,0 6px 24px rgb(0 0 0 / 18%));cursor:grab;pointer-events:auto;touch-action:none;user-select:none;z-index:50}
@@ -12987,29 +14148,52 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-status-dot[data-psa-status=missing]{background:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-tertiary))}
 .psa-entry-locator{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .psa-entry-note{box-sizing:border-box;width:100%;min-height:34px;max-height:72px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
-.psa-entry-note:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psa-entry-actions{display:flex;justify-content:flex-end;gap:2px}
 .psa-empty{display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center;padding:18px 6px;border:1px dashed var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px)}
 .psa-empty-title{color:var(--dsw-alias-label-primary);font-weight:500}
 .psa-field{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
 .psa-field-label{min-width:0;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .psa-select{appearance:none;height:26px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-layer-1));color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;cursor:pointer}
-.psa-select:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psa-popover{position:fixed;box-sizing:border-box;width:320px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;gap:8px;padding:10px 12px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:auto;z-index:45}
 .psa-popover-head{display:flex;align-items:center;gap:6px;cursor:grab;user-select:none}
 .psa-popover-title{flex:1;min-width:0;font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psa-popover-ref{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-popover-ref{display:flex;align-items:center;gap:4px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;min-width:0}
+.psa-popover-ref .psa-truncate{flex:1;min-width:0}
+.psa-popover-ref .psa-icon-btn{width:20px;height:20px}
 .psa-popover-status{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:16px}
 .psa-levels{display:inline-flex;align-items:center;gap:2px;margin-left:auto}
 .psa-popover-note{display:flex;flex-direction:column;gap:4px}
 .psa-popover-textarea{box-sizing:border-box;width:100%;min-height:56px;max-height:150px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
-.psa-popover-textarea:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psa-popover-actions{display:flex;gap:6px}
 .psa-popover-actions .psa-btn{flex:1;justify-content:center}
 .psa-note-editor{position:fixed;box-sizing:border-box;width:300px;display:flex;flex-direction:column;gap:6px;padding:10px 12px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:auto;z-index:55}
 .psa-note-editor-textarea{box-sizing:border-box;width:100%;min-height:96px;max-height:220px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
 .psa-feedback{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:56;max-width:min(520px,calc(100vw - 48px));padding:8px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 8px 24px rgb(0 0 0 / 18%));color:var(--dsw-alias-label-secondary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:none}
 .psa-feedback[data-psa-kind=error]{color:var(--dsw-alias-state-error-primary)}
+/* B3: rainbow circulating focus ring for annotation inputs. Values are copied from
+   the shared dynamic-workspaces recipe (.psf-rainbow-focus) so every plugin input
+   reads as one effect: identical conic stops, the same 140ms fade, 3.2s ring spin
+   plus 14s hue drift, and the same reduced-motion/forced-colors fallbacks. The
+   wrapper owns the ring; the control keeps its border and loses the solid focus
+   outline, so keyboard focus stays visible without layout shift. */
+@property --psa-ring-angle{syntax:'<angle>';inherits:false;initial-value:0deg}
+.psa-rainbow-field{position:relative;display:block;min-width:0}
+.psa-field > .psa-rainbow-field{flex:none}
+.psa-rainbow-field::after{content:'';position:absolute;inset:-2px;border-radius:calc(var(--dsw-radius-sm,8px) + 2px);padding:2px;background:conic-gradient(from var(--psa-ring-angle,0deg),#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:0;transition:opacity 140ms var(--ds-ease-in-out,ease);filter:saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38));z-index:2}
+.psa-rainbow-field:focus-within::after,.psa-rainbow-field:focus-visible::after{opacity:1;animation:psa-ring-spin 3.2s linear infinite,psa-ring-hue 14s linear infinite}
+.psa-rainbow-field > .psa-popover-textarea,
+.psa-rainbow-field > .psa-entry-note,
+.psa-rainbow-field > .psa-note-editor-textarea,
+.psa-rainbow-field > .psa-select{position:relative;z-index:1;outline:none}
+@keyframes psa-ring-spin{to{--psa-ring-angle:360deg}}
+@keyframes psa-ring-hue{from{filter:hue-rotate(0deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}to{filter:hue-rotate(360deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}}
+@media (prefers-reduced-motion:reduce){
+.psa-rainbow-field:focus-within::after,.psa-rainbow-field:focus-visible::after{animation:none}
+}
+@media (forced-colors:active){
+.psa-rainbow-field::after{display:none}
+.psa-rainbow-field:focus-within{outline:2px solid Highlight;outline-offset:1px}
+}
 `
 
     /**
@@ -13289,6 +14473,13 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           selection.length === 1
             ? React.createElement('div', { className: 'psa-muted psa-truncate', title: elementLabel(selection[0]) }, `${t('rail.selectedName')} · ${elementLabel(selection[0])}`)
             : null,
+          selection.length === 1 && selection[0]?.locator?.surface === 'floating'
+            ? React.createElement('div', {
+              className: 'psa-muted',
+              'data-psa-surface-badge': 'floating',
+              'data-psa-own': ''
+            }, `${t('rail.surfaceFloating')} · ${t('rail.surfaceTransient')}`)
+            : null,
           React.createElement('div', { className: 'psa-muted' }, hint))
       ]
       if (selection.length > 1) {
@@ -13425,24 +14616,34 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
             'aria-label': t(`popover.status.${status}`)
           })),
       React.createElement('div', { className: 'psa-entry-locator', title: locator }, locator),
-      React.createElement('textarea', {
-        className: 'psa-entry-note',
-        'data-psa-entry-note': '',
-        'data-psa-own': '',
-        rows: 2,
-        value: typeof entry.note === 'string' ? entry.note : '',
-        placeholder: t('collection.notePlaceholder'),
-        'aria-label': t('collection.notePlaceholder'),
-        onChange: (event) => {
-          const textarea = event.currentTarget
-          if (textarea !== null && typeof textarea === 'object') {
-            textarea.style.height = 'auto'
-            textarea.style.height = `${Math.min(textarea.scrollHeight ?? 34, 72)}px`
+      React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
+        React.createElement('textarea', {
+          className: 'psa-entry-note',
+          'data-psa-entry-note': '',
+          'data-psa-own': '',
+          rows: 2,
+          value: typeof entry.note === 'string' ? entry.note : '',
+          placeholder: t('collection.notePlaceholder'),
+          'aria-label': t('collection.notePlaceholder'),
+          onChange: (event) => {
+            const textarea = event.currentTarget
+            if (textarea !== null && typeof textarea === 'object') {
+              textarea.style.height = 'auto'
+              textarea.style.height = `${Math.min(textarea.scrollHeight ?? 34, 72)}px`
+            }
+            controller.updateCollectionNote(entry.id, textarea === null ? '' : textarea.value)
           }
-          controller.updateCollectionNote(entry.id, textarea === null ? '' : textarea.value)
-        }
-      }),
+        })),
       React.createElement('div', { className: 'psa-entry-actions' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-entry-copy-locator': '',
+          'data-psa-own': '',
+          'aria-label': t('collection.copyLocator'),
+          title: t('collection.copyLocator'),
+          onClick: () => controller.copyLocator(entry.id)
+        }, RemixGlyph(REMIX_ANNOTATION_COPY_LINE, 13)),
         React.createElement('button', {
           type: 'button',
           className: 'psa-icon-btn',
@@ -13513,13 +14714,14 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         'data-psa-own': ''
       },
       React.createElement('span', { className: 'psa-field-label' }, t(labelKey)),
-      React.createElement('select', {
-        className: 'psa-select',
-        'data-psa-own': '',
-        [dataAttribute]: '',
-        value,
-        onChange: (event) => controller.setModifier(fieldName, event.target.value)
-      }, MODIFIER_CHOICES.map((choice) => React.createElement('option', { key: choice, value: choice }, t(`modifier.${choice}`)))))
+      React.createElement('span', { className: 'psa-rainbow-field', 'data-psa-own': '' },
+        React.createElement('select', {
+          className: 'psa-select',
+          'data-psa-own': '',
+          [dataAttribute]: '',
+          value,
+          onChange: (event) => controller.setModifier(fieldName, event.target.value)
+        }, MODIFIER_CHOICES.map((choice) => React.createElement('option', { key: choice, value: choice }, t(`modifier.${choice}`))))))
       const message = snapshot.state.feedback === null ? '' : snapshot.state.feedback.text
       return React.createElement('div', { className: 'psa-rail-section' },
         React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
@@ -13561,11 +14763,15 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       const status = controller.statusOf(ref)
       const inCollection = controller.isInCollection(ref)
       const locator = describeLocator(ref)
+      const surface = ref?.locator?.surface === 'floating' ? 'floating' : 'page'
+      const ephemeral = surface === 'floating'
       return React.createElement('div', {
         ref: setPopoverNode,
         className: 'psa-popover',
         'data-psa-popover': '',
         'data-psa-own': '',
+        'data-psa-surface': surface,
+        'data-psa-ephemeral': ephemeral ? 'true' : undefined,
         role: 'dialog',
         'aria-label': t('popover.aria'),
         style: { left: `${snapshot.popoverPosition.x}px`, top: `${snapshot.popoverPosition.y}px` }
@@ -13586,7 +14792,24 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         title: t('popover.close'),
         onClick: () => controller.clearSelection()
       }, RemixGlyph(REMIX_CLOSE_LINE, 14))),
-      React.createElement('div', { className: 'psa-popover-ref', 'data-psa-popover-ref': '', title: locator }, locator),
+      React.createElement('div', { className: 'psa-popover-ref', 'data-psa-popover-ref': '', title: locator },
+        React.createElement('span', { className: 'psa-truncate', 'data-psa-own': '' }, locator),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-popover-copy-locator': '',
+          'data-psa-own': '',
+          'aria-label': t('popover.copyLocator'),
+          title: t('popover.copyLocator'),
+          onClick: () => controller.copyLocator()
+        }, RemixGlyph(REMIX_ANNOTATION_COPY_LINE, 13))),
+      ephemeral
+        ? React.createElement('div', {
+          className: 'psa-muted',
+          'data-psa-ephemeral-hint': '',
+          'data-psa-own': ''
+        }, t('popover.ephemeralHint'))
+        : null,
       React.createElement('div', {
         className: 'psa-popover-status',
         'data-psa-popover-status': '',
@@ -13615,18 +14838,19 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         }, RemixGlyph(REMIX_ARROW_DOWN_LINE, 13)))),
       React.createElement('label', { className: 'psa-popover-note', 'data-psa-own': '' },
         React.createElement('span', { className: 'psa-muted' }, t('popover.noteLabel')),
-        React.createElement('textarea', {
-          className: 'psa-popover-textarea',
-          'data-psa-note': '',
-          'data-psa-own': '',
-          rows: 3,
-          value: state.note,
-          placeholder: t('popover.notePlaceholder'),
-          'aria-label': t('popover.noteLabel'),
-          onChange: (event) => controller.updateNote(event.target.value),
-          onFocus: () => controller.beginEdit(),
-          onBlur: () => controller.endEdit()
-        })),
+        React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
+          React.createElement('textarea', {
+            className: 'psa-popover-textarea',
+            'data-psa-note': '',
+            'data-psa-own': '',
+            rows: 3,
+            value: state.note,
+            placeholder: t('popover.notePlaceholder'),
+            'aria-label': t('popover.noteLabel'),
+            onChange: (event) => controller.updateNote(event.target.value),
+            onFocus: () => controller.beginEdit(),
+            onBlur: () => controller.endEdit()
+          }))),
       React.createElement('div', { className: 'psa-popover-actions' },
         React.createElement('button', {
           type: 'button',
@@ -13673,16 +14897,17 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           onClick: () => controller.closeNoteEditor()
         }, RemixGlyph(REMIX_CLOSE_LINE, 14))),
       React.createElement('div', { className: 'psa-muted psa-truncate' }, elementLabel(entry)),
-      React.createElement('textarea', {
-        className: 'psa-note-editor-textarea',
-        'data-psa-own': '',
-        value: typeof entry.note === 'string' ? entry.note : '',
-        placeholder: t('collection.notePlaceholder'),
-        'aria-label': t('collection.notePlaceholder'),
-        autoFocus: true,
-        onChange: (event) => controller.updateCollectionNote(entry.id, event.target.value),
-        onBlur: () => controller.closeNoteEditor()
-      }))
+      React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
+        React.createElement('textarea', {
+          className: 'psa-note-editor-textarea',
+          'data-psa-own': '',
+          value: typeof entry.note === 'string' ? entry.note : '',
+          placeholder: t('collection.notePlaceholder'),
+          'aria-label': t('collection.notePlaceholder'),
+          autoFocus: true,
+          onChange: (event) => controller.updateCollectionNote(entry.id, event.target.value),
+          onBlur: () => controller.closeNoteEditor()
+        })))
     }
 
     /**
@@ -13732,22 +14957,6 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         document.head.appendChild(style)
         return () => style.remove()
       }, 'power-suite: ui annotation stylesheet')
-      ctx.effect(() => {
-        // The Project page owns the viewport (z-index) when open; leave
-        // annotation mode so its capture layer cannot swallow page input and
-        // only the page's Esc ladder stays active. The launcher reappears on
-        // close, with annotation mode still off.
-        const onExit = () => {
-          if (annotationController === null) return
-          try {
-            annotationController.deactivate()
-          } catch {
-            // Deactivation is defensive; never wedge the page open on failure.
-          }
-        }
-        window.addEventListener(ANNOTATION_EXIT_EVENT, onExit)
-        return () => window.removeEventListener(ANNOTATION_EXIT_EVENT, onExit)
-      }, 'power-suite: ui annotation exits for the project page')
       ctx.effect(() => {
         try {
           annotationController = createAnnotationController(t, ctx)
@@ -13836,6 +15045,8 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         DEFAULT_SETTINGS: ANNOTATION_DEFAULT_SETTINGS,
         MODIFIER_CHOICES,
         SETTINGS_STORAGE_KEY,
+        RECORDS_STORAGE_KEY: ANNOTATION_RECORDS_STORAGE_KEY,
+        RECORD_LIMIT: ANNOTATION_RECORD_LIMIT,
         normalizeSettings,
         resolveModifierChange,
         parseStoredSettings,
@@ -13867,7 +15078,18 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         collectionAdd,
         collectionRemove,
         collectionClear,
-        collectionSetNote
+        collectionSetNote,
+        annotationWorkspaceLabel,
+        annotationRoutePath,
+        normalizeAnnotationViewport,
+        buildStableAncestors,
+        buildUniqueSelector,
+        annotationLocatorText,
+        normalizeAnnotationRecord,
+        parseAnnotationStore,
+        serializeAnnotationStore,
+        annotationSurfaceRoot,
+        annotationSurfaceLevels
       }
     }
 
