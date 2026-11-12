@@ -5194,9 +5194,13 @@ async function captureScreenshots(harness) {
     const composerState = await h.composer()
     const composerText = (composerState.text || '').trim()
     if (expectations.allowInsertedText === true) {
+      // Phase 2-B: the normal insertion is ONE native group chip (the plain batch
+      // text is only the D9 fallback); accept either shape in the capture assertion.
+      const chip = await h.page.eval(probes.chipState)
+      const hasChip = chip.chips.length >= 1 && /UI annotations|UI 标注/.test(String(chip.chips[0].text || ''))
       assert(
-        /^(Please adjust the UI elements below|请调整以下 UI 元素)/.test(composerText),
-        `[${name}] composer must contain only the inserted structured request: ${short(composerText, 220)}`
+        hasChip || /^(Please adjust the UI elements below|请调整以下 UI 元素)/.test(composerText),
+        `[${name}] composer must contain only the inserted structured request (group chip or plain fallback): ${short(composerText, 220)}`
       )
     } else {
       assertEqual(composerText, '', `[${name}] refusing capture: composer draft is not empty: ${draftPreview(composerText)}`)
@@ -5351,11 +5355,18 @@ async function captureScreenshots(harness) {
   await capture('annotation-collection.png', { modeOn: true })
   // 5) Composer with the structured batch request inserted (not sent).
   await h.click('[data-psa-insert-batch]')
-  const headerPattern = /Please adjust the UI elements below|请调整以下 UI 元素/
+  // Phase 2-B inserts one native group chip; keep a plain-text fallback wait for
+  // builds where the chip services are unavailable (D9).
   await h.page.waitFor(
-    `(${headerPattern.toString()}).test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || '')`,
-    { timeout: 8000, label: 'batch insert for the composer screenshot' }
-  ).catch(() => {})
+    `document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-editor="true"] [data-lexical-decorator="true"]').length >= 1`,
+    { timeout: 8000, label: 'batch group chip for the composer screenshot' }
+  ).catch(async () => {
+    const headerPattern = /Please adjust the UI elements below|请调整以下 UI 元素/
+    await h.page.waitFor(
+      `(${headerPattern.toString()}).test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || '')`,
+      { timeout: 4000, label: 'plain-text batch fallback for the composer screenshot' }
+    ).catch(() => {})
+  })
   await sleep(350)
   await h.clickBack()
   await sleep(300)

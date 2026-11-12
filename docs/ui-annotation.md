@@ -35,6 +35,17 @@ page's content elements, never reads form values, and never sends the message.
   **Quick reference**, and **Delete annotation**. Committing a requirement closes
   the popover and clears the selection automatically; floating surfaces are
   marked as transient in the popover.
+- **Composer reference chip** — Quick reference (from the popover, the detail
+  card, or a rail row) inserts one native inline reference chip into the current
+  composer; the batch footer inserts **one group chip** (`UI annotations × N`).
+  Chips are atomic, carry their clipboard text, and serialize to the documented
+  quick-reference/batch text at send time. When the chip services are unavailable
+  the plugin falls back to the Phase 1 plain text with an explanatory toast.
+- **Batch rail** — the collection view is a full batch surface: per-row include
+  checkbox (other-Session rows are disabled and explained), select-all-current /
+  clear-selection, inline requirement editing, insert-reference, preview (scroll +
+  flash + detail card), move up/down, delete X, delete-selected, clear, and a
+  batch footer that reports exactly what will be inserted.
 - **Page marks** — every current-Session annotation whose target still resolves
   stays visible on the page as a pointer-transparent overlay mask with a numbered
   badge (`#3` plus a one-line requirement excerpt). Missing, ambiguous, and
@@ -325,8 +336,10 @@ It shows:
 - **Quick reference** — commits the requirement first when the element is not
   yet in the collection, then inserts this one annotation into the current
   Session's composer at the caret, preserving the existing draft and caret
-  position, one undo step, and never sending the message (the native inline
-  composer chip is Phase 2-B; this build inserts the Phase 1 plain-text block);
+  position, one undo step, and never sending the message. It inserts a native
+  inline reference chip; when the composer chip services are unavailable it falls
+  back to the plain-text block and says so with
+  **Reference chips unavailable here; inserted as plain text**;
 - **Mark requirement** / **Update requirement** — the primary action. It adds or
   updates the record and then auto-dismisses the popover and clears the
   selection, keeping the page marks visible; it does not touch the composer;
@@ -388,32 +401,47 @@ collection is empty the view shows **No annotated elements** with the hint
 
 ![Collection view in the rail with ordered annotated rows and inline notes](assets/annotation-collection.png)
 
-- **Order** — entries stay in the order they were added. Re-adding an element
-  updates it in place, so order reflects first selection.
-- **Notes** — edit a row's note inline. A long note gets an expand control that
-  opens a temporary 300 px floating editor beside the rail; it edits live and
-  closes on its close control, on blur, or on Esc, and it never changes the canvas
-  width. The inline note editor grows with its content up to 72 px and scrolls
-  beyond it.
-- **Copy locator** copies the row's verified-unique selector (or best ordered
-  candidate) with the same toast as the popover.
-- **Remove** removes one entry and reports **Removed from the collection**;
-  **Clear** empties the list in one click with no confirmation dialog and reports
-  **Collection cleared**.
+- **Scope counts** — the header states `{current} current · {other} other` for the
+  whole collection, so it is obvious what a batch insert will touch.
+- **Selection / include** — every row has a native include checkbox. Only
+  current-Session rows can be included; an other-Session row is dashed, disabled,
+  and explained with **From another session; batch insert skips it**. **Select
+  current session** includes every current row, **Clear selection** deselects all.
+- **Order and moves** — entries stay in insertion order. The inline ↑/↓ controls
+  move one row, keep the persisted `order` contiguous, and the footer states that
+  the insertion order is the batch order. Re-adding an element updates it in
+  place.
+- **Notes** — edit a row's requirement inline (rainbow focus ring); a long note
+  gets an expand control that opens a temporary 300 px floating editor beside the
+  rail. Both paths dispatch the same update action as the detail card, so
+  `updatedAt` is bumped and the persisted document is refreshed through the
+  debounced write. The inline editor grows with its content up to 72 px and
+  scrolls beyond it.
+- **Per-row actions** — **Insert reference** (one native chip for that row),
+  element name → **preview** (scroll + 600 ms flash + detail card; other-Session
+  rows refuse with the existing message), **Copy locator**, **Move up/down**,
+  **expand editor**, and **Delete X**. Deleting a row shows the 5 s undo toast.
+- **Delete selected** deletes every included current-Session annotation as one
+  undo step: a `multi` undo payload restores each record at its original index,
+  and the newest deletion replaces the previous undo slot.
+- **Batch insert (N)** inserts the included current-Session records as **one**
+  native group chip (`UI annotations × N`, D2; per-item chips are not produced).
+  The button is disabled with a visible reason when nothing is selectable (empty
+  collection, no current Session, or only other-Session rows). The selected count
+  is shown in the footer and the button label.
+- **Clear** empties the list in one click with no confirmation dialog and enters
+  the same 5 s undo slot.
 - **Cap** — the collection and its persisted document hold at most **100**
   annotations. Adding the 101st record is refused before it is committed, with a
-  visible message (**The collection is full (100 annotations)…**); nothing is
-  silently dropped and no record is evicted.
+  visible message (**The collection is full (100 annotations)…**); the collection
+  view also states the cap once it is reached. Nothing is silently dropped and no
+  record is evicted.
 - **Re-locate** scrolls a still-resolving element into view, flashes its
   highlight for about 600 ms, and reports **Moved to the element**. If the
   element no longer resolves, the action reports **The element cannot be located
   ({status})** instead of failing silently. Other-session entries refuse the
   action with **This annotation belongs to another session** because their DOM
   belongs to a different placement of the page.
-- **Insert all into composer** produces one ordered batch (see
-  [insertion format](#batch-request-collection)). The control is disabled while
-  the collection holds no entry for the current Session; the rail explains why
-  with its scope notice or no-session notice instead of a click-time error.
 - The collection view's header area shows the total count, so the rail's status
   view and launcher badge agree with the list.
 
@@ -425,9 +453,11 @@ created in.
 
 - Entries whose origin Session is the current Session are **current-scope** rows.
 - Entries from another Session carry an **Other session** badge in the
-  collection and are **excluded from batch insert**. The collection reports
-  `{count} from other sessions will be skipped`, and the batch header states how
-  many were skipped.
+  collection and are **excluded from batch insert**: they are never selected, so
+  they cannot enter a chip ref. The collection reports `{count} from other
+  sessions will be skipped`; the plain-text fallback also states the skip count in
+  its batch header, while the normal group chip only references the selected
+  current-Session records.
 - Switching back to the origin Session makes those entries current again.
   Nothing is deleted on a switch.
 - Records are validated and persisted in **browser-local `localStorage`** under
@@ -486,15 +516,56 @@ even when the captured text itself was empty or truncated.
 
 ## Insertion format
 
-Both insertion paths write plain text into the current Session's composer,
-through the shell's own semantic insertion API, using the active UI language.
-Inserted text is placed at the caret (or the captured insertion point) and the
-rest of the draft is preserved; the insertion is one undo step, focuses the
-composer afterwards, and is never sent automatically.
+Every insertion path targets the current Session's composer through the shell's
+own semantic insertion API, using the active UI language. The normal shape is a
+**native inline reference chip**: one chip for a single annotation, one group chip
+for a batch. The plain-text blocks documented in this section are (a) the chip's
+model serialization at send time and (b) the D9 fallback used when the composer
+chip services are unavailable. Insertion places the chip at the captured caret,
+preserves the rest of the draft, is one undo step, focuses the composer
+afterwards, and is never sent automatically.
 
-![The ordered batch request inserted into the composer without sending](assets/annotation-inserted.png)
+![One native batch group chip in the composer, not sent](assets/annotation-inserted.png)
 
-### Quick reference (single element)
+### Composer reference chips (single and batch)
+
+- **Single chip** — source `ui-annotation`, ref = the record id, label = the
+  element label, clipboard text `@<label>`. It is atomic: Backspace removes the
+  whole chip once. Clicking it opens that record's hover detail card (the record
+  must still be drawn on the current page; otherwise the editor leaves the
+  gesture unchanged).
+- **Batch group chip** — ONE chip with label `UI annotations × N` and ref
+  `batch:<id>|<id>…` over the included current-Session records in collection
+  order. D2 explicitly rejects per-item chips. Clicking it opens the collection
+  view.
+- **`@` source** — while typing an `@` reference in the composer, the
+  **UI annotations** group lists current-Session records only, capped at 20, with
+  the requirement excerpt as the description; when there are no candidates the
+  group is absent rather than empty.
+- **Send-time serialization** — the shell calls the source codec when the draft
+  is submitted; nothing is sent by the annotation feature itself. A single chip
+  serializes exactly like the quick-reference block below; the batch chip
+  serializes exactly like the ordered batch request below. A single chip whose
+  record no longer exists fails serialization (the shell blocks the send and the
+  chip renders its failure treatment) instead of silently downgrading; a batch
+  chip skips deleted members and adds an explicit
+  `({count} annotation(s) no longer exist and were skipped)` line, and if every
+  member is gone it emits the explicit `(no annotations remain for this
+  reference)` line rather than an empty prompt.
+- **Fallback (D9)** — when there is no composer, no current Session, the
+  insertion span changed, or the chip services are not installed, the same action
+  inserts the plain-text block instead and reports **Reference chips unavailable
+  here; inserted as plain text**. A missing inserted-session notification still
+  reports **Open a session before inserting a reference**.
+- **Accessibility** — the chip is part of the shell's native editor (focusable
+  draft, standard Backspace/undo semantics); the rail checkboxes are native
+  `<input type="checkbox">` controls with labels, and the row actions, footer
+  buttons and preview button are native buttons with localized `aria-label`s.
+
+### Quick reference (single element) — chip serialization
+
+This is the send-time model text of a single chip (and the plain-text fallback
+shape), exactly as the previous Phase 1 contract.
 
 English:
 
@@ -542,12 +613,13 @@ A vanished floating-surface target says so explicitly instead of pretending it
 moved: `Status: transient surface no longer present (locator only)` /
 `状态：瞬态浮层已不存在（仅保留定位信息）`.
 
-### Batch request (collection)
+### Batch request (collection) — group-chip serialization
 
-**Insert all into composer** in the collection view produces one numbered,
-ordered request. Items follow collection order; current-scope entries are
-included and other-scope entries are omitted with a skip line that states the
-count. A non-resolved entry keeps its block and adds an explicit status line.
+The group chip's model text is one numbered, ordered request. Items follow
+collection order; only included current-Session entries are part of the chip, so
+other-Session records never appear (the plain-text fallback keeps the explicit
+skip line with the count). A deleted batch member adds the explicit removed-count
+line. A non-resolved entry keeps its block and adds an explicit status line.
 
 English, with a skipped cross-session entry and one stale target:
 
@@ -831,7 +903,7 @@ plugin is installed, and its mode-dependent rules act only while
 
 ## Testing and verification
 
-Pure logic is covered by Node's test runner (**204** cases); live behavior is
+Pure logic is covered by Node's test runner (**214** cases); live behavior is
 exercised by a pre-merge acceptance harness, but **not every interaction has a
 single full-green live run** (see below and
 [verification.md](verification.md)).
@@ -930,9 +1002,42 @@ recorded these live results against the running GUI:
   scenario 10 when the **native DSH hover preview card did not appear within 5 s**
   (the failing step is the pre-existing F2 hover-card probe, not an annotation
   assertion; a rerun of the same sequence was green). The screen-capture pass was
-  not regenerated for Phase 2-A; the checked-in images remain from the earlier
-  round-2 build, and Phase 2-A screenshots were kept outside the repository as
-  working evidence.
+  not regenerated for Phase 2-A (those screenshots stayed outside the repository
+  as working evidence). The **Phase 2-B build regenerated the committed
+  `docs/assets/annotation-*.png` set** from the same CDP capture pass (privacy
+  blur asserted before every capture, blank scratch Session only): idle, mode,
+  selection (requirement popover), collection (new batch rail with include
+  checkboxes/metadata), and inserted (native `UI annotations × N` group chip).
+
+The Phase 2-B build (on top of the Phase 2-A commits) recorded these live results
+against the running GUI:
+
+- `npm test`: **214/214** pass (10 new T8/T9 cases); `npm run check`: exit 0.
+- `--smoke`: **6/6**, 66-key seam (Phase 2-A 57 + multi-delete undo, rail
+  scope/selection and chip-ref/candidate/serialization helpers), 0 page errors,
+  0 real network failures.
+- Scenario **13** (composer chips) PASS live: Quick reference inserted one native
+  chip (occurrence 1, draft has no plain four-line block), chip click opened the
+  record detail card, Backspace removed the chip atomically, batch inserted ONE
+  `UI annotations × 2` group chip (no numbered blocks in the draft), the
+  collection view stayed open, transcript stayed 0 and nothing was sent. The
+  plain-text fallback row (`13f`) is recorded as an explicit **SKIP** on this
+  branch: the live GUI always installs `conversation`/`inputTriggers`, so the
+  fallback branch cannot be forced end-to-end without stubbing DSH services; the
+  fallback text, toast and both serializers are unit-tested.
+- Scenario **11** (F4 merged pin) is recorded as an explicit **SKIP** in this
+  worktree because the dynamic-workspaces feature is not merged here; the
+  scenario detects the DW capability and runs the real pin + no-mode regression
+  after merge. The `10b` row uses the same capability gate: SKIP here, real check
+  after merge (M-4).
+- Sequence `--from 4 --no-shots` (smoke + S4-S15): **13 PASS / 2 SKIP / 0 FAIL**
+  in ~2 min, 0 page errors, 0 real network failures. S5 now asserts the ONE group
+  chip (D2) instead of the old plain numbered blocks; S6's stale/cross-session
+  honesty moved from the draft text (impossible anymore) to the rail status and
+  the unit-tested serializers.
+- Screenshots: the committed `docs/assets/annotation-*.png` set was regenerated on
+  this build (`--shots-only --assets`, exit 0, ~36 s) with the harness privacy
+  guard asserted before every capture.
 
 Historical round-1/round-2 acceptance evidence (pre-merge branches, 31/32/35-key
 seams) remains recorded in [verification.md](verification.md) and the harness
@@ -951,8 +1056,8 @@ Phase 2 UX pass along with the new detail card and marks.
   `--assets` writes them to `docs/assets/` (the default is a temporary
   directory), `--client <path>` injects an alternate client file, `--scenario N`
   or `--from N` runs a subset (scenario ids 1-15; this build's order is
-  1-10, 12, 14, 15 — 11 and 13 are the Phase 2-B chip/rail work and are not
-  implemented yet), `--no-shots` skips captures, `--headful` shows the
+  1-15, with 11/10b/13f recording explicit cross-branch/env SKIP rows in this
+  worktree and running for real after the merge), `--no-shots` skips captures, `--headful` shows the
   browser, and `--keep-open` leaves Chrome running for inspection.
 - Gate semantics: the exit code is `0` only when every check passes; `1` for any
   scenario failure, page error, real network/API failure, missing scenario row,
@@ -965,7 +1070,9 @@ Phase 2 UX pass along with the new detail card and marks.
   `cssIdentifier` and `clampPopoverPositionToViewport`; Phase 1 48 keys adding the
   floating-surface picker, verified selector/ancestors, and v2 record store; Phase
   2-A 57 keys adding the record commit/remove/restore/move/include helpers, the
-  single-slot undo, the mark-badge excerpt, and the detail-card clamp), or does not mount the
+  single-slot undo, the mark-badge excerpt, and the detail-card clamp; Phase 2-B
+  66 keys adding multi-delete undo, rail scope/selection helpers and the chip ref/
+  candidates/serialization helpers), or does not mount the
   annotation surface. `full` and `--shots-only` with a feature-absent client
   record a **FAIL** row and exit non-zero; every requested scenario must produce
   a result row.
