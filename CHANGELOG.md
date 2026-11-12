@@ -40,6 +40,22 @@ heading is added until the release is cut.
 
 ### Added
 
+- Native session figures in the Running & recent row hover card: for the hovered
+  Session (parent or nested subagent row) the card appends **Session statistics**
+  (`{turns} turns {steps} steps`, LLM time, tool time, average TTFT, TPS in the
+  native duration/speed recipes), **Token usage** (exact grouped total =
+  billed input + output, honest cache-hit percentage that never rounds a partial
+  hit to 100, uncached/cached/cache-write/output exact counts), and **Context
+  usage** (`{percent} of context used`, `~used / window`, and `~`-prefixed
+  System prompt / Tool definitions / Messages composition rows). Values come from
+  the existing `sessions` inject's `projectionsBySession` — live Sessions are
+  push-seeded and need no request; a cold (persisted) Session gets exactly one
+  deduplicated `refreshProjections` read on first hover, and the card fills the
+  figures in as they land with no loading state. Each section is omitted entirely
+  when its data is absent, so an empty Session keeps the plain card. The card
+  grows to 320 px (still flush on the sidebar edge with the same native tooltip
+  chrome) and clamps at `min(560px, 100vh - 16px)`; subagent cards gain a compact
+  Session-title line. No Host route, new inject, or package dependency.
 - Interrupted-state SSE stream: `GET /api/power-suite.interrupted-events`
   pushes `turn/start`/`turn/end` invalidations (`{sessionId, parentSession,
   event}`) to every connected browser page, so cross-device badges/Continue/
@@ -50,6 +66,11 @@ heading is added until the release is cut.
 
 ### Changed
 
+- Running & recent identity glyphs swapped: the panel header's all-complete
+  indicator now paints the DeepSeek brand glyph (`deepseek-fill`) and an
+  acknowledged finished parent row paints the sparkling-line glyph. Sizes,
+  scales, colours, glyph columns, the running pulse dot, the unread green dot,
+  and the nested subagent robot glyph are unchanged, as is all state logic.
 - Interrupted-session detection now covers **every unfinished turn ending**, not
   only Host restarts/crashes: any `turn/end` reason `error` (quota/usage limit,
   request timeout, transport/network failure, rate limit, malformed response,

@@ -4423,6 +4423,17 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** Highest number of rows the summary card lists before "view all". */
     const DW_PANEL_LIMIT = 5
 
+    /**
+     * Width of the row hover card in pixels. The native session tooltip is
+     * 244 px wide; the card grows to 320 px so each of the three native figure
+     * sections fits its label and right-aligned value on one line. The left
+     * edge still sits flush on the sidebar column's right edge.
+     */
+    const DW_HOVERCARD_WIDTH = 320
+
+    /** Viewport-clamped ceiling for the row hover card once the figures show. */
+    const DW_HOVERCARD_MAX_HEIGHT = 560
+
     /** Minutes a finished Session stays in the card by default. */
     const DW_DEFAULT_RECENT_MINUTES = 120
 
@@ -4477,6 +4488,29 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'hover.subagentsOne': '1 subagent',
       'hover.open': 'Click to open',
       'hover.newSession': 'New session in this directory',
+      'stats.title': 'Session statistics',
+      'stats.counts': '{turns} turns {steps} steps',
+      'stats.llmTime': 'LLM time',
+      'stats.toolTime': 'Tool time',
+      'stats.ttft': 'Avg time to first token (TTFT)',
+      'stats.speed': 'Tokens per second (TPS)',
+      'usage.title': 'Token usage',
+      'usage.cacheHit': 'Cache hit',
+      'usage.input': 'Uncached input',
+      'usage.cacheRead': 'Cached input',
+      'usage.cacheWrite': 'Cache write',
+      'usage.output': 'Output',
+      'usage.count': '{count} tok',
+      'context.aria': '{percent} of context used',
+      'context.system': 'System prompt',
+      'context.tools': 'Tool definitions',
+      'context.messages': 'Messages',
+      'tokensPerSecond': '{tps} tok/s',
+      'number.thousand': '{value}K',
+      'number.million': '{value}M',
+      'number.groupSeparator': ',',
+      'duration.compactSeconds': '{seconds}s',
+      'duration.compactMinutes': '{minutes}m{seconds}s',
       'count': '{count}',
       'group.active': 'Active Projects',
       'group.inactive': 'Inactive Projects',
@@ -4514,6 +4548,29 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'hover.subagentsOne': '1 个子代理',
       'hover.open': '点击打开',
       'hover.newSession': '在相同目录新建 Session',
+      'stats.title': '会话统计',
+      'stats.counts': '{turns} 轮 {steps} 步',
+      'stats.llmTime': '模型用时',
+      'stats.toolTime': '工具调用用时',
+      'stats.ttft': '首 token 平均（TTFT）',
+      'stats.speed': '输出速度（TPS）',
+      'usage.title': 'Token 用量',
+      'usage.cacheHit': '缓存命中',
+      'usage.input': '未缓存输入',
+      'usage.cacheRead': '缓存读取',
+      'usage.cacheWrite': '缓存写入',
+      'usage.output': '输出',
+      'usage.count': '{count} tok',
+      'context.aria': '上下文已用 {percent}',
+      'context.system': '系统提示词',
+      'context.tools': '工具定义',
+      'context.messages': '对话消息',
+      'tokensPerSecond': '{tps} tok/s',
+      'number.thousand': '{value}K',
+      'number.million': '{value}M',
+      'number.groupSeparator': ',',
+      'duration.compactSeconds': '{seconds}秒',
+      'duration.compactMinutes': '{minutes}分{seconds}秒',
       'count': '{count}',
       'group.active': '活跃项目',
       'group.inactive': '非活跃项目',
@@ -4587,9 +4644,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-child-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap}
 .psd-child-time{flex:none;width:48px;text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
-.psd-hovercard{position:fixed;z-index:1000;box-sizing:border-box;width:244px;max-height:min(320px,calc(100vh - 16px));overflow:hidden;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-alias-tooltip-bg,#2c2c2e);color:#fff;box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;font-size:12px;line-height:16px;pointer-events:none}
+.psd-hovercard{position:fixed;z-index:1000;box-sizing:border-box;width:${DW_HOVERCARD_WIDTH}px;max-height:min(${DW_HOVERCARD_MAX_HEIGHT}px,calc(100vh - 16px));overflow-x:hidden;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-alias-tooltip-bg,#2c2c2e);color:#fff;box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;font-size:12px;line-height:16px;pointer-events:none}
+.psd-hovercard::-webkit-scrollbar{display:none;width:0;height:0}
 .psd-hovercard-content{display:flex;flex-direction:column;gap:8px}
 .psd-hovercard-title{color:#fff;font-size:14px;line-height:20px;font-weight:400;overflow-wrap:break-word}
+.psd-hovercard-session{color:#fff;font-size:13px;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .psd-hovercard-path{color:#cfd3d6;font-size:12px;line-height:16px;white-space:normal;word-break:break-all;overflow-wrap:anywhere;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
 .psd-hovercard-time{color:#cfd3d6;font-size:12px;line-height:16px}
 .psd-hovercard-status{display:flex;align-items:center;gap:8px;color:#adb2b8;font-size:12px;line-height:20px}
@@ -4598,6 +4657,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-hovercard-row{display:flex;gap:8px;min-width:0;font-size:12px;line-height:16px}
 .psd-hovercard-key{flex:none;color:#adb2b8}
 .psd-hovercard-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#cfd3d6}
+.psd-hovercard-section{display:flex;flex-direction:column;gap:2px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12)}
+.psd-hovercard-section-head{display:flex;align-items:baseline;gap:8px;min-width:0;font-size:12px;line-height:16px}
+.psd-hovercard-section-title{flex:none;color:#fff}
+.psd-hovercard-section-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#cfd3d6;font-variant-numeric:tabular-nums}
+.psd-hovercard-row-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#cfd3d6;font-variant-numeric:tabular-nums}
 .psd-run{--psd-title-fade:calc(var(--psd-action-width,22px) + 6px)}
 .psd-child{--psd-title-fade:calc(var(--psd-action-width,22px) + 6px)}
 .psd-run-actions{position:absolute;z-index:2;top:50%;right:76px;transform:translateY(-50%);display:flex;align-items:center;justify-content:flex-end;gap:2px;min-width:22px;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
@@ -4760,6 +4824,263 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const date = new Date(at)
       const pad = (value) => String(value).padStart(2, '0')
       return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Native session figures (statistics, token usage, context) for the row hover card.
+    //
+    // The values arrive as Host projections (`sessionStats`, `tokenUsage`,
+    // `contextPressure`, `contextBreakdown`) on the Session list snapshot. Every
+    // formatter below copies the native client's recipe verbatim so the figures
+    // read exactly like the shell's Session statistics / Token usage dialogs and
+    // the composer ContextMeter panel. They are pure: plain data plus the
+    // namespace-bound translate seat, no React and no DOM.
+    // ---------------------------------------------------------------------------------------
+
+    /**
+     * Compact token count in the native style: `517 / 12.2K / 517K / 1.2M`.
+     * @param {number} value - non-negative token count.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {string} compact display text.
+     */
+    function dwFormatCompactTokens(value, t) {
+      const scaled = (candidate) => candidate >= 100
+        ? String(Math.round(candidate))
+        : String(Math.round(candidate * 10) / 10)
+      if (value < 1e3) return String(value)
+      if (value < 1e6) return t('number.thousand', { value: scaled(value / 1e3) })
+      return t('number.million', { value: scaled(value / 1e6) })
+    }
+
+    /**
+     * Exact token count with the native locale-owned digit grouping.
+     * @param {number} value - non-negative token count.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {string} grouped display text.
+     */
+    function dwFormatExactTokens(value, t) {
+      const digits = String(value)
+      const groups = []
+      for (let end = digits.length; end > 0; end -= 3) {
+        groups.unshift(digits.slice(Math.max(0, end - 3), end))
+      }
+      return groups.join(t('number.groupSeparator'))
+    }
+
+    /**
+     * Compact duration in the native recipe: `45.2s` under a minute, `2m42s`
+     * from there on.
+     * @param {number} ms - duration in milliseconds.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {string} duration text.
+     */
+    function dwFormatStatsDuration(ms, t) {
+      const seconds = ms / 1e3
+      if (seconds < 60) return t('duration.compactSeconds', { seconds: Math.round(seconds * 10) / 10 })
+      const whole = Math.round(seconds)
+      return t('duration.compactMinutes', { minutes: Math.floor(whole / 60), seconds: whole % 60 })
+    }
+
+    /**
+     * Decode throughput in the native recipe: whole tokens from ten up, one
+     * decimal below, with the `tok/s` unit when the decode time is known.
+     * @param {number} decodeTokens - tokens produced while decoding.
+     * @param {number} decodeMs - decode time in milliseconds.
+     * @param {Function} t - namespace-bound translate.
+     * @returns {string | null} display text, or null when there is no decode time.
+     */
+    function dwFormatTps(decodeTokens, decodeMs, t) {
+      if (!(decodeMs > 0)) return null
+      const tps = Math.max(0, decodeTokens / (decodeMs / 1e3))
+      const displayed = tps >= 10 ? String(Math.round(tps)) : String(Math.round(tps * 10) / 10)
+      return t('tokensPerSecond', { tps: displayed })
+    }
+
+    /** Round a cache-read ratio to exact percentage units, positive ties up. */
+    function dwRoundedPercentUnits(cacheReadTokens, denominator, decimalPlaces) {
+      const scale = (decimalPlaces === 0 ? 1 : 10) * 100
+      const doubledScale = scale * 2
+      const denominatorQuotient = Math.floor(denominator / doubledScale)
+      const denominatorRemainder = denominator % doubledScale
+      let lower = 0
+      let upper = scale
+      while (lower < upper) {
+        const candidate = Math.floor((lower + upper + 1) / 2)
+        const factor = candidate * 2 - 1
+        if (cacheReadTokens >= factor * denominatorQuotient + Math.ceil(factor * denominatorRemainder / doubledScale)) lower = candidate
+        else upper = candidate - 1
+      }
+      return lower
+    }
+
+    /** Render percentage units with an optional tenths digit. */
+    function dwDisplayPercentUnits(units, decimalPlaces) {
+      if (decimalPlaces === 0) return String(units)
+      const whole = Math.floor(units / 10)
+      const tenths = units % 10
+      return tenths === 0 ? String(whole) : `${whole}.${tenths}`
+    }
+
+    /**
+     * Display-ready cache-hit share that never rounds a partial hit up to 100
+     * (the native honesty case: 999 999 / 1 000 000 reads `99.9999`, not
+     * `100`). A full hit returns `100`; no billed input returns null.
+     * @param {number} cacheReadTokens - prompt tokens served from cache.
+     * @param {number} billedInputTokens - all prompt-side billing buckets.
+     * @returns {string | null} percentage text without the percent sign.
+     */
+    function dwCacheHitPercent(cacheReadTokens, billedInputTokens) {
+      if (billedInputTokens === 0) return null
+      const missedInputTokens = billedInputTokens - cacheReadTokens
+      if (missedInputTokens === 0) return '100'
+      const roundedUnits = dwRoundedPercentUnits(cacheReadTokens, billedInputTokens, 0)
+      if (roundedUnits < 100) return dwDisplayPercentUnits(roundedUnits, 0)
+      let distinguishingPlaces = 1
+      let scaledDoubleGap = missedInputTokens * 200
+      const denominatorTens = Math.floor(billedInputTokens / 10)
+      while (scaledDoubleGap <= denominatorTens) {
+        scaledDoubleGap *= 10
+        distinguishingPlaces += 1
+      }
+      const denominatorOnes = billedInputTokens % 10
+      let roundedLoss = 5
+      for (let loss = 1; loss < 5; loss += 1) {
+        const factor = loss * 2 + 1
+        const threshold = factor * denominatorTens + Math.floor(factor * denominatorOnes / 10)
+        if (scaledDoubleGap <= threshold) {
+          roundedLoss = loss
+          break
+        }
+      }
+      return `99.${'9'.repeat(distinguishingPlaces - 1)}${10 - roundedLoss}`
+    }
+
+    /** Sum the three disjoint prompt-side billing buckets. */
+    function dwBilledInputTokens(usage) {
+      return usage.uncachedInputTokens + usage.cacheReadTokens + usage.cacheWriteTokens
+    }
+
+    /**
+     * Bounded context occupancy from the independently updated pressure fields.
+     * @param {object | undefined} pressure - latest `contextPressure` value.
+     * @returns {{ percent: number, usedTokens: number, contextWindow: number } | null}
+     *   occupancy, or null until both numerator and capacity are known.
+     */
+    function dwContextOccupancy(pressure) {
+      if (pressure === null || typeof pressure !== 'object') return null
+      const usedTokens = pressure.projectedTokens ?? pressure.pressureTokens
+      if (typeof usedTokens !== 'number' || !Number.isFinite(usedTokens)) return null
+      if (typeof pressure.contextWindow !== 'number' || !Number.isFinite(pressure.contextWindow)) return null
+      return {
+        percent: Math.min(100, Math.round(usedTokens / pressure.contextWindow * 100)),
+        usedTokens,
+        contextWindow: pressure.contextWindow
+      }
+    }
+
+    /** A finite non-negative metric, else 0 (projection values can be absent). */
+    function dwMetric(value) {
+      return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
+    }
+
+    /** A finite non-negative whole count, else 0. */
+    function dwCount(value) {
+      return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0
+    }
+
+    /**
+     * Normalize one `sessionStats` projection into display data, applying the
+     * native visibility rule (no section before the Session took a step).
+     * @param {object | undefined} stats - `sessionStats` projection value.
+     * @returns {object | null} normalized stats, or null when hidden.
+     */
+    function dwNormalizeSessionStats(stats) {
+      if (stats === null || typeof stats !== 'object') return null
+      const normalized = {
+        turns: dwCount(stats.turns),
+        steps: dwCount(stats.steps),
+        llmMs: dwMetric(stats.llmMs),
+        toolMs: dwMetric(stats.toolMs),
+        ttftMs: dwMetric(stats.ttftMs),
+        ttftSteps: dwCount(stats.ttftSteps),
+        decodeMs: dwMetric(stats.decodeMs),
+        decodeTokens: dwMetric(stats.decodeTokens)
+      }
+      return normalized.steps === 0 ? null : normalized
+    }
+
+    /**
+     * Normalize one `tokenUsage` projection into display data. The whole-dialog
+     * emptiness rule is native: no section when the Session billed nothing.
+     * @param {object | undefined} usage - `tokenUsage` projection value.
+     * @returns {object | null} normalized usage, or null when hidden.
+     */
+    function dwNormalizeTokenUsage(usage) {
+      if (usage === null || typeof usage !== 'object') return null
+      const normalized = {
+        uncachedInputTokens: dwCount(usage.uncachedInputTokens),
+        cacheReadTokens: dwCount(usage.cacheReadTokens),
+        cacheWriteTokens: dwCount(usage.cacheWriteTokens),
+        outputTokens: dwCount(usage.outputTokens)
+      }
+      normalized.billedInputTokens = dwBilledInputTokens(normalized)
+      if (normalized.billedInputTokens === 0 && normalized.outputTokens === 0) return null
+      normalized.totalTokens = normalized.billedInputTokens + normalized.outputTokens
+      normalized.cacheHitPercent = dwCacheHitPercent(normalized.cacheReadTokens, normalized.billedInputTokens)
+      return normalized
+    }
+
+    /**
+     * Normalize the context projections into display data. The heuristic
+     * breakdown is a separate estimator: it is only ever shown as its own
+     * `~`-prefixed composition rows, never as parts of the provider pressure.
+     * @param {object | undefined} pressure - `contextPressure` projection value.
+     * @param {object | undefined} breakdown - `contextBreakdown` projection value.
+     * @returns {object | null} normalized context, or null when hidden.
+     */
+    function dwNormalizeContext(pressure, breakdown) {
+      const occupancy = dwContextOccupancy(pressure)
+      if (occupancy === null) return null
+      const composition = breakdown !== null && typeof breakdown === 'object'
+        ? {
+            systemTokens: dwCount(breakdown.systemTokens),
+            toolsTokens: dwCount(breakdown.toolsTokens),
+            messageTokens: dwCount(breakdown.messageTokens)
+          }
+        : null
+      return { ...occupancy, breakdown: composition }
+    }
+
+    /**
+     * Whether a projection record still needs the one-shot cold read: the
+     * statistics/context values have not arrived yet and no read has been
+     * attempted (or is in flight). Live Sessions are push-seeded and need no
+     * request; error / migration states are never retried.
+     * @param {object | undefined} record - `projectionsBySession[id]`.
+     * @returns {boolean} whether to call `refreshProjections` once.
+     */
+    function dwNeedsProjectionRead(record) {
+      if (record === null || record === undefined || typeof record !== 'object') return true
+      const values = record.values
+      if (values === null || typeof values !== 'object') return true
+      if (values.sessionStats !== undefined && values.contextBreakdown !== undefined) return false
+      const state = record.state
+      return state === undefined || state === null || state === 'idle'
+    }
+
+    /**
+     * Shape the three hover-card figure sections from one Session's projection
+     * values. Each section is omitted entirely when its data is absent.
+     * @param {object | undefined} values - projection values for the Session.
+     * @returns {{ stats: object | null, usage: object | null, context: object | null }}
+     */
+    function dwProjectionSections(values) {
+      const source = values !== null && typeof values === 'object' ? values : {}
+      return {
+        stats: dwNormalizeSessionStats(source.sessionStats),
+        usage: dwNormalizeTokenUsage(source.tokenUsage),
+        context: dwNormalizeContext(source.contextPressure, source.contextBreakdown)
+      }
     }
 
     /**
@@ -5521,6 +5842,88 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     /**
+     * One native-figure section of the row hover card: a header line (label plus
+     * a right-aligned headline value) and right-aligned key/value rows, matching
+     * the shell's Session-statistics dialog list.
+     * @param {object} props - section props.
+     * @param {string} props.title - left-hand section label.
+     * @param {string} [props.value] - right-aligned headline value.
+     * @param {Array<[string, string]>} props.rows - label/value row pairs.
+     * @returns {object} the section element.
+     */
+    function DwHovercardSection({ title, value, rows }) {
+      return React.createElement('div', { className: 'psd-hovercard-section' },
+        React.createElement('div', { className: 'psd-hovercard-section-head' },
+          React.createElement('span', { className: 'psd-hovercard-section-title' }, title),
+          value === undefined ? null : React.createElement('span', { className: 'psd-hovercard-section-value' }, value)),
+        rows.map(([label, text]) => React.createElement('div', { className: 'psd-hovercard-row', key: label },
+          React.createElement('span', { className: 'psd-hovercard-key' }, label),
+          React.createElement('span', { className: 'psd-hovercard-row-value' }, text))))
+    }
+
+    /**
+     * The three native figures the shell shows for a Session, appended to the
+     * hover card: Session statistics, Token usage, and context occupancy with
+     * the heuristic composition. Each section is omitted entirely when its
+     * projection data is absent, so a Session with no data keeps the plain card.
+     * @param {object} props - component props.
+     * @param {{ stats: object | null, usage: object | null, context: object | null }} props.sections -
+     *   normalized sections from {@link dwProjectionSections}.
+     * @param {Function} props.t - namespace-bound translate.
+     * @returns {object | null} the fragment, or null when no section has data.
+     */
+    function DwHovercardProjectionSections({ sections, t }) {
+      if (sections === null || typeof sections !== 'object') return null
+      const { stats, usage, context } = sections
+      const blocks = []
+      if (stats !== null) {
+        const rows = []
+        if (stats.llmMs > 0) rows.push([t('stats.llmTime'), dwFormatStatsDuration(stats.llmMs, t)])
+        if (stats.toolMs > 0) rows.push([t('stats.toolTime'), dwFormatStatsDuration(stats.toolMs, t)])
+        if (stats.ttftSteps > 0) rows.push([t('stats.ttft'), dwFormatStatsDuration(stats.ttftMs / stats.ttftSteps, t)])
+        const speed = dwFormatTps(stats.decodeTokens, stats.decodeMs, t)
+        if (speed !== null) rows.push([t('stats.speed'), speed])
+        blocks.push(React.createElement(DwHovercardSection, {
+          key: 'stats',
+          title: t('stats.title'),
+          value: t('stats.counts', { turns: stats.turns, steps: stats.steps }),
+          rows
+        }))
+      }
+      if (usage !== null) {
+        const exact = (value) => t('usage.count', { count: dwFormatExactTokens(value, t) })
+        const rows = []
+        if (usage.cacheHitPercent !== null) rows.push([t('usage.cacheHit'), `${usage.cacheHitPercent}%`])
+        rows.push([t('usage.input'), exact(usage.uncachedInputTokens)])
+        rows.push([t('usage.cacheRead'), exact(usage.cacheReadTokens)])
+        if (usage.cacheWriteTokens !== 0) rows.push([t('usage.cacheWrite'), exact(usage.cacheWriteTokens)])
+        rows.push([t('usage.output'), exact(usage.outputTokens)])
+        blocks.push(React.createElement(DwHovercardSection, {
+          key: 'usage',
+          title: t('usage.title'),
+          value: exact(usage.totalTokens),
+          rows
+        }))
+      }
+      if (context !== null) {
+        const rows = []
+        if (context.breakdown !== null) {
+          rows.push([t('context.system'), `~${dwFormatCompactTokens(context.breakdown.systemTokens, t)}`])
+          rows.push([t('context.tools'), `~${dwFormatCompactTokens(context.breakdown.toolsTokens, t)}`])
+          rows.push([t('context.messages'), `~${dwFormatCompactTokens(context.breakdown.messageTokens, t)}`])
+        }
+        blocks.push(React.createElement(DwHovercardSection, {
+          key: 'context',
+          title: t('context.aria', { percent: `${context.percent}%` }),
+          value: `~${dwFormatCompactTokens(context.usedTokens, t)} / ${dwFormatCompactTokens(context.contextWindow, t)}`,
+          rows
+        }))
+      }
+      if (blocks.length === 0) return null
+      return React.createElement(React.Fragment, null, blocks)
+    }
+
+    /**
      * Render the running-Sessions summary card.
      * @param {object} props - component props.
      * @returns {object} React element.
@@ -5528,7 +5931,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     function DynamicRunningPanel(props) {
       const {
         t, rows, expanded, showAll, now, durations, childrenByParent, collapsedParents, acked,
-        onToggle, onToggleAll, onToggleChildren, onOpen, interruptedT, onNewSession, currentSessionId
+        onToggle, onToggleAll, onToggleChildren, onOpen, interruptedT, onNewSession, currentSessionId,
+        projections, onEnsureProjections
       } = props
       const visible = expanded && !showAll ? rows.slice(0, DW_PANEL_LIMIT) : rows
       const canExpand = rows.length > DW_PANEL_LIMIT
@@ -5631,6 +6035,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }, [measureClippedTitles])
       // Keep the card inside the viewport (native tooltips are clamped at the
       // bottom edge); measuring after mount avoids guessing the content height.
+      // Projection values land asynchronously for cold Sessions and grow the
+      // card, so re-clamp whenever the Session list snapshot changes.
       React.useLayoutEffect(() => {
         if (hover === null) return
         const element = hoverCardRef.current
@@ -5639,8 +6045,21 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (hover.top > maxTop) {
           setHover((previous) => (previous === null ? previous : { ...previous, top: maxTop }))
         }
-      }, [hover])
+      }, [hover, projections])
+      // Every Session id asked for once per seat lifetime: cold (persisted)
+      // Sessions carry only summary projections, so the hover trigger starts one
+      // `refreshProjections` read and the card fills in when the values arrive.
+      // Nothing is polled, and error / migration states are never retried.
+      const projectionRequestsRef = React.useRef(new Set())
+      const ensureRowProjections = (sessionId) => {
+        if (typeof onEnsureProjections !== 'function') return
+        if (projectionRequestsRef.current.has(sessionId)) return
+        if (!dwNeedsProjectionRead(projections?.[sessionId])) return
+        projectionRequestsRef.current.add(sessionId)
+        onEnsureProjections(sessionId)
+      }
       const showHover = (row, element) => {
+        ensureRowProjections(row.id)
         clearHoverTimer()
         hoverTimer.current = window.setTimeout(() => {
           if (!(element instanceof HTMLElement) || !element.isConnected) return
@@ -5694,7 +6113,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         React.createElement('span', { className: 'psd-indicator', 'aria-hidden': true },
           anyRunning
             ? React.createElement('span', { className: 'psd-pulse' })
-            : React.createElement('span', { className: 'psd-spark' }, RemixGlyph(DW_SPARKLING_LINE, 14))),
+            // Identity glyph swap (user-requested): the all-complete header mark is
+            // the DeepSeek brand glyph; the read parent-row mark is the sparkle.
+            : React.createElement('span', { className: 'psd-spark' }, RemixGlyph(DW_DEEPSEEK_FILL, 14))),
         React.createElement('span', { className: 'psd-panel-title' }, t('panel.title')),
         React.createElement('span', { className: 'psd-count' }, t('count', { count: rows.length })))
       ]
@@ -5783,7 +6204,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                   : !isRead(row.id, row.updatedAt)
                     ? React.createElement(StateDot, { state: 'done', size: 14, className: 'psd-run-glyph' })
                     : React.createElement('span', { className: 'psd-run-brand', 'aria-hidden': true },
-                      RemixGlyph(DW_DEEPSEEK_FILL, 14, undefined, 0.82)),
+                      RemixGlyph(DW_SPARKLING_LINE, 14, undefined, 0.82)),
                 interrupted
                   ? React.createElement('span', {
                     className: 'psd-interrupted',
@@ -5814,6 +6235,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               ? React.createElement('div', { className: 'psd-children' }, rowChildren.map((child) => {
                 const childRow = {
                   ...row,
+                  kind: 'child',
                   id: child.id,
                   title: child.title,
                   state: child.state,
@@ -5891,7 +6313,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               ? dwFormatRelative(now - row.updatedAt, t)
               : dwFormatDuration(now - duration.at, t))
           : dwFormatRelative(now - row.updatedAt, t)
-        const cardLeft = Math.round(Math.max(8, Math.min(hover.anchorLeft, window.innerWidth - 244 - 8)))
+        const cardLeft = Math.round(Math.max(8, Math.min(hover.anchorLeft, window.innerWidth - DW_HOVERCARD_WIDTH - 8)))
         children.push(React.createElement('div', {
           key: 'hover',
           ref: hoverCardRef,
@@ -5908,6 +6330,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         },
         React.createElement('div', { className: 'psd-hovercard-content' },
           React.createElement('div', { className: 'psd-hovercard-title' }, row.workspace),
+          // A subagent row's card is titled with the owning Workspace, so add the
+          // hovered Session's own compact title to say which subagent it is.
+          row.kind === 'child'
+            ? React.createElement('div', { className: 'psd-hovercard-session' }, row.title)
+            : null,
           row.workspacePath.length === 0
             ? null
             : React.createElement('div', { className: 'psd-hovercard-path' }, row.workspacePath),
@@ -5920,8 +6347,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             }),
             React.createElement('span', null,
               `${running ? t('hover.running') : t('hover.done')} · ${statusTime}`)),
-          // Remaining native-tooltip-style detail rows. Later hover-card content
-          // (session statistics, token usage, context) appends rows here.
+          // Remaining native-tooltip-style detail rows.
           React.createElement('div', { className: 'psd-hovercard-row' },
             React.createElement('span', { className: 'psd-hovercard-key' }, t('hover.updated')),
             React.createElement('span', { className: 'psd-hovercard-value' }, dwFormatAbsoluteTime(row.updatedAt))),
@@ -5929,7 +6355,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             ? React.createElement('div', { className: 'psd-hovercard-row' },
               React.createElement('span', { className: 'psd-hovercard-key' },
                 row.subagents === 1 ? t('hover.subagentsOne') : t('hover.subagents', { count: row.subagents })))
-            : null)))
+            : null,
+          // The three native figures for this Session (parent or nested
+          // subagent). Each section is omitted when the projection has no data,
+          // so an empty Session keeps exactly the card it has today.
+          React.createElement(DwHovercardProjectionSections, {
+            sections: dwProjectionSections(projections?.[row.id]?.values),
+            t
+          }))))
       }
       return React.createElement('div', { ref: panelRootRef, className: 'psd-panel' }, children)
     }
@@ -6528,6 +6961,23 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }, [scheduleApply])
 
       if (mounts === null) return null
+      // The list snapshot already carries every projection value the Host pushes
+      // for live Sessions; a cold (persisted) Session gets one one-shot read when
+      // its row is hovered. Both stay client-only: no Host route, no new inject.
+      const sessionProjections = sessions !== null && typeof sessions === 'object'
+        ? sessions.projectionsBySession
+        : undefined
+      const ensureProjections = (sessionId) => {
+        if (parentSessions === null || parentSessions === undefined) return
+        if (typeof parentSessions.refreshProjections !== 'function') return
+        try {
+          const pending = parentSessions.refreshProjections(sessionId)
+          if (pending !== null && pending !== undefined && typeof pending.catch === 'function') pending.catch(() => {})
+        } catch {
+          // A Host without the projection units leaves the figures out; the card
+          // itself still renders.
+        }
+      }
       const portal = []
       portal.push(ReactDOM.createPortal(React.createElement(DynamicRunningPanel, {
         t,
@@ -6541,6 +6991,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         acked: ackedBaselines,
         currentSessionId,
         interruptedT,
+        projections: sessionProjections,
+        onEnsureProjections: ensureProjections,
         onNewSession: openNewSession,
         onToggle: () => setPanelExpanded((value) => !value),
         onToggleAll: () => setShowAll((value) => !value),
@@ -14150,6 +14602,21 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         collectionRemove,
         collectionClear,
         collectionSetNote
+      }
+      // The dynamic-Workspaces hover card's native figures. Kept in its own
+      // namespace so the annotation seam above stays byte-for-byte stable.
+      globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesStats = {
+        DW_EN,
+        DW_ZH,
+        dwProjectionSections,
+        dwNeedsProjectionRead,
+        dwFormatCompactTokens,
+        dwFormatExactTokens,
+        dwFormatStatsDuration,
+        dwFormatTps,
+        dwCacheHitPercent,
+        dwBilledInputTokens,
+        dwContextOccupancy
       }
     }
 

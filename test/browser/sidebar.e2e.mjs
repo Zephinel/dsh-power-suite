@@ -483,13 +483,15 @@ class Page {
     await this.send('Emulation.setEmulatedMedia', { features })
   }
 
-  async screenshotBase64() {
-    const result = await this.send('Page.captureScreenshot', { format: 'png', fromSurface: true })
+  async screenshotBase64(clip) {
+    const params = { format: 'png', fromSurface: true }
+    if (clip !== undefined) params.clip = { x: clip.x, y: clip.y, width: clip.width, height: clip.height, scale: 1 }
+    const result = await this.send('Page.captureScreenshot', params)
     return result.data
   }
 
-  async screenshot(pathname) {
-    const data = await this.screenshotBase64()
+  async screenshot(pathname, clip) {
+    const data = await this.screenshotBase64(clip)
     await writeFile(pathname, Buffer.from(data, 'base64'))
     return pathname
   }
@@ -833,6 +835,7 @@ const probe = {
       const s = getComputedStyle(node)
       return { fontSize: s.fontSize, lineHeight: s.lineHeight, fontWeight: s.fontWeight, color: s.color }
     }
+    const text = (node) => node ? (node.innerText || '').trim() : ''
     const panel = document.querySelector('.psd-panel')
     const sidebar = panel ? panel.closest('[class*="_sidebarCol"]') : null
     return {
@@ -850,7 +853,180 @@ const probe = {
       title: inner('.psd-hovercard-title'),
       path: inner('.psd-hovercard-path'),
       status: inner('.psd-hovercard-status'),
-      text: (card.innerText || '').trim().slice(0, 400),
+      session: inner('.psd-hovercard-session'),
+      sessionText: text(card.querySelector('.psd-hovercard-session')),
+      // Native session-figure sections (B6): header line plus right-aligned rows.
+      sections: [...card.querySelectorAll('.psd-hovercard-section')].map((section) => ({
+        title: text(section.querySelector('.psd-hovercard-section-title')),
+        value: text(section.querySelector('.psd-hovercard-section-value')),
+        rows: [...section.querySelectorAll('.psd-hovercard-row')].map((row) => ({
+          key: text(row.querySelector('.psd-hovercard-key')),
+          value: text(row.querySelector('.psd-hovercard-row-value')),
+        })),
+      })),
+      maxHeight: style.maxHeight,
+      overflowY: style.overflowY,
+      scrollHeight: card.scrollHeight,
+      clientHeight: card.clientHeight,
+      offsetHeight: card.offsetHeight,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      text: (card.innerText || '').trim().slice(0, 700),
+    }
+  },
+
+  /**
+   * Reach the injected seat's `ctx.sessions` through the React fiber tree and
+   * instrument its one-shot `refreshProjections`, so the B6 checks can count
+   * projection reads and pick a Session whose figures have not been fetched yet.
+   */
+  projectionBridge: () => {
+    const panel = document.querySelector('.psd-panel')
+    if (!panel) return { ok: false, reason: 'no .psd-panel' }
+    const fiberKey = Object.keys(panel).find((key) => key.startsWith('__reactFiber$'))
+    if (fiberKey === undefined) return { ok: false, reason: 'no react fiber on .psd-panel' }
+    let fiber = panel[fiberKey]
+    let sessions = null
+    let panelProps = null
+    for (let i = 0; i < 80 && fiber !== null && fiber !== undefined; i += 1, fiber = fiber.return) {
+      const props = fiber.memoizedProps
+      if (props === null || typeof props !== 'object') continue
+      if (sessions === null && props.parentSessions !== null && typeof props.parentSessions === 'object'
+        && typeof props.parentSessions.refreshProjections === 'function') {
+        sessions = props.parentSessions
+      }
+      if (panelProps === null && props.childrenByParent instanceof Map && Array.isArray(props.rows)) {
+        panelProps = { rows: props.rows, childrenByParent: props.childrenByParent, projections: props.projections }
+      }
+    }
+    if (sessions === null) return { ok: false, reason: 'ctx.sessions not found on the fiber chain' }
+    window.__psdE2ESessions = sessions
+    if (sessions.__psdE2ERefreshCounts === undefined) {
+      const counts = {}
+      const original = sessions.refreshProjections.bind(sessions)
+      sessions.refreshProjections = (sessionId) => {
+        counts[sessionId] = (counts[sessionId] ?? 0) + 1
+        return original(sessionId)
+      }
+      sessions.__psdE2ERefreshCounts = counts
+    }
+    const snapshot = sessions.list !== null && sessions.list !== undefined && typeof sessions.list.getSnapshot === 'function'
+      ? sessions.list.getSnapshot()
+      : null
+    const recordOf = (sessionId) => {
+      const value = snapshot !== null ? snapshot.projectionsBySession?.[sessionId] : undefined
+      if (value === undefined) return { state: null, keys: [], hasStats: false, hasBreakdown: false }
+      return {
+        state: value.state ?? null,
+        keys: Object.keys(value.values ?? {}),
+        hasStats: value.values?.sessionStats !== undefined,
+        hasBreakdown: value.values?.contextBreakdown !== undefined,
+      }
+    }
+    const needsRead = (sessionId) => {
+      const record = recordOf(sessionId)
+      if (record.keys.length === 0) return true
+      if (record.hasStats && record.hasBreakdown) return false
+      return record.state === null || record.state === 'idle'
+    }
+    const rows = panelProps === null ? [] : panelProps.rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      kind: 'parent',
+      state: row.state,
+      subagents: row.subagents,
+      record: recordOf(row.id),
+      needsRead: needsRead(row.id),
+    }))
+    const children = []
+    if (panelProps !== null) {
+      for (const [parentId, kids] of panelProps.childrenByParent.entries()) {
+        for (const child of kids) {
+          children.push({
+            id: child.id,
+            title: child.title,
+            kind: 'child',
+            parentId,
+            state: child.state,
+            record: recordOf(child.id),
+            needsRead: needsRead(child.id),
+          })
+        }
+      }
+    }
+    return {
+      ok: true,
+      counts: { ...sessions.__psdE2ERefreshCounts },
+      rows,
+      children,
+      listTotal: snapshot !== null ? snapshot.ids.length : null,
+      domRows: [...document.querySelectorAll('.psd-run, .psd-child')].map((el) => ({
+        kind: el.classList.contains('psd-run') ? 'parent' : 'child',
+        title: (el.querySelector('.psd-run-title, .psd-child-title')?.innerText ?? '').trim(),
+      })),
+    }
+  },
+
+  /**
+   * Hold one Session's one-shot projection read pending, simulating a Host that
+   * never answers (unknown id / absent projection units), while leaving every
+   * other Session readable. Used to prove the card renders without data.
+   */
+  stallProjectionRefresh: (sessionId) => {
+    const sessions = window.__psdE2ESessions
+    if (sessions === undefined || sessions === null) return { ok: false, reason: 'projectionBridge was not called yet' }
+    if (sessions.__psdE2EStalled === undefined) {
+      const wrapped = sessions.refreshProjections
+      sessions.__psdE2EStalled = new Set()
+      sessions.refreshProjections = (sessionIdToRead) => {
+        if (sessions.__psdE2EStalled.has(sessionIdToRead)) return new Promise(() => {})
+        return wrapped(sessionIdToRead)
+      }
+    }
+    sessions.__psdE2EStalled.add(sessionId)
+    return { ok: true, stalled: [...sessions.__psdE2EStalled] }
+  },
+
+  /**
+   * Remove one Session's projection store and rebuild the list snapshot, so the
+   * hover card sees a Session with no projection values (the Host-without-units
+   * / unknown-Session shape) and must hide the whole figure block.
+   */
+  dropProjectionValues: (sessionId) => {
+    const sessions = window.__psdE2ESessions
+    if (sessions === undefined || sessions === null) return { ok: false, reason: 'projectionBridge was not called yet' }
+    const manager = sessions.manager
+    if (manager === undefined || manager === null || !(manager.projectionStores instanceof Map)) {
+      return { ok: false, reason: 'manager projection stores not reachable' }
+    }
+    const existed = manager.projectionStores.delete(sessionId)
+    manager.notifier.markDirty()
+    return { ok: true, existed }
+  },
+
+  /** Identity glyphs of the panel header and the card rows (B6 icon swap). */
+  identityGlyphs: () => {
+    const pathPrefix = (root, selector) => {
+      const lookup = selector === null || selector === undefined || selector === '' ? 'path' : `${selector} path`
+      const node = root ? root.querySelector(lookup) : null
+      return node ? (node.getAttribute('d') ?? '').slice(0, 40) : null
+    }
+    const header = document.querySelector('.psd-panel-toggle')
+    const headerSpark = header ? header.querySelector('.psd-spark') : null
+    const headerSvg = headerSpark ? headerSpark.querySelector('svg') : null
+    const parents = [...document.querySelectorAll('.psd-run')].map((row) => ({
+      state: row.dataset.state ?? null,
+      brand: pathPrefix(row, '.psd-run-brand'),
+      statusDot: row.querySelector('.psd-run-glyph') !== null,
+    }))
+    return {
+      headerPulsing: header !== null && header.querySelector('.psd-pulse') !== null,
+      headerPath: pathPrefix(header, '.psd-spark'),
+      headerGlyphSize: headerSvg === null
+        ? null
+        : { width: headerSvg.getAttribute('width'), height: headerSvg.getAttribute('height') },
+      brandRows: parents.filter((row) => row.brand !== null),
+      parentRows: parents.length,
+      childBrands: [...document.querySelectorAll('.psd-child-brand')].map((el) => pathPrefix(el, null)),
     }
   },
 
@@ -1167,6 +1343,165 @@ async function hoverRow(page, rowIndex) {
   return target
 }
 
+/**
+ * Hover one specific card row identified by its exact title (parent or nested
+ * subagent row), scrolling it into view first when the card body has scrolled.
+ * @param {object} page - Page wrapper.
+ * @param {'parent' | 'child'} kind - row kind to search.
+ * @param {string} title - exact row title text.
+ * @returns {Promise<object>} measured hover target.
+ */
+async function hoverCardRowByTitle(page, kind, title) {
+  const locate = () => page.eval((rowKind, rowTitle) => {
+    const selector = rowKind === 'child' ? '.psd-child' : '.psd-run'
+    const titleSelector = rowKind === 'child' ? '.psd-child-title' : '.psd-run-title'
+    const row = [...document.querySelectorAll(selector)].find((el) => ((el.querySelector(titleSelector)?.innerText ?? '').trim()) === rowTitle)
+    if (!row) return null
+    const rect = row.getBoundingClientRect()
+    const offscreen = rect.top < 8 || rect.bottom > window.innerHeight - 8
+    if (offscreen) row.scrollIntoView({ block: 'center' })
+    return { found: true, offscreen }
+  }, kind, title)
+  const found = await locate()
+  assert(found, `card ${kind} row "${short(title, 60)}" not found in the DOM`)
+  if (found.offscreen) await sleep(250)
+  const target = await page.eval((rowKind, rowTitle) => {
+    const selector = rowKind === 'child' ? '.psd-child' : '.psd-run'
+    const titleSelector = rowKind === 'child' ? '.psd-child-title' : '.psd-run-title'
+    const row = [...document.querySelectorAll(selector)].find((el) => ((el.querySelector(titleSelector)?.innerText ?? '').trim()) === rowTitle)
+    if (!row) return null
+    const r = row.getBoundingClientRect()
+    const tr = row.querySelector(titleSelector)?.getBoundingClientRect() ?? r
+    return {
+      rowTop: Math.round(r.top),
+      x: Math.round(tr.left + Math.min(40, Math.max(8, tr.width / 2))),
+      y: Math.round(r.top + r.height / 2),
+    }
+  }, kind, title)
+  assert(target, `card ${kind} row "${short(title, 60)}" disappeared while scrolling`)
+  assert(target.y > 8 && target.y < VIEWPORT.height - 8, `card row "${short(title, 40)}" is outside the viewport (y=${target.y})`)
+  await page.moveTo(900, 500)
+  await sleep(180)
+  await page.moveTo(target.x, target.y)
+  return target
+}
+
+/**
+ * Open the hover card for one card row and capture it as soon as it appears.
+ * The sidebar list is live: rows can re-sort under a stationary pointer, which
+ * dismisses the card. Retrying and capturing on first appearance keeps the
+ * figure checks deterministic without freezing the host data.
+ * @param {object} page - Page wrapper.
+ * @param {'parent' | 'child'} kind - row kind.
+ * @param {string} title - exact row title.
+ * @param {object} [options] - retry/timeout options.
+ * @returns {Promise<{ card: object, target: object } | null>} the card, or null.
+ */
+async function openHoverCard(page, kind, title, { attempts = 5, timeoutMs = 2200 } = {}) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await page.moveTo(900, 500)
+    await sleep(120)
+    let target = null
+    try {
+      target = await hoverCardRowByTitle(page, kind, title)
+    } catch {
+      await sleep(250)
+      continue
+    }
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      await sleep(80)
+      const card = await page.eval(probe.hoverCard)
+      if (card !== null) return { card, target }
+    }
+  }
+  return null
+}
+
+/**
+ * `hoverRow` with retries: the live card can re-sort between the coordinate
+ * measurement and the pointer move, so a single dispatch can land on nothing.
+ * @param {object} page - Page wrapper.
+ * @param {number} rowIndex - index into the rendered card rows.
+ * @returns {Promise<object>} the measured hover target.
+ */
+async function hoverRowStable(page, rowIndex) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      const target = await hoverRow(page, rowIndex)
+      await sleep(350)
+      const present = await page.eval(() => document.querySelector('[data-psd-hovercard]') !== null)
+      if (present) return target
+    } catch {
+      // retry
+    }
+    await page.moveTo(900, 500)
+    await sleep(200)
+  }
+  throw new Error(`card row ${rowIndex} could not be hovered (live list kept re-sorting)`)
+}
+
+/**
+ * Make at least one finished parent row read (its identity glyph is visible)
+ * by opening it from the card when no acknowledged row exists yet.
+ * @param {object} page - Page wrapper.
+ * @returns {Promise<number>} number of acknowledged parent rows afterwards.
+ */
+async function arrangeReadDoneRow(page) {
+  const count = () => page.eval(() => document.querySelectorAll('.psd-run-brand').length)
+  if (await count() > 0) return count()
+  const target = await page.eval(() => {
+    const row = [...document.querySelectorAll('.psd-run')].find((el) => el.dataset.state === 'done' && el.querySelector('.psd-run-main') !== null)
+    if (!row) return null
+    const main = row.querySelector('.psd-run-main')
+    const rect = main.getBoundingClientRect()
+    return { x: Math.round(rect.left + 20), y: Math.round(rect.top + rect.height / 2), title: row.querySelector('.psd-run-title')?.innerText ?? '' }
+  })
+  if (target === null) return 0
+  await page.clickAt(target.x, target.y)
+  await sleep(1400)
+  return count()
+}
+
+// ---------------------------------------------------------------------------------------------
+// B6 helpers: parse the native figure strings rendered by the hover card
+// ---------------------------------------------------------------------------------------------
+
+/** Group a number with the native thousands separator for log details. */
+function formatNumber(value) {
+  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+/** Parse a native exact count (`5,203,456 tok`) into its integer value. */
+function parseTokenCount(label, text) {
+  const match = /^([\d,]+) tok$/.exec(text ?? '')
+  assert(match, `${label} is not a native exact count: ${JSON.stringify(text)}`)
+  return Number(match[1].replace(/,/g, ''))
+}
+
+/** Parse a native percentage (`96%` / `99.9999%`) into a number. */
+function parsePercent(label, text) {
+  const match = /^(\d+(?:\.\d+)?)%$/.exec(text ?? '')
+  assert(match, `${label} is not a native percentage: ${JSON.stringify(text)}`)
+  return Number(match[1])
+}
+
+/**
+ * One section of the hover card as a key→value map; asserts the section exists
+ * and that the native label shape holds.
+ * @param {Array<object>} sections - measured sections.
+ * @param {string} title - expected section title (exact label or prefix match).
+ * @param {Function} [titleMatch] - optional title predicate instead of equality.
+ * @returns {object} `{ section, rows }` with `rows` a Map.
+ */
+function sectionRows(sections, title, titleMatch) {
+  const section = titleMatch === undefined
+    ? sections.find((candidate) => candidate.title === title)
+    : sections.find((candidate) => titleMatch.test(candidate.title))
+  assert(section, `missing hover-card section "${title}" (got ${JSON.stringify(sections.map((s) => s.title))})`)
+  return { section, rows: new Map(section.rows.map((row) => [row.key, row.value])) }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Checks
 // ---------------------------------------------------------------------------------------------
@@ -1465,7 +1800,7 @@ async function runHoverCardChecks({ page, results, state }) {
     state.hoverCard = card
     assertEqual(card.offsetFromSidebarRight, native.offsetFromSidebarRight, 'hover card left edge must be flush on the sidebar edge like the native tooltip')
     assertNear(card.rect.top, target.rowTop, 1, 'hover card top must align to the hovered row top')
-    assertEqual(card.rect.width, 244, 'hover card width must match the native tooltip')
+    assertEqual(card.rect.width, 320, 'hover card keeps the native chrome and grows to its documented 320 px so the B6 figure sections fit on one line each')
     assertEqual(card.radius, native.radius, 'hover card radius must match the native tooltip')
     assertEqual(card.borderWidth, native.borderWidth, 'hover card must be borderless like the native tooltip')
     assertEqual(card.padding, native.padding, 'hover card padding must match the native tooltip')
@@ -1720,8 +2055,285 @@ async function runFoldChecks({ page, results, state }) {
   })
 }
 
+async function runStatsChecks({ page, results, state }) {
+  log('\n=== B6: native session figures in the row hover card ===')
+  state.pageErrorsBefore = page.pageErrors.length
+  state.logEntriesBefore = page.logEntries.length
+
+  await results.check('b6-1', 'live parent row hover shows statistics, token usage and context figures', async () => {
+    const bridge = await page.eval(probe.projectionBridge)
+    assert(bridge.ok, `projection bridge unavailable: ${short(bridge.reason || 'unknown')}`)
+    const parents = bridge.rows ?? []
+    const live = parents.find((row) => row.record.hasStats && row.record.hasBreakdown && row.record.state === 'idle')
+      ?? parents.find((row) => row.record.hasStats && row.record.hasBreakdown)
+    assert(live, 'no parent card row exposes push-seeded projection values')
+    state.liveStatsRow = { id: live.id, title: live.title }
+    const opened = await openHoverCard(page, 'parent', live.title)
+    assert(opened !== null, 'hover card did not open on the live parent row')
+    const card = opened.card
+    state.liveStatsCard = card
+    assertEqual(card.pointerEvents, 'none', 'figure card must stay pointer-events:none in normal mode')
+    assertEqual(card.sections.length, 3, `expected the three native figure sections, got ${JSON.stringify(card.sections.map((section) => section.title))}`)
+    // 1. Session statistics: native counts line plus native-formatted duration/speed rows.
+    const stats = sectionRows(card.sections, 'Session statistics')
+    const counts = /^(\d+) turns (\d+) steps$/.exec(stats.section.value) ?? /^(\d+) 轮 (\d+) 步$/.exec(stats.section.value)
+    assert(counts, `statistics headline is not the native counts line: ${JSON.stringify(stats.section.value)}`)
+    assert(Number(counts[2]) > 0, 'statistics section must only appear for a Session with steps')
+    const durationShape = /^\d+(?:\.\d+)?(?:s|秒)$|^\d+(?:m|分)\d+(?:s|秒)$/
+    const speedShape = /^\d+(?:\.\d+)? tok\/s$/
+    const statsLabels = new Map([
+      ['LLM time', durationShape], ['模型用时', durationShape],
+      ['Tool time', durationShape], ['工具调用用时', durationShape],
+      ['Avg time to first token (TTFT)', durationShape], ['首 token 平均（TTFT）', durationShape],
+      ['Tokens per second (TPS)', speedShape], ['输出速度（TPS）', speedShape],
+    ])
+    let statsRows = 0
+    for (const [key, value] of stats.rows) {
+      const shape = statsLabels.get(key)
+      if (shape === undefined) continue
+      statsRows += 1
+      assert(shape.test(value), `statistics row "${key}" has a non-native value: ${JSON.stringify(value)}`)
+    }
+    assert(statsRows >= 2, `expected at least LLM time and TPS rows, got ${statsRows} (${JSON.stringify(stats.section.rows)})`)
+    // 2. Token usage: total = billed input buckets + output, exact grouped counts.
+    const usage = sectionRows(card.sections, 'Token usage')
+    const total = parseTokenCount('Token usage total', usage.section.value)
+    const uncached = parseTokenCount('Uncached input', usage.rows.get('Uncached input') ?? usage.rows.get('未缓存输入'))
+    const cached = parseTokenCount('Cached input', usage.rows.get('Cached input') ?? usage.rows.get('缓存读取'))
+    const output = parseTokenCount('Output', usage.rows.get('Output') ?? usage.rows.get('输出'))
+    const cacheWriteText = usage.rows.get('Cache write') ?? usage.rows.get('缓存写入')
+    const cacheWrite = cacheWriteText === undefined ? 0 : parseTokenCount('Cache write', cacheWriteText)
+    assertEqual(uncached + cached + cacheWrite + output, total, 'token usage total must equal the billing buckets plus output')
+    assert(total > 0, 'live Session must show a non-zero token total')
+    const billed = uncached + cached + cacheWrite
+    const hitText = usage.rows.get('Cache hit') ?? usage.rows.get('缓存命中')
+    if (billed > 0) {
+      assert(hitText !== undefined, 'billed input must show a cache-hit row')
+      const hit = parsePercent('Cache hit', hitText)
+      if (cached === billed) assertEqual(hitText, '100%', 'a full cache hit must read 100%')
+      else assert(hit < 100, `a partial cache hit must never round to 100% (got ${hitText})`)
+    } else {
+      assertEqual(hitText, undefined, 'no billed input must hide the cache-hit row')
+    }
+    // 3. Context usage: percent + ~used / window plus the heuristic composition,
+    //    which is never asserted to partition the provider pressure.
+    const context = sectionRows(card.sections, 'of context used', /^\d+% of context used$|^上下文已用 \d+%$/)
+    const percentValue = /^(\d+)%/.exec(context.section.title)
+    assert(percentValue, `context headline is not a percentage: ${JSON.stringify(context.section.title)}`)
+    const percent = Number(percentValue[1])
+    assert(percent >= 0 && percent <= 100, `context percent out of range: ${percent}`)
+    const figures = /^~([\d.]+[KM]?) \/ ([\d.]+[KM]?)$/.exec(context.section.value)
+    assert(figures, `context figures are not "~used / window": ${JSON.stringify(context.section.value)}`)
+    const breakdownLabels = new Set(['System prompt', 'Tool definitions', 'Messages', '系统提示词', '工具定义', '对话消息'])
+    let breakdownRows = 0
+    for (const [key, value] of context.rows) {
+      if (!breakdownLabels.has(key)) continue
+      breakdownRows += 1
+      assert(/^~[\d.]+[KM]?$/.test(value), `context breakdown row "${key}" must be a compact ~-prefixed count: ${JSON.stringify(value)}`)
+    }
+    assertEqual(breakdownRows, 3, `expected the three composition rows, got ${breakdownRows}`)
+    assert(Number(card.rect.width) <= 320, `figure card must stay within its 320 px budget, got ${card.rect.width}`)
+    return `${counts[1]} turns ${counts[2]} steps | ${formatNumber(total)} tok | cache hit ${hitText ?? 'n/a'} | context ${context.section.title} (${context.section.value}); ${statsRows} stats rows`
+  })
+
+  await results.check('b6-2', 'a cold subagent row triggers exactly one projection read, then fills its figures', async () => {
+    const bridge = await page.eval(probe.projectionBridge)
+    assert(bridge.ok, `projection bridge unavailable: ${short(bridge.reason || 'unknown')}`)
+    const visibleChildren = new Set((bridge.domRows ?? []).filter((row) => row.kind === 'child').map((row) => row.title))
+    const cold = (bridge.children ?? []).find((child) => child.needsRead && visibleChildren.has(child.title))
+    assert(cold, 'no cold subagent row is listed in the card with unseeded figures; cannot verify the one-shot read')
+    assert(cold.record.keys.length > 0, 'a cold child should still carry summary projection keys')
+    assertEqual(bridge.counts[cold.id] ?? 0, 0, 'the cold child already had a projection read before this check')
+    // The first hover starts the one-shot read. The live list can re-sort under
+    // the pointer, so trigger until the bridge records the read instead of
+    // requiring the card to stay open across the whole fill.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try {
+        await hoverCardRowByTitle(page, 'child', cold.title)
+      } catch {
+        await sleep(250)
+        continue
+      }
+      await sleep(500)
+      const triggered = await page.eval(probe.projectionBridge)
+      if ((triggered.counts[cold.id] ?? 0) > 0) break
+    }
+    // No loading state: the card is complete the moment it opens and the
+    // figures append in place once the read lands.
+    await sleep(1600)
+    const opened = await openHoverCard(page, 'child', cold.title)
+    assert(opened !== null, 'hover card did not open on the cold child row')
+    const card = opened.card
+    assertEqual(card.sessionText, cold.title, 'a subagent card must name the hovered Session under the Workspace title')
+    const after = await page.eval(probe.projectionBridge)
+    assertEqual(after.counts[cold.id] ?? 0, 1, `cold child must trigger exactly one projection read (${JSON.stringify(after.counts)})`)
+    const record = (after.children ?? []).find((child) => child.id === cold.id)
+    assert(record && record.record.hasStats, 'the projection read did not land the statistics values in the store')
+    assert(card.sections.length >= 2, `cold child card should fill in its native figures, got ${JSON.stringify(card.sections.map((section) => section.title))}`)
+    assertEqual(card.pointerEvents, 'none', 'cold child card must stay pointer-events:none')
+    // Leaving and returning reuses the cached values: the guard never re-reads.
+    await page.moveTo(900, 500)
+    await sleep(500)
+    await openHoverCard(page, 'child', cold.title)
+    const second = await page.eval(probe.projectionBridge)
+    assertEqual(second.counts[cold.id] ?? 0, 1, 'a second hover must not re-read the projection')
+    state.coldChild = { id: cold.id, title: cold.title, reads: second.counts[cold.id], sections: card.sections.map((section) => section.title) }
+    return `${cold.id.slice(0, 8)}… "${short(cold.title, 34)}": 1 read, ${card.sections.length} sections (${state.coldChild.sections.join(' / ')})`
+  })
+
+  await results.check('b6-3', 'absent projection data hides the whole figure block without breaking the card', async () => {
+    // Open the figures for a live row first (adversarial setup), then simulate a
+    // Session the Host exposes without projection values: hold its one-shot read
+    // pending and clear its values while the card is open. The block must vanish,
+    // the plain rows must stay, and there must be no loading state.
+    const bridge = await page.eval(probe.projectionBridge)
+    const domTitles = {
+      parent: new Set((bridge.domRows ?? []).filter((row) => row.kind === 'parent').map((row) => row.title)),
+      child: new Set((bridge.domRows ?? []).filter((row) => row.kind === 'child').map((row) => row.title)),
+    }
+    const liveId = state.liveStatsRow !== undefined ? state.liveStatsRow.id : null
+    const candidates = [...(bridge.children ?? []), ...(bridge.rows ?? [])]
+      .filter((row) => row.id !== liveId && row.record.hasStats && domTitles[row.kind === 'child' ? 'child' : 'parent'].has(row.title))
+      .sort((left, right) => (left.kind === 'child' ? 0 : 1) - (right.kind === 'child' ? 0 : 1))
+    let observed = null
+    for (const candidate of candidates.slice(0, 3)) {
+      const opened = await openHoverCard(page, candidate.kind === 'child' ? 'child' : 'parent', candidate.title)
+      if (opened === null || opened.card.sections.length === 0) continue
+      const stalled = await page.eval(probe.stallProjectionRefresh, candidate.id)
+      assert(stalled.ok, `cannot stall the projection read: ${short(stalled.reason || 'unknown')}`)
+      const dropped = await page.eval(probe.dropProjectionValues, candidate.id)
+      assert(dropped.ok, `cannot clear the projection values: ${short(dropped.reason || 'unknown')}`)
+      // Poll immediately: the seat re-renders as soon as the list snapshot changes.
+      for (let i = 0; i < 25; i += 1) {
+        await sleep(80)
+        const card = await page.eval(probe.hoverCard)
+        if (card !== null && card.sections.length === 0) {
+          observed = { candidate, card }
+          break
+        }
+      }
+      if (observed !== null) break
+      // The live card closed instead of hiding the block: try another row.
+    }
+    assert(observed !== null, 'the open figure card never hid its block after the projection values were cleared')
+    const { candidate, card } = observed
+    assert(card.title, 'the card kept rendering without its figure block')
+    assert(card.text.includes('Last active'), 'the plain detail rows disappeared with the figure block')
+    assertEqual(card.pointerEvents, 'none', 'card must stay pointer-events:none without figures')
+    // Values must not appear later either (the read never settles): no flash.
+    await sleep(700)
+    const later = await page.eval(probe.hoverCard)
+    if (later !== null) {
+      assertEqual(later.sections.length, 0, 'absent projections must not grow a figure block later')
+      assertEqual(later.pointerEvents, 'none', 'card must stay pointer-events:none')
+    }
+    await page.moveTo(900, 500)
+    await sleep(400)
+    return `live card lost ${candidate.id.slice(0, 8)}… "${short(candidate.title, 28)}" projections mid-hover: block hidden, plain rows intact (${card.rect.width}x${card.rect.height}), no spinner`
+  })
+
+  await results.check('b6-4', 'figure card keeps the native chrome, 320 px frame and viewport clamp', async () => {
+    const live = state.liveStatsRow
+    assert(live, 'need the live figure row from b6-1')
+    const opened = await openHoverCard(page, 'parent', live.title)
+    assert(opened !== null, 'hover card did not reopen for the geometry check')
+    const card = opened.card
+    assertEqual(card.pointerEvents, 'none', 'card must not capture the pointer')
+    assertEqual(card.pinned, null, 'normal mode must not pin the card')
+    assertEqual(card.rect.width, 320, 'the figure card keeps its documented 320 px width')
+    assertEqual(card.offsetFromSidebarRight, 0, 'card left edge must stay flush on the sidebar right edge')
+    assertEqual(card.borderWidth, '0px', 'card must stay borderless')
+    assert(/560px/.test(card.maxHeight), `card max-height must keep the 560 px clamp: ${card.maxHeight}`)
+    assert(card.overflowY === 'auto', `card must scroll internally past the clamp: ${card.overflowY}`)
+    assert(card.rect.height <= 560, `card height ${card.rect.height} exceeds the 560 px clamp`)
+    assert(card.rect.top >= 8, `card top ${card.rect.top} is above the viewport margin`)
+    assert(card.rect.top + card.rect.height <= card.viewport.height - 8 + 1, `card bottom ${card.rect.top + card.rect.height} escapes the viewport (${card.viewport.height})`)
+    // pointer-events:none must win hit-testing over the card surface.
+    const hit = await page.eval((point) => {
+      const element = document.elementFromPoint(point.x, point.y)
+      return element === null ? null : { inCard: element.closest('[data-psd-hovercard]') !== null, tag: element.tagName }
+    }, { x: card.rect.left + 12, y: card.rect.top + 12 })
+    assert(hit, 'elementFromPoint returned nothing over the card')
+    assertEqual(hit.inCard, false, 'the card captured pointer hit-testing')
+    state.statsCardGeometry = { width: card.rect.width, height: card.rect.height, maxHeight: card.maxHeight }
+    await page.moveTo(900, 500)
+    await sleep(500)
+    return `320x${card.rect.height} at ${card.rect.left}/${card.rect.top}, max-height ${card.maxHeight}, pointer-events none, clamped inside ${card.viewport.width}x${card.viewport.height}`
+  })
+
+  await results.check('b6-6', 'identity glyphs: all-complete header brand, read parent rows sparkle, child robots unchanged', async () => {
+    const DEEPSEEK_PREFIX = 'M23.7493 4.92674'
+    const SPARKLE_PREFIX = 'M14 4.4375'
+    const ROBOT_PREFIX = 'M13.5 2C13.5 2.44425'
+    let glyphs = await page.eval(probe.identityGlyphs)
+    // Header: the pulse dot while anything runs; otherwise the DeepSeek brand
+    // glyph in the same 14 px slot with the same class/colour recipe.
+    if (!glyphs.headerPulsing) {
+      assert(glyphs.headerPath && glyphs.headerPath.startsWith(DEEPSEEK_PREFIX),
+        `all-complete header identity glyph must be the DeepSeek brand glyph, got ${short(glyphs.headerPath)}`)
+      assertEqual(glyphs.headerGlyphSize?.width, '14', 'header identity glyph size')
+      assertEqual(glyphs.headerGlyphSize?.height, '14', 'header identity glyph box')
+    } else {
+      assertEqual(glyphs.headerPath, null, 'a running card keeps the pulse dot instead of an identity glyph')
+    }
+    // Rows: a read/acknowledged finished parent row shows the sparkling glyph.
+    // A live card may briefly contain only running parent rows (no finished
+    // parent inside the retention window); try to arrange one by opening a
+    // finished row, then verify every identity glyph that is actually shown.
+    if (glyphs.brandRows.length === 0) {
+      state.arrangedReadRows = await arrangeReadDoneRow(page)
+      glyphs = await page.eval(probe.identityGlyphs)
+    }
+    const readParentRows = glyphs.brandRows.length
+    for (const row of glyphs.brandRows) {
+      assert(row.brand && row.brand.startsWith(SPARKLE_PREFIX),
+        `a read parent row must use the sparkling glyph, got ${short(row.brand)}`)
+    }
+    // Child rows keep the robot glyph; arrange one acknowledged finished child
+    // (opening it only acknowledges it) when none shows an identity glyph yet.
+    let childBrands = glyphs.childBrands
+    if (childBrands.length === 0) {
+      const childTarget = await page.eval(() => {
+        const row = [...document.querySelectorAll('.psd-child')].find((el) => el.dataset.state === 'done' && el.querySelector('.psd-child-main') !== null)
+        if (!row) return null
+        const main = row.querySelector('.psd-child-main')
+        const rect = main.getBoundingClientRect()
+        return { x: Math.round(rect.left + 20), y: Math.round(rect.top + rect.height / 2) }
+      })
+      if (childTarget !== null) {
+        await page.clickAt(childTarget.x, childTarget.y)
+        await sleep(1400)
+        glyphs = await page.eval(probe.identityGlyphs)
+        childBrands = glyphs.childBrands
+      }
+    }
+    for (const path of childBrands) {
+      assert(path && path.startsWith(ROBOT_PREFIX), `child rows must keep the robot glyph, got ${short(path)}`)
+    }
+    state.glyphEvidence = {
+      headerPulsing: glyphs.headerPulsing,
+      headerPath: glyphs.headerPath,
+      readParentRows,
+      childBrands: childBrands.length,
+    }
+    const headerState = glyphs.headerPulsing ? 'pulse dot (running card)' : 'DeepSeek brand glyph (all complete)'
+    return `header ${headerState}; read parent rows verified: ${readParentRows}${readParentRows === 0 ? ' (none in the live card this run — source test pins the swap)' : ' sparkle'}; ${childBrands.length} child robot glyph(s) unchanged`
+  })
+
+  await results.check('b6-5', 'figure hovers add no page errors or failed network requests', async () => {
+    const newPageErrors = page.pageErrors.slice(state.pageErrorsBefore)
+    assertEqual(newPageErrors.length, 0, `new page errors: ${JSON.stringify(newPageErrors)}`)
+    const knownNoise = /9230\/ingest/
+    const newEntries = page.logEntries.slice(state.logEntriesBefore).filter((entry) => !knownNoise.test(entry))
+    assertEqual(newEntries.length, 0, `new console/network errors: ${JSON.stringify(newEntries.slice(0, 4))}`)
+    return `0 new page errors, 0 new network failures (${page.pageErrors.length} total page errors)`
+  })
+}
+
 async function runAnnotationPinChecks({ page, results, state }) {
   log('\n=== F4: annotation mode pins the hover card ===')
+  // Earlier checks reload the page; wait for the live card to hydrate again.
+  await ensurePanelRows(page)
   await results.check('f4-1', 'annotation mode pins the hover card and mode exit unpins/clears it', async () => {
     // Simulate the annotation side: attribute + stylesheet rule + state event.
     await page.evaluate(`(() => {
@@ -1733,9 +2345,21 @@ async function runAnnotationPinChecks({ page, results, state }) {
       document.dispatchEvent(new CustomEvent('power-suite:ui-annotation-state', { detail: { active: true } }))
     })()`)
     await sleep(300)
-    const target = await hoverRow(page, 0)
-    await sleep(700)
-    const card = await page.eval(probe.hoverCard)
+    let card = null
+    for (let attempt = 0; attempt < 4 && card === null; attempt += 1) {
+      try {
+        await hoverRow(page, 0)
+      } catch {
+        await sleep(300)
+        continue
+      }
+      await sleep(700)
+      card = await page.eval(probe.hoverCard)
+      if (card === null) {
+        await page.moveTo(900, 500)
+        await sleep(300)
+      }
+    }
     assert(card, 'hover card did not open in annotation mode')
     assertEqual(card.pinned, 'true', 'hover card must expose data-psd-pinned="true" while annotation mode is active')
     assertEqual(card.pointerEvents, 'auto', 'annotation mode must make the hover card pointer-interactive')
@@ -1752,9 +2376,21 @@ async function runAnnotationPinChecks({ page, results, state }) {
     const gone = await page.eval(probe.hoverCard)
     assertEqual(gone, null, 'hover card did not close after the pointer left the pinned card')
     // Mode exit must clear a showing card too.
-    const second = await hoverRow(page, 0)
-    await sleep(700)
-    const reopened = await page.eval(probe.hoverCard)
+    let reopened = null
+    for (let attempt = 0; attempt < 4 && reopened === null; attempt += 1) {
+      try {
+        await hoverRow(page, 0)
+      } catch {
+        await sleep(300)
+        continue
+      }
+      await sleep(700)
+      reopened = await page.eval(probe.hoverCard)
+      if (reopened === null) {
+        await page.moveTo(900, 500)
+        await sleep(200)
+      }
+    }
     assert(reopened, 'hover card did not reopen for the mode-exit check')
     await page.evaluate(`(() => {
       document.documentElement.removeAttribute('data-psa-active')
@@ -1763,7 +2399,7 @@ async function runAnnotationPinChecks({ page, results, state }) {
     await sleep(500)
     const cleared = await page.eval(probe.hoverCard)
     assertEqual(cleared, null, 'mode exit left the hover card pinned')
-    return `pinned at z=${card.zIndex}, toggles correctly; row top ${second.rowTop > 0 ? 'ok' : 'n/a'}`
+    return `pinned at z=${card.zIndex}, toggles correctly`
   })
 
   await results.check('f4-2', 'normal mode DOM never carries the pin marker', async () => {
@@ -1771,9 +2407,21 @@ async function runAnnotationPinChecks({ page, results, state }) {
       const style = document.getElementById('psd-e2e-annotation-pin')
       if (style) style.remove()
     })()`)
-    const target = await hoverRow(page, 0)
-    await sleep(700)
-    const card = await page.eval(probe.hoverCard)
+    let card = null
+    for (let attempt = 0; attempt < 4 && card === null; attempt += 1) {
+      try {
+        await hoverRow(page, 0)
+      } catch {
+        await sleep(300)
+        continue
+      }
+      await sleep(700)
+      card = await page.eval(probe.hoverCard)
+      if (card === null) {
+        await page.moveTo(900, 500)
+        await sleep(200)
+      }
+    }
     assert(card, 'hover card did not open in normal mode')
     assertEqual(card.pinned, null, 'normal-mode hover card must not carry data-psd-pinned')
     assertEqual(card.pointerEvents, 'none', 'normal-mode hover card must not capture the pointer')
@@ -1790,10 +2438,13 @@ async function runAnnotationPinChecks({ page, results, state }) {
 
 async function captureScreenshots(page, state) {
   await mkdir(SHOTS_DIR, { recursive: true })
+  // Best effort: the card should be hydrated after the checks, but evidence
+  // capture must not turn a live-data hiccup into a failed run.
+  await ensurePanelRows(page).catch(() => 0)
   const shots = []
-  const shot = async (name) => {
+  const shot = async (name, clip) => {
     const file = path.join(SHOTS_DIR, `${name}.png`)
-    await page.screenshot(file)
+    await page.screenshot(file, clip)
     shots.push(file)
     return file
   }
@@ -1801,11 +2452,38 @@ async function captureScreenshots(page, state) {
   await page.moveTo(900, 500)
   await sleep(300)
   await shot('01-card-light')
-  await hoverRow(page, 0)
-  await sleep(700)
+  // Icon-swap evidence: the panel header (identity glyph / pulse dot) plus the
+  // card rows including the acknowledged row arranged by the B6 glyph check.
+  const panelClip = await page.eval(() => {
+    const panel = document.querySelector('.psd-panel')
+    if (!panel) return null
+    const r = panel.getBoundingClientRect()
+    const top = Math.max(0, Math.round(r.top))
+    return {
+      x: Math.max(0, Math.round(r.left)),
+      y: top,
+      width: Math.min(Math.round(r.width), 600),
+      height: Math.min(Math.round(r.height), window.innerHeight - top),
+    }
+  })
+  if (panelClip !== null && panelClip.width > 0 && panelClip.height > 0) {
+    await shot('01b-panel-identity-glyphs', panelClip)
+  }
+  try {
+    await hoverRowStable(page, 0)
+  } catch {
+    await sleep(300)
+  }
   await shot('02-card-row-hover')
   await page.moveTo(900, 500)
   await sleep(400)
+  // B6 figure sections (the values fill in when the projection read lands).
+  if (state.liveStatsRow !== undefined) {
+    const opened = await openHoverCard(page, 'parent', state.liveStatsRow.title)
+    if (opened !== null && opened.card.sections.length > 0) await shot('02b-hovercard-stats-light')
+    await page.moveTo(900, 500)
+    await sleep(400)
+  }
   const currentRow = await page.eval(() => {
     const row = document.querySelector('.psd-run-current, .psd-child-current')
     return row !== null
@@ -1822,6 +2500,12 @@ async function captureScreenshots(page, state) {
   await sleep(700)
   await shot('04-card-dark')
   if (currentRow) await shot('05-current-wave-dark')
+  if (state.liveStatsRow !== undefined) {
+    const openedDark = await openHoverCard(page, 'parent', state.liveStatsRow.title)
+    if (openedDark !== null && openedDark.card.sections.length > 0) await shot('05b-hovercard-stats-dark')
+    await page.moveTo(900, 500)
+    await sleep(400)
+  }
   await page.emulateMedia([])
   await page.emulateMedia([{ name: 'prefers-reduced-motion', value: 'reduce' }])
   await sleep(500)
@@ -1883,6 +2567,7 @@ async function run() {
       await runLayoutChecks({ page, results, state })
       await runCurrentHighlightChecks({ page, results, state })
       await runHoverCardChecks({ page, results, state })
+      await runStatsChecks({ page, results, state })
       await runFocusChecks({ page, results, state })
       await runFoldChecks({ page, results, state })
       await runAnnotationPinChecks({ page, results, state })
