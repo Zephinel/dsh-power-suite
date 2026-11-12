@@ -109,13 +109,17 @@ heading is added until the release is cut.
   hover pill stays content-paced while the action/chevron highlights keep fixed
   22×22 / 24×26 geometry on one column.
 - Running & recent current-highlight: the animated conic rainbow ring is replaced
-  by a low-key rainbow smoke glow painted on the **bottom face of the row's own
-  rounded rectangle** (card parent and nested child rows) and the same glow on
-  the owning native Workspace row in the sidebar; it breathes and drifts without
-  a layout shift and falls back to a static tint under
-  `prefers-reduced-motion`. Opening a Session from the card, the sidebar, or
-  anywhere else moves the highlight together with the Activity/Workspace
-  association.
+  by a low-intensity animated rainbow **atmosphere painted inside the row's own
+  rounded-rectangle highlight**, with the row's real content (title, time,
+  leading glyph, actions) layered above it under a faint contrast scrim. It
+  applies to the current Session's card row (parent and nested child rows), the
+  owning native Workspace row, and the native sidebar Session row of the open
+  Session (`data-psd-current-session`), is clipped to each row's own radius, is
+  `pointer-events: none`, changes no column/geometry/layout, animates only the
+  highlighted rows (hover raises it slightly), and draws a static rainbow fill
+  under `prefers-reduced-motion`. Opening a Session from the card, the sidebar,
+  or anywhere else moves the highlight together with the
+  Activity/Workspace/Session association.
 - Running & recent hover card: the row detail card now matches the live native
   sidebar session hover-card oracle (left edge flush with the sidebar's right
   edge, top aligned to the row, borderless, 16 px radius, 12×16 padding and
