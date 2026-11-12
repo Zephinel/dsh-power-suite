@@ -1035,6 +1035,12 @@ against the running GUI:
   chip (D2) instead of the old plain numbered blocks; S6's stale/cross-session
   honesty moved from the draft text (impossible anymore) to the rail status and
   the unit-tested serializers.
+- Self-contained tail sequence `--from 10 --no-shots` (smoke + S10-S15): **11
+  PASS / 3 SKIP / 0 FAIL** in 95 s, exit 0, 0 page errors, 0 real network
+  failures (only attempt; an earlier run of the same sequence failed S12 with the
+  whole annotation mode deactivated — mode/rail off, fresh Session — and the
+  immediately following run was green, so it is recorded as the known live-GUI
+  activation race rather than a product assertion).
 - Screenshots: the committed `docs/assets/annotation-*.png` set was regenerated on
   this build (`--shots-only --assets`, exit 0, ~36 s) with the harness privacy
   guard asserted before every capture.
