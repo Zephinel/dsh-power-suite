@@ -101,6 +101,26 @@ The plugin does not depend on the icon package or network at runtime.
   falls inside a recent continuation window for this browser. This is a UI
   compatibility shim until Chat exposes the source kind on the trigger row.
 
+## Multiple devices on one Host
+
+The interruption state is **Host-owned**, not browser-local: the route folds the
+shared Session log and the live `session/event` cache on the DSH Host. Every
+browser that opens the same Host URL (for example this Mac's LAN port) sees the
+same state, including after **Continue** starts a real new turn. There is no
+per-device interrupted-state file or localStorage value.
+
+A page that opens or switches to a Session fetches the state immediately. A page
+that is already open refreshes every **20 s**, and also on window focus,
+`visibilitychange`, `online`, and `connection/reset` after a Host reconnect.
+The initiating page clears the badge as soon as the Continue request is
+accepted; other pages normally follow within one poll. A stale page that still
+shows Continue during that window gets `409 session-busy` from the route and
+refreshes instead of starting a duplicate turn.
+
+Limit: there is no push/stream channel for this state, so two idle pages can lag
+by up to one poll interval. All devices must use the same Host (same
+`$DSH_HOME` and URL/token); different Hosts/profiles do not share state.
+
 ## Automatic refresh after a Host restart
 
 Interruption state is Host-owned but the browser caches one record per Session.
