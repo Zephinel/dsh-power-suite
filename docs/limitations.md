@@ -185,16 +185,21 @@
   and a failed disk write keeps the map in memory without durability (flush and
   dispose still resolve; the stopped listener will not retry that write; temp
   cleanup is best-effort and stale `*.tmp` is not swept; dispose does not await
-  an in-flight ledger load). A first cold request may wait up to 5 s for the
-  one-time baseline; after a seed timeout/failure the route serves the current
-  map immediately for the next 30 s while background seeding continues, and a
+  an in-flight ledger load). A first cold request may wait up to 5 s for a seed
+  that is still pending; if that wait times out, the route serves the current map
+  for the next 30 s without waiting while background seeding continues, and a
   permanently hung listing can cause another ≤5 s wait after each backoff
-  window. The client merges activity per-id with `max(previous, next)` and
+  window. A seed that **fails/rejects** settles silently with no backoff and no
+  retry — seeded history never appears for this process (until a Host recompose/
+  restart), and only live committed events keep advancing activity; the route
+  never 500s, and per-session cache-document read failures are skipped (not
+  retried). The client merges activity per-id with `max(previous, next)` and
   prunes only against a non-empty Session catalog, so partial/empty responses
   and HMR overlap cannot drop known activity; a genuinely empty catalog never
-  prunes (stale entries may remain but no rows show). That client merge has no
-  node-test harness. The client's empty-response guard can defer a rare genuine
-  clear by up to 120 s. The ledger is a `$DSH_HOME`-shared Host file capped at
+  prunes (stale entries may remain but no rows show), and a genuine clear does
+  not take effect while the catalog still lists the Session — it applies on
+  reload or after the Session leaves the catalog. That client merge has no
+  node-test harness. The ledger is a `$DSH_HOME`-shared Host file capped at
   5000 Sessions (oldest entries drop; profiles sharing a home share it), the
   route serves a live snapshot with no document scan/TTL, and Host code changes
   need a plugin Host recompose. The **native sidebar keeps the catalog

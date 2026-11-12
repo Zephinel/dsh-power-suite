@@ -91,7 +91,8 @@ successful copy shows the row's check state for 1.6 s.
 
 A durable Host document (`$DSH_HOME/dsh-power-suite/read-acks.json`, schema
 version 1, `{ acked: { sessionId: acknowledgedUpdatedAt } }`) is shared by every
-browser of the profile. The store sanitizes ids (≤200 chars) and finite positive
+browser/profile using that `$DSH_HOME`; the browser `localStorage` ack cache is
+per origin. The store sanitizes ids (≤200 chars) and finite positive
 baselines, merges per id with `Math.max` (monotonic, no removal verb), caps the
 document at 1000 entries (oldest baselines drop), and writes atomically
 (temporary sibling + rename, `0600`, serialized chain). One authenticated route
@@ -183,17 +184,22 @@ ledger**:
   { sessions: {} }`). The route awaits the single-flight ledger load **plus** the
   one-time baseline through a bounded `waitForSeeded(5000 ms)` before every
   snapshot: an existing durable ledger is returned fast (measured ~12 ms / 407
-  entries), while a first cold request may wait up to 5 s for seeding. After a
-  seed timeout/failure the route serves the current map **immediately for the
-  next 30 s** while background seeding continues; success clears the backoff and
-  seeded values resume. If the listing stays permanently hung, a request after
-  each 30 s backoff window may again wait up to 5 s. The client merges activity
-  per-id with `max(previous, next)` and prunes only against a **non-empty**
-  Session catalog, so empty/partial responses and HMR overlap cannot drop known
-  activity; a genuinely empty catalog never prunes (stale entries may remain but
-  no rows show). No client node-test harness exists for these merges. It also
-  ignores an empty response while it holds a non-empty map, for up to 120 s after
-  mount or the last non-empty response. Values are exact only for
+  entries), while a first cold request may wait up to 5 s for a seed that is
+  still pending. If that wait times out, the route serves the current map for the
+  next 30 s without waiting while background seeding continues; a late success
+  clears the backoff and seeded values resume, and a permanently hung listing can
+  wait up to 5 s again after each 30 s window. A seed that **fails/rejects**
+  (e.g. `listSessions()` rejects) is different: the error is swallowed, the seed
+  promise settles, there is **no backoff and no retry**, and seeded history never
+  appears for this process (until a Host recompose/restart) — only live events
+  keep advancing activity. The route never answers 500 for either case. The
+  client merges activity per-id with `max(previous, next)` and prunes only
+  against a **non-empty** Session catalog, so empty/partial responses and HMR
+  overlap cannot drop known activity; a genuinely empty catalog never prunes
+  (stale entries may remain but no rows show), and a genuine clear does not take
+  effect while the catalog still lists the Session — it applies on reload or
+  after the Session leaves the catalog. No client node-test harness exists for
+  these merges. Values are exact only for
   allowlisted events the Host observed; pre-install Sessions have only the
   baseline approximation (historical/seed-only/no-cache can be under-reported,
   never fabricated). Host code changes need a plugin Host recompose (no DSH

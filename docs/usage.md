@@ -70,8 +70,9 @@ Session is running and the white sparkle icon when nothing runs.
 - Card times come from the Host's **event-sourced activity ledger**, not the
   catalog's last-prompt time, so a turn that ran for hours keeps its real
   completion time and stays in the recent window instead of vanishing on stop.
-  The ledger records allowlisted committed Session events live across all known
-  activity-bearing families (turns, steps, messages/attempts, tools including
+  The ledger records allowlisted committed Session events live across the 55
+  documented activity-bearing `SessionEvent` types (7 metadata types are
+  explicitly excluded; the families are turns, steps, messages/attempts, tools including
   PTC, jobs, commands, compaction, subagent state, goal/todo, approvals and
   selection actions, workspace/deliverable/schedule changes, team traffic,
   image/offload, feedback, inbox splice, LLM retry, tool-workflow progress —

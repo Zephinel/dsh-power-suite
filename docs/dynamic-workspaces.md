@@ -184,8 +184,9 @@ rows, it stays for the retention window, and then it leaves the card. This is th
 
 ## Shared read acknowledgements
 
-Read state is Host-owned and shared by every browser of the DSH profile. The
-Host feature (`src/features/read-acks/`) keeps a durable document:
+Read state is Host-owned and shared by every browser/profile using the same
+`$DSH_HOME`; the browser `localStorage` cache is per origin. The Host feature
+(`src/features/read-acks/`) keeps a durable document:
 
 ```text
 $DSH_HOME/dsh-power-suite/read-acks.json
@@ -323,11 +324,15 @@ committed events DSH itself uses:
   single-flight ledger load plus the one-time baseline through a bounded
   **`waitForSeeded(5000 ms)`** before snapshotting. An existing durable ledger is
   returned fast (measured ~12 ms / 407 entries); a first cold request may wait up
-  to 5 s. After a seed timeout/failure the route serves the current map
-  **immediately for the next 30 s** while background seeding continues; success
-  clears the backoff and seeded values resume. If the listing stays permanently
-  hung, a request after each 30 s backoff window may again wait up to 5 s (no
-  500; seeding failures never fail the route).
+  to 5 s for a seed that is **still pending**. If that wait times out, the route
+  serves the current map without waiting for the next **30 s** while background
+  seeding continues; a late success clears the backoff and seeded values resume,
+  and a permanently hung listing can again wait ≤5 s after each 30 s window. A
+  seed that **fails/rejects** (e.g. `listSessions()` rejects) is different: the
+  error is swallowed, the seed promise settles, there is **no backoff and no
+  retry**, and seeded history never appears this process (until a Host recompose/
+  restart); only live committed events keep advancing activity. The route never
+  answers 500 for either case.
 - **Client** — the map is fetched on the existing card sync cadence (mount,
   focus, visibility, 30 s — no extra timer, 8 s `AbortController` timeout) and
   folded in as `effectiveUpdatedAt = max(summary.updatedAt, activity[id])` for
@@ -337,11 +342,10 @@ committed events DSH itself uses:
   a **non-empty** Session catalog, so partial/empty activity responses and HMR
   overlap cannot drop a known Session's activity; a genuinely empty catalog never
   prunes (stale map entries may remain, but no rows show). This client rule has
-  no node-test harness. The sync **awaits** the in-flight ack-push promise before
-  fetching activity. The client **ignores an empty activity response while it
-  already holds a non-empty map, but only for 120 s after mount or the last
-  non-empty response**; a genuinely empty profile is accepted after that window,
-  and a rare genuine clear inside it can be deferred by up to 120 s.
+  no node-test harness. A genuine clear therefore does not take effect while the
+  catalog still lists the Session — it applies on reload or after the Session
+  leaves the catalog (an empty/partial response can never drop known activity).
+  The sync **awaits** the in-flight ack-push promise before fetching activity.
 
 Exactness: values are **exact for allowlisted events this Host observed**
 (including `turn/end` of long, interrupted, or failed turns). Sessions that
@@ -515,17 +519,24 @@ The native **View options** menu picks how Sessions are grouped:
   browser `localStorage` ack cache is per origin; the route needs a plugin Host
   recompose after upgrading, and the native sidebar keeps its catalog times
   regardless.
-- **Empty-activity guard window.** The client ignores an empty activity response
-  while it holds a known non-empty map, but only for 120 s after mount or the last
-  non-empty response; a genuinely empty profile is accepted after that window,
-  and a rare genuine clear within it can be deferred by up to 120 s.
-- **Fresh-install cold start and seed backoff.** A first cold request may wait
-  up to 5 s for the one-time baseline. If the catalogue listing or a
-  cache-document read times out/fails, the route serves the current map
-  immediately for the next 30 s while background seeding continues; a successful
-  seed clears the backoff and seeded values resume. A permanently hung listing
-  can make a request after each backoff window wait up to 5 s again. Seeding
-  failures never fail the route (no 500).
+- **Monotonic activity merge and delayed clears.** The client keeps the per-id
+  maximum of known and incoming activity and prunes only against a non-empty
+  Session catalog. Empty/partial responses and HMR overlap cannot drop known
+  activity, and a genuine clear does not take effect while the catalog still
+  lists the Session — it applies on a page reload or after the Session leaves the
+  catalog. Stale client entries can therefore outlive a Host-side clear until one
+  of those events.
+- **Fresh-install cold start, pending vs failed seed.** A first cold request may
+  wait up to 5 s for a seed that is still pending. If that wait times out, the
+  route serves the current map for the next 30 s without waiting while seeding
+  runs in the background; if that seed eventually succeeds the backoff clears and
+  the seeded values apply, and a permanently hung listing can add another ≤5 s
+  wait after each window. A seed that **fails/rejects** settles silently with no
+  backoff and no retry, so
+  seeded history never appears for this process (until a Host recompose/restart);
+  only live committed events advance activity. The route never 500s. Per-session
+  cache-document read failures are skipped (not retried) and just omit that
+  Session's baseline.
 - **One-time migration caveat for read marks.** During the short-lived
   mtime-floor build some acknowledgement baselines were inflated (for example
   `78f7a4a7…`). Baselines are max-monotonic, so opening the Session cannot lower

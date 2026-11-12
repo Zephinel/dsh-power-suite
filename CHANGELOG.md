@@ -120,15 +120,18 @@ All notable changes to this repository are documented here. The format follows
   `GET /api/power-suite.session-activity` keeps the same `{sessions}` contract
   and serves the live ledger (no per-request document scan, no-store) after a
   bounded `waitForSeeded(5000 ms)` — fast for an existing ledger; a first cold
-  request may wait up to 5 s, and after a seed timeout/failure the route serves
-  the current map immediately for a 30 s backoff while background seeding
-  continues (success clears it; a permanently hung listing can wait again after
-  each window). Baseline cache/header times are clamped to now+60 s while live
-  event times are trusted. The client merges activity per-id monotonically and
-  prunes only against a non-empty catalog, so partial/empty responses cannot
-  drop known activity. The client ignores an empty response
-  while it holds a non-empty map for up to 120 s after mount/last non-empty, and
-  the card folds the map in via `max(catalog updatedAt, activity)` for retention,
+  request may wait up to 5 s for a still-pending seed. If that wait times out,
+  the route serves the current map for a 30 s backoff while background seeding
+  continues (a late success clears it; a permanently hung listing can wait again
+  after each window). A seed that **fails/rejects** is swallowed and settles with
+  no backoff or retry, so seeded history never appears for that process (until a
+  Host recompose/restart); the route never 500s. Baseline cache/header times are
+  clamped to now+60 s while live event times are trusted. The client merges
+  activity per-id monotonically and prunes only against a non-empty catalog, so
+  partial/empty responses cannot drop known activity; a genuine clear does not
+  take effect while the catalog still lists the Session (it applies on reload or
+  after the Session leaves the catalog). The card folds the map in via
+  `max(catalog updatedAt, activity)` for retention,
   ordering, relative times, bucket recency, child rows, and read-baseline
   raising. Activity is exact only for allowlisted events the Host observed
   (including long, interrupted, and failed turn ends); pre-install Sessions rely
