@@ -1,61 +1,63 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import {
+  ACTIVITY_LEDGER_VERSION,
+  MAX_ACTIVITY_SESSIONS,
+  activityLedgerPath,
+  capActivitySessions,
+  createActivityLedger,
+  mergeActivitySessions,
+  parseActivityLedger,
+  sanitizeActivitySessions,
+  serializeActivityLedger
+} from '../src/features/session-activity/store.js'
+import {
   MAX_CACHE_DOCUMENT_BYTES,
   SESSION_ACTIVITY_ROUTE,
-  SESSION_ACTIVITY_TTL_MS,
-  cachedLastMessageTime,
-  collectSessionActivity,
+  activityFromEvent,
   createProjectionCacheReader,
   harnessHome,
   installSessionActivity,
-  readCachedDocumentActivity
+  isSyntheticSeedEvent,
+  readCachedDocumentActivity,
+  seedActivityBaseline
 } from '../src/features/session-activity/host.js'
 
 /**
  * One listed Session record.
  * @param {object} header - header fields.
- * @param {boolean} [live] - live flag.
- * @returns {{ header: object, live: boolean, persisted: boolean }} the record.
+ * @returns {{ header: object, live: boolean, persisted: boolean }} record.
  */
-function record(header, live = false) {
-  return { header: { isSeeded: false, ...header }, live, persisted: true }
+function record(header) {
+  return { header: { isSeeded: false, ...header }, live: false, persisted: true }
 }
 
 /**
- * Build a projection-cache fake from per-Session last-message times.
- * @param {Record<string, number | null | undefined>} times - id → time.
- * @returns {object} the fake `sessionProjectionCache` service.
- */
-function fakeCache(times) {
-  return {
-    cachedSnapshot(meta, keys) {
-      assert.deepEqual(keys, ['timeContext'])
-      const time = times[meta.id]
-      if (time === undefined) return undefined
-      return { asOfSeq: 1, values: { timeContext: { lastMessageTime: time } } }
-    }
-  }
-}
-
-/**
- * Build a Host context that records the session-activity route.
- * @param {object} options - fixture pieces.
+ * Build a Host context for the activity ledger.
+ * @param {object} [options] - fixture pieces.
  * @param {Array<object>} [options.records] - listSessions result.
- * @param {object} [options.cache] - projection-cache fake.
- * @param {Error} [options.listError] - when set, listSessions rejects.
- * @returns {{ ctx: object, routes: Map<string, object>, calls: { list: number } }} fixture.
+ * @param {Error} [options.listError] - listSessions rejection.
+ * @returns {object} fake context with captured effects/handlers.
  */
-function makeContext({ records = [], cache, listError } = {}) {
+function makeContext({ records = [], listError } = {}) {
   const routes = new Map()
-  const calls = { list: 0 }
+  const handlers = []
+  const cleanups = []
   const ctx = {
     effect: (fn) => {
-      const dispose = fn()
-      return typeof dispose === 'function' ? dispose : () => {}
+      const cleanup = fn()
+      const dispose = typeof cleanup === 'function' ? cleanup : () => {}
+      cleanups.push(dispose)
+      return dispose
+    },
+    on: (name, handler, options) => {
+      handlers.push({ name, handler, options })
+      return () => {
+        handlers.length = Math.max(0, handlers.length - 1)
+      }
     },
     connection: {
       fetch: {
@@ -67,138 +69,224 @@ function makeContext({ records = [], cache, listError } = {}) {
     },
     sessionQuery: {
       async listSessions() {
-        calls.list += 1
         if (listError !== undefined) throw listError
         return records
       }
-    },
-    get(name) {
-      return name === 'sessionProjectionCache' ? cache : undefined
     }
   }
-  return { ctx, routes, calls }
+  return { ctx, routes, handlers, cleanups }
 }
 
-test('cachedLastMessageTime tolerates missing cache, values, and errors', () => {
-  assert.equal(cachedLastMessageTime(undefined, { id: 'a' }), null)
-  assert.equal(cachedLastMessageTime({}, { id: 'a' }), null)
-  assert.equal(cachedLastMessageTime(fakeCache({}), { id: 'a' }), null)
-  assert.equal(cachedLastMessageTime(fakeCache({ a: null }), { id: 'a' }), null)
-  assert.equal(cachedLastMessageTime(fakeCache({ a: 'nope' }), { id: 'a' }), null)
-  assert.equal(cachedLastMessageTime(fakeCache({ a: 1234 }), { id: 'a' }), 1234)
-  assert.equal(cachedLastMessageTime({ cachedSnapshot: () => { throw new Error('broken') } }, { id: 'a' }), null)
+/**
+ * Build one context with a real ledger in a throwaway home.
+ * @returns {Promise<{ home: string, ledger: object, ctx: object, routes: Map, handlers: Array, cleanups: Array }>} fixture.
+ */
+async function ledgerFixture() {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-ledger-'))
+  const ledger = createActivityLedger(home)
+  const fixture = makeContext()
+  return { home, ledger, ...fixture }
+}
+
+test('activity ledger sanitizes, merges maxima, and caps the oldest entries', () => {
+  assert.deepEqual(sanitizeActivitySessions({
+    'session-a': 10,
+    'session-b': 0,
+    'session-c': -1,
+    'session-d': 'nope',
+    '': 5,
+    ['x'.repeat(201)]: 7
+  }), { 'session-a': 10 })
+  assert.deepEqual(mergeActivitySessions({ a: 100, b: 50 }, { a: 80, b: 90, c: 10 }), { a: 100, b: 90, c: 10 })
+  assert.deepEqual(mergeActivitySessions(null, { a: 3 }), { a: 3 })
+
+  const many = {}
+  for (let index = 0; index < MAX_ACTIVITY_SESSIONS + 5; index += 1) many[`session-${String(index).padStart(5, '0')}`] = 1000 + index
+  const capped = capActivitySessions(many)
+  assert.equal(Object.keys(capped).length, MAX_ACTIVITY_SESSIONS)
+  assert.equal(capped['session-00000'], undefined)
+  assert.equal(capped['session-00005'], 1005)
 })
 
-test('collectSessionActivity reports max(cache, header) per Session and includes subagents', async () => {
-  const records = [
-    record({ id: 'session-cached', createdAt: 100 }),
-    record({ id: 'session-header', createdAt: 200 }),
-    record({ id: 'session-updated', createdAt: 100, updatedAt: 400 }),
-    record({ id: 'session-subagent', createdAt: 300, origin: 'subagent', parentSession: 'session-cached' }),
-    record({ id: 'session-empty' })
-  ]
-  const { ctx } = makeContext({
-    records,
-    cache: fakeCache({
-      'session-cached': 500,
-      'session-header': 150,
-      'session-subagent': 250
+test('activity ledger parses only its own version and serializes the documented shape', () => {
+  assert.deepEqual(parseActivityLedger(''), {})
+  assert.deepEqual(parseActivityLedger('{broken'), {})
+  assert.deepEqual(parseActivityLedger('{"version":2,"sessions":{"a":1}}'), {})
+  assert.deepEqual(parseActivityLedger('{"version":1,"sessions":{"a":1,"b":"x"}}'), { a: 1 })
+  const text = serializeActivityLedger({ b: 5, a: 10 })
+  assert.equal(text.endsWith('\n'), true)
+  const parsed = JSON.parse(text)
+  assert.equal(parsed.version, ACTIVITY_LEDGER_VERSION)
+  assert.deepEqual(parsed.sessions, { a: 10, b: 5 })
+})
+
+test('the durable ledger writes atomically, reloads, and rewrites corrupt/missing files', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-ledger-'))
+  try {
+    const ledger = createActivityLedger(home)
+    await ledger.load()
+    ledger.record({ 'session-a': 1000, 'session-b': 500 })
+    await ledger.flush()
+    const document = JSON.parse(await readFile(activityLedgerPath(home), 'utf8'))
+    assert.equal(document.version, ACTIVITY_LEDGER_VERSION)
+    assert.deepEqual(document.sessions, { 'session-a': 1000, 'session-b': 500 })
+    assert.equal((await stat(activityLedgerPath(home))).mode & 0o777, 0o600)
+    const reopened = createActivityLedger(home)
+    assert.deepEqual(await reopened.load(), { 'session-a': 1000, 'session-b': 500 })
+
+    const file = activityLedgerPath(home)
+    await writeFile(file, '{broken', 'utf8')
+    const corrupt = createActivityLedger(home)
+    assert.deepEqual(await corrupt.load(), {})
+    await corrupt.flush()
+    assert.deepEqual(JSON.parse(await readFile(file, 'utf8')).sessions, {})
+
+    await rm(file, { force: true })
+    const missing = createActivityLedger(home)
+    assert.deepEqual(await missing.load(), {})
+    await missing.flush()
+    assert.deepEqual(JSON.parse(await readFile(file, 'utf8')).sessions, {})
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('activityFromEvent accepts committed events and ignores seeds or invalid times', () => {
+  const session = { id: 'session-a' }
+  assert.deepEqual(activityFromEvent(session, { type: 'turn/end', time: 1000 }), { sessionId: 'session-a', time: 1000 })
+  assert.equal(activityFromEvent({}, { type: 'turn/end', time: 1000 }), null)
+  assert.equal(activityFromEvent(session, null), null)
+  assert.equal(activityFromEvent(session, { type: 'turn/end', time: 0 }), null)
+  assert.equal(activityFromEvent(session, { type: 'turn/end', time: Number.NaN }), null)
+  assert.equal(activityFromEvent(session, { type: 'turn/end', time: 'now' }), null)
+  for (const type of ['session/end-seed', 'session/start-seed', 'plugin:demo/seed', 'seed']) {
+    assert.equal(isSyntheticSeedEvent(type), true)
+    assert.equal(activityFromEvent(session, { type, time: 1000 }), null)
+  }
+  assert.equal(isSyntheticSeedEvent('turn/end'), false)
+})
+
+test('the event handler creates/advances entries and the route serves the live ledger', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-ledger-'))
+  try {
+    const ledger = createActivityLedger(home)
+    const { ctx, routes, handlers, cleanups } = makeContext()
+    installSessionActivity(ctx, { ledger, readCachedDocument: async () => null })
+    await ledger.load()
+    assert.equal(handlers.length, 1)
+    assert.equal(handlers[0].name, 'session/event')
+    assert.equal(handlers[0].options?.global, true)
+    const route = routes.get(SESSION_ACTIVITY_ROUTE)
+    assert.equal(route.methods[0], 'GET')
+
+    handlers[0].handler({ id: 'session-a' }, { type: 'turn/end', time: 1000 })
+    handlers[0].handler({ id: 'session-a' }, { type: 'assistant/message', time: 2000 })
+    handlers[0].handler({ id: 'session-a' }, { type: 'turn/end', time: 1500 })
+    handlers[0].handler({ id: 'session-b' }, { type: 'session/end-seed', time: 9999 })
+    const response = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
+    assert.equal(response.status, 200)
+    assert.equal(response.headers.get('cache-control'), 'no-store')
+    assert.deepEqual(await response.json(), { sessions: { 'session-a': 2000 } })
+
+    cleanups[0]()
+    assert.equal(handlers.length, 0)
+    await ledger.dispose()
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('the one-time baseline seeds missing Sessions, preserves newer entries, and falls back to headers', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-ledger-'))
+  try {
+    const ledger = createActivityLedger(home)
+    await ledger.load()
+    ledger.record({ 'session-newer': 5000 })
+    const records = [
+      record({ id: 'session-cached', createdAt: 100 }),
+      record({ id: 'session-newer', createdAt: 100 }),
+      record({ id: 'session-header', createdAt: 300, updatedAt: 400 }),
+      record({ id: 'session-empty' })
+    ]
+    const cache = new Map([
+      ['session-cached', 1000],
+      ['session-newer', 2000],
+      ['session-empty', null]
+    ])
+    const { ctx } = makeContext({ records })
+    const snapshot = await seedActivityBaseline(ctx, ledger, {
+      readCachedDocument: async (id) => cache.get(id) ?? null
     })
-  })
-  assert.deepEqual(await collectSessionActivity(ctx, { readCachedDocument: async () => null }), {
-    'session-cached': 500,
-    'session-header': 200,
-    'session-updated': 400,
-    'session-subagent': 300
-  })
+    assert.equal(snapshot['session-cached'], 1000)
+    assert.equal(snapshot['session-newer'], 5000)
+    assert.equal(snapshot['session-header'], 400)
+    assert.equal(snapshot['session-empty'], undefined)
+    await ledger.dispose()
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
 })
 
-test('collectSessionActivity works without the projection-cache service', async () => {
-  const { ctx } = makeContext({
-    records: [record({ id: 'session-a', createdAt: 100 }), record({ id: 'session-b', createdAt: 300, updatedAt: 200 })]
-  })
-  assert.deepEqual(await collectSessionActivity(ctx, { readCachedDocument: async () => null }), { 'session-a': 100, 'session-b': 300 })
+test('a listing failure leaves the baseline ledger untouched', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-ledger-'))
+  try {
+    const ledger = createActivityLedger(home)
+    await ledger.load()
+    ledger.record({ 'session-a': 1000 })
+    const { ctx } = makeContext({ listError: new Error('corpus down') })
+    assert.deepEqual(await seedActivityBaseline(ctx, ledger, { readCachedDocument: async () => 2000 }), { 'session-a': 1000 })
+    await ledger.dispose()
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
 })
 
-test('session-activity route serves the map with no-store and reuses the short cache', async () => {
-  const records = [record({ id: 'session-442a', createdAt: 1000 })]
-  const { ctx, routes, calls } = makeContext({
-    records,
-    cache: fakeCache({ 'session-442a': 1794423139284 })
+test('the route degrades to an empty map with no-store when the ledger fails', async () => {
+  const { ctx, routes } = makeContext()
+  installSessionActivity(ctx, {
+    ledger: {
+      async load() {},
+      record() {},
+      snapshot() { throw new Error('ledger unavailable') },
+      async flush() {},
+      async dispose() {}
+    },
+    readCachedDocument: async () => null
   })
-  installSessionActivity(ctx, { readCachedDocument: async () => 1794423139284 })
-  const route = routes.get(SESSION_ACTIVITY_ROUTE)
-  assert.deepEqual(route.methods, ['GET'])
-  assert.equal(route.requestBody, 'buffered')
-
-  const first = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
-  assert.equal(first.status, 200)
-  assert.equal(first.headers.get('cache-control'), 'no-store')
-  assert.deepEqual(await first.json(), { sessions: { 'session-442a': 1794423139284 } })
-  assert.equal(calls.list, 1)
-
-  const second = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
-  assert.deepEqual(await second.json(), { sessions: { 'session-442a': 1794423139284 } })
-  assert.equal(calls.list, 1, 'a second request inside the TTL must not list again')
-  assert.ok(SESSION_ACTIVITY_TTL_MS >= 5000 && SESSION_ACTIVITY_TTL_MS <= 10000)
+  const response = await routes.get(SESSION_ACTIVITY_ROUTE).fetch(new Request('http://host/api/power-suite.session-activity'))
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.get('cache-control'), 'no-store')
+  assert.deepEqual(await response.json(), { sessions: {} })
 })
 
-test('session-activity route degrades to an empty map with 200 when listing fails', async () => {
-  const { ctx, routes, calls } = makeContext({ listError: new Error('corpus down') })
-  installSessionActivity(ctx, { readCachedDocument: async () => null })
-  const route = routes.get(SESSION_ACTIVITY_ROUTE)
-  const first = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
-  assert.equal(first.status, 200)
-  assert.equal(first.headers.get('cache-control'), 'no-store')
-  assert.deepEqual(await first.json(), { sessions: {} })
-  // Failures are not cached: the next poll retries.
-  const second = await route.fetch(new Request('http://host/api/power-suite.session-activity'))
-  assert.deepEqual(await second.json(), { sessions: {} })
-  assert.equal(calls.list, 2)
-})
-
-test('readCachedDocumentActivity extracts the timeContext row and tolerates corruption', () => {
-  const document = JSON.stringify({
-    version: 7,
-    record: { rows: { timeContext: { ver: 3, seq: 1836, val: { lastMessageTime: 1794423139036 } } } }
-  })
-  assert.equal(readCachedDocumentActivity(document), 1794423139036)
+test('readCachedDocumentActivity takes the newer of lastMessageTime and lastInjectionTime', () => {
+  const document = (val) => JSON.stringify({ version: 7, record: { rows: { timeContext: { ver: 3, seq: 1, val } } } })
+  assert.equal(readCachedDocumentActivity(document({ lastMessageTime: 1000 })), 1000)
+  assert.equal(readCachedDocumentActivity(document({ lastMessageTime: 1000, lastInjectionTime: 2000 })), 2000)
+  assert.equal(readCachedDocumentActivity(document({ lastMessageTime: 3000, lastInjectionTime: 2000 })), 3000)
+  assert.equal(readCachedDocumentActivity(document({ lastMessageTime: null, lastInjectionTime: null })), null)
   assert.equal(readCachedDocumentActivity('{broken'), null)
-  assert.equal(readCachedDocumentActivity(''), null)
   assert.equal(readCachedDocumentActivity(JSON.stringify({ version: 7, record: { rows: {} } })), null)
-  assert.equal(readCachedDocumentActivity(JSON.stringify({ version: 7, record: { rows: { timeContext: { val: { lastMessageTime: null } } } } })), null)
 })
 
-test('createProjectionCacheReader uses the newer of timeContext and the checkpoint mtime', async () => {
-  const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-'))
+test('the cache-document reader never returns mtime and skips oversized documents', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-ledger-'))
   try {
     const directory = path.join(home, 'storages', 'session_projcache', 'sessions')
     await mkdir(directory, { recursive: true })
-    const file = path.join(directory, 'session-442a0000-e8e9-4f56-8d43-583e63c9b79d.json')
-    const document = (lastMessageTime) => JSON.stringify({
-      version: 7,
-      record: { rows: { timeContext: { ver: 3, seq: 10, val: { lastMessageTime } } } }
-    })
+    const file = path.join(directory, 'session-cached.json')
     const reader = createProjectionCacheReader(home)
-    // Parsed time newer than the file mtime wins.
-    await writeFile(file, document(1000), 'utf8')
-    await utimes(file, new Date(900), new Date(900))
-    assert.equal(await reader('session-442a0000-e8e9-4f56-8d43-583e63c9b79d'), 1000)
-    // Same mtime: the cached floor is reused.
-    assert.equal(await reader('session-442a0000-e8e9-4f56-8d43-583e63c9b79d'), 1000)
-    // Older parsed message time (timeContext never advanced on turn/end) is
-    // raised to the checkpoint mtime.
-    await writeFile(file, document(2000), 'utf8')
-    await utimes(file, new Date(5000), new Date(5000))
-    assert.equal(await reader('session-442a0000-e8e9-4f56-8d43-583e63c9b79d'), 5000)
-    // mtime-only: a document without a usable timeContext row still yields the
-    // checkpoint floor.
+    await writeFile(file, JSON.stringify({
+      version: 7,
+      record: { rows: { timeContext: { ver: 3, seq: 1, val: { lastMessageTime: 1000 } } } }
+    }), 'utf8')
+    await utimes(file, new Date(9000), new Date(9000))
+    assert.equal(await reader('session-cached'), 1000)
     await writeFile(file, JSON.stringify({ version: 7, record: { rows: {} } }), 'utf8')
-    await utimes(file, new Date(7000), new Date(7000))
-    assert.equal(await reader('session-442a0000-e8e9-4f56-8d43-583e63c9b79d'), 7000)
-    // Oversized cache documents are skipped before readFile.
+    await utimes(file, new Date(11000), new Date(11000))
+    assert.equal(await reader('session-cached'), null)
     await writeFile(file, 'x'.repeat(MAX_CACHE_DOCUMENT_BYTES + 1), 'utf8')
-    assert.equal(await reader('session-442a0000-e8e9-4f56-8d43-583e63c9b79d'), null)
+    assert.equal(await reader('session-cached'), null)
     assert.equal(await reader('session-missing'), null)
     assert.equal(await reader('../etc/passwd'), null)
   } finally {
@@ -211,10 +299,10 @@ test('harnessHome trims DSH_HOME, resolves relative paths, and falls back on whi
   try {
     process.env.DSH_HOME = '   '
     assert.equal(harnessHome(), path.join(os.homedir(), '.dsh'))
-    process.env.DSH_HOME = 'relative/harness-home'
-    assert.equal(harnessHome(), path.resolve('relative/harness-home'))
-    process.env.DSH_HOME = '/tmp/dsh-home'
-    assert.equal(harnessHome(), '/tmp/dsh-home')
+    process.env.DSH_HOME = 'relative/activity-home'
+    assert.equal(harnessHome(), path.resolve('relative/activity-home'))
+    process.env.DSH_HOME = '/tmp/activity-home'
+    assert.equal(harnessHome(), '/tmp/activity-home')
   } finally {
     if (previous === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previous

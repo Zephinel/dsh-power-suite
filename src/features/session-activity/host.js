@@ -1,40 +1,48 @@
 /**
- * Host half of the suite's `session-activity` feature: one authenticated,
- * read-only route that reports the last observed activity timestamp of every
- * catalogued Session.
+ * Host half of the suite's `session-activity` feature: an event-sourced,
+ * durable last-activity ledger plus one authenticated read-only route.
  *
- * The client session-list summary carries the *last prompt* time, so a Session
- * whose turn ran for hours looks stale the moment it stops: the activity card
- * drops it from the retention window and its relative time is wrong. This route
- * supplies the real last-activity values without reading any Session log:
+ * Why a ledger: the client card needs an authoritative "when did this Session
+ * last do anything". Catalog `updatedAt` is the last-prompt time (stale for
+ * long turns) and the projection-cache document mtime is rewritten by Host
+ * maintenance (`session/end-seed`) long after real activity, so both are
+ * proxies. This feature instead uses the same committed event stream DSH uses:
+ * every `session/event` advances `sessionId → max(time)`, so long completed
+ * turns, interrupted/failed turns and maintenance rewrites all follow one rule.
  *
- * - `ctx.sessionQuery.listSessions()` lists the logical corpus (live plus
- *   persisted, subagents included) from metadata alone.
- * - For each listed header, the optional `ctx.sessionProjectionCache` is asked
- *   for the cached `timeContext` row. `timeContext` is registered without a
- *   wire view, so `cachedSnapshot()` cannot expose it; the same projection-cache
- *   document is therefore read directly from the per-record JSON storage
- *   (`storages/session_projcache/sessions/<id>.json`) as a mtime-guarded fallback.
- *   `timeContext.lastMessageTime` tracks the newest model-visible event, but it
- *   does not advance on `turn/end`; the document mtime is therefore used as a
- *   safe last-activity/checkpoint floor (`turn/end` writes a checkpoint), so a
- *   just-finished long turn cannot look stale and vanish from the card.
- * - A Session with no cache row at all falls back to its header timestamps.
+ * - **Live authority:** `ctx.on('session/event', (session, event) => …)`.
+ *   Synthetic seed/maintenance event types are ignored defensively; only a
+ *   finite positive `event.time` for a valid Session id advances an entry.
+ * - **Durable ledger:** `$DSH_HOME/dsh-power-suite/session-activity.json`
+ *   `{ version: 1, sessions: { [id]: lastActivityAt } }`, bounded to the newest
+ *   5000 entries, max-merged, atomic 0600 writes serialized and debounced.
+ * - **One-time baseline:** at install, Sessions in `ctx.sessionQuery`'s corpus
+ *   without a ledger entry are seeded from their per-record projection-cache
+ *   document's `max(timeContext.lastMessageTime, lastInjectionTime)` without
+ *   reading Session logs and without overwriting newer live entries. The
+ *   document mtime is only a re-parse guard, never a value.
+ * - **Route:** `GET /api/power-suite.session-activity` returns a snapshot of
+ *   the live ledger (same `{ sessions }` contract the client already consumes),
+ *   `cache-control: no-store`, empty map on failure.
  *
- * Values are bounded by a short in-memory cache because the browser polls this
- * route; every response is `cache-control: no-store`. A failed listing yields
- * an empty map with 200 so clients silently keep using their own timestamps.
+ * Accepted limits: activity is exact for events observed by this Host process;
+ * pre-existing Sessions rely on the one-time cache-document approximation
+ * (falling back to header timestamps when no cache row exists), so a historical
+ * completion or a seed-only rewrite can be under-reported. That is deliberate:
+ * the ledger never fabricates recency from mtime or catalog prompt times.
  */
 
 import { readFile, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import {
+  createActivityLedger,
+  isActivitySessionId,
+  isActivityTime
+} from './store.js'
 
-/** Route serving the last-activity map. */
+/** Route serving the live activity ledger snapshot. */
 export const SESSION_ACTIVITY_ROUTE = '/api/power-suite.session-activity'
-
-/** How long one activity map stays warm; the browser polls faster than this. */
-export const SESSION_ACTIVITY_TTL_MS = 5000
 
 /** Projection-cache storage path fragments inside one harness home. */
 const PROJECTION_CACHE_PATH = ['storages', 'session_projcache', 'sessions']
@@ -42,8 +50,11 @@ const PROJECTION_CACHE_PATH = ['storages', 'session_projcache', 'sessions']
 /** Session ids are harness-generated tokens; refuse anything path-like. */
 const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 
-/** A projection-cache document is small JSON; refuse to load absurd files. */
-export const MAX_CACHE_DOCUMENT_BYTES = 2 * 1024 * 1024
+/** A cache document is a fold shortcut; bound what one request may load. */
+export const MAX_CACHE_DOCUMENT_BYTES = 16 * 1024 * 1024
+
+/** Synthetic seed/maintenance event types that must never count as activity. */
+const SEED_EVENT_PATTERN = /(?:^|[/-])seed$/i
 
 /**
  * Resolve the harness home from `DSH_HOME`, trimming surrounding whitespace and
@@ -56,7 +67,7 @@ export function harnessHome() {
 }
 
 /**
- * Answer with JSON and a no-store policy: the map tracks live activity.
+ * Answer with JSON and a no-store policy: the ledger is live state.
  * @param {number} status - HTTP status.
  * @param {unknown} payload - JSON body.
  * @returns {Response} the response.
@@ -66,31 +77,39 @@ function sendJson(status, payload) {
 }
 
 /**
- * Read one header's cached last-message time through the projection-cache
- * service. This only serves wire projections, so in current compositions it is
- * usually null; the document fallback below covers `timeContext`.
- * @param {object | undefined} cache - `ctx.get('sessionProjectionCache')` result.
- * @param {object} header - cloned Session header from the corpus listing.
- * @returns {number | null} cached `timeContext.lastMessageTime`, or null.
+ * Whether a committed event type is a synthetic seed/maintenance boundary.
+ * Seed events are documented not to publish on `session/event`; the guard keeps
+ * a future or plugin-generated variant from fabricating activity.
+ * @param {unknown} type - event type.
+ * @returns {boolean} whether it must be ignored.
  */
-export function cachedLastMessageTime(cache, header) {
-  if (cache === undefined || cache === null || typeof cache.cachedSnapshot !== 'function') return null
-  try {
-    const snapshot = cache.cachedSnapshot(header, ['timeContext'])
-    const values = snapshot !== undefined && snapshot !== null ? snapshot.values : undefined
-    const timeContext = values !== null && typeof values === 'object' ? values.timeContext : undefined
-    const lastMessageTime = timeContext !== null && typeof timeContext === 'object' ? timeContext.lastMessageTime : undefined
-    return typeof lastMessageTime === 'number' && Number.isFinite(lastMessageTime) ? lastMessageTime : null
-  } catch {
-    return null
-  }
+export function isSyntheticSeedEvent(type) {
+  return typeof type === 'string' && SEED_EVENT_PATTERN.test(type)
 }
 
 /**
- * Extract `timeContext.lastMessageTime` from one persisted projection-cache
- * document. Corrupt or foreign documents read as null.
+ * Project one committed Session event onto a ledger entry.
+ * @param {object} session - committed Session subject.
+ * @param {object} event - committed Session event.
+ * @returns {{ sessionId: string, time: number } | null} entry, or null when ignored.
+ */
+export function activityFromEvent(session, event) {
+  if (session === null || typeof session !== 'object') return null
+  const sessionId = session.id
+  if (!isActivitySessionId(sessionId)) return null
+  if (event === null || typeof event !== 'object') return null
+  if (isSyntheticSeedEvent(event.type)) return null
+  if (!isActivityTime(event.time)) return null
+  return { sessionId, time: event.time }
+}
+
+/**
+ * Extract the cheap historical approximation from one projection-cache
+ * document: the newer of `timeContext.lastMessageTime` and
+ * `timeContext.lastInjectionTime`. Corrupt, foreign, or time-less documents
+ * read as null. Document mtime is deliberately never a value.
  * @param {unknown} text - document contents.
- * @returns {number | null} last model-visible event time, or null.
+ * @returns {number | null} cached activity approximation, or null.
  */
 export function readCachedDocumentActivity(text) {
   if (typeof text !== 'string' || text.length === 0) return null
@@ -105,22 +124,18 @@ export function readCachedDocumentActivity(text) {
     : undefined
   const row = rows !== null && typeof rows === 'object' ? rows.timeContext : undefined
   const value = row !== null && typeof row === 'object' && row.val !== null && typeof row.val === 'object' ? row.val : undefined
-  const lastMessageTime = value !== null && typeof value === 'object' ? value.lastMessageTime : undefined
-  return typeof lastMessageTime === 'number' && Number.isFinite(lastMessageTime) ? lastMessageTime : null
+  if (value === null || typeof value !== 'object') return null
+  const times = [value.lastMessageTime, value.lastInjectionTime].filter((time) => typeof time === 'number' && Number.isFinite(time))
+  return times.length === 0 ? null : Math.max(...times)
 }
 
 /**
- * Open a mtime-guarded reader for the per-record projection-cache documents.
- *
- * A cold Session's cache document is written at checkpoint points (notably
- * `turn/end`), so the newer of its `timeContext.lastMessageTime` and the file
- * mtime is the cheap last-activity/checkpoint floor without replaying the
- * Session log. `timeContext` alone misses `turn/end`, so an interrupted/failed
- * long turn would otherwise keep a stale message time and drop out of the card.
- * `stat` on every id skips the JSON parse for unchanged documents, and an
- * oversized document (corrupt cache) is skipped before it is read into memory.
+ * Open a reader for the per-record projection-cache documents used by the
+ * one-time baseline. `stat` mtime only skips re-parsing unchanged files; it is
+ * never an activity value because Host maintenance may rewrite a document long
+ * after real activity. Oversized documents are skipped before they are read.
  * @param {string} dshHome - harness home directory.
- * @returns {function(string): Promise<number | null>} Session id → activity floor.
+ * @returns {function(string): Promise<number | null>} Session id → cached activity.
  */
 export function createProjectionCacheReader(dshHome) {
   const directory = path.join(dshHome, ...PROJECTION_CACHE_PATH)
@@ -138,91 +153,109 @@ export function createProjectionCacheReader(dshHome) {
     if (info.size > MAX_CACHE_DOCUMENT_BYTES) return null
     const previous = known.get(id)
     if (previous !== undefined && previous.mtimeMs === info.mtimeMs) return previous.value
-    let parsed = null
+    let value = null
     try {
-      parsed = readCachedDocumentActivity(await readFile(file, 'utf8'))
+      value = readCachedDocumentActivity(await readFile(file, 'utf8'))
     } catch {
-      parsed = null
+      value = null
     }
-    // The checkpoint write time is a safe floor even when the document has no
-    // usable timeContext row or the parse failed.
-    const value = Math.max(parsed ?? 0, info.mtimeMs)
     known.set(id, { mtimeMs: info.mtimeMs, value })
     return value
   }
 }
 
 /**
- * Collect last-activity/checkpoint floors for every catalogued Session.
+ * Seed the ledger for pre-existing Sessions from the projection-cache corpus.
  *
- * The value per Session is the newest of the cached document floor (the newer
- * of its `timeContext` time and checkpoint mtime), the header `updatedAt`
- * (kept for forward compatibility), and the header `createdAt`. Only headers
- * with a usable timestamp are reported, so a Session whose cache row is absent
- * still gets its creation time as a safe minimum.
- * @param {object} ctx - Host context carrying `sessionQuery` and optional services.
+ * Runs once per install (background): for every catalogued Session without a
+ * ledger entry, take the cache document's activity approximation, falling back
+ * to the header timestamps when the document is missing or time-less. Entries
+ * are merged with max semantics, so live events recorded while the baseline
+ * runs are never overwritten with older history. Listing failures leave the
+ * current ledger untouched.
+ * @param {object} ctx - Host context; `sessionQuery` is optional.
+ * @param {object} ledger - activity ledger handle.
  * @param {object} [options] - injection points for tests.
- * @param {function(string): Promise<number | null>} [options.readCachedDocument] - document reader.
- * @returns {Promise<Record<string, number>>} Session id → last-activity epoch milliseconds.
+ * @param {function(string): Promise<number | null>} [options.readCachedDocument] - cache reader.
+ * @returns {Promise<Record<string, number>>} the ledger snapshot after seeding.
  */
-export async function collectSessionActivity(ctx, options = {}) {
-  const sessions = {}
-  const records = await ctx.sessionQuery.listSessions()
-  const cache = typeof ctx.get === 'function' ? ctx.get('sessionProjectionCache') : undefined
+export async function seedActivityBaseline(ctx, ledger, options = {}) {
+  const query = ctx !== null && typeof ctx === 'object' ? ctx.sessionQuery : undefined
+  if (query === undefined || query === null || typeof query.listSessions !== 'function') {
+    return ledger.snapshot()
+  }
+  let records
+  try {
+    records = await query.listSessions()
+  } catch {
+    return ledger.snapshot()
+  }
+  const current = ledger.snapshot()
   const readCachedDocument = typeof options.readCachedDocument === 'function'
     ? options.readCachedDocument
     : createProjectionCacheReader(harnessHome())
+  const seeds = {}
   for (const record of Array.isArray(records) ? records : []) {
     const header = record !== null && typeof record === 'object' ? record.header : undefined
     if (header === null || typeof header !== 'object') continue
     const id = typeof header.id === 'string' ? header.id : ''
-    if (id.length === 0) continue
-    let cached = cachedLastMessageTime(cache, header)
-    if (cached === null) {
-      try {
-        cached = await readCachedDocument(id)
-      } catch {
-        cached = null
-      }
+    if (!isActivitySessionId(id) || current[id] !== undefined) continue
+    let cached = null
+    try {
+      cached = await readCachedDocument(id)
+    } catch {
+      cached = null
     }
     const updatedAt = typeof header.updatedAt === 'number' && Number.isFinite(header.updatedAt) ? header.updatedAt : 0
     const createdAt = typeof header.createdAt === 'number' && Number.isFinite(header.createdAt) ? header.createdAt : 0
     const at = Math.max(cached ?? 0, updatedAt, createdAt)
-    if (at > 0) sessions[id] = at
+    if (at > 0) seeds[id] = at
   }
-  return sessions
+  if (Object.keys(seeds).length > 0) ledger.record(seeds)
+  return ledger.snapshot()
 }
 
 /**
- * Register the session-activity route inside Connection's authentication fence.
- * @param {object} ctx - Host context carrying the connection service.
+ * Register the activity ledger lifecycle and read-only route.
+ * @param {object} ctx - Host context.
  * @param {object} [options] - injection points for tests.
- * @param {function(string): Promise<number | null>} [options.readCachedDocument] - document reader.
+ * @param {object} [options.ledger] - ledger handle override.
+ * @param {function(string): Promise<number | null>} [options.readCachedDocument] - cache reader.
  * @returns {void}
  */
 export function installSessionActivity(ctx, options = {}) {
-  const readCachedDocument = typeof options.readCachedDocument === 'function'
-    ? options.readCachedDocument
-    : createProjectionCacheReader(harnessHome())
-  let cachedAt = 0
-  let cachedValue = null
+  const ledger = options.ledger ?? createActivityLedger(harnessHome())
+  ctx.effect(() => {
+    void (async () => {
+      try {
+        await ledger.load()
+        await seedActivityBaseline(ctx, ledger, { readCachedDocument: options.readCachedDocument })
+      } catch {
+        // Missing services/corrupt files keep the live/loaded map; the route
+        // still serves whatever the ledger already holds.
+      }
+    })()
+    const stop = typeof ctx.on === 'function'
+      ? ctx.on('session/event', (session, event) => {
+        const entry = activityFromEvent(session, event)
+        if (entry === null) return
+        ledger.record({ [entry.sessionId]: entry.time })
+      }, { global: true })
+      : null
+    return () => {
+      if (typeof stop === 'function') stop()
+      void ledger.dispose()
+    }
+  }, `power-suite: session-activity ledger ${SESSION_ACTIVITY_ROUTE}`)
   ctx.effect(() => ctx.connection.fetch.register({
     path: SESSION_ACTIVITY_ROUTE,
     methods: ['GET'],
     requestBody: 'buffered',
     fetch: async () => {
-      const now = Date.now()
-      if (cachedValue !== null && now - cachedAt < SESSION_ACTIVITY_TTL_MS) {
-        return sendJson(200, { sessions: cachedValue })
-      }
       try {
-        const sessions = await collectSessionActivity(ctx, { readCachedDocument })
-        cachedValue = sessions
-        cachedAt = Date.now()
-        return sendJson(200, { sessions })
+        return sendJson(200, { sessions: ledger.snapshot() })
       } catch {
-        // A missing or failing corpus service must not fail the browser's
-        // periodic card refresh; clients fall back to their own timestamps.
+        // A broken ledger must not fail the browser's periodic card refresh.
         return sendJson(200, { sessions: {} })
       }
     }

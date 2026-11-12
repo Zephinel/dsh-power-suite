@@ -4871,6 +4871,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** Abort a hung read-acks GET/POST so the next sync cycle can retry. */
     const DW_ACK_REQUEST_TIMEOUT_MS = 8000
 
+    /** Most entries one read-acks POST carries (Host cap is 64 KiB UTF-8). */
+    const DW_ACK_PUSH_BATCH_ENTRIES = 200
+
+    /** Conservative byte budget for one read-acks POST batch. */
+    const DW_ACK_PUSH_BATCH_BYTES = 48 * 1024
+
     /** Most entries the local cache keeps; the oldest baselines drop first. */
     const DW_ACK_MAX_ENTRIES = 1000
 
@@ -4905,7 +4911,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       } catch {
         // A corrupt document or a storage-denied browser starts empty.
       }
-      return baselines
+      // Never load more than the bounded map the Host accepts; the extras would
+      // only bloat every migration push.
+      return dwCapAckedBaselines(baselines)
     }
 
     /**
@@ -5048,15 +5056,54 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           body: JSON.stringify({ acked: entries }),
           signal: controller.signal
         })
-        if (!response.ok) return null
+        if (!response.ok) {
+          // 4xx is permanent for this exact batch (bad shape / too large / media
+          // type / no route): drop it so it cannot block newer acks forever.
+          // 5xx (including store-failed) and throttling stay retryable.
+          const retryable = response.status >= 500 || response.status === 429
+          return { merged: null, status: response.status, retryable }
+        }
         const payload = await response.json()
         const acked = payload !== null && typeof payload === 'object' ? payload.acked : null
-        return dwSanitizeAckEntries(acked)
+        return { merged: dwSanitizeAckEntries(acked), status: response.status, retryable: false }
       } catch {
-        return null
+        // Timeout/network: retry on a later sync cycle.
+        return { merged: null, status: 0, retryable: true }
       } finally {
         window.clearTimeout(timer)
       }
+    }
+
+    /**
+     * Split one pending baseline map into POST-sized batches.
+     *
+     * The Host caps a request body at 64 KiB UTF-8; 200 entries and a
+     * conservative estimated-byte budget keep every batch far below that even
+     * for long ids, so a large local cache can never pin the sync loop in a
+     * permanent 413. Values are estimated as UTF-16 code units × 3 (worst-case
+     * UTF-8 expansion) plus JSON punctuation.
+     * @param {Map<string, number>} pending - queued baselines.
+     * @returns {Array<Record<string, number>>} batches, each under the entry and byte caps.
+     */
+    function dwAckPushBatches(pending) {
+      const batches = []
+      let batch = {}
+      let entries = 0
+      let bytes = 0
+      for (const [id, baseline] of pending) {
+        const entryBytes = id.length * 3 + 32
+        if (entries > 0 && (entries >= DW_ACK_PUSH_BATCH_ENTRIES || bytes + entryBytes > DW_ACK_PUSH_BATCH_BYTES)) {
+          batches.push(batch)
+          batch = {}
+          entries = 0
+          bytes = 0
+        }
+        batch[id] = baseline
+        entries += 1
+        bytes += entryBytes
+      }
+      if (entries > 0) batches.push(batch)
+      return batches
     }
 
     /**
@@ -5090,10 +5137,13 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @returns {Promise<Record<string, number> | null>} Session id → activity time, or null.
      */
     async function dwFetchSessionActivity() {
+      const controller = new AbortController()
+      const timer = window.setTimeout(() => controller.abort(), DW_ACK_REQUEST_TIMEOUT_MS)
       try {
         const response = await fetch(appUrl(DW_ACTIVITY_ROUTE), {
           credentials: 'same-origin',
-          headers: { accept: 'application/json' }
+          headers: { accept: 'application/json' },
+          signal: controller.signal
         })
         if (!response.ok) return null
         const payload = await response.json()
@@ -5108,6 +5158,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         return activity
       } catch {
         return null
+      } finally {
+        window.clearTimeout(timer)
       }
     }
 
@@ -5666,10 +5718,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         }
         return next
       }, [])
-      // Pending pushes stay queued after any failed/timed-out POST and are
-      // retried by the next sync cycle (mount/focus/visibility/30 s poll), so a
-      // one-time migration or an increased baseline is not lost. The queue is a
-      // small subset of the bounded baseline map; at most one POST is in flight.
+      // Pending pushes are sent in small sequential batches (200 entries / a
+      // conservative 48 KiB budget) so a large local cache can never exceed the
+      // Host's 64 KiB body cap and pin the queue in a permanent 413. Network and
+      // 5xx failures stay queued for the next sync cycle; a permanent 4xx drops
+      // only that batch so newer acks can still sync. At most one POST is in
+      // flight, and only entries that still hold the pushed value are dropped.
       const flushAckedPush = React.useCallback(() => {
         if (ackedPushInFlightRef.current) return
         if (ackedPushTimerRef.current !== null) {
@@ -5677,20 +5731,27 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           ackedPushTimerRef.current = null
         }
         if (ackedPendingPushRef.current.size === 0) return
-        const payload = {}
-        for (const [id, baseline] of ackedPendingPushRef.current) payload[id] = baseline
         ackedPushInFlightRef.current = true
         void (async () => {
-          const merged = await dwPostReadAcks(payload)
-          ackedPushInFlightRef.current = false
-          if (merged === null) return
-          // Drop only entries that still hold the pushed value; baselines raised
-          // while the request was in flight stay queued for the next flush.
-          for (const [id, baseline] of Object.entries(payload)) {
-            const pending = ackedPendingPushRef.current.get(id)
-            if (pending !== undefined && pending <= baseline) ackedPendingPushRef.current.delete(id)
+          try {
+            let rounds = 0
+            while (ackedPendingPushRef.current.size > 0 && rounds < 64) {
+              rounds += 1
+              const batch = dwAckPushBatches(ackedPendingPushRef.current)[0]
+              if (batch === undefined) return
+              const result = await dwPostReadAcks(batch)
+              if (result.merged === null && result.retryable) return
+              for (const [id, baseline] of Object.entries(batch)) {
+                const pending = ackedPendingPushRef.current.get(id)
+                if (pending !== undefined && pending <= baseline) ackedPendingPushRef.current.delete(id)
+              }
+              if (result.merged !== null) applyAckedHostEntries(result.merged)
+              // A permanent 4xx already dropped this batch above; continue with
+              // the next one rather than retrying it forever.
+            }
+          } finally {
+            ackedPushInFlightRef.current = false
           }
-          applyAckedHostEntries(merged)
         })()
       }, [applyAckedHostEntries])
       const scheduleAckedPush = React.useCallback((entries) => {
@@ -7948,7 +8009,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const openWorkspace = () => {
         try {
           const pending = nav.openWorkspace(project.workspaceId)
-          if (pending !== null && pending !== undefined && typeof pending.then === 'function') pending.catch(() => {})
+          if (pending !== null && pending !== undefined && typeof pending.then === 'function') {
+            pending.catch((error) => console.warn('[power-suite] open workspace failed', error !== null && typeof error === 'object' && typeof error.message === 'string' ? error.message : error))
+          }
         } catch (error) {
           console.warn('[power-suite] open workspace failed', error)
         }
@@ -8425,7 +8488,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const openWorkspace = () => {
         try {
           const pending = nav.openWorkspace(workspaceId)
-          if (pending !== null && pending !== undefined && typeof pending.then === 'function') pending.catch(() => {})
+          if (pending !== null && pending !== undefined && typeof pending.then === 'function') {
+            pending.catch((error) => console.warn('[power-suite] open workspace failed', error !== null && typeof error === 'object' && typeof error.message === 'string' ? error.message : error))
+          }
         } catch (failure) {
           console.warn('[power-suite] open workspace failed', failure)
         }

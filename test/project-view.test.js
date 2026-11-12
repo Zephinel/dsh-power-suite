@@ -198,8 +198,29 @@ test('a forked closer folded without its start is stopped, not interrupted', () 
   assert.equal(fold.turns[0].endedAt, 5000)
   assert.equal(turnStatus(fold.turns[0], false), 'stopped')
   const { runs, totalRuns } = buildRuns({ sessions: [{ sessionId: 's', title: 'S', running: false, turns: fold.turns, jobs: [], callIdToTurn: new Map() }] })
-  assert.equal(totalRuns, 1)
-  assert.equal(runs[0].status, 'stopped')
+  // A synthetic boundary is not a run on ANY surface: no row, no count.
+  assert.equal(totalRuns, 0)
+  assert.deepEqual(runs, [])
+  const stats = computeStats({ sessions: [{ sessionId: 's', running: false, turns: fold.turns }], dayStart: 0 })
+  assert.equal(stats.totalRuns, 0)
+  assert.equal(stats.completedRuns, 0)
+})
+
+test('mixed inherited boundary and real turns count only the real run everywhere', () => {
+  const fold = foldSessionLog([
+    event(1, 5000, 'turn/end', { turn: 3, reason: { kind: 'forked' } }),
+    turnStart(2, 6000, 4),
+    turnEnd(3, 7000, 4)
+  ])
+  const sessions = [{ sessionId: 's', title: 'S', running: false, turns: fold.turns, jobs: [], callIdToTurn: new Map() }]
+  const built = buildRuns({ sessions })
+  assert.equal(built.totalRuns, 1)
+  assert.equal(built.runs.length, 1)
+  assert.equal(built.runs[0].turn, 4)
+  assert.equal(built.runs[0].status, 'completed')
+  const stats = computeStats({ sessions, dayStart: 0 })
+  assert.equal(stats.totalRuns, 1)
+  assert.equal(stats.completedRuns, 1)
 })
 
 test('associateJobs prefers the tool-call mapping, then time containment, then the nearest preceding turn', () => {
@@ -340,13 +361,15 @@ test('computeStats counts today and averages only measurable completed turns', (
   assert.equal(stats.truncated, true)
 })
 
-test('computeStats reports a null average when no completed turn has timing', () => {
+test('computeStats excludes a synthetic boundary from completed counts and average', () => {
   const stats = computeStats({
     sessions: [
       {
         sessionId: 'a',
         running: false,
         turns: [
+          // No start: a synthetic fork boundary, even if its recorded reason is
+          // `completed`; it is not a measurable run.
           { turn: 1, startedAt: null, endedAt: 5, endKind: 'completed', endCause: null, toolCalls: 0 },
           { turn: 2, startedAt: 10, endedAt: 20, endKind: 'aborted', endCause: 'user', toolCalls: 0 }
         ]
@@ -354,10 +377,10 @@ test('computeStats reports a null average when no completed turn has timing', ()
     ],
     dayStart: 0
   })
-  assert.equal(stats.completedRuns, 1)
+  assert.equal(stats.totalRuns, 1)
+  assert.equal(stats.completedRuns, 0)
   assert.equal(stats.averageDurationMs, null)
-  // The turn ended at epoch 5, which is after the supplied day boundary 0.
-  assert.equal(stats.completedToday, 1)
+  assert.equal(stats.completedToday, 0)
 })
 
 test('computeStats does not count synthetic fork boundaries as runs', () => {
@@ -618,6 +641,32 @@ test('project route warnings keep a bounded error identity for fold/programming 
   assert.equal(payload.sessions.length, 0)
   assert.equal(payload.warnings.length, 1)
   assert.match(payload.warnings[0].message, /TypeError: fold exploded/)
+})
+
+test('project route excludes a forked-closer boundary from runs, runCount, limits and stats', async () => {
+  const logs = new Map([
+    ['session-forked', [event(1, 1_700_000_000_000, 'turn/end', { turn: 3, reason: { kind: 'forked' } })]]
+  ])
+  const records = [
+    { live: false, persisted: true, header: { id: 'session-forked', createdAt: 1000, cwd: '/tmp/project' } }
+  ]
+  const { ctx, routes } = makeContext({
+    workspaces: [workspace({ sessionIds: ['session-forked'] })],
+    records,
+    logs
+  })
+  installProjectView(ctx)
+  const response = await routes.get('/api/power-suite.project').fetch(
+    new Request('http://host/api/power-suite.project?workspaceId=workspace-1')
+  )
+  assert.equal(response.status, 200)
+  const payload = await response.json()
+  assert.equal(payload.sessions.length, 1)
+  assert.equal(payload.sessions[0].runCount, 0)
+  assert.deepEqual(payload.runs, [])
+  assert.equal(payload.stats.totalRuns, 0)
+  assert.equal(payload.stats.completedRuns, 0)
+  assert.equal(payload.limits.totalRunsMeasured, 0)
 })
 
 test('project cache identity includes archived members and the focus Session', async () => {

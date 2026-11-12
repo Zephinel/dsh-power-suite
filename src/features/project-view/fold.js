@@ -121,6 +121,20 @@ export function turnStatus(turn, running) {
 }
 
 /**
+ * Whether one folded turn is a measurable run.
+ *
+ * A turn with no recorded `startedAt` is a synthetic boundary (a fork seed's
+ * `turn/end` whose `turn/start` lives in the inherited prefix), not a run. One
+ * rule, used by the run list, per-Session run counts, measurement limits and
+ * stats, keeps every surface in agreement.
+ * @param {object} turn - folded turn.
+ * @returns {boolean} whether it is a measured run.
+ */
+export function isMeasuredTurn(turn) {
+  return isRecord(turn) && Number.isFinite(turn.startedAt)
+}
+
+/**
  * Fold one Session's own event log (a fork's inherited prefix must already be
  * removed by the caller) into turn and job records.
  *
@@ -334,10 +348,10 @@ export function buildRuns({ sessions, maxRunsPerSession = MAX_RUNS_PER_SESSION, 
   let totalRuns = 0
   if (!Array.isArray(sessions)) return { runs: all, totalRuns, truncated: false }
   for (const session of sessions) {
-    const turns = Array.isArray(session.turns) ? session.turns : []
-    totalRuns += turns.length
-    const jobsByTurn = session.jobsByTurn instanceof Map ? session.jobsByTurn : associateJobs(turns, session.jobs ?? [], session.callIdToTurn ?? new Map())
-    const chronological = [...turns].sort((left, right) => {
+    const measured = (Array.isArray(session.turns) ? session.turns : []).filter(isMeasuredTurn)
+    totalRuns += measured.length
+    const jobsByTurn = session.jobsByTurn instanceof Map ? session.jobsByTurn : associateJobs(measured, session.jobs ?? [], session.callIdToTurn ?? new Map())
+    const chronological = [...measured].sort((left, right) => {
       const leftAt = left.startedAt ?? left.endedAt ?? 0
       const rightAt = right.startedAt ?? right.endedAt ?? 0
       return leftAt - rightAt || left.turn - right.turn
@@ -399,10 +413,11 @@ export function computeStats({ sessions, dayStart, truncatedSessions = false }) 
       if (session.running === true) runningSessions += 1
       const turns = Array.isArray(session.turns) ? session.turns : []
       for (const turn of turns) {
-        // A `turn/end` without a recorded start is a synthetic fork boundary
-        // (the start lives in the inherited prefix); it is not a measured run,
-        // so it never inflates the run total or the duration average.
-        if (Number.isFinite(turn.startedAt)) totalRuns += 1
+        // One canonical rule: a `turn/end` without a recorded start is a
+        // synthetic fork boundary, not a measurable run. It contributes to no
+        // run-based metric here (total, completed, today, duration).
+        if (!isMeasuredTurn(turn)) continue
+        totalRuns += 1
         if (turn.endedAt === null || turn.endedAt === undefined) continue
         const status = turnEndStatus(turn.endKind, turn.endCause)
         if (status !== 'completed') continue

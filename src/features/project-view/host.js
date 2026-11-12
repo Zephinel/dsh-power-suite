@@ -15,7 +15,7 @@
  *   provides it (`sessionProjectionCache`): a cached title and last-prompt time
  *   rank Sessions without opening their logs. Without the cache the route falls
  *   back to live Sessions first, then newest-created order.
- * - A short in-memory cache (10 s) keyed by Workspace identity and membership
+ * - A short in-memory cache (25 s) keyed by Workspace identity, archive identity and focus
  *   absorbs the browser's polling; `refresh=1` bypasses it for the manual
  *   refresh action. Every response is `cache-control: no-store` because the
  *   browser cache must not serve a stale snapshot after a turn ends.
@@ -37,6 +37,7 @@ import {
   buildRuns,
   computeStats,
   foldSessionLog,
+  isMeasuredTurn,
   localDayStart
 } from './fold.js'
 
@@ -294,7 +295,7 @@ export async function collectProjectSnapshot(ctx, workspace, focusSessionId, rec
         createdAt: Number.isFinite(header.createdAt) ? header.createdAt : null,
         updatedAt: lastActivityAt > 0 ? lastActivityAt : null,
         lastActivityAt: lastActivityAt > 0 ? lastActivityAt : null,
-        runCount: fold.turns.length,
+        runCount: fold.turns.filter(isMeasuredTurn).length,
         turns: fold.turns,
         jobs: fold.jobs,
         callIdToTurn: fold.callIdToTurn,
