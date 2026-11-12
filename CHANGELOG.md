@@ -65,9 +65,7 @@ heading is added until the release is cut.
   truncation**) and inserted verbatim (multi-line notes can exceed single-line
   layouts); hover uses a lazy element-only candidate chain with descriptors
   built only for the chosen element and ≤2 context ancestors (0 `textContent`
-  reads on hover); opening the Project page dispatches
-  `power-suite:ui-annotation-exit` and hides the launcher (annotation is not
-  usable while the page is open; the page's Esc ladder runs first); the whole
+  reads on hover); the whole
   prompt-history rail family is hidden in annotation mode; selector escaping uses
   `globalThis.CSS` with a leading-digit hex fallback (`#123abc` → `#\31 23abc`);
   pinned popovers re-clamp on resize while keeping their dragged offset; the
@@ -99,6 +97,17 @@ heading is added until the release is cut.
   the backoff a GET may serve current/empty memory `200`). Selection families no
   longer list PTC mode (`ptc-mode` is a message-source key; `tool/ptc-dispatch`
   remains activity).
+
+### Removed
+
+- Standalone Project detail page: the `project-view` feature is removed —
+  `src/features/project-view/{host.js,fold.js}`, the `//#region feature: project
+  view` browser region and its `installProjectView` call, the 24 project-view
+  tests, `docs/project-view.md`, the five `docs/assets/project-*.png`
+  screenshots, and the `GET /api/power-suite.project` route. Clicking a
+  Workspace's title in the sidebar performs the native expand/collapse again,
+  and the default agent preset stays available from the Workspace context
+  menu. Removing the page needs no data migration: it persisted no state.
 
 ## [0.2.0] — undated development snapshot
 

@@ -13,7 +13,6 @@ shows one plugin whose inventory grows with the suite.
 | [Workspace presets](docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions created in that Workspace. |
 | [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with single-line rows, right-edge disclosure chevrons, Host-shared read marks (unread completions green until opened, synced across browsers sharing the DSH home), event-sourced Host last-activity times for long runs, a rainbow ring on the current chat, row hover actions (interrupted Continue, same-directory New session), a row hover detail, nested subagent Sessions, and configurable retention windows. |
 | [Prompt history](docs/prompt-history.md) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; a right-edge rail lists them newest first with a hover full-text preview, an inline search, and click-to-copy. Plain arrows keep their original behavior. |
-| [Project view](docs/project-view.md) | A **standalone Project page** (content area right of the sidebar) opened by clicking a Workspace, with Overview stats, Sessions, Runs with expandable turn/job records, and Workspace settings; the sidebar stays interactive for switching, the page hides the prompt-history rail and keeps one top-bar Refresh, and Esc/back returns to the untouched conversation. |
 | [Draft attachments](docs/draft-attachments.md) | Attachments in a draft (pasted images, dropped or picked files) survive switching Sessions and coming back, for the page lifetime; the shell only persists the draft text. |
 | [Interrupted sessions](docs/interrupted-sessions.md) | Sessions that did not finish — restart/crash, any provider/model/network error (quota, timeout, rate limit), an output limit, or an imported unknown cancellation — carry an amber mark left of the title, a hover-only Continue action with a row mask, and a play-shaped composer submit control; deliberate cancellations and completed turns stay unmarked. State is Host-owned and cross-device: a Host SSE stream invalidates open pages immediately on turn boundaries, with polling as fallback. |
 | [UI element annotation](docs/ui-annotation.md) | A floating launcher toggles a point-and-click annotation mode in which the page makes room for a narrow right rail instead of being covered; hovering outlines the element a click would select, a note popover records the requested change, and one localized reference or one ordered batch is inserted into the current composer without sending — with multi-select, marquee, ancestor adjustment, and a hold-to-pass-through modifier. |
@@ -26,9 +25,9 @@ New in 0.3.0 (unreleased; planned version, no release date or tag yet):
   of being covered: hovering outlines the element a click would select, and a
   compact popover records a note (inserted verbatim, line breaks preserved) and
   inserts a structured plain-text reference into the current composer through the
-  shell's own insertion API, without sending; opening the Project page leaves
-  annotation mode and hides the launcher. Selection is isolated from the page (clicking a native control never
-  triggers it), the multi-select modifier toggles elements or draws a marquee,
+  shell's own insertion API, without sending. Selection is isolated from the
+  page (clicking a native control never triggers it), the multi-select modifier
+  toggles elements or draws a marquee,
   holding the pass-through modifier restores real native left and right clicks,
   and the collection keeps ordered session-scoped entries with per-entry notes,
   de-duplication, re-locate, stale/ambiguous status markers, and one ordered
@@ -61,17 +60,6 @@ New in 0.2.0 (development snapshot — never tagged or released; undated):
 - **Draft attachment memory** — attachments in a draft survive switching
   Sessions and coming back for the page lifetime, even though the shell only
   persists the draft's text and reference chips.
-- **Project view** — clicking a Workspace's title in the sidebar opens a
-  standalone Project page in the content area right of the sidebar
-  (Esc/back closes it and restores the Session, draft, view, and sidebars
-  untouched). It turns the Workspace into a project dashboard: four stat cards, a Sessions browser, a Runs history
-  whose turns expand into their nested job records with live elapsed time, and
-  Workspace settings (default agent preset, read-only grouping windows, path
-  actions).
-- **Project page polish** — while the Project page is open it hides the
-  body-portaled prompt-history rail and keeps a single top-bar Refresh (the old
-  tab-bar/header refresh buttons are gone); closing restores the rail
-  immediately.
 - **Shared card read marks** — the activity card's acknowledgements are stored
   by the Host in `read-acks.json` and synced to every browser using the same
   DSH home

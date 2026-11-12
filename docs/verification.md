@@ -22,15 +22,15 @@ npm run pack:check
 
 Current evidence (2026-11-12, Node 24.22.2):
 
-- `npm test`: **181 tests, 181 passed, 0 failed, 0 skipped** — 73 base tests
-  (56 other suites + 17 project-view), plus 7 more project-view tests (24
-  current), **14** read-acks, **22** session-activity Host tests, **7** extra
+- `npm test`: **157 tests, 157 passed, 0 failed, 0 skipped** after the 0.3.0
+  Project-view removal (the 24 project-view tests were deleted with the page),
+  including **14** read-acks, **22** session-activity Host tests, **7** extra
   interrupted-session tests (error/max-tokens/aborted-cause cases and SSE stream
   frames) and **58** UI-element-annotation tests through the browser-factory
-  test seam; per-file: interrupted-host 20, interrupted-sessions 7, project-view
-  24, prompt-history 6, read-acks 14, session-activity 22, session-artifacts 16,
-  settings 6, ui-annotation 58, workspace-presets 8.
-- `npm run check`: passed (`18 modules, 10 test files`).
+  test seam; per-file: interrupted-host 20, interrupted-sessions 7, prompt-history
+  6, read-acks 14, session-activity 22, session-artifacts 16, settings 6,
+  ui-annotation 58, workspace-presets 8.
+- `npm run check`: passed (`16 modules, 9 test files`).
 - Interrupted-state SSE transport was verified with cookie auth: 200,
   `content-type: text/event-stream; charset=utf-8`, no-store/no-buffering, first
   frame `: connected` + `retry: 10000`, held open until a 2 s curl timeout (no
@@ -46,9 +46,9 @@ Current evidence (2026-11-12, Node 24.22.2):
   present, and the composer primary control was enabled with
   `aria-label="Continue the unfinished task"` and the play-triangle mask. No
   live continuation was sent (the retry itself is covered by Host tests).
-- `npm run pack:check`: **78 files** (0.3.0 tarball), including `src/`,
-  `locale/`, `docs/` (with the Project page/rail states/sidebar switch,
-  activity-card actions/acknowledgement/ledger/current-ring states, Artifacts
+- `npm run pack:check`: **70 files** (0.3.0 tarball), including `src/`,
+  `locale/`, `docs/` (with the activity-card
+  actions/acknowledgement/ledger/current-ring states, Artifacts
   panel/filter-menu/Quick Look, Dynamic Workspaces, hover-detail,
   prompt-history rail captures, and the UI-element-annotation captures),
   `cordis.patch.yml`, `icon.png`, and the standard repository files.
@@ -64,8 +64,8 @@ Current evidence (2026-11-12, Node 24.22.2):
   prompt-history timestamp fold (`at` from a finite event time, `null`
   otherwise) with the 500-prompt cap unchanged, the settings store (schema
   version 2 with the two retention windows, version-1 migration to the default
-  windows, and patch validation for unknown/invalid fields), and the Project view
-  folds and route (turn status map, job association, the canonical measured-turn
+  windows, and patch validation for unknown/invalid fields), and — before the
+  0.3.0 removal — the Project view folds and route (turn status map, job association, the canonical measured-turn
   rule, the 40/200/24 caps, stats and recent-activity derivation, parameter
   validation and 25 s cache behavior), the read-acks store/route (schema,
   sanitization, max-merge, 1000-entry cap, 415/413/400/500 including the
@@ -104,9 +104,9 @@ Current evidence (2026-11-12, Node 24.22.2):
   and the session-activity ledger route (16 MiB document guard, allowlist
   families/non-activity set, seed backoff, cold-load snapshot), while the
   Project view's
-  `GET /api/power-suite.project` route and its pure folds are covered by the
-  project-view suite (turn status, fork closer, stats exclusion, cache
-  identity/TTL). The prompt-history rail shares the existing
+  `GET /api/power-suite.project` route and its pure folds were covered until the
+  0.3.0 removal by the project-view suite (turn status, fork closer, stats
+  exclusion, cache identity/TTL). The prompt-history rail shares the existing
   `api/prompt-history.list` payload and draft attachment memory writes nothing to
   the Host or storage; the remaining client-only surfaces rely on the syntax gate
   and the live checks below.
@@ -121,6 +121,19 @@ prompts; subagent detection was checked against real local Session logs: the par
 `session-bd41197f-48fd-4065-a4f8-5545510cc86e` (main turn completed, two child
 sessions left with open crash tails) returned `interrupted: true,
 subagent: true`; two completed control Sessions stayed `interrupted: false`.
+
+**Removed in 0.3.0: the standalone Project detail page.** The `project-view`
+feature (the Host route and folds, the `src/client.js` region and its sidebar
+title entry, 24 tests, `docs/project-view.md`, and five `docs/assets/project-*`
+screenshots) was removed on the user's decision. Clicking a Workspace title now
+performs the native expand/collapse again; the Workspace context-menu default
+preset path is untouched, and no data migration was needed because the page
+persisted no state. The live evidence for the page under "Manual UI checks" is
+kept as the historical record of that implementation; its links to the deleted
+page and screenshots were removed. Current gates after the removal: `npm test`
+**157 tests**, `npm run check` passed (`16 modules, 9 test files`), and
+`npm run pack:check` **70 files**. Before the removal the same gates reported
+181 tests, 18 modules, 10 test files, and 78 packed files.
 
 ## UI element annotation acceptance
 
@@ -637,9 +650,6 @@ by code inspection plus an observed reload where an archived Session disappeared
 from the card.
 
 The live surfaces are captured in
-[assets/project-overview.png](assets/project-overview.png),
-[assets/project-sidebar-switch.png](assets/project-sidebar-switch.png),
-[assets/project-standalone-closed.png](assets/project-standalone-closed.png),
 [assets/card-row-actions.png](assets/card-row-actions.png),
 [assets/card-interrupted.png](assets/card-interrupted.png),
 [assets/card-child-actions.png](assets/card-child-actions.png),
@@ -651,8 +661,6 @@ The live surfaces are captured in
 [assets/card-current-glow.png](assets/card-current-glow.png),
 [assets/card-current-glow-dark.png](assets/card-current-glow-dark.png),
 [assets/card-current-glow-reduced.png](assets/card-current-glow-reduced.png),
-[assets/project-page-rail-hidden.png](assets/project-page-rail-hidden.png),
-[assets/project-page-rail-restored.png](assets/project-page-rail-restored.png),
 [assets/artifacts-panel.png](assets/artifacts-panel.png),
 [assets/artifacts-filter-menu.png](assets/artifacts-filter-menu.png),
 [assets/artifacts-quicklook.png](assets/artifacts-quicklook.png),

@@ -14,7 +14,6 @@ src/index.js            Host entry (Node)
 ├─ features/interrupted-sessions/host.js GET  /api/power-suite.interrupted
 │                                        POST /api/power-suite.continue
 ├─ features/settings/host.js             GET/POST /api/power-suite.settings
-├─ features/project-view/host.js         GET  /api/power-suite.project
 ├─ features/read-acks/host.js            GET/POST /api/power-suite.read-acks
 ├─ features/session-activity/host.js     GET  /api/power-suite.session-activity
 └─ ctx.effect(...)                       every registration lives with the plugin
@@ -29,7 +28,6 @@ src/client.js           Browser entry (DSH module loader)
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
 ├─ UI element annotation mode (launcher, right rail, highlights, note popover, collection, composer insert)
 ├─ Plugins-page settings section
-├─ Standalone Project page seat (content-area Overview / Sessions / Runs / Settings)
 └─ Shared hover Quick Look for generated/provided Artifacts rows and native Workspace file rows
 ```
 
@@ -283,9 +281,9 @@ The client talks to the Host only over the authenticated routes above; it never
 imports Host code. Feature copy is registered through per-feature locale
 namespaces (`sessionArtifacts`, `workspacePresets`, `dynamicWorkspaces`,
 `powerSuitePromptHistoryPreview`, `powerSuiteInterrupted`, `powerSuiteSettings`,
-`powerSuiteProjectView`, `powerSuiteAnnotation`) so the en/zh dictionaries stay
+`powerSuiteAnnotation`) so the en/zh dictionaries stay
 aligned. The client entry also injects the shell's `sessions` listing service for
-the Project view's session navigation and preset roster.
+the prompt-history preview's parent-Session rows.
 
 ### Dynamic Workspaces
 
@@ -374,65 +372,6 @@ restored attachment. No Host route and no storage writes: this is a page-lifetim
 workaround, so a reload cannot restore Files. See
 [draft-attachments.md](draft-attachments.md).
 
-### Project view
-
-A standalone page in the content area right of the left Workspaces sidebar, not
-a conversation view. An invisible `shell.overlay` seat (id
-`power-suite.project-page`, locale namespace `powerSuiteProjectView`, custom
-`psv-` token CSS) listens for the window CustomEvent
-`power-suite:open-project` (`detail.workspaceId`) and renders one
-`position: fixed; top: 0` page with inline measured `left`/`width`/`height`: the
-left edge is the sidebar slot's docked-box right edge (`[data-slot="sidebar"]`,
-`display: contents`, first element child; zero-width/absent sidebar → 0), the
-width is the viewport width minus that edge, and the height is the viewport
-height. So the left sidebar stays visible and interactive, the page covers the
-composer/right sidebar/history rails, and clicking another Workspace switches the
-same page instance in place. Geometry is re-measured through one rAF-coalesced
-callback (ResizeObservers on the sidebar slot/docked box/container,
-MutationObserver for a replaced subtree, window resize, a 500 ms settle interval)
-with cleanup on close. The page has its own top bar (back/close chevron, project
-title, Active/Inactive badge, refresh) above the unchanged four tabs (Overview /
-Sessions / Runs / Settings); Esc closes an open page menu first and then the
-page itself, and the back control closes it; opening never navigates and closing
-restores the conversation, current Session, composer draft, selected conversation
-view, and both sidebar states. It is not modal
-(`aria-modal` is not set). The page is workspace-scoped: it fetches
-`GET /api/power-suite.project?workspaceId=…` (15 s poll, window-focus refresh,
-manual `refresh=1`, `AbortController` cancels stale requests on a workspace
-switch) and handles loading/error/404-empty states. Header navigation (Open
-Workspace, New Session, Sessions-list click) closes the page then navigates
-(fire-and-forget UI promises attach rejection guards); refresh, Copy project
-path, settings presets, and Runs expansion stay in-page. The page keeps its tab,
-filters, searches, and expanded rows across Workspace switches — the component
-instance stays mounted and only the data hook follows the WorkspaceId — which is
-intended UX.
-A single document-level capture click handler on sidebar Workspace titles
-dispatches the open event; the native fold chevron, row context menu, New Session
-button, Session rows, drags, and modified/non-primary clicks stay native, the
-Workspace service is resolved lazily through `ctx.get('workspaces')`, and effect
-cleanup removes the handler and the event listener so HMR cannot stack them.
-Header navigation treats `openWorkspace` as fire-and-forget and logs a bounded
-`console.warn` for rejected promises.
-
-The Host route resolves a Workspace from `workspaceId` or from a `sessionId`
-(direct membership → durable parent chain → canonical cwd), measures the newest
-20 accounted non-archived Sessions (concurrency 4, fork-inherited event prefix
-sliced, unreadable logs skipped into `warnings[]`), and folds each log with the
-pure helpers in `project-view/fold.js`: turn/start..turn/end runs, the coarse
-status map, and job association by exact tool-call id → time containment →
-nearest preceding turn. A turn counts as a measured run only with a finite
-`startedAt` (`isMeasuredTurn` governs `buildRuns`, each session's `runCount`,
-`limits.totalRunsMeasured`, and `computeStats`), so synthetic fork boundaries
-never inflate the overview. Caps are 40 runs per Session, 200 runs total, and 24
-job rows per run (with the full `jobCount` kept). A **25 s** in-memory snapshot
-cache (keyed by Workspace id + `updatedAt` + member count + a hash of the
-relevant archived-member subset + the requested `focusSessionId`, at most 30
-snapshots, FIFO eviction) covers the browser's 15 s poll; `refresh=1` bypasses
-it, and every response is `cache-control: no-store`; missing parameters answer
-`400`, unknown/unaccounted Workspaces `404`. Per-Session warnings stay a bounded
-error identity (error name plus a truncated message) so one unreadable log never
-turns the whole snapshot into a 500.
-
 ### Hover Quick Look
 
 One hover card serves the Artifacts panel and the native workspace-files list. Row
@@ -489,11 +428,7 @@ and rail-width property exactly (removing them only when the plugin set them) an
 clears the marker after the transition; the inline grid style is never touched.
 While annotation is active the entire prompt-history rail family (rail, search
 card, preview card, divider, toggle) is hidden; normal mode is unaffected. The
-Project page dispatches `power-suite:ui-annotation-exit` on open, so annotation
-deactivates; its launcher is hidden under
-`html[data-power-suite-project-page="true"]`, and the page Esc ladder closes the
-page first (launcher returns, annotation stays off), so annotation is not usable
-while the page is open. The marquee adds at most the 24 most specific intersecting
+marquee adds at most the 24 most specific intersecting
 candidates.
 
 While active, window capture-phase listeners consume `pointerdown`, `pointerup`,
@@ -547,7 +482,7 @@ from batch insert); only browser-local state persists —
 | `contextMenus.register` (`workspace`) | Default agent preset submenu |
 | `conversation.input.overlay` | Renderless prompt-history keyboard seat, draft-attachment memory seat, and the annotation mode's Session bridge seat |
 | `conversation.input.dock` | Session hooks for the body-portaled prompt-history rail |
-| `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation, the standalone Project page (`power-suite.project-page`), and the UI element annotation launcher/rail/popover |
+| `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation and the UI element annotation launcher/rail/popover |
 | `plugins.bundle.config` | Plugin settings page |
 | `sidebar.session.row.leading` | Interrupted-session badge |
 | `sidebar.workspaces.session.row.action` | Continue action |
