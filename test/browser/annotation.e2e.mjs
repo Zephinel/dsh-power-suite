@@ -1951,8 +1951,6 @@ const probes = {
   /** Whether the dynamic-workspaces hovercard (cross-branch marker) exists in this build. */
   realPsdHovercardPresent: () => document.querySelector('[data-psd-hovercard]') !== null,
 
-  /** Whether the dynamic-workspaces feature itself is installed (cross-branch build capability). */
-  dynamicWorkspacesPresent: () => document.querySelector('[data-psd-rail], [data-psd-search-card], [data-psd-preview-card], [data-psd-hovercard]') !== null,
 
   /** One opaque synthetic floating layer used for the F3 stationary-pointer check. */
   createFloatingProbeLayer: (x, y, width, height) => {
@@ -4399,17 +4397,26 @@ function buildScenarios(harness) {
       await sleep(300)
       await h.ensureSidebarExpanded()
       await h.ensureConversation()
-      const dwPresent = await h.page.eval(probes.dynamicWorkspacesPresent)
-      if (!dwPresent) {
+      const support = await detectDwHovercardSupport(h)
+      if (support.merged !== true) {
+        // The merged F4 pin contract is genuinely not installed: SKIP with the exact
+        // reason (never a fake PASS). This covers both "no DW hovercard at all" and
+        // "legacy DW card without the [data-psd-hovercard] marker".
         h.state.s11Absent = true
-        return 'dynamic-workspaces feature absent in this branch: F4 pin/select + no-mode close regression recorded as SKIP (real PASS after merge)'
+        h.state.s11SkipReason = support.reason
+        return `F4 merged pin contract absent in this build: ${support.reason}; real PASS after the branches merge`
       }
-      const result = await runCrossBranchHovercardCheck(h)
-      if (result.verified !== true) {
-        h.state.s11Absent = true
-        return `dynamic-workspaces marker present but no hover card appeared: ${result.reason}`
-      }
-      return result.reason
+      // DW IS installed on this build: a missing pin/select must surface as a real
+      // FAILURE (with one retry for live-GUI timing), never as a SKIP row. Only the
+      // genuinely-absent capability branch above may set `s11Absent`.
+      const first = await runCrossBranchHovercardCheck(h)
+      if (first.verified === true) return first.reason
+      const retry = await runCrossBranchHovercardCheck(h)
+      if (retry.verified === true) return `${retry.reason} (verified on retry; first attempt: ${first.reason})`
+      throw new Error(
+        `dynamic-workspaces feature is present but the F4 pin/select regression was not observed ` +
+        `(first attempt: ${first.reason}; retry: ${retry.reason})`
+      )
     },
 
     12: async () => {
@@ -5001,6 +5008,75 @@ function buildScenarios(harness) {
 }
 
 /**
+ * Detect whether the *merged* dynamic-workspaces F4 contract is installed.
+ *
+ * The base dynamic-workspaces feature lives in this same bundle, so static
+ * `psd-*` class presence cannot tell "merged pin contract" from "legacy card".
+ * The merged branch marks its hover card with `[data-psd-hovercard]`; this probe
+ * actually hovers the DW-rendered sidebar rows (and degrades to session/workspace
+ * rows) and reports what appeared:
+ *   - `merged: true`       → the pinned-card contract is installed; run the real check.
+ *   - `merged: false, baseOnly: true` → base DW card exists but without the merged
+ *     marker; a SKIP with that exact reason is honest.
+ *   - `merged: false, baseOnly: false` → no DW hovercard behavior observed at all.
+ * @param {object} h - harness.
+ * @returns {Promise<{ merged: boolean, baseOnly: boolean, reason: string }>} support state.
+ */
+async function detectDwHovercardSupport(h) {
+  await h.ensureActivatedStable()
+  await h.ensureStatusPanel()
+  const candidates = []
+  const psdPoint = await h.page.evaluate(`(() => {
+    for (const selector of ['.psd-group-toggle', '.psd-item', '.psd-panel-toggle', '.psd-panel']) {
+      for (const element of document.querySelectorAll(selector)) {
+        const rect = element.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight) {
+          return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+        }
+      }
+    }
+    return null
+  })()`)
+  if (psdPoint !== null) candidates.push(psdPoint)
+  const workspace = await h.page.eval(probes.workspaceRowPoint)
+  if (workspace !== null) candidates.push(workspace)
+  const session = await h.page.eval(probes.sessionRowPoint, null)
+  if (session !== null) candidates.push(session)
+  let baseOnly = false
+  let sawAnyRow = false
+  for (const point of candidates) {
+    sawAnyRow = true
+    await h.page.moveTo(point.x, point.y)
+    const deadline = Date.now() + 2500
+    while (Date.now() < deadline) {
+      const state = await h.page.evaluate(`(() => ({
+        merged: document.querySelector('[data-psd-hovercard]') !== null,
+        base: document.querySelector('.psd-hovercard, [class*="psd-hovercard"]') !== null
+      }))()`)
+      if (state.merged === true) {
+        return { merged: true, baseOnly: false, reason: 'merged [data-psd-hovercard] marker observed' }
+      }
+      if (state.base === true) baseOnly = true
+      await sleep(120)
+    }
+  }
+  if (baseOnly) {
+    return {
+      merged: false,
+      baseOnly: true,
+      reason: 'a legacy dynamic-workspaces hover card exists but it carries no merged [data-psd-hovercard] pin marker, so the F4 pin/lifetime contract is not installed in this build'
+    }
+  }
+  return {
+    merged: false,
+    baseOnly: false,
+    reason: sawAnyRow
+      ? 'no dynamic-workspaces hover card appeared over the probed sidebar rows; the F4 pin/lifetime contract is not installed in this build'
+      : 'no sidebar row was available to probe dynamic-workspaces support'
+  }
+}
+
+/**
  * F4 cross-branch check: pinned dynamic-workspaces hover card in annotation mode,
  * plus the no-mode 140 ms close regression. Only meaningful once the DW branch is
  * merged (the annotation side of the contract is asserted in scenario 10).
@@ -5096,13 +5172,13 @@ async function runScenarios(harness, results, opts) {
       // record an explicit SKIP (never a fake PASS) when it is absent.
       const scenarioRow = results.rows.find((row) => row.id === id)
       if (scenarioRow !== undefined && scenarioRow.pass === true) {
-        let dwPresent = false
+        let support = { merged: false, baseOnly: false, reason: 'support detection unavailable' }
         try {
-          dwPresent = await harness.page.eval(probes.dynamicWorkspacesPresent)
-        } catch {
-          dwPresent = false
+          support = await detectDwHovercardSupport(harness)
+        } catch (error) {
+          support = { merged: false, baseOnly: false, reason: `support detection failed: ${error?.message || error}` }
         }
-        if (dwPresent) {
+        if (support.merged === true) {
           await results.check('10b', 'plugin hovercard pin (F4 merged: pin + selectable in annotation mode)', async () => {
             const outcome = await runCrossBranchHovercardCheck(harness)
             if (outcome.verified !== true) throw new Error(outcome.reason)
@@ -5112,7 +5188,7 @@ async function runScenarios(harness, results, opts) {
           results.skip(
             '10b',
             'plugin hovercard pin (F4 cross-branch, owned by the dynamic-workspaces branch)',
-            'no dynamic-workspaces feature in this worktree (DW marker/pin absent); the annotation-side event + [data-psd-hovercard] CSS are asserted in scenario 10, and the real pin row runs after the branches merge'
+            `F4 merged pin contract absent in this build: ${support.reason}; the annotation-side event + [data-psd-hovercard] CSS are asserted in scenario 10, and the real pin row runs after the branches merge`
           )
         }
       }
@@ -5123,7 +5199,9 @@ async function runScenarios(harness, results, opts) {
         results.replaceWithSkip(
           id,
           'F4 cross-branch: pinned dynamic-workspaces hover card is selectable in annotation mode',
-          'dynamic-workspaces feature absent in this worktree: the pin/select + no-mode close regression cannot be observed here; the same scenario runs for real after the branches merge'
+          `F4 merged pin contract absent in this build: ${harness.state.s11SkipReason ?? 'no [data-psd-hovercard] marker observed'}; ` +
+            'the pin/select + no-mode close regression cannot be observed here and the same scenario runs for real after the branches merge. ' +
+            'A present marker with a failing pin/select would FAIL this row, never SKIP it.'
         )
       }
     }

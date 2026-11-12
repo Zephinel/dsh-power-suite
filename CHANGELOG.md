@@ -11,32 +11,59 @@ heading is added until the release is cut.
 
 ### Added
 
-- UI element annotation: a floating launcher toggles a client-only annotation
-  mode that makes room for a responsive right rail by shrinking the shell frame's
-  `padding-right` (`clamp(188px, 11.6vw, 236px)`, no CSS transform) and falls
-  back to an overlay rail on narrow viewports. Hover outlines the candidate
-  element; a click selects it and opens a draggable note popover carrying the
-  element name, locator summary, resolved/ambiguous/missing/changed status,
-  ancestor level up/down, a note field, and **Quick reference** / **Add to
-  collection** actions. Page pointer events are consumed in the capture phase so
-  native controls cannot act while annotating; the configurable multi-select
-  modifier toggles selection or starts a marquee, and the configurable
-  pass-through modifier restores real native mouse and context-menu behavior
-  without synthesizing clicks. References are inserted through the composer's
-  semantic `captureInsertion`/`insertText` API — preserving the draft and caret,
-  one undo step, never sending — as one localized reference or one ordered batch
-  for the collection, which de-dupes by a stable locator key, keeps per-entry
-  notes, marks other-session entries and excludes them from the batch, and marks
-  stale targets explicitly. The two modifiers (a conflicting choice moves the
-  other modifier, with an explanation), the launcher position, and the
-  rail-collapsed state persist in browser `localStorage`; the collection is
-  page-lifetime. The browser-only feature adds no Host route,
-  service, or profile change, cleans up every listener, layout marker, and DOM
-  node on exit and HMR, and adds a pure test seam plus a live-page CDP acceptance
-  harness (full acceptance recorded pre-merge; the merged build `572b8fa1…` itself
-  was not re-run (32-key seam); after the audit fixes only the post-audit-fix
-  build `1c61a230…` got `--smoke`: 6/6 PASS with the 35-key seam, smoke-only
-  evidence).
+- UI element annotation (expanded in this round): a floating launcher toggles a
+  client-only annotation mode that makes room for a responsive right rail by
+  shrinking the shell frame's `padding-right` (`clamp(188px, 11.6vw, 236px)`, no
+  CSS transform) and falls back to an overlay rail on narrow viewports. Hover
+  outlines the candidate element; the picker treats **floating surfaces**
+  (body-level DSH hover preview cards, and this plugin's own hover card while
+  annotation mode pins it) as selectable targets *and* lets the Parent/Child
+  controls drill into their inner text blocks and controls, with a paint layer
+  raised above native hover cards (inline `z-index:150`, exact value/priority
+  restored on exit) and a 60 ms mutation-triggered hover recompute for surfaces
+  that appear while the pointer is stationary. A click selects the element and
+  opens the requirement popover: element name, locator summary, live
+  resolution status, ancestor level up/down, requirement textarea, and
+  **Mark requirement** / **Update requirement**, **Delete annotation** (5 s undo
+  toast), and **Quick reference** actions. Every annotation is stored as a
+  **v2 record** capturing a uniquely verified CSS selector, ≤3 sanitized
+  ancestors, surface/ephemeral flags, Session id plus Workspace cwd/label, a
+  query-free route, the bounds and viewport, and a text digest — never
+  outerHTML, input values, JS paths, XPath, or computed styles. Records persist
+  in browser `localStorage` (`power-suite.ui-annotation.annotations`, schema
+  version 2, 100-record cap with a visible refusal), survive a reload, and
+  re-resolve their Resolved/Matches several/No longer resolves/Content changed
+  statuses live. Annotated elements keep a page mark with a numbered
+  requirement-summary badge; hovering it opens a draggable detail card with the
+  requirement full text, locator, position, Session/Workspace, status,
+  surface/ephemeral marker, and **Copy locator** / **Relocate** / **Open in
+  composer** actions. References are inserted as **native composer inline
+  reference chips** through the shell's input-trigger seam (dynamic
+  `conversation` + `inputTriggers` injection; an `@` source with current-Session
+  candidates, no empty group): one chip for a single reference and one grouped
+  `UI annotations × N` chip for a batch, serialized at send time through the
+  existing reference/batch serializers (deleted members are skipped with an
+  honest removed-count line, and a missing single record invalidates the chip so
+  the send is blocked), with a plain-text fallback plus explanation when the
+  chip services are unavailable. The right rail's collection view is the batch
+  surface: include checkboxes (other-Session rows are excluded and explained),
+  inline and expanded requirement editing, reorder, preview (scroll/ flash/ detail
+  card), per-row insert, delete (undo), delete-selected and clear (one undo
+  slot), and one group-chip batch footer with visible disable reasons. Page
+  pointer events are consumed in the capture phase so native controls cannot
+  act while annotating; the configurable multi-select modifier toggles selection
+  or starts a marquee, and the configurable pass-through modifier restores real
+  native mouse and context-menu behavior without synthesizing clicks. Plugin
+  text inputs (annotation note fields, prompt-history search, settings choices)
+  use the shared rainbow track focus ring instead of solid focus borders; the
+  launcher position, rail-collapsed state, and two modifiers persist in browser
+  `localStorage`, while annotation records use their own v2 document. The
+  browser-only feature adds no Host route, service, or profile change, cleans up
+  every listener, layout marker, and DOM node on exit and HMR, and ships a pure
+  test seam plus live-page CDP acceptance harness (seam generation 66; see
+  [verification.md](docs/verification.md) for the honest per-scenario record —
+  the known late-run headless S6/S8 stalls mean no single all-green full-suite
+  run is claimed).
 
 ### Added
 
@@ -71,6 +98,42 @@ heading is added until the release is cut.
   acknowledged finished parent row paints the sparkling-line glyph. Sizes,
   scales, colours, glyph columns, the running pulse dot, the unread green dot,
   and the nested subagent robot glyph are unchanged, as is all state logic.
+- Running & recent card layout: rows and the header share one fixed trailing grid
+  — title (right-edge gradient fade while clipped) → **time 48 px**
+  (right-aligned, tabular numerals) → **New session action 22 px**
+  (hover/focus-revealed) → **disclosure chevron 24 px** — so parent and nested
+  subagent rows right-align their times on one column and no title can push the
+  controls; nested subagent rows no longer offer the New session action (their
+  action/disclosure columns are empty spacers; an interrupted child keeps only
+  Continue in the action slot), and the header joins the same grid. The row-body
+  hover pill stays content-paced while the action/chevron highlights keep fixed
+  22×22 / 24×26 geometry on one column.
+- Running & recent current-highlight: the animated conic rainbow ring is replaced
+  by a low-key rainbow smoke glow painted on the **bottom face of the row's own
+  rounded rectangle** (card parent and nested child rows) and the same glow on
+  the owning native Workspace row in the sidebar; it breathes and drifts without
+  a layout shift and falls back to a static tint under
+  `prefers-reduced-motion`. Opening a Session from the card, the sidebar, or
+  anywhere else moves the highlight together with the Activity/Workspace
+  association.
+- Running & recent hover card: the row detail card now matches the live native
+  sidebar tooltip oracle (left edge flush with the sidebar's right edge, top
+  aligned to the row, borderless, 16 px radius, native tooltip surface, shadow,
+  12×16 padding and native title/secondary type), grows to 320 px for the figure
+  rows, and clamps to `min(560px, 100vh - 16px)`. The panel's plugin chrome now
+  follows the native recipes: borderless floating cards, inherited shell font
+  family/size/weight, and title-case **Active Projects** / **Inactive Projects**
+  bucket labels instead of uppercase.
+- Running & recent fold persistence: the Active/Inactive bucket fold state is
+  restored on the **first observable paint** using a persisted bucket
+  classification cache and then corrected by live data, so a collapsed bucket no
+  longer paints expanded for the hydration window; native section re-renders
+  cannot clobber a fold.
+- Plugin input focus treatment: a shared animated rainbow track focus ring
+  replaces solid-color focus outlines/borders on plugin text inputs (annotation
+  note fields, prompt-history search field, settings choice pills); it fades in
+  in 140 ms, rotates and hue-drifts, keeps a static ring under reduced motion,
+  and falls back to the system `Highlight` outline under forced colors.
 - Interrupted-session detection now covers **every unfinished turn ending**, not
   only Host restarts/crashes: any `turn/end` reason `error` (quota/usage limit,
   request timeout, transport/network failure, rate limit, malformed response,
