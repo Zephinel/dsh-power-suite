@@ -27,9 +27,11 @@
  *       still creates and opens a blank Session.
  *   B3  plugin input focus uses the shared rainbow track glow (prompt-history search
  *       field), with no solid-color focus border left behind.
- *   B4  the current Session gets the soft rainbow wave behind its row and the native
- *       Workspace row that owns it gets the same wave; reduced motion leaves a static
- *       tint.
+ *   B4  the current Session row gets the rainbow smoke glow painted on the bottom face
+ *       of its own rounded rectangle (a flowing rim that follows the rounded bottom
+ *       corners plus soft rising rainbow puffs), and the owning native Workspace row
+ *       gets the same treatment; nested child rows paint it through their dedicated
+ *       host; reduced motion leaves a static tint.
  *   B5  the row hover card matches the native sidebar tooltip oracle measured live
  *       (flush at the sidebar's right edge, top aligned to the row, same width, radius,
  *       borderless elevation, padding and typography).
@@ -1072,7 +1074,7 @@ const probe = {
     }
   },
 
-  /** Current-Session wave facts on the card row and the native Workspace row. */
+  /** Current-Session highlight facts on the card row and the native Workspace row. */
   currentHighlight: () => {
     const rect = (el) => {
       if (!el) return null
@@ -1083,19 +1085,36 @@ const probe = {
       if (!el) return null
       const s = getComputedStyle(el, which)
       return {
+        content: s.content,
+        position: s.position,
         backgroundImage: s.backgroundImage,
+        backgroundSize: s.backgroundSize,
+        backgroundPosition: s.backgroundPosition,
         animationName: s.animationName,
+        animationDuration: s.animationDuration,
         opacity: s.opacity,
-        height: s.height,
         filter: s.filter,
+        maskImage: s.maskImage || s.webkitMaskImage || 'none',
+        borderRadius: s.borderRadius,
+        top: s.top,
+        right: s.right,
+        bottom: s.bottom,
+        left: s.left,
+        width: s.width,
+        height: s.height,
+        zIndex: s.zIndex,
       }
     }
+    const host = (el) => {
+      if (!el) return null
+      return { tag: el.tagName.toLowerCase(), className: String(el.className), radius: getComputedStyle(el).borderRadius, rect: rect(el), clientWidth: el.clientWidth, clientHeight: el.clientHeight }
+    }
     const row = document.querySelector('.psd-run-current, .psd-child-current')
-    const wave = row
-      ? row.classList.contains('psd-run-current')
-        ? pseudo(row, '::before')
-        : pseudo(row.querySelector('.psd-child-wave'), '::after')
-      : null
+    const childWave = row && row.classList.contains('psd-child-current') ? row.querySelector('.psd-child-wave') : null
+    // All three hosts paint through their own pseudo-elements: parent card rows on
+    // the row itself, nested child rows on the injected .psd-child-wave layer (the
+    // row's own ::before/::after are the tree connectors), native rows on the row.
+    const waveHost = row ? (row.classList.contains('psd-run-current') ? row : childWave) : null
     const marker = document.querySelector('[data-psd-current-workspace]')
     const markerSection = (() => {
       let node = marker
@@ -1110,8 +1129,10 @@ const probe = {
     const ringPresent = document.querySelector('.psd-child-ring') !== null
     const oldRing = row ? getComputedStyle(row, '::before').content !== 'none' && getComputedStyle(row, '::before').backgroundImage.includes('conic-gradient') : false
     return {
-      row: row ? { className: row.className, rect: rect(row), current: row.getAttribute('aria-current') } : null,
-      wave,
+      row: row ? { kind: row.classList.contains('psd-run-current') ? 'parent' : 'child', className: row.className, rect: rect(row), radius: getComputedStyle(row).borderRadius, current: row.getAttribute('aria-current') } : null,
+      waveHost: host(waveHost),
+      wave: waveHost ? { before: pseudo(waveHost, '::before'), after: pseudo(waveHost, '::after') } : null,
+      legacyWave: row && row.classList.contains('psd-run-current') ? pseudo(row, '::before') : null,
       childWave: document.querySelector('.psd-child-wave') !== null,
       ringPresent,
       oldRing,
@@ -1119,7 +1140,11 @@ const probe = {
         ? {
             rowKey: marker.getAttribute('data-row-key'),
             rect: rect(marker),
-            wave: pseudo(marker, '::after'),
+            radius: getComputedStyle(marker).borderRadius,
+            clientWidth: marker.clientWidth,
+            clientHeight: marker.clientHeight,
+            before: pseudo(marker, '::before'),
+            after: pseudo(marker, '::after'),
             ownsCurrentSession:
               sessionId !== null && markerSection !== null && [...markerSection.querySelectorAll('[data-row-key^="session:"]')].some((el) => el.getAttribute('data-row-key') === `session:${sessionId}`),
           }
@@ -1836,8 +1861,53 @@ async function runLayoutChecks({ page, results, state }) {
   })
 }
 
+/**
+ * Assert one current-Session glow host paints the rainbow on the bottom face of
+ * its own rounded rectangle through two stacked pseudo-element layers: a bottom
+ * rim of rainbow light that follows the rounded bottom corners and a smoke wash
+ * of drifting rainbow puffs rising from it. The old detached band/ring geometry
+ * must be gone.
+ * @param {string} label - host description for failure messages.
+ * @param {{ radius: string, rect: object }} host - the row-shaped host box.
+ * @param {{ before: object | null, after: object | null }} layers - pseudo facts.
+ * @returns {string} measured summary.
+ */
+function assertBottomFaceGlow(label, host, layers) {
+  const { before, after } = layers
+  assert(before && after, `${label}: the two glow layers are missing`)
+  // ::before is the smoke layer; ::after is the bottom rim painted on top of it.
+  const checks = [['smoke', before], ['rim', after]]
+  for (const [layerName, layer] of checks) {
+    assert(layer.content !== 'none', `${label}: the ${layerName} layer does not render`)
+    assertEqual(layer.position, 'absolute', `${label}: the ${layerName} layer must be positioned`)
+    for (const side of ['top', 'right', 'bottom', 'left']) {
+      assertNear(parseFloat(layer[side]), 0, 0.5, `${label}: the ${layerName} layer must cover the whole row box (${side}=${layer[side]}, not the old inset band)`)
+    }
+    assertEqual(layer.borderRadius, host.radius, `${label}: the ${layerName} layer must inherit the row's rounded-rectangle radius`)
+    // inset:0 resolves against the row's padding box: the native row paints its
+    // own surface there too (it carries 3 px transparent inline borders), so the
+    // glow canvas is the client box, not the border box.
+    assertNear(parseFloat(layer.width), host.clientWidth, 1, `${label}: the ${layerName} width must follow the row's paint box (${layer.width} vs ${host.clientWidth})`)
+    assertNear(parseFloat(layer.height), host.clientHeight, 1, `${label}: the ${layerName} height must follow the row's paint box (${layer.height} vs ${host.clientHeight})`)
+    assert(layer.backgroundImage.includes('linear-gradient'), `${label}: the ${layerName} layer must paint the rainbow gradient`)
+    assert(layer.backgroundImage.includes('rgb(255, 107, 107)'), `${label}: the ${layerName} layer must use the rainbow stops`)
+    assert(layer.maskImage.includes('gradient'), `${label}: the ${layerName} layer needs its bottom-face mask`)
+    assert(layer.filter.includes('blur'), `${label}: the ${layerName} layer must stay soft`)
+    assert(layer.animationName.includes('psd-'), `${label}: the ${layerName} layer has no animation (${layer.animationName})`)
+    assert(!layer.animationName.includes('psd-wave'), `${label}: the old psd-wave recipe is still running`)
+    assert(Number(layer.opacity) > 0 && Number(layer.opacity) <= 1, `${label}: the ${layerName} layer opacity is out of range (${layer.opacity})`)
+    assertEqual(layer.zIndex, '0', `${label}: the ${layerName} layer must sit behind the row content`)
+  }
+  assert(after.maskImage.includes('linear-gradient'), `${label}: the rim layer must be a bottom-strip mask`)
+  assert(before.maskImage.includes('linear-gradient'), `${label}: the smoke layer must include the vertical feather falloff`)
+  assert((before.maskImage.match(/radial-gradient/g) ?? []).length >= 3, `${label}: the smoke layer must use several soft radial puffs (${before.maskImage})`)
+  assert(before.animationName.includes('psd-smoke'), `${label}: the smoke layer must run the psd-smoke animations (${before.animationName})`)
+  assert(after.animationName.includes('psd-glow'), `${label}: the rim layer must run the psd-glow animations (${after.animationName})`)
+  return `${label}: smoke+rim ${before.width}x${before.height} r=${before.borderRadius} inset 0; animations ${before.animationName} | ${after.animationName}`
+}
+
 async function runCurrentHighlightChecks({ page, results, state }) {
-  log('\n=== B4: current-Session rainbow wave (card + Workspace row) ===')
+  log('\n=== B4: current-Session rainbow glow on the rounded row bottom face ===')
   await results.check('b4-0', 'open a card row to make its Session current', async () => {
     const target = await page.eval(() => {
       const row = document.querySelector('.psd-run')
@@ -1858,7 +1928,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     return `opened "${short(target.title, 40)}"`
   })
 
-  await results.check('b4-1', 'card row and owning native Workspace row carry the wave (no conic ring left)', async () => {
+  await results.check('b4-1', 'card row and owning native Workspace row paint the rounded bottom-face glow (old band/ring gone)', async () => {
     let highlight = await page.eval(probe.currentHighlight)
     state.highlight = highlight
     if (highlight.marker && highlight.sessionId !== null && highlight.marker.rowKey) {
@@ -1881,15 +1951,16 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     assertEqual(highlight.row.current, 'true', 'current card row must expose aria-current')
     assert(!highlight.ringPresent, 'the old .psd-child-ring element is still rendered')
     assert(!highlight.oldRing, 'the current row still paints a conic-gradient ring')
-    assert(highlight.wave, 'current row wave facts missing')
-    assert(highlight.wave.backgroundImage.includes('linear-gradient'), `current row highlight must be the rainbow wave, got ${highlight.wave.backgroundImage}`)
-    assert(highlight.wave.animationName.includes('psd-wave'), `wave animation missing (${highlight.wave.animationName})`)
+    assert(highlight.waveHost && highlight.wave, 'current card row has no glow host')
+    for (const side of ['left', 'right', 'top', 'bottom']) {
+      assertNear(highlight.waveHost.rect[side], highlight.row.rect[side], 1, `card glow host must follow the row box (${side}: ${highlight.waveHost.rect[side]} vs ${highlight.row.rect[side]})`)
+    }
+    const cardSummary = assertBottomFaceGlow('card current row', highlight.waveHost, highlight.wave)
     assert(highlight.marker, 'no native Workspace row carries data-psd-current-workspace')
     assertEqual(highlight.markerCount, 1, 'exactly one native Workspace row must be marked')
-    assert(highlight.marker.wave.backgroundImage.includes('linear-gradient'), 'Workspace row highlight must be the rainbow wave')
-    assert(highlight.marker.wave.animationName.includes('psd-wave'), 'Workspace row wave animation missing')
+    const nativeSummary = assertBottomFaceGlow('native Workspace row', { radius: highlight.marker.radius, rect: highlight.marker.rect, clientWidth: highlight.marker.clientWidth, clientHeight: highlight.marker.clientHeight }, { before: highlight.marker.before, after: highlight.marker.after })
     assert(highlight.marker.ownsCurrentSession, `marked Workspace row does not own the open Session ${highlight.sessionId}`)
-    return `${highlight.row.className} + ${highlight.marker.rowKey}; wave ${highlight.wave.animationName}`
+    return `${highlight.row.className} + ${highlight.marker.rowKey}; ${cardSummary}; ${nativeSummary}`
   })
 
   await results.check('b4-2', 'opening another sidebar Session moves the marker to its Workspace', async () => {
@@ -1928,19 +1999,70 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       }
     }
     assert(highlight.marker.ownsCurrentSession, 'workspace marker did not move to the newly opened Session')
+    assert(highlight.marker && highlight.marker.before && highlight.marker.before.animationName.includes('psd-smoke'), 'the moved Workspace marker lost its bottom-face smoke layer')
     return `marker follows ${highlight.sessionId} on ${highlight.marker.rowKey}`
   })
 
-  await results.check('b4-3', 'reduced motion leaves a static (unanimated) tint', async () => {
+  await results.check('b4-3', 'reduced motion leaves a static bottom-face tint', async () => {
     await page.emulateMedia([{ name: 'prefers-reduced-motion', value: 'reduce' }])
     await sleep(400)
     const highlight = await page.eval(probe.currentHighlight)
-    assertEqual(highlight.wave.animationName, 'none', 'reduced motion must stop the card wave animation')
-    assertEqual(highlight.marker.wave.animationName, 'none', 'reduced motion must stop the Workspace wave animation')
-    assert(Number(highlight.wave.opacity) > 0.1, `reduced motion must leave a visible static tint (opacity ${highlight.wave.opacity})`)
+    assert(highlight.wave && highlight.marker, 'current highlight facts missing under reduced motion')
+    const layers = [
+      ['card smoke', highlight.wave.before],
+      ['card rim', highlight.wave.after],
+      ['native smoke', highlight.marker.before],
+      ['native rim', highlight.marker.after],
+    ]
+    for (const [name, layer] of layers) {
+      assertEqual(layer.animationName, 'none', `reduced motion must stop the ${name} animation (${layer.animationName})`)
+      assert(Number(layer.opacity) > 0.1, `reduced motion must leave a visible static tint (${name} opacity ${layer.opacity})`)
+      assert(layer.maskImage.includes('gradient'), `reduced motion must keep the bottom-face mask (${name})`)
+    }
     await page.emulateMedia([])
     await sleep(200)
-    return `static tint at opacity ${highlight.wave.opacity}`
+    return `static smoke ${highlight.wave.before.opacity} + rim ${highlight.wave.after.opacity}; native ${highlight.marker.before.opacity}/${highlight.marker.after.opacity}`
+  })
+
+  await results.check('b4-4', 'a nested child current row paints the same glow on its own rounded rectangle', async () => {
+    const target = await page.eval(() => {
+      const child = document.querySelector('.psd-child')
+      const main = child ? child.querySelector('.psd-child-main') : null
+      if (!main) return null
+      const r = main.getBoundingClientRect()
+      return { x: Math.round(r.left + Math.min(30, Math.max(10, r.width / 2))), y: Math.round(r.top + r.height / 2) }
+    })
+    assert(target, 'no nested child row to open')
+    await page.moveTo(900, 500)
+    await sleep(200)
+    await page.clickAt(target.x, target.y)
+    await page.waitForFn(() => !!document.querySelector('.psd-child-current'), [], { timeout: 15000, label: 'current child row highlight' })
+    await sleep(900)
+    const highlight = await page.eval(probe.currentHighlight)
+    assert(highlight.row && highlight.row.kind === 'child', `expected a child current row, got ${JSON.stringify(highlight.row)}`)
+    assert(highlight.childWave, 'child current row is missing its .psd-child-wave glow host')
+    assert(highlight.waveHost && highlight.wave, 'child glow host facts missing')
+    for (const side of ['left', 'right', 'top', 'bottom']) {
+      assertNear(highlight.waveHost.rect[side], highlight.row.rect[side], 1, `child glow host must follow the row box (${side}: ${highlight.waveHost.rect[side]} vs ${highlight.row.rect[side]})`)
+    }
+    assertEqual(highlight.waveHost.radius, highlight.row.radius, 'child glow host must inherit the child row radius')
+    const summary = assertBottomFaceGlow('child current row', highlight.waveHost, highlight.wave)
+    // Leave a parent row current again: the report screenshots show the primary case.
+    const parent = await page.eval(() => {
+      const row = document.querySelector('.psd-run')
+      const main = row ? row.querySelector('.psd-run-main') : null
+      if (!main) return null
+      const r = main.getBoundingClientRect()
+      return { x: Math.round(r.left + 30), y: Math.round(r.top + r.height / 2) }
+    })
+    if (parent) {
+      await page.moveTo(900, 500)
+      await sleep(150)
+      await page.clickAt(parent.x, parent.y)
+      await page.waitForFn(() => !!document.querySelector('.psd-run-current'), [], { timeout: 15000, label: 'parent current row after child check' })
+      await sleep(700)
+    }
+    return `${summary}; child row ${highlight.row.rect.width}x${highlight.row.rect.height} radius ${highlight.row.radius}`
   })
 }
 
@@ -2626,6 +2748,94 @@ async function runAnnotationPinChecks({ page, results, state }) {
 // Screenshots
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * Best-effort: leave the first card parent row as the current Session so the
+ * screenshot pass captures the primary parent-row highlight. Never throws into
+ * the evidence pass (a screenshot run must not fail on a live-data hiccup).
+ * @param {object} page - Page wrapper.
+ * @returns {Promise<void>}
+ */
+/**
+ * Best effort: photograph the marked native Workspace row's bottom-face glow,
+ * then scroll the current card row back into view for the remaining evidence.
+ * @param {object} page - Page wrapper.
+ * @param {Function} shot - screenshot(name, clip) helper.
+ * @param {string} name - evidence file name.
+ * @returns {Promise<void>}
+ */
+async function shotNativeWorkspaceGlow(page, shot, name) {
+  try {
+    // The marked row can be hidden by the Inactive bucket fold or a collapsed
+    // native section after the fold checks; reopen both for the evidence shot.
+    const prepared = await page.eval(() => {
+      if (!document.querySelector('[data-psd-current-workspace="true"]')) return false
+      const hidden = document.querySelector('[data-psd-current-workspace="true"]').getBoundingClientRect().height <= 4
+      if (!hidden) return true
+      const group = document.querySelector('[data-psd="group"][data-group="inactive"] .psd-group-toggle')
+      if (group && group.getAttribute('aria-expanded') === 'false') group.click()
+      return true
+    })
+    if (!prepared) return
+    await page.moveTo(900, 500)
+    await sleep(600)
+    const scrolled = await page.eval(() => {
+      const row = document.querySelector('[data-psd-current-workspace="true"]')
+      if (!row) return false
+      // The row's native section may have been collapsed by later checks: reopen
+      // it so its bottom-face glow is photographable.
+      if (row.getAttribute('aria-expanded') === 'false') row.click()
+      row.scrollIntoView({ block: 'center', behavior: 'instant' })
+      return true
+    })
+    if (!scrolled) return
+    await page.moveTo(900, 500)
+    await sleep(700)
+    const view = await page.eval(() => {
+      const row = document.querySelector('[data-psd-current-workspace="true"]')
+      if (!row) return null
+      const r = row.getBoundingClientRect()
+      return { top: Math.round(r.top), height: Math.round(r.height), visible: r.height > 4 && r.top >= 0 && r.bottom <= window.innerHeight }
+    })
+    if (view === null || !view.visible) return
+    const clipTop = Math.max(0, view.top - 80)
+    await shot(name, { x: 0, y: clipTop, width: 340, height: Math.max(60, Math.min(220, VIEWPORT.height - clipTop)) })
+    await page.eval(() => {
+      const cardRow = document.querySelector('.psd-run-current, .psd-child-current')
+      if (cardRow) cardRow.scrollIntoView({ block: 'center', behavior: 'instant' })
+    })
+    await page.moveTo(900, 500)
+    await sleep(400)
+  } catch {
+    // Evidence capture is best effort.
+  }
+}
+
+async function ensureParentRowCurrent(page) {
+  try {
+    if (await page.eval(() => document.querySelector('.psd-run-current') !== null)) {
+      await page.moveTo(900, 500)
+      await sleep(250)
+      return
+    }
+    const target = await page.eval(() => {
+      const row = document.querySelector('.psd-run')
+      const main = row ? row.querySelector('.psd-run-main') : null
+      if (!main) return null
+      const r = main.getBoundingClientRect()
+      return { x: Math.round(r.left + 30), y: Math.round(r.top + r.height / 2) }
+    })
+    if (!target) return
+    await page.moveTo(900, 500)
+    await sleep(150)
+    await page.clickAt(target.x, target.y)
+    await page.waitForFn(() => !!document.querySelector('.psd-run-current'), [], { timeout: 15000, label: 'parent current row for screenshots' })
+    await page.moveTo(900, 500)
+    await sleep(900)
+  } catch {
+    // Evidence capture is best effort; the checks already verified the highlight.
+  }
+}
+
 async function captureScreenshots(page, state) {
   await mkdir(SHOTS_DIR, { recursive: true })
   // Best effort: the card should be hydrated after the checks, but evidence
@@ -2674,6 +2884,10 @@ async function captureScreenshots(page, state) {
     await page.moveTo(900, 500)
     await sleep(400)
   }
+  // 01/02 above may show a nested child row's glow (the read-glyph check opens
+  // one). Open the first card row so the primary parent-row highlight is the one
+  // in the 03/04/05 evidence shots; the child case stays visible in 01/02.
+  await ensureParentRowCurrent(page)
   const currentRow = await page.eval(() => {
     const row = document.querySelector('.psd-run-current, .psd-child-current')
     return row !== null
@@ -2686,10 +2900,12 @@ async function captureScreenshots(page, state) {
     await sleep(300)
     await shot('03-current-wave-light')
   }
+  await shotNativeWorkspaceGlow(page, shot, '03b-native-workspace-glow-light')
   await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
   await sleep(700)
   await shot('04-card-dark')
   if (currentRow) await shot('05-current-wave-dark')
+  await shotNativeWorkspaceGlow(page, shot, '05c-native-workspace-glow-dark')
   if (state.liveStatsRow !== undefined) {
     const openedDark = await openHoverCard(page, 'parent', state.liveStatsRow.title)
     if (openedDark !== null && openedDark.card.sections.length > 0) await shot('05b-hovercard-stats-dark')
