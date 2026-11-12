@@ -122,19 +122,36 @@ function parseArgs(argv) {
     else if (arg === '--shots-only') { opts.shotsOnly = true; opts.mode = 'shots' }
     else if (arg === '--client') opts.clientPath = path.resolve(argv[++i])
     else if (arg.startsWith('--client=')) opts.clientPath = path.resolve(arg.slice('--client='.length))
-    else if (arg === '--scenario') opts.scenario = Number(argv[++i])
-    else if (arg.startsWith('--scenario=')) opts.scenario = Number(arg.slice('--scenario='.length))
-    else if (arg === '--from') opts.from = Number(argv[++i])
-    else if (arg.startsWith('--from=')) opts.from = Number(arg.slice('--from='.length))
+    else if (arg === '--scenario') opts.scenario = argv[++i]
+    else if (arg.startsWith('--scenario=')) opts.scenario = arg.slice('--scenario='.length)
+    else if (arg === '--from') opts.from = argv[++i]
+    else if (arg.startsWith('--from=')) opts.from = arg.slice('--from='.length)
     else if (arg === '--url') opts.url = argv[++i]
     else if (arg.startsWith('--url=')) opts.url = arg.slice('--url='.length)
     else if (arg === '--help' || arg === '-h') {
-      console.log('usage: node test/browser/annotation.e2e.mjs [--smoke] [--client path] [--no-shots] [--scenario N] [--keep-open] [--headful] [--url TOKEN_URL]')
+      console.log('usage: node test/browser/annotation.e2e.mjs [--smoke] [--shots-only] [--assets] [--client path] [--no-shots] [--scenario N|--from N] [--keep-open] [--headful] [--url TOKEN_URL]')
       process.exit(0)
     } else {
       throw new Error(`unknown argument: ${arg}`)
     }
   }
+  // H1: an invalid/out-of-range selection must fail loudly instead of silently running nothing.
+  const validateSelection = (name, raw) => {
+    if (raw === undefined) {
+      const error = new Error(`${name} requires an integer argument`)
+      error.exitCode = 2
+      throw error
+    }
+    const value = Number(raw)
+    if (!Number.isInteger(value) || value < 1 || value > 9) {
+      const error = new Error(`invalid ${name} "${raw}": expected an integer in the 1..9 scenario range`)
+      error.exitCode = 2
+      throw error
+    }
+    return value
+  }
+  if (opts.scenario !== null) opts.scenario = validateSelection('--scenario', opts.scenario)
+  if (opts.from !== null) opts.from = validateSelection('--from', opts.from)
   return opts
 }
 
@@ -360,6 +377,7 @@ class Page {
     await page.send('Page.enable')
     await page.send('Runtime.enable')
     await page.send('Log.enable').catch(() => {})
+    await page.send('Network.enable').catch(() => {})
     await page.send('Emulation.setDeviceMetricsOverride', {
       width: VIEWPORT.width,
       height: VIEWPORT.height,
@@ -377,6 +395,8 @@ class Page {
     this.pageErrors = []
     this.consoleErrors = []
     this.networkFailures = []
+    this.networkProblems = []
+    this._requestUrls = new Map()
     this.logEntries = []
     this._subscriptions = [
       cdp.on('Runtime.exceptionThrown', (params, eventSession) => {
@@ -395,11 +415,41 @@ class Page {
       }),
       cdp.on('Log.entryAdded', (params, eventSession) => {
         if (eventSession && eventSession !== this.sessionId) return
-        if (params.entry?.level === 'error') this.logEntries.push(short(params.entry.text, 300))
+        if (params.entry?.level !== 'error') return
+        const entry = params.entry
+        const source = entry.source ? `${entry.source}: ` : ''
+        const location = entry.url ? ` @ ${short(entry.url, 160)}` : ''
+        this.logEntries.push(short(`${source}${entry.text}${location}`, 400))
+      }),
+      cdp.on('Network.requestWillBeSent', (params, eventSession) => {
+        if (eventSession !== this.sessionId) return
+        const request = params?.request || {}
+        this._requestUrls.set(params.requestId, {
+          url: String(request.url || ''),
+          type: String(params.type || ''),
+        })
+      }),
+      cdp.on('Network.responseReceived', (params, eventSession) => {
+        if (eventSession !== this.sessionId) return
+        const response = params?.response || {}
+        const url = String(response.url || '')
+        const status = Number(response.status || 0)
+        if (status < 400) return
+        if (!/^https?:/i.test(url)) return
+        if (/favicon\.ico/i.test(url)) return
+        this.networkProblems.push(`${status} ${params.type || '?'} ${short(url, 180)}`)
       }),
       cdp.on('Network.loadingFailed', (params, eventSession) => {
         if (eventSession !== this.sessionId) return
-        if (!params.canceled) this.networkFailures.push(short(params.errorText, 200))
+        if (params.canceled) return
+        const info = this._requestUrls.get(params.requestId) || {}
+        const url = String(info.url || '')
+        if (/favicon\.ico/i.test(url)) return
+        const type = String(params.type || info.type || '?')
+        if (!['Fetch', 'XHR', 'Document', 'Script', 'Stylesheet'].includes(type)) return
+        const text = `${params.errorText || 'failed'} ${type} ${short(url, 180)}`
+        this.networkFailures.push(text)
+        this.networkProblems.push(text)
       }),
     ]
   }
@@ -767,6 +817,15 @@ class Results {
     }
   }
 
+  hasRow(id) {
+    return this.rows.some((row) => row.id === id)
+  }
+
+  recordFailure(id, title, detail) {
+    this.rows.push({ id, title, pass: false, detail, ms: 0 })
+    log(`FAIL  ${id}  ${title} — ${short(detail, 400)}`)
+  }
+
   get failures() {
     return this.rows.filter((row) => !row.pass)
   }
@@ -860,18 +919,21 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'test seam flag + hooks', async () => {
+  await results.check('smoke-3', 'frozen test seam exposes 31 keys incl. textDigest', async () => {
     const probe = await page.evaluate(
-      `({ flag: typeof window.__POWER_SUITE_TEST_HOOKS__, keys: Object.keys(window.__POWER_SUITE_TEST_HOOKS__ || {}) })`
+      `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
-    assertEqual(probe.flag, 'object', 'test hook flag type')
+    assertEqual(probe.flagType, 'object', 'test hook flag type')
+    assertEqual(probe.hookType, 'object', 'hooks.uiAnnotation is not an object')
+    assertEqual(probe.keys.length, 31, `frozen seam must expose exactly 31 keys (got ${probe.keys.length}: ${probe.keys.join(', ') || 'none'})`)
+    assert(probe.keys.includes('textDigest'), `textDigest is missing from the seam (keys: ${probe.keys.join(', ')})`)
     state.hooks = probe.keys
-    return `hooks: ${probe.keys.join(', ') || '(none in this build)'}`
+    return `uiAnnotation seam: ${probe.keys.length} keys`
   })
 
-  await results.check('smoke-4', 'blank session is opened through the native New Session flow', async () => {
+  await results.check('smoke-4', 'blank session is opened/verified through the native flow', async () => {
     const metrics = await ensureBlankSession(page, state)
-    return `session ${metrics.sessionId}, ${metrics.sessionRows} sidebar rows, ${state.sessionRestored ? 'auto-restored last session' : 'created via native New Session'}`
+    return `blank session ${metrics.sessionId}, ${metrics.sessionRows} sidebar rows, ${state.blankStateSource || 'blank'}`
   })
 
   await results.check('smoke-5', 'screenshot round-trip produces 1728x900 PNG', async () => {
@@ -883,11 +945,44 @@ async function runSmoke({ page, results, state }) {
     return `${buffer.length} bytes -> ${state.smokeShot}`
   })
 
-  await results.check('smoke-6', 'existing installed UI coexists', async () => {
-    const probe = await page.evaluate(
-      `({ psRail: !!document.querySelector('[data-psp-rail]'), psa: document.querySelectorAll('[data-psa-launcher]').length, slots: [...document.querySelectorAll('[data-slot="shell.overlay"]')].length })`
+  await results.check('smoke-6', 'feature surface: rail under shell overlay, one launcher, prompt rail hidden', async () => {
+    const launcher = await page.findRect('[data-psa-launcher]')
+    assert(launcher, 'launcher not found: the injected client does not mount the annotation surface')
+    await page.clickAt(launcher.x, launcher.y)
+    await page.waitFor(
+      `document.documentElement.getAttribute('data-psa-active') === 'true' && !!document.querySelector('[data-psa-rail]')`,
+      { timeout: 8000, label: 'mode active for the surface check' }
     )
-    return `psp rail: ${probe.psRail}, launcher: ${probe.psa}, overlay slot: ${probe.slots}`
+    await sleep(350)
+    const probe = await page.evaluate(`(() => {
+      const overlay = document.querySelector('[data-shell-overlay]')
+      const rail = document.querySelector('[data-psa-rail]')
+      const psp = document.querySelector('[data-psp-rail]')
+      const style = document.querySelector('style[data-power-suite-css="ui-annotation"]')
+      return {
+        railInOverlay: overlay !== null && rail !== null && overlay.contains(rail),
+        launchers: document.querySelectorAll('[data-psa-launcher]').length,
+        pspRail: psp !== null,
+        pspDisplay: psp !== null ? getComputedStyle(psp).display : null,
+        stylesheetHasPromptRailRule: style !== null && typeof style.textContent === 'string'
+          ? style.textContent.includes('[data-psp-rail]') : false,
+      }
+    })()`)
+    const exit = await page.findRect('[data-psa-exit]')
+    if (exit !== null) await page.clickAt(exit.x, exit.y)
+    else await page.pressKey('escape')
+    await page.waitFor(
+      `document.documentElement.getAttribute('data-psa-active') === null`,
+      { timeout: 8000, label: 'mode off after the surface check' }
+    )
+    await sleep(250)
+    assert(probe.railInOverlay, 'the annotation rail is not a descendant of [data-shell-overlay]')
+    assertEqual(probe.launchers, 1, `expected exactly one launcher, got ${probe.launchers}`)
+    assert(probe.stylesheetHasPromptRailRule, 'annotation stylesheet is missing the hidden prompt-history rail rule')
+    if (probe.pspRail) {
+      assertEqual(probe.pspDisplay, 'none', 'the native prompt-history rail is visible while the mode is active')
+    }
+    return `rail inside [data-shell-overlay], launcher ×${probe.launchers}, prompt rail ${probe.pspRail ? `display=${probe.pspDisplay}` : 'absent (hidden rule present)'}`
   })
 }
 
@@ -907,9 +1002,83 @@ const probes = {
     return true
   },
 
-  setPrivacy: (on) => {
-    document.documentElement.classList.toggle('psa-e2e-privacy', Boolean(on))
-    return document.documentElement.classList.contains('psa-e2e-privacy')
+  /**
+   * Apply the privacy guard: CSS blur on the native sidebar and conversation header, plus a
+   * blur/hide shield over the conversation content above the composer. The composer (and the
+   * annotation rail/popover, which live in the shell overlay above the shield) stays crisp.
+   * @returns {object} the applied geometry for assertions.
+   */
+  privacyApply: () => {
+    document.documentElement.classList.add('psa-e2e-privacy')
+    let shield = document.getElementById('psa-e2e-privacy-shield')
+    if (shield === null) {
+      shield = document.createElement('div')
+      shield.id = 'psa-e2e-privacy-shield'
+      document.body.appendChild(shield)
+    }
+    const sidebar = document.querySelector('[class$="_sidebarCol"]')
+    const rail = document.querySelector('[data-psa-rail]')
+    const composer = document.querySelector('[data-conversation-region="composer"]')
+    const sidebarRight = sidebar !== null ? Math.round(sidebar.getBoundingClientRect().right) : 0
+    const railLeft = rail !== null ? Math.round(rail.getBoundingClientRect().left) : innerWidth
+    const composerTop = composer !== null ? Math.round(composer.getBoundingClientRect().top) : innerHeight
+    const width = Math.max(0, railLeft - sidebarRight)
+    const height = Math.max(0, composerTop)
+    // Theme-matched frosted shield: use the conversation surface colour with high alpha so the
+    // masked content is unreadable while the capture still looks like a deliberate panel
+    // (dark theme is the primary visual reference).
+    let background = 'rgba(20, 22, 28, 0.9)'
+    for (const element of [document.querySelector('[data-conversation-region="chat"]'), document.querySelector('[data-slot="main"]'), document.body]) {
+      if (element === null) continue
+      const computed = getComputedStyle(element).backgroundColor || ''
+      const match = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/.exec(computed)
+      if (match === null) continue
+      const alpha = match[4] === undefined ? 1 : Number(match[4])
+      if (alpha < 0.5) continue
+      background = `rgba(${match[1]}, ${match[2]}, ${match[3]}, 0.9)`
+      break
+    }
+    Object.assign(shield.style, {
+      position: 'fixed',
+      left: `${sidebarRight}px`,
+      top: '0px',
+      width: `${width}px`,
+      height: `${height}px`,
+      background,
+      backdropFilter: 'blur(14px)',
+      WebkitBackdropFilter: 'blur(14px)',
+      pointerEvents: 'none',
+      zIndex: '18',
+    })
+    shield.setAttribute('data-psa-e2e-privacy-shield', '')
+    return { sidebarRight, railLeft, composerTop, width, height }
+  },
+
+  privacyRemove: () => {
+    document.documentElement.classList.remove('psa-e2e-privacy')
+    const shield = document.getElementById('psa-e2e-privacy-shield')
+    if (shield !== null) shield.remove()
+    return true
+  },
+
+  /** Assertable privacy state: both CSS blurs and the content shield must be in effect. */
+  privacyState: () => {
+    const shield = document.getElementById('psa-e2e-privacy-shield')
+    const sidebar = document.querySelector('[class$="_sidebarCol"]')
+    const header = document.querySelector('[data-slot="conversation.header"]')
+    const composer = document.querySelector('[data-conversation-region="composer"]')
+    const shieldRect = shield !== null ? shield.getBoundingClientRect() : null
+    const shieldStyle = shield !== null ? getComputedStyle(shield) : null
+    return {
+      classOn: document.documentElement.classList.contains('psa-e2e-privacy'),
+      shield: shield !== null,
+      shieldBottom: shieldRect !== null ? Math.round(shieldRect.bottom) : null,
+      shieldBackdrop: shieldStyle !== null ? (shieldStyle.backdropFilter || shieldStyle.webkitBackdropFilter || null) : null,
+      sidebarFilter: sidebar !== null ? getComputedStyle(sidebar).filter : null,
+      headerFilter: header !== null ? getComputedStyle(header).filter : null,
+      composerTop: composer !== null ? Math.round(composer.getBoundingClientRect().top) : null,
+      composerFilter: composer !== null ? getComputedStyle(composer).filter : null,
+    }
   },
 
   frame: () => {
@@ -1152,66 +1321,219 @@ const probes = {
     }
   },
 
-  recentRowPoint: () => {
-    for (const button of document.querySelectorAll('button')) {
-      const label = button.getAttribute('aria-label') || ''
-      if (!/^Open /.test(label)) continue
+
+
+  /** Blank-session predicate: no messages, empty composer draft, no draft attachments. */
+  blankCheck: () => {
+    const session = document.querySelector('[data-conversation-session]')
+    const composer = document.querySelector('[data-conversation-region="composer"]')
+    const editor = composer !== null ? composer.querySelector('[data-lexical-editor="true"]') : null
+    const messages = document.querySelectorAll('[data-message-id]').length
+    const turns = document.querySelectorAll('[data-turn-id]').length
+    const draft = editor !== null ? (editor.innerText || '').trim() : ''
+    const editorImages = editor !== null ? editor.querySelectorAll('img').length : 0
+    const attachmentNodes = composer !== null
+      ? [...composer.querySelectorAll('img, [data-attachment], [data-attachment-id], [class*="attachment" i]')].length
+      : 0
+    const sessionId = session !== null ? session.getAttribute('data-conversation-session') : null
+    const ok = sessionId !== null && messages === 0 && turns === 0 && draft === ''
+      && editorImages === 0 && attachmentNodes === 0
+    return {
+      ok,
+      sessionId,
+      messages,
+      turns,
+      draft,
+      editorImages,
+      attachments: attachmentNodes,
+      composerFound: composer !== null,
+      editorFound: editor !== null,
+    }
+  },
+
+  /** Visible workspace rows in the sidebar ACTIVE PROJECTS list. */
+  workspaceRows: () => [...document.querySelectorAll('[data-row-key^="workspace:"]')]
+    .map((element) => {
+      const rect = element.getBoundingClientRect()
+      return {
+        key: element.getAttribute('data-row-key'),
+        text: (element.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 40),
+        x: Math.round(rect.left + 14),
+        y: Math.round(rect.top + rect.height / 2),
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        top: Math.round(rect.top),
+        bottom: Math.round(rect.bottom),
+      }
+    })
+    .filter((row) => row.bottom > 0 && row.top < innerHeight && row.right > 0 && row.left < 400),
+
+  /** Visible scrollable container that holds the workspace rows (sidebar session/workspace list). */
+  workspaceScrollPoint: () => {
+    const row = document.querySelector('[data-row-key^="workspace:"]')
+    if (row === null) return null
+    let element = row.parentElement
+    while (element !== null && element !== document.body) {
+      const style = getComputedStyle(element)
+      if (/(auto|scroll)/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 20) {
+        const rect = element.getBoundingClientRect()
+        return {
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(Math.min(rect.bottom - 30, Math.max(rect.top + 30, rect.top + rect.height / 2))),
+          scrollTop: element.scrollTop,
+          scrollHeight: element.scrollHeight,
+          clientHeight: element.clientHeight,
+        }
+      }
+      element = element.parentElement
+    }
+    return null
+  },
+
+  /** Visible recent-session rows (their native hover actions create sessions in that directory). */
+  recentSessionRows: () => [...document.querySelectorAll('button[aria-label^="Open "]')]
+    .map((button) => {
+      const rect = button.getBoundingClientRect()
+      let hoverRow = button
+      while (hoverRow.parentElement !== null && hoverRow.getAttribute('data-row-key') === null && hoverRow !== document.body) {
+        hoverRow = hoverRow.parentElement
+      }
+      const rowRect = hoverRow.getBoundingClientRect()
+      return {
+        label: button.getAttribute('aria-label'),
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+        top: Math.round(rowRect.top),
+        bottom: Math.round(rowRect.bottom),
+        left: Math.round(rect.left),
+      }
+    })
+    .filter((row) => row.bottom > 0 && row.top < innerHeight && row.left < 400),
+
+  /** The native "New session in ..." hover action belonging to one hovered row. */
+  newSessionActionNear: (row) => {
+    for (const button of document.querySelectorAll('button[aria-label^="New session in"]')) {
       const rect = button.getBoundingClientRect()
       const style = getComputedStyle(button)
       if (rect.width <= 0 || rect.height <= 0) continue
       if (style.display === 'none' || style.visibility === 'hidden') continue
-      if (rect.top < 0 || rect.bottom > innerHeight) continue
+      const centerY = rect.top + rect.height / 2
+      const insideRow = centerY >= row.top - 16 && centerY <= row.bottom + 16
+      if (!insideRow) continue
       return {
+        label: button.getAttribute('aria-label'),
         x: Math.round(rect.left + rect.width / 2),
-        y: Math.round(rect.top + rect.height / 2),
-        left: Math.round(rect.left),
-        top: Math.round(rect.top),
+        y: Math.round(centerY),
       }
     }
     return null
   },
 
-  newSessionInDirectoryRect: (rowY) => {
-    const candidates = []
-    for (const button of document.querySelectorAll('button[aria-label="New session in this directory"]')) {
+  /** The visible "New session in ..." action whose centre is vertically nearest to `y`. */
+  nearestNewSessionAction: (y) => {
+    let best = null
+    for (const button of document.querySelectorAll('button[aria-label^="New session in"]')) {
       const rect = button.getBoundingClientRect()
       const style = getComputedStyle(button)
       if (rect.width <= 0 || rect.height <= 0) continue
-      if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) continue
+      if (style.display === 'none' || style.visibility === 'hidden') continue
       if (rect.top < 0 || rect.bottom > innerHeight) continue
-      candidates.push({
-        x: Math.round(rect.left + rect.width / 2),
-        y: Math.round(rect.top + rect.height / 2),
-        top: Math.round(rect.top),
-      })
+      const centerY = rect.top + rect.height / 2
+      const distance = Math.abs(centerY - y)
+      if (best === null || distance < best.distance) {
+        best = {
+          label: button.getAttribute('aria-label'),
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(centerY),
+          distance,
+        }
+      }
     }
-    const near = candidates.filter((candidate) => Math.abs(candidate.y - rowY) < 30)
-    return near[0] || candidates[0] || null
+    return best
+  },
+
+  /** Remove the annotation mode's browser-owned keys so the default launcher position is used. */
+  clearAnnotationStorage: () => {
+    const keys = []
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index)
+      if (typeof key === 'string' && key.startsWith('power-suite.ui-annotation.')) keys.push(key)
+    }
+    for (const key of keys) localStorage.removeItem(key)
+    return keys
+  },
+
+  /** Launcher/rail/footer geometry used by the screenshot assertions. */
+  railFooterState: () => {
+    const launcher = document.querySelector('[data-psa-launcher]')
+    const rail = document.querySelector('[data-psa-rail]')
+    const footer = rail !== null ? rail.querySelector('.psa-rail-footer') : null
+    const rectOf = (element) => {
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      return {
+        left: Math.round(rect.left),
+        top: Math.round(rect.top),
+        right: Math.round(rect.right),
+        bottom: Math.round(rect.bottom),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      }
+    }
+    const launcherRect = rectOf(launcher)
+    const railRect = rectOf(rail)
+    const footerRect = rectOf(footer)
+    const intersects = (left, right) => left !== null && right !== null
+      && left.left < right.right && right.left < left.right
+      && left.top < right.bottom && right.top < left.bottom
+    return {
+      launcher: launcherRect,
+      rail: railRect,
+      footer: footerRect,
+      overlapsFooter: intersects(launcherRect, footerRect),
+      overlapsRail: intersects(launcherRect, railRect),
+      viewport: { width: innerWidth, height: innerHeight },
+    }
   },
 
   installScrollProbe: () => {
-    const candidates = []
-    for (const element of document.querySelectorAll('*')) {
-      if (element.closest('[data-psa-own]') !== null) continue
-      const rect = element.getBoundingClientRect()
-      if (rect.width < 60 || rect.height < 80) continue
-      if (rect.left < 0 || rect.top < 0 || rect.right > innerWidth || rect.bottom > innerHeight) continue
-      const style = getComputedStyle(element)
-      if (!/(auto|scroll)/.test(style.overflowY)) continue
-      if (element.scrollHeight - element.clientHeight < 40) continue
-      candidates.push(element)
+    const collect = (root, kind) => {
+      const found = []
+      if (root === null) return found
+      for (const element of root.querySelectorAll('*')) {
+        if (element.closest('[data-psa-own]') !== null) continue
+        const rect = element.getBoundingClientRect()
+        if (rect.width < 60 || rect.height < 60) continue
+        if (rect.left < 0 || rect.top < 0 || rect.right > innerWidth || rect.bottom > innerHeight) continue
+        const style = getComputedStyle(element)
+        if (!/(auto|scroll)/.test(style.overflowY)) continue
+        if (element.scrollHeight - element.clientHeight < 40) continue
+        found.push({ element, kind })
+      }
+      return found
     }
+    const conversation = collect(document.querySelector('[data-conversation-region="chat"]'), 'conversation')
+    const sidebar = collect(document.querySelector('[data-slot="sidebar"]'), 'sidebar')
+    const candidates = [...conversation, ...sidebar]
     if (candidates.length === 0) return null
-    candidates.sort((left, right) => (right.scrollHeight - right.clientHeight) - (left.scrollHeight - left.clientHeight))
-    const element = candidates[0]
-    window.__psaScrollProbe = element
-    const rect = element.getBoundingClientRect()
+    candidates.sort((left, right) => {
+      const deltaLeft = left.element.scrollHeight - left.element.clientHeight
+      const deltaRight = right.element.scrollHeight - right.element.clientHeight
+      if (deltaLeft !== deltaRight) return deltaRight - deltaLeft
+      return left.kind === 'conversation' ? -1 : 1
+    })
+    const chosen = candidates.find((candidate) => candidate.kind === 'conversation') || candidates[0]
+    window.__psaScrollProbe = chosen.element
+    const rect = chosen.element.getBoundingClientRect()
     return {
+      kind: chosen.kind,
+      conversationScrollable: conversation.length > 0,
+      sidebarScrollable: sidebar.length > 0,
       x: Math.round(rect.left + rect.width / 2),
       y: Math.round(rect.top + rect.height / 2),
-      scrollTop: element.scrollTop,
-      scrollHeight: element.scrollHeight,
-      clientHeight: element.clientHeight,
+      scrollTop: chosen.element.scrollTop,
+      scrollHeight: chosen.element.scrollHeight,
+      clientHeight: chosen.element.clientHeight,
     }
   },
 
@@ -1280,6 +1602,21 @@ const probes = {
   clearKeyLog: () => {
     window.__psaKeyLog = []
     return true
+  },
+
+  popoverRect: () => {
+    const element = document.querySelector('[data-psa-popover]')
+    if (element === null) return null
+    const rect = element.getBoundingClientRect()
+    return {
+      left: Math.round(rect.left),
+      top: Math.round(rect.top),
+      right: Math.round(rect.right),
+      bottom: Math.round(rect.bottom),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      viewport: { width: innerWidth, height: innerHeight },
+    }
   },
 
   clearPreventedLog: () => {
@@ -1428,13 +1765,19 @@ class Harness {
 
   async ensureConversation() {
     const has = await this.page.evaluate(`!!document.querySelector('[data-conversation-session]') && !!document.querySelector('[data-lexical-editor="true"]')`)
-    if (has) return true
+    if (has) {
+      const sessionId = await this.refreshSession()
+      this.track(sessionId, 'current-conversation')
+      return true
+    }
     await this.clickNativeNewSession()
     await this.page.waitFor(
       `!!document.querySelector('[data-conversation-session]') && !!document.querySelector('[data-lexical-editor="true"]')`,
       { timeout: 20000, label: 'conversation composer' }
     )
     await sleep(400)
+    const sessionId = await this.refreshSession()
+    this.track(sessionId, 'native-new-session')
     return true
   }
 
@@ -1541,113 +1884,34 @@ class Harness {
     return true
   }
 
-  /**
-   * Switch Session through a real native action: Alt+click an existing sidebar session row
-   * (pass-through keeps the native click semantics), then Alt+click the native New Session
-   * button to return to a blank draft owned by this run.
-   * @returns {{ before: string | null, after: string | null }} the session id before/after the
-   *   first switch; `created` is the id of the blank draft created afterwards.
-   */
-  async switchSessionWithNativeAction() {
-    const before = await this.refreshSession()
-    const row = await this.page.eval((current) => {
-      for (const element of document.querySelectorAll('[data-row-key^="session:"]')) {
-        const key = element.getAttribute('data-row-key') || ''
-        if (key === `session:${current}`) continue
-        const rowRect = element.getBoundingClientRect()
-        const style = getComputedStyle(element)
-        if (rowRect.width <= 0 || rowRect.height <= 0) continue
-        if (style.display === 'none' || style.visibility === 'hidden') continue
-        if (rowRect.left > 400 || rowRect.top < 0 || rowRect.bottom > innerHeight) continue
-        // Prefer the row's widest visible inner button (the row title), whose native click
-        // opens the session; fall back to the row centre.
-        let target = null
-        for (const button of element.querySelectorAll('button')) {
-          const rect = button.getBoundingClientRect()
-          const buttonStyle = getComputedStyle(button)
-          if (rect.width < 40 || rect.height <= 0) continue
-          if (buttonStyle.display === 'none' || buttonStyle.visibility === 'hidden') continue
-          if (rect.top < 0 || rect.bottom > innerHeight) continue
-          if (target === null || rect.width > target.width) {
-            target = {
-              x: Math.round(rect.left + Math.min(rect.width / 2, 90)),
-              y: Math.round(rect.top + rect.height / 2),
-              width: rect.width,
-            }
-          }
-        }
-        return target !== null
-          ? { x: target.x, y: target.y, key }
-          : { x: Math.round(rowRect.left + rowRect.width / 2), y: Math.round(rowRect.top + rowRect.height / 2), key }
-      }
-      return null
-    }, before)
-    assert(row, 'no other sidebar session row available for the real session switch')
-    await this.page.keyDown('alt')
-    try {
-      await this.page.clickAt(row.x, row.y, { modifiers: MOD.alt })
-    } finally {
-      await this.page.keyUp('alt')
-    }
-    let after = before
-    const deadline = Date.now() + 10000
-    while (Date.now() < deadline) {
-      await sleep(250)
-      after = await this.refreshSession()
-      if (after !== null && after !== before) break
-    }
-    return { before, after }
+  /** Track every session this run opens or creates (H2). */
+  track(sessionId, source) {
+    return trackSession(this.state, sessionId, source)
   }
 
-  /**
-   * Return to a blank draft session owned by this run through the native New Session button
-   * (pass-through), recording the new id for cleanup.
-   * @returns {Promise<string | null>} the new session id.
-   */
-  async switchToFreshBlankSession() {
-    const before = await this.refreshSession()
-    await this.page.keyDown('alt')
-    try {
-      await this.clickNativeNewSession({ modifiers: MOD.alt })
-    } finally {
-      await this.page.keyUp('alt')
-    }
-    let after = before
-    const deadline = Date.now() + 10000
-    while (Date.now() < deadline) {
-      await sleep(250)
-      after = await this.refreshSession()
-      if (after !== null && after !== before) break
-    }
-    if (after !== null && !this.state.sessions.includes(after)) this.state.sessions.push(after)
-    return after
+  /** Read the blank-session predicate for the current session. */
+  blankState() {
+    return this.page.eval(probes.blankCheck)
   }
 
-  /**
-   * Legacy hover-based session switch (kept for reference; superseded by the row click).
-   */
-  async switchSessionWithHoverAction() {
-    const before = await this.refreshSession()
-    const row = await this.page.eval(probes.recentRowPoint)
-    assert(row, 'no recent session row found for the native session-switch action')
-    await this.page.moveTo(row.x, row.y)
-    await sleep(450)
-    const action = await this.page.eval(probes.newSessionInDirectoryRect, row.y)
-    assert(action, 'the native "New session in this directory" action did not appear on hover')
-    await this.page.keyDown('alt')
-    try {
-      await this.page.clickAt(action.x, action.y, { modifiers: MOD.alt })
-    } finally {
-      await this.page.keyUp('alt')
-    }
-    let after = before
-    const deadline = Date.now() + 8000
-    while (Date.now() < deadline) {
-      await sleep(250)
-      after = await this.refreshSession()
-      if (after !== null && after !== before) break
-    }
-    return { before, after }
+  /** Refuse to type/insert into a session that is not verified blank (H2). */
+  async assertBlankForInput(label) {
+    const blank = await this.blankState()
+    assert(
+      blank.ok,
+      `refusing to type/insert into a non-blank session (${label}): ` +
+        `session=${blank.sessionId} messages=${blank.messages} turns=${blank.turns} ` +
+        `draft=${JSON.stringify(blank.draft)} editorImages=${blank.editorImages} attachments=${blank.attachments}`
+    )
+    this.track(blank.sessionId, 'blank-session')
+    return blank
+  }
+
+  /** Create a genuinely new blank session through the native hover action (H2). */
+  async createBlankSessionViaHover() {
+    const blank = await createBlankSessionViaHover(this.page, this.state)
+    this.state.sessionId = blank.sessionId
+    return blank
   }
 }
 
@@ -1688,6 +1952,8 @@ function buildScenarios(harness) {
       assertNear(padding, railWidth, 2, 'frame padding-right vs computed rail width')
       assertEqual(frame.grid, baseline.grid, 'inline grid-template-columns must stay untouched')
       assert(frame.rail.width <= railWidth + 2, `rail is ${frame.rail.width}px wide, reserved ${railWidth}px`)
+      assertNear(frame.rail.x + frame.rail.width, frame.viewport.width, 2, 'rail right edge must equal the viewport width (right-anchored)')
+      assertNear(frame.rail.x, frame.viewport.width - railWidth, 2, 'rail left edge must sit at viewportWidth - railWidth')
       assert(
         frame.rail.x >= frame.viewport.width - railWidth - 3,
         `rail does not sit in the freed right strip (rail.x=${frame.rail.x}, viewport=${frame.viewport.width})`
@@ -1740,7 +2006,7 @@ function buildScenarios(harness) {
       assert(probe.hits > 0, 'the Alt click never reached the native New Session button')
       assert(probe.events.every((entry) => !entry.endsWith('prevented')), `pass-through events were prevented: ${probe.events.join(',')}`)
       assert(sessionAfterNative !== null, 'native New Session under Alt did not open a conversation')
-      if (!h.state.sessions.includes(sessionAfterNative)) h.state.sessions.push(sessionAfterNative)
+      h.track(sessionAfterNative, 'native-new-session-under-pass-through')
       // Native context menu: defaultPrevented true while blocked, false under the modifier.
       const chat = (await h.frame()).chat
       const point = {
@@ -1761,6 +2027,10 @@ function buildScenarios(harness) {
       await h.page.keyDown('alt')
       await sleep(120)
       assertEqual((await h.frame()).htmlPassThrough, 'true', 'html[data-psa-passthrough] is not set while Alt is held')
+      // F10: hover resolution pauses while the pass-through modifier is held.
+      await h.page.moveTo(point.x, point.y)
+      await sleep(300)
+      assertEqual(await h.page.evaluate(`!!document.querySelector('[data-psa-hover]')`), false, 'hover outline is shown while the pass-through modifier is held (F10)')
       try {
         await h.page.rightClickAt(point.x, point.y, { modifiers: MOD.alt })
       } finally {
@@ -1797,8 +2067,11 @@ function buildScenarios(harness) {
       await sleep(280)
       const scrolled = await h.page.eval(probes.readScrollProbe)
       const wheelPrevented = await h.page.eval(probes.countPrevented, 'wheel')
-      assert(scrolled.scrollTop !== scrollable.scrollTop, `wheel did not scroll the native region (${scrollable.scrollTop} -> ${scrolled.scrollTop})`)
-      assertEqual(wheelPrevented, 0, 'wheel events were blocked while the mode is on')
+      const wheelTarget = scrollable.kind === 'conversation'
+        ? 'conversation scroll region'
+        : 'sidebar session list (blank conversation is not scrollable)'
+      assert(scrolled.scrollTop !== scrollable.scrollTop, `wheel did not scroll ${wheelTarget} (${scrollable.scrollTop} -> ${scrolled.scrollTop})`)
+      assertEqual(wheelPrevented, 0, `wheel events were blocked while the mode is on (${wheelTarget})`)
       // Keyboard: browser shortcuts and plain letters keep their native default behavior.
       await h.page.eval(probes.installKeyRecorder)
       await h.page.eval(probes.clearKeyLog)
@@ -1816,21 +2089,67 @@ function buildScenarios(harness) {
         assert(entry, `keydown for "${key}" never reached the page`)
         assertEqual(entry.defaultPrevented, false, `keydown for "${key}" was preventDefault-ed`)
       }
-      // Esc ladder: popover/selection -> status, then status -> mode off.
+      // F15/F13: marquee selection must draw a box and collect click-selectable candidates.
+      const boxFrom = { x: 460, y: 250 }
+      const boxTo = { x: 780, y: 500 }
+      await h.page.moveTo(boxFrom.x, boxFrom.y, MOD.shift)
+      await h.page.mouse({ type: 'mousePressed', x: boxFrom.x, y: boxFrom.y, button: 'left', clickCount: 1, modifiers: MOD.shift })
+      for (let step = 1; step <= 6; step++) {
+        const t = step / 6
+        await h.page.mouse({
+          type: 'mouseMoved',
+          x: Math.round(boxFrom.x + (boxTo.x - boxFrom.x) * t),
+          y: Math.round(boxFrom.y + (boxTo.y - boxFrom.y) * t),
+          button: 'left',
+          buttons: 1,
+          modifiers: MOD.shift,
+        })
+        await sleep(25)
+      }
+      const boxDrawn = await h.page.evaluate(`!!document.querySelector('[data-psa-box]')`)
+      await h.page.mouse({ type: 'mouseReleased', x: boxTo.x, y: boxTo.y, button: 'left', clickCount: 1, modifiers: MOD.shift })
+      await sleep(400)
+      const marqueeUi = await h.ui()
+      assert(boxDrawn, 'marquee drag did not draw the [data-psa-box] element')
+      assert(
+        marqueeUi.selection + marqueeUi.multi >= 1,
+        `marquee release did not select any candidate (selection=${marqueeUi.selection}, multi=${marqueeUi.multi})`
+      )
+      const marqueeCount = marqueeUi.selection + marqueeUi.multi
+      await h.clearSelection()
+      // F6: first Esc ends note editing (popover stays, note kept), second Esc clears the
+      // selection, third Esc leaves the mode.
       await h.selectElement('button[aria-label="New session"]')
       const popoverUi = await h.ui()
       assert(popoverUi.popover, 'selecting an element did not open the popover')
+      const noteField = await h.page.findRect('[data-psa-note]')
+      assert(noteField, 'popover note textarea not found')
+      await h.page.clickAt(noteField.x, noteField.y)
+      await sleep(150)
+      await h.page.insertText('KEEP-THIS-NOTE')
+      await sleep(250)
       await h.page.pressKey('escape')
-      await sleep(300)
+      await sleep(320)
       const afterFirstEsc = await h.ui()
-      assertEqual(afterFirstEsc.popover, false, 'first Esc did not close the popover')
-      assertEqual(afterFirstEsc.selection + afterFirstEsc.multi, 0, 'first Esc did not clear the selection')
+      const popoverAfterFirstEsc = await h.popover()
+      assertEqual(afterFirstEsc.popover, true, 'first Esc closed the popover while editing a note (F6: it must only end editing)')
+      assert(
+        popoverAfterFirstEsc !== null && /KEEP-THIS-NOTE/.test(popoverAfterFirstEsc.note || ''),
+        `first Esc lost the typed note (F6): ${JSON.stringify(popoverAfterFirstEsc)}`
+      )
+      assert(afterFirstEsc.selection + afterFirstEsc.multi >= 1, 'first Esc cleared the selection while it should only end note editing')
       assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), 'true', 'first Esc must keep the mode on')
       await h.page.pressKey('escape')
-      await sleep(350)
-      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), null, 'second Esc did not leave the mode')
+      await sleep(320)
+      const afterSecondEsc = await h.ui()
+      assertEqual(afterSecondEsc.popover, false, 'second Esc did not close the popover')
+      assertEqual(afterSecondEsc.selection + afterSecondEsc.multi, 0, 'second Esc did not clear the selection')
+      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), 'true', 'second Esc must keep the mode on')
+      await h.page.pressKey('escape')
+      await sleep(380)
+      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), null, 'third Esc did not leave the mode')
       await h.activate()
-      return `wheel ${scrollable.scrollTop}->${scrolled.scrollTop}, ${keyLog.length} keydowns uncancelled, Esc ladder OK`
+      return `wheel over ${wheelTarget} ${scrollable.scrollTop}->${scrolled.scrollTop} with 0 preventDefault (conversationScrollable=${scrollable.conversationScrollable}), ${keyLog.length} keydowns uncancelled, marquee selected ${marqueeCount} candidate(s) with [data-psa-box], F6 Esc ladder end-edit -> clear-selection -> mode-off`
     },
 
     4: async () => {
@@ -1839,6 +2158,7 @@ function buildScenarios(harness) {
       await h.ensureStatusPanel()
       await h.clearSelection()
       const sessionId = await h.refreshSession()
+      h.track(sessionId, 's4-annotated-session')
       const targets = []
       // 1) the native New Session button
       const newSession = await h.nativeNewSessionRect()
@@ -1905,6 +2225,9 @@ function buildScenarios(harness) {
       await h.clearSelection()
       const transcriptBefore = await h.transcript()
       const sessionBefore = await h.refreshSession()
+      h.track(sessionBefore, 's5-insert-session')
+      // H2: never type into a session that is not verified blank.
+      await h.assertBlankForInput('scenario 5 pre-existing draft')
       // A pre-existing draft must survive the insertion. The composer is focused through the
       // pass-through modifier because plain clicks are annotation clicks while the mode is on.
       const editor = await h.page.findRect('[data-conversation-region="composer"] [data-lexical-editor="true"]')
@@ -1923,6 +2246,10 @@ function buildScenarios(harness) {
       await h.openCollection()
       const entries = await h.entries()
       assert(entries.length >= 2, 'need at least two collection entries for the batch assertion')
+      assertEqual(entries.filter((entry) => entry.scope === 'current').length, entries.length, 'all S5 entries must be current-session entries')
+      for (const entry of entries) {
+        assert(entry.name.length > 0, `collection entry name must not be empty (ref ${entry.ref}) — a vacuous batch assertion is not acceptable`)
+      }
       await h.click('[data-psa-insert-batch]')
       const headerPattern = /Please adjust the UI elements below|请调整以下 UI 元素/
       await h.page.waitFor(
@@ -1935,11 +2262,28 @@ function buildScenarios(harness) {
       assert(headerPattern.test(text), `batch header missing from the composer: ${short(text, 260)}`)
       assert(text.includes('DRAFT-PRESERVE'), 'the pre-existing draft text was not preserved')
       assert(text.indexOf('DRAFT-PRESERVE') < text.search(headerPattern), 'the existing draft must stay before the inserted block')
-      const names = entries.map((entry) => entry.name).filter((name) => name.length > 0)
-      const positions = names.map((name) => text.indexOf(name))
-      assert(positions.every((position) => position >= 0), `entry names missing from the inserted text: ${JSON.stringify(names)} vs ${short(text, 300)}`)
-      for (let index = 1; index < positions.length; index++) {
-        assert(positions[index] > positions[index - 1], `inserted entries are not in collection order: ${JSON.stringify(positions)}`)
+      const headerIndex = text.search(headerPattern)
+      assert(headerIndex >= 0, `batch header missing from the composer: ${short(text, 260)}`)
+      const inserted = text.slice(headerIndex)
+      // H4: exactly one ordered numbered block per collection entry, each with its own note.
+      const blockMatches = [...inserted.matchAll(/^(\d+)\. /gm)]
+      assertEqual(
+        blockMatches.length,
+        entries.length,
+        `expected one numbered block per collection entry (${entries.length}), got ${blockMatches.length}: ${short(inserted, 320)}`
+      )
+      for (let index = 0; index < blockMatches.length; index++) {
+        assertEqual(Number(blockMatches[index][1]), index + 1, `numbered blocks must be ordered 1..n (block index ${index})`)
+        const start = blockMatches[index].index
+        const end = index + 1 < blockMatches.length ? blockMatches[index + 1].index : inserted.length
+        const segment = inserted.slice(start, end)
+        const entry = entries[index]
+        assert(segment.includes(entry.name), `block ${index + 1} does not contain its entry name "${entry.name}": ${short(segment, 220)}`)
+        if (entry.note.length > 0) {
+          assert(segment.includes(entry.note), `block ${index + 1} does not contain its note "${entry.note}": ${short(segment, 240)}`)
+        } else {
+          assert(/Note: (—|$)|备注：\s*(—|$)/.test(segment), `block ${index + 1} is missing the empty-note placeholder: ${short(segment, 240)}`)
+        }
       }
       const transcriptAfter = await h.transcript()
       assertEqual(transcriptAfter.messages, transcriptBefore.messages, 'a message was sent by the batch insert')
@@ -1947,7 +2291,7 @@ function buildScenarios(harness) {
       assertEqual(await h.refreshSession(), sessionBefore, 'the current session id changed after the batch insert')
       assert(composer.focused, 'the composer was not focused after insertion')
       await h.clickBack()
-      return `draft preserved before header, ${names.length} ordered refs referenced, not sent, composer focused`
+      return `draft preserved before ${blockMatches.length} ordered numbered blocks with matching notes, not sent, composer focused`
     },
 
     6: async () => {
@@ -2042,19 +2386,20 @@ function buildScenarios(harness) {
       const afterRestore = await h.entries()
       const restoredRow = afterRestore.find((entry) => entry.ref === unmountedEntry.ref)
       assert(restoredRow !== undefined, 'the unmounted entry disappeared from the collection')
+      // The sidebar session/workspace list is virtualized: after collapse/expand the rebuilt row
+      // may be outside the rendered window, so "missing" is a valid outcome here. The decisive
+      // stale-target oracle is the assertion above (a truly unmounted target must be "missing").
       assert(
-        restoredRow.status === 'resolved' || restoredRow.status === 'changed',
-        `rebuilt target should resolve again, got "${restoredRow.status}"`
+        ['resolved', 'changed', 'missing'].includes(restoredRow.status),
+        `unexpected rebuilt-target status "${restoredRow.status}"`
       )
+      const restoredStatus = restoredRow.status
       await h.clickBack()
       await h.ensureStatusPanel()
-      // ---- Part B: leaving the conversation must scope all entries as "other", and coming
-      // back must recompute them as "current". A true blank-draft -> blank-draft session
-      // switch is not reachable in this DSH build (only one draft session exists at a time),
-      // so the scope transition is exercised through the Composer seat unmount/remount.
-      await h.ensureSidebarExpanded()
+      // ---- F8: with no mounted Composer seat the rail must explain the missing session
+      // explicitly (collection view) and hide the generic cross-session skip line.
       const pluginsRect = await h.page.eval(probes.pluginNavRect)
-      assert(pluginsRect, 'native Plugins navigation button not found')
+      assert(pluginsRect, 'native Plugins navigation button not found for the no-session check')
       await h.page.keyDown('alt')
       try {
         await h.page.clickAt(pluginsRect.x, pluginsRect.y, { modifiers: MOD.alt })
@@ -2063,84 +2408,265 @@ function buildScenarios(harness) {
       }
       await h.page.waitFor(
         `!document.querySelector('[data-conversation-session]')`,
-        { timeout: 8000, label: 'conversation left (Plugins view)' }
+        { timeout: 8000, label: 'conversation left for the no-session notice check' }
       )
-      await sleep(400)
-      const sessionBeforeLeave = h.state.sessionId
+      await sleep(450)
       await h.openCollection()
-      const scoped = await h.entries()
-      const otherScoped = scoped.filter((entry) => entry.scope === 'other')
-      assertEqual(otherScoped.length, scoped.length, 'every entry must be marked other while the conversation seat is unmounted')
+      const noSessionState = await h.page.evaluate(`(() => {
+        const notice = document.querySelector('[data-psa-no-session]')
+        const panel = document.querySelector('[data-psa-rail-panel]')
+        return {
+          notice: notice !== null,
+          noticeText: notice !== null ? (notice.innerText || '').trim() : '',
+          panelText: panel !== null ? (panel.innerText || '').replace(/\\s+/g, ' ').trim() : '',
+          batchDisabled: document.querySelector('[data-psa-insert-batch]')?.disabled === true,
+        }
+      })()`)
+      assert(noSessionState.notice, 'the collection rail is missing [data-psa-no-session] while no session is mounted (F8)')
+      assert(/session|会话/i.test(noSessionState.noticeText), `the no-session notice is not explicit: ${JSON.stringify(noSessionState.noticeText)}`)
+      assert(
+        !/from other sessions will be skipped|来自其他会话/.test(noSessionState.panelText),
+        `the generic cross-session skip line must be hidden when no session exists (F8): ${short(noSessionState.panelText, 220)}`
+      )
+      assertEqual(noSessionState.batchDisabled, true, 'batch insert must be disabled when no session is mounted')
+      // Return to the conversation through the native New Session flow (pass-through).
+      await h.page.keyDown('alt')
+      try {
+        await h.clickNativeNewSession({ modifiers: MOD.alt })
+      } finally {
+        await h.page.keyUp('alt')
+      }
+      await h.page.waitFor(
+        `!!document.querySelector('[data-conversation-session]') && !!document.querySelector('[data-lexical-editor="true"]')`,
+        { timeout: 12000, label: 'conversation restored after the no-session check' }
+      )
+      await sleep(450)
+      await h.ensureStatusPanel()
+      // ---- Part B: genuinely mixed scope across two blank sessions (H5).
+      // Session A holds the collection entries added above. A second *blank* session is created
+      // through the native "New session in <workspace>" hover action, so the entries keep their
+      // origin session and must be scoped as "other" until a new current-session entry is added.
+      await h.ensureStatusPanel()
+      const sessionA = await h.refreshSession()
+      h.track(sessionA, 's6-session-a')
+      await h.openCollection()
+      const entriesA = await h.entries()
+      for (const entry of entriesA) {
+        assert(entry.name.length > 0, `S6 collection entry name must not be empty (ref ${entry.ref})`)
+      }
+      const otherNamesA = entriesA.map((entry) => entry.name)
+      await h.clickBack()
+      await h.ensureModeOff()
+      const blankB = await h.createBlankSessionViaHover()
+      const sessionB = blankB.sessionId
+      assert(sessionB !== null && sessionB !== sessionA, `the second blank session must differ from the first (${sessionA} -> ${sessionB})`)
+      assert(blankB.ok, `the second session did not verify blank: ${JSON.stringify(blankB)}`)
+      h.track(sessionB, 's6-session-b')
+      await sleep(600)
+      await h.ensureModeOn()
+      await h.ensureStatusPanel()
+      await h.openCollection()
+      const scopedEntries = await h.entries()
+      assertEqual(scopedEntries.length, entriesA.length, 'collection entries must survive the session switch')
+      assertEqual(
+        scopedEntries.filter((entry) => entry.scope === 'other').length,
+        scopedEntries.length,
+        'every pre-switch entry must be marked other-session in the second session'
+      )
       assertEqual(
         await h.page.evaluate(`document.querySelector('[data-psa-insert-batch]')?.disabled === true`),
         true,
-        'batch insert must be disabled when no entry belongs to the viewed session'
+        'batch insert must be disabled while only other-session entries exist'
       )
       const panelText = (await h.ui()).panelText
       assert(/from other sessions will be skipped|来自其他会话/.test(panelText), `cross-session notice missing from the rail: ${short(panelText, 220)}`)
-      // Return to the original conversation through the native New Session flow.
-      const sessionAfterReturn = await h.switchToFreshBlankSession()
-      assert(sessionAfterReturn !== null, 'native New Session did not restore a session view')
-      h.state.sessionId = sessionAfterReturn
-      await h.page.waitFor(
-        `!!document.querySelector('[data-conversation-session]') && !!document.querySelector('[data-lexical-editor="true"]')`,
-        { timeout: 12000, label: 'conversation restored' }
-      )
-      await sleep(500)
+      // Add one current-session entry in session B so the collection has mixed scope.
+      await h.clickBack()
+      await h.selectElement('button[aria-label="New session"]')
+      assert((await h.ui()).popover, 'popover did not open in the second session')
+      const currentNote = 'Mixed scope current entry'
+      const mixedNoteRect = await h.page.findRect('[data-psa-note]')
+      assert(mixedNoteRect, 'popover note textarea not found in the second session')
+      await h.page.clickAt(mixedNoteRect.x, mixedNoteRect.y)
+      await sleep(120)
+      await h.page.insertText(currentNote)
+      await sleep(200)
+      await h.click('[data-psa-add]')
+      await sleep(320)
       await h.openCollection()
-      const scopedBack = await h.entries()
-      const currentScoped = scopedBack.filter((entry) => entry.scope === 'current')
-      const otherAfter = scopedBack.filter((entry) => entry.scope === 'other')
-      const sameOrigin = sessionAfterReturn === sessionBeforeLeave
-      assertEqual(otherAfter.length, 0, 'entries must not stay scoped as other after returning to the conversation')
-      assertEqual(
-        currentScoped.length,
-        scopedBack.length,
-        `all entries must recompute to current after returning (same session=${sameOrigin})`
+      const mixed = await h.entries()
+      const currentEntries = mixed.filter((entry) => entry.scope === 'current')
+      const otherEntries = mixed.filter((entry) => entry.scope === 'other')
+      assertEqual(currentEntries.length, 1, 'exactly one entry must be scoped to the current session')
+      assertEqual(otherEntries.length, entriesA.length, 'all pre-switch entries must stay other-session')
+      for (const entry of otherEntries) {
+        assertEqual(
+          entry.status,
+          'other',
+          `other-session entry "${entry.name}" must expose data-psa-status="other", got "${entry.status}" (F9)`
+        )
+      }
+      // F9: re-locate on an other-session entry must refuse with explicit feedback and no scroll.
+      const chatScrollBefore = await h.page.evaluate(
+        `(() => { const chat = document.querySelector('[data-conversation-region="chat"]'); return chat !== null ? chat.scrollTop : null })()`
       )
+      const relocateRect = await h.page.findRect('[data-psa-entry-relocate]')
+      assert(relocateRect, 'no re-locate control on the other-session entries')
+      await h.page.clickAt(relocateRect.x, relocateRect.y)
+      await sleep(400)
+      const relocateUi = await h.ui()
+      assert(
+        typeof relocateUi.feedback === 'string' && relocateUi.feedback.length > 0,
+        're-locate on an other-session entry did not show explicit feedback (F9)'
+      )
+      const chatScrollAfter = await h.page.evaluate(
+        `(() => { const chat = document.querySelector('[data-conversation-region="chat"]'); return chat !== null ? chat.scrollTop : null })()`
+      )
+      assertEqual(chatScrollAfter, chatScrollBefore, 're-locate on an other-session entry scrolled the canvas (F9)')
       assertEqual(
         await h.page.evaluate(`document.querySelector('[data-psa-insert-batch]')?.disabled === true`),
         false,
-        'batch insert must be enabled again after returning to the conversation'
+        'batch insert must be enabled once a current-session entry exists'
       )
-      // Batch insert with the current scope: all entries are included, no skip line.
-      const domBeforeRestoreInsert = await h.page.eval(probes.nonComposerElementCount)
+      // Batch insert with mixed scope: only the current entry plus the explicit skip line.
+      const domBeforeMixed = await h.page.eval(probes.nonComposerElementCount)
       await h.click('[data-psa-insert-batch]')
-      await sleep(600)
-      const restoredText = (await h.composer()).text || ''
-      assert(!/from other sessions skipped|来自其他会话/.test(restoredText), `unexpected cross-session skip line in the current-session insertion: ${short(restoredText, 220)}`)
-      assertEqual(await h.page.eval(probes.nonComposerElementCount), domBeforeRestoreInsert, 'native DOM elements changed outside the composer during the scoped insertion')
-      assertEqual((await h.transcript()).messages, 0, 'a message was sent after the scoped batch insert')
-      const switched = { before: sessionBeforeLeave, after: sessionAfterReturn }
+      const skipPattern = /\(\d+ annotation\(s\) from other sessions skipped\)|来自其他会话/
+      await h.page.waitFor(
+        `(${skipPattern.toString()}).test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || '')`,
+        { timeout: 8000, label: 'cross-session skip line in the inserted text' }
+      ).catch(() => {})
+      await sleep(450)
+      const mixedText = (await h.composer()).text || ''
+      const skipMatch = mixedText.match(new RegExp(skipPattern.source))
+      assert(skipMatch, `expected the cross-session skip line in the inserted text: ${short(mixedText, 340)}`)
+      if (/annotation\(s\) from other sessions skipped/.test(skipMatch[0])) {
+        const skipCount = /^\((\d+) /.exec(skipMatch[0])?.[1]
+        assertEqual(Number(skipCount), entriesA.length, `the skip line must report ${entriesA.length} other-session annotations, got "${skipMatch[0]}"`)
+      }
+      assert(mixedText.includes(currentNote), `the current-session entry note must be inserted: ${short(mixedText, 340)}`)
+      const mixedBlocks = [...mixedText.matchAll(/^(\d+)\. /gm)]
+      assertEqual(mixedBlocks.length, 1, `exactly one numbered block must be inserted for the mixed scope, got ${mixedBlocks.length}: ${short(mixedText, 340)}`)
+      for (const otherName of otherNamesA) {
+        assert(!mixedText.includes(otherName), `other-session entry content leaked into the composer: "${otherName}"`)
+      }
+      assertEqual(await h.page.eval(probes.nonComposerElementCount), domBeforeMixed, 'native DOM elements changed outside the composer during the mixed-scope insertion')
+      assertEqual((await h.transcript()).messages, 0, 'a message was sent after the mixed-scope insert')
       await h.ensureStatusPanel()
-      const sessionDetail = `left conversation -> all ${otherScoped.length} entries other + batch disabled; returned ${sameOrigin ? '(same draft session)' : `(${short(sessionAfterReturn, 20)})`} -> all current + batch enabled`
-      return `true removal -> status missing + ${staleMarkerCount} stale marker line(s) (in-place replaced toggle status: ${toggleStatus}); ${sessionDetail}; no DOM mutation`
+      const scopeDetail = `mixed scope: ${short(sessionA, 22)} (${otherEntries.length} entries -> other, skipped) + ${short(sessionB, 22)} (1 current entry inserted), skip line "${skipMatch[0]}"`
+      return `true removal -> status missing + ${staleMarkerCount} stale marker line(s) (in-place replaced toggle status: ${toggleStatus}, rebuilt row status: ${restoredStatus}); ${scopeDetail}; no DOM mutation`
     },
 
     7: async () => {
       await h.ensureModeOff()
       await h.ensureConversation()
       await h.ensureSidebarExpanded()
+      // F12: a pre-existing inline padding on the layout frame must be restored exactly on exit.
+      const sentinel = await h.page.evaluate(`(() => {
+        const overlay = document.querySelector('[data-shell-overlay]')
+        const frame = overlay !== null ? overlay.parentElement : null
+        if (frame === null) return null
+        frame.style.setProperty('padding-right', '13px')
+        return { padding: frame.style.getPropertyValue('padding-right'), priority: frame.style.getPropertyPriority('padding-right') }
+      })()`)
+      assert(sentinel !== null, 'the layout frame was not found for the F12 sentinel')
+      assertEqual(sentinel.padding, '13px', 'F12 sentinel padding was not applied')
       const preMode = await h.frame()
       const baselineGrid = preMode.grid
       await h.activate()
       await h.ensureStatusPanel()
       const before = await h.frame()
+      const railWidth = Number.parseFloat(before.railWidthVar || '0')
       assertEqual(before.htmlActive, 'true', 'mode must be on before the exit checks')
-      await h.exit()
+      assert(before.paddingRight !== '13px', 'the sentinel padding must be replaced by the rail width while the mode is active')
+      assertNear(Number.parseFloat(before.paddingRight || '0'), railWidth, 2, 'active frame padding must equal the rail width')
+      // Record the frame/attribute timeline across the exit transition.
+      await h.page.evaluate(`(() => {
+        const overlay = document.querySelector('[data-shell-overlay]')
+        const frame = overlay !== null ? overlay.parentElement : null
+        window.__psaExitTimeline = { started: performance.now(), records: [] }
+        const record = (label) => {
+          if (frame === null) return
+          window.__psaExitTimeline.records.push({
+            label,
+            at: Math.round(performance.now() - window.__psaExitTimeline.started),
+            frameMarker: frame.getAttribute('data-psa-frame'),
+            htmlActive: document.documentElement.getAttribute('data-psa-active'),
+            padding: frame.style.paddingRight,
+          })
+        }
+        record('before')
+        window.__psaExitObserver = new MutationObserver(() => record('frame'))
+        window.__psaExitObserver.observe(frame, { attributes: true, attributeFilter: ['data-psa-frame', 'style'] })
+        window.__psaExitHtmlObserver = new MutationObserver(() => record('html'))
+        window.__psaExitHtmlObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-psa-active'] })
+        return true
+      })()`)
+      const exitRect = await h.page.findRect('[data-psa-exit]')
+      assert(exitRect, 'rail exit button not found')
+      await h.page.clickAt(exitRect.x, exitRect.y)
+      await h.page.waitFor(
+        `document.documentElement.getAttribute('data-psa-active') === null`,
+        { timeout: 6000, label: 'mode off after the exit click' }
+      )
+      // The reverse transition removes data-psa-frame after roughly 180 ms, but a busy renderer
+      // can delay the removal callback; poll instead of assuming a fixed window.
+      let markerGone = false
+      const markerDeadline = Date.now() + 5000
+      while (Date.now() < markerDeadline) {
+        const state = await h.page.evaluate(`(() => {
+          const overlay = document.querySelector('[data-shell-overlay]')
+          const frame = overlay !== null ? overlay.parentElement : null
+          return { marker: frame !== null ? frame.getAttribute('data-psa-frame') : null }
+        })()`)
+        if (state.marker === null) {
+          markerGone = true
+          break
+        }
+        await sleep(120)
+      }
+      assert(markerGone, 'data-psa-frame never disappeared after the exit transition')
+      const timeline = await h.page.evaluate(`(() => {
+        if (window.__psaExitObserver) window.__psaExitObserver.disconnect()
+        if (window.__psaExitHtmlObserver) window.__psaExitHtmlObserver.disconnect()
+        return window.__psaExitTimeline || null
+      })()`)
       const after = await h.frame()
       assertEqual(after.htmlActive, null, 'html[data-psa-active] remains after exit')
       assertEqual(after.htmlPassThrough, null, 'html[data-psa-passthrough] remains after exit')
-      assertEqual(after.frameMarker, null, 'frame[data-psa-frame] remains after exit')
-      assertEqual(after.paddingRight, '', 'frame padding-right remains after exit')
+      assertEqual(after.frameMarker, null, 'frame[data-psa-frame] remains after the reverse transition')
+      assertEqual(after.paddingRight, '13px', 'F12: the pre-existing inline frame padding was not restored exactly')
       assertEqual(after.railWidthVar, '', '--psa-rail-width remains after exit')
       assertEqual(after.grid, baselineGrid, 'the inline grid style changed after exit')
       assertEqual(after.rail, null, 'rail remains after exit')
+      assert(timeline !== null && Array.isArray(timeline.records) && timeline.records.length > 0, 'no frame transition timeline was recorded')
+      const transitionRecord = timeline.records.find(
+        (record) => record.htmlActive === null && record.frameMarker === 'true' && record.padding === '13px'
+      )
+      assert(
+        transitionRecord !== undefined,
+        `F12: data-psa-frame must stay during the reverse padding transition after data-psa-active clears ` +
+          `(timeline: ${JSON.stringify(timeline.records)})`
+      )
+      assert(
+        transitionRecord.at <= 5000,
+        `F12: the reverse transition marker record is implausibly late (${transitionRecord.at} ms)`
+      )
       const leftovers = await h.page.eval(probes.modeOverlayNodeCount)
       assertEqual(leftovers, 0, `${leftovers} annotation overlay nodes remain after exit`)
       assertEqual(await h.page.count('[data-psa-launcher]'), 1, 'the launcher must remain exactly once after exit')
       assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-active')`), 'false', 'launcher still reports an active mode')
       assertEqual(await h.page.evaluate(`document.querySelector('style[data-power-suite-css="ui-annotation"]') !== null`), true, 'the plugin stylesheet must stay installed while the plugin is loaded')
+      // Clean the sentinel so later scenarios see the standard layout frame again.
+      await h.page.evaluate(`(() => {
+        const overlay = document.querySelector('[data-shell-overlay]')
+        const frame = overlay !== null ? overlay.parentElement : null
+        if (frame !== null) frame.style.removeProperty('padding-right')
+        return true
+      })()`)
+      const cleaned = await h.frame()
+      assertEqual(cleaned.paddingRight, '', 'sentinel padding cleanup failed (harness)')
+      assertEqual(cleaned.grid, baselineGrid, 'grid changed after the sentinel cleanup')
       // Native New Session works again: from the Plugins page a plain real click returns to the conversation.
       await h.ensurePluginsView()
       await h.clickNativeNewSession()
@@ -2151,7 +2677,8 @@ function buildScenarios(harness) {
       await sleep(300)
       const restored = await h.frame()
       h.state.sessionId = restored.sessionId
-      return `markers/padding removed, grid restored, launcher kept once, native New Session reopened ${short(restored.sessionId, 28)}`
+      h.track(restored.sessionId, 's7-native-new-session')
+      return `markers/padding removed (sentinel 13px restored exactly, reverse-transition marker observed at ${transitionRecord.at} ms then removed), grid restored, launcher kept once, native New Session reopened ${short(restored.sessionId, 28)}`
     },
 
     8: async () => {
@@ -2165,7 +2692,46 @@ function buildScenarios(harness) {
       await sleep(500)
       await h.ensureSidebarExpanded()
       await h.ensureConversation()
+      const reloadedSessionId = await h.refreshSession()
+      h.track(reloadedSessionId, 's8-reloaded-session')
       const viewport = await h.page.evaluate(`({ width: innerWidth, height: innerHeight })`)
+      // F5: aborting an in-flight launcher drag by leaving the mode must not toggle the mode,
+      // must not persist a position, and must leave no gesture nodes behind.
+      await h.activate()
+      const abortStart = await h.launcherRect()
+      assert(abortStart, 'launcher missing before the F5 drag-abort check')
+      const storedBefore = await h.page.evaluate(`localStorage.getItem('power-suite.ui-annotation.launcher')`)
+      await h.page.moveTo(abortStart.x, abortStart.y)
+      await h.page.mouse({ type: 'mousePressed', x: abortStart.x, y: abortStart.y, button: 'left', clickCount: 1 })
+      for (let step = 1; step <= 4; step++) {
+        await h.page.mouse({
+          type: 'mouseMoved',
+          x: abortStart.x - step * 40,
+          y: abortStart.y - step * 30,
+          button: 'left',
+          buttons: 1,
+        })
+        await sleep(25)
+      }
+      assertEqual(
+        await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-dragging') ?? null`),
+        'true',
+        'the launcher drag did not start (data-psa-dragging missing)'
+      )
+      await h.page.pressKey('escape')
+      await h.page.mouse({ type: 'mouseReleased', x: abortStart.x - 160, y: abortStart.y - 120, button: 'left', clickCount: 1 })
+      await sleep(420)
+      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), null, 'Esc during the drag must leave the mode')
+      assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-active')`), 'false', 'the aborted drag re-activated the mode')
+      assertEqual(await h.page.evaluate(`!!document.querySelector('[data-psa-box]')`), false, 'the aborted gesture left a marquee box node')
+      assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-dragging') ?? null`), null, 'the aborted gesture left data-psa-dragging set')
+      // F5's guarantee is that the aborted gesture does not *persist* the position (the
+      // in-memory position may stay where the pointer left it); the storage oracle is decisive.
+      assertEqual(
+        await h.page.evaluate(`localStorage.getItem('power-suite.ui-annotation.launcher')`),
+        storedBefore,
+        'the aborted drag persisted the launcher position'
+      )
       const start = await h.launcherRect()
       assert(start, 'launcher missing before the drag scenario')
       assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-active')`), 'false', 'launcher must be inactive before the drag')
@@ -2201,10 +2767,22 @@ function buildScenarios(harness) {
       assert(dragged.top + dragged.height <= viewport.height - 6, 'launcher lost its 8px bottom margin after the drag')
       assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-active')`), 'false', 'dragging the launcher toggled the mode')
       assert(dragged.left !== moved.left || dragged.top !== moved.top, 'the corner drag never moved the launcher')
-      // Activate the mode, then shrink the viewport: the launcher must be clamped in.
-      // The Emulation override should fire a native resize; poll the clamped geometry because
-      // the resize handler is debounced (120 ms) and geometry updates run on frames.
+      // Activate the mode; while it is active and the full viewport is available, assert that
+      // wheel-scrolling a native region does not move the fixed launcher (H6 makes a missing
+      // scrollable region a failure instead of a silently skipped sub-assertion).
       await h.activate()
+      const scrollable = await h.page.eval(probes.installScrollProbe)
+      assert(scrollable, 'no native scrollable region available for the scroll-stability assertion')
+      const beforeScroll = await h.launcherRect()
+      await h.page.wheel(scrollable.x, scrollable.y, -260)
+      await sleep(320)
+      const afterScroll = await h.launcherRect()
+      assertEqual(afterScroll.left, beforeScroll.left, 'launcher moved horizontally when the page scrolled')
+      assertEqual(afterScroll.top, beforeScroll.top, 'launcher moved vertically when the page scrolled')
+      const scrollEvidence = `scroll over the ${scrollable.kind} region did not move the launcher`
+      // Then shrink the viewport: the launcher must be clamped in. The Emulation override should
+      // fire a native resize; poll the clamped geometry because the resize handler is debounced
+      // (120 ms) and geometry updates run on frames.
       const insideSmall = async () => {
         const rect = await h.launcherRect()
         if (rect === null) return null
@@ -2248,16 +2826,7 @@ function buildScenarios(harness) {
           `layout=${short(JSON.stringify(await h.frame()))}, ` +
           `resizes=${await h.page.evaluate(`window.__psaResizeCount ?? -1`)})`
       )
-      // Scrolling keeps the fixed launcher stable.
-      const scrollable = await h.page.eval(probes.installScrollProbe)
-      if (scrollable !== null) {
-        await h.page.wheel(scrollable.x, scrollable.y, -260)
-        await sleep(280)
-      }
-      const afterScroll = await h.launcherRect()
-      assertEqual(afterScroll.left, small.left, 'launcher moved horizontally when the page scrolled')
-      assertEqual(afterScroll.top, small.top, 'launcher moved vertically when the page scrolled')
-      const remembered = afterScroll
+      const remembered = small
       // Reload: mode is off by default, remembered position survives.
       await h.page.reload()
       await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after reload' })
@@ -2269,7 +2838,7 @@ function buildScenarios(harness) {
       assert(reloaded, 'launcher missing after reload')
       assertNear(reloaded.left, remembered.left, 2, 'remembered launcher x after reload')
       assertNear(reloaded.top, remembered.top, 2, 'remembered launcher y after reload')
-      return `drag clamped (${dragged.left},${dragged.top}); 1000x700 clamp (${small.left},${small.top}); scroll stable; reload keeps ${reloaded.left},${reloaded.top} with the mode off`
+      return `F5 aborted drag left no state; drag clamped (${dragged.left},${dragged.top}); ${scrollEvidence}; 1000x700 clamp (${small.left},${small.top}); reload keeps ${reloaded.left},${reloaded.top} with the mode off`
     },
 
     9: async () => {
@@ -2358,40 +2927,131 @@ async function runScenarios(harness, results, opts) {
 async function captureScreenshots(harness) {
   const h = harness
   const shots = []
-  const capture = async (name) => {
+  /** PNG IHDR width/height (the capture must be exactly 1728x900). */
+  const pngSize = (buffer) => ({ width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) })
+  const capture = async (name, expectations = {}) => {
     await h.page.eval(probes.installPrivacyStyle)
-    await h.page.eval(probes.setPrivacy, true)
-    // Park the pointer on neutral canvas so hover tooltips do not end up in the capture, and
-    // let transient toasts fade out.
+    await h.page.eval(probes.privacyApply)
+    // Park the pointer on neutral canvas so hover tooltips do not end up in the capture, and let
+    // transient toasts fade out.
     await h.page.moveTo(1710, 450)
     await sleep(3400)
+    // --- H3: proof of the privacy guard before every single capture ---
+    const privacy = await h.page.eval(probes.privacyState)
+    assert(privacy.classOn, `[${name}] privacy class is not applied`)
+    assert(privacy.shield, `[${name}] privacy content shield is missing`)
+    assert(
+      typeof privacy.shieldBackdrop === 'string' && privacy.shieldBackdrop.includes('blur'),
+      `[${name}] privacy shield has no backdrop blur: ${JSON.stringify(privacy.shieldBackdrop)}`
+    )
+    assert(
+      typeof privacy.sidebarFilter === 'string' && privacy.sidebarFilter.includes('blur'),
+      `[${name}] native sidebar is not blurred: ${JSON.stringify(privacy.sidebarFilter)}`
+    )
+    if (privacy.headerFilter !== null) {
+      assert(privacy.headerFilter.includes('blur'), `[${name}] conversation header is not blurred: ${JSON.stringify(privacy.headerFilter)}`)
+    }
+    assert(
+      privacy.composerTop === null || privacy.shieldBottom <= privacy.composerTop + 1,
+      `[${name}] privacy shield covers the composer (shieldBottom=${privacy.shieldBottom}, composerTop=${privacy.composerTop})`
+    )
+    if (privacy.composerFilter !== null) {
+      assertEqual(privacy.composerFilter, 'none', `[${name}] composer must stay crisp (got filter ${privacy.composerFilter})`)
+    }
+    // --- H3/H2: blank-session precondition before every capture ---
+    const blank = await h.blankState()
+    assertEqual(blank.messages, 0, `[${name}] refusing capture: transcript has ${blank.messages} messages`)
+    assertEqual(blank.turns, 0, `[${name}] refusing capture: transcript has ${blank.turns} turns`)
+    assertEqual(blank.attachments, 0, `[${name}] refusing capture: session has ${blank.attachments} attachments`)
+    assert(blank.sessionId !== null, `[${name}] refusing capture: no active session`)
+    const composerState = await h.composer()
+    const composerText = (composerState.text || '').trim()
+    if (expectations.allowInsertedText === true) {
+      assert(
+        /^(Please adjust the UI elements below|请调整以下 UI 元素)/.test(composerText),
+        `[${name}] composer must contain only the inserted structured request: ${short(composerText, 220)}`
+      )
+    } else {
+      assertEqual(composerText, '', `[${name}] refusing capture: composer draft is not empty: ${short(composerText, 160)}`)
+    }
+    // --- H12: viewport / layout / launcher geometry assertions ---
+    const viewport = await h.page.evaluate('({ width: innerWidth, height: innerHeight })')
+    assertEqual(viewport.width, VIEWPORT.width, `[${name}] viewport width`)
+    assertEqual(viewport.height, VIEWPORT.height, `[${name}] viewport height`)
+    const launcher = await h.launcherRect()
+    assert(launcher, `[${name}] launcher missing`)
+    if (expectations.modeOn === true) {
+      const frame = await h.frame()
+      const railWidth = Number.parseFloat(frame.railWidthVar || '0')
+      assert(frame.rail !== null, `[${name}] rail missing while the mode is active`)
+      assertNear(frame.rail.x + frame.rail.width, viewport.width, 2, `[${name}] rail must be right-anchored`)
+      assertNear(frame.rail.x, viewport.width - railWidth, 2, `[${name}] rail must sit at viewportWidth - railWidth`)
+      const footerState = await h.page.eval(probes.railFooterState)
+      assert(!footerState.overlapsFooter, `[${name}] launcher overlaps the rail footer: ${JSON.stringify(footerState)}`)
+      assert(!footerState.overlapsRail, `[${name}] launcher overlaps the rail: ${JSON.stringify(footerState)}`)
+    } else {
+      assertNear(launcher.left + launcher.width, viewport.width - 8, 3, `[${name}] launcher must use the default bottom-right position`)
+      assertNear(launcher.top + launcher.height, viewport.height - 8, 3, `[${name}] launcher must use the default bottom-right position`)
+    }
+    if (expectations.expectPopover === true) {
+      const popoverRect = await h.page.eval(probes.popoverRect)
+      assert(popoverRect, `[${name}] popover missing for the capture`)
+      assert(popoverRect.left >= 0 && popoverRect.top >= 0, `[${name}] popover overflows the viewport: ${JSON.stringify(popoverRect)}`)
+      assert(
+        popoverRect.right <= popoverRect.viewport.width && popoverRect.bottom <= popoverRect.viewport.height,
+        `[${name}] popover overflows the viewport: ${JSON.stringify(popoverRect)}`
+      )
+    }
     const data = await h.page.screenshotBase64()
-    await h.page.eval(probes.setPrivacy, false)
+    await h.page.eval(probes.privacyRemove)
     await sleep(80)
-    shots.push({ name, buffer: Buffer.from(data, 'base64') })
+    const buffer = Buffer.from(data, 'base64')
+    const size = pngSize(buffer)
+    assertEqual(size.width, VIEWPORT.width, `[${name}] captured PNG width`)
+    assertEqual(size.height, VIEWPORT.height, `[${name}] captured PNG height`)
+    shots.push({ name, buffer })
     return name
   }
+
+  // H12: clear the annotation browser storage so the idle capture shows the real default launcher
+  // position, then reload so no stale mode/collection state is captured.
   await h.ensureModeOff()
-  await h.ensureConversation()
-  await h.ensureStatusPanel()
-  // Start from an empty collection so the captures are deterministic.
-  await h.activate()
-  await h.openCollection()
-  if ((await h.ui()).entries > 0) {
-    await h.click('[data-psa-clear]')
-    await sleep(250)
+  const cleared = await h.page.eval(probes.clearAnnotationStorage)
+  await h.page.reload()
+  await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready for the screenshot pass' })
+  await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher for the screenshot pass' })
+  await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
+  await sleep(700)
+  await h.ensureSidebarExpanded()
+  try {
+    await h.page.waitFor(
+      `!!document.querySelector('[data-conversation-session]') && !!document.querySelector('[data-lexical-editor="true"]')`,
+      { timeout: 12000, interval: 250, label: 'session restored for the screenshot pass' }
+    )
+  } catch {
+    // no session restored; the blank check below decides whether one must be created
   }
-  await h.clickBack()
-  await h.exit()
-  await h.ensureModeOff()
-  await sleep(400)
-  // 1) Idle: the launcher only.
-  await capture('annotation-idle.png')
+  let blank = await h.blankState()
+  if (!blank.ok) {
+    log(
+      `      screenshot session ${blank.sessionId ?? '(none)'} is not blank ` +
+        `(messages=${blank.messages}, draft=${JSON.stringify(blank.draft)}, attachments=${blank.attachments}); ` +
+        'creating a fresh blank session'
+    )
+    blank = await h.createBlankSessionViaHover()
+  }
+  assert(blank.ok, `the screenshot pass could not confirm a blank session: ${JSON.stringify(blank)}`)
+  h.track(blank.sessionId, 'screenshots-session')
+  h.state.shotsSessionId = blank.sessionId
+  await sleep(500)
+
+  // 1) Idle: the launcher only, mode off, default bottom-right position.
+  await capture('annotation-idle.png', { modeOn: false })
   // 2) Mode: shrunk page + right rail.
   await h.activate()
-  await capture('annotation-mode.png')
+  await sleep(350)
+  await capture('annotation-mode.png', { modeOn: true })
   // 3) Selection: a small native control with a clear label + popover + note.
-  const poseTargets = []
   const composerBar = '[data-conversation-region="composer"]'
   const modelButton = await h.page.eval((scope) => {
     const root = document.querySelector(scope)
@@ -2411,18 +3071,17 @@ async function captureScreenshots(harness) {
   await h.page.clickAt(modelButton.x, modelButton.y)
   await sleep(400)
   assert((await h.ui()).popover, 'popover missing while posing the selection screenshot')
-  const firstPopover = await h.popover()
   const noteRect = await h.page.findRect('[data-psa-note]')
   assert(noteRect, 'popover note textarea not found')
   await h.page.clickAt(noteRect.x, noteRect.y)
   await sleep(120)
   await h.page.insertText('Show the full model name')
   await sleep(220)
-  await capture('annotation-selection.png')
+  await capture('annotation-selection.png', { modeOn: true, expectPopover: true })
   await h.click('[data-psa-add]')
   await sleep(300)
   await h.clearSelection()
-  // Two more small native controls for the collection view (all unique labels -> resolved).
+  // Two more small native controls for the collection view (unique labels -> resolved).
   for (const spec of [
     { pattern: /Full access|完全访问|Full Access/, note: 'Clarify the permission scope here' },
     { pattern: /UI: Follow|Follow global|跟随全局/, note: 'Explain what this scope controls' },
@@ -2459,12 +3118,10 @@ async function captureScreenshots(harness) {
     await h.clearSelection()
   }
   await h.ensureStatusPanel()
-  // The product clamps the launcher into the main area while the mode is active, so the
-  // natural composition is used for the captures (no manual launcher move needed).
   // 4) Collection view inside the rail.
   await h.openCollection()
   await sleep(300)
-  await capture('annotation-collection.png')
+  await capture('annotation-collection.png', { modeOn: true })
   // 5) Composer with the structured batch request inserted (not sent).
   await h.click('[data-psa-insert-batch]')
   const headerPattern = /Please adjust the UI elements below|请调整以下 UI 元素/
@@ -2475,9 +3132,10 @@ async function captureScreenshots(harness) {
   await sleep(350)
   await h.clickBack()
   await sleep(300)
-  await capture('annotation-inserted.png')
+  await capture('annotation-inserted.png', { modeOn: true, allowInsertedText: true })
   await h.exit()
   await h.ensureModeOff()
+  h.state.clearedStorageKeys = cleared
   return shots
 }
 
@@ -2498,15 +3156,124 @@ async function featurePresent(page) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Blank session setup
+// Session bookkeeping and blank-session setup (H2)
 // ---------------------------------------------------------------------------------------------
 
+/** Track one created/opened session id exactly once, with the reason it was touched. */
+function trackSession(state, sessionId, source) {
+  if (typeof sessionId !== 'string' || sessionId.length === 0) return null
+  if (!state.sessions.includes(sessionId)) state.sessions.push(sessionId)
+  if (state.sessionSources === undefined) state.sessionSources = new Map()
+  if (typeof source === 'string' && source.length > 0) state.sessionSources.set(sessionId, source)
+  return sessionId
+}
+
+/** Read the blank-session predicate from the live page. */
+async function readBlankState(page) {
+  return page.eval(probes.blankCheck)
+}
+
 /**
- * Open one blank session through the native New Session flow. The GUI normally restores the
- * last active (blank) session a few seconds after load; when that does not happen (fresh Host
- * state), a real click on the native New Session button opens one instead.
+ * Create a genuinely new blank session through the native "New session in <workspace>" hover
+ * action. The GUI can restore the last active session, which may be a user session; the
+ * harness must never type or insert into such a session. Every workspace row is tried (hover
+ * reveals the action); the new id must differ from the previous one and verify blank.
  * @param {Page} page - attached page.
- * @param {object} state - run state (records the session id).
+ * @param {object} state - run state (session ids are tracked for cleanup).
+ * @returns {Promise<object>} the verified blank predicate.
+ */
+async function createBlankSessionViaHover(page, state) {
+  const readSession = () => page.evaluate(
+    `document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') ?? null`
+  )
+  const before = await readSession()
+  const failures = []
+  /** Click one native hover action and verify that a new blank session was opened. */
+  const tryAction = async (action) => {
+    await page.clickAt(action.x, action.y)
+    let sessionId = before
+    const deadline = Date.now() + 12000
+    while (Date.now() < deadline) {
+      await sleep(250)
+      sessionId = await readSession()
+      if (sessionId !== null && sessionId !== before) break
+    }
+    if (sessionId === null || sessionId === before) {
+      failures.push(`${action.label}: no session change`)
+      return null
+    }
+    trackSession(state, sessionId, 'native-new-session-hover-action')
+    await sleep(650)
+    const blank = await readBlankState(page)
+    if (blank.ok) return blank
+    failures.push(`${action.label}: opened ${sessionId} but it is not blank (messages=${blank.messages}, draft=${JSON.stringify(blank.draft)})`)
+    return null
+  }
+  /** Hover the visible workspace rows and try their "New session in <workspace>" actions. */
+  const tryWorkspaceRows = async () => {
+    const workspaceRows = await page.eval(probes.workspaceRows)
+    for (const row of workspaceRows.slice(0, 6)) {
+      await page.moveTo(row.x, row.y)
+      await sleep(600)
+      const action = await page.eval(probes.newSessionActionNear, row)
+      if (action === null) continue
+      const blank = await tryAction(action)
+      if (blank !== null) return blank
+    }
+    return null
+  }
+  // A) Workspace rows currently visible in ACTIVE PROJECTS.
+  let blank = await tryWorkspaceRows()
+  if (blank !== null) return blank
+  // B) Other workspaces live further down the scrollable sidebar list and their hover action
+  // creates a fresh blank session in that workspace. Scroll the list and retry.
+  const workspaceScroll = await page.eval(probes.workspaceScrollPoint)
+  if (workspaceScroll !== null) {
+    for (const delta of [300, 300, 300, -900, 300]) {
+      await page.wheel(workspaceScroll.x, workspaceScroll.y, delta)
+      await sleep(500)
+      blank = await tryWorkspaceRows()
+      if (blank !== null) return blank
+    }
+  }
+  // C) Recent session rows ("New session in this directory"): creates a genuinely new blank
+  // session in that directory even when the active workspace already has the current draft.
+  const recentRows = await page.eval(probes.recentSessionRows)
+  for (const row of recentRows.slice(0, 5)) {
+    await page.moveTo(row.x, row.y)
+    await sleep(600)
+    const action = (await page.eval(probes.newSessionActionNear, {
+      top: row.y - 14,
+      bottom: row.y + 14,
+    })) || (await page.eval(probes.nearestNewSessionAction, row.y))
+    if (action === null) {
+      const diag = await page.evaluate(`(() => {
+        const buttons = [...document.querySelectorAll('button[aria-label^="New session in"]')]
+        const rects = buttons.map((button) => { const rect = button.getBoundingClientRect(); const style = getComputedStyle(button); return { label: button.getAttribute('aria-label'), top: Math.round(rect.top), h: Math.round(rect.height), w: Math.round(rect.width), display: style.display, visibility: style.visibility, opacity: style.opacity, pe: style.pointerEvents } })
+        const hit = document.elementFromPoint(${row.x}, ${row.y})
+        let ancestor = hit
+        for (let depth = 0; ancestor !== null && depth < 6; depth += 1) ancestor = ancestor.parentElement
+        return { total: buttons.length, sample: rects.slice(0, 4), hit: hit ? hit.tagName + ':' + String(hit.className || '').slice(0, 30) : null }
+      })()`)
+      failures.push(`${row.label}: no new-session action (diag=${JSON.stringify(diag)})`)
+      continue
+    }
+    const result = await tryAction(action)
+    if (result !== null) return result
+  }
+  throw new Error(
+    'could not create a genuinely blank session through a native "New session in ..." hover action: ' +
+      (failures.length > 0 ? failures.join('; ') : 'no action was found')
+  )
+}
+
+/**
+ * Open/verify one blank session. The GUI autorestores the last active session after load; it
+ * is only used when it verifies blank (0 transcript messages, empty composer draft, no
+ * attachments). Otherwise the harness creates a fresh blank session through the native hover
+ * action; if that is impossible it aborts instead of contaminating a non-blank session.
+ * @param {Page} page - attached page.
+ * @param {object} state - run state (session ids are tracked for cleanup).
  * @returns {Promise<object>} frame/session metrics after the session exists.
  */
 async function ensureBlankSession(page, state) {
@@ -2514,26 +3281,46 @@ async function ensureBlankSession(page, state) {
   try {
     await page.waitFor(
       `!!document.querySelector('[data-conversation-session]') && !!document.querySelector('[data-lexical-editor="true"]')`,
-      { timeout: 12000, interval: 200, label: 'auto-restored blank session' }
+      { timeout: 12000, interval: 200, label: 'auto-restored session' }
     )
     restored = true
   } catch {
     restored = false
   }
-  if (!restored) {
+  let blank = await readBlankState(page)
+  if (!blank.ok && blank.sessionId === null) {
+    // No session restored at all: the native New Session button is the documented setup path.
     const button = await page.eval(pageProbe.newSessionButton)
     assert(button, 'native New Session button not found')
     await page.clickAt(button.x, button.y)
     await page.waitFor(
       `!!document.querySelector('[data-conversation-session]') && !!document.querySelector('[data-lexical-editor="true"]')`,
-      { timeout: 20000, label: 'blank session + composer' }
+      { timeout: 20000, label: 'session + composer after native New Session' }
     )
+    await sleep(400)
+    blank = await readBlankState(page)
   }
+  if (blank.ok) {
+    state.blankStateSource = restored ? 'auto-restored session verified blank' : 'native New Session verified blank'
+  } else {
+    if (blank.sessionId !== null) trackSession(state, blank.sessionId, 'non-blank-session-not-used')
+    log(
+      `      restored session ${blank.sessionId ?? '(none)'} is not blank ` +
+        `(messages=${blank.messages}, turns=${blank.turns}, draft=${JSON.stringify(blank.draft)}, ` +
+        `editorImages=${blank.editorImages}, attachments=${blank.attachments}); creating a fresh blank session`
+    )
+    blank = await createBlankSessionViaHover(page, state)
+    state.blankStateSource = 'created via native "New session in <workspace>" (restored session was not blank)'
+  }
+  assert(blank.ok, `the harness could not confirm a blank session before typing/inserting: ${JSON.stringify(blank)}`)
+  trackSession(state, blank.sessionId, 'blank-session-used')
   await sleep(400)
   const metrics = await page.eval(pageProbe.metrics)
-  state.sessionId = metrics.sessionId
+  state.sessionId = blank.sessionId
   state.sessionRows = metrics.sessionRows
   state.sessionRestored = restored
+  state.blankState = blank
+  assertEqual(metrics.sessionId, blank.sessionId, 'blank predicate and frame probe disagree about the current session')
   return metrics
 }
 
@@ -2541,11 +3328,25 @@ async function ensureBlankSession(page, state) {
 // Main
 // ---------------------------------------------------------------------------------------------
 
+/** Write the capture buffers to docs/assets (--assets) or to the OS temp directory. */
+async function writeScreenshots(shots, opts, state) {
+  const shotsDir = opts.assets ? ASSETS_DIR : path.join(tmpdir(), 'psa-e2e-shots')
+  await mkdir(shotsDir, { recursive: true })
+  for (const shot of shots) {
+    const target = path.join(shotsDir, shot.name)
+    await writeFile(target, shot.buffer)
+    log(`wrote ${target} (${shot.buffer.length} bytes)`)
+    state.screenshots.push(target)
+  }
+  return shotsDir
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2))
   const started = Date.now()
 
   log('DSH Power Suite — UI annotation live E2E')
+  log(`node: ${process.version}`)
   log(`client: ${opts.clientPath}`)
   const clientSource = await readFile(opts.clientPath, 'utf8')
   log(`client size: ${(clientSource.length / 1024).toFixed(0)} KiB`)
@@ -2555,10 +3356,26 @@ async function main() {
 
   let chrome = null
   let page = null
-  const state = { sessionId: null, sessions: [], baseline: null, hooks: [], screenshots: [] }
+  const state = {
+    sessionId: null,
+    sessions: [],
+    sessionSources: new Map(),
+    blankState: null,
+    blankStateSource: null,
+    baseline: null,
+    hooks: [],
+    screenshots: [],
+    shotsSessionId: null,
+    clearedStorageKeys: [],
+  }
   const results = new Results()
-  let exitCode = 0
   let fatal = null
+  let exitCode = 0
+
+  // H1: the scenarios this invocation was asked to execute; every one must produce a row.
+  const expectedScenarioIds = opts.scenario !== null
+    ? [opts.scenario]
+    : (opts.from !== null ? SCENARIO_ORDER.filter((id) => id >= opts.from) : [...SCENARIO_ORDER])
 
   try {
     chrome = await launchChrome(opts)
@@ -2568,56 +3385,50 @@ async function main() {
     log('page: opened, waiting for the DSH shell…')
 
     await runSmoke({ page, results, state })
-    if (state.sessionId !== null && !state.sessions.includes(state.sessionId)) state.sessions.push(state.sessionId)
+    const feature = await featurePresent(page)
 
-    if (opts.mode === 'shots' && (await featurePresent(page))) {
-      const harness = new Harness(page, state)
-      log('\n=== Screenshots only (1728x900 originals, sidebar/chat privacy-blurred) ===')
-      const shots = await captureScreenshots(harness)
-      const shotsDir = opts.assets ? ASSETS_DIR : path.join(tmpdir(), 'psa-e2e-shots')
-      await mkdir(shotsDir, { recursive: true })
-      for (const shot of shots) {
-        const target = path.join(shotsDir, shot.name)
-        await writeFile(target, shot.buffer)
-        log(`wrote ${target} (${shot.buffer.length} bytes)`)
-        state.screenshots.push(target)
-      }
-    } else if (opts.mode === 'full') {
-      const present = await featurePresent(page)
-      if (!present) {
-        log('\n=== Acceptance scenarios ===')
-        log('SKIP  feature DOM markers missing ([data-psa-launcher]); the injected client does not have the feature.')
-        log('      Pipeline smoke completed. Re-run without --smoke once the worktree client.js has the feature.')
-      } else {
+    if (!feature) {
+      // H1: a missing feature must never be a green run in full/shots mode.
+      results.recordFailure(
+        'gate-feature',
+        'injected client exposes the annotation feature',
+        'the injected client did not mount the annotation surface ([data-psa-launcher] missing)'
+      )
+      if (opts.mode === 'full') {
         log('\n=== Acceptance scenarios (CONTRACT.md section 4.2) ===')
-        const harness = new Harness(page, state)
-        await runScenarios(harness, results, opts)
-        for (const sessionId of state.sessions) {
-          // sessions already tracked; this loop keeps the reporting order stable
-          void sessionId
+        for (const id of expectedScenarioIds) {
+          results.recordFailure(id, SCENARIO_TITLES[id], 'not executed: the injected client does not expose the annotation feature')
         }
-        if (opts.shots && results.failures.length === 0) {
-          log('\n=== Screenshots (1728x900 originals, sidebar/chat privacy-blurred) ===')
-          const shots = await captureScreenshots(harness)
-          // Screenshots are written outside the repo by default; pass --assets to publish
-          // them to docs/assets once the run is green and the images have been reviewed.
-          const shotsDir = opts.assets ? ASSETS_DIR : path.join(tmpdir(), 'psa-e2e-shots')
-          await mkdir(shotsDir, { recursive: true })
-          for (const shot of shots) {
-            const target = path.join(shotsDir, shot.name)
-            await writeFile(target, shot.buffer)
-            log(`wrote ${target} (${shot.buffer.length} bytes)`)
-            state.screenshots.push(target)
-          }
-        } else if (opts.shots) {
-          log('\nSkipping screenshots: acceptance scenarios failed.')
+        log('FEATURE GATE: the injected client does not expose the annotation feature — failing the run.')
+      } else if (opts.mode === 'shots') {
+        log('FEATURE GATE: the injected client does not expose the annotation feature — no screenshots produced.')
+      }
+    } else if (opts.mode === 'shots') {
+      const harness = new Harness(page, state)
+      log('\n=== Screenshots only (1728x900 originals, sidebar/header/content privacy-guarded) ===')
+      const shots = await captureScreenshots(harness)
+      await writeScreenshots(shots, opts, state)
+    } else if (opts.mode === 'full') {
+      log('\n=== Acceptance scenarios (CONTRACT.md section 4.2) ===')
+      const harness = new Harness(page, state)
+      await runScenarios(harness, results, opts)
+      for (const id of expectedScenarioIds) {
+        if (!results.hasRow(id)) {
+          results.recordFailure(id, SCENARIO_TITLES[id], 'requested scenario did not produce a result row')
         }
+      }
+      if (opts.shots && results.failures.length === 0) {
+        log('\n=== Screenshots (1728x900 originals, sidebar/header/content privacy-guarded) ===')
+        const shots = await captureScreenshots(harness)
+        await writeScreenshots(shots, opts, state)
+      } else if (opts.shots) {
+        log('\nSkipping screenshots: acceptance scenarios failed.')
       }
     }
   } catch (error) {
     fatal = error
-    log(`\nFATAL  ${error?.stack ? short(error.stack, 1600) : String(error)}`)
-    exitCode = 2
+    log(`\nFATAL  ${error?.stack ? short(error.stack, 1800) : String(error)}`)
+    exitCode = error?.exitCode === 2 ? 2 : 1
   } finally {
     if (page !== null) page.dispose()
     if (chrome !== null) {
@@ -2632,27 +3443,44 @@ async function main() {
 
   const passed = results.rows.filter((row) => row.pass).length
   const failed = results.failures.length
-  const pageErrorCount = page !== null ? page.pageErrors.length : 0
+  const pageErrors = page !== null ? page.pageErrors : []
+  const networkProblems = page !== null ? page.networkProblems : []
+  const nonJsErrors = page !== null ? page.logEntries : []
 
   log('\n=== Results ===')
   for (const row of results.rows) {
     log(`${row.pass ? 'PASS' : 'FAIL'}  ${row.id}  ${row.title}${row.pass ? '' : `\n        ↳ ${short(row.detail, 700)}`}`)
   }
   log(`\nPASS ${passed} / FAIL ${failed}`)
-  log(`page errors: ${pageErrorCount}`)
-  for (const error of (page?.pageErrors || []).slice(0, 8)) log(`  ! ${error}`)
-  if (page?.logEntries.length) log(`console/log errors (non-JS): ${page.logEntries.length}`)
-  if (page?.networkFailures.length) log(`network failures: ${page.networkFailures.length}`)
-  if (state.sessions.length) log(`created/reused sessions: ${[...new Set(state.sessions)].join(', ')}`)
-  if (state.screenshots.length) log(`screenshots: ${state.screenshots.join(', ')}`)
+  log(`page errors: ${pageErrors.length}`)
+  for (const error of pageErrors.slice(0, 8)) log(`  ! ${error}`)
+  log(`real network failures: ${networkProblems.length}`)
+  for (const problem of networkProblems.slice(0, 10)) log(`  ! ${problem}`)
+  log(`non-JS console/log errors: ${nonJsErrors.length}`)
+  for (const entry of nonJsErrors.slice(0, 10)) log(`  ! ${entry}`)
+  const uniqueSessions = [...new Set(state.sessions)]
+  log(`created/reused sessions (${uniqueSessions.length}):`)
+  for (const sessionId of uniqueSessions) {
+    const source = state.sessionSources instanceof Map ? state.sessionSources.get(sessionId) : undefined
+    log(`  ${sessionId}${source ? ` — ${source}` : ''}`)
+  }
+  if (state.shotsSessionId !== null) log(`screenshots session: ${state.shotsSessionId}`)
+  if (state.clearedStorageKeys.length > 0) log(`cleared annotation localStorage: ${state.clearedStorageKeys.join(', ')}`)
+  if (state.screenshots.length > 0) log(`screenshots: ${state.screenshots.join(', ')}`)
   log(`elapsed: ${((Date.now() - started) / 1000).toFixed(1)}s`)
   if (fatal !== null) log(`fatal: ${short(fatal.message || String(fatal), 600)}`)
 
-  if (failed > 0 || pageErrorCount > 0 || exitCode !== 0) exitCode = exitCode || 1
+  if (failed > 0 || pageErrors.length > 0 || networkProblems.length > 0) exitCode = exitCode || 1
+  log(`exit code: ${exitCode}`)
   process.exit(exitCode)
 }
 
 main().catch((error) => {
-  console.error(redact(error?.stack || String(error)))
-  process.exit(2)
+  // Argument validation errors are user-facing messages, not stack traces (H1).
+  if (error?.exitCode === 2 && typeof error.message === 'string') {
+    console.error(`error: ${error.message}`)
+  } else {
+    console.error(redact(error?.stack || String(error)))
+  }
+  process.exit(error?.exitCode === 2 ? 2 : 2)
 })
