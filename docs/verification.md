@@ -94,6 +94,13 @@ This is the final acceptance record for the planned 0.3.0 release after two revi
 fix rounds: round 1 resolved F1–F18, round 2 resolved R1–R4 and the harness
 findings N1–N6/H10.
 
+Final publication build: commit `50a1bb3`, `src/client.js` md5 `10dd3b72…`. The
+acceptance run recorded above was taken on `37388d3f…`; the only delta is the
+review-requested defensive cleanup in `deactivate()`'s already-off early return
+(clears the resolved-node cache/observer; that branch is not exercised by any
+scenario). `npm test` 125/125 and `npm run check` are green on the final build; no
+acceptance behavior changed.
+
 Run:
 
 ```bash
