@@ -5,12 +5,6 @@ activity buckets and a running & recent Sessions summary card, without replacing
 the shipped browser. Native search, context menus, add-workspace flow, drag
 reordering, and dialogs keep working because their nodes are never touched.
 
-![Sidebar running-session card and active/inactive project buckets](assets/dynamic-workspaces.png)
-
-The row hover detail (Workspace, Status, Last active, subagent count):
-
-![Card row hover detail with workspace, status, last active and subagent count](assets/dynamic-workspaces-hover.png)
-
 ## What it adds
 
 - **Active Projects / Inactive Projects buckets** — the native Workspace
@@ -24,6 +18,12 @@ The row hover detail (Workspace, Status, Last active, subagent count):
   one of its Sessions starts, drops back to Inactive once nothing it accounts
   for is running or inside the retention window, and a finished Session lingers
   in the card instead of vanishing on the stop.
+- The card and the buckets are aligned to the native sidebar's own geometry: the
+  same right-anchored control columns in every row and the header, the native
+  14 px/20 px row type, title-case bucket labels, borderless native-style
+  floating cards, a native-aligned row hover card, and plugin input focus
+  highlighted with the rainbow track (see *Plugin chrome*). Opening a Session
+  highlights its row and its Project with a soft rainbow wave.
 - **Configurable windows** — the two retention windows are Host settings on the
   suite's Plugins page ([Settings](settings.md)): finished-Session retention
   (1/2/6/12/24 hours, default **2 hours**) and active-project retention
@@ -77,13 +77,25 @@ sidebar's panel tabs. It starts expanded.
   the white session-type icons share one centre; header sparkle/pulse centre
   x = 43 and row glyph centre x = 43), and the header title starts on the same
   column as the row titles (x = 58). Then come the **Running & recent** title
-  and a count badge with the number of listed rows. The toggle
-  block, the **View all** link, and the header chevron are all 30 px tall with
-  the same corner radius (12 px in the shell), so their hover highlights line
-  up; the chevron is the rightmost control and folds the body.
-- **Rows**: a Session row is **one line**: leading glyph, title, and time, with
-  a disclosure chevron at the far right when the Session has subagent children.
-  Running Sessions are always listed, then recently finished Sessions inside
+  and a count badge with the number of listed rows. The text block (indicator,
+  title, count) is content-sized, so its hover highlight hugs the label instead
+  of stretching across the header; a flexible spacer then pushes the **View all**
+  link and the rightmost **header chevron** to the trailing edge. The toggle
+  block, the link, and the chevron are all 30 px tall with the same corner radius
+  (12 px in the shell), and the 24 px chevron column is shared with every row's
+  disclosure column, so header and row controls line up vertically. The chevron
+  folds the body; clicking anywhere in the header that is not a control folds it
+  too.
+- **Rows**: a Session row is **one line**. Columns are anchored from the right
+  edge so the same controls share one vertical line in every parent and child
+  row: a 48 px right-aligned **time column**, then the fixed **New session**
+  action slot (its button is overlaid on the title's faded tail, see *Row
+  actions*), and finally a 24 px **disclosure column** (a spacer when the row has
+  no children). The title takes the rest of the width and fades out under a
+  right-edge gradient mask **only while it actually overflows**; the 14 px/20 px
+  title size matches the native sidebar rows, and the time is drawn at 11 px in
+  the tabular-numeric tertiary label colour. Running Sessions are always listed,
+  then recently finished Sessions inside
   the finished-Session **retention window** (default 2 hours, configurable in
   [Settings](settings.md)), each group newest activity first. A running row uses the
   shell's own `StateDot` with `state: "ongoing"` as its loading indicator — no
@@ -110,13 +122,15 @@ sidebar's panel tabs. It starts expanded.
 
 ![Read marks restored on a fresh browser profile from the Host-shared document](assets/card-shared-ack.png)
 
-- **Row actions**: every row (main and nested subagent) carries a fixed trailing
-  cluster immediately before the disclosure chevron:
-  `[Continue (interrupted only)] [New session] [chevron]`. The two action slots
-  are 22 px wide and stay reserved, hidden with opacity/`pointer-events` until the
-  row is hovered or on keyboard `focus-within`, so revealing them never shifts
-  the title or time. Both buttons stop the row's open handler; clicking the row
-  body still opens the Session.
+- **Row actions**: every row (main and nested subagent) carries the **New
+  session** button on one fixed 22 px column immediately left of the time
+  column, overlaid on the title's faded tail. An interrupted row additionally
+  shows **Continue** to the left of it (46 px cluster), so the New session
+  button and the time never move. The cluster is hidden with
+  opacity/`pointer-events` until the row is hovered or on keyboard
+  `focus-within`, so revealing it never shifts the title or time. Both buttons
+  stop the row's open handler; clicking the row body (including the title's
+  faded tail) still opens the Session.
 - **Interrupted rows**: a row whose Session is interrupted (main or child) shows
   an amber warning badge before the title, taken from the suite's shared
   interrupted-Session records; its **Continue** action reuses the interrupted
@@ -134,27 +148,36 @@ sidebar's panel tabs. It starts expanded.
   which is already on the row), followed by the **full workspace path** (wrapped,
   not truncated) and then **Status** (`Running`/`Finished` plus the observed or
   relative time), **Last active** (absolute `YYYY-MM-DD HH:MM`), and the running
-  subagent count when there is one. The card is anchored to the **activity
-  panel's right edge + 10 px** (clamped to the viewport), so it sits outside the
-  sidebar and never covers the row or its action buttons; it does not capture the
-  pointer (same show/hide delays as before, dismissed by Escape, scroll, or
-  resize), and clicking the row still opens the Session.
+  subagent count when there is one. The card reproduces the **native sidebar
+  session tooltip** recipe measured live: its left edge is **flush with the
+  sidebar column's right edge** (same offset 0 as the native tooltip, no longer
+  intruding into the sidebar), its top aligns with the hovered row's top (then
+  clamped to the viewport), and it is 244 px wide with native borderless chrome
+  — 16 px radius, `--dsw-alias-tooltip-bg` surface, `--dsw-shadow-lv3`
+  elevation, 12 x 16 px padding on a 212 px content box, 14/20 px title, 12/16 px
+  path/time, and a 12/20 px status line with a 10 px dot — all inherited from
+  the shell font. It does not capture the pointer in normal mode (same show/hide
+  delays as before, dismissed by Escape, scroll, or resize), and clicking the row
+  still opens the Session. The body is a vertical row list so later detail rows
+  (statistics, token usage, context) can be appended without changing the card
+  chrome. While the UI annotation mode is active the same card becomes
+  **pinned/annotatable** (see *Plugin chrome and annotation mode* below).
 - **Disclosure column**: the header chevron and every row's disclosure arrow
-  are horizontally centred on one right-edge column (not merely right-aligned),
-  and rows without children reserve the same column with a spacer, so their
-  times stay aligned with rows that have children.
-- **Split row highlight**: hovering the row body highlights only the main part
-  of the row; hovering the disclosure arrow highlights only the arrow — the two
-  are independent and never compose into a nested two-layer highlight. The row
-  body's highlight carries 8 px horizontal inner padding, so the leading glyph
-  and title do not sit flush against the highlight edge.
+  share one 24 px right-edge column (not merely right-aligned), and rows without
+  children — including every nested subagent row — reserve the same column with a
+  spacer. Parent rows, child rows, and the header therefore share the same
+  action, time, and disclosure columns.
+- **Hover highlights**: the row-body highlight is a rounded pill paced by its
+  **content** — the leading glyph plus the (possibly faded) title — with 8 px
+  inner left padding, so it never stretches across empty space. Non-text
+  controls keep fixed highlight blocks that line up across all rows: 22 x 22 px
+  for each action button and 24 x 26 px for the disclosure arrow. Hovering the
+  disclosure arrow highlights only the arrow (the body pill is suppressed), so
+  the two highlights stay independent and never compose into a nested two-layer
+  highlight.
 - **No body scrollbar**: the card body scrolls with the wheel or trackpad but
   hides its scrollbar (native `scrollbar-width` / WebKit rules), matching the
   native sidebar surfaces.
-![Hovering a card row reveals its New session action; the detail card sits outside the sidebar](assets/card-row-actions.png)
-
-![An interrupted card row with the amber badge and Continue action (controlled state)](assets/card-interrupted.png)
-
 - **Nested subagents**: a parent row with running or recently active direct
   subagent Sessions gets a per-parent disclosure chevron at its far right.
   Expanding it shows the children indented deeper beneath the parent, connected
@@ -163,16 +186,18 @@ sidebar's panel tabs. It starts expanded.
   the trunk is masked below the last child's tick, so no dangling line hangs
   under the group. Each child row has its own leading glyph (the same running /
   unread / acknowledged states, using the white `robot-2-line` icon when
-  acknowledged), title, relative time, and the same trailing action cluster
-  (Continue when interrupted, New session).
-  ![Nested subagent rows with their own trailing actions](assets/card-child-actions.png)
+  acknowledged), title, relative time, and the same trailing columns (Continue
+  when interrupted, New session, time, and the reserved disclosure spacer), so
+  child and parent controls sit on the same vertical lines.
   Each parent folds independently; the card header still folds the whole list.
 - **Click**: clicking a parent row opens that Session; clicking a child row
-  opens the child Session. The disclosure chevron is a separate control.
+  opens the child Session. The whole row body is clickable (the action buttons
+  and the disclosure chevron are the separate controls).
 - **Five-row default**: with more than five top-level rows the header also shows
   **View all {count}**; **Show less** returns to the first five (children stay
   inside their parent row and do not count against the limit). The body scrolls,
-  and a very long title truncates.
+  and a long title fades out under the right-edge mask instead of colliding with
+  the fixed trailing columns.
 - **Empty state**: **No running sessions** with the sentence that Sessions in
   progress across every Workspace appear there. Blank, archived, and Sessions
   with `origin: "subagent"` never appear as top-level rows; subagent Sessions
@@ -377,46 +402,49 @@ never fabricated; unknown future event types are under-reported until the
 allowlist grows. The Host half needs a plugin Host recompose (reload the plugin /
 restart the Host process; no DSH restart) after upgrading.
 
-![The card with ledger-backed activity times and the current-chat ring](assets/card-activity-ledger.png)
+## Current-Session highlight
 
-## Current-chat ring
+The row for the Session the main conversation currently shows gets a soft,
+breathing rainbow wave, and so does the Workspace it belongs to:
 
-The row for the Session the main conversation currently shows gets a rainbow
-ring so it is identifiable at a glance:
-
-- **Semantics**: the current Session is the first client summary with
-  `retainedBy.mainView > 0` — the same source the read-baseline effect trusts.
-  Exactly that row gets `.psd-run-current` and `aria-current="true"`; a nested
-  subagent child gets `.psd-child-current` plus an absolute `.psd-child-ring`
-  span (the child wrapper's pseudo-elements already draw the tree connectors).
-  The ring moves immediately when a Session is opened from the card, sidebar, or
-  anywhere else, supports child rows, and disappears when the row leaves the
-  card. Merely-running or unopened completed rows are intentionally **not**
-  highlighted.
-- **Visual**: a 2 px conic-gradient rainbow ring hugs the row's rounded
-  rectangle with a soft `drop-shadow` glow, drawn by a mask-composite
-  pseudo-element (`pointer-events: none`, behind the content). A CSS `@property
-  --psd-ring-angle` rotates the gradient over 3.2 s, and a 14 s `hue-rotate`
-  drift keeps the colours moving. `prefers-reduced-motion: reduce` disables both
-  animations and leaves a static ring. Light and dark themes are both legible,
-  the row rectangle does not change (no layout shift), and the card body gets
-  2 px top clearance so a first-row ring is not clipped.
-- **Engine support**: the animated ring relies on Chromium's `@property`;
-  other engines fall back to a static ring.
-
-![The current-chat rainbow ring on the activity card](assets/card-current-glow.png)
-
-![The rainbow ring in the dark theme](assets/card-current-glow-dark.png)
-
-![Reduced motion leaves a static rainbow ring](assets/card-current-glow-reduced.png)
+- **Semantics**: the current Session is the client summary the main view retains
+  (`retainedBy.mainView > 0`) — the same source the read-baseline effect trusts.
+  A Session that just gained retention wins over an older one that is still being
+  released, so opening a Session anywhere (card, native sidebar, elsewhere) moves
+  the highlight immediately; exactly that row gets `.psd-run-current` (child:
+  `.psd-child-current`) plus `aria-current="true"`. A nested subagent child gets
+  an absolute `.psd-child-wave` span (the child wrapper's pseudo-elements already
+  draw the tree connectors), and when a subagent Session is the open one the
+  highlight lands on its parent Session's Workspace. The highlight disappears
+  when the row leaves the card. Merely-running or unopened completed rows are
+  intentionally **not** highlighted.
+- **Visual**: a low-opacity rainbow band sits **behind the bottom of the row
+  content** — a linear 90° rainbow gradient, 5–6 px blur, masked to fade at both
+  ends, with a 3.6 s opacity/scale "breathing" loop, a 9 s horizontal slide, and
+  a 14 s hue drift. It replaces the old 2 px conic ring, changes no geometry (no
+  layout shift), and is legible in light and dark themes. The effect is a plain
+  CSS gradient animation, so it does not need `@property`; `prefers-reduced-motion:
+  reduce` stops all three animations and leaves the static tint at ~26 % opacity.
+- **Workspace row**: the native Workspace row of the current Session's project
+  is marked with `data-psd-current-workspace="true"` and carries the same wave
+  behind its bottom edge, so opening a Session from the sidebar highlights the
+  matching project entry too. The attribute is removed when another Session is
+  opened, when the row stops owning the current Session, and on plugin unload;
+  native nodes are never otherwise modified (one marker attribute only).
+- **Feature-set alignment**: the wave replaces the previous "current-chat ring"
+  treatment entirely; no `.psd-child-ring` element, conic gradient, or rotation
+  animation remains.
 
 ## Collapsing the buckets
 
-Each bucket header is a button with the uppercase label, the Workspace count,
+Each bucket header is a button with the title-case label, the Workspace count,
 and a chevron at the far right. Folding a bucket hides that bucket's native
 sections with an inline `display: none`; the native nodes stay alive, so their
 menus, hover states, and drag state survive. The chevron flips and the header
-keeps its `aria-expanded` state.
+keeps its `aria-expanded` state. A collapsed bucket is also applied when a
+native re-render resets an inline `display`/`order`: the observer watches the
+section style attributes and every write compares the current value first, so
+the fold cannot be clobbered (and redundant writes cannot loop).
 
 The two fold states persist in `localStorage` under
 `power-suite.dynamic-workspaces.folds`:
@@ -429,6 +457,16 @@ The two fold states persist in `localStorage` under
 to expanded and the in-memory state. The preference is per browser and per
 profile: it does not sync across devices. The card's own expanded/collapsed state
 is per page visit and is not persisted.
+
+The last observed Active/Inactive classification of every Workspace is cached
+under `power-suite.dynamic-workspaces.buckets` (versioned document mapping
+Workspace ids and the ungrouped section to `active`/`inactive`). A reload paints
+the native tree before the Session catalogue hydrates, when every section would
+otherwise classify as Inactive; for that pre-hydration pass only, the cached
+classification is used, so a collapsed bucket is hidden on the first observable
+paint instead of appearing expanded and collapsing later. Once the catalogue
+reports ready, live classification wins and both the native sections and the
+cache are corrected, so a stale cache entry can never stick.
 
 ## How it fits the native browser
 
@@ -446,13 +484,75 @@ adds sibling nodes and inline layout:
 - **Ordering**: the tree becomes `display: flex; flex-direction: column`, and the
   feature writes only `order` (and `display` for folding) on the native group
   sections. It matches no hashed native class name.
+- **Markers**: the only native-node mutations are the inline `order`/`display`
+  the feature already owned and one `data-psd-current-workspace` attribute on the
+  current Session's Workspace row (removed on change/unload). Everything else is
+  read-only DOM traversal.
 - **Reconciliation**: a `MutationObserver` on `[data-slot="sidebar"]` plus a
   500 ms retry keeps the foreign nodes present across native re-renders and
-  sidebar folds. Unloading the plugin removes every inserted node and clears
-  every inline `order`/`display` it wrote.
-- **Styling**: theme tokens only; the animated flow bar on running rows is
-  stopped under reduced motion, and the disclosure chevrons keep their short
-  transform transition.
+  sidebar folds; the observer also watches section style attributes so a native
+  re-render cannot reset an applied fold. Unloading the plugin removes every
+  inserted node, clears every inline `order`/`display` it wrote, and removes the
+  Workspace marker.
+- **Styling**: theme tokens only; the wave and focus animations are stopped
+  under reduced motion, and the disclosure chevrons keep their short transform
+  transition.
+
+## Plugin chrome: fonts, borders, focus
+
+Plugin surfaces follow the shell's own recipes instead of bespoke chrome:
+
+- **Fonts**: every surface inherits the shell font family (`font: inherit` /
+  the shell text tokens) and uses the native sidebar sizes — Session row titles
+  14 px/20 px at weight 400 (nested subagent titles 13 px), the card title
+  13 px/20 px at weight 500, 11 px tabular-numeric times, 12 px secondary rows.
+  Bucket labels are **title case** ("Active Projects" / "Inactive Projects");
+  the former `text-transform: uppercase` and letter spacing are gone. Plugin
+  code blocks use the shell code-font token `--ds-font-family-code` (the
+  earlier `--dsw-font-code` name did not exist, so they silently fell back to a
+  generic monospace).
+- **Borderless floating cards**: the row hover card, the hover Quick Look card
+  (`.dsa-quicklook`) and the prompt-history preview/search cards
+  (`.psp-rail-card`, `.psp-search-card`) are borderless: no outline/border and
+  no 0.5 px `--dsw-elevation-*` stroke ring — they use the native tooltip
+  elevation `--dsw-shadow-lv3` (0 0 1 px #0003, 0 0 4 px #00000005,
+  0 12 px 32 px #00000014) with a 16 px radius.
+- **Rainbow focus highlight for plugin inputs**: focused plugin text inputs and
+  choice controls show the same flowing rainbow track that used to draw the
+  current-chat ring, in place of a solid-colour focus border. The shared class
+  is `.psf-rainbow-focus` (see `DW_CSS`): a `::after` overlay with
+  `padding: 2px`, a `conic-gradient` of the seven rainbow stops, a
+  `mask-composite: exclude` ring mask, a blurred `drop-shadow` glow, and a
+  3.2 s `@property --psf-ring-angle` rotation plus a 14 s hue drift; opacity
+  transitions in at 140 ms and the ring is inset by 2–3 px so it never shifts
+  layout. It is wired to the **prompt-history search field**
+  (`span.psp-search-field.psf-rainbow-focus` around the borderless input) and
+  the **settings choice pills** (`.dps-choice-option.psf-rainbow-focus`, whose
+  old solid outline rule is removed). Any other plugin input can adopt the same
+  class; the annotation note editors are expected to use it once their surface
+  is rewritten. `prefers-reduced-motion: reduce` leaves a static rainbow ring,
+  and `forced-colors` mode replaces it with a system `Highlight` outline so
+  focus stays visible in high-contrast mode.
+
+## Annotation mode integration
+
+The UI annotation mode can inspect plugin surfaces. While
+`document.documentElement[data-psa-active="true"]` is set:
+
+- the row hover card is marked with `data-psd-pinned="true"` (the stable
+  `data-psd-hovercard=""` attribute is always present), stays open when the
+  pointer leaves the anchor row, and becomes pointer-interactive through the
+  annotation stylesheet's `html[data-psa-active='true'] [data-psd-hovercard]`
+  override (the annotation side owns that CSS; the plugin sets no
+  annotation-only z-index itself);
+- leaving the card closes it even in annotation mode;
+- the annotation mode broadcasts `power-suite:ui-annotation-state` with
+  `detail.active`; the plugin clears a pinned card on `active: false` and
+  cancels a pending hide on `active: true` (listener registered/removed with the
+  card's component lifecycle).
+
+Normal mode is unchanged: no `data-psd-pinned`, `pointer-events: none`, the
+same 260 ms show / 140 ms hide delays, and the plugin's own z-index/elevation.
 
 ## Rail behavior
 
@@ -577,13 +677,16 @@ The native **View options** menu picks how Sessions are grouped:
   cache identity uses a 32-bit FNV-1a hash of the archived-member subset; a
   collision can only cause a cache miss or a briefly stale snapshot, never wrong
   data beyond one poll. It is accepted as a NIT.
-- **The current-chat ring is an enhancement, not state.** Only the row of the
-  Session open in the main view is ringed; merely-running and unopened completed
-  rows are not. The animated ring needs Chromium's `@property`; other engines
-  show a static ring. Reduced-motion users get the static ring too.
-- **Row actions are hover/focus-revealed.** The Continue and New session slots
-  are reserved but hidden until the row is hovered or keyboard-focused; a
-  touch-only device has no hover, so those row actions are not reachable there
+- **The current-Session wave is an enhancement, not state.** Only the row of the
+  Session open in the main view (and its owning native Workspace row) gets the
+  wave; merely-running and unopened completed rows are not highlighted. The wave
+  is a plain CSS gradient animation, so it needs no `@property`; reduced-motion
+  users get a static tint. One marker attribute is written on the native
+  Workspace row and removed when the selection changes or the plugin unloads.
+- **Row actions are hover/focus-revealed.** The New session button (and the
+  Continue button on interrupted rows) is overlaid on the title's faded tail and
+  hidden until the row is hovered or keyboard-focused; a touch-only device has
+  no hover, so those row actions are not reachable there
   (the Workspace's own New Session still is). The buttons never change the row
   layout.
 - **Continue sends a real continuation.** The row's Continue action reuses the
@@ -603,19 +706,55 @@ The native **View options** menu picks how Sessions are grouped:
   read marks and activity times come from the Host (`read-acks.json` and the
   event-sourced activity ledger). A change made from another device can still lag
   one snapshot/poll, and Host code changes need a plugin Host recompose.
-- **Per-browser state.** Bucket folds live in `localStorage` for one browser and
-  profile; the card's open state is not persisted.
+- **Per-browser state.** Bucket folds and the last bucket-classification cache
+  live in `localStorage` for one browser and profile; they do not sync across
+  devices or profiles. The card's open state is not persisted.
+- **Focus ring applies to pointer focus too.** The rainbow track is shown by
+  `:focus-within` (not only `:focus-visible`) so a clicked/activated input gets
+  the same active-state highlight as the annotation note editor screenshot; it
+  does not replace any functionality. Under `prefers-reduced-motion: reduce` it
+  becomes a static rainbow ring, and in `forced-colors` mode it falls back to a
+  system `Highlight` outline so keyboard focus stays visible. Plugin buttons
+  outside the input/choice surfaces keep their normal shell focus outlines.
+- **Annotation-mode pinning is cooperative.** The hover card only becomes
+  pointer-interactive while the annotation feature sets
+  `data-psa-active="true"` and ships its CSS override; without the annotation
+  side the card stays non-interactive and the `power-suite:ui-annotation-state`
+  listener simply never fires.
 - **Blank and archived Sessions are skipped.** Rows come from the Session list,
   so a Session with no recorded content never appears, and an archived Session
   does not keep its Workspace Active.
 
 ## Verification
 
+The committed live harness `test/browser/sidebar.e2e.mjs` drives a throwaway
+headless Chrome against the running GUI with this worktree's `client.js`
+injected (same loader swap as `test/browser/annotation.e2e.mjs`, no profile or
+plugin change) and asserts the polish work on the real DOM:
+
+```bash
+node test/browser/sidebar.e2e.mjs          # full run, screenshots in .tmp-work/sidebar-e2e/
+node test/browser/sidebar.e2e.mjs --smoke  # pipeline-only smoke
+```
+
+It requires at least one running or recently finished Session in the card (it
+never fabricates activity; on an idle GUI start a Session first). It checks:
+row-column x positions across parent/child/header rows; the clipped-title mask
+and its absence on short titles; hover-pill/control highlight geometry; the
+current-Session wave on the card row and the owning native Workspace row plus
+reduced-motion behaviour; the hover card against the **live native tooltip
+oracle** (flush offset 0, row-top alignment, 244 px width, radius/border/padding/
+elevation/typography); borderless floating cards; title-case bucket labels and
+typography; the rainbow focus ring on the prompt-history search field; fold
+persistence across reloads including the pre-hydration bucket cache and live
+drift correction; annotation-mode pinning; and zero page errors.
+
 Manual checks on the running DSH Web GUI:
 
 1. On a grouped view (**WorkSpace** or **Workspace Tree**), confirm the card sits
-   above the native Workspaces header and both bucket headers render with their
-   Workspace counts.
+   above the native Workspaces header and both bucket headers render as
+   **Active Projects** / **Inactive Projects** (title case) with their Workspace
+   counts.
 2. Start a turn in a Workspace: within one snapshot the Workspace moves into
    Active (top of that bucket) and its Session appears in the card with the
    shell loading indicator and, after a second, a running duration.
@@ -632,36 +771,55 @@ Manual checks on the running DSH Web GUI:
    8 → 5, Inactive 6 → 9), and reverting to 7 days restores 8/6. The hints show
    the current values (`Currently 2 hours…`, `Currently 7 days…`).
 5. Fold **Active Projects**: its sections disappear, the chevron flips, and the
-   state survives a page reload; unfold it again.
+   state survives a page reload; reload again and confirm the collapsed bucket is
+   already hidden when the sidebar paints (no "expanded then collapsing" flash),
+   and that afterwards a Workspace moving Active → Inactive still appears under
+   the expanded Inactive bucket. Unfold it again.
 6. Rest a pointer on a card row: the hover card's title is the Workspace name,
-   with the full wrapped workspace path, Status with its time, Last active
-   absolute time, and the running subagent count when present; the card does not
-   take the pointer, and the row has no native tooltip.
-7. If a listed Session delegated to subagents, its row shows a disclosure
+   with the full wrapped workspace path, a relative time, Status with its time,
+   Last active absolute time, and the running subagent count when present. The
+   card starts flush on the sidebar's right edge, its top aligns with the row,
+   it looks like the native session tooltip (dark tooltip surface, no border,
+   16 px radius, native elevation, 12 x 16 px padding, 14 px title), and it does
+   not take the pointer; the row has no native `title` tooltip.
+7. Check the columns: New session buttons, times, and disclosure chevrons of
+   parent rows, child rows, and the header all sit on the same vertical lines;
+   times are right-aligned; a long title fades out under the right-edge gradient
+   mask before the New session slot, while a short title is not masked.
+8. If a listed Session delegated to subagents, its row shows a disclosure
    chevron at the far right: expanding reveals the child rows indented under the
    parent with the branch lines (the trunk is centered under the parent's dot
    and stops at the last child's tick), each opens its own Session, and
    collapsing hides the child rows again.
-8. Check the alignment: the header pulse (while running) or sparkle (when idle),
-   the green unread dot, and the white session-type icon of a top-level row are
-   centred on one glyph column, the header title starts on the row-title column,
-   and the header chevron centre lines up with every row arrow centre (rows
-   without children reserve the same column).
-9. Check the glyph states: a running row shows the shell loading indicator; a
-   finished, unopened row shows the green done dot; after opening that Session
-   (from here or elsewhere) the row shows the white `deepseek-fill` icon and a
-   subagent row shows the white `robot-2-line` icon, until a new run and
-   completion restore the green dot. Check that hovering the row body and the
-   arrow highlights only the hovered part, and that the card body scrolls with a
-   hidden scrollbar.
-10. Check the card header geometry: the toggle block, **View all**, and the
-    header chevron share one 30 px height and corner radius.
-11. Collapse the sidebar: the card is hidden and no custom node shows in the rail;
+9. Open a Session from the card or the native sidebar: that row gets the soft
+   breathing rainbow wave at its bottom edge and the matching native Workspace
+   row gets the same wave. Switch to another Session: the wave follows. Enable
+   the OS "reduce motion" setting: both waves become a static tint.
+10. Check the glyph states: a running row shows the shell loading indicator; a
+    finished, unopened row shows the green done dot; after opening that Session
+    (from here or elsewhere) the row shows the white `deepseek-fill` icon and a
+    subagent row shows the white `robot-2-line` icon, until a new run and
+    completion restore the green dot. Check that hovering the row body shows the
+    content-paced pill and the arrow's own highlight stays independent, and that
+    the card body scrolls with a hidden scrollbar.
+11. Check the card header geometry: the text block is content-sized (its hover
+    highlight hugs the label), **View all** and the header chevron stay 30 px
+    tall with the shell corner radius, and the chevron lines up with every row's
+    disclosure column.
+12. Focus the prompt-history search field and the settings choice pills: the
+    solid focus border is gone and the rainbow track glow rings the control;
+    with reduced motion it is a static rainbow ring.
+13. While UI annotation mode is active, hover a card row and move the pointer
+    onto the hover card: it stays open, is pointer-interactive and marked
+    `data-psd-pinned="true"`, and the annotation hover outline can select it.
+    Leave the card or the mode: it closes; normal mode never shows the marker
+    and keeps `pointer-events: none`.
+14. Collapse the sidebar: the card is hidden and no custom node shows in the rail;
     widen it: the card and buckets return.
-12. Use the native Workspaces search, a Workspace context menu, the add-workspace
+15. Use the native Workspaces search, a Workspace context menu, the add-workspace
     flow, and drag reordering while the feature is mounted: none of them target
     the card or the bucket headers, and no row is lost.
-13. Run `npm run check`; it stays green (syntax, package manifest, Markdown
+16. Run `npm run check`; it stays green (syntax, package manifest, Markdown
     links, and the node tests).
 
 See [verification.md](verification.md) for the recorded evidence.
