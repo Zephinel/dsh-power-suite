@@ -61,6 +61,11 @@
 - Detection uses the session log and Agent status. A log that ends inside an
   open turn without an explicit `turn/end` is treated as interrupted only when
   the Agent is not running; other clients may report a different state.
+- Any `turn/end` `error` (including quota, timeout, transport, rate limit and
+  malformed response) and `max-tokens` are treated as unfinished and resumable;
+  `blocked`, `forked`, completed turns and user/parent/hook cancellations are
+  deliberate and stay unmarked. Continue retries the task, so a persistent cause
+  can fail again and re-mark it.
 - The sidebar cache updates from live session events and a periodic refresh;
   a very recent change from another device can lag by one poll interval.
 
@@ -94,9 +99,10 @@
   shift the row layout.
 - **Continue sends a real continuation request.** The interrupted-row Continue
   action reuses the suite's continuation flow and actually asks the Host to
-  resume that Session; the badge and action were verified with a controlled
-  interrupt state because the live GUI had no genuinely interrupted Session, and
-  no live child-interrupted case was exercised.
+  resume that Session; it is a retry, so a persistent cause (missing credential,
+  context too long, ongoing quota/rate limit) can fail again and re-mark the
+  Session. Error/limit classification is covered by Host tests; a live
+  error-ended Session was used to verify the badge/triangle path.
 - **New session may fall back to the Workspace default directory.** The row
   action creates a blank Session in that row's own `cwd`; if the directory or
   Session creation is unavailable it falls back to the Workspace New Session, so

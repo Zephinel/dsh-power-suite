@@ -3592,23 +3592,23 @@ window.__ModuleLoader__.load({
     const CONTINUE_ROUTE = 'api/power-suite.continue'
 
     const INTERRUPTED_EN = {
-      'badge.aria': 'Task interrupted',
-      'badge.title': 'The last task was interrupted. Hover this session to continue it.',
-      'badge.title.subagent': 'A delegated subagent task was interrupted. Hover this session to continue it.',
+      'badge.aria': 'Task did not finish',
+      'badge.title': 'The last task did not finish. Hover this session to continue it.',
+      'badge.title.subagent': 'A delegated subagent task did not finish. Hover this session to continue it.',
       'continue.label': 'Continue',
-      'continue.aria': 'Continue the interrupted task',
-      'continue.prompt': 'Continue the interrupted task.',
-      'continue.summary': 'Continue interrupted task',
+      'continue.aria': 'Continue the unfinished task',
+      'continue.prompt': 'Continue the unfinished task.',
+      'continue.summary': 'Continue unfinished task',
       'continue.failed': 'Could not continue the task. Try again.'
     }
     const INTERRUPTED_ZH = {
-      'badge.aria': '任务被中断',
-      'badge.title': '上一个任务被中断，悬停此会话可继续。',
-      'badge.title.subagent': '委派的子任务被中断，悬停此会话可继续。',
+      'badge.aria': '任务未完成',
+      'badge.title': '上一个任务未完成，悬停此会话可继续。',
+      'badge.title.subagent': '委派的子任务未完成，悬停此会话可继续。',
       'continue.label': '继续',
-      'continue.aria': '继续被中断的任务',
-      'continue.prompt': '继续完成被中断的任务。',
-      'continue.summary': '继续被中断的任务',
+      'continue.aria': '继续未完成的任务',
+      'continue.prompt': '继续完成上一个任务。',
+      'continue.summary': '继续未完成的任务',
       'continue.failed': '继续任务失败，请重试。'
     }
 

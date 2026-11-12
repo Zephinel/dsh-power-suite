@@ -84,6 +84,12 @@ const turnEnd = (turn, time, kind, cause, seq = 1) => ({
   time,
   data: { turn, reason: cause === undefined ? { kind } : { kind, reason: { kind: cause } } }
 })
+const turnEndError = (turn, time, error, seq = 1) => ({
+  type: 'turn/end',
+  seq,
+  time,
+  data: { turn, reason: { kind: 'error', error } }
+})
 
 test('an interrupted subagent still active after the parent turn marks the parent', async () => {
   const logs = new Map([
@@ -154,6 +160,63 @@ test('a child event invalidates the parent-derived value', async () => {
   assert.equal((await read(route, 'session-parent')).interrupted, true)
 })
 
+
+test('a provider quota error leaves the Session resumable', async () => {
+  const logs = new Map([
+    ['session-quota', [
+      turnStart(1, 1000),
+      turnEndError(1, 2000, { code: 'QUOTA', message: '429: OpenCode Go usage limit reached' })
+    ]]
+  ])
+  const parents = new Map([['session-quota', null]])
+  const controller = { commands: { async prompt() { return { accepted: true } } } }
+  const { route, continueRoute } = makeContext({ logs, parents, controller })
+  const payload = await read(route, 'session-quota')
+  assert.equal(payload.interrupted, true)
+  assert.equal(payload.reason, 'error')
+  const response = await continueRoute.fetch(new Request('http://localhost/api/power-suite.continue', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: 'session-quota', prompt: 'Continue the interrupted task.' })
+  }))
+  assert.equal(response.status, 200)
+  assert.deepEqual(await response.json(), { accepted: true })
+})
+
+test('any model/network/timeout error is resumable, not a final failure', async () => {
+  const logs = new Map([
+    ['session-error', [
+      turnStart(1, 1000),
+      turnEndError(1, 2000, { code: 'SERVER_ERROR', message: 'upstream exploded' })
+    ]]
+  ])
+  const parents = new Map([['session-error', null]])
+  const { route } = makeContext({ logs, parents })
+  const payload = await read(route, 'session-error')
+  assert.equal(payload.interrupted, true)
+  assert.equal(payload.reason, 'error')
+})
+
+test('a transport timeout and max-tokens ending are resumable', async () => {
+  const logs = new Map([
+    ['session-timeout', [turnStart(1, 1000), turnEndError(1, 2000, { code: 'TRANSPORT', message: 'Connection error.' })]],
+    ['session-max', [turnStart(1, 1000), { type: 'turn/end', seq: 1, time: 2000, data: { turn: 1, reason: { kind: 'max-tokens' } } }]]
+  ])
+  const parents = new Map([['session-timeout', null], ['session-max', null]])
+  const { route } = makeContext({ logs, parents })
+  assert.equal((await read(route, 'session-timeout')).interrupted, true)
+  assert.equal((await read(route, 'session-max')).interrupted, true)
+})
+
+test('the live quota turn/end updates the interrupted cache', async () => {
+  const logs = new Map([['session-live', [turnStart(1, 1000)]]])
+  const parents = new Map([['session-live', null]])
+  const { route, emit } = makeContext({ logs, parents })
+  emit('session-live', turnEndError(1, 2000, { code: 'QUOTA', message: 'usage limit reached' }))
+  const payload = await read(route, 'session-live')
+  assert.equal(payload.interrupted, true)
+  assert.equal(payload.reason, 'error')
+})
 
 test('the continue route resumes through a non-human context source', async () => {
   const calls = []

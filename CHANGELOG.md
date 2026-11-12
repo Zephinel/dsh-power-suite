@@ -40,6 +40,15 @@ heading is added until the release is cut.
 
 ### Changed
 
+- Interrupted-session detection now covers **every unfinished turn ending**, not
+  only Host restarts/crashes: any `turn/end` reason `error` (quota/usage limit,
+  request timeout, transport/network failure, rate limit, malformed response,
+  missing credential), `max-tokens`, `interrupted`, and `aborted` with the
+  `disposed` or legacy cause mark the Session as unfinished. Deliberate endings
+  (`completed`, `blocked`, `forked`, user/parent/hook cancellation) stay
+  unmarked. The existing amber badge, hover Continue action and play-shaped
+  composer control therefore appear for timeout/error sessions too; Continue
+  retries the task (a persistent cause can fail again and re-mark it).
 - UI element annotation audit fixes: user notes are normalized with
   `normalizeUserNote` (CRLF→LF, NUL/C0 control characters except tab/newline
   removed, spaces/line breaks preserved, **no redaction and no silent

@@ -3,13 +3,16 @@
  * whether the Session's last turn was cut off (by a Host restart) rather than
  * ended by the user or the model.
  *
- * A turn that ends normally records `turn/end` with its reason. The Harness
- * marks a Harness-caused cutoff in two ways: crash recovery appends a synthetic
- * `turn/end` with reason `interrupted`, while a graceful Host shutdown closes a
- * live turn as `aborted` with the `disposed` cancellation cause. A crash that
- * skipped both leaves the last `turn/start` open until the Session is next
- * loaded. An open turn whose Agent is currently running is live work, not an
- * interrupted one.
+ * A turn that ends normally records `turn/end` with its reason. A task is
+ * resumable when the last turn did not finish: crash recovery appends a
+ * synthetic `turn/end` reason `interrupted`; a graceful Host shutdown closes a
+ * live turn as `aborted` with the `disposed` cause; a provider/model/network
+ * failure ends the turn with `error`; an output-token ceiling ends it with
+ * `max-tokens`; and imports without a recorded cancellation cause are `legacy`.
+ * A crash that skipped all of these leaves the last `turn/start` open until the
+ * Session is next loaded. An open turn whose Agent is running is live work, not
+ * an interrupted one. Deliberate endings (`completed`, `blocked`, `forked`, and
+ * user/parent/hook cancellation) are not resumable.
  */
 
 /** Authenticated exact route reporting one Session's interruption state. */
@@ -26,18 +29,25 @@ function isRecord(value) {
 
 /**
  * The interruption rule shared by the log fold and the live event cache.
+ *
+ * The DSH `TurnEndReasonMap` distinguishes deliberate ends (`completed`,
+ * `aborted` by the user/parent/hook, `blocked`, `forked`) from ends that leave
+ * the task unfinished (`interrupted`, `error` of any kind, `max-tokens`, and the
+ * Harness shutdown cause `disposed`). A stop with no recorded cause (`legacy`
+ * imports) is treated as resumable because its origin is unknowable.
  * @param {string | null} kind - `turn/end` reason kind.
  * @param {string | null} cause - cancellation cause of an `aborted` ending.
- * @returns {boolean} whether this ending is a Harness-caused interruption.
+ * @returns {boolean} whether the task can be resumed.
  */
 function interruptedEnd(kind, cause) {
-  return kind === 'interrupted' || (kind === 'aborted' && cause === 'disposed')
+  if (kind === 'interrupted' || kind === 'error' || kind === 'max-tokens') return true
+  return kind === 'aborted' && (cause === 'disposed' || cause === 'legacy')
 }
 
 /**
  * Whether one recorded `turn/end` reason is a Harness-caused interruption.
  * @param {unknown} reason - `turn/end` data.reason.
- * @returns {boolean} whether the Harness cut the task off.
+ * @returns {boolean} whether the task can be resumed after this ending.
  */
 export function isInterruptedEnd(reason) {
   if (!isRecord(reason) || typeof reason.kind !== 'string') return false

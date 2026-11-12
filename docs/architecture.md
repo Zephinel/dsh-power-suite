@@ -261,10 +261,12 @@ and restores it on unmount, so the page shows only the real controls.
 ### Interrupted sessions
 
 The Host folds `turn/start` and `turn/end` events and treats a turn as
-interrupted when its end reason is `interrupted`, or when the log ends inside an
-open turn and the Agent is no longer running. Results are cached and refreshed
-from `session/event`; the route supports a `refresh` query for explicit
-re-reads.
+resumable when its end reason is `interrupted`, `error`, or `max-tokens`, when it
+was `aborted` with the `disposed` or legacy cause, or when the log ends inside an
+open turn and the Agent is no longer running. Deliberate endings (`completed`,
+`blocked`, `forked`, user/parent/hook cancellation) are not marked. Results are
+cached and refreshed from `session/event`; the route supports a `refresh` query
+for explicit re-reads.
 
 ## Browser half
 

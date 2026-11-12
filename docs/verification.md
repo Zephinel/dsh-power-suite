@@ -22,14 +22,22 @@ npm run pack:check
 
 Current evidence (2026-11-12, Node 24.22.2):
 
-- `npm test`: **174 tests, 174 passed, 0 failed, 0 skipped** — 73 base tests
+- `npm test`: **179 tests, 179 passed, 0 failed, 0 skipped** — 73 base tests
   (56 other suites + 17 project-view), plus 7 more project-view tests (24
-  current), **14** read-acks, **22** session-activity Host tests, and **58**
+  current), **14** read-acks, **22** session-activity Host tests, **5** extra
+  interrupted-session tests (all error/max-tokens/aborted-cause cases) and **58**
   UI-element-annotation tests through the browser-factory test seam; per-file:
-  interrupted-host 14, interrupted-sessions 6, project-view 24, prompt-history 6,
+  interrupted-host 18, interrupted-sessions 7, project-view 24, prompt-history 6,
   read-acks 14, session-activity 22, session-artifacts 16, settings 6,
   ui-annotation 58, workspace-presets 8.
 - `npm run check`: passed (`18 modules, 10 test files`).
+- Interrupted-session generalization was verified on a real error-ended Session
+  (`session-685bae89-2798-4bed-83c4-f28ddf0ed024`, last `turn/end` reason
+  `error` / `RATE_LIMIT`): the route returned `interrupted: true`, the sidebar
+  row carried `data-power-suite-interrupted`, the hover Continue pill was
+  present, and the composer primary control was enabled with
+  `aria-label="Continue the unfinished task"` and the play-triangle mask. No
+  live continuation was sent (the retry itself is covered by Host tests).
 - `npm run pack:check`: **78 files** (0.3.0 tarball), including `src/`,
   `locale/`, `docs/` (with the Project page/rail states/sidebar switch,
   activity-card actions/acknowledgement/ledger/current-ring states, Artifacts
@@ -115,7 +123,7 @@ subagent: true`; two completed control Sessions stayed `interrupted: false`.
 > the 32-key generation). After the audit fixes, `--smoke` passed **6/6** with
 > the **35-key** seam on the post-audit-fix build (`1c61a230…`) (smoke-only
 > evidence).
-> The merged suite is **174/174**, `npm run check` **18 modules / 10 test files**,
+> The merged suite is **179/179**, `npm run check` **18 modules / 10 test files**,
 > and the tarball **78 files** (0.3.0); the per-scenario record below remains
 > pre-merge evidence, not merged-build evidence.
 
@@ -157,7 +165,7 @@ commit `fd8ccc9`). The acceptance run recorded above was taken on `37388d3f…`;
 the only delta is the review-requested defensive cleanup in `deactivate()`'s
 already-off early return (clears the resolved-node cache/observer; that branch is
 not exercised by any scenario). On that pre-merge build `npm test` was 125/125
-and `npm run check` green; the merged tree is 174/174 / 18 modules / 10 test
+and `npm run check` green; the merged tree is 179/179 / 18 modules / 10 test
 files / 78-file pack. The full harness was not re-run after the merge, and the
 merged build `572b8fa1…` itself was not re-run; after the audit fixes, only
 `--smoke` was run on the post-audit-fix build `1c61a230…` (6/6, 35-key seam, 0
@@ -182,7 +190,7 @@ Automated gates on this build:
   this build); `node --check src/client.js` passed; `npm run check` passed
   (`14 modules, 8 test files`); `npm run pack:check` **63 files** including the
   five annotation captures.
-- Merged tree gates (current): `npm test` **174/174**, `npm run check` passed
+- Merged tree gates (current): `npm test` **179/179**, `npm run check` passed
   (`18 modules, 10 test files`), `npm run pack:check` **78 files**. Post-audit-fix
   evidence is the 6/6 `--smoke` run above on `1c61a230…` (35-key seam); the merged
   build `572b8fa1…` itself was not re-run (32-key seam), the full E2E was not

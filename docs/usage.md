@@ -191,11 +191,13 @@ were restored) stops them from coming back.
 
 ## Interrupted sessions
 
-A Session whose last turn was cut off by a Host restart shows an amber mark
-left of its title. Hover the row and choose **Continue** to resume it; the
-continuation is implicit — it does not appear as a user message in the
-transcript, while the composer submit control uses a play icon until the new
-turn starts.
+A Session whose last turn did not finish — Host restart/crash, any model or
+network error (quota/usage limit, timeout, transport, rate limit), an output
+limit, or an imported unknown cancellation — shows an amber mark left of its
+title. Hover the row and choose **Continue** to retry it; the continuation is
+implicit — it does not appear as a user message in the transcript, while the
+composer submit control uses a play icon until the new turn starts. Deliberate
+user/hook/parent cancellations and completed turns stay unmarked.
 
 ## Project view
 

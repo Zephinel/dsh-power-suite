@@ -19,7 +19,7 @@ test('the fold tracks the last turn and its ending', () => {
   assert.deepEqual(lastTurnState([start(2, 2), end(2, 3, 'interrupted'), start(2, 4)]), { turn: 2, open: false, endReason: 'interrupted', endCause: null })
 })
 
-test('only crash tails and Harness endings count as interrupted', () => {
+test('crash tails, error stops and Harness endings leave work to resume', () => {
   assert.equal(isInterrupted(lastTurnState([]), false), false)
   assert.equal(isInterrupted(lastTurnState([start(1, 0), end(1, 1, 'completed')]), false), false)
   assert.equal(isInterrupted(lastTurnState([start(1, 0), end(1, 1, 'interrupted')]), false), true)
@@ -30,9 +30,27 @@ test('only crash tails and Harness endings count as interrupted', () => {
   assert.equal(isInterrupted(lastTurnState([start(1, 0), end(1, 1, 'aborted', 'user')]), false), false)
   assert.equal(isInterrupted(lastTurnState([start(1, 0), end(1, 1, 'aborted', 'parent')]), false), false)
   assert.equal(isInterrupted(lastTurnState([start(1, 0), end(1, 1, 'aborted', 'hook')]), false), false)
-  assert.equal(isInterrupted(lastTurnState([start(1, 0), end(1, 1, 'error')]), false), false)
+  assert.equal(isInterrupted(lastTurnState([start(1, 0), end(1, 1, 'error')]), false), true)
 })
 
+test('every unfinished turn ending is resumable; deliberate ends are not', () => {
+  const ending = (reason) => lastTurnState([start(1, 0), { type: 'turn/end', seq: 1, data: { turn: 1, reason } }])
+  // Provider/model/network/timeout/quota errors: the task did not finish.
+  assert.equal(isInterrupted(ending({ kind: 'error', error: { code: 'QUOTA', message: '429: OpenCode Go usage limit reached' } }), false), true)
+  assert.equal(isInterrupted(ending({ kind: 'error', error: { code: 'TRANSPORT', message: 'Connection error.' } }), false), true)
+  assert.equal(isInterrupted(ending({ kind: 'error', error: { code: 'RATE_LIMIT', message: 'retry shortly' } }), false), true)
+  assert.equal(isInterrupted(ending({ kind: 'error', error: { code: 'UNKNOWN' } }), false), true)
+  assert.equal(isInterrupted(ending({ kind: 'max-tokens' }), false), true)
+  assert.equal(isInterrupted(ending({ kind: 'aborted', reason: { kind: 'legacy' } }), false), true)
+  // Deliberate or synthetic ends stay unmarked.
+  assert.equal(isInterrupted(ending({ kind: 'completed' }), false), false)
+  assert.equal(isInterrupted(ending({ kind: 'blocked' }), false), false)
+  assert.equal(isInterrupted(ending({ kind: 'forked' }), false), false)
+  assert.equal(isInterrupted(ending({ kind: 'aborted', reason: { kind: 'user' } }), false), false)
+  assert.equal(isInterrupted(ending({ kind: 'aborted', reason: { kind: 'parent' } }), false), false)
+  assert.equal(isInterrupted(ending({ kind: 'aborted', reason: { kind: 'hook' } }), false), false)
+  assert.equal(isInterrupted(ending({ kind: 'aborted' }), false), false)
+})
 test('a graceful Host shutdown is a Harness-caused interruption', () => {
   const shutdown = lastTurnState([start(1, 0), end(1, 1, 'aborted', 'disposed')])
   assert.equal(isInterrupted(shutdown, false), true)
@@ -51,6 +69,13 @@ test('the live event predicate matches the fold', () => {
   assert.equal(isInterruptedEnd({ kind: 'aborted', reason: { kind: 'user' } }), false)
   assert.equal(isInterruptedEnd({ kind: 'aborted' }), false)
   assert.equal(isInterruptedEnd({ kind: 'completed' }), false)
+  assert.equal(isInterruptedEnd({ kind: 'error', error: { code: 'QUOTA', message: 'usage limit reached' } }), true)
+  assert.equal(isInterruptedEnd({ kind: 'error', error: { code: 'TRANSPORT', message: 'Connection error.' } }), true)
+  assert.equal(isInterruptedEnd({ kind: 'max-tokens' }), true)
+  assert.equal(isInterruptedEnd({ kind: 'blocked' }), false)
+  assert.equal(isInterruptedEnd({ kind: 'forked' }), false)
+  assert.equal(isInterruptedEnd({ kind: 'aborted', reason: { kind: 'legacy' } }), true)
+  assert.equal(isInterruptedEnd({ kind: 'aborted', reason: { kind: 'user' } }), false)
   assert.equal(isInterruptedEnd(null), false)
 })
 

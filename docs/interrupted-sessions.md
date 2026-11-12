@@ -1,7 +1,9 @@
 # Interrupted sessions
 
-Tasks cut off by a Host restart or crash are marked in the sidebar and can be
-continued without hunting for the right message.
+Tasks that did not finish — cut off by a Host restart/crash, or stopped by a
+provider/model/network error, a quota/timeout, or an output-token ceiling — are
+marked in the sidebar and can be continued without hunting for the right
+message.
 
 ## What the user sees
 
@@ -12,7 +14,7 @@ continued without hunting for the right message.
   never collides with the text underneath; the mark and the action sit above the
   mask. Both use theme tokens, so they follow light and dark mode.
 - Opening that Session turns the composer's send control into a **play triangle**
-  (`play-fill`). Pressing it with an empty draft continues the interrupted task;
+  (`play-fill`). Pressing it with an empty draft continues the unfinished task;
   typing a draft first sends that draft normally instead.
 - Continuing is **implicit**: it does not add a user bubble to the transcript.
   The browser asks the Host to start the next turn with a non-human context
@@ -21,21 +23,29 @@ continued without hunting for the right message.
 
 ## When a Session counts as interrupted
 
-The Host folds the Session's last turn:
+The Host folds the Session's last turn and marks it when the turn did not
+finish:
 
 - the last `turn/end` reason is `interrupted` (crash recovery closes a tail turn
   with that reason),
 - the last `turn/end` reason is `aborted` with the `disposed` cancellation cause
-  (a graceful Host shutdown, such as a restart, closes the live turn that way),
-  or
+  (a graceful Host shutdown, such as a restart, closes the live turn that way)
+  or the `legacy` cause (an imported record with no recoverable cause),
+- the last `turn/end` reason is `error` — **any** provider/model/network error,
+  including quota/usage limits, request timeouts, transport failures, rate
+  limits and malformed responses,
+- the last `turn/end` reason is `max-tokens` (a step hit its output ceiling), or
 - the last turn is still open and its Agent is **not** running (a raw crash tail
   before recovery).
 
-A running Session is never marked; a user cancellation (`aborted` with cause
-`user`), a parent or hook cancellation, a model error, a completed turn, or a
-Session with no turns is not interrupted either.
+A running Session is never marked. Deliberate endings are not marked: a
+completed turn, a user/parent/hook cancellation (`aborted` with those causes), a
+`blocked` turn (a pre-step hook rejected it), a `forked` synthetic boundary, or
+a Session with no turns.
 Only the **last** turn matters: continuing the task starts a new turn, so the
-previous interruption stops counting immediately.
+previous stop stops counting immediately. Continue is a retry, not a guarantee:
+if the underlying cause persists (still no credentials, still over the context
+limit, still rate-limited) the new turn can fail again with the same mark.
 
 ## How it is wired
 
