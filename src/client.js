@@ -8058,13 +8058,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
     //#endregion
 
-    /**
-     * Window event that asks the UI annotation mode to deactivate.
-     * The standalone Project page was its only dispatcher; the event kept its
-     * annotation listener until that region is rewritten.
-     */
-    const ANNOTATION_EXIT_EVENT = 'power-suite:ui-annotation-exit'
-
     //#region feature: ui element annotation
     //
     // Browser-only mode that lets the user outline real DSH elements, give each
