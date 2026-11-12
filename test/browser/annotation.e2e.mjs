@@ -5094,19 +5094,42 @@ async function runCrossBranchHovercardCheck(h) {
    * Hover a sidebar row until the DW hover card appears.
    * @returns {Promise<{ card: object, point: object } | null>} the card and anchor.
    */
+  /**
+   * Reset the pointer away from the card, then hover the DW card rows (the only
+   * elements whose mouseenter opens the hover card; native sidebar rows never do).
+   * Returns the visible card plus the anchor point.
+   * @returns {Promise<{ card: object, point: object } | null>} the card and anchor.
+   */
   const findCard = async () => {
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const point = (await h.page.eval(probes.workspaceRowPoint)) ?? (await h.page.eval(probes.sessionRowPoint, null))
-      if (point === null || point === undefined) {
-        await sleep(250)
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      // Annotation mode can leave a previously pinned card open; release it first so
+      // a card observed here is a fresh mouseenter product, not stale state.
+      await h.page.moveTo(700, 160)
+      await sleep(250)
+      const points = await h.page.evaluate(`(() => {
+        const points = []
+        for (const selector of ['.psd-run-main', '.psd-child-main']) {
+          for (const element of document.querySelectorAll(selector)) {
+            const rect = element.getBoundingClientRect()
+            if (rect.width > 8 && rect.height > 4 && rect.top >= 0 && rect.bottom <= innerHeight && points.length < 3) {
+              points.push({ x: Math.round(rect.left + Math.min(40, rect.width / 2)), y: Math.round(rect.top + rect.height / 2) })
+            }
+          }
+        }
+        return points
+      })()`)
+      if (!Array.isArray(points) || points.length === 0) {
+        await sleep(300)
         continue
       }
-      await h.page.moveTo(point.x, point.y)
-      const deadline = Date.now() + 4000
-      while (Date.now() < deadline) {
-        const card = await h.page.eval(probes.psdHovercardState)
-        if (card !== null && card.visible) return { card, point }
-        await sleep(120)
+      for (const point of points) {
+        await h.page.moveTo(point.x, point.y)
+        const deadline = Date.now() + 2500
+        while (Date.now() < deadline) {
+          const card = await h.page.eval(probes.psdHovercardState)
+          if (card !== null && card.visible) return { card, point }
+          await sleep(120)
+        }
       }
     }
     return null
