@@ -165,6 +165,27 @@ blank Session) and the runner's reload helper re-selects the record-owning Sessi
 native sidebar row when the shell restores a different "last viewed" Session after a reload.
 Scenario 10 now also guards the F-2 regression that Phase 1 silently persisted `cwd:null`.
 
+## Current evidence (Phase 2-B annotation build)
+
+Phase 2-B (on top of the Phase 2-A commits), Node v24.22.2, live GUI at 1728x900,
+**66-key** seam. Logs are external evidence under `.tmp-work/` (gitignored).
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Unit model | `npm test` | **214/214** pass, 0 skip (10 new T8/T9 cases) |
+| Repository gate | `npm run check` | exit 0 (18 modules, 10 test files) |
+| Smoke | `node test/browser/annotation.e2e.mjs --smoke` | **6/6**, seam 66 keys, 0 page errors, 0 real network failures |
+| Composer chips (T9) | `--scenario 13 --no-shots` | **PASS**: Quick reference → one native chip (`occurrence=1`, no plain 4-line block), chip click → record detail card, Backspace → chip removed, batch → ONE `UI annotations × 2` group chip (no numbered blocks), collection view kept, transcript 0, not sent |
+| Chip fallback | post-hook row `13f` | explicit **SKIP**: the live GUI always installs the chip services, so the D9 fallback cannot be forced end-to-end without stubbing DSH; fallback text/toast/serializers unit-tested |
+| F4 merged pin (T-cross) | `--scenario 11 --no-shots` | explicit **SKIP** in this worktree (dynamic-workspaces feature absent). The scenario detects the DW capability and runs the real pin + no-mode close regression after merge; `10b` uses the same capability gate instead of a hardcoded SKIP (M-4) |
+| Rail + chip sequence | `--from 4 --no-shots` | **13 PASS / 2 SKIP / 0 FAIL**, ~2 min, 0 page errors, 0 real network failures (S4-S15; S5 asserts the ONE group chip, S6 rail status honesty) |
+| Screenshots | `--shots-only --assets` | exit 0, ~36 s; regenerated `annotation-idle/mode/selection/collection/inserted.png` with the privacy guard asserted before every capture |
+
+Scenario 13 uses the real CDP composer: it asserts the native Lexical decorator
+chip count, clipboard projection, chipless draft, atomic Backspace removal, the
+single group chip for a batch, and that the transcript stays 0 (nothing is sent).
+The group chip label is `UI annotations × N` (D2: per-item chips are rejected).
+
 ## Current evidence (round 2, pre-merge annotation build)
 
 > This acceptance evidence was recorded on the pre-merge annotation branch (final
