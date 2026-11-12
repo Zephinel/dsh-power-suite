@@ -134,10 +134,12 @@
   is derived as read when its baseline is within **1000 ms** of the current
   activity, so a very small genuine change could keep a stale ack; metadata-only
   bumps cannot. Pushes are chunked (≤200 entries / ~48 KiB, one POST in flight):
-  network, 5xx, and 429 failures stay queued, a permanent 4xx drops only that
-  batch, and both the local cache and pending map are capped at 1000. The two
-  Host routes need a plugin reload / Host recompose after upgrading, and old
-  local marks are uploaded once when DSH is first opened with the new Host.
+  network, 5xx, and 429 failures stay queued, a permanent non-retryable 4xx
+  drops **only that batch immediately**, and the local cache and pending map are
+  each capped at 1000 (pending entries dropped by the cap stay in the local map
+  and re-migrate later). The two Host routes need a plugin reload / Host
+  recompose after upgrading, and old local marks are uploaded once when DSH is
+  first opened with the new Host.
 - **One-time read-mark caveat from the superseded mtime build.** During the
   short-lived mtime-floor iteration some acknowledgement baselines were inflated
   (for example `78f7a4a7…`). Baselines are max-monotonic: opening the Session
@@ -145,19 +147,25 @@
   may stay acknowledged longer than its real history warrants. It has already
   left the card's retention window, so the visible symptom is gone; fresh
   installs and Sessions touched after the ledger fix are unaffected.
-- **Activity is exact only for events the Host observed.** The event-sourced
-  ledger records committed `session/event` times live, so long, interrupted, and
-  failed turns that end while the Host runs report exactly. Sessions that
-  existed before install rely on the one-time projection-cache baseline
-  (`max(timeContext.lastMessageTime, lastInjectionTime)` plus header fallback),
-  so a historical or seed-only completion can be under-reported — the ledger
-  never fabricates recency from document mtime or catalog prompt times. Seed and
-  maintenance events are filtered out by design. The ledger is a per-DSH-profile
-  Host file capped at 5000 Sessions (oldest entries drop), the route serves a
-  live snapshot with no document scan/TTL, and Host code changes need a plugin
-  Host recompose. The **native sidebar keeps the catalog last-prompt times**, so
-  sidebar times can disagree with the card for long runs; after the window
-  expires, retention arithmetic still removes completed rows.
+- **Activity is exact only for allowlisted events the Host observed.** The
+  event-sourced ledger records committed `session/event` times live for the
+  explicit `ACTIVITY_EVENT_TYPES` allowlist, so long, interrupted, and failed
+  turns that end while the Host runs report exactly. Metadata events
+  (`request/*`, `session/title`, plugin metadata), seed/maintenance variants, and
+  **unknown future event types never advance activity** — they are
+  under-reported until the allowlist grows, never fabricated. Sessions that
+  existed before install rely on a one-time projection-cache baseline
+  (`max(timeContext.lastMessageTime, lastInjectionTime)`, else header
+  **`createdAt` only** — SessionHeader has no `updatedAt`), so a historical,
+  seed-only, or no-cache completion can be under-reported. Writes read-merge
+  per-id maxima across overlapping HMR/Host instances (max semantics only, no
+  generation ordering), and an abrupt process crash before the 750 ms flush can
+  lose the last debounce window (no `fsync` contract). The ledger is a
+  per-DSH-profile Host file capped at 5000 Sessions (oldest entries drop), the
+  route serves a live snapshot with no document scan/TTL, and Host code changes
+  need a plugin Host recompose. The **native sidebar keeps the catalog last-prompt
+  times**, so sidebar times can disagree with the card for long runs; after the
+  window expires, retention arithmetic still removes completed rows.
 - **The rainbow ring is decoration for the current row only.** Only the Session
   open in the main view is ringed; merely-running and unopened completed rows are
   not. The animated ring needs Chromium's `@property` — other engines render a

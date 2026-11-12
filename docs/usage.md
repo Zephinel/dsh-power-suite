@@ -70,12 +70,16 @@ Session is running and the white sparkle icon when nothing runs.
 - Card times come from the Host's **event-sourced activity ledger**, not the
   catalog's last-prompt time, so a turn that ran for hours keeps its real
   completion time and stays in the recent window instead of vanishing on stop.
-  The ledger records committed Session events live (including interrupted and
-  failed turn ends); Sessions that existed before the feature was installed only
-  get a one-time baseline, so a historical/seed-only end can be under-reported —
-  it is never fabricated. The native sidebar keeps its own catalog times. The
-  Host routes behind the marks/times need the plugin reloaded / Host recomposed
-  after upgrading.
+  The ledger records allowlisted committed Session events live (turns, steps,
+  messages, assistant attempts, tool calls/results — including interrupted and
+  failed turn ends); metadata, seed/maintenance, and unknown future event types
+  do not count, so a brand-new event type can be under-reported until the
+  allowlist grows. Sessions that existed before the feature was installed only
+  get a one-time baseline (projection-cache time, or the header's `createdAt`
+  when there is no cache document), so a historical/seed-only end can be
+  under-reported — it is never fabricated. The native sidebar keeps its own
+  catalog times. The Host routes behind the marks/times need the plugin reloaded
+  / Host recomposed after upgrading.
 - Rest the pointer on a row for its hover detail: the Workspace name, full
   workspace path, Status with its time, absolute Last active time, and the
   running subagent count. The card sits outside the sidebar and never covers the

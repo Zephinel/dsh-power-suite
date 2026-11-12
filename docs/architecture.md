@@ -102,14 +102,16 @@ bytes) merges and returns the merged document (`415` non-JSON, `413` too large,
 document cannot be written); every response is `no-store`. The browser keeps a
 `localStorage` copy as a cache, syncs on mount/focus/visibility/30 s, migrates
 old local marks with a one-time POST, and pushes raised baselines with a 250 ms
-debounce after an **8 s AbortController** timeout. Failed/timed-out pushes stay
-queued and retry on the next sync cycle (one POST in flight); a permanent 4xx
-drops only that batch. Pushes are chunked to at most **200 entries / ~48 KiB**
-per sequential POST (local and pending maps capped at 1000), so a large cache
-cannot pin the Host's 64 KiB cap. Queued entries are dropped only after the Host
-acknowledges them; pending pushes are flushed before the activity fetch, inside
-a `try/finally` that always clears the in-flight flag. Read state is derived at
-render (`baseline >= activity - 1000 ms`); there is no running-based clearing.
+debounce after an **8 s AbortController** timeout. Network, 5xx, and 429 failures
+stay queued and retry on the next sync cycle (one POST in flight); a permanent
+non-retryable 4xx (400/413/415/404 etc.) drops **only that batch immediately**
+so later acks still sync. Pushes are chunked to at most **200 entries / ~48 KiB**
+per sequential POST (the local cache and the pending map are each capped at
+1000; pending entries dropped by the cap remain in the local map and re-migrate
+later), so a large cache cannot pin the Host's 64 KiB cap. Pending pushes are
+flushed before the activity fetch, inside a `try/finally` that always clears the
+in-flight flag. Read state is derived at render
+(`baseline >= activity - 1000 ms`); there is no running-based clearing.
 
 ### Session activity ledger
 
@@ -120,28 +122,45 @@ maintenance (`session/end-seed`), so neither is authoritative. The feature
 ledger**:
 
 - `ctx.on('session/event', …, { global: true })` inside `ctx.effect` advances
-  `sessionId → max(event.time)` for every committed event with a finite positive
-  time and a valid id; seed/maintenance event types are filtered defensively
-  (`*seed`, `session/end-seed`, `plugin:…/seed`) and never count. Cleanup
-  unsubscribes and flushes the store.
+  `sessionId → max(event.time)` only for the explicit `ACTIVITY_EVENT_TYPES`
+  allowlist (`turn/start|end`, `step/start|end`, user/developer/system/assistant
+  messages, `assistant/attempt`, `tool/call|result`) with a finite positive time
+  and valid id. Metadata events (`request/header`, `request/context`,
+  `session/title`, plugin metadata), seed/maintenance variants, and unknown
+  future event types never advance activity (they can under-report until the
+  allowlist grows). Cleanup unsubscribes the listener first and then **returns**
+  `ledger.dispose()`, so Cordis awaits the durable write.
 - `$DSH_HOME/dsh-power-suite/session-activity.json` holds
-  `{ version: 1, sessions: { id: lastActivityAt } }`: sanitized (id ≤200 chars,
-  finite positive epoch ms), max-merged, capped at the 5000 newest Sessions,
-  atomic temp+rename writes (`0600` in a `0700` directory) on a serialized chain
-  with a 750 ms debounce; corrupt/missing reads empty (rewritten on next write),
-  a valid empty document is not rewritten.
+  `{ version: 1, sessions: { id: lastActivityAt } }`: `record()` mutates the
+  in-memory map O(batch) and marks dirty (sanitize/cap/copy are deferred to
+  snapshot/write; the route copies once per request). Writes re-read the current
+  file, merge per-id maxima, write the merged map atomically (temp+rename,
+  `0600` in a `0700` directory) on a serialized chain with a 750 ms debounce, and
+  absorb external entries into memory, so overlapping HMR/Host instances do not
+  clobber each other (max only — no generation ordering). `flush()` always
+  awaits the chain including an in-flight write and drains events recorded during
+  it until stable; `dispose()` stops the debounce, flushes, awaits the chain, and
+  is idempotent. Corrupt/missing files load as empty and schedule a rewrite
+  immediately; a valid empty document is not rewritten. An abrupt process crash
+  before the debounce/flush can still lose the last ≤750 ms window (no `fsync`)
+  — accepted.
 - On install, a one-time background baseline seeds Sessions that are in the
   catalog but not yet in the ledger from their projection-cache document's
   `max(timeContext.lastMessageTime, lastInjectionTime)` (16 MiB document cap,
-  id/path guard, mtime used only as a re-parse guard), with header fallback;
-  max-merge means it never overwrites newer live events, and a listing failure
-  leaves the ledger as-is.
+  id/path guard, mtime used only as a re-parse guard). A Session with no usable
+  cache row falls back to header **`createdAt` only** (SessionHeader has no
+  `updatedAt`) — a creation-time approximation. Max-merge means the baseline
+  never overwrites newer live events, and a listing failure leaves the ledger
+  as-is.
 - `GET /api/power-suite.session-activity` keeps the same path/contract and
   serves a cheap live ledger snapshot (`no-store`; broken ledger → `200
-  { sessions: {} }`). Values are exact for events the Host observed; pre-install
-  Sessions have only the baseline approximation (a historical/seed-only end can
-  be under-reported, never fabricated). Host code changes need a plugin Host
-  recompose (no DSH restart).
+  { sessions: {} }`). `ensureLoaded()` is single-flight and awaited before every
+  snapshot, so the first GET after a cold Host returns the full ledger (measured
+  ~60 ms / 404 entries, not an empty map); the client ignores an empty response
+  while it already holds a non-empty map. Values are exact only for allowlisted
+  events the Host observed; pre-install Sessions have only the baseline
+  approximation (historical/seed-only/no-cache can be under-reported, never
+  fabricated). Host code changes need a plugin Host recompose (no DSH restart).
 
 The browser folds the map in as
 `effectiveUpdatedAt = max(summary.updatedAt, activity[id])` for card

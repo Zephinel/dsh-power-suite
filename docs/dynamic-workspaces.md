@@ -211,16 +211,18 @@ $DSH_HOME/dsh-power-suite/read-acks.json
   maxima, sends a one-time migration POST (uploading old local marks), then
   re-syncs every **30 s** and on window focus/visibility; newly raised baselines
   are pushed with a **250 ms** debounce. Both the local cache and the pending
-  push map are capped at **1000** entries. Pushes are split into sequential
-  batches of at most **200 entries / a conservative 48 KiB** (well under the
-  Host's 64 KiB cap; at most one POST in flight): network, 5xx, and 429 failures
-  stay queued and retry on the next sync/focus, a permanent 4xx drops only that
-  batch (bounded rounds) so later acks still sync, and entries are dropped only
-  after the Host acknowledges them. Client GET/POST requests and the activity
-  fetch carry an **8 s `AbortController` timeout**; the sync uses `try/finally`
-  to always clear its in-flight flag and flushes pending ack pushes before
-  fetching activity. A missing route (a Host without the new feature) degrades
-  silently to local-only behavior.
+  push map are capped at **1000** entries (oldest baselines drop from the pending
+  map; they remain in the local map and re-migrate later). Pushes are split into
+  sequential batches of at most **200 entries / a conservative 48 KiB** (well
+  under the Host's 64 KiB cap; at most one POST in flight): network, 5xx, and 429
+  failures stay queued and retry on the next sync/focus, while a permanent
+  non-retryable 4xx (400/413/415/404 etc.) drops **only that batch immediately**
+  so later acks still sync; entries that still hold the pushed value are removed
+  after a successful POST. Client GET/POST requests and the activity fetch carry
+  an **8 s `AbortController` timeout**; the sync uses `try/finally` to always
+  clear its in-flight flag and flushes pending ack pushes before fetching
+  activity. A missing route (a Host without the new feature) degrades silently to
+  local-only behavior.
 - Read state is derived at render: read iff
   `baseline >= activity - 1000 ms` (using the effective activity timestamp
   below). The old “running clears the ack” branch is gone, so momentary status
@@ -241,43 +243,69 @@ fabricate recency. The feature therefore builds its own ledger from the same
 committed events DSH itself uses:
 
 - **Live authority** — the Host subscribes to `ctx.on('session/event', …,
-  { global: true })` inside its plugin effect. A committed event with a finite
-  positive `event.time` for a valid Session id advances that Session's entry with
-  `max` semantics, so completed, interrupted, and failed turns all follow one
-  rule. Synthetic seed/maintenance event types (`*seed`,
-  `session/end-seed`, `session/start-seed`, `plugin:…/seed`) are filtered out
-  defensively and can never count as activity.
+  { global: true })` inside its plugin effect. Only an explicit
+  `ACTIVITY_EVENT_TYPES` allowlist advances a Session's entry (with `max`
+  semantics): `turn/start`, `turn/end`, `step/start`, `step/end`,
+  `user/message`, `developer/message`, `system/message`, `assistant/message`,
+  `assistant/attempt`, `tool/call`, and `tool/result`; the time must be a finite
+  positive `event.time` for a valid Session id. Metadata events (`request/header`,
+  `request/context`, `session/title`, plugin metadata), seed/maintenance events,
+  and **unknown future event types do not advance activity** — the card can
+  under-report an unrecognized future activity type, but it never fabricates
+  recency.
 - **Durable ledger** — `$DSH_HOME/dsh-power-suite/session-activity.json`:
   `{ "version": 1, "sessions": { "<sessionId>": <lastActivityAt> } }`. The store
   sanitizes ids (≤200 chars) and finite positive epoch-ms values, merges with
   `Math.max`, caps at the **5000 newest** Sessions, and writes atomically
   (temporary sibling + rename, `0600` file in a `0700` directory) on a
-  serialized chain with a **750 ms** debounce (`load`/`record`/`snapshot`/
-  `flush`/`dispose`). A corrupt or missing file reads as empty and is rewritten;
-  a valid empty document is not rewritten.
+  serialized chain with a **750 ms** debounce. `record()` is the hot path: it
+  mutates the in-memory map O(batch) and marks it dirty; sanitize/cap/copy happen
+  only at snapshot/write, and the route copies once per request.
+- **Durability contract** — `flush()` always awaits the serialized write chain
+  (including an in-flight write) and keeps draining events recorded during a
+  write until the ledger is stable, so a `dispose()` during a write cannot lose
+  the last committed events. `dispose()` stops the debounce timer, flushes, awaits
+  the chain, and is idempotent. Host cleanup unsubscribes the `session/event`
+  listener first and then **returns** `ledger.dispose()`, so Cordis awaits the
+  durable write before the plugin unloads. **Crash caveat:** an abrupt process
+  crash before the 750 ms flush can still lose the last debounce window; there is
+  no `fsync` contract — accepted.
+- **Read-merge writes** — every write re-reads the current file, merges the
+  `max` per Session id, writes the merged map, and absorbs any external entries
+  into memory. Overlapping HMR/Host instances therefore no longer clobber each
+  other; merging is per-id max only and does **not** order distinct Host
+  generations beyond that. A corrupt/missing file loads as empty and schedules an
+  empty rewrite; a valid empty document is not rewritten.
 - **One-time baseline** — on install, Sessions already in the catalog without a
   ledger entry are seeded from their per-record projection-cache document's
   `max(timeContext.lastMessageTime, timeContext.lastInjectionTime)` (16 MiB
   document cap, id/path guard, document mtime used only as a re-parse guard —
-  never as a value), falling back to the header's `updatedAt`/`createdAt`. The
-  seed is merged with max semantics so it never overwrites newer live events;
-  a listing failure leaves the ledger untouched.
+  never as a value). A Session with no usable cache row falls back to the header's
+  **`createdAt` only** (DSH's SessionHeader has no `updatedAt`), a creation-time
+  approximation. The seed is merged with max semantics so it never overwrites
+  newer live events; a listing failure leaves the ledger untouched.
 - **Route** — `GET /api/power-suite.session-activity` keeps the same path and
   `{ sessions }` contract and serves a cheap snapshot of the live ledger (no
   per-request document scan, no TTL), `cache-control: no-store`; a broken ledger
-  degrades to `200 { sessions: {} }`.
+  degrades to `200 { sessions: {} }`. **Cold load**: `ensureLoaded()` is
+  single-flight and awaited before every snapshot, so the first GET after a cold
+  Host returns the full ledger (measured ~60 ms / 404 entries) instead of an empty
+  map.
 - **Client** — the map is fetched on the existing card sync cadence (mount,
   focus, visibility, 30 s — no extra timer, 8 s `AbortController` timeout) and
   folded in as `effectiveUpdatedAt = max(summary.updatedAt, activity[id])` for
   the recent-row cutoff/order/time, running-row order/time, Active/Inactive
-  recency, nested child timestamps, and the read-baseline raise.
+  recency, nested child timestamps, and the read-baseline raise. The client
+  **ignores an empty activity response while it already holds a non-empty map**,
+  so a transient/older Host answer cannot regress the card for a poll.
 
-Exactness: values are **exact for events this Host observed** (including
-`turn/end` of long, interrupted, or failed turns); Sessions that existed before
-install only have the one-time projection-cache approximation, so a historical
-or seed-only completion can be under-reported — never fabricated. The Host half
-needs a plugin Host recompose (reload the plugin / restart the Host process; no
-DSH restart) after upgrading.
+Exactness: values are **exact for allowlisted events this Host observed**
+(including `turn/end` of long, interrupted, or failed turns). Sessions that
+existed before install only have the one-time cache-document/`createdAt`
+approximation, so a historical or seed-only completion can be under-reported —
+never fabricated; unknown future event types are under-reported until the
+allowlist grows. The Host half needs a plugin Host recompose (reload the plugin /
+restart the Host process; no DSH restart) after upgrading.
 
 ![The card with ledger-backed activity times and the current-chat ring](assets/card-activity-ledger.png)
 
@@ -404,23 +432,32 @@ The native **View options** menu picks how Sessions are grouped:
 - **Read marks are shared per DSH profile.** Acks live in the Host's
   `read-acks.json` and sync to every browser on that profile (30 s poll, focus/
   visibility); the per-browser `localStorage` copy is only a cache/offline path.
-  Another DSH profile has its own marks. The document is capped at 1000 entries
-  and merging is maxima-only (no unread-removal API), so a baseline can only move
-  forward. Without the route (older Host) the browser stays local-only; with
+  Another DSH profile has its own marks. The document, the local cache, and the
+  pending push map are each capped at 1000 entries (the pending map drops its
+  oldest baselines, which stay in the local map and re-migrate later) and merging
+  is maxima-only (no unread-removal API), so a baseline can only move forward. Without the route (older Host) the browser stays local-only; with
   storage denied too, the map lives in memory for the page lifetime. The 1000 ms
   tolerance deliberately favors keeping an ack: a real new turn that moves
   `updatedAt` by more than one second clears it, while metadata-only bumps do
   not.
-- **Activity is exact only for events this Host observed.** The ledger records
-  committed `session/event` times live, so long/interrupted/failed turns that
-  finish while the Host runs report exactly. Sessions that predate the install
-  rely on a one-time projection-cache approximation
-  (`max(timeContext.lastMessageTime, lastInjectionTime)`, header fallback), so a
-  historical or seed-only completion can be under-reported — the ledger never
-  fabricates recency from mtime or catalog prompt times. Seed/maintenance events
-  are filtered out by design. The ledger is a per-DSH-profile Host file (5000
-  Sessions cap, oldest dropped); the route needs a plugin Host recompose after
-  upgrading, and the native sidebar keeps its catalog times regardless.
+- **Activity is exact only for allowlisted events this Host observed.** The
+  ledger records committed `session/event` times live for `turn/*`, `step/*`,
+  user/developer/system/assistant messages, `assistant/attempt`, and
+  `tool/call|result`, so long/interrupted/failed turns that finish while the Host
+  runs report exactly. Sessions that predate the install rely on a one-time
+  projection-cache approximation
+  (`max(timeContext.lastMessageTime, lastInjectionTime)`, else header
+  **`createdAt` only** — SessionHeader has no `updatedAt`), so a historical,
+  seed-only, or no-cache completion can be under-reported; metadata events,
+  seed/maintenance events, and unknown future event types never advance activity,
+  so a new event type can be under-reported until the allowlist grows — the
+  ledger never fabricates recency from mtime or catalog prompt times. Writes
+  read-merge per-id maxima across overlapping HMR/Host instances (max only, no
+  generation ordering); an abrupt process crash before the 750 ms flush can lose
+  the last debounce window (no `fsync` contract). The ledger is a per-DSH-profile
+  Host file (5000 Sessions cap, oldest dropped); the route needs a plugin Host
+  recompose after upgrading, and the native sidebar keeps its catalog times
+  regardless.
 - **One-time migration caveat for read marks.** During the short-lived
   mtime-floor build some acknowledgement baselines were inflated (for example
   `78f7a4a7…`). Baselines are max-monotonic, so opening the Session cannot lower

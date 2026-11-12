@@ -91,18 +91,30 @@ All notable changes to this repository are documented here. The format follows
   `baseline >= activity - 1000 ms`, so a transient status flag can no longer
   resurrect a stale green dot.
 - Event-sourced activity ledger for the activity card: the Host subscribes to
-  committed `session/event` times (seed/maintenance events filtered out),
-  persists `$DSH_HOME/dsh-power-suite/session-activity.json`
+  committed `session/event` times under an explicit `ACTIVITY_EVENT_TYPES`
+  allowlist (`turn/*`, `step/*`, user/developer/system/assistant messages,
+  `assistant/attempt`, `tool/call|result`; metadata, seed/maintenance and unknown
+  future types never count), persists
+  `$DSH_HOME/dsh-power-suite/session-activity.json`
   (`{version:1, sessions:{id:lastActivityAt}}`, max-merge, 5000-Session cap,
   debounced atomic writes), and seeds a one-time projection-cache baseline for
-  pre-install Sessions (never overwriting newer live events). A read-only
-  `GET /api/power-suite.session-activity` keeps the same `{sessions}` contract
-  and serves the live ledger (no per-request document scan, no-store), and the
-  card folds it in via `max(catalog updatedAt, activity)` for retention,
-  ordering, relative times, bucket recency, child rows, and read-baseline
-  raising. Activity is exact for events the Host observed (including long,
-  interrupted, and failed turn ends); pre-install Sessions rely on the baseline
-  approximation, and the native sidebar keeps catalog times.
+  pre-install Sessions (never overwriting newer live events; header `createdAt`
+  when there is no cache document). Writes read-merge the on-disk document so
+  overlapping HMR/Host instances cannot clobber each other (max per id only),
+  `flush()` awaits the full serialized chain and drains during-write events, and
+  `dispose()` stops the debounce, flushes, awaits the chain and is idempotent
+  (Host cleanup disposes the listener first, then returns `ledger.dispose()`).
+  A read-only `GET /api/power-suite.session-activity` keeps the same
+  `{sessions}` contract and serves the live ledger (no per-request document
+  scan, no-store; `ensureLoaded()` single-flight makes the first cold GET return
+  the full ledger, and the client ignores an empty response while it already has
+  a non-empty map), and the card folds it in via
+  `max(catalog updatedAt, activity)` for retention, ordering, relative times,
+  bucket recency, child rows, and read-baseline raising. Activity is exact only
+  for allowlisted events the Host observed (including long, interrupted, and
+  failed turn ends); pre-install Sessions rely on the baseline approximation,
+  an abrupt process crash before the 750 ms flush can lose that debounce window
+  (no fsync), and the native sidebar keeps catalog times.
 - Current-chat rainbow ring: the card marks the Session open in the main view
   with a 2 px conic-gradient ring plus soft glow (`@property` rotation + hue
   drift, static under reduced motion), `pointer-events: none`, no layout shift,
@@ -147,13 +159,13 @@ All notable changes to this repository are documented here. The format follows
   per-Session warnings carry a bounded error identity; read-acks POST failures
   return no-store `500 { code: "store-failed" }`, the body cap is 64 KiB of
   UTF-8 bytes, client requests time out after 8 s, pushes are chunked
-  (≤200 entries/~48 KiB, one in flight) with retry for transient failures and
-  bounded batch-drop for permanent 4xx, and queued entries are dropped only
-  after the Host acknowledges them (local/pending maps capped at 1000); the
-  activity route uses an 8 s AbortController timeout and the client flushes
-  pending ack pushes before fetching it; the Project page's first Escape closes
-  an open menu and the second closes the page, and header `openWorkspace`
-  promises have rejection guards.
+  (≤200 entries/~48 KiB, one in flight) where network/5xx/429 stay queued and a
+  permanent non-retryable 4xx drops only that batch immediately (local and
+  pending maps each capped at 1000; pending entries dropped by the cap remain in
+  the local map and re-migrate later); the activity route uses an 8 s
+  AbortController timeout and the client flushes pending ack pushes before
+  fetching it; the Project page's first Escape closes an open menu and the second
+  closes the page, and header `openWorkspace` promises have rejection guards.
 
 ### Changed
 

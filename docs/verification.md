@@ -20,9 +20,9 @@ npm run pack:check
   the DSH bundle patch points at a real file;
 - the pure-logic test suite (`node --test test/*.test.js`).
 
-Current evidence (2026-11-11, Node 24.22.2):
+Current evidence (2026-11-12, Node 24.22.2):
 
-- `npm test`: **102 tests, 102 passed, 0 failed**.
+- `npm test`: **106 tests, 106 passed, 0 failed**.
 - `npm run check`: passed (`18 modules, 9 test files`).
 - `npm run pack:check`: **72 files** (0.2.0 tarball), including `src/`,
   `locale/`, `docs/` (with the Project page/rail states/sidebar switch,
@@ -40,15 +40,17 @@ Current evidence (2026-11-11, Node 24.22.2):
   rule, the 40/200/24 caps, stats and recent-activity derivation, parameter
   validation and 25 s cache behavior), the read-acks store/route (schema,
   sanitization, max-merge, 1000-entry cap, 415/413/400/500), and the
-  event-sourced activity ledger (store max-merge/cap/atomic persistence, event
-  projection and seed filtering, one-time baseline, live snapshot route).
+  event-sourced activity ledger (store max-merge/cap/atomic persistence,
+  read-merge writes, flush/dispose durability including an in-flight write and
+  repeated dispose, record→dispose→reload, 20 sequential lifecycles, allowlist
+  event projection, one-time baseline, cold-load snapshot route).
 - Host routes are covered by tests where they exist: Dynamic Workspaces'
   card state is browser-derived but Host-backed through the read-acks store/route
-  (schema, sanitization, merge, cap, 415/413/400/500) and the session-activity
-  route (16 MiB document guard, event projection/seed filter, snapshot serving), while the
-  Project view's `GET /api/power-suite.project` route and its pure folds are
-  covered by the project-view suite (turn status, fork closer, stats exclusion,
-  cache identity/TTL). The prompt-history rail shares the existing
+  and the session-activity ledger route (16 MiB document guard, allowlist event
+  projection, cold-load snapshot), while the Project view's
+  `GET /api/power-suite.project` route and its pure folds are covered by the
+  project-view suite (turn status, fork closer, stats exclusion, cache
+  identity/TTL). The prompt-history rail shares the existing
   `api/prompt-history.list` payload and draft attachment memory writes nothing to
   the Host or storage; the remaining client-only surfaces rely on the syntax gate
   and the live checks below.
@@ -273,13 +275,29 @@ These were exercised in the Web GUI during development:
   advanced `1794463340198` → `1794463361062` without a restart and persisted to
   the ledger file (later `1794463369210`), while the old `0c14`/`78f7` values
   stayed unchanged as the file mtime advanced. Chunked pushes were forced with
-  450 pending entries plus a forced first POST `413`: the client sent batches of
-  200/200/68 entries (6811/6811/2710 bytes), dropped only the rejected first
-  batch, synced the later/new acks, and showed no retry storm; a hung activity
-  request aborted at 8 s and was retried on focus. HMR produced exactly one
-  acks GET and one activity GET per 32 s window after reload (an HMR mount added
-  one of each), with 0 exceptions/plugin console errors.
-- The current-chat rainbow ring was verified live:- The current-chat rainbow ring was verified live: exactly one ring rendered with
+  450 pending entries plus a forced first POST `413`; 18 entries were added while
+  the queue drained, so the 468 total went out as batches of 200/200/68 entries
+  (6811/6811/2710 bytes), dropping only the rejected first batch, syncing the
+  later/new acks with no retry storm; a hung activity request aborted at 8 s and
+  was retried on focus. HMR produced exactly one acks GET and one activity GET
+  per 32 s window after reload (an HMR mount added one of each), with 0
+  exceptions/plugin console errors.
+- Ledger durability and cold load were verified after a recompose: the first cold
+  GET returned `200` with a **404-entry** ledger in ~**60 ms** (not `{}`), and
+  the route and file counts agreed (file mode `600`, version `1`). A checkpoint
+  `80769cd0…` = `1794466322463` survived dispose/recompose as route = file =
+  **`1794466351365`** (≥ checkpoint, so the ≤750 ms debounce window was not
+  lost); a later probe read route `1794466488144` / file `1794466475256`.
+  `0c14a9e7…` (`1794263011213`) and `78f7a4a7…` (`1794418427299`) stayed stable
+  through Host activity and recompose, while `442a0000…` advanced only with real
+  events (`…6219743` → `…6306695` → `…6318019` → `…6413163`). Forcing an empty
+  activity response left the card rows/panel unchanged (client empty-response
+  guard), and HMR kept one acks GET + one activity GET per 32 s window, one
+  panel/three rows, 0 exceptions/plugin console errors.
+- The 10× gate run was clean: `npm test` **10/10 runs exited 0 with 106/106
+  passing each**; `npm run check` **10/10 exited 0 with fail 0** (18 modules, 9
+  test files); the final `npm run pack:check` was **72**.
+- The current-chat rainbow ring was verified live: exactly one ring rendered with
   two running animations (angle moving 281° → 234° and the hue drift over 1.6 s),
   and it moved as different Sessions were opened — across completed and running
   rows, from the sidebar, onto a nested child row and back. Row rectangles did not
@@ -302,7 +320,7 @@ These were exercised in the Web GUI during development:
   Escape. A forced one-shot read-acks POST failure stayed pending and was
   retried on window focus, then reached the Host document. HMR left a single
   poll/handler set. There were 0 console errors.
-- The settings page and the configurable windows were verified live:- The settings page and the configurable windows were verified live: the
+- The settings page and the configurable windows were verified live: the
   **DSH Power Suite** Plugins page shows exactly three setting rows (Shortcut
   modifier, Finished Session retention, Active project retention) with the
   defaults checked (120 minutes / 7 days), and the package README document above
