@@ -26,7 +26,7 @@ src/client.js           Browser entry (DSH module loader)
 ├─ Draft attachment memory seat (invisible)
 ├─ Dynamic Workspaces buckets + running & recent Sessions card
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
-├─ UI element annotation mode (launcher, right rail, highlights, note popover, collection, composer insert)
+├─ UI element annotation mode (launcher, right rail, floating-surface picking, marks/detail card, note popover, composer reference chips, batch collection)
 ├─ Plugins-page settings section
 └─ Shared hover Quick Look for generated/provided Artifacts rows and native Workspace file rows
 ```
@@ -293,40 +293,55 @@ status, and Workspace stores, inserts a summary card above the native Workspaces
 header and two bucket headers into the native `[role="tree"]`, and writes flex
 `order` values on the native group sections to band Active Projects above
 Inactive Projects. Inside the card, running, recent, and direct subagent
-Sessions are derived from the same stores: rows are single-line (glyph, title,
-time) with disclosure chevrons at the far right, subagent rows nest under their
-parent, and each row's workspace title and path, status, last-active time, and
-subagent count live in a native-style hover card that does not capture the
-pointer. Both retention windows are Host settings: finished-Session retention
+Sessions are derived from the same stores: rows share one fixed trailing grid —
+title (its right edge faded by a mask while clipped) → **time 48 px**
+(right-aligned, tabular numerals) → **New session action 22 px**
+(hover/focus-revealed) → **disclosure chevron 24 px** — so parent and nested
+subagent rows right-align their times on one column; nested subagent rows have
+no New session action (they keep empty action/disclosure spacers, and an
+interrupted child keeps only Continue in the action slot), and the header joins
+the same grid. Each row's workspace title/path, status, last-active time,
+subagent count, and the three native Session figures live in a native-style
+hover card that does not capture the pointer and matches the live native sidebar
+tooltip recipe (flush left edge, borderless, native tooltip surface, shadow and
+typography). The figures come from the injected `sessions` service's
+`projectionsBySession` map — live Sessions are push-seeded, a cold persisted
+Session gets exactly one deduplicated `refreshProjections` read on first hover,
+and each section is omitted when its projection data is absent (no loading
+state). Both retention windows are Host settings: finished-Session retention
 (`recentSessionMinutes`) bounds the card and its nested subagent rows, and
 Active-project retention (`activeProjectDays`) bounds the Active bucket, with
 running Sessions always listed and always active. The card header's indicator is
 a blue pulsing business-primary dot while any listed Session runs and the white
-RemixIcon `sparkling-line` when nothing runs, horizontally centred on the same
-glyph column as the row glyphs and followed by the title on the row-title
-column; the header chevron shares one right-edge centre column with the row
-disclosure arrows. Card state is Host-backed: read baselines sync through
-`api/power-suite.read-acks`, and card retention/times use the Host
-`api/power-suite.session-activity` map where the catalog time is stale (native
-sidebar times stay catalog-based). The row of the Session currently open in the
-main view (`retainedBy.mainView > 0`) carries `.psd-run-current` /
-`aria-current="true"` with a rainbow conic-gradient ring (`.psd-child-ring` on
-nested children): a 2 px mask-composite pseudo-element with a soft glow,
-animated by Chromium's `@property --psd-ring-angle` (3.2 s rotation plus a 14 s
-hue drift), static under reduced motion and on engines without `@property`,
-`pointer-events: none`, with no layout shift. The leading glyph has
-three states: the shell loading indicator while running, the green done dot while
-a completion is unread, and a white session-type icon (RemixIcon `deepseek-fill`
-for main rows, `robot-2-line` for subagent rows) once the Session has been opened
-and the completion acknowledged. Read state is derived from the Host-shared
-baseline (`baseline >= activity - 1000 ms`), not from running status. Rows carry
-fixed hover/focus-revealed **Continue** (interrupted only; opens the Session and
-then sends the continuation) and **New session** (creates a blank Session in the
-row's cwd and opens it) slots before the chevron, and the row of the Session
-open in the main view carries the rainbow ring. The card
-body hides its scrollbar, rows have no native tooltips, and the row body and
-disclosure arrow highlight independently (the body highlight has 8 px horizontal
-inner padding).
+RemixIcon `deepseek-fill` brand glyph when nothing runs, horizontally centred on
+the same glyph column as the row glyphs and followed by the title on the
+row-title column; the header chevron shares the rows' disclosure column. Card
+state is Host-backed: read baselines sync through `api/power-suite.read-acks`,
+and card retention/times use the Host `api/power-suite.session-activity` map
+where the catalog time is stale (native sidebar times stay catalog-based). The
+row of the Session currently open in the main view (`retainedBy.mainView > 0`)
+carries `.psd-run-current` / `aria-current="true"`, and the owning native
+Workspace row carries `data-psd-current-workspace`; both paint a low-key
+animated rainbow smoke glow on the bottom face of their own rounded rectangle
+(a blurred, breathing, hue-drifting gradient strip following the row's bottom
+radius), static under reduced motion, `pointer-events: none`, with no layout
+shift. The leading glyph has three states: the shell loading indicator while
+running, the green done dot while a completion is unread, and the white
+`sparkling-line` glyph once the Session has been opened and the completion
+acknowledged (nested subagent rows use `robot-2-line`); the header's all-complete
+indicator uses the brand `deepseek-fill` glyph. Read state is derived from the
+Host-shared baseline (`baseline >= activity - 1000 ms`), not from running status.
+Rows carry a hover/focus-revealed **Continue** (interrupted only; opens the
+Session and then sends the continuation) and, on parent rows, **New session**
+(creates a blank Session in the row's cwd and opens it). While UI-element
+annotation mode is active the hover card is pinned for pointer/selection
+(`data-psd-hovercard`, `data-psd-pinned`, `pointer-events: auto`, z-index 120)
+and clears on the annotation mode-state event or mode exit. The card body hides
+its scrollbar, rows have no native tooltips, and the row body and disclosure
+arrow highlight independently (the body highlight has 8 px horizontal inner
+padding). The Active/Inactive fold state persists in browser `localStorage` and
+is applied on the first observable paint through a persisted bucket
+classification cache that live data corrects once the Session store hydrates.
 A parent counts as active while a direct child runs. A `MutationObserver` on the
 sidebar reconciles the foreign nodes after native re-renders; unload removes them
 and restores the inline styles. The native browser keeps owning every row, menu,
@@ -454,22 +469,59 @@ inspect | selected | multi | collection`, a settings view flag, and transient
 pass-through/boxing/drag states) is a pure function covered by the Node suite
 through the factory's test seam.
 
-Insertion uses the composer's semantic API: `inputActions.captureInsertion()`
-captures `{ start, end, draftRev }` and `inputActions.insertText(text, span)`
-inserts without replacing the draft, in one undo step, and never sends; the
-quick-reference and batch serializers are pure functions in the region, and the
-editor is focused afterwards. With no conversation seat (Start page, no Session)
-the rail shows the open-a-Session notice, batch insert stays disabled, and the
-launcher, rail, and collection keep working. Two lifecycle boundaries are
-deliberate: exiting the mode removes the mode-scoped capture listeners, layout,
-rail DOM, hover/selection/box state, and pending rAF work; the plugin disposer
-additionally removes the always-on launcher resize handler, the style tag, React
-roots, and the rest. The collection is page-lifetime memory with Session-scoped
-entries (other-session entries are marked, refuse re-locate, and are excluded
-from batch insert); only browser-local state persists —
-`power-suite.ui-annotation.settings` (the two modifiers),
-`power-suite.ui-annotation.launcher` (position), and
-`power-suite.ui-annotation.rail-collapsed`. See
+Candidate picking treats **floating surfaces** as first-class: a chain whose
+live hit is inside a contiguous `position: fixed|absolute` region with computed
+`z-index >= 10` resolves to that surface's root by default (whole native hover
+preview card or the plugin's own pinned card), and the Parent/Child controls
+drill into the surface's inner text blocks and controls; while the mode is
+active the shell overlay's inline `z-index` is raised to 150 (saved value and
+priority restored on exit) so the outline paints above body-level hover cards,
+and a 60 ms mutation-triggered hover recompute keeps up with surfaces that
+appear while the pointer is stationary. A selected element becomes a **v2
+record**: ordered selector candidates plus a uniquely verified CSS selector,
+≤3 sanitized ancestors, surface/ephemeral flags, Session id with Workspace cwd
+and basename, a query-free route, viewport, bounds, and a derived text digest —
+never outerHTML, input values, JS paths, XPath, or computed styles.
+
+Records persist in a browser-owned v2 document
+(`power-suite.ui-annotation.annotations`, 250 ms debounced writes, flush on mode
+exit/dispose/visibility change, 100-record cap with a visible refusal) and are
+restored on reload, re-resolving their four live statuses. Annotated elements of
+the current Session keep a page mark with a numbered requirement badge; a
+hover-intent detail card carries the requirement, locator, position,
+Session/Workspace, status, and surface marker with edit/relocate/copy-locator/
+delete actions, and the requirement popover commits or updates the record,
+deletes it with a 5 s undo slot, and auto-dismisses after either action. The
+right rail's collection view is the batch surface (include checkboxes with
+other-Session exclusion, inline/expanded note editing, reorder, preview, delete
+with undo, and one grouped batch chip).
+
+Insertion uses the shell's **native composer inline reference chips**:
+`installUiAnnotation` dynamically injects `conversation` and `inputTriggers`
+(so a composition without the chat surface still loads and falls back), a
+Session-scoped `@` trigger source exposes the current Session's records (≤20,
+no empty group), and the annotation controller resolves
+`sessions.scope(sessionId)` → `conversation.input.for(actx).insertReference(ref,
+captureInsertion())`. One chip is inserted for a single reference and one
+grouped `UI annotations × N` chip for a batch; the trigger source's
+`serializeReference` reuses the existing quick-reference/batch serializers at
+send time (deleted batch members are skipped with an honest removed-count line,
+and a missing single record invalidates the chip so the send is blocked), with a
+plain-text fallback plus explanation when the chip services or span are
+unavailable. The semantic insertion path preserves the draft and caret, is one
+undo step, never sends, and focuses the composer afterwards. With no
+conversation seat (Start page, no Session) the rail shows the open-a-Session
+notice, insert/batch actions stay disabled, and the launcher, rail, marks, and
+collection keep working.
+
+Two lifecycle boundaries are deliberate: exiting the mode removes the
+mode-scoped capture listeners, layout, rail DOM, popover/detail/mark DOM,
+hover/selection/box state, and pending rAF work while keeping the persisted
+records; the plugin disposer additionally removes the always-on launcher resize
+handler, the style tag, React roots, the input-trigger source, and the rest.
+Four browser-local keys persist: `power-suite.ui-annotation.settings` (the two
+modifiers), `power-suite.ui-annotation.launcher` (position),
+`power-suite.ui-annotation.rail-collapsed`, and the v2 records document. See
 [ui-annotation.md](ui-annotation.md).
 
 ### Slots used
@@ -480,7 +532,7 @@ from batch insert); only browser-local state persists —
 | `sidebarRightTabs.register` | Artifacts guide card on the Start page |
 | `contextMenu.icon` | Workspace menu icon |
 | `contextMenus.register` (`workspace`) | Default agent preset submenu |
-| `conversation.input.overlay` | Renderless prompt-history keyboard seat, draft-attachment memory seat, and the annotation mode's Session bridge seat |
+| `conversation.input.overlay` | Renderless prompt-history keyboard seat, draft-attachment memory seat, and the annotation mode's Session bridge seat (Session id, input actions, and the Session's cwd/workspace label mirrored from the slot's `useSessions` hook) |
 | `conversation.input.dock` | Session hooks for the body-portaled prompt-history rail |
 | `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation and the UI element annotation launcher/rail/popover |
 | `plugins.bundle.config` | Plugin settings page |
@@ -501,9 +553,10 @@ from batch insert); only browser-local state persists —
 - Pure state derivation lives in feature modules and is covered by
   `node:test`; UI wiring stays in `src/client.js`.
 - The UI element annotation mode stays browser-only: it adds no Host route,
-  service, Session-log write, or profile change. Its collection is page-lifetime
-  memory, and only its two browser-local modifiers, launcher position, and
-  rail-collapsed flag are persisted.
+  service, Session-log write, or profile change. Its v2 records are browser
+  `localStorage` memory (capped at 100, never synced); the two modifiers,
+  launcher position, rail-collapsed flag, and records document are the only
+  persisted browser state.
 
 ## Verification
 

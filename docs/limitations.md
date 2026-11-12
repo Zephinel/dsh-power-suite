@@ -96,11 +96,14 @@
   child is only reachable while its parent row is in the card. A finished
   subagent does not finish the parent's task by itself. Blank and archived
   Sessions are skipped too.
-- **Row actions reveal on hover or keyboard focus.** The card's Continue and
-  New session slots are reserved but hidden until a row is hovered or focused
-  with the keyboard; a touch-only device has no hover, so those row actions are
-  not reachable there (the Workspace's own New Session still is). They never
-  shift the row layout.
+- **Row actions reveal on hover or keyboard focus.** The card's trailing
+  controls share one fixed grid (time 48 px → New session 22 px → disclosure
+  24 px) and the action is hidden until a row is hovered or focused with the
+  keyboard; a touch-only device has no hover, so the New session action is not
+  reachable there (the Workspace's own New Session still is). Nested subagent
+  rows intentionally have **no** New session action (their action/disclosure
+  columns are empty spacers so times still align); an interrupted child keeps
+  only Continue in the action slot. Hover never shifts the grid.
 - **Continue sends a real continuation request.** The interrupted-row Continue
   action reuses the suite's continuation flow and actually asks the Host to
   resume that Session; it is a retry, so a persistent cause (missing credential,
@@ -113,12 +116,21 @@
   the new Session can land elsewhere than the row's directory.
 - **Parent disclosure state is per page.** Each parent's show/hide of its
   subagent children is not persisted; only the two bucket folds are.
+- **Current highlight is decorative.** The open Session's card row and its
+  owning native Workspace row paint a rainbow smoke glow on the bottom face of
+  their rounded rectangle (no ring). It is `pointer-events: none`, follows the
+  rows on re-render, and becomes a static tint under `prefers-reduced-motion`;
+  the owning Workspace row is chosen from the Session's Workspace so a subagent
+  Session highlights its parent project's row.
 - **It depends on the shipped sidebar's internals** — the
   `[data-slot="sidebar.workspaces"]` wrapper, the `role="tree"` list, and
   `data-row-key="workspace:<id>"` rows. A DSH change to those anchors makes this
   feature render nothing; the native browser is unaffected.
 - **Per-browser fold state.** `power-suite.dynamic-workspaces.folds` lives in
-  `localStorage`; the card's open/closed state is not persisted.
+  `localStorage`, and `power-suite.dynamic-workspaces.buckets` caches the last
+  bucket classification so the fold applies on the first observable paint
+  before the Session store hydrates; live data corrects the cache once ready.
+  The card's open/closed state is not persisted.
 - **Client-side derivation, Host-backed state.** The buckets and card rows are
   derived in the browser from the Session, status, and Workspace stores, but the
   card's read marks and activity times come from Host routes
@@ -129,9 +141,15 @@
   snapshot/poll.
 - **Some row detail is hover-only.** A card row shows only its leading glyph,
   title, and time, and carries no native `title` tooltip; the Workspace name,
-  full wrapped workspace path, Status detail, absolute Last active time, and the
-  running subagent count appear only in the row's hover card, which does not
-  capture the pointer (and is unavailable on touch-only input).
+  full wrapped workspace path, Status detail, absolute Last active time, running
+  subagent count, and the native Session statistics / Token usage / Context
+  usage figures appear only in the row's hover card, which does not capture the
+  pointer (and is unavailable on touch-only input). Figures are omitted when the
+  Session's projections are absent; a cold (not currently live) Session gets one
+  deduplicated projection read on first hover, so the card may fill those
+  sections a moment after it opens and a stale/partial push can remove them
+  again. The context composition rows are a heuristic estimate and are never
+  presented as parts of the used-token total.
 - **Read marks are shared per `$DSH_HOME`, with no profile isolation and a
   cap.** Acks live in `$DSH_HOME/dsh-power-suite/read-acks.json` and sync to
   every browser using that home; the per-browser
@@ -301,22 +319,54 @@
   is accepted for the current release.
 - **Marquee cap.** A marquee adds at most the 24 most specific intersecting
   candidates, not every intersecting element.
-- **Evidence traceability.** The full annotation E2E acceptance evidence was
-  recorded on the pre-merge annotation build (final publication md5 `10dd3b72…` /
-  branch commit `fd8ccc9`, round-2 build `37388d3f…`); the full suite was **not**
-  re-run on the merged build (`572b8fa1…`, 32-key seam). After the audit fixes,
-  `node test/browser/annotation.e2e.mjs --smoke` passed **6/6 on the
-  post-audit-fix build** `1c61a230…` with the **35-key** seam, 0 page errors and
-  0 real network failures, reusing the existing blank Session
-  `session-5eec2763-0a91-460e-b559-08a8c3a98d13` (no new Session). That is
-  smoke-only evidence; full live behavior remains pre-merge and no single
-  all-green full-suite run exists. The logs it quotes live in `/tmp` and are
-  external development artifacts, not repository files.
+- **Evidence traceability.** Live acceptance evidence for the current
+  implementation was recorded on 2026-11-13 (annotation seam generation 66) with
+  the in-repo CDP harness (`--smoke` 6/6; per-scenario S1-S15 with targeted
+  self-contained runs). The full suite has **not** been observed fully green in a
+  single process on this build: the known late-run headless stalls (S6/S8
+  `Input.dispatchMouseEvent` timeouts) interrupt long runs, so per-scenario
+  targeted same-build runs stand in for the missing rows. The independent
+  verification rounds and their evidence gaps are recorded in
+  [verification.md](verification.md).
 - **No client node harness for the pointer chain or sync internals.** The lazy
   hover chain/descriptor behavior and the client ack flush/401-403/merge rules
   live in the unexported browser bundle; they are code-reviewed, the chain was
   measured by an **ad hoc vm/fake-DOM probe (not the committed E2E harness)**,
   and neither is unit-tested end to end.
+
+- **Annotation records are browser-local.** The v2 document lives in
+  `localStorage` for this browser profile/origin; it is capped at 100 records
+  (the 101st add is refused visibly), never synced to the Host or another
+  device, and can hold full Workspace paths plus the notes you typed. Clearing
+  browser site data or the collection removes it. A page reload restores the
+  records, but the page mark only appears for records that still resolve in the
+  current page.
+- **Floating-surface annotations are ephemeral by nature.** A native hover
+  preview card exists only while hovered (and this plugin's card only while
+  pinned in annotation mode); a reference captured from one is marked
+  `ephemeral` and will usually stop resolving once the card closes. The
+  annotation remains usable as locator data, and its status is reported honestly
+  as missing/ambiguous rather than guessed.
+- **Pointer-events-free tooltips cannot be annotated.** Native tooltips that set
+  `pointer-events: none` cannot be hit-tested; annotate their anchor control.
+  Native modals/menus stack above the annotation paint layer, so they must be
+  closed before annotating the page behind them.
+- **A uniquely verified selector can still go stale.** The selector is verified
+  at capture time; after a re-render or data change the four live statuses report
+  it honestly (Resolved / Matches several / No longer resolves / Content
+  changed), and relocating refuses non-resolved targets.
+- **The composer chip path has a fallback that is unit-tested only.** The
+  plain-text fallback and its toast are covered by unit tests and code review;
+  forcing the live fallback would require stubbing the shell's
+  conversation/inputTriggers services, so it has no live E2E row. Trigger-source
+  registration needs those two client services; an older composition without
+  them automatically degrades to plain text. Sending a chip is never done by the
+  harness (the feature never sends); missing-chip send blocking and batch
+  removed-member honesty are unit-tested.
+- **The composer chip group appears in the `@` menu.** The `@` trigger source
+  shows up in the shell's reference menu ("UI annotations") only while the current
+  Session has annotation records; it is an addition to that menu, not a separate
+  picker.
 
 ## Raw artifacts and implicit continuation
 

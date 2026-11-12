@@ -11,27 +11,30 @@ shows one plugin whose inventory grows with the suite.
 |---|---|
 | [Session artifacts](docs/session-artifacts.md) | An **Artifacts** card in the right Sidebar's Start page listing the current Session's created and delivered files **and the images/files the user attached to their prompts**, with 40 px image thumbnails, an All/Generated/Provided dropdown filter in the panel header, native open, download, copy content (text verbatim; images as a real clipboard picture in a secure context, with an HTML-image fallback on plain HTTP), and LAN link copy. |
 | [Workspace presets](docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions created in that Workspace. |
-| [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with single-line rows, right-edge disclosure chevrons, Host-shared read marks (unread completions green until opened, synced across browsers sharing the DSH home), event-sourced Host last-activity times for long runs, a rainbow ring on the current chat, row hover actions (interrupted Continue, same-directory New session), a row hover detail, nested subagent Sessions, and configurable retention windows. |
+| [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with a fixed trailing grid (time → New session action → disclosure; subagent rows have no New session), Host-shared read marks, event-sourced Host last-activity times, a breathing rainbow glow on the current row's bottom edge and its owning Workspace row, a native-style row hover card carrying status plus the native **Session statistics / Token usage / Context usage** figures, nested subagent Sessions, and configurable retention windows. |
 | [Prompt history](docs/prompt-history.md) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; a right-edge rail lists them newest first with a hover full-text preview, an inline search, and click-to-copy. Plain arrows keep their original behavior. |
 | [Draft attachments](docs/draft-attachments.md) | Attachments in a draft (pasted images, dropped or picked files) survive switching Sessions and coming back, for the page lifetime; the shell only persists the draft text. |
 | [Interrupted sessions](docs/interrupted-sessions.md) | Sessions that did not finish — restart/crash, any provider/model/network error (quota, timeout, rate limit), an output limit, or an imported unknown cancellation — carry an amber mark left of the title, a hover-only Continue action with a row mask, and a play-shaped composer submit control; deliberate cancellations and completed turns stay unmarked. State is Host-owned and cross-device: a Host SSE stream invalidates open pages immediately on turn boundaries, with polling as fallback. |
-| [UI element annotation](docs/ui-annotation.md) | A floating launcher toggles a point-and-click annotation mode in which the page makes room for a narrow right rail instead of being covered; hovering outlines the element a click would select, a note popover records the requested change, and one localized reference or one ordered batch is inserted into the current composer without sending — with multi-select, marquee, ancestor adjustment, and a hold-to-pass-through modifier. |
+| [UI element annotation](docs/ui-annotation.md) | A floating launcher toggles a point-and-click annotation mode in which the page makes room for a narrow right rail instead of being covered. Hovering outlines the element a click would select — including floating surfaces such as native hover preview cards, which can also be drilled into — and each annotation becomes a persisted v2 record (verified unique selector, Session/Workspace identity, position) shown as a page marker with a requirement badge and a hover detail card. References are inserted as **native composer inline reference chips** (single or one grouped batch) without sending, and the right rail's collection view edits, previews, reorders, and batch-inserts annotations — with multi-select, marquee, ancestor adjustment, and a hold-to-pass-through modifier. |
 | [Settings](docs/settings.md) | The bundle's Plugins page carries its own configuration section: the prompt-history modifier plus the two Dynamic Workspaces retention windows (finished Sessions and Active projects). |
 
 New in 0.3.0 (unreleased; planned version, no release date or tag yet):
 
 - **UI element annotation** — a round launcher toggles a point-and-click
   annotation mode in which the page makes room for a narrow right rail instead
-  of being covered: hovering outlines the element a click would select, and a
-  compact popover records a note (inserted verbatim, line breaks preserved) and
-  inserts a structured plain-text reference into the current composer through the
-  shell's own insertion API, without sending. Selection is isolated from the
-  page (clicking a native control never triggers it), the multi-select modifier
-  toggles elements or draws a marquee,
-  holding the pass-through modifier restores real native left and right clicks,
-  and the collection keeps ordered session-scoped entries with per-entry notes,
-  de-duplication, re-locate, stale/ambiguous status markers, and one ordered
-  batch insert request.
+  of being covered: hovering outlines the element a click would select
+  (including floating surfaces such as native hover preview cards, which can be
+  drilled into), and a compact popover records the requested change. Each
+  annotation becomes a persisted v2 record with a page marker, a numbered
+  requirement badge, and a hover detail card, and references are inserted as
+  native composer inline reference chips — one per reference or one grouped
+  batch chip — through the shell's own input-trigger seam, without sending.
+  Selection is isolated from the page (clicking a native control never triggers
+  it), the multi-select modifier toggles elements or draws a marquee, holding
+  the pass-through modifier restores real native left and right clicks, and the
+  rail's collection view edits, previews, reorders, and batch-inserts
+  annotations with a 5 s delete-undo, de-duplication, and stale/ambiguous
+  status markers.
 
 New in 0.2.0 (development snapshot — never tagged or released; undated):
 

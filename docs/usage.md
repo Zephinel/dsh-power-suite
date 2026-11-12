@@ -132,18 +132,29 @@ window the rail floats over the right edge instead, and its collapse control
 reduces it to a strip. Exit with the rail's exit control, the launcher, or Esc.
 
 - Hover the page to outline the element a click would select, then click it: the
-  highlight stays and a small note popover opens next to the element. It names
-  the element, summarizes its locator, shows whether it still resolves, and
-  offers **↑ / ↓** to move to a parent element or back down when the chosen
-  granularity is wrong.
-- Type the requested change in the **note** field; it is inserted **verbatim**
-  (line breaks and spaces preserved, no redaction or truncation), so multi-line
-  notes stay multi-line in the inserted request and may exceed single-line
-  layouts. Page-derived text is separately sanitized; the note is not.
-  **Quick reference** inserts
-  this one annotation into the current Session's composer at the caret, keeping
-  the existing draft and without sending. **Add to collection** parks the element
-  in the rail's collection instead.
+  highlight stays and a requirement popover opens next to the element. It names
+  the element, summarizes its locator, shows whether it still resolves, offers
+  **↑ / ↓** to move to a parent element or back down when the chosen granularity
+  is wrong, and carries the **Requested change** textarea.
+- Floating surfaces are annotatable too: hovering a native session/Workspace
+  hover preview card (or this plugin's own card while annotation mode pins it)
+  outlines the whole surface, and **Child element / Parent element** step into
+  the card's inner text rows or back out. Tooltips that explicitly let pointer
+  events through cannot be hit-tested; annotate their anchor control instead.
+- Type the requested change, then choose **Mark requirement**: the popover closes
+  and the element keeps a page marker with a numbered badge showing a short
+  requirement excerpt. Hovering the marker opens a detail card with the full
+  requirement, locator, position, Session/Workspace, status, and actions
+  (**Quick reference**, **Edit requirement**, **Relocate**, **Copy locator**,
+  **Delete**). Re-select an annotated element (or use the card) to update its
+  requirement; deletion is immediate and a **5 s Undo** toast restores it.
+- **Quick reference** inserts the annotation into the current Session's composer
+  as a **native reference chip** (one chip for a single element, one grouped
+  **UI annotations × N** chip for a batch) without sending; the chip expands to
+  the structured four-line/batch request when the message is sent, and clicking
+  it reopens the annotation's detail card. When the composer's reference-chip
+  service is unavailable the same text is inserted as plain text with an
+  explanation instead.
 - Hold **Shift** (the default multi-select modifier) to add or remove elements
   without reopening the popover while more than one stays selected, or drag while
   holding it to draw a selection box. A plain drag never draws a box. With
@@ -153,29 +164,36 @@ reduces it to a strip. Exit with the rail's exit control, the launcher, or Esc.
   normally: left clicks perform their real action and right clicks open the
   native menu. Releasing the modifier returns to annotation; the mode never fakes
   a click.
-- **Collection** in the rail lists saved elements in order with their notes: edit
-  a note inline, remove or clear entries, re-locate an element (scrolls to it and
-  flashes it), or **Insert all into composer** to hand all current annotations to
-  the model as one numbered request. The insert control is disabled until the
-  collection holds an entry from the current Session; entries from another
-  Session stay visible but are skipped by the batch, and re-locate refuses them.
-  Re-adding the same element keeps its position and updates its note — or leaves
-  the saved note untouched when the note field is empty — instead of creating a
-  duplicate.
-- Esc steps back one layer at a time: an active note edit ends first (the text
-  stays), then the selection clears, then the mode turns off. From the
+- **Collection** in the rail is the batch surface: every saved annotation is a
+  row with an include checkbox, index, status, Session/Workspace and surface
+  metadata, an inline requirement editor (plus an expanded editor), **Preview**
+  (scrolls to the element, flashes it, opens its detail card),
+  **Insert reference**, **↑ / ↓**, and **Delete**. **Select current session** /
+  **Deselect all** drive the footer's **Delete selected** (one undo slot) and
+  **Insert batch (N)** actions, which insert **one grouped chip**; **Clear** also
+  offers undo. Entries from another Session stay visible (dashed, disabled
+  checkbox) but are skipped by the batch, with an explicit count; the batch
+  control explains why it is disabled. Drag-free reordering happens with the
+  arrow buttons, and the order is the batch order.
+- Esc steps back one layer at a time: an open detail card or active requirement
+  edit ends first, then the selection clears, then the mode turns off. From the
   collection or settings view, Esc first returns to the status view.
 - The two modifiers are changed in the rail's **settings** view and stored in
   this browser. They must differ; a conflicting choice moves the other modifier
   to a different key and the view explains what changed.
 
+Annotation records survive a page reload (browser `localStorage`, at most 100,
+with a visible refusal past the cap) and re-resolve their live status; the two
+modifiers, launcher position, and rail-collapsed flag persist separately.
+
 Clicking while annotating does not trigger the page: native controls such as
-**New session** are selected, not activated. The feature only inserts text; it
-never edits the page's content elements, never reads typed values, and never
-sends the message. With no Session open, insert actions are unavailable and the
-collection says **Open a session before inserting a reference**. A selection,
-note, or collection entry does not survive a page reload; the two modifiers, the
-launcher position, and the rail's collapsed state do.
+**New session** are selected, not activated. The feature never edits the page's
+content elements, never reads typed values, and never sends the message; its page
+marks are a separate pointer-events-free overlay. With no Session open, insert
+actions are unavailable and the collection says **Open a session before
+inserting a reference**. Annotation records survive a page reload (browser
+`localStorage`, cap 100) and re-resolve their statuses; the two modifiers, the
+launcher position, and the rail's collapsed state also persist in this browser.
 
 ## Draft attachments
 
