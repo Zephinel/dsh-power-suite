@@ -76,23 +76,28 @@ sidebar's panel tabs. It starts expanded.
   the top-level rows (the pulse/brand glyph, the green unread-completion dots,
   and the white read-row identity icons share one centre; header pulse/brand
   centre x = 43 and row glyph centre x = 43), and the header title starts on the
-  same column as the row titles (x = 58). Then come the **Running & recent** title
-  and a count badge with the number of listed rows. The text block (indicator,
-  title, count) is content-sized, so its hover highlight hugs the label instead
-  of stretching across the header; a flexible spacer then pushes the **View all**
-  link and the rightmost **header chevron** to the trailing edge. The toggle
-  block, the link, and the chevron are all 30 px tall with the same corner radius
-  (12 px in the shell), and the 24 px chevron column is shared with every row's
-  disclosure column, so header and row controls line up vertically. The chevron
-  folds the body; clicking anywhere in the header that is not a control folds it
-  too.
-- **Rows**: a Session row is **one line**. Columns are anchored from the right
-  edge so the same controls share one vertical line in every parent and child
-  row: a 48 px right-aligned **time column**, then the fixed **New session**
-  action slot (its button is overlaid on the title's faded tail, see *Row
-  actions*), and finally a 24 px **disclosure column** (a spacer when the row has
-  no children). The title takes the rest of the width and fades out under a
-  right-edge gradient mask **only while it actually overflows**; the 14 px/20 px
+  same column as the row titles (x = 58), followed by the **Running & recent**
+  title. The text block (indicator, title) is content-sized, so its hover
+  highlight hugs the label instead of stretching across the header; a flexible
+  spacer then pushes the trailing controls to the right. Those controls share
+  the row grid: the **View all** link keeps its 30 px hover block, an empty
+  **time column** (48 px) follows, then the **count badge** with the number of
+  listed rows is right-anchored on the fixed **action column** (its natural
+  width spills left into the empty time column), and the **header chevron**
+  closes the same 24 px **disclosure column** every row uses.
+  The toggle block, the link, and the chevron are all 30 px tall with the same
+  corner radius (12 px in the shell), so header and row controls line up
+  vertically. The chevron folds the body; clicking anywhere in the header that
+  is not a control folds it too.
+- **Rows**: a Session row is **one line**. Four columns are anchored from the
+  right edge, left to right: the title/content column, a 48 px right-aligned
+  **time column** (11 px tabular numerals), a fixed 22 px **New session action
+  column**, and a 24 px **disclosure column**. Every parent and child row
+  reserves all of them — child rows keep the action and disclosure columns as
+  empty fixed spacers — so a subagent row's time ends on exactly the same x as
+  its parent row's time (the user-reported misalignment). The title takes the
+  rest of the width and fades out under a right-edge gradient mask **only while
+  it actually overflows**; the 14 px/20 px
   title size matches the native sidebar rows, and the time is drawn at 11 px in
   the tabular-numeric tertiary label colour. Running Sessions are always listed,
   then recently finished Sessions inside
@@ -125,20 +130,26 @@ sidebar's panel tabs. It starts expanded.
 
 ![Read marks restored on a fresh browser profile from the Host-shared document](assets/card-shared-ack.png)
 
-- **Row actions**: every row (main and nested subagent) carries the **New
-  session** button on one fixed 22 px column immediately left of the time
-  column, overlaid on the title's faded tail. An interrupted row additionally
-  shows **Continue** to the left of it (46 px cluster), so the New session
-  button and the time never move. The cluster is hidden with
-  opacity/`pointer-events` until the row is hovered or on keyboard
-  `focus-within`, so revealing it never shifts the title or time. Both buttons
-  stop the row's open handler; clicking the row body (including the title's
-  faded tail) still opens the Session.
+- **Row actions**: **main (parent) rows** carry the **New session** button on
+  the fixed 22 px action column between the time column and the disclosure
+  column. **Nested subagent rows carry no New session button at all** (user
+  decision: creating a Session belongs to the main row; the column stays
+  reserved as an empty spacer so the child time keeps the parent time x). The
+  button is hidden with opacity/`pointer-events` until the row is hovered or on
+  keyboard `focus-within`, so revealing it never shifts the title, time, action
+  or disclosure columns. The button stops the row's open handler; clicking the
+  row body (including the title's faded tail) still opens the Session.
 - **Interrupted rows**: a row whose Session is interrupted (main or child) shows
   an amber warning badge before the title, taken from the suite's shared
   interrupted-Session records; its **Continue** action reuses the interrupted
   feature's continuation request: it opens that Session and then sends the
-  continuation once the conversation is open and idle.
+  continuation once the conversation is open and idle. On a **subagent row**
+  Continue sits in that row's fixed action slot (children have no New session
+  button, so the slot is free). On a **main row** the slot is reserved for New
+  session, so Continue is a hover/focus-revealed overlay immediately left of
+  the time column, over the title's faded tail — the old cluster position — and
+  no fixed column moves. Interrupted children therefore show only Continue in
+  the action column; New session is never reintroduced for child rows.
 - **New session**: the native shell's "new chat" sprite icon (with an inlined
   Remix fallback) creates a blank Session in **the row's own directory** using
   the Session service, then opens it — without opening the source Session. When
@@ -175,7 +186,8 @@ sidebar's panel tabs. It starts expanded.
   share one 24 px right-edge column (not merely right-aligned), and rows without
   children — including every nested subagent row — reserve the same column with a
   spacer. Parent rows, child rows, and the header therefore share the same
-  action, time, and disclosure columns.
+  time, action, and disclosure columns: the header's empty time column and its
+  count badge (right-anchored on the action column) complete the same grid.
 - **Hover highlights**: the row-body highlight is a rounded pill paced by its
   **content** — the leading glyph plus the (possibly faded) title — with 8 px
   inner left padding, so it never stretches across empty space. Non-text
@@ -195,9 +207,10 @@ sidebar's panel tabs. It starts expanded.
   the trunk is masked below the last child's tick, so no dangling line hangs
   under the group. Each child row has its own leading glyph (the same running /
   unread / acknowledged states, using the white `robot-2-line` icon when
-  acknowledged), title, relative time, and the same trailing columns (Continue
-  when interrupted, New session, time, and the reserved disclosure spacer), so
-  child and parent controls sit on the same vertical lines.
+  acknowledged), title, relative time, and the same reserved trailing columns
+  (time, the empty 22 px action slot — Continue only while interrupted — and the
+  disclosure spacer), so child and parent times and disclosure arrows sit on the
+  same vertical lines. Child rows render no New session control.
   Each parent folds independently; the card header still folds the whole list.
 - **Click**: clicking a parent row opens that Session; clicking a child row
   opens the child Session. The whole row body is clickable (the action buttons
@@ -764,12 +777,12 @@ The native **View options** menu picks how Sessions are grouped:
   is a plain CSS gradient animation, so it needs no `@property`; reduced-motion
   users get a static tint. One marker attribute is written on the native
   Workspace row and removed when the selection changes or the plugin unloads.
-- **Row actions are hover/focus-revealed.** The New session button (and the
-  Continue button on interrupted rows) is overlaid on the title's faded tail and
+- **Row actions are hover/focus-revealed.** The main row's New session button,
+  the child row's interrupted Continue, and the main row's Continue overlay are
   hidden until the row is hovered or keyboard-focused; a touch-only device has
   no hover, so those row actions are not reachable there
-  (the Workspace's own New Session still is). The buttons never change the row
-  layout.
+  (the Workspace's own New Session still is). Every button sits on a reserved
+  fixed-width column, so revealing it never changes the row layout.
 - **Continue sends a real continuation.** The row's Continue action reuses the
   interrupted-session continuation flow, so pressing it actually asks the Host to
   resume that Session (it opens the Session first and then continues). The badge
@@ -881,10 +894,15 @@ Manual checks on the running DSH Web GUI:
    tooltip (dark tooltip surface, no border, 16 px radius, native elevation,
    12 x 16 px padding, 14 px title, 320 px wide, viewport-clamped height), and it
    does not take the pointer; the row has no native `title` tooltip.
-7. Check the columns: New session buttons, times, and disclosure chevrons of
-   parent rows, child rows, and the header all sit on the same vertical lines;
-   times are right-aligned; a long title fades out under the right-edge gradient
-   mask before the New session slot, while a short title is not masked.
+7. Check the columns left to right: time, then the New session button (main
+   rows only; hover a parent row to reveal it), then the disclosure chevron.
+   Parent and child times end on the same x — child rows reserve the action and
+   disclosure columns as empty spacers — and the header's empty time column,
+   count badge and chevron sit on the same grid. Times are right-aligned with
+   tabular numerals; a long title fades out under the right-edge gradient mask
+   before the time column, while a short title is not masked. Hovering a parent
+   row reveals the 22 px New session button without moving any column; nested
+   child rows never show that button.
 8. If a listed Session delegated to subagents, its row shows a disclosure
    chevron at the far right: expanding reveals the child rows indented under the
    parent with the branch lines (the trunk is centered under the parent's dot
@@ -906,7 +924,8 @@ Manual checks on the running DSH Web GUI:
     scrollbar.
 11. Check the card header geometry: the text block is content-sized (its hover
     highlight hugs the label), **View all** and the header chevron stay 30 px
-    tall with the shell corner radius, and the chevron lines up with every row's
+    tall with the shell corner radius, the count badge is right-anchored above
+    the rows' action column, and the chevron lines up with every row's
     disclosure column.
 12. Focus the prompt-history search field and the settings choice pills: the
     solid focus border is gone and the rainbow track glow rings the control;
