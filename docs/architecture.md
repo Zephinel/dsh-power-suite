@@ -279,17 +279,18 @@ the root overlay does not receive the Session hooks as props. Locale namespace
 `powerSuiteAnnotation`, class prefix `psa-`, DOM markers `data-psa-*`.
 
 The layout is a frame `padding-right` change, never a CSS transform. On
-activation the frame receives `data-psa-frame`,
-`padding-right = railWidth px`, and a `--psa-rail-width` custom property; the rail
-width is `clamp(188, round(0.116 * innerWidth), 236)` px. The frame's content box
-shrinks, so the left sidebar, conversation, and native right sidebar shrink with
-it, while the shell's overlay layer still spans the frame and the rail occupies
-the freed strip. The padding transition is 180 ms and disabled under
-`prefers-reduced-motion`. Resize recomputes the layout (debounced):
-`innerWidth - leftSidebarWidth - rightSidebarWidth - railWidth >= 560` keeps the
-shrink layout; otherwise the rail overlays the right edge and can collapse to
-48 px. Exiting removes the padding, the custom property, and both markers and
-leaves the inline grid style untouched.
+activation the frame receives `data-psa-frame`, `padding-right = railWidth px`,
+and a `--psa-rail-width` custom property; the rail width is
+`clamp(188, round(0.116 * innerWidth), 236)` px. The frame's content box shrinks:
+the left sidebar keeps its width while the conversation column and the native
+right sidebar give up the rail width, and the shell's overlay layer still spans
+the frame so the rail occupies the freed strip. The padding transition is 180 ms
+and disabled under `prefers-reduced-motion`. Resize recomputes the layout
+(debounced): `innerWidth - leftSidebarWidth - rightSidebarWidth - railWidth >=
+560` keeps the shrink layout; otherwise the rail overlays the right edge and can
+collapse to 48 px. Exiting restores the frame's previous inline `padding-right`
+and rail-width property exactly (removing them only when the plugin set them) and
+clears the marker after the transition; the inline grid style is never touched.
 
 While active, window capture-phase listeners consume `pointerdown`, `pointerup`,
 `mousedown`, `mouseup`, `click`, `auxclick`, `dblclick`, `contextmenu`, and
@@ -301,20 +302,25 @@ synthesized. Candidates walk the event target's ancestor chain, prefer
 interactive/semantic elements over text leaves, skip the composer's editable
 internals (the composer region is the candidate), and produce a plain-JSON
 `ElementRef` with reliability-ordered selector candidates, a stable identity key,
-and sanitized text. The reducer (`off | idle | inspect | selected | multi |
-collection`, a settings view flag, and transient pass-through/boxing/drag states)
-is a pure function covered by the Node suite through the factory's test seam.
+sanitized text, and a small deterministic text digest used for change detection
+(derived data only; no raw page text is kept in it). The reducer (`off | idle |
+inspect | selected | multi | collection`, a settings view flag, and transient
+pass-through/boxing/drag states) is a pure function covered by the Node suite
+through the factory's test seam.
 
 Insertion uses the composer's semantic API: `inputActions.captureInsertion()`
 captures `{ start, end, draftRev }` and `inputActions.insertText(text, span)`
 inserts without replacing the draft, in one undo step, and never sends; the
 quick-reference and batch serializers are pure functions in the region, and the
 editor is focused afterwards. With no conversation seat (Start page, no Session)
-the insert actions report a notice to open a Session first while the launcher,
-rail, and collection keep working. Teardown removes listeners, the style tag, the hidden
-prompt-rail rule, React roots, markers, rAF loops, and timers. The collection is
-page-lifetime memory with Session-scoped entries (other-session entries are
-marked and excluded from batch insert); only browser-local state persists —
+the rail shows the open-a-Session notice, batch insert stays disabled, and the
+launcher, rail, and collection keep working. Two lifecycle boundaries are
+deliberate: exiting the mode removes the mode-scoped capture listeners, layout,
+rail DOM, hover/selection/box state, and pending rAF work; the plugin disposer
+additionally removes the always-on launcher resize handler, the style tag, React
+roots, and the rest. The collection is page-lifetime memory with Session-scoped
+entries (other-session entries are marked, refuse re-locate, and are excluded
+from batch insert); only browser-local state persists —
 `power-suite.ui-annotation.settings` (the two modifiers),
 `power-suite.ui-annotation.launcher` (position), and
 `power-suite.ui-annotation.rail-collapsed`. See

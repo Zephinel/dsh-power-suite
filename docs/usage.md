@@ -117,11 +117,15 @@ reduces it to a strip. Exit with the rail's exit control, the launcher, or Esc.
 - **Collection** in the rail lists saved elements in order with their notes: edit
   a note inline, remove or clear entries, re-locate an element (scrolls to it and
   flashes it), or **Insert all into composer** to hand all current annotations to
-  the model as one numbered request. Entries from another Session stay visible
-  but are skipped by the batch. Re-adding the same element updates its note and
-  position instead of creating a duplicate.
-- Esc steps back one layer at a time: close the note editor or popover, clear the
-  selection, leave the collection or settings view, then turn the mode off.
+  the model as one numbered request. The insert control is disabled until the
+  collection holds an entry from the current Session; entries from another
+  Session stay visible but are skipped by the batch, and re-locate refuses them.
+  Re-adding the same element keeps its position and updates its note — or leaves
+  the saved note untouched when the note field is empty — instead of creating a
+  duplicate.
+- Esc steps back one layer at a time: an active note edit ends first (the text
+  stays), then the selection clears, then the mode turns off. From the
+  collection or settings view, Esc first returns to the status view.
 - The two modifiers are changed in the rail's **settings** view and stored in
   this browser. They must differ; a conflicting choice moves the other modifier
   to a different key and the view explains what changed.
@@ -129,9 +133,10 @@ reduces it to a strip. Exit with the rail's exit control, the launcher, or Esc.
 Clicking while annotating does not trigger the page: native controls such as
 **New session** are selected, not activated. The feature only inserts text; it
 never edits the page's content elements, never reads typed values, and never
-sends the message. A selection, note, or collection entry does not survive a
-page reload; the two modifiers, the launcher position, and the rail's collapsed
-state do.
+sends the message. With no Session open, insert actions are unavailable and the
+collection says **Open a session before inserting a reference**. A selection,
+note, or collection entry does not survive a page reload; the two modifiers, the
+launcher position, and the rail's collapsed state do.
 
 ## Draft attachments
 

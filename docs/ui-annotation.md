@@ -49,8 +49,10 @@ action and its pressed state follows the mode.
   button back where it was. The mode itself starts off on every page load.
 - While the rail is open, the launcher is moved just left of the rail's column
   so it cannot sit under the rail or its footer controls.
-- While the mode is off, nothing else changes: no listeners, no injected layout,
-  no rail.
+- While the mode is off, the page has no capture listeners and no injected
+  layout: only the launcher stays. One window resize handler remains installed
+  for the plugin's lifetime by design, so the launcher stays clamped inside the
+  viewport even in idle.
 - A count badge appears on the launcher when the collection has entries, so the
   mode's state is visible before opening it.
 
@@ -64,12 +66,12 @@ a strip freed from the right edge instead of covering the conversation.
 - The rail width is `clamp(188px, 11.6vw, 236px)` — about 200 px at a 1728 px
   viewport — and it holds the rail content, not the page.
 - The layout shrinks by setting the shell frame's `padding-right` to the rail
-  width. The frame's content box shrinks, so the left sidebar, the conversation,
-  and the native right sidebar all shrink correctly, while the shell's overlay
-  layer still spans the full frame and the rail can occupy the freed strip
-  without covering the native right column. This is a padding change, not a CSS
-  transform: the page stays crisp and its own scrolling and hit testing keep
-  working.
+  width. The frame's content box shrinks: the left sidebar keeps its width while
+  the conversation column and the native right sidebar give up the rail width,
+  and the shell's overlay layer still spans the full frame so the rail can
+  occupy the freed strip without covering the native right column. This is a
+  padding change, not a CSS transform: the page stays crisp and its own scrolling
+  and hit testing keep working.
 - The padding change is animated with a 180 ms ease transition, disabled under
   `prefers-reduced-motion`.
 - **Narrow viewports** switch to an overlay layout: when the space left after the
@@ -87,8 +89,10 @@ a strip freed from the right edge instead of covering the conversation.
   ([prompt-history.md](prompt-history.md)) is hidden while annotation mode is
   active so the two right-edge surfaces cannot overlap.
 - **Exit** the mode with the rail's exit control, the launcher, or Esc. The
-  original layout is restored exactly: padding, marker attributes, and rail DOM
-  are removed, and no residual inline style remains.
+  original layout comes back exactly: the frame's previous inline `padding-right`
+  and rail-width property are restored, or removed when the plugin added them;
+  the frame marker is cleared after the short transition; and the rail DOM is
+  removed.
 
 ### Rail status view
 
@@ -105,8 +109,8 @@ The rail's default **status** view reports what the mode would act on:
   **Settings** entries.
 
 Collection and settings replace the rail's body in place. Each view has a back
-control to the status view; Esc also steps back from either view before clearing
-the selection and exiting the mode.
+control to the status view, and Esc also returns to the status view from either
+view.
 
 ## Selecting elements
 
@@ -129,11 +133,14 @@ opens the note popover.
 - **Selection highlight** follows the page on scroll and resize. It is
   recomputed in one animation frame, and no animation loop runs while nothing is
   selected.
-- **Esc** steps out progressively, one layer at a time:
-  1. an expanded note editor closes, and an in-progress note edit or marquee ends;
-  2. the current selection (single or multi) clears and its popover closes;
-  3. the collection or settings view returns to the status view;
-  4. the mode turns off and the original layout returns.
+- **Esc** steps out one layer at a time:
+  1. an active note edit ends and keeps the popover and its text;
+  2. the current selection clears and its popover closes;
+  3. the mode turns off and the original layout returns.
+
+  When the collection or settings view is open, Esc returns to the status view
+  before the mode can be exited; an expanded note editor or an in-progress
+  marquee also closes on Esc.
 - **Interaction isolation** — while the mode is active and not passed through,
   the pointer events that could drive the page are consumed in the capture phase:
   `pointerdown`, `mousedown`, `pointerup`, `mouseup`, `click`, `auxclick`,
@@ -143,8 +150,8 @@ opens the note popover.
   and browser keyboard shortcuts are untouched, and the page stays readable.
 - **Page content is never modified** by selection, annotation, or insertion. The
   feature reads layout and labels and inserts text; it does not edit the page's
-  content elements, files, or Session logs. Its own UI, the temporary frame
-  padding, and the toggled prompt-rail style are removed on exit.
+  content elements, files, or Session logs. Its own UI, the prompt-rail style,
+  and the temporary frame padding change are cleaned up on exit.
 
 ### Multi-select and marquee
 
@@ -201,23 +208,27 @@ It shows:
   whether the element is already in the collection. Adding does not touch the
   composer.
 
-With no Session composer mounted (for example on the Start page), insertion is
-unavailable: attempting it reports **Open a session before inserting a
-reference**. The launcher, rail, selection, and collection still work there.
+With no Session composer mounted (for example on the Start page), insert actions
+are unavailable: the collection view shows **Open a session before inserting a
+reference** under its rows and hides the generic other-session skip line, and a
+single insertion attempt reports the same message. The launcher, rail, selection,
+and collection still work there.
 
-Adding an element shows **Added to the collection**; re-adding the same element
-from the popover updates its existing collection entry and its note, keeps the
-original position in the list, and shows **Updated the existing collection
-entry**. It never creates a duplicate.
+Adding an element shows **Added to the collection**. Re-adding the same element
+from the popover keeps the original position in the list and shows **Updated the
+existing collection entry**: a non-empty note replaces the stored one, while an
+empty note preserves the note already saved for that entry. It never creates a
+duplicate.
 
 ## The collection
 
 The collection view replaces the rail's status content in place — same narrow
 width, internal scroll, no wide drawer. Rows are ordered and numbered, and each
-row shows the element name, the locator summary, its resolution status, and its
-per-entry note. When the collection is empty the view shows **No annotated
-elements** with the hint **Select an element, write a note, then add it to the
-collection.**
+row shows the element name, the locator summary, and its per-entry note; a row
+whose origin Session is the current Session also shows its resolution status,
+while an other-session row shows the **Other session** badge instead. When the
+collection is empty the view shows **No annotated elements** with the hint
+**Select an element, write a note, then add it to the collection.**
 
 ![Collection view in the rail with ordered annotated rows and inline notes](assets/annotation-collection.png)
 
@@ -234,11 +245,13 @@ collection.**
 - **Re-locate** scrolls a still-resolving element into view, flashes its
   highlight for about 600 ms, and reports **Moved to the element**. If the
   element no longer resolves, the action reports **The element cannot be located
-  ({status})** instead of failing silently.
+  ({status})** instead of failing silently. Other-session entries refuse the
+  action with **This annotation belongs to another session** because their DOM
+  belongs to a different placement of the page.
 - **Insert all into composer** produces one ordered batch (see
-  [insertion format](#batch-request-collection)). If no entry of the current
-  Session is available it reports **Nothing to insert from the current session**
-  instead of inserting an empty block.
+  [insertion format](#batch-request-collection)). The control is disabled while
+  the collection holds no entry for the current Session; the rail explains why
+  with its scope notice or no-session notice instead of a click-time error.
 - The collection view's header area shows the total count, so the rail's status
   view and launcher badge agree with the list.
 
@@ -262,9 +275,11 @@ Session switches, and every entry records the Session it was created in.
 
 Entries are identified by a stable locator key derived from the element's most
 reliable selector, so selecting the same element twice is an update, not a second
-row. De-duplication is scoped by Session: the same locator reached from two
-different Sessions produces two entries, because it belongs to two different
-placements of the request.
+row. A stable DSH attribute such as `data-row-key="session:<uuid>"` keeps its
+identity, and a locator that only has an accessible label includes structural
+context in its key so two same-label controls stay distinct. De-duplication is
+scoped by Session: the same locator reached from two different Sessions produces
+two entries, because it belongs to two different placements of the request.
 
 ### Re-resolution statuses
 
@@ -284,6 +299,12 @@ item adds it indented under that item's `Note` line. Only the reference text and
 the recorded locator are inserted; the plugin never
 modifies the page to fix a stale reference. Re-locate works only for a resolved
 element and explains why when it cannot.
+
+Change detection compares an 8-hex lowercase digest of the whitespace-collapsed
+sanitized text (derived data only; the raw page text is not stored, and the
+digest is empty for live input surfaces) and the captured accessible name with
+the live element, so a content or label change is reported as **Content changed**
+even when the captured text itself was empty or truncated.
 
 ## Insertion format
 
@@ -435,10 +456,15 @@ and inserts text through the composer that is already mounted.
   candidates, never by what is typed in it.
 - **Sensitive attributes** — attribute names that look like
   `token`, `secret`, `password`, `passwd`, `authorization`, or `cookie` are
-  dropped, and values that look like bearer tokens, `sk-…` keys, or long
-  base64/hex strings are redacted. Text summaries are whitespace-collapsed,
-  stripped of control and zero-width characters, redact emails and token-like
-  strings, and truncate to 80 characters with an ellipsis.
+  dropped, and values that look like bearer tokens, `sk-…` keys, emails, or long
+  unbroken base64/hex strings are redacted. The element's `id` is sanitized at
+  the same boundary before it can become a selector candidate, so an
+  email- or secret-shaped `id` is never used as a locator or identity key. Known
+  DSH data attributes keep their namespaced and UUID values (for example
+  `data-row-key="session:<uuid>"`), because those are stable identities rather
+  than opaque secrets. Text summaries are whitespace-collapsed, stripped of
+  control and zero-width characters, redact emails and token-like strings, and
+  truncate to 80 characters with an ellipsis.
 - **Canvas-rendered content** — has no DOM target, so it has no DOM candidate and
   is not selectable. The feature never reads pixels.
 - **Portals** — body-level DSH menus, popovers, and dialogs are ordinary DOM, so
@@ -493,11 +519,13 @@ package manifest.
   `setNote`, `beginEdit`, `endEdit`, `openView`, the collection actions,
   `passThrough`, `box`, `feedback`, `session`, `exitOne`); deactivation from any
   phase is one code path that restores layout and state.
-- **Full cleanup** — the effect disposer removes every listener, the injected
-  style tag, the hidden prompt rail rule, React roots, the frame padding and
-  marker attributes, rAF loops, and pending timers, and clears selection and box
-  state. Exiting the mode and unloading the plugin both leave the page as they
-  found it.
+- **Two lifecycle boundaries** — exiting the mode removes the mode-scoped
+  capture listeners and gesture listeners, restores the layout exactly, removes
+  the rail, popover, and highlight DOM, and clears hover, selection, and box
+  state. The plugin disposer additionally removes the always-on launcher resize
+  handler, the injected style tag, the hidden prompt-rail rule, React roots,
+  remaining rAF loops and timers, and all markers. Unloading therefore leaves
+  the page as it found it.
 - **Bridge tolerance** — a mount without a composer (Start page, no Session)
   leaves the launcher/rail and collection usable; only insert actions are
   disabled, with a notice to open a Session first.
@@ -506,7 +534,8 @@ package manifest.
   and the E2E injector), the factory publishes its pure helpers under
   `__POWER_SUITE_TEST_HOOKS__.uiAnnotation`: settings normalization and modifier
   conflict resolution, text/attribute sanitizers, selector candidates,
-  `buildElementRef`, locator descriptions, the reducer, quick-reference and batch
+  `buildElementRef`, a deterministic text digest, locator descriptions, the
+  reducer, quick-reference and batch
   serializers, `batchScopeSplit`, `resolveRefStatus`, position clamps, rail width
   and layout mode, and the collection list helpers. Production never defines the
   flag.
@@ -516,7 +545,9 @@ The visible DOM carries stable markers used by the E2E harness and by cleanup:
 `[data-psa-launcher]`, `[data-psa-layer]` with `[data-psa-hover]`,
 `[data-psa-selection]`, `[data-psa-multi-outline]`, and `[data-psa-box]`,
 `[data-psa-popover]`, the collection rows under `[data-psa-entry]` (including
-`[data-psa-entry-note-editor]` and their `data-psa-status` values), the
+`[data-psa-entry-note-editor]`, their `data-psa-status` values, and the
+`data-psa-status="other"` state for other-session rows), the no-session notice
+`[data-psa-no-session]`, the
 multi-select action `[data-psa-add-multi]`, the settings controls
 `[data-psa-setting-passthrough]` / `[data-psa-setting-multi]` with
 `[data-psa-settings-feedback]`, and the feedback toast `[data-psa-feedback]`.
@@ -542,13 +573,16 @@ The annotation model has its own suite,
 the shared harness [`test/helpers/client-module.mjs`](../test/helpers/client-module.mjs):
 it loads the browser entry, provides DOM stubs, sets the test-seam flag, and
 reads `uiAnnotation` back without a browser. The tests cover settings and the
-modifier conflict, sanitization and attribute filtering, selector candidate order
-and identity stability, reference building for buttons/rows/regions/inputs (no
-values), the state machine and Esc ladder, collection de-duplication, immutability,
-session scoping and notes, quick-reference and batch serialization (ordering,
-numbering, the empty-note and status markers, the other-session skip line, and the
-ZH label conventions), the resolution statuses, and the launcher/popover clamps
-and rail-width thresholds.
+modifier conflict, sanitization and attribute filtering (including sensitive
+`id` values and the known DSH stable-attribute allowlist), selector candidate
+order and identity stability (including same-label, different-path keys),
+reference building for buttons/rows/regions/inputs (no values), the state machine
+and Esc ladder (including ending an active note edit), collection de-duplication
+and empty-re-add note preservation, immutability, session scoping and notes,
+quick-reference and batch serialization (ordering, numbering, the empty-note and
+status markers, the other-session skip line, and the ZH label conventions), the
+resolution statuses (including digest-based change detection), and the
+launcher/popover clamps and rail-width thresholds.
 
 The live acceptance harness is
 [`test/browser/annotation.e2e.mjs`](../test/browser/annotation.e2e.mjs), a
@@ -577,16 +611,49 @@ service are never modified.
   directory), `--client <path>` injects an alternate client file, `--scenario N`
   or `--from N` runs a subset, `--no-shots` skips captures, `--headful` shows the
   browser, and `--keep-open` leaves Chrome running for inspection.
-- Side effects: each run launches throwaway headless Chrome and creates or
-  reuses blank Sessions in the live GUI through the native New Session control.
-  Every touched `data-conversation-session` id is printed for cleanup; no message
-  is sent and no setting is changed. Chrome and the temporary profile are removed
-  even on failure.
-- Output: a PASS/FAIL table for the scenarios plus collected page errors; the
-  script exits 0 only when the smoke checks and every scenario pass and the
-  page-error count is 0. The smoke run takes about 10 seconds, `--shots-only`
-  about 35 seconds, and the full 9-scenario run several minutes (recorded at
-  6–8 minutes on this deployment).
+- Gate semantics: `--smoke` is pipeline-only but exits non-zero when the
+  injected client cannot load, does not expose the 31-key test seam, or does not
+  mount the annotation surface. `full` and `--shots-only` with a client that
+  lacks the feature record a **FAIL** row and exit non-zero; invalid scenario
+  selections (`--scenario 10`, `--from 10`, a missing value) are argument errors
+  that exit 2; every requested scenario must produce a result row, and the run
+  fails on any scenario failure, page error, or real network/API failure.
+- Blank Session and privacy preconditions: before any capture or interaction the
+  harness verifies the Session is blank — zero transcript messages, an empty
+  composer draft, and no attachments — and otherwise creates a genuinely fresh
+  blank Session through the native New session action. It never types into a
+  non-blank Session. Every capture is made with the privacy guard applied and
+  asserted (blur on the native sidebar and conversation header, plus a blur/hide
+  shield over the conversation content; the composer and annotation rail stay
+  crisp), and it checks the 1728 x 900 frame, a right-anchored rail, the launcher
+  clear of the rail footer, and the popover fully inside the viewport.
+- Side effects: each run launches throwaway headless Chrome and creates or reuses
+  blank Sessions in the live GUI through the native New Session control. Every
+  Session the harness opens or creates is tracked once and printed with the
+  reason it was touched — including the one reopened in scenario 7, the second
+  blank Session created in scenario 6, and the Session used for the screenshots.
+  No message is sent and no DSH setting is changed. The throwaway profile's three
+  annotation `localStorage` keys (`settings`, `launcher`, `rail-collapsed`) are
+  cleared before the captures so the screenshots show the default launcher
+  position. Chrome and the temporary profile are removed even on failure.
+- Mixed-scope coverage: scenario 6 asserts a collection holding one current and
+  one other-session entry — only the current entry is inserted, the other-session
+  skip line is present, and the other entry is marked.
+- Output: a PASS/FAIL table for the scenarios plus collected page errors and
+  real same-origin API/network failures; the script exits 0 only when the smoke
+  checks and every scenario pass with 0 page errors and no real network failures.
+  The smoke run takes about 5 seconds, `--shots-only` about 35 seconds, and the
+  full 9-scenario run 8–10 minutes on the live GUI. Benign DSH-internal telemetry
+  WebSocket 403s are printed but do not fail the run (they are neither page errors
+  nor same-origin HTTP failures). Known evidence limits are recorded in
+  [`test/browser/README.md`](../test/browser/README.md) and
+  [verification.md](verification.md): after roughly 7 minutes of continuous
+  automation the headless renderer can stall real input (a scenario-8 timeout;
+  scenarios 8-9 pass deterministically in a short `--from 8` run on the same
+  build), native context-menu visuals are not observable so the oracle is
+  event-level, wheel scrolling is asserted on the nearest scrollable region,
+  zero-area picker behavior is unit-tested only, and the run is single-device and
+  single-language (ZH copy is unit-tested rather than exercised end to end).
 
 [`test/browser/README.md`](../test/browser/README.md) carries the same
 prerequisites, options, side effects, and known evidence limits. See

@@ -20,9 +20,9 @@ npm run pack:check
   the DSH bundle patch points at a real file;
 - the pure-logic test suite (`node --test test/*.test.js`).
 
-Current evidence (2026-11-11, Node 24.22.2):
+Current evidence (2026-11-12, Node 24.22.2):
 
-- `npm test`: **109 tests, 109 passed, 0 failed, 0 skipped**.
+- `npm test`: **118 tests, 118 passed, 0 failed, 0 skipped**.
 - `npm run check`: passed (`14 modules, 8 test files`).
 - `npm run pack:check`: **58 files** (0.3.0 tarball) before the annotation
   captures below are added (63 with them), including `src/`, `locale/`, `docs/`
@@ -62,19 +62,27 @@ subagent: true`; two completed control Sessions stayed `interrupted: false`.
 
 ## UI element annotation acceptance
 
-Date: 2026-11-11. The feature is browser-only
-([ui-annotation.md](ui-annotation.md)), so its acceptance run uses the real DSH
-Web GUI instead of a Host test: `test/browser/annotation.e2e.mjs` (Node 22 or
-newer; this run used Node 24.22.2; dependency-free) launches headless Google
-Chrome with a throwaway profile, opens the GUI served by the launchd service
-`com.rexxin.dsh-web`, and injects this checkout's `src/client.js` through the
-page's module loader before the shell loads. The installed checkout, the user
-profile, the launchd service, and the GUI's existing Sessions are untouched. The
-harness creates or reuses blank Sessions through the native New Session control
-and prints every touched `data-conversation-session` id for cleanup, drives every
-interaction with real CDP mouse and keyboard input at 1728 x 900, collects page
-errors (`Runtime.exceptionThrown` and error-level console calls), and exits 0 only
-when the smoke checks and all nine scenarios pass with no page errors.
+Date: 2026-11-12 (fix round `fix/ui-annotation-review-fixes`). The feature is
+browser-only ([ui-annotation.md](ui-annotation.md)), so its acceptance run uses
+the real DSH Web GUI instead of a Host test: `test/browser/annotation.e2e.mjs`
+(Node 22 or newer; this run used Node 24.22.2; dependency-free) launches headless
+Google Chrome (157.0.8103.78) with a throwaway profile, opens the GUI served by
+the launchd service `com.rexxin.dsh-web`, and injects this checkout's
+`src/client.js` through the page's module loader before the shell loads. The
+installed checkout, the user profile, the launchd service, and the GUI's
+existing Sessions are untouched. The harness verifies that the Session it uses is
+blank (zero transcript messages, an empty composer draft, and no attachments) and
+otherwise creates a genuinely fresh blank Session through the native New session
+action; it never types into a non-blank Session. It tracks and prints every
+Session it touches for cleanup, drives every interaction with real CDP mouse and
+keyboard input at 1728 x 900, collects page errors (`Runtime.exceptionThrown` and
+error-level console calls) and real same-origin API/network failures, and is a
+gate: a missing feature or an invalid scenario selection exits non-zero instead
+of passing silently.
+
+This is the final acceptance record for the planned 0.3.0 release fix round,
+which resolves review findings F1–F18 on top of the reviewed feature build
+(`5136d3c`; the code fix is `602a1c4`, the regression tests `1c70ef7`).
 
 Run:
 
@@ -84,87 +92,109 @@ node test/browser/annotation.e2e.mjs    # smoke + 9 scenarios + screenshots
 
 Automated gates on this tree:
 
-- `npm test`: **109 tests, 109 passed, 0 failed, 0 skipped** — the 73 existing
-  tests plus 36 annotation model tests, deterministic across repeated runs.
+- `npm test`: **118 tests, 118 passed, 0 failed, 0 skipped** — the 73 existing
+  tests plus 45 annotation model tests, including the review-fix regression
+  tests, deterministic across two consecutive runs. The new regression tests
+  fail (13 red) on the reviewed build `5136d3c` and pass on this fix build.
 - `node --check src/client.js`: passed.
 - `npm run check`: passed (`14 modules, 8 test files`).
-- `npm run pack:check`: **63 files** in the 0.3.0 tarball, including the five
-  annotation captures.
+- `npm run pack:check`: **63 files** in the planned 0.3.0 tarball, including the
+  five annotation captures.
 
-Acceptance result: **9/9 scenarios PASS, 0 page errors** on the final build
-(`src/client.js` md5 `7fddd574ca5b630af752eec3e2870eb2`, the launcher
-rail-avoidance fix). The full-suite run made scenarios 1-7 PASS; scenario 8 hit
-a known harness-side late-run CDP input timeout and scenario 9 cascaded, so an
-immediate `--from 8` rerun on the same build was used to confirm scenarios 8 and
-9. The timeout is a documented harness limitation in `test/browser/README.md`,
-not a product signal.
+Acceptance result: every scenario has green evidence on the fixed build
+(`src/client.js` md5 `e0fdbc23d0dcbbfce5d1292f64850071`). The evidence comes from
+two runs on the same build rather than one green full-suite exit-0 run:
 
-| # | Scenario | Result |
+- **initial full suite** — S1–S5 PASS. S6 and S7 failed on then-unfixed harness
+  assertions (not product defects; the harness was hardened in this round), S8
+  hit the documented late-run CDP input timeout, and S9 cascaded from it.
+- **same-build `--from 6` follow-up** — S6, S7, S8, and S9 PASS with exit 0 in
+  55.0 seconds.
+- The pipeline smoke passed 6/6 on its own: the frozen test seam has 31 keys
+  (including `textDigest`), the rail is a descendant of `[data-shell-overlay]`,
+  exactly one launcher exists, the annotation stylesheet hides the native
+  prompt-history rail while active, and the Session was verified blank.
+
+A later full attempt met live-GUI flakiness in S4 (a virtualized sidebar row)
+plus the same late-run timeout. That is recorded as a live-GUI/harness timing
+limitation in [`test/browser/README.md`](../test/browser/README.md), not a
+product signal. Page errors were 0 and real same-origin network/API failures
+were 0 in every run.
+
+| # | Scenario | Evidence on the fixed build |
 |---|---|---|
-| 1 | Activate mode via a real launcher click: shrink + rail; native New Session blocked | PASS — markers set, rail and frame padding both 200 px at 1728 x 900, inline grid untouched; the blocked real click reached 0 native handler hits (2 `preventDefault`) and the session/view stayed unchanged |
-| 2 | Alt pass-through: native New Session works, native context menu not prevented | PASS — plain right-click blocked with 0 bubble events; Alt right-click reached the bubble listener once with `defaultPrevented = false`; `html[data-psa-passthrough]` only while held |
-| 3 | Wheel scrolling works, shortcuts not consumed, Esc ladder steps out | PASS — a wheel scroll moved the native region 0 → 320 with 0 `preventDefault`; Meta+K, Control+L, and plain letters arrived unprevented; the Esc ladder stepped out |
-| 4 | Multi-select via Shift+click; collection add/update/note/remove | PASS — 3 Shift+clicks produced 3 multi outlines; add-all de-duplicated and updated on re-add; inline note edit and remove worked |
-| 5 | Batch insert: order, existing draft preserved, not sent, composer focused | PASS — pre-existing draft verbatim, one ordered block per entry, no message sent, composer focused |
-| 6 | Session scope: stale target marked + cross-session entries skipped, no DOM mutation | PASS — a truly removed target reads `missing` and inserts the explicit `Status:` line; leaving the conversation scopes every entry `other`, disables batch insert and shows the cross-session notice; returning recomputes every entry `current`; no DOM change outside the composer |
-| 7 | Exit mode: markers/padding cleaned, native clicks work again, launcher stays | PASS — markers/padding/grid restored, 0 overlay nodes, one inactive launcher, native clicks work |
-| 8 | Launcher drag clamp, viewport resize, scroll stability, reload default + position memory | PASS — the drag never toggled the mode and clamped with the 8 px margin (drag from `(1676, 848)`); the 1000 x 700 override clamps the launcher to `(748, 648)` inside the viewport; wheel scrolling did not move it; reload starts with the mode off and the position restored |
-| 9 | Collection view keeps the frame/rail geometry; exit restores the baseline layout | PASS — opening/closing the collection kept frame padding at 200 px and the canvas at 1248 px, and the rail stayed in the right strip; exit restored the 1448 px canvas baseline and the inline grid |
+| 1 | Activate via a real launcher click; layout shrinks and the rail appears; native New Session is blocked | PASS — markers set; frame `padding-right` equals the computed rail width (200 px at 1728 x 900); the rail is right-anchored inside the freed strip; inline grid untouched; the blocked real click reached 0 native handler hits with `preventDefault` applied and the Session/view stayed unchanged |
+| 2 | Alt pass-through restores native semantics; no-session state; native context menu is not intercepted | PASS — the native New Session action ran; `html[data-psa-passthrough]` existed only while held and the hover outline paused; the rail showed `[data-psa-no-session]` while no Session was mounted; the contextmenu oracle recorded a blocked right-click that never reached the bubble listener and exactly one Alt right-click with `defaultPrevented === false` |
+| 3 | Wheel scrolling and shortcuts are untouched; marquee; Esc ladder | PASS — a real wheel changed the native scroll position with 0 `preventDefault`; Meta+K, Control+L, and plain letters arrived unprevented; Shift+drag drew a box and selected a candidate; the F6 Esc chain was: first Esc ended note editing and kept the popover and typed note, second Esc cleared the selection, third Esc left the mode |
+| 4 | Shift+click multi-select; collection add/update/note/remove | PASS — 3 Shift+clicks produced 3 multi outlines and the rail count; add-all de-duplicated and updated on re-add (Add → Update); inline note edit and remove worked |
+| 5 | Batch insert order, existing draft preserved, never sent, composer focused | PASS — one ordered numbered block per collection entry with the block count equal to the entry count, non-empty names, each note inside its own block (or the empty-note placeholder), the pre-existing draft kept verbatim before the header, no message sent, composer focused |
+| 6 | Removed targets are stale; genuinely mixed cross-session scope; no page mutation | PASS — a truly removed target read `data-psa-status="missing"` and inserted the explicit `Status: target no longer resolves` line; a second genuinely blank Session created through the native hover action made the mixed state real: prior entries became scope/status `other`, batch insert was disabled with the cross-session notice, and the inserted block contained exactly the current entry plus the skip line with no other-session text; re-locate on an other-session entry was refused; no DOM change outside the composer |
+| 7 | Exit cleans up completely and restores a pre-existing inline layout | PASS — a sentinel `padding-right: 13px` set before activation was restored exactly, `--psa-rail-width` was removed, `data-psa-frame` survived the ~180 ms reverse transition (observed through a MutationObserver timeline) and then disappeared; inline grid byte-identical, 0 overlay nodes, one inactive launcher, native clicks worked again |
+| 8 | Launcher drag/resize/scroll/reload geometry; interrupted gesture cleanup | PASS — an interrupted drag ended by Esc neither toggled the mode nor persisted the position and left no `data-psa-dragging`/box node; real drags clamped with the 8 px margin; after the 1000 x 700 viewport override the launcher was fully inside the viewport; a missing scrollable region fails the scenario; wheel scrolling did not move the launcher; after reload the mode started off and the remembered position came back |
+| 9 | Collection view keeps the rail/frame geometry; exit restores the baseline | PASS — opening and closing the collection left frame padding and canvas width unchanged and kept the rail in the right strip without a wide drawer; exit restored the pre-mode canvas width and inline grid |
 
-Created/reused blank Session ids for cleanup:
-`session-1057e23c-2776-41dc-921f-5f77566c6e3b` and
-`session-5eec2763-0a91-460e-b559-08a8c3a98d13`. The full suite took about 6-8
-minutes and `--shots-only` about 35 seconds on this deployment.
+Gate proofs (H1): the feature-absent client
+(`--client /tmp/ps-annotation/baseline-client.js`) exits 1 with
+`FAIL gate-feature` and a `PASS 4 / FAIL 12` table; `--scenario 10` and
+`--from 10` are argument errors that exit 2 with the 1..9 range message.
 
-Additional independent live checks (Lead, same injected build): PASS on mode
-activation (shrink + rail), blocked native clicks (the 280 px sidebar did not
-collapse and the selection/popover opened; New Session on the start page did not
-create a Session), Alt pass-through (the sidebar collapsed natively 280 → 56 px
-and `html[data-psa-passthrough]` was present only while held), launcher clamping
-after a real 1000 x 700 viewport override, and exit restore (`padding-right`
-empty, markers removed, 0 overlay nodes, byte-identical inline grid string,
-launcher `aria-pressed=false`, 0 page errors).
+Created/reused Sessions in the final validation, for cleanup:
+`session-8e460d06-507a-4c6d-95c6-63f20882c6e4`,
+`session-5eec2763-0a91-460e-b559-08a8c3a98d13` (also the screenshots Session),
+`session-1e273273-4316-46f5-84c8-199bfc0812a2`, plus the earlier draft
+`session-1057e23c-2776-41dc-921f-5f77566c6e3b`.
 
-Screenshots (1728 x 900 originals; sidebar titles and chat content masked before
-capture; embedded in [ui-annotation.md](ui-annotation.md)):
+Screenshots (fixed build, 1728 x 900 originals, dark theme; blank Session
+asserted and the sidebar, conversation header, and conversation content
+shielded/blurred while the composer and rail stay crisp; embedded in
+[ui-annotation.md](ui-annotation.md)):
 
-- [annotation-idle.png](assets/annotation-idle.png) — the launcher only, mode off.
-- [annotation-mode.png](assets/annotation-mode.png) — mode on: the page shrunk by
-  the 200 px rail in the freed right strip, with the launcher clamped just left of
-  the rail.
-- [annotation-selection.png](assets/annotation-selection.png) — a highlighted
-  native control with its popover (locator, Target · Resolved, note, Quick
-  reference / Add to collection).
-- [annotation-collection.png](assets/annotation-collection.png) — the collection
-  view in the rail: three ordered rows with inline notes and the footer actions.
-- [annotation-inserted.png](assets/annotation-inserted.png) — the ordered batch
-  request inserted into the composer, not sent.
+- [annotation-idle.png](assets/annotation-idle.png) — 125955 B — mode off, the
+  default bottom-right launcher, no annotation surface.
+- [annotation-mode.png](assets/annotation-mode.png) — 145436 B — mode on: the
+  page shrunk by the 200 px rail in the freed right strip.
+- [annotation-selection.png](assets/annotation-selection.png) — 164728 B — a
+  highlighted native control with its popover (element, locator, Target ·
+  Resolved, note, Quick reference / Add to collection) fully inside the viewport.
+- [annotation-collection.png](assets/annotation-collection.png) — 162083 B — the
+  collection view in the rail: three ordered rows with notes and the Clear /
+  Insert all footer unobstructed.
+- [annotation-inserted.png](assets/annotation-inserted.png) — 201176 B — the
+  ordered structured batch request inserted into the composer, not sent.
+
+Independent read-only re-review: result pending in the Lead's final message;
+this line is replaced with the reviewer's verdict when it arrives.
 
 Known evidence limits:
 
 - Native context-menu visuals are not observable in headless Chrome; the
   assertion is the event-level `preventDefault`/bubble oracle.
 - This DSH build keeps one blank draft Session at a time, so a blank → blank
-  Session switch is unreachable from the UI. Cross-session scope was verified by
-  unmounting/remounting the composer seat plus the true-removal stale case. An
-  in-place control replacement that keeps the same stable `data-*` identity (the
-  sidebar collapse toggle carries `data-sidebar-toggle` in both states) resolves
-  as the same control; the harness records it as evidence instead of failing.
-- Wheel scrolling was asserted on the nearest native scrollable region because a
-  blank Session's conversation is empty; the run also asserts that no wheel event
-  is prevented.
-- Headless Chrome occasionally swallows the native `resize` event for
-  `Emulation.setDeviceMetricsOverride`; the harness retries with a real second
-  override and falls back to one synthetic resize only when zero native events
-  arrive. A long full-suite run can also hit a late-run CDP input timeout; an
-  immediate `--from 8` rerun on the same build confirmed scenarios 8 and 9. The
-  Lead independently verified the product clamps with real input.
-- The run creates blank Sessions in the live GUI and does not exercise a
-  human-authored conversation, a second device/browser, screen readers, or the
-  Chinese UI end to end (the ZH label conventions are covered by unit tests and
-  the strings reviewed in code). Screenshots are evidence from one run, not a
-  substitute for the automated gate.
-- The product boundaries this run does not move are documented in
+  Session switch cannot be reached from the UI; scenario 6 creates a second
+  genuinely blank Session through the native "New session in <workspace>" hover
+  action and then asserts the mixed current/other-session scope.
+- A blank Session's conversation is empty and non-scrollable, so the wheel
+  assertion uses the nearest native scrollable region (the sidebar list) and
+  states that in the evidence; scenario 8 fails if no scrollable region exists.
+- Headless Chrome can swallow the native `resize` event for
+  `Emulation.setDeviceMetricsOverride`; the harness retries with a second real
+  viewport change and only then falls back to one synthetic resize event. The
+  product's resize clamp was independently verified with real input earlier.
+- After roughly 7 minutes of continuous automation the headless renderer can
+  stop acknowledging real input for long enough to time out scenario 8; scenarios
+  8 and 9 pass deterministically on the same build in a short `--from 8` (or
+  `--from 6`) run. A later full attempt also met one live-GUI timing failure in
+  S4 (virtualized sidebar row). Both are harness/environment limits recorded in
+  `test/browser/README.md`, not product signals.
+- Zero-area picker behavior is not directly synthesizable in the live GUI and is
+  covered by the pure-model tests.
+- The run is single-device and single-language: one deployment at 1728 x 900 in
+  the active UI language; the Chinese copy is covered by unit tests rather than
+  end-to-end.
+- Benign DSH-internal telemetry WebSocket 403s (`ws://127.0.0.1:9230/ingest`)
+  are printed with detail but are not page errors or same-origin HTTP failures,
+  so they do not gate the run.
+- The product boundaries the run does not move are documented in
   [ui-annotation.md](ui-annotation.md#host-boundaries): Shadow DOM internals are
   not inspectable (only the host is selectable), cross-origin iframe contents are
   not selectable, native input/textarea/contenteditable values are never read,

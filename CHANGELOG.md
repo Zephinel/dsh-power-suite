@@ -6,6 +6,9 @@ All notable changes to this repository are documented here. The format follows
 
 ## [Unreleased]
 
+Planned as version 0.3.0; the release date is still pending. No dated release
+heading is added until the release is cut.
+
 ### Added
 
 - UI element annotation: a floating launcher toggles a client-only annotation
