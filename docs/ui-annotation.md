@@ -826,18 +826,37 @@ It opens the real DSH Web GUI with a fresh Chrome profile (`--user-data-dir`),
 injects this checkout's `src/client.js` in place of the installed bundle for that
 page, and runs the acceptance scenarios with real CDP mouse and keyboard input at
 a 1728 x 900 viewport. The installed plugin, the user profile, and the launchd
-service are never modified. The recorded acceptance evidence is **pre-merge**
-(final publication build `10dd3b72…` / branch commit `fd8ccc9`); the round-3
-audit fixes (note normalization, lazy hover) are unit-tested rather than
-re-covered by E2E. The merged build `572b8fa1…` itself was not re-run (32-key
-seam); after the audit fixes, `node test/browser/annotation.e2e.mjs --smoke` on
-the post-audit-fix build `1c61a230…` passed **6/6** with the **35-key** seam, 0
-page errors and 0 real network failures, reusing the existing blank Session
-`session-5eec2763-0a91-460e-b559-08a8c3a98d13` (no new Session). This is
-**smoke-only** evidence for the post-audit-fix build: the full E2E remains
-pre-merge and there is no single all-green full-suite run. The evidence exists
-as in-repo summaries plus `/tmp` logs that are external development artifacts,
-not repository files.
+service are never modified.
+
+The Phase 1 build (`feat/annotation-ux`, `src/client.js` md5 `151e0380…`)
+recorded these live results against the running GUI:
+
+- `npm test`: **193/193** pass; `npm run check`: exit 0 (syntax, manifest, and
+  pack dry-run).
+- `--smoke`: **6/6**, 48-key seam, 0 page errors, 0 real network failures.
+- `--scenario 10` and `--scenario 15`: PASS (floating surfaces, F3 stationary
+  recompute, F4 annotation-side event/CSS, v2 records, reload persistence,
+  100-record cap; rainbow focus ring and reduced motion).
+- One self-contained sequence `node test/browser/annotation.e2e.mjs --from 6
+  --no-shots` (smoke + scenarios 6, 7, 8, 9, 10, 15) passed **12 PASS / 1 SKIP /
+  0 FAIL** in 143 s, 0 page errors, 0 real network failures. The SKIP row (`10b`)
+  is the plugin-hovercard pin, which belongs to the Dynamic Workspaces branch;
+  it is recorded explicitly rather than shown as a pass.
+- A full `--no-shots` run was attempted twice on this build and both attempts
+  stalled inside scenario 6 after scenarios 1-5 passed (the known late-run
+  headless-renderer stall described below; the same scenario passes in the
+  shorter `--from 6` sequence and standalone). **No single all-green full-suite
+  run exists for this build**; the evidence above is the honest composite, and
+  the harness retries/limitations are documented in
+  [`test/browser/README.md`](../test/browser/README.md).
+
+Historical round-1/round-2 acceptance evidence (pre-merge branches, 31/32/35-key
+seams) remains recorded in [verification.md](verification.md) and the harness
+README; it is not evidence for the Phase 1 build. The checked-in
+`docs/assets/annotation-*.png` images were captured on that earlier round-2
+build; Phase 1 evidence screenshots are kept outside the repository
+(`.tmp-work/shots2/`), and regenerating the committed asset set belongs to the
+Phase 2 UX pass along with the new detail card and marks.
 
 - Prerequisites: Node 22 or newer (global WebSocket), Google Chrome (override the
   binary with `CHROME_BIN`), and the DSH Web GUI running as
