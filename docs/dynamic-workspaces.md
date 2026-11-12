@@ -96,11 +96,17 @@ sidebar's panel tabs. It starts expanded.
   column**, and a 24 px **disclosure column**. Every parent and child row
   reserves all of them — child rows keep the action and disclosure columns as
   empty fixed spacers — so a subagent row's time ends on exactly the same x as
-  its parent row's time (the user-reported misalignment). The title takes the
-  rest of the width and fades out under a right-edge gradient mask **only while
-  it actually overflows**; the 14 px/20 px
-  title size matches the native sidebar rows, and the time is drawn at 11 px in
-  the tabular-numeric tertiary label colour. Running Sessions are always listed,
+  its parent row's time. A flexible **spacer** (`flex: 1 1 auto; min-width: 0`)
+  between the title control and the trailing grid absorbs every spare pixel, so
+  the trailing grid is **right-anchored at any card width**: the disclosure
+  column's right edge always equals the row's right edge and every row's time
+  right edge equals `row right − 50 px` (22 action + 24 disclosure + the two
+  2 px gaps), no matter whether a title is short or clipped. The title control
+  keeps its content-paced width (so the hover pill still hugs the label) and its
+  `max-width: calc(100% − 100 px)` cap, and the right-edge gradient mask fades a
+  clipped title exactly at the content-column boundary, never under the trailing
+  columns. The 14 px/20 px title size matches the native sidebar rows, and the
+  time is drawn at 11 px in the tabular-numeric tertiary label colour. Running Sessions are always listed,
   then recently finished Sessions inside
   the finished-Session **retention window** (default 2 hours, configurable in
   [Settings](settings.md)), each group newest activity first. A running row uses the
@@ -202,6 +208,14 @@ sidebar's panel tabs. It starts expanded.
   disclosure arrow highlights only the arrow (the body pill is suppressed), so
   the two highlights stay independent and never compose into a nested two-layer
   highlight.
+- **Row spacing**: rows are separated so the internal rainbow-atmosphere fills
+  never touch — the card body uses a 5 px column gap between top-level items,
+  a 4 px gap between a parent row and its child list, and a 5 px gap between
+  child rows. The tree connector geometry stays coherent: the 1 px vertical
+  trunk starts at the child list, still meets each child's tick, and the
+  last-child mask ends the trunk cleanly below the last row. Hovering across the
+  gaps still works (row hover intents are unaffected; the gap is only spacing,
+  never a click target), and the gaps cause no horizontal layout change.
 - **No body scrollbar**: the card body scrolls with the wheel or trackpad but
   hides its scrollbar (native `scrollbar-width` / WebKit rules), matching the
   native sidebar surfaces.
