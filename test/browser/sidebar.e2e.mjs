@@ -1084,7 +1084,7 @@ const probe = {
     }
   },
 
-  /** Current-Session highlight facts on the card row and the native Workspace row. */
+  /** Current-Session atmosphere facts: card row + native Workspace/Session rows. */
   currentHighlight: () => {
     const rect = (el) => {
       if (!el) return null
@@ -1098,68 +1098,135 @@ const probe = {
         content: s.content,
         position: s.position,
         backgroundImage: s.backgroundImage,
-        backgroundSize: s.backgroundSize,
-        backgroundPosition: s.backgroundPosition,
         animationName: s.animationName,
-        animationDuration: s.animationDuration,
         opacity: s.opacity,
         filter: s.filter,
-        maskImage: s.maskImage || s.webkitMaskImage || 'none',
-        borderRadius: s.borderRadius,
-        top: s.top,
-        right: s.right,
-        bottom: s.bottom,
-        left: s.left,
-        width: s.width,
-        height: s.height,
         zIndex: s.zIndex,
       }
     }
-    const host = (el) => {
+    // The absolute wrapper's containing block is the row's padding box: that is
+    // the border box minus the native row's transparent inline borders.
+    const clientRect = (el) => {
       if (!el) return null
-      return { tag: el.tagName.toLowerCase(), className: String(el.className), radius: getComputedStyle(el).borderRadius, rect: rect(el), clientWidth: el.clientWidth, clientHeight: el.clientHeight }
-    }
-    const row = document.querySelector('.psd-run-current, .psd-child-current')
-    const childWave = row && row.classList.contains('psd-child-current') ? row.querySelector('.psd-child-wave') : null
-    // All three hosts paint through their own pseudo-elements: parent card rows on
-    // the row itself, nested child rows on the injected .psd-child-wave layer (the
-    // row's own ::before/::after are the tree connectors), native rows on the row.
-    const waveHost = row ? (row.classList.contains('psd-run-current') ? row : childWave) : null
-    const marker = document.querySelector('[data-psd-current-workspace]')
-    const markerSection = (() => {
-      let node = marker
-      for (let i = 0; i < 8 && node && node.parentElement; i += 1) {
-        node = node.parentElement
-        if (node.matches && node.matches('[role="tree"]')) return null
-        if (node.querySelector && node.querySelector('[data-row-key^="session:"]')) return node
+      const r = el.getBoundingClientRect()
+      return {
+        left: Math.round(r.left + el.clientLeft),
+        top: Math.round(r.top + el.clientTop),
+        right: Math.round(r.left + el.clientLeft + el.clientWidth),
+        bottom: Math.round(r.top + el.clientTop + el.clientHeight),
+        width: el.clientWidth,
+        height: el.clientHeight,
       }
-      return null
-    })()
-    const sessionId = document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') ?? null
-    const ringPresent = document.querySelector('.psd-child-ring') !== null
-    const oldRing = row ? getComputedStyle(row, '::before').content !== 'none' && getComputedStyle(row, '::before').backgroundImage.includes('conic-gradient') : false
-    return {
-      row: row ? { kind: row.classList.contains('psd-run-current') ? 'parent' : 'child', className: row.className, rect: rect(row), radius: getComputedStyle(row).borderRadius, current: row.getAttribute('aria-current') } : null,
-      waveHost: host(waveHost),
-      wave: waveHost ? { before: pseudo(waveHost, '::before'), after: pseudo(waveHost, '::after') } : null,
-      legacyWave: row && row.classList.contains('psd-run-current') ? pseudo(row, '::before') : null,
-      childWave: document.querySelector('.psd-child-wave') !== null,
-      ringPresent,
-      oldRing,
-      marker: marker
-        ? {
-            rowKey: marker.getAttribute('data-row-key'),
-            rect: rect(marker),
-            radius: getComputedStyle(marker).borderRadius,
-            clientWidth: marker.clientWidth,
-            clientHeight: marker.clientHeight,
-            before: pseudo(marker, '::before'),
-            after: pseudo(marker, '::after'),
-            ownsCurrentSession:
-              sessionId !== null && markerSection !== null && [...markerSection.querySelectorAll('[data-row-key^="session:"]')].some((el) => el.getAttribute('data-row-key') === `session:${sessionId}`),
+    }
+    /** Facts of one .psd-atmos wrapper: clipped box, canvas and contrast scrim. */
+    const atmosphere = (host) => {
+      if (!host) return null
+      const wrapper = [...host.children].find((node) => node instanceof HTMLElement && node.classList.contains('psd-atmos')) ?? null
+      if (wrapper === null) return null
+      const s = getComputedStyle(wrapper)
+      const canvas = wrapper.querySelector('canvas.psd-atmos-canvas')
+      const scrim = wrapper.querySelector('.psd-atmos-scrim')
+      const canvasStyle = canvas ? getComputedStyle(canvas) : null
+      const scrimStyle = scrim ? getComputedStyle(scrim) : null
+      let painted = -1
+      if (canvas !== null) {
+        try {
+          const ctx = canvas.getContext('2d')
+          if (ctx !== null && canvas.width > 0 && canvas.height > 0) {
+            const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+            painted = 0
+            for (let index = 3; index < data.length; index += 4) {
+              if (data[index] > 4) painted += 1
+            }
           }
-        : null,
-      markerCount: document.querySelectorAll('[data-psd-current-workspace]').length,
+        } catch {
+          painted = -1
+        }
+      }
+      return {
+        rect: rect(wrapper),
+        radius: s.borderRadius,
+        overflow: s.overflow,
+        pointerEvents: s.pointerEvents,
+        zIndex: s.zIndex,
+        opacity: Number(s.opacity),
+        kind: wrapper.getAttribute('data-psd-atmos'),
+        running: wrapper.getAttribute('data-psd-atmos-running'),
+        motion: wrapper.getAttribute('data-psd-atmos-motion'),
+        canvas: canvas === null ? null : {
+          width: canvas.width,
+          height: canvas.height,
+          rect: rect(canvas),
+          filter: canvasStyle.filter,
+          mixBlendMode: canvasStyle.mixBlendMode,
+          pointerEvents: canvasStyle.pointerEvents,
+          painted,
+        },
+        scrim: scrim === null ? null : {
+          rect: rect(scrim),
+          zIndex: scrimStyle.zIndex,
+          pointerEvents: scrimStyle.pointerEvents,
+          backgroundImage: scrimStyle.backgroundImage,
+        },
+      }
+    }
+    /** First non-atmosphere child and its stacking facts (content layer). */
+    const content = (host) => {
+      if (!host) return null
+      const child = [...host.children].find((node) => node instanceof HTMLElement && !node.classList.contains('psd-atmos')) ?? null
+      if (child === null) return null
+      const s = getComputedStyle(child)
+      return { className: String(child.className), position: s.position, zIndex: s.zIndex }
+    }
+    const proxy = document.querySelector('[data-psd-current-workspace="true"]')
+    const sessionProxy = document.querySelector('[data-psd-current-session="true"]')
+    const row = document.querySelector('.psd-run-current, .psd-child-current')
+    const sessionId = document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') ?? null
+    const rowPseudoAnimations = row === null ? '' : [
+      getComputedStyle(row, '::before').animationName,
+      getComputedStyle(row, '::after').animationName,
+    ].join(',')
+    return {
+      row: row === null ? null : {
+        kind: row.classList.contains('psd-run-current') ? 'parent' : 'child',
+        className: String(row.className),
+        rect: rect(row),
+        clientRect: clientRect(row),
+        radius: getComputedStyle(row).borderRadius,
+        current: row.getAttribute('aria-current'),
+        pseudoAnimations: rowPseudoAnimations,
+      },
+      card: row === null ? null : atmosphere(row),
+      cardContent: row === null ? null : content(row),
+      legacyWave: document.querySelector('.psd-child-wave') !== null,
+      legacyRing: document.querySelector('.psd-child-ring') !== null,
+      oldAnimation: (() => {
+        if (row === null) return false
+        const names = [rowPseudoAnimations, atmosphere(row)?.canvas?.filter ?? '']
+        return names.some((value) => /psd-(smoke|glow|wave)/.test(value))
+      })(),
+      marker: proxy === null ? null : {
+        rowKey: proxy.getAttribute('data-row-key'),
+        rect: rect(proxy),
+        clientRect: clientRect(proxy),
+        radius: getComputedStyle(proxy).borderRadius,
+        atmos: atmosphere(proxy),
+        content: content(proxy),
+        before: pseudo(proxy, '::before'),
+        after: pseudo(proxy, '::after'),
+      },
+      sessionMarker: sessionProxy === null ? null : {
+        rowKey: sessionProxy.getAttribute('data-row-key'),
+        rect: rect(sessionProxy),
+        clientRect: clientRect(sessionProxy),
+        radius: getComputedStyle(sessionProxy).borderRadius,
+        isOpenSession: sessionId !== null && sessionProxy.getAttribute('data-row-key') === `session:${sessionId}`,
+        atmos: atmosphere(sessionProxy),
+        content: content(sessionProxy),
+      },
+      markerCount: document.querySelectorAll('[data-psd-current-workspace="true"]').length,
+      sessionMarkerCount: document.querySelectorAll('[data-psd-current-session="true"]').length,
+      atmosCount: document.querySelectorAll('.psd-atmos').length,
       sessionId,
     }
   },
@@ -1943,8 +2010,52 @@ function assertBottomFaceGlow(label, host, layers) {
   return `${label}: smoke+rim ${before.width}x${before.height} r=${before.borderRadius} inset 0; animations ${before.animationName} | ${after.animationName}`
 }
 
+/**
+ * Assert one row paints the clipped internal rainbow atmosphere: the wrapper is
+ * the row box clipped to the row radius, the canvas fills it and painted pixels
+ * exist, the dark scrim sits above the canvas, and the real content is raised
+ * above both layers. All injected layers stay pointer-events:none.
+ * @param {string} label - row description for failure messages.
+ * @param {object} row - row facts ({ rect, radius }).
+ * @param {object} atmos - atmosphere wrapper facts.
+ * @param {object | null} content - first real content child stacking facts.
+ * @param {object} [options] - { motion: 'animated' | 'static' } expectation.
+ * @returns {string} measured summary.
+ */
+function assertAtmosphereRow(label, row, atmos, content, options = {}) {
+  assert(atmos, `${label}: no .psd-atmos layer inside the row`)
+  const box = row.clientRect ?? row.rect
+  for (const side of ['left', 'right', 'top', 'bottom']) {
+    assertNear(atmos.rect[side], box[side], 1, `${label}: atmosphere must cover the row's paint box exactly (${side}: ${atmos.rect[side]} vs ${box[side]})`)
+  }
+  assertEqual(atmos.radius, row.radius, `${label}: atmosphere must inherit the row's rounded-rectangle radius`)
+  assertEqual(atmos.overflow, 'hidden', `${label}: atmosphere wrapper must clip to the rounded rect`)
+  assertEqual(atmos.pointerEvents, 'none', `${label}: atmosphere wrapper must not capture the pointer`)
+  assertEqual(atmos.zIndex, '0', `${label}: atmosphere must sit on the background layer (z-index 0)`)
+  assert(atmos.opacity > 0.2 && atmos.opacity <= 1, `${label}: atmosphere must be visible (opacity ${atmos.opacity})`)
+  assert(atmos.canvas, `${label}: atmosphere has no canvas`)
+  assert(atmos.canvas.width > 0 && atmos.canvas.height > 0, `${label}: atmosphere canvas has no drawing buffer (${atmos.canvas.width}x${atmos.canvas.height})`)
+  assert(atmos.canvas.painted > 0, `${label}: atmosphere canvas painted no rainbow pixels`)
+  assert(atmos.canvas.filter.includes('blur'), `${label}: atmosphere canvas must keep the gas blur (${atmos.canvas.filter})`)
+  assertEqual(atmos.canvas.mixBlendMode, 'screen', `${label}: atmosphere canvas must use the screen blend`)
+  assertEqual(atmos.canvas.pointerEvents, 'none', `${label}: atmosphere canvas must not capture the pointer`)
+  assert(atmos.scrim, `${label}: atmosphere has no contrast scrim`)
+  for (const side of ['left', 'right', 'top', 'bottom']) {
+    assertNear(atmos.scrim.rect[side], box[side], 1, `${label}: scrim must cover the row's paint box (${side})`)
+  }
+  assertEqual(atmos.scrim.pointerEvents, 'none', `${label}: scrim must not capture the pointer`)
+  assert(atmos.scrim.backgroundImage.includes('linear-gradient'), `${label}: scrim must be the faint dark gradient (${short(atmos.scrim.backgroundImage, 90)})`)
+  assert(content, `${label}: row content element missing`)
+  assertEqual(content.position, 'relative', `${label}: real content must be positioned above the atmosphere`)
+  assert(Number(content.zIndex) >= 2, `${label}: real content must stack above the atmosphere/scrim (z-index ${content.zIndex})`)
+  const wantMotion = options.motion ?? 'animated'
+  assertEqual(atmos.motion, wantMotion, `${label}: atmosphere motion state must be ${wantMotion} (${atmos.motion})`)
+  assertEqual(atmos.running, wantMotion === 'animated' ? 'true' : 'false', `${label}: atmosphere rAF state must match ${wantMotion} (running=${atmos.running})`)
+  return `${label}: ${row.rect.width}x${row.rect.height} r=${row.radius}, canvas ${atmos.canvas.width}x${atmos.canvas.height} painted=${atmos.canvas.painted}, content z=${content.zIndex}, motion=${atmos.motion}`
+}
+
 async function runCurrentHighlightChecks({ page, results, state }) {
-  log('\n=== B4: current-Session rainbow glow on the rounded row bottom face ===')
+  log('\n=== B4: current-Session rainbow atmosphere inside the row pill ===')
   await results.check('b4-0', 'open a card row to make its Session current', async () => {
     const target = await page.eval(() => {
       const row = document.querySelector('.psd-run')
@@ -1965,7 +2076,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     return `opened "${short(target.title, 40)}"`
   })
 
-  await results.check('b4-1', 'card row and owning native Workspace row paint the rounded bottom-face glow (old band/ring gone)', async () => {
+  await results.check('b4-1', 'card row, owning Workspace row and open Session row paint the clipped internal atmosphere', async () => {
     let highlight = await page.eval(probe.currentHighlight)
     state.highlight = highlight
     if (highlight.marker && highlight.sessionId !== null && highlight.marker.rowKey) {
@@ -1979,28 +2090,30 @@ async function runCurrentHighlightChecks({ page, results, state }) {
         return { present: true, expanded: false }
       }, highlight.marker.rowKey)
       if (opened.expanded) {
-        await sleep(500)
+        await sleep(700)
         highlight = await page.eval(probe.currentHighlight)
         state.highlight = highlight
       }
     }
     assert(highlight.row, 'current card row has no .psd-run-current/.psd-child-current class')
     assertEqual(highlight.row.current, 'true', 'current card row must expose aria-current')
-    assert(!highlight.ringPresent, 'the old .psd-child-ring element is still rendered')
-    assert(!highlight.oldRing, 'the current row still paints a conic-gradient ring')
-    assert(highlight.waveHost && highlight.wave, 'current card row has no glow host')
-    for (const side of ['left', 'right', 'top', 'bottom']) {
-      assertNear(highlight.waveHost.rect[side], highlight.row.rect[side], 1, `card glow host must follow the row box (${side}: ${highlight.waveHost.rect[side]} vs ${highlight.row.rect[side]})`)
-    }
-    const cardSummary = assertBottomFaceGlow('card current row', highlight.waveHost, highlight.wave)
+    assert(!highlight.legacyWave, 'the old bottom-face .psd-child-wave layer is still rendered')
+    assert(!highlight.legacyRing, 'the old .psd-child-ring element is still rendered')
+    assert(!highlight.oldAnimation, 'an old psd-smoke/psd-glow/psd-wave animation is still applied')
+    const cardSummary = assertAtmosphereRow('card current row', highlight.row, highlight.card, highlight.cardContent)
     assert(highlight.marker, 'no native Workspace row carries data-psd-current-workspace')
     assertEqual(highlight.markerCount, 1, 'exactly one native Workspace row must be marked')
-    const nativeSummary = assertBottomFaceGlow('native Workspace row', { radius: highlight.marker.radius, rect: highlight.marker.rect, clientWidth: highlight.marker.clientWidth, clientHeight: highlight.marker.clientHeight }, { before: highlight.marker.before, after: highlight.marker.after })
-    assert(highlight.marker.ownsCurrentSession, `marked Workspace row does not own the open Session ${highlight.sessionId}`)
-    return `${highlight.row.className} + ${highlight.marker.rowKey}; ${cardSummary}; ${nativeSummary}`
+    assert(!/linear-gradient/.test(highlight.marker.before?.backgroundImage ?? ''), 'the native Workspace row still paints the old bottom-face pseudo layer')
+    const workspaceSummary = assertAtmosphereRow('native Workspace row', { rect: highlight.marker.rect, clientRect: highlight.marker.clientRect, radius: highlight.marker.radius }, highlight.marker.atmos, highlight.marker.content)
+    assert(highlight.sessionMarker, 'no native Session row carries data-psd-current-session')
+    assertEqual(highlight.sessionMarkerCount, 1, 'exactly one native Session row must be marked')
+    assertEqual(highlight.sessionMarker.isOpenSession, true, `the marked native Session row must be the open Session ${highlight.sessionId}`)
+    const sessionSummary = assertAtmosphereRow('native Session row', { rect: highlight.sessionMarker.rect, clientRect: highlight.sessionMarker.clientRect, radius: highlight.sessionMarker.radius }, highlight.sessionMarker.atmos, highlight.sessionMarker.content)
+    assertEqual(highlight.atmosCount, 3, `exactly three atmosphere renderers expected (card row + Workspace row + Session row), got ${highlight.atmosCount}`)
+    return `${cardSummary}; ${workspaceSummary}; ${sessionSummary}`
   })
 
-  await results.check('b4-2', 'opening another sidebar Session moves the marker to its Workspace', async () => {
+  await results.check('b4-2', 'opening another sidebar Session moves the marker and the atmosphere with it', async () => {
     const before = await page.eval(probe.currentHighlight)
     const rows = await page.count('.psd-run')
     const target = await page.eval((index) => {
@@ -2021,47 +2134,39 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     )
     await sleep(1800)
     let highlight = await page.eval(probe.currentHighlight)
+    assert(highlight.marker && highlight.marker.rowKey, 'the native Workspace marker disappeared after switching Sessions')
     assertEqual(highlight.markerCount, 1, 'exactly one native Workspace row must stay marked')
-    assertEqual(highlight.sessionId === before.sessionId, rows <= 1, `opening another card row did not change the main-view Session`)
-    if (highlight.marker && highlight.sessionId !== null && highlight.marker.rowKey) {
-      const expanded = await page.eval((rowKey) => {
-        const row = document.querySelector(`[data-row-key="${rowKey}"]`)
-        if (!row) return false
-        if (row.getAttribute('aria-expanded') === 'false') { row.click(); return true }
-        return false
-      }, highlight.marker.rowKey)
-      if (expanded) {
-        await sleep(500)
-        highlight = await page.eval(probe.currentHighlight)
-      }
-    }
-    assert(highlight.marker.ownsCurrentSession, 'workspace marker did not move to the newly opened Session')
-    assert(highlight.marker && highlight.marker.before && highlight.marker.before.animationName.includes('psd-smoke'), 'the moved Workspace marker lost its bottom-face smoke layer')
-    return `marker follows ${highlight.sessionId} on ${highlight.marker.rowKey}`
+    assertEqual(highlight.sessionMarkerCount, 1, 'exactly one native Session row must stay marked')
+    assertEqual(highlight.sessionMarker?.isOpenSession, true, `the marked native Session row must follow the new open Session ${highlight.sessionId}`)
+    assert(highlight.marker.atmos && highlight.sessionMarker.atmos, 'the moved native rows lost their atmosphere layers')
+    assertEqual(highlight.sessionId === before.sessionId, rows <= 1, 'opening another card row did not change the main-view Session')
+    assertEqual(highlight.atmosCount, 3, `exactly three atmosphere renderers expected after the move, got ${highlight.atmosCount}`)
+    return `markers follow ${highlight.sessionId} on ${highlight.sessionMarker.rowKey}; workspace ${highlight.marker.rowKey}`
   })
 
-  await results.check('b4-3', 'reduced motion leaves a static bottom-face tint', async () => {
+  await results.check('b4-3', 'reduced motion keeps the static internal rainbow fill and stops the renderer', async () => {
     await page.emulateMedia([{ name: 'prefers-reduced-motion', value: 'reduce' }])
-    await sleep(400)
-    const highlight = await page.eval(probe.currentHighlight)
-    assert(highlight.wave && highlight.marker, 'current highlight facts missing under reduced motion')
-    const layers = [
-      ['card smoke', highlight.wave.before],
-      ['card rim', highlight.wave.after],
-      ['native smoke', highlight.marker.before],
-      ['native rim', highlight.marker.after],
-    ]
-    for (const [name, layer] of layers) {
-      assertEqual(layer.animationName, 'none', `reduced motion must stop the ${name} animation (${layer.animationName})`)
-      assert(Number(layer.opacity) > 0.1, `reduced motion must leave a visible static tint (${name} opacity ${layer.opacity})`)
-      assert(layer.maskImage.includes('gradient'), `reduced motion must keep the bottom-face mask (${name})`)
+    try {
+      await sleep(700)
+      const highlight = await page.eval(probe.currentHighlight)
+      const rows = [
+        ['card row', highlight.row, highlight.card, highlight.cardContent],
+        ['Workspace row', highlight.marker ? { rect: highlight.marker.rect, clientRect: highlight.marker.clientRect, radius: highlight.marker.radius } : null, highlight.marker?.atmos, highlight.marker?.content],
+        ['Session row', highlight.sessionMarker ? { rect: highlight.sessionMarker.rect, clientRect: highlight.sessionMarker.clientRect, radius: highlight.sessionMarker.radius } : null, highlight.sessionMarker?.atmos, highlight.sessionMarker?.content],
+      ]
+      const details = []
+      for (const [label, row, atmos, content] of rows) {
+        assert(row && atmos, `${label}: atmosphere missing under reduced motion`)
+        details.push(assertAtmosphereRow(label, row, atmos, content, { motion: 'static' }))
+      }
+      return details.join('; ')
+    } finally {
+      await page.emulateMedia([])
+      await sleep(500)
     }
-    await page.emulateMedia([])
-    await sleep(200)
-    return `static smoke ${highlight.wave.before.opacity} + rim ${highlight.wave.after.opacity}; native ${highlight.marker.before.opacity}/${highlight.marker.after.opacity}`
   })
 
-  await results.check('b4-4', 'a nested child current row paints the same glow on its own rounded rectangle', async () => {
+  await results.check('b4-4', 'a nested child current row paints the same atmosphere inside its own rounded rect', async () => {
     const target = await page.eval(() => {
       const child = document.querySelector('.psd-child')
       const main = child ? child.querySelector('.psd-child-main') : null
@@ -2077,13 +2182,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     await sleep(900)
     const highlight = await page.eval(probe.currentHighlight)
     assert(highlight.row && highlight.row.kind === 'child', `expected a child current row, got ${JSON.stringify(highlight.row)}`)
-    assert(highlight.childWave, 'child current row is missing its .psd-child-wave glow host')
-    assert(highlight.waveHost && highlight.wave, 'child glow host facts missing')
-    for (const side of ['left', 'right', 'top', 'bottom']) {
-      assertNear(highlight.waveHost.rect[side], highlight.row.rect[side], 1, `child glow host must follow the row box (${side}: ${highlight.waveHost.rect[side]} vs ${highlight.row.rect[side]})`)
-    }
-    assertEqual(highlight.waveHost.radius, highlight.row.radius, 'child glow host must inherit the child row radius')
-    const summary = assertBottomFaceGlow('child current row', highlight.waveHost, highlight.wave)
+    const summary = assertAtmosphereRow('child current row', highlight.row, highlight.card, highlight.cardContent)
     // Leave a parent row current again: the report screenshots show the primary case.
     const parent = await page.eval(() => {
       const row = document.querySelector('.psd-run')
@@ -2099,7 +2198,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       await page.waitForFn(() => !!document.querySelector('.psd-run-current'), [], { timeout: 15000, label: 'parent current row after child check' })
       await sleep(700)
     }
-    return `${summary}; child row ${highlight.row.rect.width}x${highlight.row.rect.height} radius ${highlight.row.radius}`
+    return `${summary}; child row radius ${highlight.row.radius}`
   })
 }
 
@@ -2107,6 +2206,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
  * Hover a native sidebar session row and return the live native tooltip facts.
  * The native tooltip has its own show delay/heuristic, so retry once.
  * @param {object} page - Page wrapper.
+ * @param {string | null} evidenceName - optional close-up evidence file name.
  * @returns {Promise<{ row: object, tooltip: object | null }>} native row + tooltip.
  */
 async function measureNativeTooltip(page, evidenceName = null) {
@@ -2120,8 +2220,6 @@ async function measureNativeTooltip(page, evidenceName = null) {
   }
   let tooltip = await hover()
   if (tooltip === null) tooltip = await hover()
-  // Photograph the live native tooltip while it is still open (the pointer is
-  // still on the row; moving away dismisses it).
   if (tooltip !== null && evidenceName !== null) await writeEvidenceShot(page, evidenceName, tooltip.rect)
   await page.moveTo(900, 500)
   await sleep(300)
@@ -3034,7 +3132,74 @@ async function captureScreenshots(page, state) {
     await sleep(400)
     await shot('08-buckets')
   }
+  // B4 v3 atmosphere close-ups: card row + native Workspace row + native Session
+  // row, in both themes.
+  await captureAtmosphereEvidence(page, shot, 'light')
+  await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+  await sleep(800)
+  await captureAtmosphereEvidence(page, shot, 'dark')
+  await page.emulateMedia([])
+  await sleep(300)
   return shots
+}
+
+/**
+ * Photograph the internal rainbow atmosphere on the three highlighted rows.
+ * @param {object} page - Page wrapper.
+ * @param {Function} shot - screenshot(name, clip) helper.
+ * @param {'light' | 'dark'} theme - theme label used in the file names.
+ * @returns {Promise<void>}
+ */
+async function captureAtmosphereEvidence(page, shot, theme) {
+  try {
+    // The fold checks reload the page with persisted folds: unfold both buckets
+    // and the marked Workspace section so the native rows are photographable.
+    const expanded = await page.eval(() => {
+      for (const group of ['active', 'inactive']) {
+        const toggle = document.querySelector(`[data-psd="group"][data-group="${group}"] .psd-group-toggle`)
+        if (toggle instanceof HTMLElement && toggle.getAttribute('aria-expanded') === 'false') toggle.click()
+      }
+      return true
+    })
+    if (!expanded) return
+    await sleep(700)
+    const rowsReady = await page.eval(() => {
+      const row = document.querySelector('[data-psd-current-workspace="true"]')
+      if (row instanceof HTMLElement && row.getAttribute('aria-expanded') === 'false') row.click()
+      return true
+    })
+    if (!rowsReady) return
+    await sleep(900)
+    const targets = [
+      ['11-card-atmosphere', '.psd-run-current, .psd-child-current'],
+      ['12-workspace-atmosphere', '[data-psd-current-workspace="true"]'],
+      ['13-session-atmosphere', '[data-psd-current-session="true"]'],
+    ]
+    for (const [name, selector] of targets) {
+      const scrolled = await page.eval((sel) => {
+        const el = document.querySelector(sel)
+        if (!el) return false
+        el.scrollIntoView({ block: 'center', behavior: 'instant' })
+        return true
+      }, selector)
+      if (!scrolled) continue
+      await page.moveTo(900, 500)
+      await sleep(400)
+      const rect = await page.eval((sel) => {
+        const el = document.querySelector(sel)
+        if (!el) return null
+        const r = el.getBoundingClientRect()
+        return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }
+      }, selector)
+      console.log(`ATMOSRECT ${name} ${theme} ${rect === null ? 'null' : JSON.stringify(rect)}`)
+      if (rect === null || rect.width < 8 || rect.height < 8) continue
+      const clip = clipAroundRect(rect)
+      if (clip === null) continue
+      await shot(`${name}-${theme}`, clip)
+    }
+  } catch (error) {
+    console.log(`ATMOSSHOT ${theme} skipped: ${error?.message || String(error)}`)
+  }
 }
 
 /** Viewport-clamped clip around a floating card rect for evidence close-ups. */

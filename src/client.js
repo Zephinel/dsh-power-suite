@@ -4701,36 +4701,288 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 @keyframes psf-ring-hue{from{filter:hue-rotate(0deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}to{filter:hue-rotate(360deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}}
 @media (prefers-reduced-motion: reduce){.psf-rainbow-focus:focus-within::after,.psf-rainbow-focus:focus-visible::after{animation:none}}
 @media (forced-colors: active){.psf-rainbow-focus::after{display:none}.psf-rainbow-focus:focus-within{outline:2px solid Highlight;outline-offset:1px}}
-/* Current-session highlight: a faint rainbow glow painted on the bottom face of
-   the row's own rounded rectangle (replaces the old detached blurred wave band
-   and the even older conic ring). Two stacked pseudo-element layers cover the row
-   box exactly (inset 0, border-radius: inherit) and are clipped to its radius so
-   the bottom corners follow the row shape. The haze layer (::before) is the wide,
-   strongly feathered part: the rainbow gradient at reduced saturation behind a
-   vertical low-alpha falloff plus four large soft radial puffs, blurred 11 px, so
-   the colour diffuses upward into the row like spreading smoke. The rim layer
-   (::after) is the quiet core: a ~1.5 px bottom line that fades out by 8 px and
-   hugs the rounded bottom corners. Both breathe slowly and drift; opacity stays
-   low so the highlight is felt more than seen. The native Workspace row that owns
-   the Session gets the identical treatment and is marked with
-   data-psd-current-workspace; a nested child row paints through the injected
-   .psd-child-wave host because its own ::before/::after are the tree connectors.
-   Content stays above both layers. */
-.psd-run-current,.psd-child-current{position:relative;isolation:isolate}
-.psd-child-wave{position:absolute;inset:0;z-index:0;border-radius:inherit;pointer-events:none}
-.psd-run-current::before,.psd-child-wave::before,[data-psd-current-workspace='true']::before{content:'';position:absolute;inset:0;z-index:0;border-radius:inherit;pointer-events:none;background-image:linear-gradient(90deg,#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);background-size:340% 100%;background-position:100% 100%;background-repeat:no-repeat;filter:blur(11px) saturate(.88);mask-image:linear-gradient(to top,rgba(0,0,0,.34) 0%,rgba(0,0,0,.2) 26%,rgba(0,0,0,.07) 62%,rgba(0,0,0,0) 96%),radial-gradient(52% 74% at 12% 104%,rgba(0,0,0,.4) 0%,rgba(0,0,0,0) 84%),radial-gradient(46% 88% at 38% 108%,rgba(0,0,0,.32) 0%,rgba(0,0,0,0) 86%),radial-gradient(58% 70% at 62% 102%,rgba(0,0,0,.38) 0%,rgba(0,0,0,0) 84%),radial-gradient(44% 92% at 86% 110%,rgba(0,0,0,.3) 0%,rgba(0,0,0,0) 86%);-webkit-mask-image:linear-gradient(to top,rgba(0,0,0,.34) 0%,rgba(0,0,0,.2) 26%,rgba(0,0,0,.07) 62%,rgba(0,0,0,0) 96%),radial-gradient(52% 74% at 12% 104%,rgba(0,0,0,.4) 0%,rgba(0,0,0,0) 84%),radial-gradient(46% 88% at 38% 108%,rgba(0,0,0,.32) 0%,rgba(0,0,0,0) 86%),radial-gradient(58% 70% at 62% 102%,rgba(0,0,0,.38) 0%,rgba(0,0,0,0) 84%),radial-gradient(44% 92% at 86% 110%,rgba(0,0,0,.3) 0%,rgba(0,0,0,0) 86%);opacity:.36;animation:psd-smoke-drift 22s ease-in-out infinite alternate,psd-smoke-breathe 10s ease-in-out infinite,psd-smoke-hue 36s linear infinite}
-.psd-run-current::after,.psd-child-wave::after,[data-psd-current-workspace='true']::after{content:'';position:absolute;inset:0;z-index:0;border-radius:inherit;pointer-events:none;background-image:linear-gradient(90deg,#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);background-size:220% 100%;background-position:0 100%;background-repeat:no-repeat;filter:blur(2.8px) saturate(.9);mask-image:linear-gradient(to top,rgba(0,0,0,.9) 0,rgba(0,0,0,.9) 1.5px,rgba(0,0,0,.4) 4px,rgba(0,0,0,0) 8px);-webkit-mask-image:linear-gradient(to top,rgba(0,0,0,.9) 0,rgba(0,0,0,.9) 1.5px,rgba(0,0,0,.4) 4px,rgba(0,0,0,0) 8px);opacity:.42;animation:psd-glow-flow 14s ease-in-out infinite alternate,psd-glow-breathe 7s ease-in-out infinite}
-.psd-run-current > *{position:relative;z-index:1}
-.psd-child-current > *:not(.psd-child-wave){position:relative;z-index:1}
-[data-psd-current-workspace='true']{position:relative;isolation:isolate}
-[data-psd-current-workspace='true'] > *{position:relative;z-index:1}
-@keyframes psd-glow-flow{from{background-position:0% 100%}to{background-position:100% 100%}}
-@keyframes psd-glow-breathe{0%,100%{opacity:.34}50%{opacity:.5}}
-@keyframes psd-smoke-drift{from{background-position:100% 100%}to{background-position:0% 100%}}
-@keyframes psd-smoke-breathe{0%,100%{opacity:.27}50%{opacity:.43}}
-@keyframes psd-smoke-hue{from{filter:blur(11px) saturate(.88) hue-rotate(0deg)}50%{filter:blur(12px) saturate(.94) hue-rotate(180deg)}to{filter:blur(11px) saturate(.88) hue-rotate(360deg)}}
-@media (prefers-reduced-motion: reduce){.psd-run-current::before,.psd-child-wave::before,[data-psd-current-workspace='true']::before,.psd-run-current::after,.psd-child-wave::after,[data-psd-current-workspace='true']::after{animation:none;transform:none}.psd-run-current::before,.psd-child-wave::before,[data-psd-current-workspace='true']::before{opacity:.3;filter:blur(11px) saturate(.88)}.psd-run-current::after,.psd-child-wave::after,[data-psd-current-workspace='true']::after{opacity:.38;filter:blur(2.8px) saturate(.9)}}
+/* Current-session highlight: a full-pill rainbow "atmosphere" painted INSIDE the
+   row's own rounded rectangle, with the real content layered on top (design doc
+   "Rainbow Atmosphere V3 — Session Row Integration"). Layer order inside one
+   clipped rounded rect: (0) the row's existing neutral surface is untouched;
+   (1) .psd-atmos is an absolutely positioned, radius-clipped wrapper that holds
+   a small Canvas 2D gas renderer (drifting prism blobs, screen blend, blurred);
+   (2) .psd-atmos-scrim is a faint dark gradient above the canvas that keeps the
+   title/time/actions readable; (3) the real row content is raised to z-index 2.
+   Everything is pointer-events:none and clipped by the wrapper's overflow, so
+   the row radius, grid, hover actions and hit areas never change. The same
+   treatment is applied to the owning native Workspace row
+   (data-psd-current-workspace) and, since B4 v3, to the native sidebar Session
+   row of the open Session (data-psd-current-session); only highlighted rows get
+   a renderer. Reduced motion paints one static pastel frame and stops rAF; a
+   hidden tab pauses the loop; the renderer is destroyed when the row stops
+   being highlighted. */
+.psd-atmos{position:absolute;inset:0;z-index:0;border-radius:inherit;overflow:hidden;pointer-events:none;isolation:isolate;opacity:.62;transition:opacity 220ms var(--ds-ease-in-out,ease)}
+.psd-atmos-canvas{display:block;width:100%;height:100%;pointer-events:none;filter:blur(3px) saturate(1.18);mix-blend-mode:screen}
+.psd-atmos-scrim{position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(90deg,rgba(16,18,22,.2),rgba(16,18,22,.3))}
+.psd-run-current:hover .psd-atmos,.psd-child-current:hover .psd-atmos,[data-psd-current-workspace='true']:hover .psd-atmos,[data-psd-current-session='true']:hover .psd-atmos{opacity:.8}
+.psd-run-current,.psd-child-current,[data-psd-current-workspace='true'],[data-psd-current-session='true']{position:relative;isolation:isolate}
+.psd-run-current > *:not(.psd-atmos),.psd-child-current > *:not(.psd-atmos){position:relative;z-index:2}
+[data-psd-current-workspace='true'] > *:not([data-psd-atmos]),[data-psd-current-session='true'] > *:not([data-psd-atmos]){position:relative;z-index:2}
+@media (prefers-reduced-motion: reduce){.psd-atmos{transition:none}}
+
 `
+
+/** Prism palette of the atmosphere renderer (V3 shader rainbow stops). */
+const DW_ATMOS_PALETTE = [
+  [255, 61, 122],
+  [255, 140, 61],
+  [255, 212, 89],
+  [92, 227, 122],
+  [59, 235, 217],
+  [61, 156, 255],
+  [148, 89, 255],
+  [250, 97, 199]
+]
+
+/** Baseline atmosphere config adapted from the V3 design doc (smoke mode). */
+const DW_ATMOS_CONFIG = { intensity: 0.56, spread: 1.16, drift: 1.2, stirring: 0.58, breathing: 0.22, blend: 0.9, vibrance: 1.32 }
+
+/**
+ * Mount the Canvas 2D rainbow-gas renderer into one atmosphere wrapper.
+ *
+ * The canvas is the wrapper's first child; it fills the wrapper (the row's own
+ * radius clips it), paints a handful of drifting prism blobs with a screen-like
+ * additive blend, and is disposed when the row stops being highlighted. One
+ * renderer per highlighted row; no RAFs for non-highlighted rows. A hidden tab
+ * pauses the loop, reduced motion draws a single static frame.
+ * @param {HTMLElement} host - the .psd-atmos wrapper.
+ * @returns {{ destroy: Function }} disposer.
+ */
+function dwAtmosphereMount(host) {
+  const canvas = document.createElement('canvas')
+  canvas.className = 'psd-atmos-canvas'
+  canvas.setAttribute('aria-hidden', 'true')
+  host.insertBefore(canvas, host.firstChild)
+  const ctx = canvas.getContext('2d', { alpha: true })
+  if (ctx === null) {
+    canvas.remove()
+    return { destroy: () => {} }
+  }
+  const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  const noise = (seed) => {
+    const value = Math.sin(seed * 127.1 + 311.7) * 43758.5453
+    return value - Math.floor(value)
+  }
+  const blobs = Array.from({ length: 9 }, (_, index) => ({
+    phase: noise(index + 1) * Math.PI * 2,
+    speed: 0.42 + noise(index + 2) * 0.62,
+    size: 0.5 + noise(index + 3) * 0.42,
+    hue: index % DW_ATMOS_PALETTE.length
+  }))
+  let raf = 0
+  let lastFrame = 0
+  let lastDraw = 0
+  let time = 0
+  let disposed = false
+  const state = (running, motion) => {
+    host.setAttribute('data-psd-atmos-running', running ? 'true' : 'false')
+    host.setAttribute('data-psd-atmos-motion', motion)
+  }
+  const resize = () => {
+    const rect = canvas.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.25)
+    const width = Math.max(2, Math.round(rect.width * dpr))
+    const height = Math.max(2, Math.round(rect.height * dpr))
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width
+      canvas.height = height
+    }
+  }
+  const draw = () => {
+    if (disposed) return
+    const width = canvas.width
+    const height = canvas.height
+    if (width === 0 || height === 0) return
+    ctx.clearRect(0, 0, width, height)
+    const span = Math.max(width, height)
+    // A low broad wash keeps the whole pill tinted, not just the blob cores.
+    const wash = ctx.createLinearGradient(0, 0, width, 0)
+    for (let index = 0; index < DW_ATMOS_PALETTE.length; index += 1) {
+      const color = DW_ATMOS_PALETTE[index]
+      wash.addColorStop(index / (DW_ATMOS_PALETTE.length - 1), `rgba(${color[0]},${color[1]},${color[2]},${(0.1 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.spread).toFixed(3)})`)
+    }
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.fillStyle = wash
+    ctx.fillRect(0, 0, width, height)
+    // Drifting prism blobs: two coupled orbits + breathing alpha ≈ gas flow.
+    ctx.globalCompositeOperation = 'lighter'
+    const breath = 1 + DW_ATMOS_CONFIG.breathing * 0.11 * Math.sin(time * 0.37)
+    for (const blob of blobs) {
+      const color = DW_ATMOS_PALETTE[blob.hue]
+      const cx = width * (0.5 + 0.34 * Math.sin(time * blob.speed * DW_ATMOS_CONFIG.drift + blob.phase) + 0.09 * Math.sin(time * 0.23 * DW_ATMOS_CONFIG.stirring + blob.phase * 1.7))
+      const cy = height * (0.5 + 0.32 * Math.cos(time * blob.speed * 0.8 * DW_ATMOS_CONFIG.drift + blob.phase * 1.3) + 0.08 * Math.sin(time * 0.19 + blob.phase))
+      const radius = Math.max(2, span * blob.size * (0.5 + 0.16 * Math.sin(time * 0.31 + blob.phase)))
+      const alpha = Math.min(0.6, 0.34 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.vibrance * breath)
+      const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius)
+      gradient.addColorStop(0, `rgba(${color[0]},${color[1]},${color[2]},${alpha.toFixed(3)})`)
+      gradient.addColorStop(0.55, `rgba(${color[0]},${color[1]},${color[2]},${(alpha * 0.42).toFixed(3)})`)
+      gradient.addColorStop(1, `rgba(${color[0]},${color[1]},${color[2]},0)`)
+      ctx.fillStyle = gradient
+      ctx.beginPath()
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+  const frame = (now) => {
+    raf = 0
+    if (disposed || document.hidden) return
+    if (lastFrame > 0) time += Math.min(0.08, (now - lastFrame) / 1000) * DW_ATMOS_CONFIG.drift
+    lastFrame = now
+    if (now - lastDraw >= 33) {
+      lastDraw = now
+      draw()
+    }
+    raf = window.requestAnimationFrame(frame)
+  }
+  const stop = () => {
+    if (raf !== 0) window.cancelAnimationFrame(raf)
+    raf = 0
+    lastFrame = 0
+  }
+  const start = () => {
+    stop()
+    if (disposed || document.hidden) {
+      state(false, motionQuery.matches ? 'static' : 'animated')
+      return
+    }
+    if (motionQuery.matches) {
+      state(false, 'static')
+      resize()
+      draw()
+      return
+    }
+    state(true, 'animated')
+    raf = window.requestAnimationFrame(frame)
+  }
+  const onVisibility = () => {
+    if (document.hidden) {
+      stop()
+      state(false, motionQuery.matches ? 'static' : 'animated')
+    } else {
+      start()
+    }
+  }
+  const onMotion = () => start()
+  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { resize(); if (motionQuery.matches) draw() }) : null
+  if (observer !== null) observer.observe(canvas)
+  document.addEventListener('visibilitychange', onVisibility)
+  motionQuery.addEventListener('change', onMotion)
+  resize()
+  start()
+  return {
+    destroy: () => {
+      disposed = true
+      stop()
+      if (observer !== null) observer.disconnect()
+      document.removeEventListener('visibilitychange', onVisibility)
+      motionQuery.removeEventListener('change', onMotion)
+      canvas.remove()
+    }
+  }
+}
+
+/**
+ * React host for the atmosphere layers of a highlighted card row. Renders the
+ * clipped wrapper (canvas is mounted imperatively) and the contrast scrim.
+ * @returns {object} the wrapper element.
+ */
+function DwAtmosphere() {
+  const hostRef = React.useRef(null)
+  React.useEffect(() => {
+    const host = hostRef.current
+    if (!(host instanceof HTMLElement)) return undefined
+    const renderer = dwAtmosphereMount(host)
+    return () => renderer.destroy()
+  }, [])
+  return React.createElement('span', { ref: hostRef, className: 'psd-atmos', 'data-psd-atmos': 'card', 'aria-hidden': true },
+    React.createElement('span', { className: 'psd-atmos-scrim', 'aria-hidden': true }))
+}
+
+/** Native-row atmosphere instances, keyed by marker kind. */
+const dwNativeAtmospheres = { workspace: null, session: null }
+
+/**
+ * Destroy one injected native-row atmosphere (renderer + wrapper + marker).
+ * @param {{ host: HTMLElement, wrapper: HTMLElement, renderer: object, attr: string }} record - instance.
+ * @returns {void}
+ */
+function dwClearNativeAtmosphere(record) {
+  record.renderer.destroy()
+  if (record.wrapper.isConnected) record.wrapper.remove()
+  if (record.host.getAttribute(record.attr) === 'true') record.host.removeAttribute(record.attr)
+}
+
+/**
+ * Ensure exactly one atmosphere instance per native marker kind, re-injecting it
+ * after a native re-render (the node observer calls this on every reconcile).
+ * @param {'workspace' | 'session'} kind - marker kind.
+ * @param {HTMLElement | null} row - the native row, or null.
+ * @param {string} attr - marker attribute.
+ * @returns {void}
+ */
+function dwSyncNativeAtmosphere(kind, row, attr) {
+  const current = dwNativeAtmospheres[kind]
+  if (current !== null && current.host !== row) {
+    dwClearNativeAtmosphere(current)
+    dwNativeAtmospheres[kind] = null
+  }
+  if (!(row instanceof HTMLElement)) return
+  const existing = dwNativeAtmospheres[kind]
+  if (existing !== null && existing.wrapper.isConnected) {
+    if (row.getAttribute(attr) !== 'true') row.setAttribute(attr, 'true')
+    return
+  }
+  if (existing !== null) dwClearNativeAtmosphere(existing)
+  row.setAttribute(attr, 'true')
+  const wrapper = document.createElement('span')
+  wrapper.className = 'psd-atmos'
+  wrapper.setAttribute('data-psd-atmos', kind)
+  wrapper.setAttribute('aria-hidden', 'true')
+  const scrim = document.createElement('span')
+  scrim.className = 'psd-atmos-scrim'
+  scrim.setAttribute('aria-hidden', 'true')
+  wrapper.appendChild(scrim)
+  row.insertBefore(wrapper, row.firstChild)
+  const renderer = dwAtmosphereMount(wrapper)
+  dwNativeAtmospheres[kind] = { host: row, wrapper, renderer, attr }
+}
+
+/**
+ * Apply the atmosphere to the owning native Workspace row and to the native
+ * sidebar Session row of the current Session (max two instances).
+ * @param {HTMLElement | null} workspaceRow - owning native Workspace row.
+ * @param {string | null} currentSessionId - Session open in the main view.
+ * @returns {void}
+ */
+function dwSyncNativeAtmospheres(workspaceRow, currentSessionId) {
+  dwSyncNativeAtmosphere('workspace', workspaceRow instanceof HTMLElement ? workspaceRow : null, 'data-psd-current-workspace')
+  let sessionRow = null
+  if (typeof currentSessionId === 'string' && currentSessionId.length > 0) {
+    for (const candidate of document.querySelectorAll('[data-row-key^="session:"]')) {
+      if (candidate.getAttribute('data-row-key') === `session:${currentSessionId}`) {
+        sessionRow = candidate
+        break
+      }
+    }
+  }
+  dwSyncNativeAtmosphere('session', sessionRow, 'data-psd-current-session')
+}
+
+/** Tear down every native-row atmosphere instance (panel unmount). */
+function dwClearNativeAtmospheres() {
+  for (const kind of Object.keys(dwNativeAtmospheres)) {
+    const record = dwNativeAtmospheres[kind]
+    if (record !== null) dwClearNativeAtmosphere(record)
+    dwNativeAtmospheres[kind] = null
+  }
+}
 
     /**
      * Format a running duration for the summary card.
@@ -6262,6 +6514,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               onMouseEnter: (event) => showHover(row, event.currentTarget),
               onMouseLeave: hideHover
             },
+              isCurrent(row.id) ? React.createElement(DwAtmosphere, { key: 'atmos' }) : null,
               React.createElement('button', {
                 type: 'button',
                 className: 'psd-run-main',
@@ -6341,9 +6594,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                   onMouseEnter: (event) => showHover(childRow, event.currentTarget),
                   onMouseLeave: hideHover
                 },
-                childCurrent
-                  ? React.createElement('span', { key: 'wave', className: 'psd-child-wave', 'aria-hidden': true })
-                  : null,
+                childCurrent ? React.createElement(DwAtmosphere, { key: 'atmos' }) : null,
                 React.createElement('button', {
                   type: 'button',
                   className: 'psd-child-main',
@@ -6893,14 +7144,22 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             ? owner.workspaceId
             : DW_BUCKET_UNGROUPED
         }
+        let markedWorkspaceRow = null
         if (currentWorkspaceKey !== null) {
           for (const section of sections) {
             if (section.cacheKey !== currentWorkspaceKey) continue
             section.row.setAttribute('data-psd-current-workspace', 'true')
             marked.add(section.row)
+            markedWorkspaceRow = section.row
             break
           }
         }
+        // B4 v3: the owning Workspace row and the native Session row of the open
+        // Session get the same internal rainbow atmosphere (max two renderers).
+        dwSyncNativeAtmospheres(
+          markedWorkspaceRow,
+          typeof latest.currentSessionId === 'string' ? latest.currentSessionId : null
+        )
         // Remember this classification so the next reload can apply persisted
         // folds before the stores hydrate (see useCachedBuckets above).
         if (activity !== null) {
@@ -7007,6 +7266,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             if (refs.inactiveHeader instanceof HTMLElement) refs.inactiveHeader.remove()
             for (const element of markedWorkspaceRef.current) element.removeAttribute('data-psd-current-workspace')
             markedWorkspaceRef.current.clear()
+            dwClearNativeAtmospheres()
             if (refs.list instanceof HTMLElement) {
               refs.list.style.display = ''
               refs.list.style.flexDirection = ''
