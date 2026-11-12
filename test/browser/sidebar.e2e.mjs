@@ -15,11 +15,16 @@
  * untouched.
  *
  * It then verifies the sidebar polish work on the real rendered DOM:
- *   B1  right-anchored row columns: actions / time / disclosure share fixed x positions
- *       across parent rows, child rows and the header; clipped titles carry the
- *       right-edge gradient mask.
+ *   B1  one fixed trailing grid shared by parent rows, child rows and the header —
+ *       time 48 px (right-aligned) then the 22 px New session action slot then the
+ *       24 px disclosure column; nested child rows reserve the action and disclosure
+ *       columns as empty spacers so their time ends on the parent row's time x, and
+ *       they render no New session control; clipped titles carry the right-edge
+ *       gradient mask.
  *   B2  hover highlight geometry: content-paced body pill, fixed-size control highlights
- *       (22 px action buttons, 24 px chevron) on the same columns in every row.
+ *       (22 px New session button, 24 px chevron) on the same columns in every row;
+ *       revealing the actions moves no column, and the main-row New session action
+ *       still creates and opens a blank Session.
  *   B3  plugin input focus uses the shared rainbow track glow (prompt-history search
  *       field), with no solid-color focus border left behind.
  *   B4  the current Session gets the soft rainbow wave behind its row and the native
@@ -38,8 +43,9 @@
  *       (`data-psd-hovercard`, `data-psd-pinned`) and mode exit clears it.
  *
  * Side effects: one blank Session is created through the native New Session button per
- * run (never typed into); one existing Session row is opened (from the card) to exercise
- * the current-highlight marker; `localStorage` for the throwaway profile is modified
+ * run and one more through the card's main-row New session action (b2-4; both blank and
+ * never typed into); one existing Session row is opened (from the card) to exercise the
+ * current-highlight marker; `localStorage` for the throwaway profile is modified
  * (folds/bucket cache). No other session, setting or file is touched, and the token is
  * never printed. The harness exits 0 only when every check passed and the page reported
  * no errors; 1 on any failure; 2 on usage errors.
@@ -711,20 +717,24 @@ const probe = {
     const rows = [...document.querySelectorAll('.psd-run, .psd-child')].map((el) => ({
       kind: el.classList.contains('psd-run') ? 'parent' : 'child',
       state: el.dataset.state,
+      dataActions: el.getAttribute('data-actions'),
       rect: rect(el),
       title: titleOf(el, '.psd-run-title, .psd-child-title'),
       time: (() => {
         const node = el.querySelector('.psd-run-time, .psd-child-time')
-        return node ? { rect: rect(node), style: styleOf(node) } : null
+        return node ? { rect: rect(node), text: (node.innerText || '').trim(), style: styleOf(node) } : null
       })(),
       actions: (() => {
         const node = el.querySelector('.psd-run-actions')
-        return node ? { rect: rect(node), width: node.getBoundingClientRect().width } : null
+        if (!node) return null
+        const r = node.getBoundingClientRect()
+        return { rect: rect(node), width: Math.round(r.width), empty: node.getAttribute('data-empty') === 'true' }
       })(),
       actionButtons: [...el.querySelectorAll('.psd-row-action')].map((button) => ({
+        variant: button.getAttribute('data-variant'),
+        label: button.getAttribute('aria-label'),
         rect: rect(button),
         radius: getComputedStyle(button).borderRadius,
-        hidden: button.dataset.hidden,
       })),
       toggle: (() => {
         const node = el.querySelector('.psd-run-toggle') || el.querySelector('.psd-run-toggle-spacer')
@@ -740,6 +750,10 @@ const probe = {
     return {
       rows,
       head,
+      headBadge: (() => {
+        const node = document.querySelector('.psd-panel-head .psd-count')
+        return node ? { rect: rect(node), text: (node.innerText || '').trim() } : null
+      })(),
       panel: rect(panel),
       sidebar: sidebar ? rect(sidebar) : null,
       headerTitle: (() => {
@@ -1050,7 +1064,9 @@ const probe = {
       mainBackground: main ? getComputedStyle(main).backgroundColor : null,
       mainRect: rect(main),
       actionsOpacity: actions ? getComputedStyle(actions).opacity : null,
+      slotRect: rect(actions),
       actionRects: actionButtons.map((button) => rect(button)),
+      actionVariants: actionButtons.map((button) => button.getAttribute('data-variant')),
       actionRadii: actionButtons.map((button) => getComputedStyle(button).borderRadius),
       toggleRect: rect(toggle),
     }
@@ -1554,33 +1570,76 @@ async function runLayoutChecks({ page, results, state }) {
     return `${count} top-level rows, ${state.rows.rows.length} rows incl. subagents`
   })
 
-  await results.check('b1-2', 'actions / time / disclosure share fixed columns across parent and child rows', async () => {
+  await results.check('b1-2', 'rows share one trailing grid: time → New session slot → disclosure (parent + child)', async () => {
     const geometry = await page.eval(probe.panelGeometry)
     const rows = geometry.rows
     assert(rows.length >= 2, `need at least two rows to compare columns, got ${rows.length}`)
     state.geometry = geometry
-    const collect = (fn) => rows.map(fn).filter((value) => value !== null && Number.isFinite(value))
-    const actionRights = collect((row) => row.actionButtons.length > 0 ? row.actionButtons[row.actionButtons.length - 1].rect.right : null)
-    const timeRights = collect((row) => row.time?.rect.right)
-    const toggleRights = collect((row) => row.toggle?.right)
-    const titleRights = collect((row) => row.title?.rect.right)
-    const spread = (values) => Math.max(...values) - Math.min(...values)
-    assert(actionRights.length === rows.length, `every row must render the New session slot: ${actionRights.length}/${rows.length}`)
-    assertNear(spread(actionRights), 0, 1, `New session button right edges must align across rows (${JSON.stringify(actionRights)})`)
-    assertNear(spread(timeRights), 0, 1, `time right edges must align across rows (${JSON.stringify(timeRights)})`)
-    assertNear(spread(toggleRights), 0, 1, `disclosure/spacer right edges must align across rows (${JSON.stringify(toggleRights)})`)
-    assertNear(spread(titleRights), 0, 1, `title right edges must align on the shared column (${JSON.stringify(titleRights)})`)
-    const parentAction = rows.find((row) => row.kind === 'parent' && row.actionButtons.length > 0)
-    const childAction = rows.find((row) => row.kind === 'child' && row.actionButtons.length > 0)
-    if (parentAction && childAction) {
-      assertNear(parentAction.actionButtons[parentAction.actionButtons.length - 1].rect.left, childAction.actionButtons[childAction.actionButtons.length - 1].rect.left, 1, 'parent and child New session buttons must be on one column')
+    const parents = rows.filter((row) => row.kind === 'parent')
+    const children = rows.filter((row) => row.kind === 'child')
+    assert(parents.length >= 1 && children.length >= 1, `need both a parent and a nested child row, got ${parents.length} parent / ${children.length} child`)
+    for (const row of rows) {
+      const label = `${row.kind} row "${short(row.title?.text, 28)}"`
+      assert(row.time, `${label} has no time column`)
+      assert(row.actions, `${label} has no fixed action slot`)
+      assert(row.toggle, `${label} has no disclosure column/spacer`)
     }
-    // The header chevron shares the row disclosure column.
+    const spread = (values) => Math.max(...values) - Math.min(...values)
+    const timeRights = rows.map((row) => row.time.rect.right)
+    const timeWidths = rows.map((row) => row.time.rect.width)
+    const actionLefts = rows.map((row) => row.actions.rect.left)
+    const actionRights = rows.map((row) => row.actions.rect.right)
+    const actionWidths = rows.map((row) => row.actions.rect.width)
+    const toggleLefts = rows.map((row) => row.toggle.left)
+    const toggleRights = rows.map((row) => row.toggle.right)
+    assertNear(spread(timeRights), 0, 1, `time right edges must align across every row (${JSON.stringify(timeRights)})`)
+    assertNear(spread(timeWidths), 0, 0.5, `time column width must be fixed (${JSON.stringify(timeWidths)})`)
+    assertNear(timeWidths[0], 48, 0.5, `time column must be 48 px wide, got ${timeWidths[0]}`)
+    assertNear(spread(actionLefts), 0, 1, `action-slot left edges must align across every row (${JSON.stringify(actionLefts)})`)
+    assertNear(spread(actionRights), 0, 1, `action-slot right edges must align across every row (${JSON.stringify(actionRights)})`)
+    assertNear(spread(actionWidths), 0, 0.5, `action slot width must be fixed (${JSON.stringify(actionWidths)})`)
+    assertNear(actionWidths[0], 22, 0.5, `action slot must be 22 px wide, got ${actionWidths[0]}`)
+    assertNear(spread(toggleLefts), 0, 1, `disclosure column left edges must align across every row (${JSON.stringify(toggleLefts)})`)
+    assertNear(spread(toggleRights), 0, 1, `disclosure column right edges must align across every row (${JSON.stringify(toggleRights)})`)
+    // Column order left to right: time, then the New session slot, then disclosure.
+    for (const row of rows) {
+      assert(row.time.rect.right < row.actions.rect.left, `time must sit left of the action slot on a ${row.kind} row`)
+      assert(row.actions.rect.right < row.toggle.left, `action slot must sit left of the disclosure column on a ${row.kind} row`)
+    }
+    // The user-reported bug: parent and child times must end on one x.
+    const parentTimeRight = parents[0].time.rect.right
+    for (const childRow of children) {
+      assertNear(childRow.time.rect.right, parentTimeRight, 1, `child time right edge (${childRow.time.rect.right}) must equal parent time right edge (${parentTimeRight})`)
+    }
+    // New session is a main-row action only.
+    for (const parentRow of parents) {
+      const variants = parentRow.actionButtons.map((button) => button.variant)
+      assertEqual(variants.filter((variant) => variant === 'new-session').length, 1, `main row must render exactly one New session action, got ${JSON.stringify(variants)}`)
+      const button = parentRow.actionButtons.find((entry) => entry.variant === 'new-session')
+      assertNear(button.rect.width, 22, 0.5, 'New session button width')
+      assertNear(button.rect.right, parentRow.actions.rect.right, 1, 'New session button must be right-anchored inside its fixed slot')
+    }
+    for (const childRow of children) {
+      const variants = childRow.actionButtons.map((button) => button.variant)
+      assertEqual(variants.filter((variant) => variant === 'new-session').length, 0, `child row must not render the New session action, got ${JSON.stringify(variants)}`)
+      assert(variants.every((variant) => variant === 'continue'), `child action slot may only hold Continue when interrupted, got ${JSON.stringify(variants)}`)
+      assertEqual(childRow.actions.empty, variants.length === 0, 'child action slot must be an empty fixed spacer unless it holds Continue')
+    }
+    // The header shares the same grid: time spacer, count badge on the action
+    // column, chevron on the disclosure column.
+    const headTime = geometry.head.find((part) => part.className.includes('psd-panel-head-time-spacer'))
+    const headActions = geometry.head.find((part) => part.className.includes('psd-panel-head-actions'))
     const headChevron = geometry.head.find((part) => part.className.includes('psd-panel-chevron'))
-    assert(headChevron, 'header chevron missing')
-    assertNear(headChevron.rect.right, toggleRights[0], 1, `header chevron right edge must line up with the row disclosure column (chevron ${headChevron.rect.right}, rows ${toggleRights[0]})`)
+    assert(headTime && headActions && headChevron, 'header is missing its time/action/chevron column parts')
+    assertNear(headTime.rect.right, timeRights[0], 1, `header time column right edge (${headTime.rect.right}) must line up with the row time column (${timeRights[0]})`)
+    assertNear(headActions.rect.right, actionRights[0], 1, `header action column right edge (${headActions.rect.right}) must line up with the row action column (${actionRights[0]})`)
+    assertNear(headChevron.rect.right, toggleRights[0], 1, `header chevron right edge (${headChevron.rect.right}) must line up with the row disclosure column (${toggleRights[0]})`)
     assertNear(headChevron.rect.width, 24, 0.5, 'header chevron column width')
-    return `actions right ${actionRights[0]}, time right ${timeRights[0]}, disclosure right ${toggleRights[0]}, titles right ${titleRights[0]} (${rows.length} rows)`
+    assert(geometry.headBadge, 'header count badge missing')
+    assertNear(geometry.headBadge.rect.right, headActions.rect.right, 1, 'count badge must be right-anchored on the header action column')
+    const parentTimes = parents.map((row) => `${row.time.text}@${row.time.rect.right}`)
+    const childTimes = children.map((row) => `${row.time.text}@${row.time.rect.right}`)
+    return `time right ${parentTimeRight} (${timeWidths[0]} px), New session slot right ${actionRights[0]} (${actionWidths[0]} px), disclosure right ${toggleRights[0]}; parent times ${parentTimes.join(', ')}; child times ${childTimes.join(', ')}; header ${headTime.rect.right}/${headActions.rect.right}/${headChevron.rect.right}`
   })
 
   await results.check('b1-3', 'long titles carry the right-edge gradient mask; short titles do not', async () => {
@@ -1595,7 +1654,12 @@ async function runLayoutChecks({ page, results, state }) {
     for (const title of unclipped) {
       assertEqual(title.mask, 'none', `unclipped title "${short(title.text, 30)}" must not be masked`)
     }
-    // The fade must sit in the last ~18px of the title column and never eat a short title.
+    // A clipped title stops on the content-column boundary, immediately left of
+    // its row's time column, in parent and child rows alike.
+    for (const row of geometry.rows) {
+      if (!row.title || !row.title.clipped || !row.time) continue
+      assertNear(row.title.rect.right, row.time.rect.left - 2, 1, `clipped ${row.kind} title must end at the content column (title ${row.title.rect.right}, time left ${row.time.rect.left})`)
+    }
     const sample = clipped[0]
     assert(sample.scrollWidth > sample.clientWidth, 'clipped flag disagrees with the measured overflow')
     return `${clipped.length} masked / ${unclipped.length} unmasked titles; fade ${sample.mask}`
@@ -1606,35 +1670,37 @@ async function runLayoutChecks({ page, results, state }) {
     const toggle = geometry.head.find((part) => part.className.includes('psd-panel-toggle'))
     const spacer = geometry.head.find((part) => part.className.includes('psd-panel-head-spacer'))
     const chevron = geometry.head.find((part) => part.className.includes('psd-panel-chevron'))
-    assert(toggle && spacer && chevron, 'header is missing the toggle/spacer/chevron parts')
+    assert(toggle && spacer && chevron, `header is missing the toggle/spacer/chevron parts (head: ${JSON.stringify(geometry.head.map((part) => part.className))}; panel: ${JSON.stringify(geometry.panel)})`)
     assert(toggle.rect.height === 30 && chevron.rect.height === 30, 'header control heights must stay 30px')
     assertNear(chevron.rect.width, 24, 0.5, 'header chevron column must be 24px wide')
     assert(toggle.rect.right < spacer.rect.left + spacer.rect.width + 1, 'header toggle must be content-sized, the spacer takes the slack')
     return `toggle ${toggle.rect.width}px + spacer ${spacer.rect.width}px + chevron ${chevron.rect.width}px`
   })
 
-  await results.check('b2-1', 'hover reveals fixed-size control highlights and a content-paced body pill', async () => {
+  await results.check('b2-1', 'hover reveals a fixed-size New session highlight and a content-paced body pill', async () => {
     await page.eval(() => window.scrollTo(0, 0))
     const target = await hoverRow(page, 0)
     await sleep(400)
     const hovered = await page.eval(probe.hoverHighlight)
     assert(hovered.hovered, 'no card row registered :hover after moving the pointer')
     assert(hovered.kind === 'parent', `expected to hover a parent row, got ${hovered.kind}`)
-    assert(hovered.actionsOpacity === '1', `action cluster must reveal on hover (opacity ${hovered.actionsOpacity})`)
-    for (const rect of hovered.actionRects) {
-      assertEqual(rect.width, 22, 'action button highlight width')
-      assertEqual(rect.height, 22, 'action button highlight height')
-    }
+    assert(hovered.actionsOpacity === '1', `action slot must reveal on hover (opacity ${hovered.actionsOpacity})`)
+    assertEqual(hovered.actionVariants.length, 1, `a main row must reveal exactly one action, got ${JSON.stringify(hovered.actionVariants)}`)
+    assertEqual(hovered.actionVariants[0], 'new-session', 'the revealed main-row action must be New session')
+    const action = hovered.actionRects[0]
+    assertEqual(action.width, 22, 'New session highlight width')
+    assertEqual(action.height, 22, 'New session highlight height')
     for (const radius of hovered.actionRadii) assert(radius !== '0px', 'action buttons must keep their rounded highlight block')
+    assertNear(action.right, hovered.slotRect.right, 1, 'New session button must be right-anchored in the fixed action slot')
     const body = hovered.mainRect
     assert(body, 'hovered body pill rect missing')
     assert(body.width < state.geometry.panel.width, 'body pill must be content-sized, not the full card width')
     assert(hovered.mainBackground !== 'rgba(0, 0, 0, 0)', 'hovered body pill has no background')
     state.hover = hovered
-    return `pill ${body.width}x${body.height}, actions ${hovered.actionRects.map((r) => `${r.width}x${r.height}`).join('+')}, top ${target.rowTop}`
+    return `pill ${body.width}x${body.height}, New session ${action.width}x${action.height} at right ${action.right} of slot ${hovered.slotRect.right}, top ${target.rowTop}`
   })
 
-  await results.check('b2-2', 'parent, child and header controls keep identical highlight geometry', async () => {
+  await results.check('b2-2', 'nested child rows reveal no New session control; header highlight geometry unchanged', async () => {
     const rows = state.geometry.rows
     const parentIndex = rows.findIndex((row) => row.kind === 'parent')
     const childIndex = rows.findIndex((row) => row.kind === 'child')
@@ -1642,19 +1708,131 @@ async function runLayoutChecks({ page, results, state }) {
     await hoverRow(page, parentIndex)
     await sleep(300)
     const parentHover = await page.eval(probe.hoverHighlight)
+    assert(parentHover.hovered && parentHover.kind === 'parent', 'parent row did not register hover')
+    assert(parentHover.actionRects.length > 0, 'parent row must expose the New session action')
+    const parentAction = parentHover.actionRects[parentHover.actionRects.length - 1]
+    assertEqual(parentHover.actionVariants[parentHover.actionVariants.length - 1], 'new-session', 'parent row action must be New session')
     await hoverRow(page, childIndex)
     await sleep(300)
     const childHover = await page.eval(probe.hoverHighlight)
-    assert(parentHover.actionRects.length > 0 && childHover.actionRects.length > 0, 'both rows must expose the action buttons')
-    const lastParent = parentHover.actionRects[parentHover.actionRects.length - 1]
-    const lastChild = childHover.actionRects[childHover.actionRects.length - 1]
-    assertNear(lastParent.width, lastChild.width, 0, 'New session highlight widths differ between parent and child rows')
-    assertNear(lastParent.left, lastChild.left, 1, 'New session highlights do not share one column')
+    assert(childHover.hovered && childHover.kind === 'child', 'child row did not register hover')
+    assertEqual(childHover.actionRects.length, 0, `child row must reveal no action buttons, got ${JSON.stringify(childHover.actionVariants)}`)
+    assertEqual(childHover.actionsOpacity, '1', `child action slot must still reveal as an empty spacer (opacity ${childHover.actionsOpacity})`)
     const headerToggle = state.geometry.head.find((part) => part.className.includes('psd-panel-toggle'))
     assert(headerToggle && headerToggle.rect.height === 30, 'header toggle control lost its 30px height')
     await page.moveTo(900, 500)
     await sleep(300)
-    return `parent/child action blocks ${lastParent.width}px at x=${lastParent.left}; header toggle ${headerToggle.rect.width}x30`
+    return `parent New session ${parentAction.width}x${parentAction.height} at x=${parentAction.left}; child action buttons 0 in its reserved 22px slot; header toggle ${headerToggle.rect.width}x30`
+  })
+
+  await results.check('b2-3', 'hover-revealing the row actions moves no fixed column', async () => {
+    await page.moveTo(900, 500)
+    await sleep(250)
+    const before = await page.eval(probe.panelGeometry)
+    const parentIndex = state.geometry.rows.findIndex((row) => row.kind === 'parent')
+    await hoverRow(page, parentIndex)
+    await sleep(400)
+    const during = await page.eval(probe.panelGeometry)
+    const hovered = await page.eval(probe.hoverHighlight)
+    assert(hovered.hovered && hovered.kind === 'parent', 'parent row did not stay hovered')
+    assertEqual(hovered.actionsOpacity, '1', 'parent actions did not reveal on hover')
+    assertEqual(before.rows.length, during.rows.length, 'row count changed while hovering')
+    const columns = (row) => ({
+      time: row.time ? [row.time.rect.left, row.time.rect.right] : null,
+      actions: row.actions ? [row.actions.rect.left, row.actions.rect.right] : null,
+      toggle: row.toggle ? [row.toggle.left, row.toggle.right] : null,
+      title: row.title ? [row.title.rect.left, row.title.rect.right] : null,
+    })
+    for (let index = 0; index < before.rows.length; index += 1) {
+      const was = columns(before.rows[index])
+      const now = columns(during.rows[index])
+      for (const key of ['time', 'actions', 'toggle', 'title']) {
+        if (was[key] === null || now[key] === null) continue
+        assertNear(now[key][0], was[key][0], 0.5, `row ${index} ${key} left edge moved on hover (${was[key][0]} -> ${now[key][0]})`)
+        assertNear(now[key][1], was[key][1], 0.5, `row ${index} ${key} right edge moved on hover (${was[key][1]} -> ${now[key][1]})`)
+      }
+    }
+    await page.moveTo(900, 500)
+    await sleep(300)
+    return `columns identical before/while hovered: time ${before.rows[0].time.rect.right}, action ${before.rows[0].actions.rect.right}, disclosure ${before.rows[0].toggle.right}`
+  })
+
+  await results.check('b2-5', 'the interrupted main-row Continue overlay lands left of the time column without covering it', async () => {
+    const measured = await page.eval(() => {
+      const row = document.querySelector('.psd-run')
+      if (!row) return null
+      const time = row.querySelector('.psd-run-time')
+      const main = row.querySelector('.psd-run-main')
+      if (!time || !main) return null
+      const before = time.getBoundingClientRect()
+      // The real overlay button only renders for an interrupted Session; probe the
+      // shipped CSS contract with a detached stand-in, then remove it.
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'psd-row-action psd-row-continue'
+      button.setAttribute('data-variant', 'continue')
+      row.appendChild(button)
+      const rowRect = row.getBoundingClientRect()
+      const probeRect = button.getBoundingClientRect()
+      const timeRect = time.getBoundingClientRect()
+      const mainRect = main.getBoundingClientRect()
+      button.remove()
+      const after = time.getBoundingClientRect()
+      return {
+        rowRight: Math.round(rowRect.right),
+        probeRight: Math.round(probeRect.right),
+        probeLeft: Math.round(probeRect.left),
+        probeWidth: Math.round(probeRect.width),
+        probeHeight: Math.round(probeRect.height),
+        timeLeft: Math.round(timeRect.left),
+        mainRight: Math.round(mainRect.right),
+        timeShift: Math.round(after.left - before.left),
+      }
+    })
+    assert(measured, 'no parent card row to probe the Continue overlay against')
+    assertEqual(measured.probeWidth, 22, 'Continue overlay width')
+    assertEqual(measured.probeHeight, 22, 'Continue overlay height')
+    assertNear(measured.probeRight, measured.timeLeft - 2, 1, `Continue overlay right edge (${measured.probeRight}) must stop before the time column (${measured.timeLeft})`)
+    assertNear(measured.probeRight, measured.mainRight, 1, `Continue overlay must sit on the faded title-tail end (overlay ${measured.probeRight}, title tail ${measured.mainRight})`)
+    assertEqual(measured.timeShift, 0, 'Continue overlay must not move the time column')
+    return `Continue overlay 22x22 at right ${measured.probeRight} vs time column left ${measured.timeLeft} (row right ${measured.rowRight}); no time shift`
+  })
+
+  await results.check('b2-4', 'the main-row New session action still creates and opens a blank Session', async () => {
+    await page.moveTo(900, 500)
+    await sleep(200)
+    const previousSession = await page.eval(() => document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') ?? null)
+    const parentIndex = state.geometry.rows.findIndex((row) => row.kind === 'parent')
+    await hoverRow(page, parentIndex)
+    await sleep(350)
+    const targeted = await page.eval(() => {
+      const row = document.querySelector('.psd-run')
+      const button = row ? row.querySelector('.psd-row-action[data-variant="new-session"]') : null
+      if (!button) return null
+      const r = button.getBoundingClientRect()
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), width: Math.round(r.width), height: Math.round(r.height) }
+    })
+    assert(targeted, 'parent row New session button not found while hovered')
+    assertEqual(targeted.width, 22, 'New session button hit area width')
+    await page.clickAt(targeted.x, targeted.y)
+    await page.waitForFn((previous) => {
+      const node = document.querySelector('[data-conversation-session]')
+      return !!node && node.getAttribute('data-conversation-session') !== previous && !!document.querySelector('[data-lexical-editor="true"]')
+    }, [previousSession], { timeout: 25000, label: 'row New session action opened a Session' })
+    await sleep(600)
+    const opened = await page.eval(() => {
+      const session = document.querySelector('[data-conversation-session]')
+      const editor = document.querySelector('[data-lexical-editor="true"]')
+      return {
+        id: session ? session.getAttribute('data-conversation-session') : null,
+        messages: document.querySelectorAll('[data-conversation-message]').length,
+        draftLength: editor ? (editor.innerText || '').trim().length : 0,
+      }
+    })
+    assert(opened.id !== null && opened.id !== previousSession, 'New session action did not open a new Session')
+    assertEqual(opened.messages, 0, `New session action opened a Session with ${opened.messages} transcript messages (not blank)`)
+    assertEqual(opened.draftLength, 0, 'New session action opened a Session with a non-empty draft')
+    return `created and opened blank Session ${opened.id} from the card row (previous ${previousSession ?? 'none'}); same-directory row open behaviour untouched`
   })
 }
 
