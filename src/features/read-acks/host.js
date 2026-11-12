@@ -1,9 +1,10 @@
 /**
  * Host half of the suite's read-acks feature: one authenticated route pair
- * serving the durable, profile-wide read baselines the activity card uses.
+ * serving the durable read baselines the activity card uses.
  *
- * The document is Host-owned so every browser of the same DSH profile agrees on
- * which Sessions were read, no matter which Mac or browser acknowledged them.
+ * The document is Host-owned under $DSH_HOME, so every browser and profile
+ * using the same DSH home agrees on which Sessions were read, no matter which
+ * Mac or browser acknowledged them.
  * Clients keep their localStorage copy as a fast/offline path and merge maxima
  * through this route; a browser with a stale cache simply reads the merged
  * document back.

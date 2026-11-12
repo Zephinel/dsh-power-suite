@@ -1,6 +1,7 @@
 /**
  * Host-shared read acknowledgements: the durable baseline document that lets
- * every browser of this DSH profile agree on which Sessions were already read.
+ * every browser and profile of the same $DSH_HOME agree on which Sessions were
+ * already read.
  *
  * Each entry maps a Session id to the Session `updatedAt` value that was
  * observed when the user last opened it. Read state is derived on the client by

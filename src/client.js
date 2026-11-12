@@ -5147,19 +5147,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     /**
-     * Read the Host-backed last-activity map. A missing route (older Host) or a
-     * transport failure reads as null and leaves summary timestamps in charge.
-     * @returns {Promise<Record<string, number> | null>} Session id → activity time, or null.
-     */
-    /**
      * Merge a fresh Host activity map monotonically: per-id max(previous, next),
      * then prune ids no longer present in a non-empty Session catalog. A partial
      * response, a cold-seed timeout or an HMR overlap therefore cannot drop a
      * Session's known activity; only a catalog that no longer lists the Session
-     * removes it. An empty catalog response is left unmerged/pruned (loading or
-     * genuinely empty profile), so known entries survive until a real catalog
-     * arrives. The client bundle is an unexported module-loader closure, so this
-     * rule is not unit-tested in the node harness (stated gap).
+     * removes it. When the catalog is empty or still loading, previous entries
+     * are kept untouched (no prune) so known activity survives until a real
+     * catalog arrives. The client bundle is an unexported module-loader closure,
+     * so this rule is not unit-tested in the node harness (stated gap).
      * @param {Record<string, number>} previous - current client activity map.
      * @param {Record<string, number>} incoming - Host response map.
      * @param {readonly string[] | null} sessionIds - current Session catalog ids.
@@ -5188,6 +5183,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       return next
     }
 
+    /**
+     * Read the Host-backed last-activity map. A missing route (older Host) or a
+     * transport failure reads as null and leaves summary timestamps in charge.
+     * @returns {Promise<Record<string, number> | null>} Session id → activity time, or null.
+     */
     async function dwFetchSessionActivity() {
       const controller = new AbortController()
       const timer = window.setTimeout(() => controller.abort(), DW_ACK_REQUEST_TIMEOUT_MS)
