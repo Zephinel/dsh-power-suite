@@ -1042,24 +1042,32 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 pre-round-2 / 32 with resolveNodeCandidate) incl. textDigest', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix) incl. textDigest', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
     assertEqual(probe.flagType, 'object', 'test hook flag type')
     assertEqual(probe.hookType, 'object', 'hooks.uiAnnotation is not an object')
-    // Round-1 frozen seam is 31 keys; round-2 adds `resolveNodeCandidate` (R1) → 32 keys.
-    // Pin whichever documented generation is present and require the round-2 key when present.
-    const hasResolverKey = probe.keys.includes('resolveNodeCandidate')
-    const expectedKeyCount = hasResolverKey ? 32 : 31
-    assertEqual(
-      probe.keys.length,
-      expectedKeyCount,
-      `frozen seam must expose exactly ${expectedKeyCount} keys (got ${probe.keys.length}: ${probe.keys.join(', ') || 'none'})`
+    // Documented frozen generations: round-1 (31), round-2 adds resolveNodeCandidate
+    // (32), audit-fix adds normalizeUserNote/cssIdentifier/clampPopoverPositionToViewport
+    // (35). Pin a documented count and require the keys that generation introduced.
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35]
+    const keyCount = probe.keys.length
+    assert(
+      ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
+      `frozen seam must expose a documented generation (got ${keyCount} keys: ${probe.keys.join(', ') || 'none'})`
     )
     assert(probe.keys.includes('textDigest'), `textDigest is missing from the seam (keys: ${probe.keys.join(', ')})`)
+    if (keyCount >= 32) {
+      assert(probe.keys.includes('resolveNodeCandidate'), `round-2+ seam must expose resolveNodeCandidate (keys: ${probe.keys.join(', ')})`)
+    }
+    if (keyCount === 35) {
+      for (const key of ['normalizeUserNote', 'cssIdentifier', 'clampPopoverPositionToViewport']) {
+        assert(probe.keys.includes(key), `audit-fix seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
+      }
+    }
     state.hooks = probe.keys
-    return `uiAnnotation seam: ${probe.keys.length} keys`
+    return `uiAnnotation seam: ${keyCount} keys`
   })
 
   await results.check('smoke-4', 'blank session is opened/verified through the native flow', async () => {

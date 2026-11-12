@@ -662,8 +662,10 @@ not repository files.
   (`--scenario 10`, `--from 10`, a missing value). A failed `Network.enable` is a
   gate failure (exit 1), not a usage error. `--smoke` is pipeline-only but still
   fails when the injected client cannot load, does not expose a documented seam
-  generation (round-1 31 keys with `textDigest`; the current generation is 32
-  with `resolveNodeCandidate`), or does not mount the annotation surface. `full` and `--shots-only` with a feature-absent client
+  generation (round-1 31 keys with `textDigest`; round-2 32 keys with
+  `resolveNodeCandidate`; current audit-fix 35 keys adding `normalizeUserNote`,
+  `cssIdentifier` and `clampPopoverPositionToViewport`), or does not mount the
+  annotation surface. `full` and `--shots-only` with a feature-absent client
   record a **FAIL** row and exit non-zero; every requested scenario must produce
   a result row.
 - Blank Session and privacy preconditions: before any capture or interaction the

@@ -112,7 +112,8 @@ dependency-free) launches headless Google Chrome (157.0.8103.78) with a throwawa
 profile, opens the GUI served by the launchd service `com.rexxin.dsh-web`, and
 injects this checkout's `src/client.js` through the page's module loader before
 the shell loads. The build under test is commit `aaab678` (`src/client.js` md5
-`37388d3f9d1de0584b62bc111c6b6043`, round-2 seam generation of 32 keys). The
+`37388d3f9d1de0584b62bc111c6b6043`, historical round-2 seam generation of 32
+keys; the current audit-fix harness generation is 35 keys). The
 installed checkout, the user profile, the launchd service, and the GUI's existing
 Sessions are untouched. The harness requires a blank Session by checking, at
 once, a `[data-conversation-session]` root, the composer region with a Lexical
@@ -172,7 +173,8 @@ The complete per-scenario PASS evidence on md5 `37388d3f…` comes from three
 same-build sources — the full run, the completion run, and two targeted
 self-contained reruns — and is listed in the table below. Page errors were 0,
 real network failures were 0, and the network domain was enabled with 0 ignored
-network noise in every run below; smoke passed 6/6 in every run (32-key seam).
+network noise in every run below; smoke passed 6/6 in every run (historical round-2 32-key seam; current
+harness generation is 35 keys).
 
 - **Full run** (`--no-shots`, 524.5 s, exit 1, log
   `/tmp/psa-final-round2.log`): S1, S3, S4, S5, and S7 PASS. S2 failed before its

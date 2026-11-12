@@ -92,9 +92,10 @@ reviewed files) to publish `docs/assets/annotation-idle.png`, `annotation-mode.p
 ## Gate semantics (H1)
 
 - `--smoke` is a pipeline-only mode, but it still fails (non-zero exit) when the injected client
-  fails to load, does not expose the documented test-seam generation (the harness accepts the
-  round-1 **31-key** generation or the current **32-key** generation that adds
-  `resolveNodeCandidate`), or does not mount the annotation surface.
+  fails to load, does not expose a documented test-seam generation (the harness accepts the
+  round-1 **31-key**, round-2 **32-key** (`resolveNodeCandidate`), and current
+  audit-fix **35-key** generations; every generation requires `textDigest`), or
+  does not mount the annotation surface.
 - `full` / `--shots-only` with a client that has no annotation feature: a **FAIL** row is
   recorded and the process exits non-zero. A feature-absent client can never produce a green
   run. Example proof: `node test/browser/annotation.e2e.mjs --client /tmp/ps-annotation/baseline-client.js`
@@ -117,15 +118,15 @@ reviewed files) to publish `docs/assets/annotation-idle.png`, `annotation-mode.p
 > launcher and rail markers. Do not read this record as merged-build E2E evidence.
 
 Environment: worktree `src/client.js` md5 `37388d3f9d1de0584b62bc111c6b6043` (commit `aaab678`,
-seam 32 keys incl. `resolveNodeCandidate`), Chrome 157.0.8103.78, Node v24.22.2, live GUI at
-1728x900. One harness instance at a time; headless Chrome count 0 before/after every run.
+historical round-2 build, seam 32 keys incl. `resolveNodeCandidate`), Chrome 157.0.8103.78, Node v24.22.2, live GUI at
+1728x900. The current harness also accepts the audit-fix **35-key** generation. One harness instance at a time; headless Chrome count 0 before/after every run.
 Every log below is kept under `/tmp`.
 
 ### Per-scenario PASS evidence on this final build
 
 | # | Evidence source | Result |
 |---|-----------------|--------|
-| smoke | every run | 6/6 PASS (seam 32 keys, rail under overlay, one launcher, prompt rail hidden, blank session) |
+| smoke | every run | 6/6 PASS on the historical round-2 build (seam 32 keys, rail under overlay, one launcher, prompt rail hidden, blank session); the current harness accepts the audit-fix 35-key generation |
 | 1 | full run `/tmp/psa-final-round2.log` | PASS (N1 post-activate stability poll passed, no retry needed) |
 | 2 | targeted `--scenario 2 --no-shots` `/tmp/psa-target2.log` (11.4 s, exit 0) | PASS — S2 is now self-contained: mode off → native Plugins view → stable activation (same 2×500 ms predicate as S1) → Alt pass-through/contextmenu oracle |
 | 3 | full run | PASS |
@@ -175,7 +176,7 @@ log `/tmp/psa-shots-round2.log`), all capture assertions passing: `annotation-id
 
 | # | Scenario | Oracle |
 |---|----------|--------|
-| smoke | Pipeline + feature surface | injection factory ran; the seam matches a documented generation and count — **31 keys** on the round-1 seam, **32 keys** on the current generation with `resolveNodeCandidate` (the harness requires exactly the matching count, always requires `textDigest`, and requires `resolveNodeCandidate` when the 32-key generation is detected); the rail is a descendant of `[data-shell-overlay]`; exactly one launcher; the annotation stylesheet hides the native prompt-history rail while active; blank session verified |
+| smoke | Pipeline + feature surface | injection factory ran; the seam matches a documented generation and count — **31 keys** on the round-1 seam, **32 keys** on the round-2 generation with `resolveNodeCandidate`, **35 keys** on the current audit-fix generation (adds `normalizeUserNote`, `cssIdentifier`, `clampPopoverPositionToViewport`); the harness requires a documented count, always requires `textDigest`, requires `resolveNodeCandidate` for round-2+, and requires the three audit-fix keys on the 35-key generation; the rail is a descendant of `[data-shell-overlay]`; exactly one launcher; the annotation stylesheet hides the native prompt-history rail while active; blank session verified |
 | 1 | Activate via a real launcher click; layout shrinks and the rail appears and stays; native New Session is blocked | activation polls `html[data-psa-active]` + `[data-psa-rail]`, then re-verifies the rail twice 500 ms apart (**N1**); if the rail disappears it exits, retries activation once, re-verifies, and otherwise fails with the live environment snapshot. Then: `frame[data-psa-frame]`, `padding-right` equals computed rail width (±2 px), inline grid untouched; rail is **right-anchored** (`rail.right == innerWidth ±2`, `rail.left == innerWidth - railWidth ±2`); blocked real click: 0 hits on the native control's own listeners, ≥1 `preventDefault`, session id / sidebar row count / view unchanged |
 | 2 | Alt pass-through restores real native semantics; no-session notice; native context menu is not intercepted | Real Alt+click on New Session reaches the native handler and opens a conversation; `html[data-psa-passthrough]` only while held; the rail shows `[data-psa-no-session]` while no session is mounted and hides it once one is; hover outline absent while the modifier is held (F10); contextmenu oracle via `Event.prototype.preventDefault` log plus a document-start bubble-phase recorder: blocked right-click is prevented, never reaches the bubble listener, Alt+right-click appears exactly once with `defaultPrevented === false` |
 | 3 | Wheel scrolling and browser shortcuts are untouched; marquee; Esc ladder | native scrollable scrollTop changes and 0 wheel `preventDefault` (conversation scroll region when scrollable, otherwise the sidebar list — stated in the evidence); Meta+K / Control+L / plain letters delivered with `defaultPrevented === false`; Shift+drag draws `[data-psa-box]` and selects ≥1 candidate; F6 Esc ladder: first Esc ends note editing and keeps the popover + typed note, second Esc clears the selection, third Esc leaves the mode |
