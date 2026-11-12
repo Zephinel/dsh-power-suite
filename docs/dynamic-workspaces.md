@@ -23,7 +23,8 @@ reordering, and dialogs keep working because their nodes are never touched.
   14 px/20 px row type, title-case bucket labels, borderless native-style
   floating cards, a native-aligned row hover card, and plugin input focus
   highlighted with the rainbow track (see *Plugin chrome*). Opening a Session
-  highlights its row and its Project with a soft rainbow wave.
+  paints a soft rainbow smoke glow on the bottom face of its row and of its
+  Project's row.
 - **Configurable windows** — the two retention windows are Host settings on the
   suite's Plugins page ([Settings](settings.md)): finished-Session retention
   (1/2/6/12/24 hours, default **2 hours**) and active-project retention
@@ -481,19 +482,34 @@ breathing rainbow wave, and so does the Workspace it belongs to:
   highlight lands on its parent Session's Workspace. The highlight disappears
   when the row leaves the card. Merely-running or unopened completed rows are
   intentionally **not** highlighted.
-- **Visual**: a low-opacity rainbow band sits **behind the bottom of the row
-  content** — a linear 90° rainbow gradient, 5–6 px blur, masked to fade at both
-  ends, with a 3.6 s opacity/scale "breathing" loop, a 9 s horizontal slide, and
-  a 14 s hue drift. It replaces the old 2 px conic ring, changes no geometry (no
-  layout shift), and is legible in light and dark themes. The effect is a plain
-  CSS gradient animation, so it does not need `@property`; `prefers-reduced-motion:
-  reduce` stops all three animations and leaves the static tint at ~26 % opacity.
+- **Visual**: the highlight is painted on the row's **own rounded rectangle**,
+  not on a detached band behind the text. Two stacked pseudo-element layers
+  cover the row box exactly (`inset: 0`, `border-radius: inherit`, clipped by
+  the row radius) and are masked so only the **bottom face** shows:
+  - a **faint rim** (`::after`): the 90° rainbow gradient, 2.8 px blur, masked to
+    a ~1.5 px line at the very bottom that fades out by 8 px — a quiet core that
+    follows the rounded bottom corners;
+  - a **wide feathered haze** (`::before`): the same rainbow gradient, 11 px
+    blur, at reduced saturation (.88), masked by a vertical low-alpha falloff
+    plus four large soft radial puffs, so the colour diffuses upward into the
+    row like spreading smoke and its upper edge is irregular and fully
+    feathered. The haze drifts across the row (22 s alternate), breathes
+    (10 s) and hue-cycles (36 s); the rim flows (14 s alternate) and breathes
+    (7 s).
+  The layers stay at ~28–43 % and ~34–50 % opacity, so the highlight is felt
+  more than seen and the row stays readable in light and dark themes. Nothing
+  animates on the row itself, no geometry changes (no layout shift), and
+  `prefers-reduced-motion: reduce` stops all animations leaving the static
+  bottom-face tint (smoke 30 %, rim 38 %). The effect is a plain CSS gradient,
+  so it needs no `@property`.
 - **Workspace row**: the native Workspace row of the current Session's project
-  is marked with `data-psd-current-workspace="true"` and carries the same wave
-  behind its bottom edge, so opening a Session from the sidebar highlights the
-  matching project entry too. The attribute is removed when another Session is
-  opened, when the row stops owning the current Session, and on plugin unload;
-  native nodes are never otherwise modified (one marker attribute only).
+  is marked with `data-psd-current-workspace="true"` and gets the identical
+  two-layer bottom-face treatment inside its own rounded rectangle (the glow
+  canvas is the row's paint box; the native row keeps its own surface), so
+  opening a Session from the sidebar highlights the matching project entry too.
+  The attribute is removed when another Session is opened, when the row stops
+  owning the current Session, and on plugin unload; native nodes are never
+  otherwise modified (one marker attribute only).
 - **Feature-set alignment**: the wave replaces the previous "current-chat ring"
   treatment entirely; no `.psd-child-ring` element, conic gradient, or rotation
   animation remains.
@@ -771,12 +787,13 @@ The native **View options** menu picks how Sessions are grouped:
   cache identity uses a 32-bit FNV-1a hash of the archived-member subset; a
   collision can only cause a cache miss or a briefly stale snapshot, never wrong
   data beyond one poll. It is accepted as a NIT.
-- **The current-Session wave is an enhancement, not state.** Only the row of the
+- **The current-Session glow is an enhancement, not state.** Only the row of the
   Session open in the main view (and its owning native Workspace row) gets the
-  wave; merely-running and unopened completed rows are not highlighted. The wave
-  is a plain CSS gradient animation, so it needs no `@property`; reduced-motion
-  users get a static tint. One marker attribute is written on the native
-  Workspace row and removed when the selection changes or the plugin unloads.
+  bottom-face rainbow smoke; merely-running and unopened completed rows are not
+  highlighted. The glow is two masked CSS gradient layers, so it needs no
+  `@property`; reduced-motion users get a static tint. One marker attribute is
+  written on the native Workspace row and removed when the selection changes or
+  the plugin unloads.
 - **Row actions are hover/focus-revealed.** The main row's New session button,
   the child row's interrupted Continue, and the main row's Continue overlay are
   hidden until the row is hovered or keyboard-focused; a touch-only device has
@@ -908,10 +925,12 @@ Manual checks on the running DSH Web GUI:
    parent with the branch lines (the trunk is centered under the parent's dot
    and stops at the last child's tick), each opens its own Session, and
    collapsing hides the child rows again.
-9. Open a Session from the card or the native sidebar: that row gets the soft
-   breathing rainbow wave at its bottom edge and the matching native Workspace
-   row gets the same wave. Switch to another Session: the wave follows. Enable
-   the OS "reduce motion" setting: both waves become a static tint.
+9. Open a Session from the card or the native sidebar: that row's own rounded
+   rectangle gets a faint rainbow rim along its bottom face plus a wide, soft
+   rainbow haze that diffuses upward into the row (smoke-like, not a drawn
+   bar), and the matching native Workspace row gets the same treatment. Both
+   breathe and drift slowly. Switch to another Session: the glow follows.
+   Enable the OS "reduce motion" setting: both become a static tint.
 10. Check the glyph states: a running row shows the shell loading indicator; a
     finished, unopened row shows the green done dot; after opening that Session
     (from here or elsewhere) the row shows the white `sparkling-line` identity

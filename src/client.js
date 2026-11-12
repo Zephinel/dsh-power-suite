@@ -4701,21 +4701,35 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 @keyframes psf-ring-hue{from{filter:hue-rotate(0deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}to{filter:hue-rotate(360deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}}
 @media (prefers-reduced-motion: reduce){.psf-rainbow-focus:focus-within::after,.psf-rainbow-focus:focus-visible::after{animation:none}}
 @media (forced-colors: active){.psf-rainbow-focus::after{display:none}.psf-rainbow-focus:focus-within{outline:2px solid Highlight;outline-offset:1px}}
-/* Current-session highlight: a soft rainbow wave behind the bottom of the row
-   content (replaces the old conic ring). The same wave runs behind the matching
-   native Workspace row and is marked by data-psd-current-workspace. */
+/* Current-session highlight: a faint rainbow glow painted on the bottom face of
+   the row's own rounded rectangle (replaces the old detached blurred wave band
+   and the even older conic ring). Two stacked pseudo-element layers cover the row
+   box exactly (inset 0, border-radius: inherit) and are clipped to its radius so
+   the bottom corners follow the row shape. The haze layer (::before) is the wide,
+   strongly feathered part: the rainbow gradient at reduced saturation behind a
+   vertical low-alpha falloff plus four large soft radial puffs, blurred 11 px, so
+   the colour diffuses upward into the row like spreading smoke. The rim layer
+   (::after) is the quiet core: a ~1.5 px bottom line that fades out by 8 px and
+   hugs the rounded bottom corners. Both breathe slowly and drift; opacity stays
+   low so the highlight is felt more than seen. The native Workspace row that owns
+   the Session gets the identical treatment and is marked with
+   data-psd-current-workspace; a nested child row paints through the injected
+   .psd-child-wave host because its own ::before/::after are the tree connectors.
+   Content stays above both layers. */
 .psd-run-current,.psd-child-current{position:relative;isolation:isolate}
-.psd-run-current::before{content:'';position:absolute;left:6px;right:6px;bottom:0;height:12px;border-radius:8px;background:linear-gradient(90deg,#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4);background-size:220% 100%;pointer-events:none;z-index:0;opacity:.3;filter:blur(6px) saturate(.9);mask-image:linear-gradient(90deg,#0000,#000 18%,#000 82%,#0000);animation:psd-wave-slide 9s linear infinite,psd-wave-breathe 3.6s ease-in-out infinite,psd-wave-hue 14s linear infinite}
-.psd-child-wave{position:absolute;left:4px;right:6px;bottom:0;height:10px;border-radius:8px;background:linear-gradient(90deg,#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4);background-size:220% 100%;pointer-events:none;z-index:0;opacity:.28;filter:blur(5px) saturate(.9);mask-image:linear-gradient(90deg,#0000,#000 18%,#000 82%,#0000);animation:psd-wave-slide 9s linear infinite,psd-wave-breathe 3.6s ease-in-out infinite,psd-wave-hue 14s linear infinite}
+.psd-child-wave{position:absolute;inset:0;z-index:0;border-radius:inherit;pointer-events:none}
+.psd-run-current::before,.psd-child-wave::before,[data-psd-current-workspace='true']::before{content:'';position:absolute;inset:0;z-index:0;border-radius:inherit;pointer-events:none;background-image:linear-gradient(90deg,#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);background-size:340% 100%;background-position:100% 100%;background-repeat:no-repeat;filter:blur(11px) saturate(.88);mask-image:linear-gradient(to top,rgba(0,0,0,.34) 0%,rgba(0,0,0,.2) 26%,rgba(0,0,0,.07) 62%,rgba(0,0,0,0) 96%),radial-gradient(52% 74% at 12% 104%,rgba(0,0,0,.4) 0%,rgba(0,0,0,0) 84%),radial-gradient(46% 88% at 38% 108%,rgba(0,0,0,.32) 0%,rgba(0,0,0,0) 86%),radial-gradient(58% 70% at 62% 102%,rgba(0,0,0,.38) 0%,rgba(0,0,0,0) 84%),radial-gradient(44% 92% at 86% 110%,rgba(0,0,0,.3) 0%,rgba(0,0,0,0) 86%);-webkit-mask-image:linear-gradient(to top,rgba(0,0,0,.34) 0%,rgba(0,0,0,.2) 26%,rgba(0,0,0,.07) 62%,rgba(0,0,0,0) 96%),radial-gradient(52% 74% at 12% 104%,rgba(0,0,0,.4) 0%,rgba(0,0,0,0) 84%),radial-gradient(46% 88% at 38% 108%,rgba(0,0,0,.32) 0%,rgba(0,0,0,0) 86%),radial-gradient(58% 70% at 62% 102%,rgba(0,0,0,.38) 0%,rgba(0,0,0,0) 84%),radial-gradient(44% 92% at 86% 110%,rgba(0,0,0,.3) 0%,rgba(0,0,0,0) 86%);opacity:.36;animation:psd-smoke-drift 22s ease-in-out infinite alternate,psd-smoke-breathe 10s ease-in-out infinite,psd-smoke-hue 36s linear infinite}
+.psd-run-current::after,.psd-child-wave::after,[data-psd-current-workspace='true']::after{content:'';position:absolute;inset:0;z-index:0;border-radius:inherit;pointer-events:none;background-image:linear-gradient(90deg,#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);background-size:220% 100%;background-position:0 100%;background-repeat:no-repeat;filter:blur(2.8px) saturate(.9);mask-image:linear-gradient(to top,rgba(0,0,0,.9) 0,rgba(0,0,0,.9) 1.5px,rgba(0,0,0,.4) 4px,rgba(0,0,0,0) 8px);-webkit-mask-image:linear-gradient(to top,rgba(0,0,0,.9) 0,rgba(0,0,0,.9) 1.5px,rgba(0,0,0,.4) 4px,rgba(0,0,0,0) 8px);opacity:.42;animation:psd-glow-flow 14s ease-in-out infinite alternate,psd-glow-breathe 7s ease-in-out infinite}
 .psd-run-current > *{position:relative;z-index:1}
 .psd-child-current > *:not(.psd-child-wave){position:relative;z-index:1}
 [data-psd-current-workspace='true']{position:relative;isolation:isolate}
-[data-psd-current-workspace='true']::after{content:'';position:absolute;left:10px;right:10px;bottom:2px;height:10px;border-radius:8px;background:linear-gradient(90deg,#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4);background-size:220% 100%;pointer-events:none;z-index:0;opacity:.28;filter:blur(5px) saturate(.9);mask-image:linear-gradient(90deg,#0000,#000 18%,#000 82%,#0000);animation:psd-wave-slide 9s linear infinite,psd-wave-breathe 3.6s ease-in-out infinite,psd-wave-hue 14s linear infinite}
 [data-psd-current-workspace='true'] > *{position:relative;z-index:1}
-@keyframes psd-wave-slide{0%{background-position:0 50%}100%{background-position:220% 50%}}
-@keyframes psd-wave-breathe{0%,100%{opacity:.2;transform:scaleX(.97)}50%{opacity:.4;transform:scaleX(1.03)}}
-@keyframes psd-wave-hue{from{filter:hue-rotate(0deg) blur(5px) saturate(.9)}50%{filter:hue-rotate(180deg) blur(6px) saturate(.92)}to{filter:hue-rotate(360deg) blur(5px) saturate(.9)}}
-@media (prefers-reduced-motion: reduce){.psd-run-current::before,.psd-child-wave,[data-psd-current-workspace='true']::after{animation:none;opacity:.26;transform:none;filter:blur(5px) saturate(.9)}}
+@keyframes psd-glow-flow{from{background-position:0% 100%}to{background-position:100% 100%}}
+@keyframes psd-glow-breathe{0%,100%{opacity:.34}50%{opacity:.5}}
+@keyframes psd-smoke-drift{from{background-position:100% 100%}to{background-position:0% 100%}}
+@keyframes psd-smoke-breathe{0%,100%{opacity:.27}50%{opacity:.43}}
+@keyframes psd-smoke-hue{from{filter:blur(11px) saturate(.88) hue-rotate(0deg)}50%{filter:blur(12px) saturate(.94) hue-rotate(180deg)}to{filter:blur(11px) saturate(.88) hue-rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.psd-run-current::before,.psd-child-wave::before,[data-psd-current-workspace='true']::before,.psd-run-current::after,.psd-child-wave::after,[data-psd-current-workspace='true']::after{animation:none;transform:none}.psd-run-current::before,.psd-child-wave::before,[data-psd-current-workspace='true']::before{opacity:.3;filter:blur(11px) saturate(.88)}.psd-run-current::after,.psd-child-wave::after,[data-psd-current-workspace='true']::after{opacity:.38;filter:blur(2.8px) saturate(.9)}}
 `
 
     /**
