@@ -2249,7 +2249,7 @@ function buildScenarios(harness) {
       assert(/^(Plugins|插件)/.test(afterText), `the blocked New Session click left the Plugins page: ${short(afterText, 180)}`)
       assertEqual(after.sessionId, null, 'the blocked New Session click opened a conversation')
       return `rail ${railWidth}px, padding ${padding}px, post-activate rail stable${activation.retried ? ' (after one activation retry)' : ''}, blocked click: 0 native hits / ${preventedPointers + preventedClicks} prevented events, view stayed on Plugins`
-    
+
     },
 
     2: async () => {
