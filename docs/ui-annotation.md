@@ -645,12 +645,13 @@ a 1728 x 900 viewport. The installed plugin, the user profile, and the launchd
 service are never modified. The recorded acceptance evidence is **pre-merge**
 (final publication build `10dd3b72…` / branch commit `fd8ccc9`); the round-3
 audit fixes (note normalization, lazy hover) are unit-tested rather than
-re-covered by E2E. On the merged build (`572b8fa1…`),
-`node test/browser/annotation.e2e.mjs --smoke` passed **6/6** with the **35-key**
-seam, 0 page errors and 0 real network failures, reusing the existing blank
-Session `session-5eec2763-0a91-460e-b559-08a8c3a98d13` (no new Session). This is
-**smoke-only** merged-build evidence: the full E2E remains pre-merge and there is
-no single all-green full-suite run. The evidence exists
+re-covered by E2E. The merged build `572b8fa1…` itself was not re-run (32-key
+seam); after the audit fixes, `node test/browser/annotation.e2e.mjs --smoke` on
+the post-audit-fix build `1c61a230…` passed **6/6** with the **35-key** seam, 0
+page errors and 0 real network failures, reusing the existing blank Session
+`session-5eec2763-0a91-460e-b559-08a8c3a98d13` (no new Session). This is
+**smoke-only** evidence for the post-audit-fix build: the full E2E remains
+pre-merge and there is no single all-green full-suite run. The evidence exists
 as in-repo summaries plus `/tmp` logs that are external development artifacts,
 not repository files.
 

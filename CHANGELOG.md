@@ -33,8 +33,10 @@ heading is added until the release is cut.
   page-lifetime. The browser-only feature adds no Host route,
   service, or profile change, cleans up every listener, layout marker, and DOM
   node on exit and HMR, and adds a pure test seam plus a live-page CDP acceptance
-  harness (full acceptance recorded pre-merge; on the merged build only `--smoke`
-  was re-run: 6/6 PASS with the 35-key seam, smoke-only evidence).
+  harness (full acceptance recorded pre-merge; the merged build `572b8fa1…` itself
+  was not re-run (32-key seam); after the audit fixes only the post-audit-fix
+  build `1c61a230…` got `--smoke`: 6/6 PASS with the 35-key seam, smoke-only
+  evidence).
 
 ### Changed
 

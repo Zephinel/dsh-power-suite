@@ -396,10 +396,10 @@
 - **Evidence traceability.** The full annotation E2E acceptance evidence was
   recorded on the pre-merge annotation build (final publication md5 `10dd3b72…` /
   branch commit `fd8ccc9`, round-2 build `37388d3f…`); the full suite was **not**
-  re-run on the merged build (`572b8fa1…`). After the merge,
-  `node test/browser/annotation.e2e.mjs --smoke` passed **6/6 on the merged
-  build** with the **35-key** seam, 0 page errors and 0 real network failures,
-  reusing the existing blank Session
+  re-run on the merged build (`572b8fa1…`, 32-key seam). After the audit fixes,
+  `node test/browser/annotation.e2e.mjs --smoke` passed **6/6 on the
+  post-audit-fix build** `1c61a230…` with the **35-key** seam, 0 page errors and
+  0 real network failures, reusing the existing blank Session
   `session-5eec2763-0a91-460e-b559-08a8c3a98d13` (no new Session). That is
   smoke-only evidence; full live behavior remains pre-merge and no single
   all-green full-suite run exists. The logs it quotes live in `/tmp` and are
