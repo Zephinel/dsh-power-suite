@@ -4586,12 +4586,13 @@ function buildScenarios(harness) {
       const rows = await h.page.eval(probes.entries)
       assertEqual(rows.length, 3, `the collection should hold 3 records with one other-Session entry (got ${rows.length})`)
       assertEqual(rows.filter((entry) => entry.scope === 'other').length, 1, 'the other-Session scope badge is missing')
-      // 5. Tooltip-like surfaces must use the native DSH tooltip background recipe
-      // in BOTH themes (light/dark) — computed-style assertion (task-13).
-      const tooltipRecipe = await checkAnnotationTooltipRecipe(h)
+      // 5. Floating tooltip-like surfaces must use the native DSH session-row hover
+      // CARD recipe in BOTH themes (fixed #2C2C2E + --dsw-shadow-lv3) — computed-style
+      // assertion (task-13 correction).
+      const tooltipRecipe = await checkAnnotationHovercardRecipe(h)
       await h.ensureStatusPanel()
       await h.exit()
-      return `2 marks (#index + requirement excerpt), hover detail card (requirement/session/workspace/position/actions, keep-open, no focus steal), edit saved (updatedAt bumped), delete -> role=status undo toast -> restored, other-Session record not drawn after reload, reduced-motion static, tooltip recipe matched native in light+dark (bg ${tooltipRecipe.light.native.backgroundColor} / ${tooltipRecipe.dark.native.backgroundColor})`
+      return `2 marks (#index + requirement excerpt), hover detail card (requirement/session/workspace/position/actions, keep-open, no focus steal), edit saved (updatedAt bumped), delete -> role=status undo toast -> restored, other-Session record not drawn after reload, reduced-motion static, native hover-card recipe matched in light+dark (bg ${tooltipRecipe.light.native.backgroundColor} / ${tooltipRecipe.dark.native.backgroundColor}, fixed #2C2C2E)`
     },
 
     13: async () => {
@@ -5146,21 +5147,22 @@ async function runCrossBranchHovercardCheck(h) {
 }
 
 /**
- * Measure the native DSH tooltip recipe and the annotation tooltip-like floating
- * surfaces in light and dark themes, then assert they agree.
+ * Measure the native DSH session-row hover-preview CARD recipe and the annotation
+ * floating tooltip-like surfaces in light and dark themes, then assert they agree.
  *
- * The native recipe comes from the real shell stylesheet rule that sets
- * `var(--dsw-alias-tooltip-bg)`: its class name is discovered from the CSS rule,
- * applied to a temporary probe node, and its computed style is read in both
- * themes (dark = `body[data-ds-dark-theme]`, the shell's theme switch). Our
- * surfaces are the real mounted `.psa-popover`, `.psa-detail-card` and
+ * The native target is the shell's hover preview card (`._card_bgejw_9`): it
+ * defines `--dsw-hovercard-bg:#2C2C2E` on itself (fixed in BOTH themes), paints
+ * `var(--dsw-shadow-lv3)`, and has no border. The class name is discovered from
+ * the real stylesheet rule, applied to a temporary probe node, and its computed
+ * style is read in both themes (dark = `body[data-ds-dark-theme]`). Our surfaces
+ * are the real mounted `.psa-popover`, `.psa-detail-card` and
  * `.psa-note-editor`. Light/dark close-up clips are written when
- * `PSA_TOOLTIP_EVIDENCE_DIR` is set.
+ * `PSA_HOVERCARD_EVIDENCE_DIR` is set.
  * @param {object} h - harness.
  * @returns {Promise<{ light: object, dark: object }>} measured recipe per theme.
  */
-async function checkAnnotationTooltipRecipe(h) {
-  const evidenceDir = process.env.PSA_TOOLTIP_EVIDENCE_DIR
+async function checkAnnotationHovercardRecipe(h) {
+  const evidenceDir = process.env.PSA_HOVERCARD_EVIDENCE_DIR
   if (evidenceDir) await mkdir(evidenceDir, { recursive: true })
   const originalDark = await h.page.evaluate(`document.body.hasAttribute('data-ds-dark-theme')`)
   /**
@@ -5194,10 +5196,11 @@ async function checkAnnotationTooltipRecipe(h) {
     }
   })()`)
   /**
-   * Computed recipe of the shell's native tooltip: find the stylesheet rule that
-   * paints the tooltip background, clone its class onto a probe node, read style.
+   * Computed recipe of the shell's native session-row hover preview card: find the
+   * stylesheet rule that defines/paints `--dsw-hovercard-bg`, clone its class onto a
+   * probe node, read style.
    * @returns {Promise<object | null>} native computed values, or null if the real
-   *   tooltip rule cannot be discovered (an honest failure for the assertion).
+   *   hover-card rule cannot be discovered (an honest failure for the assertion).
    */
   const nativeRecipe = async () => h.page.evaluate(`(() => {
     let className = null
@@ -5206,18 +5209,18 @@ async function checkAnnotationTooltipRecipe(h) {
       try { rules = sheet.cssRules } catch { continue }
       for (const rule of rules) {
         const text = rule.cssText || ''
-        if (!text.includes('var(--dsw-alias-tooltip-bg)')) continue
+        if (!text.includes('--dsw-hovercard-bg')) continue
         const selector = rule.selectorText || ''
-        const match = selector.match(/\\.(_bubble_[A-Za-z0-9_-]+)/)
+        const match = selector.match(/\\.(_card_[A-Za-z0-9_-]+)/)
         if (match !== null) { className = match[1]; break }
       }
       if (className !== null) break
     }
     if (className === null) return null
     const probe = document.createElement('div')
-    probe.id = 'psa-e2e-native-tooltip-probe'
+    probe.id = 'psa-e2e-native-hovercard-probe'
     probe.className = className
-    probe.textContent = 'Native tooltip'
+    probe.textContent = 'Native hover preview card'
     probe.style.position = 'fixed'
     probe.style.left = '-9000px'
     probe.style.top = '0'
@@ -5266,13 +5269,13 @@ async function checkAnnotationTooltipRecipe(h) {
     await writeFile(path.join(evidenceDir, name), Buffer.from(data.data, 'base64'))
   }
   /**
-   * Put a visible native-tooltip probe on screen for the evidence capture.
+   * Put a visible native hover-card probe on screen for the evidence capture.
    * @param {boolean} show - create or remove it.
    * @returns {Promise<void>}
    */
   const nativeProbeVisible = async (show) => {
     await h.page.evaluate(`(() => {
-      const existing = document.getElementById('psa-e2e-native-tooltip-visible')
+      const existing = document.getElementById('psa-e2e-native-hovercard-visible')
       if (${show === true} === false) { if (existing !== null) existing.remove(); return true }
       if (existing !== null) return true
       let className = null
@@ -5281,18 +5284,18 @@ async function checkAnnotationTooltipRecipe(h) {
         try { rules = sheet.cssRules } catch { continue }
         for (const rule of rules) {
           const text = rule.cssText || ''
-          if (!text.includes('var(--dsw-alias-tooltip-bg)')) continue
+          if (!text.includes('--dsw-hovercard-bg')) continue
           const selector = rule.selectorText || ''
-          const match = selector.match(/\\.(_bubble_[A-Za-z0-9_-]+)/)
+          const match = selector.match(/\\.(_card_[A-Za-z0-9_-]+)/)
           if (match !== null) { className = match[1]; break }
         }
         if (className !== null) break
       }
       if (className === null) return false
       const probe = document.createElement('div')
-      probe.id = 'psa-e2e-native-tooltip-visible'
+      probe.id = 'psa-e2e-native-hovercard-visible'
       probe.className = className
-      probe.textContent = 'Native DSH tooltip'
+      probe.textContent = 'Native DSH hover card'
       probe.style.position = 'fixed'
       probe.style.left = '560px'
       probe.style.top = '120px'
@@ -5305,20 +5308,20 @@ async function checkAnnotationTooltipRecipe(h) {
   // 1. Note editor (a separate floating tooltip-like card).
   await h.openCollection()
   await h.click('[data-psa-entry-expand]')
-  await h.page.waitFor(`!!document.querySelector('[data-psa-entry-note-editor]')`, { timeout: 6000, label: 'note editor for the tooltip recipe check' })
+  await h.page.waitFor(`!!document.querySelector('[data-psa-entry-note-editor]')`, { timeout: 6000, label: 'note editor for the hover-card recipe check' })
   await setTheme(false)
   light.noteEditor = await styleOf('.psa-note-editor')
   light.native = await nativeRecipe()
   await nativeProbeVisible(true)
-  await clipShot('tooltip-light-native-note-editor.png', '#psa-e2e-native-tooltip-visible')
-  await clipShot('tooltip-light-note-editor.png', '.psa-note-editor')
+  await clipShot('hovercard-light-native-note-editor.png', '#psa-e2e-native-hovercard-visible')
+  await clipShot('hovercard-light-note-editor.png', '.psa-note-editor')
   await nativeProbeVisible(false)
   await setTheme(true)
   dark.noteEditor = await styleOf('.psa-note-editor')
   dark.native = await nativeRecipe()
   await nativeProbeVisible(true)
-  await clipShot('tooltip-dark-native-note-editor.png', '#psa-e2e-native-tooltip-visible')
-  await clipShot('tooltip-dark-note-editor.png', '.psa-note-editor')
+  await clipShot('hovercard-dark-native-note-editor.png', '#psa-e2e-native-hovercard-visible')
+  await clipShot('hovercard-dark-note-editor.png', '.psa-note-editor')
   await nativeProbeVisible(false)
   await setTheme(originalDark)
   await h.page.pressKey('escape')
@@ -5326,25 +5329,25 @@ async function checkAnnotationTooltipRecipe(h) {
   // 2. Requirement popover.
   await h.ensureStatusPanel()
   const target = await h.page.eval(pageProbe.newSessionButton)
-  assert(target, 'native New session button not found for the tooltip recipe check')
+  assert(target, 'native New session button not found for the hover-card recipe check')
   await h.page.moveTo(target.x, target.y)
   await sleep(150)
   await h.page.clickAt(target.x, target.y)
-  await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the tooltip recipe check' })
+  await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the hover-card recipe check' })
   await setTheme(false)
   light.popover = await styleOf('.psa-popover')
   const nativeLight = await nativeRecipe()
   light.native = nativeLight
   await nativeProbeVisible(true)
-  await clipShot('tooltip-light-native-popover.png', '#psa-e2e-native-tooltip-visible')
-  await clipShot('tooltip-light-popover.png', '.psa-popover')
+  await clipShot('hovercard-light-native-popover.png', '#psa-e2e-native-hovercard-visible')
+  await clipShot('hovercard-light-popover.png', '.psa-popover')
   await nativeProbeVisible(false)
   await setTheme(true)
   dark.popover = await styleOf('.psa-popover')
   dark.native = await nativeRecipe()
   await nativeProbeVisible(true)
-  await clipShot('tooltip-dark-native-popover.png', '#psa-e2e-native-tooltip-visible')
-  await clipShot('tooltip-dark-popover.png', '.psa-popover')
+  await clipShot('hovercard-dark-native-popover.png', '#psa-e2e-native-hovercard-visible')
+  await clipShot('hovercard-dark-popover.png', '.psa-popover')
   await nativeProbeVisible(false)
   await setTheme(originalDark)
   await h.page.pressKey('escape')
@@ -5353,39 +5356,41 @@ async function checkAnnotationTooltipRecipe(h) {
   const marks = await h.page.eval(probes.marksState)
   assert(marks.length > 0, 'no page mark available for the detail-card tooltip recipe check')
   await h.page.moveTo(marks[0].rect.x + Math.round(marks[0].rect.width / 2), marks[0].rect.y + Math.round(marks[0].rect.height / 2))
-  await h.page.waitFor(`!!document.querySelector('[data-psa-detail]')`, { timeout: 5000, label: 'detail card for the tooltip recipe check' })
+  await h.page.waitFor(`!!document.querySelector('[data-psa-detail]')`, { timeout: 5000, label: 'detail card for the hover-card recipe check' })
   await setTheme(false)
   light.detailCard = await styleOf('.psa-detail-card')
   await nativeProbeVisible(true)
-  await clipShot('tooltip-light-native-detail.png', '#psa-e2e-native-tooltip-visible')
-  await clipShot('tooltip-light-detail.png', '.psa-detail-card')
+  await clipShot('hovercard-light-native-detail.png', '#psa-e2e-native-hovercard-visible')
+  await clipShot('hovercard-light-detail.png', '.psa-detail-card')
   await nativeProbeVisible(false)
   await setTheme(true)
   dark.detailCard = await styleOf('.psa-detail-card')
   await nativeProbeVisible(true)
-  await clipShot('tooltip-dark-native-detail.png', '#psa-e2e-native-tooltip-visible')
-  await clipShot('tooltip-dark-detail.png', '.psa-detail-card')
+  await clipShot('hovercard-dark-native-detail.png', '#psa-e2e-native-hovercard-visible')
+  await clipShot('hovercard-dark-detail.png', '.psa-detail-card')
   await nativeProbeVisible(false)
   await setTheme(originalDark)
   await h.page.pressKey('escape')
   await sleep(250)
-  // 4. Assert both themes against the native recipe.
+  // 4. Assert both themes against the native session-row hover-card recipe.
+  const expectedBackground = 'rgb(44, 44, 46)' // #2C2C2E, fixed by the native card in BOTH themes
   for (const [themeName, measured] of [['light', light], ['dark', dark]]) {
     const native = measured.native
-    assert(native !== null, `the native DSH tooltip rule was not found in the ${themeName} theme`)
-    assert(native.backgroundColor !== 'rgba(0, 0, 0, 0)', `native tooltip background is transparent in the ${themeName} theme`)
+    assert(native !== null, `the native DSH hover-card rule (--dsw-hovercard-bg) was not found in the ${themeName} theme`)
+    assertEqual(native.backgroundColor, expectedBackground, `${themeName}: the native hover card must paint #2C2C2E`)
+    assert(native.boxShadow !== 'none', `${themeName}: the native hover card must paint --dsw-shadow-lv3`)
     for (const [surfaceName, surface] of [['popover', measured.popover], ['detailCard', measured.detailCard], ['noteEditor', measured.noteEditor]]) {
       assert(surface !== null, `${surfaceName} is missing in the ${themeName} theme`)
-      assertEqual(surface.backgroundColor, native.backgroundColor, `${themeName}: ${surfaceName} background must match the native tooltip recipe`)
-      assertEqual(surface.color, native.color, `${themeName}: ${surfaceName} text color must match the native tooltip recipe`)
+      assertEqual(surface.backgroundColor, native.backgroundColor, `${themeName}: ${surfaceName} background must match the native hover-card recipe`)
+      assertEqual(surface.color, 'rgb(255, 255, 255)', `${themeName}: ${surfaceName} content color must stay near-white on the hover-card background`)
       assertEqual(surface.borderTopWidth, '0px', `${themeName}: ${surfaceName} must not paint the old 1px border`)
-      assertEqual(surface.boxShadow, 'none', `${themeName}: ${surfaceName} must not paint the old panel shadow`)
+      assertEqual(surface.boxShadow, native.boxShadow, `${themeName}: ${surfaceName} must paint the native --dsw-shadow-lv3 shadow`)
       assertEqual(surface.backdropFilter, 'none', `${themeName}: ${surfaceName} must not add a backdrop filter`)
     }
   }
-  assert(light.native.backgroundColor !== dark.native.backgroundColor, 'native tooltip background must differ between light and dark themes')
-  assertEqual(light.popover.backgroundColor, light.native.backgroundColor, 'light theme popover background')
-  assertEqual(dark.popover.backgroundColor, dark.native.backgroundColor, 'dark theme popover background')
+  assertEqual(dark.native.backgroundColor, light.native.backgroundColor, 'the native hover-card background is fixed (#2C2C2E) in both themes')
+  assertEqual(light.popover.backgroundColor, expectedBackground, 'light theme popover background must be the native #2C2C2E')
+  assertEqual(dark.popover.backgroundColor, expectedBackground, 'dark theme popover background must stay the native #2C2C2E (no theme flip)')
   return { light, dark }
 }
 

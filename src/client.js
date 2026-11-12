@@ -15733,11 +15733,13 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-note-editor-textarea{box-sizing:border-box;width:100%;min-height:96px;max-height:220px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
 .psa-feedback{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:56;max-width:min(520px,calc(100vw - 48px));padding:8px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 8px 24px rgb(0 0 0 / 18%));color:var(--dsw-alias-label-secondary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:none}
 .psa-feedback[data-psa-kind=error]{color:var(--dsw-alias-state-error-primary)}
-/* Tooltip-like floating windows use the native DSH tooltip recipe exactly:
-   same background token, no border, no panel shadow, no backdrop filter, the same
-   near-white label color, in both light and dark themes. The shell switches the
-   token set on body[data-ds-dark-theme], so this needs no theme-specific branch. */
-.psa-popover,.psa-detail-card,.psa-note-editor{background:var(--dsw-alias-tooltip-bg);border:0;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;color:var(--dsw-static-neutral-bluish-00)}
+/* Floating tooltip-like windows use the native DSH SESSION-ROW HOVER PREVIEW CARD
+   recipe (the surface the user points at as "native"): the shell's own hover card
+   defines --dsw-hovercard-bg:#2C2C2E as a fixed background in BOTH themes and
+   paints var(--dsw-shadow-lv3), no border. Do not use the small tooltip bubble
+   token here: --dsw-alias-tooltip-bg flips to #43454a in the dark theme and would
+   diverge from the native hover card. */
+.psa-popover,.psa-detail-card,.psa-note-editor{background:var(--dsw-hovercard-bg,#2C2C2E);border:0;box-shadow:var(--dsw-shadow-lv3,none);backdrop-filter:none;-webkit-backdrop-filter:none;color:var(--dsw-static-neutral-bluish-00)}
 .psa-popover .psa-muted,.psa-detail-card .psa-muted,.psa-note-editor .psa-muted{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 64%,transparent)}
 .psa-popover .psa-popover-ref,.psa-popover .psa-popover-status{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 72%,transparent)}
 .psa-detail-card .psa-detail-label,.psa-detail-card .psa-detail-meta{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 64%,transparent)}
