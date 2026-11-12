@@ -12,7 +12,9 @@
  * Contract: `/tmp/ps-annotation/CONTRACT.md` §3.7 (frozen seam signatures) and
  * §4.1 (unit-test scope), extended by `/tmp/ps-annotation/REVIEW-FINDINGS.md`.
  * Every fix-round regression below (F1-F4, F6, F11, F16) is written to fail on
- * the reviewed build 5136d3c and pass on `fix/ui-annotation-review-fixes`.
+ * the reviewed build 5136d3c and pass on `fix/ui-annotation-review-fixes`; the
+ * round-2 regressions (R1 resolver semantics, R2 real session-attribute shape,
+ * R3 credential shapes) fail on `e21929d` and pass after the round-2 fixes.
  * The seam is inert in production because the `__POWER_SUITE_TEST_HOOKS__`
  * global is only defined by this harness.
  */
@@ -53,6 +55,7 @@ if (ui === undefined) {
     'createAnnotationState', 'reduceAnnotationState',
     'serializeQuickReference', 'serializeBatchRequest', 'batchScopeSplit',
     'resolveRefStatus',
+    'resolveNodeCandidate',
     'clampLauncherPosition', 'clampPopoverPosition', 'computeRailWidth', 'layoutModeFor',
     'collectionAdd', 'collectionRemove', 'collectionClear', 'collectionSetNote'
   ]
@@ -78,6 +81,7 @@ if (ui === undefined) {
     serializeBatchRequest: [2, 2],
     batchScopeSplit: [2, 2],
     resolveRefStatus: [1, 1],
+    resolveNodeCandidate: [1, 1],
     clampLauncherPosition: [2, 4],
     clampPopoverPosition: [3, 5],
     computeRailWidth: [1, 2],
@@ -102,6 +106,7 @@ if (ui === undefined) {
   test('the seam stays inert without the test-hooks flag (production path)', () => {
     const withoutFlag = loadClientModule({ hooksFlag: false })
     assert.equal(withoutFlag.hooks, undefined, 'the seam never creates the global the browser does not define')
+    assert.equal(withoutFlag.hooks?.uiAnnotation?.resolveNodeCandidate, undefined, 'the resolver is not leaked on the production path')
     assert.equal(withoutFlag.registration?.id, '@rexxin/dsh-power-suite')
     assert.equal(typeof withoutFlag.registration.factory, 'function')
     assert.equal(typeof withoutFlag.factory.apply, 'function')
@@ -160,7 +165,7 @@ if (ui === undefined) {
    */
   function refOf(descriptorOverrides = {}, contextOverrides = {}) {
     return ui.buildElementRef(descriptorOf(descriptorOverrides), {
-      sessionId: 'session-1',
+      sessionId: SESSION_A,
       at: 1_700_000_000_000,
       order: 1,
       bounds: { x: 10, y: 20, width: 120, height: 32 },
@@ -194,8 +199,14 @@ if (ui === undefined) {
     time: '14:05'
   }
 
-  /** A real sidebar row key: `session:<uuid>`, 44 chars (REVIEW-FINDINGS F2). */
-  const REAL_ROW_KEY = 'session:123e4567-e89b-12d3-a456-426614174000'
+  /** A real DSH Session id: `session-<uuid>`, 44 chars (docs/verification.md). */
+  const SESSION_A = 'session-8e460d06-507a-4c6d-95c6-63f20882c6e4'
+  /** A second real-shaped Session id for cross-session tests. */
+  const SESSION_B = 'session-5eec2763-0a91-460e-b559-08a8c3a98d13'
+  /** Real Session-list row key: `session:<session-<uuid>>`. */
+  const REAL_ROW_KEY = `session:${SESSION_A}`
+  /** Real Workspace-list row key: `workspace:<uuid>`. */
+  const REAL_WORKSPACE_KEY = `workspace:${SESSION_B.slice('session-'.length)}`
 
   //#endregion
 
@@ -379,7 +390,7 @@ if (ui === undefined) {
     const allowListed = [
       ['data-row-key', REAL_ROW_KEY],
       ['data-conversation-region', 'composer'],
-      ['data-conversation-session', REAL_ROW_KEY],
+      ['data-conversation-session', SESSION_A],
       ['data-lexical-editor', 'true'],
       ['data-testid', 'composer-send'],
       ['data-slot', 'conversation.input.dock'],
@@ -408,6 +419,42 @@ if (ui === undefined) {
       `data:[data-row-key="${REAL_ROW_KEY}"]`,
       'the identity key is built from the surviving row key'
     )
+  })
+
+  test('R2: the real data-conversation-session shape and row keys survive; secret vectors still denied', () => {
+    assert.equal(ui.sanitizeAttributeValue('data-conversation-session', SESSION_A), SESSION_A, 'real session-<uuid> attribute value')
+    assert.equal(ui.sanitizeAttributeValue('data-row-key', REAL_ROW_KEY), REAL_ROW_KEY)
+    assert.equal(ui.sanitizeAttributeValue('data-row-key', REAL_WORKSPACE_KEY), REAL_WORKSPACE_KEY)
+    assert.equal(ui.sanitizeAttributeValue('data-row-key', `session:${SESSION_B}`), `session:${SESSION_B}`)
+    // The narrow namespace allowance is only for known stable attributes.
+    assert.equal(ui.sanitizeAttributeValue('data-unknown', SESSION_A), null, 'unknown attributes do not get the session namespace allowance')
+    // Old denials keep working on both known and unknown attributes.
+    const secrets = ['Bearer abcdef1234567890', 'sk-ABCDEF0123456789', 'deadbeefdeadbeefdeadbeefdeadbeef', 'c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0', 'alice@example.com']
+    for (const value of secrets) {
+      assert.equal(ui.sanitizeAttributeValue('data-conversation-session', value), null, `the known session attribute still rejects ${value.slice(0, 12)}…`)
+      assert.equal(ui.sanitizeAttributeValue('data-unknown', value), null, `unknown attributes still reject ${value.slice(0, 12)}…`)
+    }
+  })
+
+  test('R3: credential shapes beyond lowercase sk-/Bearer are denied', () => {
+    const denied = [
+      'SK-LIVE-abcd',
+      'bearer abc',
+      'AKIAIOSFODNN7EXAMPLE',
+      'eyJhbGciOiJub25lIn0.eyJzdWIiOiJ1c2VyIn0.abc'
+    ]
+    for (const value of denied) {
+      assert.equal(ui.sanitizeAttributeValue('aria-label', value), null, `${value.slice(0, 12)}… denied on aria-label`)
+      assert.equal(ui.sanitizeAttributeValue('data-testid', value), null, `${value.slice(0, 12)}… denied on data-testid`)
+    }
+    // The lowercase vectors from round 1 stay denied.
+    for (const value of ['sk-ABCDEF0123456789', 'Bearer abcdef1234567890', 'alice@example.com']) {
+      assert.equal(ui.sanitizeAttributeValue('aria-label', value), null)
+    }
+    // Benign values are not over-filtered by the broader credential shapes.
+    for (const value of ['SKU list', 'Task list', 'New session', 'composer-send']) {
+      assert.equal(ui.sanitizeAttributeValue('aria-label', value), value)
+    }
   })
 
   //#endregion
@@ -488,7 +535,7 @@ if (ui === undefined) {
     assert.match(ref.id, /^psa-\d+-[a-z0-9]+$/i)
     assert.equal(ref.at, 1_700_000_000_000)
     assert.equal(ref.order, 1)
-    assert.equal(ref.session.sessionId, 'session-1')
+    assert.equal(ref.session.sessionId, SESSION_A)
     assert.equal(ref.component, 'button')
     assert.equal(ref.locator.tag, 'button')
     assert.equal(ref.locator.name, 'New session')
@@ -714,15 +761,15 @@ if (ui === undefined) {
 
     const switched = ui.reduceAnnotationState(deactivated, { type: 'activate' })
     const withSelection = ui.reduceAnnotationState(switched, { type: 'selectSingle', ref })
-    const switchedSession = ui.reduceAnnotationState(withSelection, { type: 'session', sessionId: 'session-2' })
-    assert.equal(switchedSession.sessionId, 'session-2')
+    const switchedSession = ui.reduceAnnotationState(withSelection, { type: 'session', sessionId: SESSION_B })
+    assert.equal(switchedSession.sessionId, SESSION_B)
     assert.deepEqual(plain(switchedSession.selection), [], 'session switch clears the selection')
     assert.equal(switchedSession.hoverId, null)
     assert.equal(switchedSession.note, '')
     assert.equal(switchedSession.view, 'status')
     assert.deepEqual(plain(switchedSession.collection), plain(state.collection), 'collection survives the switch')
 
-    const off = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'session', sessionId: 'session-3' })
+    const off = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'session', sessionId: SESSION_B })
     assert.equal(off.phase, 'off', 'a switch while inactive stays off')
   })
 
@@ -795,8 +842,8 @@ if (ui === undefined) {
   //#region collection pure functions
 
   test('collectionAdd dedupes by session+identity, updates notes, and never mutates inputs', () => {
-    const ref = refOf({ name: 'Target' }, { sessionId: 'session-1' })
-    const otherSessionRef = refOf({ name: 'Target' }, { sessionId: 'session-2' })
+    const ref = refOf({ name: 'Target' }, { sessionId: SESSION_A })
+    const otherSessionRef = refOf({ name: 'Target' }, { sessionId: SESSION_B })
     const empty = []
     const first = ui.collectionAdd(empty, entryOf(ref, 'first'))
     assert.equal(first.added, true)
@@ -807,7 +854,7 @@ if (ui === undefined) {
     assert.equal(first.list[0].note, 'first')
 
     const input = first.list
-    const duplicateRef = refOf({ name: 'Target' }, { at: 1_800_000_000_000, order: 9, sessionId: 'session-1' })
+    const duplicateRef = refOf({ name: 'Target' }, { at: 1_800_000_000_000, order: 9, sessionId: SESSION_A })
     const duplicate = ui.collectionAdd(input, entryOf(duplicateRef, 'changed'))
     assert.equal(duplicate.added, false)
     assert.equal(duplicate.updated, true)
@@ -934,10 +981,10 @@ if (ui === undefined) {
   })
 
   test('serializeBatchRequest excludes other-session entries and reports the skipped count', () => {
-    const current = refOf({ name: 'Current', text: 'Current' }, { sessionId: 'session-1' })
-    const other = refOf({ name: 'Other', text: 'Other' }, { sessionId: 'session-2' })
+    const current = refOf({ name: 'Current', text: 'Current' }, { sessionId: SESSION_A })
+    const other = refOf({ name: 'Other', text: 'Other' }, { sessionId: SESSION_B })
     const items = [{ ref: current, note: '' }, { ref: other, note: 'from elsewhere' }]
-    const split = ui.batchScopeSplit(items, 'session-1')
+    const split = ui.batchScopeSplit(items, SESSION_A)
     assert.equal(split.current.length, 1)
     assert.equal(split.other.length, 1)
     assert.equal(split.current[0].ref.id, current.id)
@@ -1055,6 +1102,113 @@ if (ui === undefined) {
       queryAll: () => [liveElement('DIV', 'now has text')],
       liveInfo: () => ({ expectedDigest: ui.textDigest(''), actualDigest: ui.textDigest('now has text') })
     }), 'resolved', 'a unique anonymous generic match stays resolved; digest does not corroborate')
+  })
+
+  //#endregion
+
+  //#region DOM candidate resolver (R1)
+
+  /** A live-node stand-in for the pure resolver: plain object, no DOM API. */
+  const resolverNode = (tagName = 'P') => ({ tagName })
+
+  test('R1: the resolver continues past generic ambiguity to a unique lower-reliability match', () => {
+    const genericA = resolverNode()
+    const genericB = resolverNode()
+    const pathMatch = resolverNode()
+    const queried = []
+    const queryAll = (selector) => {
+      queried.push(selector)
+      if (selector === 'p') return [genericA, genericB]
+      if (selector === 'body > div > p') return [pathMatch]
+      return []
+    }
+    const result = ui.resolveNodeCandidate({
+      candidates: [
+        { kind: 'tag', value: 'p', reliability: 0.2 },
+        { kind: 'path', value: 'body > div > p', reliability: 0.1 }
+      ],
+      expectedTag: 'p',
+      queryAll
+    })
+    assert.equal(result, pathMatch, 'generic ambiguity must fall through to the lower-reliability unique path')
+    assert.deepEqual(queried, ['p', 'body > div > p'], 'the resolver keeps walking after generic ambiguity')
+  })
+
+  test('R1: a stable ambiguity is terminal and never falls through to generic candidates', () => {
+    const stableSelector = '[data-testid="send"]'
+    const stableA = resolverNode('BUTTON')
+    const stableB = resolverNode('BUTTON')
+    const generic = resolverNode('BUTTON')
+    const queried = []
+    const queryAll = (selector) => {
+      queried.push(selector)
+      if (selector === stableSelector) return [stableA, stableB]
+      return [generic]
+    }
+    const result = ui.resolveNodeCandidate({
+      candidates: [
+        { kind: 'data', value: stableSelector, reliability: 0.92 },
+        { kind: 'tag', value: 'button', reliability: 0.2 }
+      ],
+      expectedTag: 'button',
+      queryAll
+    })
+    assert.equal(result, null, 'a stable candidate matching several elements is genuine ambiguity')
+    assert.deepEqual(queried, [stableSelector], 'later generic candidates must not be consulted')
+  })
+
+  test('R1: unique generic and unique stable matches are returned, with tag filtering', () => {
+    const genericNode = resolverNode('P')
+    assert.equal(ui.resolveNodeCandidate({
+      candidates: [{ kind: 'tag', value: 'p', reliability: 0.2 }],
+      expectedTag: 'p',
+      queryAll: () => [genericNode]
+    }), genericNode, 'a unique generic match is the only match')
+
+    const stableNode = resolverNode('BUTTON')
+    assert.equal(ui.resolveNodeCandidate({
+      candidates: [{ kind: 'data', value: '[data-testid="x"]', reliability: 0.92 }],
+      expectedTag: 'BUTTON',
+      queryAll: () => [stableNode]
+    }), stableNode, 'expectedTag is compared case-insensitively')
+
+    const expectedNode = resolverNode('P')
+    const mismatchedNode = resolverNode('DIV')
+    assert.equal(ui.resolveNodeCandidate({
+      candidates: [{ kind: 'tag', value: 'p', reliability: 0.2 }],
+      expectedTag: 'p',
+      queryAll: () => [mismatchedNode, expectedNode]
+    }), expectedNode, 'mismatched tags are filtered before uniqueness is decided')
+  })
+
+  test('R1: no match, invalid input, and non-node entries resolve to null', () => {
+    assert.equal(ui.resolveNodeCandidate(null), null)
+    assert.equal(ui.resolveNodeCandidate({ candidates: [], expectedTag: 'p', queryAll: () => [] }), null)
+    assert.equal(ui.resolveNodeCandidate({
+      candidates: [{ kind: 'tag', value: 'p', reliability: 0.2 }],
+      expectedTag: 'p',
+      queryAll: () => []
+    }), null)
+    assert.equal(ui.resolveNodeCandidate({
+      candidates: [{ kind: 'tag', value: 'p', reliability: 0.2 }],
+      expectedTag: 'p',
+      queryAll: () => [null, 7, 'x', {}]
+    }), null, 'non-node entries are ignored')
+  })
+
+  test('R1: repeated calls re-query and never reuse a stale first hit', () => {
+    const candidates = [{ kind: 'data', value: '[data-testid="live"]', reliability: 0.92 }]
+    const firstNode = resolverNode('BUTTON')
+    let live = [firstNode]
+    let calls = 0
+    const queryAll = () => { calls += 1; return live }
+    const firstResult = ui.resolveNodeCandidate({ candidates, expectedTag: 'button', queryAll })
+    const replacement = resolverNode('BUTTON')
+    live = [replacement]
+    const secondResult = ui.resolveNodeCandidate({ candidates, expectedTag: 'button', queryAll })
+    assert.equal(firstResult, firstNode)
+    assert.equal(secondResult, replacement, 'the resolver must not memoize the first hit')
+    assert.equal(calls, 2, 'every call re-queries the document')
   })
 
   //#endregion

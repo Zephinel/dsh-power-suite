@@ -8463,8 +8463,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
     /** Redaction patterns, longest/most specific first. */
     const ANNOTATION_REDACTIONS = [
-      /\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi,
-      /\bsk-[A-Za-z0-9_-]{8,}/g,
+      /\bbearer\s+[a-z0-9._~+/-]+=*/gi,
+      /\bsk-[a-z0-9_-]{8,}/gi,
+      /\bAKIA[0-9A-Z]{16}\b/gi,
+      /\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]*/gi,
       /\b(?:[A-Fa-f0-9]{24,}|[A-Za-z0-9+/_-]{24,}={0,2})\b/g,
       /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g
     ]
@@ -8472,14 +8474,16 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** Attribute names never exposed through a locator. */
     const SENSITIVE_ATTRIBUTE_NAMES = /token|secret|password|passwd|authorization|cookie|csrf|session[-_]?key/i
 
-    /** Attribute values that must never be captured, even under a safe name. */
-    const SENSITIVE_ATTRIBUTE_VALUES = /\bBearer\s|sk-[A-Za-z0-9_-]{8,}|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b[A-Fa-f0-9]{24,}\b|\b[A-Za-z0-9+/_-]{24,}={0,2}\b/
-
     /**
      * Secret-shaped values that are rejected even for a known stable attribute.
-     * A proven secret always wins over the namespace allowance.
+     * A proven secret always wins over the namespace allowance. Matching is
+     * case-insensitive so `Bearer`/`bearer`, `SK-`/`sk-`, AWS keys and JWTs are
+     * all rejected by the same cheap pass (R3).
      */
-    const SENSITIVE_SECRET_VALUES = /\bBearer\s|sk-[A-Za-z0-9_-]{8,}|[\w.+-]+@[\w-]+(?:\.[\w-]+)+/
+    const SENSITIVE_SECRET_VALUES = /bearer\s|sk-[a-z0-9_-]{8,}|\bAKIA[0-9A-Z]{16}\b|\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]*|[\w.+-]+@[\w-]+(?:\.[\w-]+)+/i
+
+    /** Attribute values that must never be captured, even under a safe name. */
+    const SENSITIVE_ATTRIBUTE_VALUES = /bearer\s|sk-[a-z0-9_-]{8,}|\bAKIA[0-9A-Z]{16}\b|\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]*|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b[A-Fa-f0-9]{24,}\b|\b[A-Za-z0-9+/_-]{24,}={0,2}\b/i
 
     /**
      * Stable data attributes whose values may legitimately be a namespaced key
@@ -8502,10 +8506,18 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** A bare UUID used as a stable key. */
     const UUID_PATTERN = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/
 
+    /**
+     * A DSH Session id shaped `session-<uuid>`, the real value the shell writes
+     * into `data-conversation-session` (R2). Narrow on purpose: only this shape,
+     * never a generic long token.
+     */
+    const SESSION_ID_PATTERN = /^session-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
     /** Attributes that make a stable locator, most reliable first. */
     const LOCATOR_DATA_ATTRIBUTES = [
       ['data-row-key', 0.98],
       ['data-conversation-region', 0.95],
+      ['data-conversation-session', 0.86],
       ['data-testid', 0.92],
       ['data-slot', 0.9]
     ]
@@ -8622,7 +8634,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       // Known stable data attributes keep namespaced ids/UUIDs, which are longer
       // than the generic opaque-token heuristic but are identity, not secrets.
       if (STABLE_KEY_ATTRIBUTES.has(safeName)
-        && (NAMESPACED_KEY_PATTERN.test(trimmed) || UUID_PATTERN.test(trimmed))) {
+        && (NAMESPACED_KEY_PATTERN.test(trimmed) || UUID_PATTERN.test(trimmed) || SESSION_ID_PATTERN.test(trimmed))) {
         return trimmed
       }
       if (SENSITIVE_ATTRIBUTE_VALUES.test(trimmed)) return null
@@ -8819,7 +8831,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (typeof attr.name !== 'string' || !attr.name.startsWith('data-')) continue
         if (knownAttributes.has(attr.name)) continue
         const value = sanitizeAttributeValue(attr.name, attr.value)
-        if (value === null || isDynamicValue(value)) continue
+        if (value === null) continue
+        // Allow-listed stable attributes are identity even when their value is a
+        // long opaque id (e.g. `session-<uuid>`); unknown attributes still go
+        // through the generated-value heuristic (R2).
+        if (!STABLE_KEY_ATTRIBUTES.has(attr.name) && isDynamicValue(value)) continue
         push('data', `[${attr.name}="${cssString(value)}"]`, 0.7)
       }
       // Defensive: descriptors are pure-model data too, so an id that did not go
@@ -9354,10 +9370,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           continue
         }
         if (matches === null || matches === undefined) continue
+        if (typeof matches[Symbol.iterator] !== 'function') continue
         const list = []
         for (const element of matches) {
           if (element === null || typeof element !== 'object') continue
-          const elementTag = typeof element.tagName === 'string' ? element.tagName.toLowerCase() : ''
+          if (typeof element.tagName !== 'string') continue
+          const elementTag = element.tagName.toLowerCase()
           if (tag.length === 0 || elementTag === tag) list.push(element)
         }
         if (list.length === 0) continue
@@ -9760,13 +9778,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       return ''
     }
 
-    /**
-     * Sanitized text summary of one element. Never reads control values and never
-     * descends into a native editor or password field.
-     * @param {Element} element - candidate element.
-     * @param {boolean} isEditable - whether the element is contenteditable.
-     * @returns {string} sanitized summary.
-     */
     /** Selector of every surface whose content is user input, never page copy. */
     const ANNOTATION_LIVE_INPUT_SURFACE = 'input, textarea, select, [contenteditable], [data-lexical-editor="true"]'
 
@@ -9945,33 +9956,75 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     /**
+     * Resolve one unique element-like object from ordered locator candidates.
+     *
+     * Mirrors `resolveRefStatus`'s walk: a STABLE kind (`data`/`id`/`label`)
+     * matching several elements is genuine ambiguity and stops the walk; a GENERIC
+     * kind (`role`/`tag`/`path`) matching several cannot discriminate, so the walk
+     * continues to less reliable candidates. A unique match wins, and the first
+     * unique generic match is remembered as the fallback (R1).
+     *
+     * Pure: `queryAll(selector)` and `elementLike.tagName` are injected, so this is
+     * shared with the unit-test seam.
+     * @param {{ candidates?: Array<object>, expectedTag?: string, queryAll?: Function }} input - resolver input.
+     * @returns {object | null} the unique element-like object, or null.
+     */
+    function resolveNodeCandidate(input) {
+      const source = input !== null && typeof input === 'object' ? input : {}
+      const { candidates, expectedTag, queryAll } = source
+      if (typeof queryAll !== 'function') return null
+      const tag = typeof expectedTag === 'string' ? expectedTag.trim().toLowerCase() : ''
+      const ordered = Array.isArray(candidates)
+        ? candidates.slice().sort((left, right) => (right?.reliability ?? 0) - (left?.reliability ?? 0))
+        : []
+      let genericMatch = null
+      for (const candidate of ordered) {
+        if (candidate === null || typeof candidate !== 'object' || typeof candidate.value !== 'string' || candidate.value.length === 0) continue
+        let matches
+        try {
+          matches = queryAll(candidate.value)
+        } catch {
+          continue
+        }
+        if (matches === null || matches === undefined) continue
+        if (typeof matches[Symbol.iterator] !== 'function') continue
+        const list = []
+        for (const element of matches) {
+          if (element === null || typeof element !== 'object') continue
+          if (typeof element.tagName !== 'string') continue
+          const elementTag = element.tagName.toLowerCase()
+          if (tag.length === 0 || elementTag === tag) list.push(element)
+        }
+        if (list.length === 0) continue
+        const generic = candidate.kind === 'tag' || candidate.kind === 'path' || candidate.kind === 'role'
+        if (list.length > 1) {
+          // Stable ambiguity is final; generic ambiguity just means "keep looking".
+          if (generic) continue
+          return null
+        }
+        if (generic) {
+          if (genericMatch === null) genericMatch = list[0]
+          continue
+        }
+        return list[0]
+      }
+      return genericMatch
+    }
+
+    /**
      * Resolve one ref to its unique live element.
      * @param {object} ref - ElementRef.
-     * @returns {Element | null} the element when exactly one candidate matches.
+     * @returns {Element | null} the element when exactly one candidate resolves.
      */
     function annotationResolveNode(ref) {
       if (ref === null || typeof ref !== 'object') return null
       const locator = ref.locator
       if (locator === null || typeof locator !== 'object') return null
-      const expectedTag = typeof locator.tag === 'string' ? locator.tag.toLowerCase() : ''
-      const candidates = Array.isArray(locator.candidates) ? locator.candidates : []
-      for (const candidate of candidates) {
-        if (candidate === null || typeof candidate !== 'object' || typeof candidate.value !== 'string' || candidate.value.length === 0) continue
-        let nodes
-        try {
-          nodes = document.querySelectorAll(candidate.value)
-        } catch {
-          continue
-        }
-        const matches = []
-        for (const node of nodes) {
-          if (!(node instanceof Element)) continue
-          if (expectedTag.length === 0 || node.tagName.toLowerCase() === expectedTag) matches.push(node)
-        }
-        if (matches.length === 1) return matches[0]
-        if (matches.length > 1) return null
-      }
-      return null
+      return resolveNodeCandidate({
+        candidates: locator.candidates,
+        expectedTag: locator.tag,
+        queryAll: (selector) => document.querySelectorAll(selector)
+      })
     }
 
     /**
@@ -10138,6 +10191,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const pageListeners = []
       /** Cleanups for temporary gesture listeners; teardown aborts all of them. */
       const activeGestures = new Set()
+      /** DOM revision: bumped by body mutations so resolved nodes can be reused safely (R1/R4). */
+      let domRevision = 0
+      /** Body mutation observer feeding domRevision; disconnected on deactivate/dispose. */
+      let domObserver = null
+      /** Resolved-node cache: `{ node, rev }` per ref id, reused only at the same revision. */
+      const resolvedNodeCache = new Map()
       /** Hover identity tokens per element. */
       const elementTokens = new WeakMap()
       /** Chain and index of the last picked selection, for level up/down. */
@@ -10312,17 +10371,61 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
 
       /**
-       * Resolve one ref's live node through the unique-match path.
+       * Start the body mutation observer that feeds the resolved-node revision.
+       * Only childList/characterData are observed: an attribute-only change keeps
+       * the same node, so it cannot swap the element identity we resolved (R1/R4).
+       * @returns {void}
+       */
+      function ensureDomObserver() {
+        if (domObserver !== null) return
+        if (typeof MutationObserver !== 'function') return
+        if (typeof document === 'undefined' || document.body === null) return
+        domObserver = new MutationObserver(() => {
+          domRevision += 1
+        })
+        domObserver.observe(document.body, { childList: true, subtree: true, characterData: true })
+      }
+
+      /**
+       * Drop the resolved-node cache and stop observing DOM mutations.
+       * Called on deactivate, activation rollback, and disposal.
+       * @returns {void}
+       */
+      function clearResolvedNodeCache() {
+        resolvedNodeCache.clear()
+        domRevision += 1
+        if (domObserver !== null) {
+          domObserver.disconnect()
+          domObserver = null
+        }
+      }
+
+      /**
+       * Resolve one ref's live node.
        *
-       * A connected node from an earlier capture is not enough to trust: after a
-       * re-render the first match may be a different element with the same selector.
-       * The resolver only returns a node when exactly one candidate matches, so an
-       * update/re-locate can never target a stale first hit (F3/F5).
+       * The resolved node is cached together with the DOM revision. A scroll frame
+       * reuses it only while no body mutation happened and the node is still
+       * connected; any mutation (or a missing node entry) re-runs the unique
+       * candidate resolver, so a re-render cannot leave us highlighting the stale
+       * first hit a selector happened to match (F3 + R1/R4).
        * @param {object} ref - ElementRef.
        * @returns {Element | null} the unique live element, or null.
        */
       function liveNode(ref) {
-        return annotationResolveNode(ref)
+        ensureDomObserver()
+        const cached = resolvedNodeCache.get(ref.id)
+        if (cached !== undefined) {
+          if (cached.rev === domRevision) {
+            // A null entry is a real "ambiguous/unresolvable at this revision" result;
+            // reusing it keeps scroll frames from re-scanning the same ref.
+            if (cached.node === null) return null
+            if (cached.node.isConnected !== false) return cached.node
+          }
+          resolvedNodeCache.delete(ref.id)
+        }
+        const node = annotationResolveNode(ref)
+        resolvedNodeCache.set(ref.id, { node, rev: domRevision })
+        return node
       }
 
       /**
@@ -11237,6 +11340,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           }
           uninstallPageListeners()
           disconnectFrameObserver()
+          clearResolvedNodeCache()
           clearTimers()
           restoreAnnotationLayout({ immediate: true })
           throw error
@@ -11261,6 +11365,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           // Layout restoration and listener removal come first and unconditionally; the
           // UI-state refresh below is best effort.
           abortGestures()
+          clearResolvedNodeCache()
           lastPick = null
           uninstallPageListeners()
           disconnectFrameObserver()
@@ -11679,6 +11784,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       function dispose() {
         window.removeEventListener('resize', onInstalledResize)
         abortGestures()
+        clearResolvedNodeCache()
         detachPopoverNode()
         uninstallPageListeners()
         disconnectFrameObserver()
@@ -12651,6 +12757,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         serializeBatchRequest,
         batchScopeSplit,
         resolveRefStatus,
+        resolveNodeCandidate,
         clampLauncherPosition,
         clampPopoverPosition,
         computeRailWidth,
