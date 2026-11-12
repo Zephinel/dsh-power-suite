@@ -1793,8 +1793,9 @@ async function runHoverCardChecks({ page, results, state }) {
 
   await results.check('b5-2', 'our hover card reproduces the native geometry and chrome', async () => {
     const native = state.nativeTooltip
-    const target = await hoverRow(page, 0)
-    await sleep(900)
+    // The live card re-sorts under a stationary pointer; retry until the card is
+    // actually showing instead of a single timed hover.
+    const target = await hoverRowStable(page, 0)
     const card = await page.eval(probe.hoverCard)
     assert(card, 'our hover card did not appear after the hover delay')
     state.hoverCard = card
@@ -2334,7 +2335,20 @@ async function runAnnotationPinChecks({ page, results, state }) {
   log('\n=== F4: annotation mode pins the hover card ===')
   // Earlier checks reload the page; wait for the live card to hydrate again.
   await ensurePanelRows(page)
+  const clearAnnotationPin = async () => {
+    // Always remove the simulated annotation state, even when an assertion throws,
+    // so a failed f4-1 cannot cascade into f4-2.
+    await page.evaluate(`(() => {
+      document.documentElement.removeAttribute('data-psa-active')
+      document.dispatchEvent(new CustomEvent('power-suite:ui-annotation-state', { detail: { active: false } }))
+      const style = document.getElementById('psd-e2e-annotation-pin')
+      if (style) style.remove()
+    })()`)
+    await page.moveTo(900, 500)
+    await sleep(400)
+  }
   await results.check('f4-1', 'annotation mode pins the hover card and mode exit unpins/clears it', async () => {
+    try {
     // Simulate the annotation side: attribute + stylesheet rule + state event.
     await page.evaluate(`(() => {
       const style = document.createElement('style')
@@ -2345,20 +2359,15 @@ async function runAnnotationPinChecks({ page, results, state }) {
       document.dispatchEvent(new CustomEvent('power-suite:ui-annotation-state', { detail: { active: true } }))
     })()`)
     await sleep(300)
-    let card = null
-    for (let attempt = 0; attempt < 4 && card === null; attempt += 1) {
-      try {
-        await hoverRow(page, 0)
-      } catch {
-        await sleep(300)
-        continue
-      }
-      await sleep(700)
+    const target = await hoverRowStable(page, 0)
+    await sleep(300)
+    let card = await page.eval(probe.hoverCard)
+    if (card === null) {
+      // hoverRowStable guarantees the card was present; re-open once for flake.
+      await page.moveTo(900, 500)
+      await sleep(300)
+      await hoverRowStable(page, 0)
       card = await page.eval(probe.hoverCard)
-      if (card === null) {
-        await page.moveTo(900, 500)
-        await sleep(300)
-      }
     }
     assert(card, 'hover card did not open in annotation mode')
     assertEqual(card.pinned, 'true', 'hover card must expose data-psd-pinned="true" while annotation mode is active')
@@ -2400,6 +2409,9 @@ async function runAnnotationPinChecks({ page, results, state }) {
     const cleared = await page.eval(probe.hoverCard)
     assertEqual(cleared, null, 'mode exit left the hover card pinned')
     return `pinned at z=${card.zIndex}, toggles correctly`
+    } finally {
+      await clearAnnotationPin()
+    }
   })
 
   await results.check('f4-2', 'normal mode DOM never carries the pin marker', async () => {
