@@ -8239,6 +8239,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     // contenteditable contents are never read, canvas content has no DOM target,
     // and body-level portals are ordinary DOM and selectable.
 
+    //#region ui element annotation — pure model
+
     /** Copy namespace of the UI element annotation mode. */
     const ANNOTATION_NS = 'powerSuiteAnnotation'
 
@@ -8266,7 +8268,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     const ANNOTATION_EN = {
       'launcher.enter': 'Annotate UI elements',
       'launcher.exit': 'Exit annotation mode',
-      'launcher.count': '{count} annotated',
       'rail.aria': 'UI element annotation',
       'rail.title': 'UI annotation',
       'rail.collapse': 'Collapse rail',
@@ -8310,7 +8311,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'collection.clear': 'Clear',
       'collection.insertBatch': 'Insert all into composer',
       'collection.crossSession': '{count} from other sessions will be skipped',
-      'collection.staleCount': '{count} targets no longer resolve',
       'collection.noteEditorTitle': 'Note',
       'collection.noteEditorClose': 'Close',
       'settings.title': 'Settings',
@@ -8335,6 +8335,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'feedback.cleared': 'Collection cleared',
       'feedback.relocated': 'Moved to the element',
       'feedback.relocateFailed': 'The element cannot be located ({status})',
+      'feedback.relocateOtherSession': 'This annotation belongs to another session',
       'feedback.batchEmpty': 'Nothing to insert from the current session',
       'insert.title': 'UI annotation',
       'insert.reference': 'Reference:',
@@ -8353,7 +8354,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     const ANNOTATION_ZH = {
       'launcher.enter': '标注 UI 元素',
       'launcher.exit': '退出标注模式',
-      'launcher.count': '{count} 条标注',
       'rail.aria': 'UI 元素标注',
       'rail.title': 'UI 标注',
       'rail.collapse': '收起工具条',
@@ -8397,7 +8397,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'collection.clear': '清空',
       'collection.insertBatch': '全部插入输入框',
       'collection.crossSession': '另有 {count} 条来自其他会话，插入时将跳过',
-      'collection.staleCount': '{count} 个目标已无法定位',
       'collection.noteEditorTitle': '备注',
       'collection.noteEditorClose': '关闭',
       'settings.title': '设置',
@@ -8422,6 +8421,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'feedback.cleared': '标注集已清空',
       'feedback.relocated': '已定位到该元素',
       'feedback.relocateFailed': '无法定位该元素（{status}）',
+      'feedback.relocateOtherSession': '这条标注来自其他会话',
       'feedback.batchEmpty': '当前会话没有可插入的标注',
       'insert.title': 'UI 标注',
       'insert.reference': '定位：',
@@ -8436,8 +8436,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'insert.skipped': '（已跳过 {count} 条来自其他会话的标注）'
     }
 
-    /** Long-lived bridge to the mounted Composer seat; `null` actions before a session. */
-    const annotationBridge = { sessionId: null, inputActions: null, draft: '' }
+    /**
+     * Long-lived bridge to the mounted Composer seat. Always all-or-nothing: the
+     * Session id only exists while the seat's insertion actions do.
+     */
+    const annotationBridge = { sessionId: null, inputActions: null }
 
     /** Install guard: a remount must never register the surface twice. */
     let annotationInstalled = false
@@ -8471,6 +8474,33 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
     /** Attribute values that must never be captured, even under a safe name. */
     const SENSITIVE_ATTRIBUTE_VALUES = /\bBearer\s|sk-[A-Za-z0-9_-]{8,}|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b[A-Fa-f0-9]{24,}\b|\b[A-Za-z0-9+/_-]{24,}={0,2}\b/
+
+    /**
+     * Secret-shaped values that are rejected even for a known stable attribute.
+     * A proven secret always wins over the namespace allowance.
+     */
+    const SENSITIVE_SECRET_VALUES = /\bBearer\s|sk-[A-Za-z0-9_-]{8,}|[\w.+-]+@[\w-]+(?:\.[\w-]+)+/
+
+    /**
+     * Stable data attributes whose values may legitimately be a namespaced key
+     * (`session:<uuid>`) or a bare UUID; those shapes are longer than the generic
+     * long-token secret heuristic would allow.
+     */
+    const STABLE_KEY_ATTRIBUTES = new Set([
+      'data-row-key',
+      'data-conversation-region',
+      'data-conversation-session',
+      'data-lexical-editor',
+      'data-testid',
+      'data-slot',
+      'data-sidebar-toggle'
+    ])
+
+    /** A colon-namespaced stable key such as `session:<uuid>`. */
+    const NAMESPACED_KEY_PATTERN = /^[a-z][a-z0-9_-]*:[A-Za-z0-9][A-Za-z0-9._:-]{0,80}$/
+
+    /** A bare UUID used as a stable key. */
+    const UUID_PATTERN = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/
 
     /** Attributes that make a stable locator, most reliable first. */
     const LOCATOR_DATA_ATTRIBUTES = [
@@ -8542,6 +8572,26 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     /**
+     * Deterministic FNV-1a 32-bit digest of one collapsed, sanitized text.
+     *
+     * This is derived data only: it lets re-resolution detect content changes
+     * without storing the raw text in the ref. The offset basis is returned for an
+     * empty string, so an empty-but-captured target can be recognized later.
+     * @param {unknown} value - raw text.
+     * @returns {string} eight lowercase hex digits, or '' for a non-string.
+     */
+    function textDigest(value) {
+      if (typeof value !== 'string') return ''
+      const text = sanitizeText(value, 4096)
+      let hash = 0x811c9dc5
+      for (let index = 0; index < text.length; index += 1) {
+        hash ^= text.charCodeAt(index)
+        hash = Math.imul(hash, 0x01000193)
+      }
+      return (hash >>> 0).toString(16).padStart(8, '0')
+    }
+
+    /**
      * Accept one attribute name for capture.
      * @param {unknown} name - raw attribute name.
      * @returns {string | null} lowercase name, or null when denied.
@@ -8567,6 +8617,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       if (safeName === null || typeof value !== 'string') return null
       const trimmed = value.replace(ANNOTATION_CONTROL_CHARS, ' ').trim()
       if (trimmed.length === 0 || trimmed.length > 160) return null
+      // A proven secret is never allowed, whatever the attribute is called.
+      if (SENSITIVE_SECRET_VALUES.test(trimmed)) return null
+      // Known stable data attributes keep namespaced ids/UUIDs, which are longer
+      // than the generic opaque-token heuristic but are identity, not secrets.
+      if (STABLE_KEY_ATTRIBUTES.has(safeName)
+        && (NAMESPACED_KEY_PATTERN.test(trimmed) || UUID_PATTERN.test(trimmed))) {
+        return trimmed
+      }
       if (SENSITIVE_ATTRIBUTE_VALUES.test(trimmed)) return null
       return trimmed
     }
@@ -8764,7 +8822,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (value === null || isDynamicValue(value)) continue
         push('data', `[${attr.name}="${cssString(value)}"]`, 0.7)
       }
+      // Defensive: descriptors are pure-model data too, so an id that did not go
+      // through annotationStableId still has to pass the same sanitizer here.
       let id = typeof source.id === 'string' ? source.id : ''
+      if (id.length > 0) id = sanitizeAttributeValue('id', id) ?? ''
       if (id.length === 0) {
         const idAttr = attrs.find((item) => item !== null && typeof item === 'object' && item.name === 'id')
         if (idAttr !== undefined) {
@@ -8805,10 +8866,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @returns {string} identity key.
      */
     function identityKeyForCandidates(tag, source, candidates) {
-      const stable = candidates.find((candidate) => candidate.kind === 'data' || candidate.kind === 'id' || candidate.kind === 'label')
+      // A data attribute or id is a real identity; an accessible label alone is not
+      // (two different "Close" buttons share it), so label-only identity carries the
+      // structural context needed to tell those elements apart (F3).
+      const stable = candidates.find((candidate) => candidate.kind === 'data' || candidate.kind === 'id')
       if (stable !== undefined) return `${stable.kind}:${stable.value}`
-      const role = typeof source.role === 'string' && source.role.length > 0 ? source.role : ''
       const path = typeof source.path === 'string' && source.path.length > 0 ? source.path : tag
+      const label = candidates.find((candidate) => candidate.kind === 'label')
+      if (label !== undefined) return `label:${label.value}|${tag}|${path}`
+      const role = typeof source.role === 'string' && source.role.length > 0 ? source.role : ''
       const text = sanitizeText(source.text, 40)
       return `path:${role}:${path}:${text}`
     }
@@ -8846,6 +8912,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         },
         component: typeof source.component === 'string' && source.component.length > 0 ? source.component : 'other',
         text: sanitizeText(source.text, 80),
+        // Derived from the full sanitized text; never the text itself (F11).
+        textDigest: typeof source.textDigest === 'string' ? source.textDigest : '',
         context: contextLabels.join(' › '),
         bounds,
         note: ''
@@ -8918,12 +8986,18 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       if (index >= 0) {
         const next = current.slice()
         const existing = next[index] !== null && typeof next[index] === 'object' && next[index].ref !== null && typeof next[index].ref === 'object' ? next[index].ref : next[index]
+        // Re-adding a selected element must not wipe a note the user already wrote:
+        // only an explicit non-empty note updates it here. Clearing a note is the
+        // collection editor's explicit `collectionSetNote` path (F4).
+        const incomingNote = typeof ref.note === 'string' ? ref.note.trim() : ''
         next[index] = {
           ...ref,
           id: existing.id ?? ref.id,
           at: existing.at ?? ref.at,
           order: typeof existing.order === 'number' ? existing.order : ref.order,
-          note: typeof ref.note === 'string' ? ref.note : (typeof existing.note === 'string' ? existing.note : '')
+          note: incomingNote.length > 0
+            ? ref.note
+            : (typeof existing.note === 'string' ? existing.note : '')
         }
         return { list: next, added: false, updated: true }
       }
@@ -9318,6 +9392,17 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               if (expected.length === 0) return hasStableCandidate ? 'missing' : 'resolved'
               return sanitizeText(actual) === sanitizeText(expected) ? 'resolved' : 'changed'
             }
+            // Stable identity resolved. A changed accessible name means this is a
+            // different control now, even when the tag/selector still matches.
+            const expectedName = typeof info.expectedName === 'string' ? info.expectedName : ''
+            const actualName = typeof info.actualName === 'string' ? info.actualName : ''
+            if (expectedName.length > 0 && actualName.length > 0
+              && sanitizeText(actualName, 60) !== expectedName) return 'changed'
+            // A digest mismatch catches text changes beyond the 80-char summary and
+            // the captured-empty -> now-has-text case (F11).
+            const expectedDigest = typeof info.expectedDigest === 'string' ? info.expectedDigest : ''
+            const actualDigest = typeof info.actualDigest === 'string' ? info.actualDigest : ''
+            if (expectedDigest.length > 0 && actualDigest.length > 0 && expectedDigest !== actualDigest) return 'changed'
             if (expected.length > 0 && sanitizeText(actual) !== sanitizeText(expected)) return 'changed'
           }
         }
@@ -9411,9 +9496,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
     /** Selector set of elements the picker treats as meaningful, nearest first. */
     const ANNOTATION_CANDIDATE_SELECTOR = 'button, a, input, select, textarea, [role="button"], [role="tab"], [role="menuitem"], [role="link"], [role="dialog"], [role="list"], [role="listitem"], [role="treeitem"], [role="combobox"], [role="textbox"], [data-row-key], [data-conversation-region], [aria-label], h1, h2, h3, h4, h5, h6, li, td, pre, p, code, nav, aside, main, section'
-
-    /** Bounded selector set used once per marquee release (never a continuous scan). */
-    const ANNOTATION_BOX_CANDIDATE_SELECTOR = 'button, a, input, select, textarea, [data-row-key], [data-conversation-region], [aria-label], h1, h2, h3, h4, h5, h6, li, td, pre'
 
     /** Estimated popover size used for clamping. */
     const ANNOTATION_POPOVER_SIZE = { width: 320, height: 248 }
@@ -9571,6 +9653,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       if (element === null || typeof element !== 'object') return false
       if (typeof element.getClientRects !== 'function') return false
       if (element.getClientRects().length === 0) return false
+      // Zero-area elements have no meaningful target to outline or annotate; the
+      // primary picker check rejects them before any fallback path (F13).
+      const rect = typeof element.getBoundingClientRect === 'function' ? element.getBoundingClientRect() : null
+      if (rect === null || rect.width <= 0 || rect.height <= 0) return false
       const style = window.getComputedStyle(element)
       if (style === null || typeof style !== 'object') return true
       return style.visibility !== 'hidden' && style.display !== 'none'
@@ -9582,8 +9668,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @returns {string} stable id or ''.
      */
     function annotationStableId(element) {
-      const id = element.getAttribute('id')
-      if (id === null || id.length === 0 || id.length > 48 || isDynamicValue(id)) return ''
+      const rawId = element.getAttribute('id')
+      if (rawId === null || rawId.length === 0 || rawId.length > 48) return ''
+      // The attribute sanitizer is the single authority for what may be captured;
+      // an id is just another safe-named attribute value (F1).
+      const id = sanitizeAttributeValue('id', rawId)
+      if (id === null || isDynamicValue(id)) return ''
       return id
     }
 
@@ -9677,11 +9767,49 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @param {boolean} isEditable - whether the element is contenteditable.
      * @returns {string} sanitized summary.
      */
+    /** Selector of every surface whose content is user input, never page copy. */
+    const ANNOTATION_LIVE_INPUT_SURFACE = 'input, textarea, select, [contenteditable], [data-lexical-editor="true"]'
+
+    /**
+     * Whether one element is (or contains) a live input surface. Those live values
+     * and editor contents are never read, copied, or summarized (F7).
+     * @param {Element} element - candidate element.
+     * @returns {boolean} whether text collection must be suppressed.
+     */
+    function annotationHasLiveInputSurface(element) {
+      if (element === null || typeof element !== 'object') return false
+      if (typeof element.matches === 'function' && element.matches(ANNOTATION_LIVE_INPUT_SURFACE)) return true
+      return typeof element.querySelector === 'function'
+        && element.querySelector(ANNOTATION_LIVE_INPUT_SURFACE) !== null
+    }
+
+    /**
+     * Sanitized text summary of one element. Never reads control values and never
+     * descends into a native editor or password field.
+     * @param {Element} element - candidate element.
+     * @param {boolean} isEditable - whether the element is contenteditable.
+     * @returns {string} sanitized summary.
+     */
     function annotationTextSummary(element, isEditable) {
       if (isEditable) return ''
-      if (element.querySelector('[data-lexical-editor="true"], textarea, input[type="password"]') !== null) return ''
+      if (annotationHasLiveInputSurface(element)) return ''
       const text = typeof element.textContent === 'string' ? element.textContent : ''
       return sanitizeText(text, 80)
+    }
+
+    /**
+     * Digest of the full sanitized text of one element (F11). Privacy suppression is
+     * the same as the text summary: live input surfaces yield '' so a digest can
+     * never stand in for their content.
+     * @param {Element} element - candidate element.
+     * @param {boolean} isEditable - whether the element is contenteditable.
+     * @returns {string} eight-hex digest, or ''.
+     */
+    function annotationTextDigest(element, isEditable) {
+      if (isEditable) return ''
+      if (annotationHasLiveInputSurface(element)) return ''
+      const text = typeof element.textContent === 'string' ? element.textContent : ''
+      return textDigest(text)
     }
 
     /**
@@ -9735,6 +9863,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         name: annotationAccessibleName(element, tag),
         attrs,
         text: annotationTextSummary(element, isEditable),
+        textDigest: annotationTextDigest(element, isEditable),
         component: annotationComponentOf(tag, role, isEditable, insideComposer === true),
         path: pathInfo.selector,
         tagPath: pathInfo.parts,
@@ -9856,7 +9985,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const hits = []
       let nodes
       try {
-        nodes = document.querySelectorAll(ANNOTATION_BOX_CANDIDATE_SELECTOR)
+        // One bounded scan at release, over exactly the click picker's candidates (F15).
+        nodes = document.querySelectorAll(ANNOTATION_CANDIDATE_SELECTOR)
       } catch {
         return []
       }
@@ -10006,8 +10136,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
       /** Installed window listeners, removed on deactivate. */
       const pageListeners = []
-      /** Live element cache keyed by ref id; never serialized. */
-      const refNodes = new Map()
+      /** Cleanups for temporary gesture listeners; teardown aborts all of them. */
+      const activeGestures = new Set()
       /** Hover identity tokens per element. */
       const elementTokens = new WeakMap()
       /** Chain and index of the last picked selection, for level up/down. */
@@ -10026,6 +10156,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       let frameObserver = null
       let observedFrame = null
       let frameObserverTimer = null
+      /** Inline frame styles captured before the first mode write (F12). */
+      let frameSnapshot = null
+      /** Timer that drops the frame marker after the reverse transition (F12). */
+      let frameRestoreTimer = null
       /** Feedback auto-dismiss timer. */
       let feedbackTimer = null
       /** Re-locate flash timer. */
@@ -10034,6 +10168,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       let suppressLauncherClickUntil = 0
       /** Ref id the current popover was placed for. */
       let popoverRefId = null
+      /** Real mounted popover size used for clamping; the constant is only the fallback (F14). */
+      let popoverMeasuredSize = { width: ANNOTATION_POPOVER_SIZE.width, height: ANNOTATION_POPOVER_SIZE.height }
+      /** Mounted popover element, only used for measurement. */
+      let popoverElement = null
+      /** Pending popover measurement frame. */
+      let popoverMeasureFrame = null
       /** Monotonic hover token. */
       let tokenSeq = 0
 
@@ -10101,6 +10241,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (active) document.documentElement.setAttribute('data-psa-passthrough', 'true')
         else document.documentElement.removeAttribute('data-psa-passthrough')
         dispatch({ type: 'passThrough', on: active })
+        if (active) {
+          // Native mouse semantics resume: no hover outline, and an in-flight
+          // marquee is cancelled instead of selecting on release (F10).
+          abortGestures()
+          clearHover()
+        }
       }
 
       /**
@@ -10166,19 +10312,17 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
 
       /**
-       * Resolve one ref's live node, caching it controller-side only.
+       * Resolve one ref's live node through the unique-match path.
+       *
+       * A connected node from an earlier capture is not enough to trust: after a
+       * re-render the first match may be a different element with the same selector.
+       * The resolver only returns a node when exactly one candidate matches, so an
+       * update/re-locate can never target a stale first hit (F3/F5).
        * @param {object} ref - ElementRef.
-       * @returns {Element | null} live element.
+       * @returns {Element | null} the unique live element, or null.
        */
       function liveNode(ref) {
-        const cached = refNodes.get(ref.id)
-        if (cached !== undefined) {
-          if (cached.isConnected && (typeof ref.locator?.tag !== 'string' || cached.tagName.toLowerCase() === ref.locator.tag.toLowerCase())) return cached
-          refNodes.delete(ref.id)
-        }
-        const resolved = annotationResolveNode(ref)
-        if (resolved !== null) refNodes.set(ref.id, resolved)
-        return resolved
+        return annotationResolveNode(ref)
       }
 
       /**
@@ -10192,12 +10336,30 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           candidates: ref.locator.candidates,
           expectedTag: ref.locator.tag,
           queryAll: (selector) => document.querySelectorAll(selector),
-          liveInfo: (element) => ({
-            isConnected: element.isConnected,
-            textContent: typeof element.textContent === 'string' ? element.textContent : '',
-            expectedText: typeof ref.text === 'string' ? ref.text : ''
-          })
+          liveInfo: (element) => {
+            const elementText = typeof element.textContent === 'string' ? element.textContent : ''
+            const liveTag = typeof element.tagName === 'string' ? element.tagName.toLowerCase() : ''
+            return {
+              isConnected: element.isConnected,
+              textContent: elementText,
+              expectedText: typeof ref.text === 'string' ? ref.text : '',
+              expectedDigest: typeof ref.textDigest === 'string' ? ref.textDigest : '',
+              actualDigest: textDigest(elementText),
+              expectedName: ref.locator !== null && typeof ref.locator === 'object' && typeof ref.locator.name === 'string' ? ref.locator.name : '',
+              actualName: liveTag.length > 0 ? annotationAccessibleName(element, liveTag) : ''
+            }
+          }
         })
+      }
+
+      /**
+       * The Session the bridge is currently attached to, or null when no composer is
+       * mounted (start page, Plugins view, or a seat that has not mounted yet).
+       * @returns {string | null} current Session identity.
+       */
+      function currentSessionId() {
+        const sessionId = annotationBridge.sessionId ?? snapshot().state.sessionId
+        return typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null
       }
 
       /**
@@ -10217,8 +10379,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
        * @returns {'current' | 'other'} scope.
        */
       function collectionScopeOf(ref) {
-        const current = annotationBridge.sessionId ?? snapshot().state.sessionId
-        if (current === null || current === undefined) return 'other'
+        const current = currentSessionId()
+        if (current === null) return 'other'
         return ref?.session?.sessionId === current ? 'current' : 'other'
       }
 
@@ -10249,7 +10411,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             const rect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref.bounds)
             popoverPosition = rect === null
               ? null
-              : clampPopoverPosition(rect, ANNOTATION_POPOVER_SIZE, annotationViewport(), previous.railWidth)
+              : clampPopoverPosition(rect, popoverMeasuredSize, annotationViewport(), previous.railWidth)
           }
         } else {
           popoverRefId = null
@@ -10257,6 +10419,64 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           popoverPinned = false
         }
         return { selectionRects, popoverPosition, popoverPinned, boxRect: state.box }
+      }
+
+      /**
+       * Re-clamp an unpinned popover with the last measured popover size.
+       * @returns {void}
+       */
+      function reclampPopoverWithMeasuredSize() {
+        const current = snapshot()
+        if (current.state.phase !== 'selected' || current.popoverPinned || current.state.selection.length !== 1) return
+        const ref = current.state.selection[0]
+        const node = liveNode(ref)
+        const targetRect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref.bounds)
+        if (targetRect === null) return
+        publish({ popoverPosition: clampPopoverPosition(targetRect, popoverMeasuredSize, annotationViewport(), current.railWidth) })
+      }
+
+      /**
+       * Measure the mounted popover and use its real height/width for clamping; a
+       * fixed estimate could overflow for a long note or a narrow viewport (F14).
+       * @returns {void}
+       */
+      function measurePopover() {
+        if (popoverElement === null || typeof popoverElement.getBoundingClientRect !== 'function') return
+        const rect = popoverElement.getBoundingClientRect()
+        if (rect.width <= 0 || rect.height <= 0) return
+        const size = { width: Math.round(rect.width), height: Math.round(rect.height) }
+        const changed = size.width !== popoverMeasuredSize.width || size.height !== popoverMeasuredSize.height
+        popoverMeasuredSize = size
+        if (changed) reclampPopoverWithMeasuredSize()
+      }
+
+      /** Schedule one coalesced popover measurement. @returns {void} */
+      function schedulePopoverMeasure() {
+        if (popoverMeasureFrame !== null) return
+        popoverMeasureFrame = window.requestAnimationFrame(() => {
+          popoverMeasureFrame = null
+          measurePopover()
+        })
+      }
+
+      /**
+       * Track the mounted popover element for measurement.
+       * @param {Element | null} node - mounted popover root.
+       * @returns {void}
+       */
+      function attachPopoverNode(node) {
+        if (!(node instanceof HTMLElement) || node === popoverElement) return
+        popoverElement = node
+        schedulePopoverMeasure()
+      }
+
+      /** Forget the mounted popover element. @returns {void} */
+      function detachPopoverNode() {
+        popoverElement = null
+        if (popoverMeasureFrame !== null) {
+          window.cancelAnimationFrame(popoverMeasureFrame)
+          popoverMeasureFrame = null
+        }
       }
 
       /**
@@ -10290,18 +10510,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           feedbackTimer = null
           dispatch({ type: 'feedback', feedback: null })
         }, 3200)
-      }
-
-      /**
-       * Dismiss the feedback message immediately.
-       * @returns {void}
-       */
-      function dismissFeedback() {
-        if (feedbackTimer !== null) {
-          window.clearTimeout(feedbackTimer)
-          feedbackTimer = null
-        }
-        dispatch({ type: 'feedback', feedback: null })
       }
 
       /**
@@ -10341,9 +10549,20 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const mode = layoutModeFor(size.width, annotationMeasureSidebarWidths(), railWidth)
         const frame = annotationLayoutFrame()
         if (isActive() && frame !== null) {
+          captureFrameInline(frame)
+          if (frameRestoreTimer !== null) {
+            // Reactivating before the reverse transition finished must keep the marker.
+            window.clearTimeout(frameRestoreTimer)
+            frameRestoreTimer = null
+          }
           if (frame.getAttribute('data-psa-frame') !== 'true') frame.setAttribute('data-psa-frame', 'true')
-          const padding = mode === 'shrink' ? `${railWidth}px` : ''
-          if (frame.style.paddingRight !== padding) frame.style.paddingRight = padding
+          if (mode === 'shrink') {
+            if (frame.style.paddingRight !== `${railWidth}px`) frame.style.paddingRight = `${railWidth}px`
+          } else if (frameSnapshot !== null) {
+            // Overlay mode reserves no strip: put the host's own padding back instead
+            // of writing '' over it or leaving the shrink padding behind (F12).
+            restoreInlineProperty(frame, 'padding-right', frameSnapshot.paddingRight)
+          }
           const railProperty = `${railWidth}px`
           if (frame.style.getPropertyValue('--psa-rail-width') !== railProperty) frame.style.setProperty('--psa-rail-width', railProperty)
           observeFrame(frame)
@@ -10354,7 +10573,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           const ref = current.state.selection[0]
           const node = ref === undefined ? null : liveNode(ref)
           const rect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref?.bounds)
-          if (rect !== null) patch.popoverPosition = clampPopoverPosition(rect, ANNOTATION_POPOVER_SIZE, size, railWidth)
+          if (rect !== null) patch.popoverPosition = clampPopoverPosition(rect, popoverMeasuredSize, size, railWidth)
         }
         publish(patch)
         persistLauncherPositionIfNeeded(launcherPosition, current.launcherPosition)
@@ -10410,12 +10629,37 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
 
       /**
-       * Whether an event should be blocked, and block it.
-       * @param {object} event - DOM event.
-       * @returns {boolean} whether it was blocked.
+       * Register one temporary gesture cleanup so teardown can abort it.
+       * @param {(aborted: boolean) => void} cleanup - removes listeners and settles the gesture.
+       * @returns {Function} unregister handle.
        */
-      function blockPageEvent(event) {
-        return blockEvent(event)
+      function trackGesture(cleanup) {
+        activeGestures.add(cleanup)
+        return () => {
+          activeGestures.delete(cleanup)
+        }
+      }
+
+      /**
+       * Abort every in-flight gesture (launcher drag, popover drag, marquee) without
+       * changing the mode or persisting a half-finished interaction.
+       * @returns {void}
+       */
+      function abortGestures() {
+        for (const cleanup of [...activeGestures]) {
+          try {
+            cleanup(true)
+          } catch {
+            // One broken gesture must not block the remaining cleanups.
+          }
+        }
+        activeGestures.clear()
+        pointer = null
+        publish({ launcherDragging: false })
+        if (snapshot().state.box !== null || snapshot().boxRect !== null) {
+          publish({ boxRect: null })
+          dispatch({ type: 'box', box: null })
+        }
       }
 
       /**
@@ -10505,7 +10749,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             const ref = current.state.selection[0]
             const node = ref === undefined ? null : liveNode(ref)
             const rect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref?.bounds)
-            if (rect !== null) patch.popoverPosition = clampPopoverPosition(rect, ANNOTATION_POPOVER_SIZE, annotationViewport(), current.railWidth)
+            if (rect !== null) patch.popoverPosition = clampPopoverPosition(rect, popoverMeasuredSize, annotationViewport(), current.railWidth)
           }
           publish(patch)
         })
@@ -10621,7 +10865,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const index = annotationPickChainIndex(chain)
         if (index < 0) return
         const ref = refFromChain(chain, index, null)
-        refNodes.set(ref.id, chain[index].element)
         lastPick = { chain, index }
         dispatch({ type: 'selectSingle', ref })
       }
@@ -10641,7 +10884,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const existing = state.selection.find((item) => identityKeyOf(item) === identityKeyOf(refFromChain(chain, index, null)))
         const like = existing !== undefined ? { ...existing, note: state.note } : null
         const ref = refFromChain(chain, index, like)
-        refNodes.set(ref.id, chain[index].element)
         lastPick = { chain, index }
         dispatch({ type: 'toggleMulti', ref })
       }
@@ -10667,8 +10909,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           const key = identityKeyOf(ref)
           if (seen.has(key)) continue
           seen.add(key)
-          refNodes.set(ref.id, chain[index].element)
-          refs.push(ref)
+            refs.push(ref)
         }
         if (refs.length === 0) return
         dispatch({ type: 'setMulti', refs })
@@ -10744,12 +10985,26 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
 
       /**
-       * Reset transient modifier state when focus leaves the window.
+       * Reset transient modifier and gesture state when focus leaves the window.
        * @returns {void}
        */
       function onWindowBlur() {
         if (!isActive()) return
         if (snapshot().state.passThrough) setPassThrough(false)
+        abortGestures()
+        clearHover()
+      }
+
+      /**
+       * Cancel an in-flight page gesture without selecting anything.
+       * @returns {void}
+       */
+      function onPointerCancel() {
+        pointer = null
+        if (isActive() && (snapshot().state.box !== null || snapshot().boxRect !== null)) {
+          publish({ boxRect: null })
+          dispatch({ type: 'box', box: null })
+        }
         clearHover()
       }
 
@@ -10810,14 +11065,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         }
         listen('pointerdown', onPointerDown, { capture: true, passive: false })
         listen('pointerup', onPointerUp, { capture: true, passive: false })
-        listen('mousedown', blockPageEvent, { capture: true, passive: false })
-        listen('pointerup', blockPageEvent, { capture: true, passive: false })
-        listen('mouseup', blockPageEvent, { capture: true, passive: false })
-        listen('click', blockPageEvent, { capture: true, passive: false })
-        listen('auxclick', blockPageEvent, { capture: true, passive: false })
-        listen('dblclick', blockPageEvent, { capture: true, passive: false })
-        listen('contextmenu', blockPageEvent, { capture: true, passive: false })
-        listen('dragstart', blockPageEvent, { capture: true, passive: false })
+        listen('mousedown', blockEvent, { capture: true, passive: false })
+        listen('pointerup', blockEvent, { capture: true, passive: false })
+        listen('mouseup', blockEvent, { capture: true, passive: false })
+        listen('click', blockEvent, { capture: true, passive: false })
+        listen('auxclick', blockEvent, { capture: true, passive: false })
+        listen('dblclick', blockEvent, { capture: true, passive: false })
+        listen('contextmenu', blockEvent, { capture: true, passive: false })
+        listen('dragstart', blockEvent, { capture: true, passive: false })
+        listen('pointercancel', onPointerCancel, { capture: true, passive: true })
         listen('pointermove', onPointerMove, { capture: true, passive: true })
         listen('wheel', onWheel, { capture: true, passive: true })
         listen('scroll', onScroll, { capture: true, passive: true })
@@ -10845,25 +11101,116 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (frameObserverTimer !== null) window.clearTimeout(frameObserverTimer)
         if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
         if (flashTimer !== null) window.clearTimeout(flashTimer)
+        if (frameRestoreTimer !== null) window.clearTimeout(frameRestoreTimer)
+        if (popoverMeasureFrame !== null) window.cancelAnimationFrame(popoverMeasureFrame)
+        popoverMeasureFrame = null
         resizeTimer = null
         frameObserverTimer = null
         feedbackTimer = null
         flashTimer = null
+        frameRestoreTimer = null
+      }
+
+      /** @returns {boolean} whether the host asks for reduced motion. */
+      function prefersReducedMotion() {
+        try {
+          return typeof window.matchMedia === 'function'
+            && window.matchMedia('(prefers-reduced-motion: reduce)').matches === true
+        } catch {
+          return false
+        }
+      }
+
+      /**
+       * Remember the frame's own inline padding-right and --psa-rail-width (value
+       * and priority) before the mode writes them, so exit restores the exact
+       * previous state instead of blanket-clearing host inline styles (F12).
+       * @param {HTMLElement} frame - layout frame.
+       * @returns {void}
+       */
+      function captureFrameInline(frame) {
+        if (frameSnapshot !== null && frameSnapshot.frame === frame) return
+        if (frameSnapshot !== null) {
+          const previousFrame = frameSnapshot.frame
+          restoreFrameInline()
+          if (previousFrame !== null && previousFrame !== undefined && typeof previousFrame.removeAttribute === 'function') {
+            previousFrame.removeAttribute('data-psa-frame')
+          }
+        }
+        frameSnapshot = {
+          frame,
+          paddingRight: {
+            value: frame.style.getPropertyValue('padding-right'),
+            priority: frame.style.getPropertyPriority('padding-right')
+          },
+          railWidth: {
+            value: frame.style.getPropertyValue('--psa-rail-width'),
+            priority: frame.style.getPropertyPriority('--psa-rail-width')
+          }
+        }
+      }
+
+      /**
+       * Restore one inline property to exactly its captured value and priority.
+       * @param {HTMLElement} frame - layout frame.
+       * @param {string} name - CSS property name.
+       * @param {{ value: string, priority: string }} saved - captured property state.
+       * @returns {void}
+       */
+      function restoreInlineProperty(frame, name, saved) {
+        if (saved.value === '' && saved.priority === '') frame.style.removeProperty(name)
+        else frame.style.setProperty(name, saved.value, saved.priority)
+      }
+
+      /**
+       * Restore the captured inline frame styles. Never a blanket clear.
+       * @returns {void}
+       */
+      function restoreFrameInline() {
+        if (frameSnapshot === null) return
+        const frame = frameSnapshot.frame
+        if (frame !== null && frame !== undefined && typeof frame.style === 'object') {
+          restoreInlineProperty(frame, 'padding-right', frameSnapshot.paddingRight)
+          restoreInlineProperty(frame, '--psa-rail-width', frameSnapshot.railWidth)
+        }
+        frameSnapshot = null
       }
 
       /**
        * Remove every layout marker this mode added, restoring the frame exactly.
-       * Shared by normal deactivation, activation rollback, and plugin disposal.
+       *
+       * Exit restores the captured inline padding while the transition rule is
+       * still present, then drops the frame marker after the reverse transition
+       * (immediately under reduced motion, and always on disposal/rollback).
+       * @param {{ immediate?: boolean }} [options] - force the marker removal now.
        * @returns {void}
        */
-      function restoreAnnotationLayout() {
+      function restoreAnnotationLayout(options) {
+        const settingsForRestore = options !== null && typeof options === 'object' ? options : {}
+        const immediate = settingsForRestore.immediate === true || prefersReducedMotion()
         const frame = annotationLayoutFrame()
+        const snapshotFrame = frameSnapshot === null ? null : frameSnapshot.frame
         document.documentElement.removeAttribute('data-psa-active')
         document.documentElement.removeAttribute('data-psa-passthrough')
-        if (frame === null) return
-        frame.removeAttribute('data-psa-frame')
-        frame.style.paddingRight = ''
-        frame.style.removeProperty('--psa-rail-width')
+        if (frameRestoreTimer !== null) {
+          window.clearTimeout(frameRestoreTimer)
+          frameRestoreTimer = null
+        }
+        if (snapshotFrame !== null && snapshotFrame !== undefined) restoreFrameInline()
+        const markerFrame = snapshotFrame !== null && snapshotFrame !== undefined ? snapshotFrame : frame
+        if (markerFrame === null || markerFrame === undefined) return
+        if (immediate) {
+          markerFrame.removeAttribute('data-psa-frame')
+          if (frame !== null && frame !== markerFrame) frame.removeAttribute('data-psa-frame')
+          return
+        }
+        // Keep the marker while the restored padding animates back, then remove it.
+        frameRestoreTimer = window.setTimeout(() => {
+          frameRestoreTimer = null
+          if (markerFrame.isConnected !== false) markerFrame.removeAttribute('data-psa-frame')
+          const current = annotationLayoutFrame()
+          if (current !== null && current !== markerFrame) current.removeAttribute('data-psa-frame')
+        }, 180)
       }
 
       /**
@@ -10891,7 +11238,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           uninstallPageListeners()
           disconnectFrameObserver()
           clearTimers()
-          restoreAnnotationLayout()
+          restoreAnnotationLayout({ immediate: true })
           throw error
         }
         feedback(t('feedback.modeOn'))
@@ -10913,6 +11260,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         } finally {
           // Layout restoration and listener removal come first and unconditionally; the
           // UI-state refresh below is best effort.
+          abortGestures()
+          lastPick = null
           uninstallPageListeners()
           disconnectFrameObserver()
           restoreAnnotationLayout()
@@ -10973,17 +11322,35 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             )
           })
         }
-        /** @returns {void} */
-        const onUp = () => {
+        /**
+         * Settle the drag exactly once. An aborted drag (teardown, pass-through)
+         * never persists a position and swallows the click that follows it.
+         * @param {boolean} aborted - whether a teardown is aborting the gesture.
+         * @returns {void}
+         */
+        const settle = (aborted) => {
+          if (settled === true) return
+          settled = true
+          unregister()
           window.removeEventListener('pointermove', onMove, true)
           window.removeEventListener('pointerup', onUp, true)
+          window.removeEventListener('pointercancel', onCancel, true)
           publish({ launcherDragging: false })
+          if (aborted) {
+            suppressLauncherClickUntil = Date.now() + 600
+            return
+          }
           if (!moved) return
           suppressLauncherClickUntil = Date.now() + 600
           persistLauncherPosition(snapshot().launcherPosition)
         }
+        const onUp = () => settle(false)
+        const onCancel = () => settle(true)
+        let settled = false
+        const unregister = trackGesture(settle)
         window.addEventListener('pointermove', onMove, true)
         window.addEventListener('pointerup', onUp, true)
+        window.addEventListener('pointercancel', onCancel, true)
       }
 
       /**
@@ -11006,25 +11373,36 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const start = snapshot().popoverPosition
         if (start === null) return
         event.preventDefault()
+        measurePopover()
         const originX = event.clientX
         const originY = event.clientY
         /** @param {PointerEvent} moveEvent - pointermove. @returns {void} */
         const onMove = (moveEvent) => {
           const size = annotationViewport()
           const railWidth = snapshot().railWidth
-          const maxX = Math.max(8, size.width - railWidth - ANNOTATION_POPOVER_SIZE.width - 8)
-          const maxY = Math.max(8, size.height - ANNOTATION_POPOVER_SIZE.height - 8)
+          const maxX = Math.max(8, size.width - railWidth - popoverMeasuredSize.width - 8)
+          const maxY = Math.max(8, size.height - popoverMeasuredSize.height - 8)
           const x = Math.min(Math.max(start.x + moveEvent.clientX - originX, 8), maxX)
           const y = Math.min(Math.max(start.y + moveEvent.clientY - originY, 8), maxY)
           publish({ popoverPosition: { x: Math.round(x), y: Math.round(y) }, popoverPinned: true })
         }
-        /** @returns {void} */
-        const onUp = () => {
+        /** @param {boolean} aborted - whether a teardown is aborting the gesture. @returns {void} */
+        const settle = (aborted) => {
+          if (settled === true) return
+          settled = true
+          unregister()
           window.removeEventListener('pointermove', onMove, true)
           window.removeEventListener('pointerup', onUp, true)
+          window.removeEventListener('pointercancel', onCancel, true)
+          if (aborted) return
         }
+        const onUp = () => settle(false)
+        const onCancel = () => settle(true)
+        let settled = false
+        const unregister = trackGesture(settle)
         window.addEventListener('pointermove', onMove, true)
         window.addEventListener('pointerup', onUp, true)
+        window.addEventListener('pointercancel', onCancel, true)
       }
 
       /** Toggle the collapsed rail strip. @returns {void} */
@@ -11057,6 +11435,25 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
        */
       function updateNote(text) {
         dispatch({ type: 'setNote', text: typeof text === 'string' ? text : '' })
+      }
+
+      /**
+       * Mark the popover note as being edited. The first Esc then ends editing and
+       * keeps both the note and the popover (F6).
+       * @returns {void}
+       */
+      function beginEdit() {
+        if (!isActive()) return
+        dispatch({ type: 'beginEdit' })
+      }
+
+      /**
+       * End note editing without clearing the note or the selection.
+       * @returns {void}
+       */
+      function endEdit() {
+        if (!isActive()) return
+        dispatch({ type: 'endEdit' })
       }
 
       /**
@@ -11154,7 +11551,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (nextIndex < 0 || nextIndex >= lastPick.chain.length) return
         lastPick = { chain: lastPick.chain, index: nextIndex }
         const nextRef = refFromChain(lastPick.chain, nextIndex, { ...ref, note: state.note })
-        refNodes.set(nextRef.id, lastPick.chain[nextIndex].element)
         dispatch({ type: 'selectSingle', ref: nextRef })
       }
 
@@ -11218,6 +11614,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       function relocateEntry(refId) {
         const ref = snapshot().state.collection.find((entry) => entry.id === refId)
         if (ref === undefined) return
+        if (collectionScopeOf(ref) !== 'current') {
+          // Another Session's entry is not part of the current DOM; resolving it
+          // against this page could jump into an unrelated lookalike (F9).
+          feedback(t('feedback.relocateOtherSession'), 'error')
+          return
+        }
         const status = statusOf(ref)
         const node = status === 'resolved' ? liveNode(ref) : null
         if (node === null) {
@@ -11261,16 +11663,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
 
       /**
-       * Read one collection entry's current note for the expanded editor.
-       * @param {string} refId - ref id.
-       * @returns {string} note text.
-       */
-      function noteOf(refId) {
-        const ref = snapshot().state.collection.find((entry) => entry.id === refId)
-        return ref?.note ?? ''
-      }
-
-      /**
        * Notify the controller that the mounted Composer seat changed Session.
        * @param {string | null} sessionId - Session identity, or null.
        * @returns {void}
@@ -11286,15 +11678,16 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       /** Tear everything down (plugin unmount). @returns {void} */
       function dispose() {
         window.removeEventListener('resize', onInstalledResize)
+        abortGestures()
+        detachPopoverNode()
         uninstallPageListeners()
         disconnectFrameObserver()
         clearTimers()
-        restoreAnnotationLayout()
+        restoreAnnotationLayout({ immediate: true })
         if (flashTimer !== null) window.clearTimeout(flashTimer)
         flashTimer = null
         pointer = null
         lastPick = null
-        refNodes.clear()
         try {
           clearHover()
         } catch {
@@ -11302,7 +11695,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         }
         annotationBridge.inputActions = null
         annotationBridge.sessionId = null
-        annotationBridge.draft = ''
       }
 
       return {
@@ -11314,11 +11706,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         beginLauncherDrag,
         consumeLauncherClickSuppressed,
         beginPopoverDrag,
+        attachPopoverNode,
+        detachPopoverNode,
         toggleRailCollapsed,
         openView,
         backView,
         clearSelection,
         updateNote,
+        beginEdit,
+        endEdit,
         addSelectionToCollection,
         quickReference,
         insertBatch,
@@ -11331,11 +11727,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         relocateEntry,
         openNoteEditor,
         closeNoteEditor,
-        noteOf,
         statusOf,
         isInCollection,
         collectionScopeOf,
-        dismissFeedback,
+        currentSessionId,
         sessionChanged,
         dispose
       }
@@ -11364,7 +11759,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 @media (prefers-reduced-motion:reduce){.psa-selection[data-psa-flash=true],.psa-multi[data-psa-flash=true],.psa-flash-outline{animation:none}}
 .psa-box{position:fixed;box-sizing:border-box;border:1px solid var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));opacity:.65}
 .psa-flash-outline{position:fixed;box-sizing:border-box;border:2px solid var(--dsw-alias-state-business-primary);border-radius:3px;animation:psa-flash .6s ease-out 1}
-.psa-rail{position:fixed;top:0;right:0;bottom:0;box-sizing:border-box;display:flex;flex-direction:column;min-height:0;background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12.5px;line-height:18px;pointer-events:auto;z-index:40}
+.psa-rail{position:fixed;top:0;right:0;bottom:0;box-sizing:border-box;display:flex;flex-direction:column;min-height:0;width:var(--psa-rail-width,200px);background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12.5px;line-height:18px;pointer-events:auto;z-index:40}
 .psa-rail[data-psa-mode=overlay]{top:8px;right:8px;bottom:8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%))}
 .psa-rail[data-psa-collapsed=true]{align-items:center}
 .psa-rail-header{display:flex;align-items:center;gap:4px;padding:8px 8px 6px;flex:none}
@@ -11380,29 +11775,29 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-rail-section{display:flex;flex-direction:column;gap:6px}
 .psa-status-line{color:var(--dsw-alias-label-secondary)}
 .psa-status-strong{color:var(--dsw-alias-label-primary);font-weight:500}
-.psa-muted{color:var(--dsw-alias-label-tertiary);font-size:11.5px;line-height:16px}
+.psa-muted{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px}
 .psa-truncate{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psa-btn{appearance:none;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:space-between;gap:6px;width:100%;min-height:28px;padding:5px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;cursor:pointer;text-align:left}
+.psa-btn{appearance:none;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:space-between;gap:6px;width:100%;min-height:28px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;cursor:pointer;text-align:left}
 .psa-btn:hover:enabled{background:var(--dsw-alias-interactive-bg-hover)}
 .psa-btn:disabled{color:var(--dsw-alias-label-tertiary);cursor:default}
 .psa-btn:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psa-btn-primary{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary)}
-.psa-btn-count{color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums;font-size:11.5px}
+.psa-btn-count{color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums;font-size:12px}
 .psa-rail-footer{flex:none;display:flex;flex-direction:column;gap:6px;padding:8px 10px 10px;border-top:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent))}
-.psa-entry{display:flex;flex-direction:column;gap:5px;padding:8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px)}
+.psa-entry{display:flex;flex-direction:column;gap:4px;padding:8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px)}
 .psa-entry[data-psa-entry-scope=other]{border-style:dashed}
 .psa-entry-head{display:flex;align-items:center;gap:6px;min-width:0}
 .psa-entry-index{flex:none;min-width:13px;text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;font-variant-numeric:tabular-nums}
 .psa-entry-name{flex:1;min-width:0;appearance:none;border:0;background:transparent;padding:0;color:var(--dsw-alias-label-primary);font:inherit;font-weight:500;font-size:12px;line-height:17px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .psa-entry-name:hover{text-decoration:underline}
 .psa-entry-name:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
-.psa-badge{flex:none;padding:1px 5px;border-radius:6px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-tertiary);font-size:10.5px;line-height:14px}
+.psa-badge{flex:none;padding:0 4px;border-radius:6px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-tertiary);font-size:10.5px;line-height:14px}
 .psa-status-dot{flex:none;width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-label-tertiary)}
 .psa-status-dot[data-psa-status=resolved]{background:var(--dsw-alias-state-success-primary,var(--dsw-alias-label-tertiary))}
 .psa-status-dot[data-psa-status=ambiguous],.psa-status-dot[data-psa-status=changed]{background:var(--dsw-alias-state-warn-primary,var(--dsw-alias-label-tertiary))}
 .psa-status-dot[data-psa-status=missing]{background:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-tertiary))}
-.psa-entry-locator{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psa-entry-note{box-sizing:border-box;width:100%;min-height:34px;max-height:72px;padding:4px 6px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
+.psa-entry-locator{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-entry-note{box-sizing:border-box;width:100%;min-height:34px;max-height:72px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
 .psa-entry-note:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psa-entry-actions{display:flex;justify-content:flex-end;gap:2px}
 .psa-empty{display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center;padding:18px 6px;border:1px dashed var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px)}
@@ -11414,17 +11809,17 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-popover{position:fixed;box-sizing:border-box;width:320px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;gap:8px;padding:10px 12px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:auto;z-index:45}
 .psa-popover-head{display:flex;align-items:center;gap:6px;cursor:grab;user-select:none}
 .psa-popover-title{flex:1;min-width:0;font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psa-popover-ref{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psa-popover-status{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary);font-size:11.5px;line-height:16px}
+.psa-popover-ref{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-popover-status{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:16px}
 .psa-levels{display:inline-flex;align-items:center;gap:2px;margin-left:auto}
 .psa-popover-note{display:flex;flex-direction:column;gap:4px}
-.psa-popover-textarea{box-sizing:border-box;width:100%;min-height:56px;max-height:150px;padding:5px 7px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
+.psa-popover-textarea{box-sizing:border-box;width:100%;min-height:56px;max-height:150px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
 .psa-popover-textarea:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psa-popover-actions{display:flex;gap:6px}
 .psa-popover-actions .psa-btn{flex:1;justify-content:center}
 .psa-note-editor{position:fixed;box-sizing:border-box;width:300px;display:flex;flex-direction:column;gap:6px;padding:10px 12px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:auto;z-index:55}
-.psa-note-editor-textarea{box-sizing:border-box;width:100%;min-height:96px;max-height:220px;padding:5px 7px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
-.psa-feedback{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:56;max-width:min(520px,calc(100vw - 48px));padding:7px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 8px 24px rgb(0 0 0 / 18%));color:var(--dsw-alias-label-secondary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:none}
+.psa-note-editor-textarea{box-sizing:border-box;width:100%;min-height:96px;max-height:220px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
+.psa-feedback{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:56;max-width:min(520px,calc(100vw - 48px));padding:8px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 8px 24px rgb(0 0 0 / 18%));color:var(--dsw-alias-label-secondary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:none}
 .psa-feedback[data-psa-kind=error]{color:var(--dsw-alias-state-error-primary)}
 `
 
@@ -11637,8 +12032,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           'data-psa-collapsed': 'true',
           'data-psa-mode': snapshot.layoutMode,
           role: 'complementary',
-          'aria-label': t('rail.aria'),
-          style: { width: `${snapshot.railWidth}px` }
+          'aria-label': t('rail.aria')
         },
         React.createElement('div', { className: 'psa-rail-header' },
           collapseButton,
@@ -11666,8 +12060,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         'data-psa-own': '',
         'data-psa-mode': snapshot.layoutMode,
         role: 'complementary',
-        'aria-label': t('rail.aria'),
-        style: { width: `${snapshot.railWidth}px` }
+        'aria-label': t('rail.aria')
       },
       React.createElement('div', { className: 'psa-rail-header' },
         React.createElement('span', { className: 'psa-dot', 'aria-hidden': true }),
@@ -11756,6 +12149,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       const { t, controller, snapshot } = props
       const state = snapshot.state
       const entries = state.collection
+      const sessionId = controller.currentSessionId()
       const otherCount = entries.filter((entry) => controller.collectionScopeOf(entry) !== 'current').length
       const nodes = [
         React.createElement('div', { key: 'head', className: 'psa-rail-section' },
@@ -11772,7 +12166,17 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
             React.createElement('span', { className: 'psa-btn-count', style: { marginLeft: 'auto' } },
               entries.length === 1 ? t('collection.countOne') : t('collection.count', { count: entries.length }))))
       ]
-      if (otherCount > 0) {
+      if (sessionId === null && entries.length > 0) {
+        // Without a mounted Composer seat there is no current Session, so scope is
+        // unknown for every entry; say that explicitly instead of implying the
+        // entries are merely from another Session (F8).
+        nodes.push(React.createElement('div', {
+          key: 'no-session',
+          className: 'psa-muted',
+          'data-psa-no-session': '',
+          'data-psa-own': ''
+        }, t('feedback.noComposer')))
+      } else if (otherCount > 0) {
         nodes.push(React.createElement('div', { key: 'other', className: 'psa-muted' }, t('collection.crossSession', { count: otherCount })))
       }
       if (entries.length === 0) {
@@ -11784,7 +12188,6 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           key: entry.id,
           t,
           controller,
-          snapshot,
           entry,
           index
         }))
@@ -11799,9 +12202,11 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
      * @returns {object} the row.
      */
     function AnnotationEntryRow(props) {
-      const { t, controller, snapshot, entry, index } = props
+      const { t, controller, entry, index } = props
       const scope = controller.collectionScopeOf(entry)
-      const status = controller.statusOf(entry)
+      // A resolution chip only means something for the current page's Session; for
+      // another Session the row is marked `other` instead of claiming a live match (F9).
+      const status = scope === 'current' ? controller.statusOf(entry) : 'other'
       const locator = describeLocator(entry)
       return React.createElement('div', {
         className: 'psa-entry',
@@ -11823,14 +12228,13 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         }, elementLabel(entry)),
         scope === 'other'
           ? React.createElement('span', { className: 'psa-badge', 'data-psa-own': '' }, t('collection.otherSession'))
-          : null,
-        React.createElement('span', {
-          className: 'psa-status-dot',
-          'data-psa-status': status,
-          'data-psa-own': '',
-          title: t(`popover.status.${status}`),
-          'aria-label': t(`popover.status.${status}`)
-        })),
+          : React.createElement('span', {
+            className: 'psa-status-dot',
+            'data-psa-status': status,
+            'data-psa-own': '',
+            title: t(`popover.status.${status}`),
+            'aria-label': t(`popover.status.${status}`)
+          })),
       React.createElement('div', { className: 'psa-entry-locator', title: locator }, locator),
       React.createElement('textarea', {
         className: 'psa-entry-note',
@@ -11959,12 +12363,17 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     function AnnotationPopover(props) {
       const { t, controller, snapshot } = props
       const state = snapshot.state
+      const setPopoverNode = React.useCallback((node) => {
+        if (node === null) controller.detachPopoverNode()
+        else controller.attachPopoverNode(node)
+      }, [controller])
       const ref = state.selection[0]
       if (ref === undefined || snapshot.popoverPosition === null) return null
       const status = controller.statusOf(ref)
       const inCollection = controller.isInCollection(ref)
       const locator = describeLocator(ref)
       return React.createElement('div', {
+        ref: setPopoverNode,
         className: 'psa-popover',
         'data-psa-popover': '',
         'data-psa-own': '',
@@ -12025,7 +12434,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           value: state.note,
           placeholder: t('popover.notePlaceholder'),
           'aria-label': t('popover.noteLabel'),
-          onChange: (event) => controller.updateNote(event.target.value)
+          onChange: (event) => controller.updateNote(event.target.value),
+          onFocus: () => controller.beginEdit(),
+          onBlur: () => controller.endEdit()
         })),
       React.createElement('div', { className: 'psa-popover-actions' },
         React.createElement('button', {
@@ -12092,12 +12503,10 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
      * @returns {object} a hidden anchor element.
      */
     function AnnotationSessionSeat(props) {
-      const { sessionId, useInput, inputActions } = props
-      const draft = typeof useInput === 'function' ? useInput((state) => (state === null || state === undefined ? '' : state.draft)) : ''
+      const { sessionId, inputActions } = props
       React.useEffect(() => {
         annotationBridge.sessionId = typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null
         annotationBridge.inputActions = inputActions ?? null
-        annotationBridge.draft = typeof draft === 'string' ? draft : ''
         if (annotationController !== null) annotationController.sessionChanged(annotationBridge.sessionId)
         return () => {
           // The bridge is all-or-nothing: a session id without its Composer actions (or the
@@ -12105,13 +12514,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           // seat unmounts (e.g. leaving the conversation for the Plugins view).
           annotationBridge.sessionId = null
           annotationBridge.inputActions = null
-          annotationBridge.draft = ''
           if (annotationController !== null) annotationController.sessionChanged(null)
         }
       }, [sessionId, inputActions])
-      React.useEffect(() => {
-        annotationBridge.draft = typeof draft === 'string' ? draft : ''
-      }, [draft])
       return React.createElement('span', {
         style: { display: 'none' },
         'aria-hidden': true
@@ -12232,6 +12637,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         serializeSettings,
         modifierMatches,
         sanitizeText,
+        textDigest,
         sanitizeAttributeName,
         sanitizeAttributeValue,
         buildElementRef,
@@ -12255,6 +12661,8 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         collectionSetNote
       }
     }
+
+    //#endregion
 
     return {
       inject: ['slots', 'locale', 'sidebarRight', 'sidebarRightTabs', 'contextMenus', 'remote', 'remote.agentPresets', 'uiWorkspace', 'sessions'],
