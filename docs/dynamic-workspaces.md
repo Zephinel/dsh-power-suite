@@ -71,12 +71,12 @@ sidebar's panel tabs. It starts expanded.
 - **Header**: the leading indicator has two states. While at least one listed
   Session is running it is a **blue pulsing dot** — a business-primary 8 px dot
   with an expanding ring on a 2 s loop (static under reduced motion); when every
-  task is complete it is the white 14 px RemixIcon **sparkling-line** glyph.
+  task is complete it is the white 14 px RemixIcon **deepseek-fill** brand glyph.
   Both states are horizontally centred on the same **leading-glyph column** as
-  the top-level rows (the pulse/sparkle, the green unread-completion dots, and
-  the white session-type icons share one centre; header sparkle/pulse centre
-  x = 43 and row glyph centre x = 43), and the header title starts on the same
-  column as the row titles (x = 58). Then come the **Running & recent** title
+  the top-level rows (the pulse/brand glyph, the green unread-completion dots,
+  and the white read-row identity icons share one centre; header pulse/brand
+  centre x = 43 and row glyph centre x = 43), and the header title starts on the
+  same column as the row titles (x = 58). Then come the **Running & recent** title
   and a count badge with the number of listed rows. The text block (indicator,
   title, count) is content-sized, so its hover highlight hugs the label instead
   of stretching across the header; a flexible spacer then pushes the **View all**
@@ -105,9 +105,12 @@ sidebar's panel tabs. It starts expanded.
   The glyph then tells the read state: a **finished but unread** row shows the
   shell's green `StateDot state: "done"` (the green marker means *only* this
   unread completion), while a **finished and acknowledged** row swaps the green
-  dot for the white session-type icon — the RemixIcon `deepseek-fill` glyph on
-  main rows and `robot-2-line` on subagent rows, drawn at 14 px / 12 px in the
-  primary label colour. Opening a Session from this card or anywhere else
+  dot for the white identity icon — the RemixIcon `sparkling-line` glyph on main
+  rows and `robot-2-line` on subagent rows, drawn at 14 px / 12 px in the primary
+  label colour. The panel header's all-complete glyph is the DeepSeek brand mark
+  (`deepseek-fill`) in the same 14 px indicator slot; the swap changes only which
+  static glyph each slot paints, never the pulse dot, the green dot, the glyph
+  column, or any state branch. Opening a Session from this card or anywhere else
   acknowledges it; the acknowledgement is **persisted per browser** and keeps
   the green dot away until genuine new activity arrives (see *Read
   acknowledgements* below). The Workspace is not printed under the row any more;
@@ -148,20 +151,26 @@ sidebar's panel tabs. It starts expanded.
   which is already on the row), followed by the **full workspace path** (wrapped,
   not truncated) and then **Status** (`Running`/`Finished` plus the observed or
   relative time), **Last active** (absolute `YYYY-MM-DD HH:MM`), and the running
-  subagent count when there is one. The card reproduces the **native sidebar
-  session tooltip** recipe measured live: its left edge is **flush with the
-  sidebar column's right edge** (same offset 0 as the native tooltip, no longer
+  subagent count when there is one. A nested subagent row adds one compact line
+  under the Workspace title with that subagent Session's own title, so the
+  figures below are attributed to the right Session; child rows and parent rows
+  use the same card otherwise. The card reproduces the **native sidebar session
+  tooltip** recipe measured live: its left edge is **flush with the sidebar
+  column's right edge** (same offset 0 as the native tooltip, no longer
   intruding into the sidebar), its top aligns with the hovered row's top (then
-  clamped to the viewport), and it is 244 px wide with native borderless chrome
-  — 16 px radius, `--dsw-alias-tooltip-bg` surface, `--dsw-shadow-lv3`
-  elevation, 12 x 16 px padding on a 212 px content box, 14/20 px title, 12/16 px
-  path/time, and a 12/20 px status line with a 10 px dot — all inherited from
-  the shell font. It does not capture the pointer in normal mode (same show/hide
-  delays as before, dismissed by Escape, scroll, or resize), and clicking the row
-  still opens the Session. The body is a vertical row list so later detail rows
-  (statistics, token usage, context) can be appended without changing the card
-  chrome. While the UI annotation mode is active the same card becomes
-  **pinned/annotatable** (see *Plugin chrome and annotation mode* below).
+  clamped to the viewport), and its chrome is the native borderless tooltip —
+  16 px radius, `--dsw-alias-tooltip-bg` surface, `--dsw-shadow-lv3` elevation,
+  12 x 16 px padding, 14/20 px title, 12/16 px path/time, and a 12/20 px status
+  line with a 10 px dot — all inherited from the shell font. The card is 320 px
+  wide (the native tooltip is 244 px; the card grows so each native figure row
+  fits its label and right-aligned value on one line) with `max-height:
+  min(560px, calc(100vh - 16px))` and internal scroll. It does not capture the
+  pointer in normal mode (same show/hide delays as before, dismissed by Escape,
+  scroll, or resize), and clicking the row still opens the Session. Below the
+  plain detail rows it appends the three **native session figures** (see
+  *Session figures in the hover card* below). While the UI annotation mode is
+  active the same card becomes **pinned/annotatable** (see *Plugin chrome and
+  annotation mode* below).
 - **Disclosure column**: the header chevron and every row's disclosure arrow
   share one 24 px right-edge column (not merely right-aligned), and rows without
   children — including every nested subagent row — reserve the same column with a
@@ -206,6 +215,47 @@ sidebar's panel tabs. It starts expanded.
 Finished rows deliberately linger: a stop moves the Session below the running
 rows, it stays for the retention window, and then it leaves the card. This is the
 "find it again" behavior the card exists for.
+
+## Session figures in the hover card
+
+The hover card appends the three native Session figures the shell shows in its
+own stats dialogs and composer context meter, for the hovered Session — parent
+or nested subagent row alike:
+
+- **Session statistics** — header value `{turns} turns {steps} steps` (the native
+  `stats.counts` line), then `LLM time`, `Tool time`, `Avg time to first token
+  (TTFT)` (= `ttftMs / ttftSteps`), and `Tokens per second (TPS)` (=
+  `decodeTokens / (decodeMs / 1000)`) in the native `formatDuration` /
+  `formatTokensPerSecond` recipes (`45.2s` / `2m42s`; whole tokens from ten up,
+  one decimal below). Timing rows appear only when their input is non-zero; the
+  whole section is hidden while `steps === 0`, exactly like the native activity
+  pill.
+- **Token usage** — header value is the exact grouped total
+  (`billed input + output`, e.g. `5,498,331 tok`), then `Cache hit {pct}%`,
+  `Uncached input`, `Cached input`, `Cache write` (only when ≠ 0, native
+  parity), and `Output`, each an exact grouped count (`formatExactTokens`, comma
+  groups). The whole section is hidden when nothing was billed and no output was
+  produced.
+- **Context usage** — header line `{percent} of context used` plus
+  `~{used} / {window}` in compact K/M (`517 / 12.2K / 517K / 1.2M`); then the
+  heuristic composition `System prompt`, `Tool definitions`, `Messages`, each
+  compact and prefixed `~`. The section is hidden unless the provider reported
+  both a used count and a context-window size.
+
+Data seam: these are **Host projections**, not a re-fold of the event log. The
+plugin already receives the Session list store through its existing `sessions`
+inject, and every live Host Session is push-seeded there — its
+`projectionsBySession[id].values` carries `sessionStats`, `tokenUsage`,
+`contextPressure`, and `contextBreakdown`, updated with each committed event, so
+a live row needs **no request at all**. A cold (persisted, not live) Session
+carries only summary keys; the first hover of that row starts exactly one
+`sessions.refreshProjections(id)` read (deduped per Session for the seat
+lifetime, never polled, never retried after an error or a `migration-required`
+result), and the card fills the figures in when the values land. There is no
+Host route, no new inject, and no loading state: the card renders immediately
+with the plain rows and grows its sections in place. Missing units, unknown
+Sessions, migration-only logs, and Sessions without usage all just omit the
+affected sections (and the whole block when none has data).
 
 ## Shared read acknowledgements
 
@@ -591,6 +641,37 @@ The native **View options** menu picks how Sessions are grouped:
   page was open when the run started; otherwise the row shows the Session's
   last-activity distance. A background tab throttles the once-per-second
   duration refresh until it is visible again.
+- **Session figures are a client-side projection read, not new Host data.** The
+  hover card reads `sessionStats`, `tokenUsage`, `contextPressure`, and
+  `contextBreakdown` from the existing `sessions` inject
+  (`projectionsBySession`), so live Sessions need no request at all. A cold
+  (persisted) Session gets **one** `refreshProjections` read on first hover —
+  deduplicated per Session, never polled, never retried after an error or a
+  `migration-required` result. The card renders immediately and only grows the
+  sections when the values arrive; a missing unit, unknown Session, migration-only
+  log, or provider that reports no usage simply omits the affected sections (and
+  the whole block when none has data), leaving the plain card. There is no Host
+  route and no new inject, so the card also degrades silently on an older Host.
+- **Cache hit is honest, not rounded up.** It is `cacheRead / billed input`
+  (uncached + cache read + cache write) over the whole durable log, with the
+  native formatter's exact-integer path and its extra-precision fallback: a
+  partial hit never displays `100%` (e.g. `99.9999%` for 999 999 / 1 000 000),
+  and a full hit is the only thing that reads `100`. With no billed input the
+  row is absent.
+- **Context pressure and composition are different estimators.** The `~used /
+  window` reading comes from `projectedTokens ?? pressureTokens` and needs both
+  the used count and the route's context window; `projectedTokens` is an
+  estimate (hence `~`). The System prompt / Tool definitions / Messages rows are
+  the heuristic `contextBreakdown` composition, each prefixed `~`: they are
+  shown as their own rows and must not be added up or presented as parts of the
+  provider pressure (a live probe showed `used 450,947` against a 375,026
+  composition). The pressure fields are last-wins from different moments, so a
+  route switch can pair a fresh window with an older pressure for one request.
+- **The figure block is viewport-clamped, not scrollable by pointer.** The card
+  caps at `min(560px, 100vh - 16px)` and keeps `pointer-events: none`, so the
+  internal scroll only exists for long content; the sections themselves are
+  static text (no reduced-motion work) and the widest exact count
+  (`5,203,456 tok`) stays on its right-aligned, tabular-numeric line.
 - **Subagents nest one level deep.** Running or recently active direct subagent
   children are listed under their parent Session, and a running child keeps the
   parent counted as running. Subagent Sessions never appear as top-level rows —
@@ -743,8 +824,18 @@ row-column x positions across parent/child/header rows; the clipped-title mask
 and its absence on short titles; hover-pill/control highlight geometry; the
 current-Session wave on the card row and the owning native Workspace row plus
 reduced-motion behaviour; the hover card against the **live native tooltip
-oracle** (flush offset 0, row-top alignment, 244 px width, radius/border/padding/
-elevation/typography); borderless floating cards; title-case bucket labels and
+oracle** (flush offset 0, row-top alignment, 320 px figure width, radius/border/
+padding/elevation/typography); the three **native session-figure sections**
+(statistics line/rows, token-usage total = buckets + output, honest cache-hit
+percentage, context percent + `~used / window` + `~`-prefixed composition), the
+**cold subagent one-shot projection read** (exactly one call, then the sections
+fill in, and a second hover does not re-read), the **value-less case** (the card
+renders with the figure block hidden and no loading state), the figure-card
+frame (pointer-events none, flush left edge, 320 px, 560 px clamp, hit-testing
+passes through), and the **identity-glyph swap** (all-complete header brand
+glyph; read parent rows sparkle; child robots and pulse/green dots unchanged;
+the source-level node test pins both branches because a live card may only list
+running parents); borderless floating cards; title-case bucket labels and
 typography; the rainbow focus ring on the prompt-history search field; fold
 persistence across reloads including the pre-hydration bucket cache and live
 drift correction; annotation-mode pinning; and zero page errors.
@@ -777,11 +868,19 @@ Manual checks on the running DSH Web GUI:
    the expanded Inactive bucket. Unfold it again.
 6. Rest a pointer on a card row: the hover card's title is the Workspace name,
    with the full wrapped workspace path, a relative time, Status with its time,
-   Last active absolute time, and the running subagent count when present. The
-   card starts flush on the sidebar's right edge, its top aligns with the row,
-   it looks like the native session tooltip (dark tooltip surface, no border,
-   16 px radius, native elevation, 12 x 16 px padding, 14 px title), and it does
-   not take the pointer; the row has no native `title` tooltip.
+   Last active absolute time, and the running subagent count when present. A
+   nested subagent row adds its own compact Session title under the Workspace
+   title. Below those rows the card shows **Session statistics** (`N turns M
+   steps`, LLM time, tool time, average TTFT, TPS), **Token usage** (exact total,
+   cache hit %, uncached/cached/cache-write/output counts), and **Context usage**
+   (`N% of context used`, `~used / window`, and `~`-prefixed System prompt /
+   Tool definitions / Messages rows). Hovering a cold (persisted) row fills the
+   figures in without a loading state; a Session with no projection data shows
+   the plain card with no figure block. The card starts flush on the sidebar's
+   right edge, its top aligns with the row, it looks like the native session
+   tooltip (dark tooltip surface, no border, 16 px radius, native elevation,
+   12 x 16 px padding, 14 px title, 320 px wide, viewport-clamped height), and it
+   does not take the pointer; the row has no native `title` tooltip.
 7. Check the columns: New session buttons, times, and disclosure chevrons of
    parent rows, child rows, and the header all sit on the same vertical lines;
    times are right-aligned; a long title fades out under the right-edge gradient
@@ -797,11 +896,14 @@ Manual checks on the running DSH Web GUI:
    the OS "reduce motion" setting: both waves become a static tint.
 10. Check the glyph states: a running row shows the shell loading indicator; a
     finished, unopened row shows the green done dot; after opening that Session
-    (from here or elsewhere) the row shows the white `deepseek-fill` icon and a
-    subagent row shows the white `robot-2-line` icon, until a new run and
-    completion restore the green dot. Check that hovering the row body shows the
-    content-paced pill and the arrow's own highlight stays independent, and that
-    the card body scrolls with a hidden scrollbar.
+    (from here or elsewhere) the row shows the white `sparkling-line` identity
+    icon and a subagent row shows the white `robot-2-line` icon, until a new run
+    and completion restore the green dot. The panel header shows the green-free
+    state pair: the blue pulse dot while anything runs, and the white
+    `deepseek-fill` brand glyph when every listed task is complete. Check that
+    hovering the row body shows the content-paced pill and the arrow's own
+    highlight stays independent, and that the card body scrolls with a hidden
+    scrollbar.
 11. Check the card header geometry: the text block is content-sized (its hover
     highlight hugs the label), **View all** and the header chevron stay 30 px
     tall with the shell corner radius, and the chevron lines up with every row's
