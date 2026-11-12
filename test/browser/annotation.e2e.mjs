@@ -54,6 +54,8 @@ const CLIENT_PATH = path.join(WORKTREE, 'src', 'client.js')
 const DEFAULT_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const DSH_WEB_BIN = path.join(homedir(), '.local', 'bin', 'dsh-web')
 const VIEWPORT = { width: 1728, height: 900 }
+/** A second real-shaped Session id used by the other-Session mark assertions. */
+const SESSION_ID_OTHER = 'session-5eec2763-0a91-460e-b559-08a8c3a98d13'
 
 const MOD = { alt: 1, ctrl: 2, meta: 4, shift: 8 }
 
@@ -1073,7 +1075,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix) incl. textDigest', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1081,9 +1083,10 @@ async function runSmoke({ page, results, state }) {
     assertEqual(probe.hookType, 'object', 'hooks.uiAnnotation is not an object')
     // Documented frozen generations: round-1 (31), round-2 adds resolveNodeCandidate
     // (32), audit-fix adds normalizeUserNote/cssIdentifier/clampPopoverPositionToViewport
-    // (35), Phase 1 adds the A1/A2/persistence helpers (48). Pin a documented count and
-    // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48]
+    // (35), Phase 1 adds the A1/A2/persistence helpers (48), Phase 2-A adds the record
+    // action/undo/mark/detail-card helpers (57). Pin a documented count and require the
+    // keys that generation introduced.
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1103,6 +1106,13 @@ async function runSmoke({ page, results, state }) {
         'parseAnnotationStore', 'serializeAnnotationStore', 'annotationSurfaceRoot', 'annotationSurfaceLevels',
         'annotationLocatorText', 'normalizeAnnotationRecord']) {
         assert(probe.keys.includes(key), `Phase 1 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
+      }
+    }
+    if (keyCount === 57) {
+      for (const key of ['upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
+        'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove', 'annotationUndoRestore',
+        'annotationMarkerBadgeText', 'clampDetailCardPosition']) {
+        assert(probe.keys.includes(key), `Phase 2-A seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
       }
     }
     state.hooks = probe.keys
@@ -2132,6 +2142,8 @@ const probes = {
         id: record?.id ?? null,
         version: record?.version ?? null,
         order: record?.order ?? null,
+        at: record?.at ?? null,
+        updatedAt: record?.updatedAt ?? null,
         note: record?.note ?? null,
         route: record?.route ?? null,
         session: record?.session ?? null,
@@ -2186,6 +2198,149 @@ const probes = {
       }
     }
     return true
+  },
+
+
+  // ---- A3 Phase 2-A: page marks, hover detail card, undo toast -------------------------
+
+  /** Current page marks with their geometry, badge excerpt, and hit-test state. */
+  marksState: () => [...document.querySelectorAll('[data-psa-mark]')].map((element) => {
+    const rect = element.getBoundingClientRect()
+    const badge = element.querySelector('[data-psa-mark-badge]')
+    return {
+      id: element.getAttribute('data-psa-mark-id'),
+      index: element.getAttribute('data-psa-mark-index'),
+      state: element.getAttribute('data-psa-mark-state'),
+      stale: element.getAttribute('data-psa-mark-stale'),
+      empty: badge !== null ? badge.getAttribute('data-psa-mark-empty') : null,
+      badge: badge !== null ? (badge.innerText || badge.textContent || '').replace(/\s+/g, ' ').trim() : null,
+      pointerEvents: getComputedStyle(element).pointerEvents,
+      inLayer: element.closest('[data-psa-layer]') !== null,
+      rect: {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        right: Math.round(rect.right),
+        bottom: Math.round(rect.bottom),
+      },
+    }
+  }),
+
+  /** The hover detail card state (content, actions, geometry). */
+  detailState: () => {
+    const card = document.querySelector('[data-psa-detail]')
+    if (card === null) return null
+    const rect = card.getBoundingClientRect()
+    const text = (selector) => {
+      const element = card.querySelector(selector)
+      return element === null ? null : (element.innerText || element.textContent || '').replace(/\s+/g, ' ').trim()
+    }
+    return {
+      ref: card.getAttribute('data-psa-detail-ref'),
+      mode: card.getAttribute('data-psa-detail-mode'),
+      status: card.getAttribute('data-psa-status'),
+      role: card.getAttribute('role'),
+      ariaLabel: card.getAttribute('aria-label'),
+      title: text('[data-psa-detail-title]'),
+      requirement: text('[data-psa-detail-requirement]'),
+      locator: text('[data-psa-detail-locator]'),
+      position: text('[data-psa-detail-position]'),
+      session: text('[data-psa-detail-session]'),
+      workspace: text('[data-psa-detail-workspace]'),
+      surface: text('[data-psa-detail-surface]'),
+      buttons: {
+        quickRef: card.querySelector('[data-psa-detail-quick-ref]') !== null,
+        edit: card.querySelector('[data-psa-detail-edit]') !== null,
+        relocate: card.querySelector('[data-psa-detail-relocate]') !== null,
+        copy: card.querySelector('[data-psa-detail-copy-locator]') !== null,
+        delete: card.querySelector('[data-psa-detail-delete]') !== null,
+        save: card.querySelector('[data-psa-detail-save]') !== null,
+        cancel: card.querySelector('[data-psa-detail-cancel]') !== null,
+      },
+      hasTextarea: card.querySelector('[data-psa-detail-note]') !== null,
+      rect: {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        right: Math.round(rect.right),
+        bottom: Math.round(rect.bottom),
+        viewport: { width: innerWidth, height: innerHeight },
+      },
+    }
+  },
+
+  /** The delete undo toast state. */
+  undoToast: () => {
+    const toast = document.querySelector('[data-psa-undo-toast]')
+    if (toast === null) return { present: false }
+    return {
+      present: true,
+      role: toast.getAttribute('role'),
+      live: toast.getAttribute('aria-live'),
+      text: (toast.innerText || toast.textContent || '').replace(/\s+/g, ' ').trim(),
+      undo: toast.querySelector('[data-psa-undo]') !== null,
+    }
+  },
+
+  /** Insert one deterministic synthetic button (removed by a reload for the missing case). */
+  createSyntheticTarget: () => {
+    for (const existing of document.querySelectorAll('#psa-e2e-target')) existing.remove()
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.id = 'psa-e2e-target'
+    button.setAttribute('data-testid', 'psa-e2e-target')
+    button.textContent = 'Synthetic annotation target'
+    button.setAttribute('style', [
+      'position:fixed',
+      'left:300px',
+      'top:150px',
+      // z-index 5 keeps it a *page* element: the product's F2 surface picker only
+      // treats fixed/absolute boxes with z>=10 as floating.
+      'z-index:5',
+      'padding:6px 10px',
+      'font:12px sans-serif',
+      'background:#fff',
+      'border:1px solid #888'
+    ].join(';'))
+    document.body.appendChild(button)
+    const rect = button.getBoundingClientRect()
+    return {
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(rect.top + rect.height / 2),
+      left: Math.round(rect.left),
+      top: Math.round(rect.top),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    }
+  },
+
+  /** Remove the synthetic target element. */
+  removeSyntheticTarget: () => {
+    for (const element of document.querySelectorAll('#psa-e2e-target')) element.remove()
+    return true
+  },
+
+  /** Clone one persisted record under another Session identity (other-Session scope proof). */
+  appendOtherSessionRecord: (sessionId) => {
+    const key = 'power-suite.ui-annotation.annotations'
+    let parsed = null
+    try {
+      parsed = JSON.parse(localStorage.getItem(key) || 'null')
+    } catch {
+      parsed = null
+    }
+    if (parsed === null || !Array.isArray(parsed.records) || parsed.records.length === 0) return { ok: false }
+    const clone = JSON.parse(JSON.stringify(parsed.records[0]))
+    clone.id = 'psa-e2e-other-session'
+    clone.order = parsed.records.length
+    clone.note = 'OTHER-SESSION-REQUIREMENT'
+    clone.updatedAt = Date.now()
+    clone.session = { ...(clone.session || {}), sessionId, workspaceLabel: 'other-workspace' }
+    parsed.records.push(clone)
+    localStorage.setItem(key, JSON.stringify(parsed))
+    return { ok: true, count: parsed.records.length, id: clone.id }
   },
 
   /** Rainbow-field focus treatment for one annotation input selector. */
@@ -2633,10 +2788,12 @@ const SCENARIO_TITLES = {
   8: 'launcher drag clamp, viewport resize, scroll stability, reload default + position memory',
   9: 'collection view keeps the frame/rail geometry; exit restores the baseline layout',
   10: 'floating surfaces: whole-card hover/selection, drill, identical outline style, F3 recompute, F4 state CSS, v2 records + reload persistence',
+  12: 'page marks + hover detail card + delete/undo + other-Session exclusion',
+  14: 'persistence: reload restores records/marks; removed target is missing and not drawn',
   15: 'rainbow input focus ring: wrapper ring, no solid outline, reduced motion, no layout shift',
 }
 
-const SCENARIO_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15]
+const SCENARIO_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15]
 
 function buildScenarios(harness) {
   const h = harness
@@ -2920,7 +3077,7 @@ function buildScenarios(harness) {
       await h.click('[data-psa-add-multi]')
       await sleep(350)
       const added = await h.ui()
-      assert(/Added to the collection|已加入标注集/.test(added.feedback || ''), `missing "added" feedback: ${added.feedback}`)
+      assert(/Added to the collection|已加入标注集|Marked ·|已标记/.test(added.feedback || ''), `missing "added" feedback: ${added.feedback}`)
       await h.openCollection()
       assertEqual((await h.ui()).entries, 3, 'three entries after "Add all to collection"')
       await h.clickBack()
@@ -2928,11 +3085,11 @@ function buildScenarios(harness) {
       await h.clearSelection()
       await h.selectElement('button[aria-label="New session"]')
       const popover = await h.popover()
-      assert(/Update collection|更新标注集/.test(popover.addLabel || ''), `popover should offer update, got "${popover.addLabel}"`)
+      assert(/Update requirement|Update collection|更新需求|更新标注集/.test(popover.addLabel || ''), `popover should offer update, got "${popover.addLabel}"`)
       await h.click('[data-psa-add]')
       await sleep(350)
       const updated = await h.ui()
-      assert(/Updated the existing collection entry|已更新/.test(updated.feedback || ''), `missing "updated" feedback: ${updated.feedback}`)
+      assert(/Updated the existing collection entry|Requirement updated|已更新|需求已更新/.test(updated.feedback || ''), `missing "updated" feedback: ${updated.feedback}`)
       await h.openCollection()
       const entriesAfterUpdate = await h.entries()
       assertEqual(entriesAfterUpdate.length, 3, 're-adding the same element duplicated the collection entry')
@@ -3083,8 +3240,8 @@ function buildScenarios(harness) {
       const removedPopover = await h.popover()
       await h.click('[data-psa-add]')
       await sleep(320)
-      await h.page.pressKey('escape')
-      await sleep(200)
+      // Phase 2-A auto-dismiss: the commit already closed the popover and cleared the
+      // selection, so no Esc step is needed (an Esc here would leave the mode).
       // The target must really be in the CURRENT session's collection before the collapse.
       await h.openCollection()
       const allTargetEntries = await h.entries()
@@ -3117,8 +3274,7 @@ function buildScenarios(harness) {
       const togglePopover = await h.popover()
       await h.click('[data-psa-add]')
       await sleep(320)
-      await h.page.pressKey('escape')
-      await sleep(200)
+      // Phase 2-A auto-dismiss: no post-commit Esc (see the first target above).
       await h.openCollection()
       const beforeCollapse = await h.entries()
       const toggleEntry = beforeCollapse.find((entry) => /Collapse sidebar/.test(entry.name))
@@ -4077,6 +4233,279 @@ function buildScenarios(harness) {
       const finalHovercard = await h.page.eval(probes.syntheticHovercardStyle)
       assertEqual(finalHovercard, null, 'the synthetic hovercard leaked after cleanup')
       return `F1 z=150/restore exact; F2 card ${nativeCard.rect.width}x${nativeCard.rect.height} whole-card hover/selection; F3 stationary recompute; F4 state events + [data-psd-hovercard] pe/z (real card ${realHovercardPresent ? 'present' : 'absent in this branch'}); A2 uniqueSelector ${short(String(pageRecord.uniqueSelector).slice(0, 48))}; D1 reload kept ${reloadedEntries.length} records with resolved+missing; D15 refused at ${cappedEntries.length}`
+    },
+
+    12: async () => {
+      await h.ensureModeOff()
+      await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
+      await sleep(300)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      // Clean persisted document so the mark assertions are exact.
+      await h.page.eval(probes.clearAnnotationStorage)
+      await h.page.reload()
+      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready before the marks scenario' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the clean reload' })
+      await sleep(600)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      const cleanBlank = await h.blankState()
+      if (cleanBlank.ok !== true) {
+        const fresh = await h.createBlankSessionViaHover()
+        assert(fresh && typeof fresh.sessionId === 'string', 'could not create a blank session for the marks scenario')
+        await sleep(500)
+        await h.ensureSidebarExpanded()
+      }
+      const sessionId = await h.refreshSession()
+      h.track(sessionId, 's12-session')
+      await h.ensureActivatedStable()
+      await h.ensureStatusPanel()
+      await h.clearSelection()
+
+      /**
+       * Select one page element, type its requirement, and commit it.
+       * @param {{ x: number, y: number }} point - element centre.
+       * @param {string} note - requirement text.
+       * @returns {Promise<void>}
+       */
+      const annotateAt = async (point, note) => {
+        await h.page.moveTo(point.x, point.y)
+        await sleep(140)
+        await h.page.clickAt(point.x, point.y)
+        await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: `popover before "${note}"` })
+        const noteRect = await h.page.findRect('[data-psa-note]')
+        assert(noteRect, 'popover requirement textarea missing')
+        await h.page.clickAt(noteRect.x, noteRect.y)
+        await sleep(120)
+        await h.page.insertText(note)
+        await sleep(200)
+        await h.click('[data-psa-add]')
+        await sleep(350)
+        const afterCommit = await h.ui()
+        assertEqual(afterCommit.popover, false, 'the commit did not auto-dismiss the popover')
+        assertEqual(afterCommit.selection + afterCommit.multi, 0, 'the commit did not clear the selection')
+      }
+
+      const targetA = await h.page.eval(pageProbe.newSessionButton)
+      assert(targetA, 'native New session button not found for the marks scenario')
+      await annotateAt(targetA, 'Req one')
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 1`, { timeout: 6000, label: 'first page mark' })
+      const targetB = await h.page.eval(probes.pluginNavRect)
+      assert(targetB, 'native Plugins navigation button not found for the marks scenario')
+      await annotateAt(targetB, 'Req two')
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 2`, { timeout: 6000, label: 'two page marks' })
+      const marks = await h.page.eval(probes.marksState)
+      assertEqual(marks.length, 2, 'expected exactly two page marks')
+      for (const mark of marks) {
+        assertEqual(mark.pointerEvents, 'none', 'a page mark must not intercept pointer events')
+        assertEqual(mark.inLayer, true, 'a page mark was rendered outside the annotation layer')
+        assert(mark.badge !== null && mark.badge.includes(`#${mark.index}`), `mark badge is missing its index: ${JSON.stringify(mark)}`)
+        assert(/Req (one|two)/.test(mark.badge || ''), `mark badge is missing its requirement excerpt: ${JSON.stringify(mark)}`)
+        assert(mark.rect.width > 0 && mark.rect.height > 0, 'mark has no geometry')
+      }
+      const stored = await h.page.eval(probes.annotationStorage)
+      assertEqual(stored.count, 2, 'two records must be persisted')
+      const recordA = stored.records.find((record) => record.note === 'Req one')
+      assert(recordA, 'the first requirement was not persisted')
+
+      // Hover the first mark: the card appears after the ~120 ms hover intent.
+      const markA = (await h.page.eval(probes.marksState)).find((mark) => mark.id === recordA.id)
+      assert(markA, 'no mark for the first record')
+      await h.page.moveTo(markA.rect.x + Math.round(markA.rect.width / 2), markA.rect.y + Math.round(markA.rect.height / 2))
+      await h.page.waitFor(`!!document.querySelector('[data-psa-detail]')`, { timeout: 4000, label: 'hover detail card' })
+      await sleep(250)
+      const detail = await h.page.eval(probes.detailState)
+      assert(detail, 'detail card disappeared right after opening')
+      assertEqual(detail.ref, recordA.id, 'the detail card shows the wrong record')
+      assertEqual(detail.role, 'dialog', 'the detail card is not a dialog')
+      assert(detail.title && detail.title.length > 0, 'the detail card has no element title')
+      assertEqual(detail.requirement, 'Req one', 'the detail card is missing the full requirement')
+      assertEqual(detail.status, 'resolved', 'the detail card status is not resolved')
+      assert(/^\d+, \d+ · \d+×\d+$/.test(detail.position || ''), `the detail card position box is malformed: ${detail.position}`)
+      const sessionShort = String(sessionId || '').startsWith('session-')
+        ? String(sessionId).slice('session-'.length).replace(/[^0-9A-Za-z]/g, '').slice(0, 8)
+        : String(sessionId || '').slice(0, 8)
+      assert(detail.session && detail.session.includes(sessionShort), `the detail card session label is wrong: ${detail.session}`)
+      assert(detail.workspace && detail.workspace.length > 0, 'the detail card is missing the workspace label')
+      if (recordA.session && recordA.session.workspaceLabel) {
+        assertEqual(detail.workspace, recordA.session.workspaceLabel, 'detail workspace label mismatch')
+      }
+      assert(detail.buttons.quickRef && detail.buttons.edit && detail.buttons.relocate && detail.buttons.copy && detail.buttons.delete,
+        `the detail card is missing actions: ${JSON.stringify(detail.buttons)}`)
+      assert(detail.rect.x >= 0 && detail.rect.y >= 0, `the detail card overflows the viewport: ${JSON.stringify(detail.rect)}`)
+      assert(detail.rect.right <= detail.rect.viewport.width && detail.rect.bottom <= detail.rect.viewport.height,
+        `the detail card overflows the viewport: ${JSON.stringify(detail.rect)}`)
+      // Keep-open union: the pointer may enter the card without dismissing it.
+      await h.page.moveTo(detail.rect.x + Math.round(detail.rect.width / 2), detail.rect.y + 12)
+      await sleep(420)
+      assertEqual((await h.page.eval(probes.detailState)) !== null, true, 'the detail card closed when the pointer entered it')
+      // Hover-open must never steal focus.
+      const focusStolen = await h.page.evaluate(`(() => { const active = document.activeElement; if (active === null) return false; if (!(active instanceof Element)) return false; return active.closest('[data-psa-detail]') !== null })()`)
+      assertEqual(focusStolen, false, 'the hover detail card stole focus')
+
+      // Edit mode: rainbow-wrapped textarea, save persists and bumps updatedAt.
+      await h.click('[data-psa-detail-edit]')
+      await h.page.waitFor(`!!document.querySelector('[data-psa-detail-note]')`, { timeout: 4000, label: 'detail edit textarea' })
+      const editedRect = await h.page.findRect('[data-psa-detail-note]')
+      assert(editedRect, 'detail requirement textarea missing')
+      await h.page.clickAt(editedRect.x, editedRect.y)
+      await h.page.evaluate(`(() => { const input = document.querySelector('[data-psa-detail-note]'); if (input !== null) input.select(); return true })()`)
+      await h.page.insertText('Req one edited')
+      await sleep(150)
+      await h.click('[data-psa-detail-save]')
+      await sleep(450)
+      const afterEdit = await h.page.eval(probes.detailState)
+      assert(afterEdit && afterEdit.requirement === 'Req one edited', `the edited requirement did not reach the detail card: ${JSON.stringify(afterEdit && afterEdit.requirement)}`)
+      const storedAfterEdit = await h.page.eval(probes.annotationStorage)
+      const editedRecord = storedAfterEdit.records.find((record) => record.id === recordA.id)
+      assert(editedRecord && editedRecord.note === 'Req one edited', 'the edited requirement was not persisted')
+      assert(typeof editedRecord.updatedAt === 'number' && editedRecord.updatedAt >= recordA.updatedAt, 'the edit did not bump updatedAt')
+
+      // Delete from the detail card: mark disappears, 5 s undo toast restores it.
+      await h.click('[data-psa-detail-delete]')
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 1`, { timeout: 5000, label: 'mark removal after delete' })
+      const toast = await h.page.eval(probes.undoToast)
+      assertEqual(toast.present, true, 'no undo toast after the delete')
+      assertEqual(toast.role, 'status', 'the undo toast is not a status region')
+      assertEqual(toast.live, 'polite', 'the undo toast is not polite')
+      assert(/deleted|已删除/.test(toast.text || ''), `unexpected undo toast text: ${toast.text}`)
+      assert(toast.undo, 'the undo toast has no Undo button')
+      await h.click('[data-psa-undo]')
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 2`, { timeout: 5000, label: 'mark restore after undo' })
+      await sleep(250)
+      assertEqual((await h.page.eval(probes.undoToast)).present, false, 'the undo toast did not disappear after undo')
+
+      // Other-Session records are never drawn on the page (survives a reload).
+      // Exit first: deactivate flushes the in-memory collection, so seeding before it
+      // would be overwritten by that flush.
+      await h.exit()
+      const appended = await h.page.eval(probes.appendOtherSessionRecord, SESSION_ID_OTHER)
+      assert(appended.ok, 'could not seed the other-Session record')
+      await h.page.reload()
+      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after the marks reload' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the marks reload' })
+      await sleep(700)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      await h.ensureActivatedStable()
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 2`, { timeout: 8000, label: 'marks after reload' })
+      await sleep(300)
+      const restoredMarks = await h.page.eval(probes.marksState)
+      assertEqual(restoredMarks.length, 2, `other-Session records must not be drawn (got ${restoredMarks.length} marks)`)
+      assert(!restoredMarks.some((mark) => mark.id === appended.id), 'the other-Session record was drawn as a page mark')
+      await h.page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] })
+      await sleep(200)
+      const markAnimation = await h.page.evaluate(`(() => { const mark = document.querySelector('[data-psa-mark]'); return mark === null ? null : getComputedStyle(mark).animationName })()`)
+      await h.page.send('Emulation.setEmulatedMedia', { features: [] })
+      assertEqual(markAnimation, 'none', 'reduced motion still animates the page marks')
+      await h.openCollection()
+      const rows = await h.page.eval(probes.entries)
+      assertEqual(rows.length, 3, `the collection should hold 3 records with one other-Session entry (got ${rows.length})`)
+      assertEqual(rows.filter((entry) => entry.scope === 'other').length, 1, 'the other-Session scope badge is missing')
+      await h.clickBack()
+      await h.ensureStatusPanel()
+      await h.exit()
+      return `2 marks (#index + requirement excerpt), hover detail card (requirement/session/workspace/position/actions, keep-open, no focus steal), edit saved (updatedAt bumped), delete -> role=status undo toast -> restored, other-Session record not drawn after reload, reduced-motion static`
+    },
+
+    14: async () => {
+      await h.ensureModeOff()
+      await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
+      await sleep(300)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      await h.page.eval(probes.clearAnnotationStorage)
+      await h.page.reload()
+      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready before the persistence-marks scenario' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the clean reload' })
+      await sleep(600)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      const cleanBlank = await h.blankState()
+      if (cleanBlank.ok !== true) {
+        const fresh = await h.createBlankSessionViaHover()
+        assert(fresh && typeof fresh.sessionId === 'string', 'could not create a blank session for the persistence-marks scenario')
+        await sleep(500)
+        await h.ensureSidebarExpanded()
+      }
+      const sessionId = await h.refreshSession()
+      h.track(sessionId, 's14-session')
+      const synthetic = await h.page.eval(probes.createSyntheticTarget)
+      assert(synthetic && typeof synthetic.x === 'number', 'could not create the synthetic missing target')
+      await h.ensureActivatedStable()
+      await h.ensureStatusPanel()
+      await h.clearSelection()
+
+      /**
+       * Select one page element, type its requirement, and commit it.
+       * @param {{ x: number, y: number }} point - element centre.
+       * @param {string} note - requirement text.
+       * @returns {Promise<void>}
+       */
+      const annotateAt = async (point, note) => {
+        await h.page.moveTo(point.x, point.y)
+        await sleep(140)
+        await h.page.clickAt(point.x, point.y)
+        await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: `popover before "${note}"` })
+        const noteRect = await h.page.findRect('[data-psa-note]')
+        assert(noteRect, 'popover requirement textarea missing')
+        await h.page.clickAt(noteRect.x, noteRect.y)
+        await sleep(120)
+        await h.page.insertText(note)
+        await sleep(200)
+        await h.click('[data-psa-add]')
+        await sleep(350)
+      }
+
+      await annotateAt(synthetic, 'Synthetic removed requirement')
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 1`, { timeout: 6000, label: 'synthetic page mark' })
+      const syntheticMark = (await h.page.eval(probes.marksState))[0]
+      assert(syntheticMark && syntheticMark.badge.includes('Synthetic'), `the synthetic mark badge is wrong: ${JSON.stringify(syntheticMark)}`)
+      const persistentTarget = await h.page.eval(pageProbe.newSessionButton)
+      assert(persistentTarget, 'native New session button not found for the persistence-marks scenario')
+      await annotateAt(persistentTarget, 'Persistent requirement')
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 2`, { timeout: 6000, label: 'two page marks before reload' })
+      const syntheticMarkId = syntheticMark.id
+      const storedBefore = await h.page.eval(probes.annotationStorage)
+      assertEqual(storedBefore.count, 2, 'two records must be persisted before the reload')
+      const syntheticRecord = storedBefore.records.find((record) => record.note === 'Synthetic removed requirement')
+      const persistentRecord = storedBefore.records.find((record) => record.note === 'Persistent requirement')
+      assert(syntheticRecord && persistentRecord, 'the two records were not persisted individually')
+      const persistentMarkId = (await h.page.eval(probes.marksState)).find((mark) => mark.id !== syntheticMarkId)?.id
+      assert(typeof persistentMarkId === 'string', 'the persistent mark was not recorded')
+
+      // Reload: the synthetic element disappears with the page, the real one stays.
+      await h.exit()
+      await h.page.eval(probes.removeSyntheticTarget)
+      await h.page.reload()
+      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after the persistence-marks reload' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the persistence-marks reload' })
+      await sleep(700)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      const storedAfter = await h.page.eval(probes.annotationStorage)
+      assertEqual(storedAfter.count, 2, 'the persisted records were not restored after the reload')
+      await h.ensureActivatedStable()
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 1`, { timeout: 8000, label: 'only the live mark after reload' })
+      await sleep(300)
+      const marksAfter = await h.page.eval(probes.marksState)
+      assertEqual(marksAfter.length, 1, `the removed target must not be drawn (got ${marksAfter.length} marks)`)
+      assertEqual(marksAfter[0].id, persistentMarkId, 'the surviving page mark belongs to the wrong record')
+      assertEqual(marksAfter[0].badge.includes('Persistent'), true, 'the restored mark badge lost its requirement excerpt')
+      // The rail reports the removed target as missing and the live one as resolved.
+      await h.openCollection()
+      const rows = await h.page.eval(probes.entries)
+      assertEqual(rows.length, 2, 'both restored records must be listed in the rail')
+      const missingRow = rows.find((entry) => entry.ref === syntheticRecord.id)
+      const liveRow = rows.find((entry) => entry.ref === persistentRecord.id)
+      assert(missingRow, 'the removed target is missing from the rail collection')
+      assertEqual(missingRow.status, 'missing', `the removed target rail status is not missing (got ${missingRow.status})`)
+      assert(liveRow, 'the live record is missing from the rail collection')
+      assert(['resolved', 'changed'].includes(liveRow.status), `the live record rail status is wrong (got ${liveRow.status})`)
+      await h.clickBack()
+      await h.ensureStatusPanel()
+      await h.exit()
+      return `2 records -> reload -> storage restored (2), 1 page mark (removed target not drawn), rail statuses: missing / ${liveRow.status}`
     },
 
     15: async () => {

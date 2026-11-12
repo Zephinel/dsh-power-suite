@@ -1891,6 +1891,27 @@ if (ui === undefined) {
 
   //#endregion
 
+  test('A3/T6: the mark overlay is pointer-transparent and the detail card keeps its markers', () => {
+    const source = client.source
+    assert.equal(typeof source, 'string')
+    const cssStart = source.indexOf('const ANNOTATION_CSS')
+    assert.ok(cssStart >= 0, 'the annotation stylesheet exists')
+    const css = source.slice(cssStart, source.indexOf('\n    `', cssStart))
+    assert.ok(css.includes('.psa-mark{'), 'the page mark rule exists')
+    const markRule = css.slice(css.indexOf('.psa-mark{'), css.indexOf('}', css.indexOf('.psa-mark{')))
+    assert.ok(markRule.includes('pointer-events:none'), 'page marks must never intercept pointer events')
+    assert.ok(css.includes('.psa-mark-badge{'), 'the mark badge rule exists')
+    assert.ok(css.includes('.psa-detail-card{'), 'the detail card rule exists')
+    assert.ok(css.includes('prefers-reduced-motion'), 'reduced-motion handling is present')
+    assert.ok(source.includes("'data-psa-mark': ''"), 'marks are rendered with the data-psa-mark marker')
+    assert.ok(source.includes("'data-psa-mark-id': mark.id"), 'marks expose their record id')
+    assert.ok(source.includes("'data-psa-detail': ''"), 'the detail card is rendered with data-psa-detail')
+    assert.ok(source.includes("'data-psa-undo-toast': ''"), 'the delete undo toast is rendered')
+    assert.ok(source.includes('role: \'status\''), 'the undo toast is a polite status region')
+    assert.ok(source.includes('function AnnotationDetailCard'), 'the detail card component exists')
+    assert.ok(source.includes('function annotationMarkElements'), 'the mark element builder exists')
+  })
+
   //#region geometry and layout
 
   test('clampLauncherPosition keeps the launcher fully inside the viewport with an 8px margin', () => {
