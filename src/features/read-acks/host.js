@@ -20,13 +20,13 @@ export const READ_ACKS_ROUTE = '/api/power-suite.read-acks'
 const MAX_BODY_BYTES = 64 * 1024
 
 /**
- * The harness home this process uses.
+ * Resolve the harness home from `DSH_HOME`, trimming surrounding whitespace and
+ * resolving relative paths. An empty/whitespace override falls back to `~/.dsh`.
  * @returns {string} absolute harness home.
  */
-function harnessHome() {
-  const configured = process.env.DSH_HOME
-  if (typeof configured === 'string' && configured.length > 0) return configured
-  return path.join(os.homedir(), '.dsh')
+export function harnessHome() {
+  const configured = typeof process.env.DSH_HOME === 'string' ? process.env.DSH_HOME.trim() : ''
+  return configured.length > 0 ? path.resolve(configured) : path.join(os.homedir(), '.dsh')
 }
 
 /**
@@ -68,10 +68,12 @@ export function validateReadAckBody(body) {
 /**
  * Register the read-acks route inside Connection's authentication fence.
  * @param {object} ctx - Host context carrying the connection service.
+ * @param {object} [options] - injection points for tests.
+ * @param {object} [options.store] - store override with `get`/`record`.
  * @returns {void}
  */
-export function installReadAcks(ctx) {
-  const store = createReadAckStore(harnessHome())
+export function installReadAcks(ctx, options = {}) {
+  const store = options.store ?? createReadAckStore(harnessHome())
   ctx.effect(() => ctx.connection.fetch.register({
     path: READ_ACKS_ROUTE,
     methods: ['GET', 'POST'],
@@ -88,7 +90,9 @@ export function installReadAcks(ctx) {
         return sendJson(415, { code: 'unsupported-media-type', message: 'content-type must be application/json' })
       }
       const text = await request.text()
-      if (text.length > MAX_BODY_BYTES) {
+      // Measure UTF-8 bytes, not UTF-16 code units: a multibyte body must not
+      // slip past the 64 KiB request cap.
+      if (Buffer.byteLength(text, 'utf8') > MAX_BODY_BYTES) {
         return sendJson(413, { code: 'too-large', message: 'request body is too large' })
       }
       let body
@@ -101,7 +105,15 @@ export function installReadAcks(ctx) {
       if (verdict.ok === false) {
         return sendJson(400, { code: 'bad-request', message: verdict.message })
       }
-      return sendJson(200, { acked: await store.record(verdict.value) })
+      let acked
+      try {
+        acked = await store.record(verdict.value)
+      } catch {
+        // A disk/permission failure must keep the documented error contract;
+        // the client retries the pending baselines on its next sync cycle.
+        return sendJson(500, { code: 'store-failed', message: 'read acknowledgements could not be stored' })
+      }
+      return sendJson(200, { acked })
     }
   }), `power-suite: read-acks ${READ_ACKS_ROUTE}`)
 }

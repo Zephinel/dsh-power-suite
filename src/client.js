@@ -3918,6 +3918,11 @@ window.__ModuleLoader__.load({
 
     /**
      * Start continuing one Session from a row action.
+     *
+     * When that Session is not already the open conversation this opens it
+     * first; the renderless composer seat (InterruptedContinueSeat) observes the
+     * pending request and sends the continuation once the Session is open and
+     * idle. The row CTA never sends into a different Session.
      * @param {string} sessionId - Session identity.
      * @returns {void}
      */
@@ -4863,6 +4868,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** Debounce before increased local baselines are pushed to the Host. */
     const DW_ACK_PUSH_DEBOUNCE_MS = 250
 
+    /** Abort a hung read-acks GET/POST so the next sync cycle can retry. */
+    const DW_ACK_REQUEST_TIMEOUT_MS = 8000
+
     /** Most entries the local cache keeps; the oldest baselines drop first. */
     const DW_ACK_MAX_ENTRIES = 1000
 
@@ -5004,10 +5012,13 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @returns {Promise<Record<string, number> | null>} sanitized entries or null.
      */
     async function dwFetchReadAcks() {
+      const controller = new AbortController()
+      const timer = window.setTimeout(() => controller.abort(), DW_ACK_REQUEST_TIMEOUT_MS)
       try {
         const response = await fetch(appUrl(DW_ACK_ROUTE), {
           credentials: 'same-origin',
-          headers: { accept: 'application/json' }
+          headers: { accept: 'application/json' },
+          signal: controller.signal
         })
         if (!response.ok) return null
         const payload = await response.json()
@@ -5015,6 +5026,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         return dwSanitizeAckEntries(acked)
       } catch {
         return null
+      } finally {
+        window.clearTimeout(timer)
       }
     }
 
@@ -5025,12 +5038,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @returns {Promise<Record<string, number> | null>} the merged entries or null.
      */
     async function dwPostReadAcks(entries) {
+      const controller = new AbortController()
+      const timer = window.setTimeout(() => controller.abort(), DW_ACK_REQUEST_TIMEOUT_MS)
       try {
         const response = await fetch(appUrl(DW_ACK_ROUTE), {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'content-type': 'application/json', accept: 'application/json' },
-          body: JSON.stringify({ acked: entries })
+          body: JSON.stringify({ acked: entries }),
+          signal: controller.signal
         })
         if (!response.ok) return null
         const payload = await response.json()
@@ -5038,6 +5054,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         return dwSanitizeAckEntries(acked)
       } catch {
         return null
+      } finally {
+        window.clearTimeout(timer)
       }
     }
 
@@ -5636,6 +5654,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       ackedRef.current = ackedBaselines
       const ackedPushTimerRef = React.useRef(null)
       const ackedPendingPushRef = React.useRef(new Map())
+      const ackedPushInFlightRef = React.useRef(false)
       const ackedSyncInFlightRef = React.useRef(false)
       const ackedMigrationRef = React.useRef(false)
       const applyAckedHostEntries = React.useCallback((entries) => {
@@ -5647,6 +5666,33 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         }
         return next
       }, [])
+      // Pending pushes stay queued after any failed/timed-out POST and are
+      // retried by the next sync cycle (mount/focus/visibility/30 s poll), so a
+      // one-time migration or an increased baseline is not lost. The queue is a
+      // small subset of the bounded baseline map; at most one POST is in flight.
+      const flushAckedPush = React.useCallback(() => {
+        if (ackedPushInFlightRef.current) return
+        if (ackedPushTimerRef.current !== null) {
+          window.clearTimeout(ackedPushTimerRef.current)
+          ackedPushTimerRef.current = null
+        }
+        if (ackedPendingPushRef.current.size === 0) return
+        const payload = {}
+        for (const [id, baseline] of ackedPendingPushRef.current) payload[id] = baseline
+        ackedPushInFlightRef.current = true
+        void (async () => {
+          const merged = await dwPostReadAcks(payload)
+          ackedPushInFlightRef.current = false
+          if (merged === null) return
+          // Drop only entries that still hold the pushed value; baselines raised
+          // while the request was in flight stay queued for the next flush.
+          for (const [id, baseline] of Object.entries(payload)) {
+            const pending = ackedPendingPushRef.current.get(id)
+            if (pending !== undefined && pending <= baseline) ackedPendingPushRef.current.delete(id)
+          }
+          applyAckedHostEntries(merged)
+        })()
+      }, [applyAckedHostEntries])
       const scheduleAckedPush = React.useCallback((entries) => {
         const sanitized = dwSanitizeAckEntries(entries)
         let added = false
@@ -5659,14 +5705,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (ackedPushTimerRef.current !== null) window.clearTimeout(ackedPushTimerRef.current)
         ackedPushTimerRef.current = window.setTimeout(() => {
           ackedPushTimerRef.current = null
-          const payload = {}
-          for (const [id, baseline] of ackedPendingPushRef.current) payload[id] = baseline
-          ackedPendingPushRef.current = new Map()
-          void dwPostReadAcks(payload).then((merged) => {
-            if (merged !== null) applyAckedHostEntries(merged)
-          })
+          flushAckedPush()
         }, DW_ACK_PUSH_DEBOUNCE_MS)
-      }, [applyAckedHostEntries])
+      }, [flushAckedPush])
 
       const newSessionInFlightRef = React.useRef(new Set())
       /**
@@ -5798,11 +5839,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }, [ackedBaselines])
 
       // Keep the card's Host-backed state in sync on mount, on window focus, on
-      // visibility, and every 30 s: merge the shared read-acks document (and
-      // push the merged local map once after the first successful migration,
-      // then increased baselines through the debounced push above) and refresh
-      // the true last-activity map driving card retention/time. Missing routes
-      // (older Host) degrade silently to the local summaries.
+      // visibility, and every 30 s: merge the shared read-acks document, retry
+      // any queued migration/increased-baseline pushes (a failed or timed-out
+      // POST stays queued for the next cycle), and refresh the true
+      // last-activity map driving card retention/time. Missing routes (older
+      // Host) degrade silently to the local summaries.
       React.useEffect(() => {
         let disposed = false
         const sync = async () => {
@@ -5817,6 +5858,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
                 scheduleAckedPush(dwAckedRecords(merged))
               }
             }
+            if (!disposed && ackedPendingPushRef.current.size > 0) flushAckedPush()
             if (!disposed) {
               const activity = await dwFetchSessionActivity()
               if (!disposed && activity !== null) setSessionActivity(activity)
@@ -5843,7 +5885,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
             ackedPushTimerRef.current = null
           }
         }
-      }, [applyAckedHostEntries, scheduleAckedPush])
+      }, [applyAckedHostEntries, flushAckedPush, scheduleAckedPush])
 
       React.useEffect(() => {
         aliveRef.current = true
@@ -7905,7 +7947,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
       const openWorkspace = () => {
         try {
-          void nav.openWorkspace(project.workspaceId)
+          const pending = nav.openWorkspace(project.workspaceId)
+          if (pending !== null && pending !== undefined && typeof pending.then === 'function') pending.catch(() => {})
         } catch (error) {
           console.warn('[power-suite] open workspace failed', error)
         }
@@ -8381,7 +8424,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const minutesLabel = minutes === 1 ? t('unit.minutesOne') : t('unit.minutes', { n: minutes })
       const openWorkspace = () => {
         try {
-          void nav.openWorkspace(workspaceId)
+          const pending = nav.openWorkspace(workspaceId)
+          if (pending !== null && pending !== undefined && typeof pending.then === 'function') pending.catch(() => {})
         } catch (failure) {
           console.warn('[power-suite] open workspace failed', failure)
         }
@@ -8456,15 +8500,19 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const { state, refreshing, refresh } = usePsvProject(workspaceId)
       const sessionsSnapshot = usePsvSessions(props.sessionsSource)
       const now = usePsvNow(15000)
+      // Page-level state (tab, filters, searches, expanded rows) intentionally
+      // survives Workspace switches: this component instance stays mounted and
+      // only the data hook follows `workspaceId`. Documented as intended UX.
       const [tab, setTab] = React.useState('overview')
       const snapshot = state.snapshot
       const close = props.onClose
       const navigation = React.useMemo(() => {
         const run = (action) => {
           try {
-            action()
+            return action()
           } catch (error) {
             console.warn('[power-suite] project page navigation failed', error)
+            return undefined
           }
         }
         return {
@@ -8473,8 +8521,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
             close()
           },
           openWorkspace: (id) => {
-            run(() => { void props.uiWorkspace.openWorkspace(id) })
+            // Fire-and-forget UI navigation: hand the promise back so the
+            // header/settings callers can attach their rejection guard.
+            const pending = run(() => props.uiWorkspace.openWorkspace(id))
             close()
+            return pending
           },
           startSession: (id) => {
             run(() => props.uiWorkspace.startSession(id))
@@ -8654,9 +8705,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
      * handler that turns a plain click on a Workspace row (title/folder area)
      * into opening this Workspace's standalone Project page. Chevron folds, row
      * action buttons, Session rows, drags, modified clicks, and non-primary
-     * buttons stay fully native. Opening the page changes neither the current
-     * Session nor the conversation view: the handler only dispatches
-     * PROJECT_PAGE_EVENT and the shell.overlay seat reacts to it.
+     * buttons stay fully native. A touch/no-hover tap on the title/folder area is
+     * intentionally the page entry; only the native small chevron folds the
+     * Workspace. Opening the page changes neither the current Session nor the
+     * conversation view: the handler only dispatches PROJECT_PAGE_EVENT and the
+     * shell.overlay seat reacts to it.
      * @param {object} ctx - client root context.
      * @returns {Function} cleanup.
      */
@@ -8904,6 +8957,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         if (!open) return undefined
         const onKeyDown = (event) => {
           if (event.key !== 'Escape') return
+          // A page dropdown/menu handles Escape itself in document capture and
+          // stops propagation. While one is open the first Escape must close
+          // only that menu; the next Escape (no menu) closes the page.
+          const page = document.querySelector('[data-psv-page]')
+          if (page !== null && page.querySelector('.psv-menu') !== null) return
           event.preventDefault()
           event.stopPropagation()
           close()

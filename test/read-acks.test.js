@@ -13,7 +13,7 @@ import {
   sanitizeAcked,
   serializeReadAcks
 } from '../src/features/read-acks/store.js'
-import { READ_ACKS_ROUTE, installReadAcks } from '../src/features/read-acks/host.js'
+import { READ_ACKS_ROUTE, harnessHome, installReadAcks } from '../src/features/read-acks/host.js'
 
 /**
  * Create one throwaway harness home.
@@ -228,11 +228,57 @@ test('read-acks route rejects the wrong media type, malformed or oversized bodie
     assert.equal(oversized.status, 413)
     assert.equal((await oversized.json()).code, 'too-large')
 
+    // Multibyte content: under 64K UTF-16 code units but over 64 KiB of UTF-8.
+    const multibyteBody = `{"acked":{},"pad":"${'汉'.repeat(30 * 1024)}"}`
+    assert.ok(multibyteBody.length < 64 * 1024)
+    assert.ok(Buffer.byteLength(multibyteBody, 'utf8') > 64 * 1024)
+    const multibyte = await fixture.route.fetch(new Request('http://host/api/power-suite.read-acks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: multibyteBody
+    }))
+    assert.equal(multibyte.status, 413)
+    assert.equal((await multibyte.json()).code, 'too-large')
+
     for (const body of [{}, { acked: [] }, { acked: { id: 'nope' } }, { acked: { id: 0 } }, { acked: { id: -5 } }, { acked: { ['x'.repeat(300)]: 10 } }]) {
       const response = await fixture.route.fetch(postJson(body))
       assert.equal(response.status, 400, JSON.stringify(body).slice(0, 60))
     }
   } finally {
     await fixture.dispose()
+  }
+})
+
+test('read-acks POST maps store failures to a no-store 500', async () => {
+  const { ctx, routes } = makeContext()
+  installReadAcks(ctx, {
+    store: {
+      async get() {
+        return {}
+      },
+      async record() {
+        throw new Error('disk full')
+      }
+    }
+  })
+  const route = routes.get(READ_ACKS_ROUTE)
+  const response = await route.fetch(postJson({ acked: { 'session-a': 1000 } }))
+  assert.equal(response.status, 500)
+  assert.equal(response.headers.get('cache-control'), 'no-store')
+  assert.deepEqual(await response.json(), { code: 'store-failed', message: 'read acknowledgements could not be stored' })
+})
+
+test('read-acks harnessHome trims DSH_HOME, resolves relative paths, and falls back on whitespace', () => {
+  const previous = process.env.DSH_HOME
+  try {
+    process.env.DSH_HOME = '  '
+    assert.equal(harnessHome(), path.join(os.homedir(), '.dsh'))
+    process.env.DSH_HOME = 'relative/read-acks-home'
+    assert.equal(harnessHome(), path.resolve('relative/read-acks-home'))
+    process.env.DSH_HOME = '/tmp/read-acks-home'
+    assert.equal(harnessHome(), '/tmp/read-acks-home')
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
   }
 })

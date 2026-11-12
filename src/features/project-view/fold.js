@@ -108,9 +108,16 @@ export function turnEndStatus(kind, cause) {
  * @returns {'running' | 'completed' | 'interrupted' | 'stopped' | 'failed'} the status.
  */
 export function turnStatus(turn, running) {
-  if (!isRecord(turn) || !Number.isFinite(turn.startedAt)) return 'interrupted'
-  if (turn.endedAt === null || turn.endedAt === undefined) return running === true ? 'running' : 'interrupted'
-  return turnEndStatus(turn.endKind, turn.endCause)
+  if (!isRecord(turn)) return 'interrupted'
+  // A closed turn's recorded reason is authoritative even when its start fell
+  // into a fork's inherited prefix: a sliced fork seed keeps the synthetic
+  // `turn/end` boundary but not the `turn/start`, so the ending still describes
+  // what happened (e.g. `forked` → `stopped`).
+  if (Number.isFinite(turn.endedAt)) return turnEndStatus(turn.endKind, turn.endCause)
+  if (running === true) return 'running'
+  // An open turn with no live Agent has no recorded ending; treat it as the
+  // crash/Host-restart tail it must be.
+  return 'interrupted'
 }
 
 /**
@@ -391,8 +398,11 @@ export function computeStats({ sessions, dayStart, truncatedSessions = false }) 
     for (const session of sessions) {
       if (session.running === true) runningSessions += 1
       const turns = Array.isArray(session.turns) ? session.turns : []
-      totalRuns += turns.length
       for (const turn of turns) {
+        // A `turn/end` without a recorded start is a synthetic fork boundary
+        // (the start lives in the inherited prefix); it is not a measured run,
+        // so it never inflates the run total or the duration average.
+        if (Number.isFinite(turn.startedAt)) totalRuns += 1
         if (turn.endedAt === null || turn.endedAt === undefined) continue
         const status = turnEndStatus(turn.endKind, turn.endCause)
         if (status !== 'completed') continue

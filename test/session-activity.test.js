@@ -4,11 +4,13 @@ import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import {
+  MAX_CACHE_DOCUMENT_BYTES,
   SESSION_ACTIVITY_ROUTE,
   SESSION_ACTIVITY_TTL_MS,
   cachedLastMessageTime,
   collectSessionActivity,
   createProjectionCacheReader,
+  harnessHome,
   installSessionActivity,
   readCachedDocumentActivity
 } from '../src/features/session-activity/host.js'
@@ -167,30 +169,54 @@ test('readCachedDocumentActivity extracts the timeContext row and tolerates corr
   assert.equal(readCachedDocumentActivity(JSON.stringify({ version: 7, record: { rows: { timeContext: { val: { lastMessageTime: null } } } } })), null)
 })
 
-test('createProjectionCacheReader reads timeContext from the per-record cache document and re-reads on change', async () => {
+test('createProjectionCacheReader uses the newer of timeContext and the checkpoint mtime', async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), 'ps-activity-'))
   try {
     const directory = path.join(home, 'storages', 'session_projcache', 'sessions')
     await mkdir(directory, { recursive: true })
     const file = path.join(directory, 'session-442a0000-e8e9-4f56-8d43-583e63c9b79d.json')
-    await writeFile(file, JSON.stringify({
+    const document = (lastMessageTime) => JSON.stringify({
       version: 7,
-      record: { rows: { timeContext: { ver: 3, seq: 10, val: { lastMessageTime: 1000 } } } }
-    }), 'utf8')
+      record: { rows: { timeContext: { ver: 3, seq: 10, val: { lastMessageTime } } } }
+    })
     const reader = createProjectionCacheReader(home)
+    // Parsed time newer than the file mtime wins.
+    await writeFile(file, document(1000), 'utf8')
+    await utimes(file, new Date(900), new Date(900))
     assert.equal(await reader('session-442a0000-e8e9-4f56-8d43-583e63c9b79d'), 1000)
-    // Same document/mtime: the cached value is reused.
+    // Same mtime: the cached floor is reused.
     assert.equal(await reader('session-442a0000-e8e9-4f56-8d43-583e63c9b79d'), 1000)
-    await writeFile(file, JSON.stringify({
-      version: 7,
-      record: { rows: { timeContext: { ver: 3, seq: 20, val: { lastMessageTime: 2000 } } } }
-    }), 'utf8')
-    const future = new Date(Date.now() + 2000)
-    await utimes(file, future, future)
-    assert.equal(await reader('session-442a0000-e8e9-4f56-8d43-583e63c9b79d'), 2000)
+    // Older parsed message time (timeContext never advanced on turn/end) is
+    // raised to the checkpoint mtime.
+    await writeFile(file, document(2000), 'utf8')
+    await utimes(file, new Date(5000), new Date(5000))
+    assert.equal(await reader('session-442a0000-e8e9-4f56-8d43-583e63c9b79d'), 5000)
+    // mtime-only: a document without a usable timeContext row still yields the
+    // checkpoint floor.
+    await writeFile(file, JSON.stringify({ version: 7, record: { rows: {} } }), 'utf8')
+    await utimes(file, new Date(7000), new Date(7000))
+    assert.equal(await reader('session-442a0000-e8e9-4f56-8d43-583e63c9b79d'), 7000)
+    // Oversized cache documents are skipped before readFile.
+    await writeFile(file, 'x'.repeat(MAX_CACHE_DOCUMENT_BYTES + 1), 'utf8')
+    assert.equal(await reader('session-442a0000-e8e9-4f56-8d43-583e63c9b79d'), null)
     assert.equal(await reader('session-missing'), null)
     assert.equal(await reader('../etc/passwd'), null)
   } finally {
     await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('harnessHome trims DSH_HOME, resolves relative paths, and falls back on whitespace', () => {
+  const previous = process.env.DSH_HOME
+  try {
+    process.env.DSH_HOME = '   '
+    assert.equal(harnessHome(), path.join(os.homedir(), '.dsh'))
+    process.env.DSH_HOME = 'relative/harness-home'
+    assert.equal(harnessHome(), path.resolve('relative/harness-home'))
+    process.env.DSH_HOME = '/tmp/dsh-home'
+    assert.equal(harnessHome(), '/tmp/dsh-home')
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
   }
 })

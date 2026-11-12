@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { test } from 'node:test'
+import { mock, test } from 'node:test'
 import {
   MAX_ACTIVITY,
   MAX_JOBS_PER_RUN,
@@ -14,7 +14,7 @@ import {
   turnEndStatus,
   turnStatus
 } from '../src/features/project-view/fold.js'
-import { installProjectView } from '../src/features/project-view/host.js'
+import { PROJECT_CACHE_TTL_MS, installProjectView } from '../src/features/project-view/host.js'
 
 /**
  * Build one session event envelope.
@@ -180,6 +180,26 @@ test('turnStatus distinguishes running, interrupted, and closed turns', () => {
   assert.equal(turnStatus({ ...open, endedAt: 2000, endKind: 'interrupted' }, false), 'interrupted')
   assert.equal(turnStatus({ ...open, endedAt: 2000, endKind: 'error' }, false), 'failed')
   assert.equal(turnStatus({ ...open, endedAt: 2000, endKind: 'aborted', endCause: 'disposed' }, true), 'interrupted')
+  // A synthetic fork closer keeps only the ending: its closed reason wins over
+  // the missing start, and an open turn without a start still follows liveness.
+  const synthetic = { turn: 3, startedAt: null, endedAt: 5000, endKind: 'forked', endCause: null, toolCalls: 0 }
+  assert.equal(turnStatus(synthetic, false), 'stopped')
+  assert.equal(turnStatus({ ...synthetic, endKind: 'completed' }, false), 'completed')
+  assert.equal(turnStatus({ ...synthetic, endKind: 'error' }, false), 'failed')
+  assert.equal(turnStatus({ ...synthetic, endKind: 'aborted', endCause: 'user' }, false), 'stopped')
+  assert.equal(turnStatus({ turn: 4, startedAt: null, endedAt: null, endKind: null, endCause: null, toolCalls: 0 }, true), 'running')
+  assert.equal(turnStatus({ turn: 4, startedAt: null, endedAt: null, endKind: null, endCause: null, toolCalls: 0 }, false), 'interrupted')
+})
+
+test('a forked closer folded without its start is stopped, not interrupted', () => {
+  const fold = foldSessionLog([event(1, 5000, 'turn/end', { turn: 3, reason: { kind: 'forked' } })])
+  assert.equal(fold.turns.length, 1)
+  assert.equal(fold.turns[0].startedAt, null)
+  assert.equal(fold.turns[0].endedAt, 5000)
+  assert.equal(turnStatus(fold.turns[0], false), 'stopped')
+  const { runs, totalRuns } = buildRuns({ sessions: [{ sessionId: 's', title: 'S', running: false, turns: fold.turns, jobs: [], callIdToTurn: new Map() }] })
+  assert.equal(totalRuns, 1)
+  assert.equal(runs[0].status, 'stopped')
 })
 
 test('associateJobs prefers the tool-call mapping, then time containment, then the nearest preceding turn', () => {
@@ -338,6 +358,28 @@ test('computeStats reports a null average when no completed turn has timing', ()
   assert.equal(stats.averageDurationMs, null)
   // The turn ended at epoch 5, which is after the supplied day boundary 0.
   assert.equal(stats.completedToday, 1)
+})
+
+test('computeStats does not count synthetic fork boundaries as runs', () => {
+  const dayStart = new Date(2026, 10, 11, 0, 0, 0, 0).getTime()
+  const stats = computeStats({
+    sessions: [
+      {
+        sessionId: 'forked',
+        running: false,
+        turns: [
+          // The inherited start is absent; only the `turn/end` boundary survived.
+          { turn: 3, startedAt: null, endedAt: dayStart + 6000, endKind: 'forked', endCause: null, toolCalls: 0 },
+          { turn: 4, startedAt: dayStart + 1000, endedAt: dayStart + 4000, endKind: 'completed', endCause: null, toolCalls: 0 }
+        ]
+      }
+    ],
+    dayStart
+  })
+  assert.equal(stats.totalRuns, 1)
+  assert.equal(stats.completedRuns, 1)
+  assert.equal(stats.completedToday, 1)
+  assert.equal(stats.averageDurationMs, 3000)
 })
 
 test('localDayStart returns local midnight', () => {
@@ -557,6 +599,99 @@ test('project route skips an unreadable Session log with a warning and keeps the
   assert.equal(payload.sessions.length, 1)
   assert.equal(payload.warnings.length, 1)
   assert.equal(payload.warnings[0].sessionId, 'session-missing')
+})
+
+test('project route warnings keep a bounded error identity for fold/programming failures', async () => {
+  const logs = new Map([
+    ['session-a', [turnStart(1, 1_700_000_000_000, 1), turnEnd(2, 1_700_000_000_500, 1)]]
+  ])
+  const { ctx, routes } = makeContext({ workspaces: [workspace({ sessionIds: ['session-a'] })], logs })
+  ctx.sessionQuery.readSession = async () => {
+    throw new TypeError('fold exploded')
+  }
+  installProjectView(ctx)
+  const response = await routes.get('/api/power-suite.project').fetch(
+    new Request('http://host/api/power-suite.project?workspaceId=workspace-1')
+  )
+  assert.equal(response.status, 200)
+  const payload = await response.json()
+  assert.equal(payload.sessions.length, 0)
+  assert.equal(payload.warnings.length, 1)
+  assert.match(payload.warnings[0].message, /TypeError: fold exploded/)
+})
+
+test('project cache identity includes archived members and the focus Session', async () => {
+  let reads = 0
+  const logs = new Map([
+    ['session-a', [turnStart(1, 1_700_000_000_000, 1), turnEnd(2, 1_700_000_000_500, 1)]],
+    ['session-b', [turnStart(1, 1_700_000_001_000, 1), turnEnd(2, 1_700_000_001_500, 1)]]
+  ])
+  const { ctx, routes } = makeContext({ workspaces: [workspace({ sessionIds: ['session-a', 'session-b'] })], logs })
+  const originalRead = ctx.sessionQuery.readSession
+  ctx.sessionQuery.readSession = async (sessionId) => {
+    reads += 1
+    return originalRead(sessionId)
+  }
+  installProjectView(ctx)
+  const route = routes.get('/api/power-suite.project')
+  const first = await route.fetch(new Request('http://host/api/power-suite.project?workspaceId=workspace-1'))
+  assert.equal((await first.json()).sessions.length, 2)
+  const readsAfterFirst = reads
+  // Same request inside the TTL is warm.
+  await route.fetch(new Request('http://host/api/power-suite.project?workspaceId=workspace-1'))
+  assert.equal(reads, readsAfterFirst)
+  // A different focus Session changes the payload, so it must not reuse the cache.
+  const focused = await route.fetch(new Request('http://host/api/power-suite.project?workspaceId=workspace-1&sessionId=session-a'))
+  assert.equal((await focused.json()).focusSessionId, 'session-a')
+  assert.ok(reads > readsAfterFirst)
+  // Archiving a member changes the payload even though workspace.updatedAt and
+  // the member count are unchanged, so the cache must be bypassed.
+  const readsBeforeArchive = reads
+  ctx.workspaceRegistry.archivedSessionIds.push('session-a')
+  const archived = await route.fetch(new Request('http://host/api/power-suite.project?workspaceId=workspace-1'))
+  assert.equal((await archived.json()).sessions.length, 1)
+  assert.ok(reads > readsBeforeArchive)
+  // Archiving an unrelated Session does not affect this Workspace's payload.
+  const readsBeforeUnrelated = reads
+  ctx.workspaceRegistry.archivedSessionIds.push('session-unrelated')
+  await route.fetch(new Request('http://host/api/power-suite.project?workspaceId=workspace-1'))
+  assert.equal(reads, readsBeforeUnrelated)
+})
+
+test('project snapshot cache outlives the 15s page poll and refresh=1 still bypasses it', async () => {
+  assert.ok(PROJECT_CACHE_TTL_MS >= 20_000 && PROJECT_CACHE_TTL_MS <= 60_000)
+  let reads = 0
+  const logs = new Map([
+    ['session-a', [turnStart(1, 1_700_000_000_000, 1), turnEnd(2, 1_700_000_000_500, 1)]]
+  ])
+  const { ctx, routes } = makeContext({ workspaces: [workspace({ sessionIds: ['session-a'] })], logs })
+  const originalRead = ctx.sessionQuery.readSession
+  ctx.sessionQuery.readSession = async (sessionId) => {
+    reads += 1
+    return originalRead(sessionId)
+  }
+  installProjectView(ctx)
+  const route = routes.get('/api/power-suite.project')
+  mock.timers.enable({ apis: ['Date'], now: 1_700_000_000_000 })
+  try {
+    await route.fetch(new Request('http://host/api/power-suite.project?workspaceId=workspace-1'))
+    const readsAfterFirst = reads
+    assert.ok(readsAfterFirst > 0)
+    // One 15s page poll is served warm by the 25s cache.
+    mock.timers.tick(15_000)
+    await route.fetch(new Request('http://host/api/power-suite.project?workspaceId=workspace-1'))
+    assert.equal(reads, readsAfterFirst)
+    // A manual refresh bypasses the warm cache immediately.
+    await route.fetch(new Request('http://host/api/power-suite.project?workspaceId=workspace-1&refresh=1'))
+    assert.ok(reads > readsAfterFirst)
+    // Past the TTL the next poll is cold again.
+    const readsBeforeExpiry = reads
+    mock.timers.tick(PROJECT_CACHE_TTL_MS + 1_000)
+    await route.fetch(new Request('http://host/api/power-suite.project?workspaceId=workspace-1'))
+    assert.ok(reads > readsBeforeExpiry)
+  } finally {
+    mock.timers.reset()
+  }
 })
 
 test('project route serves a warm cache and refresh=1 bypasses it', async () => {

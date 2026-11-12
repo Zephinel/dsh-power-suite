@@ -15,8 +15,10 @@
  *   wire view, so `cachedSnapshot()` cannot expose it; the same projection-cache
  *   document is therefore read directly from the per-record JSON storage
  *   (`storages/session_projcache/sessions/<id>.json`) as a mtime-guarded fallback.
- *   `timeContext.lastMessageTime` is the time of the newest model-visible event
- *   (user/assistant message or tool result) known to the cache.
+ *   `timeContext.lastMessageTime` tracks the newest model-visible event, but it
+ *   does not advance on `turn/end`; the document mtime is therefore used as a
+ *   safe last-activity/checkpoint floor (`turn/end` writes a checkpoint), so a
+ *   just-finished long turn cannot look stale and vanish from the card.
  * - A Session with no cache row at all falls back to its header timestamps.
  *
  * Values are bounded by a short in-memory cache because the browser polls this
@@ -40,14 +42,17 @@ const PROJECTION_CACHE_PATH = ['storages', 'session_projcache', 'sessions']
 /** Session ids are harness-generated tokens; refuse anything path-like. */
 const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 
+/** A projection-cache document is small JSON; refuse to load absurd files. */
+export const MAX_CACHE_DOCUMENT_BYTES = 2 * 1024 * 1024
+
 /**
- * The harness home this process uses.
+ * Resolve the harness home from `DSH_HOME`, trimming surrounding whitespace and
+ * resolving relative paths. An empty/whitespace override falls back to `~/.dsh`.
  * @returns {string} absolute harness home.
  */
-function harnessHome() {
-  const configured = process.env.DSH_HOME
-  if (typeof configured === 'string' && configured.length > 0) return configured
-  return path.join(os.homedir(), '.dsh')
+export function harnessHome() {
+  const configured = typeof process.env.DSH_HOME === 'string' ? process.env.DSH_HOME.trim() : ''
+  return configured.length > 0 ? path.resolve(configured) : path.join(os.homedir(), '.dsh')
 }
 
 /**
@@ -108,11 +113,14 @@ export function readCachedDocumentActivity(text) {
  * Open a mtime-guarded reader for the per-record projection-cache documents.
  *
  * A cold Session's cache document is written at checkpoint points (notably
- * `turn/end`), so its `timeContext` row is the cheap proof of the last
- * model-visible event without replaying the Session log. `stat` on every id
- * skips the JSON parse for unchanged documents; only live checkpoints re-read.
+ * `turn/end`), so the newer of its `timeContext.lastMessageTime` and the file
+ * mtime is the cheap last-activity/checkpoint floor without replaying the
+ * Session log. `timeContext` alone misses `turn/end`, so an interrupted/failed
+ * long turn would otherwise keep a stale message time and drop out of the card.
+ * `stat` on every id skips the JSON parse for unchanged documents, and an
+ * oversized document (corrupt cache) is skipped before it is read into memory.
  * @param {string} dshHome - harness home directory.
- * @returns {function(string): Promise<number | null>} Session id → cached time.
+ * @returns {function(string): Promise<number | null>} Session id → activity floor.
  */
 export function createProjectionCacheReader(dshHome) {
   const directory = path.join(dshHome, ...PROJECTION_CACHE_PATH)
@@ -120,33 +128,38 @@ export function createProjectionCacheReader(dshHome) {
   return async function readCachedDocument(id) {
     if (typeof id !== 'string' || id.length === 0 || !SESSION_ID_PATTERN.test(id)) return null
     const file = path.join(directory, `${id}.json`)
-    let version
+    let info
     try {
-      version = (await stat(file)).mtimeMs
+      info = await stat(file)
     } catch {
       known.delete(id)
       return null
     }
+    if (info.size > MAX_CACHE_DOCUMENT_BYTES) return null
     const previous = known.get(id)
-    if (previous !== undefined && previous.mtimeMs === version) return previous.value
-    let value = null
+    if (previous !== undefined && previous.mtimeMs === info.mtimeMs) return previous.value
+    let parsed = null
     try {
-      value = readCachedDocumentActivity(await readFile(file, 'utf8'))
+      parsed = readCachedDocumentActivity(await readFile(file, 'utf8'))
     } catch {
-      value = null
+      parsed = null
     }
-    known.set(id, { mtimeMs: version, value })
+    // The checkpoint write time is a safe floor even when the document has no
+    // usable timeContext row or the parse failed.
+    const value = Math.max(parsed ?? 0, info.mtimeMs)
+    known.set(id, { mtimeMs: info.mtimeMs, value })
     return value
   }
 }
 
 /**
- * Collect last-activity timestamps for every catalogued Session.
+ * Collect last-activity/checkpoint floors for every catalogued Session.
  *
- * The value per Session is the newest of the cached `timeContext` time, the
- * header `updatedAt` (kept for forward compatibility), and the header
- * `createdAt`. Only headers with a usable timestamp are reported, so a Session
- * whose cache row is absent still gets its creation time as a safe minimum.
+ * The value per Session is the newest of the cached document floor (the newer
+ * of its `timeContext` time and checkpoint mtime), the header `updatedAt`
+ * (kept for forward compatibility), and the header `createdAt`. Only headers
+ * with a usable timestamp are reported, so a Session whose cache row is absent
+ * still gets its creation time as a safe minimum.
  * @param {object} ctx - Host context carrying `sessionQuery` and optional services.
  * @param {object} [options] - injection points for tests.
  * @param {function(string): Promise<number | null>} [options.readCachedDocument] - document reader.

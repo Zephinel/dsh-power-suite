@@ -43,8 +43,12 @@ import {
 /** Authenticated route serving one Workspace's project snapshot. */
 export const PROJECT_ROUTE = '/api/power-suite.project'
 
-/** How long one snapshot stays warm. */
-const CACHE_TTL_MS = 10_000
+/**
+ * How long one snapshot stays warm. The page polls every 15 s and a manual
+ * refresh bypasses this cache, so 25 s lets a normal poll reuse the previous
+ * snapshot while still refreshing at most one poll behind.
+ */
+export const PROJECT_CACHE_TTL_MS = 25_000
 
 /** Most Workspace snapshots kept in the process. */
 const MAX_CACHE = 30
@@ -66,13 +70,13 @@ function sendJson(status, payload) {
 }
 
 /**
- * The harness home this process uses.
+ * Resolve the harness home from `DSH_HOME`, trimming surrounding whitespace and
+ * resolving relative paths. An empty/whitespace override falls back to `~/.dsh`.
  * @returns {string} absolute harness home.
  */
 function harnessHome() {
-  const configured = process.env.DSH_HOME
-  if (typeof configured === 'string' && configured.length > 0) return configured
-  return path.join(os.homedir(), '.dsh')
+  const configured = typeof process.env.DSH_HOME === 'string' ? process.env.DSH_HOME.trim() : ''
+  return configured.length > 0 ? path.resolve(configured) : path.join(os.homedir(), '.dsh')
 }
 
 /**
@@ -297,12 +301,22 @@ export async function collectProjectSnapshot(ctx, workspace, focusSessionId, rec
         jobsByTurn
       }
     } catch (error) {
+      // Resilience choice: one unreadable Session must not turn the whole
+      // project snapshot into a 500. The warning still carries a bounded error
+      // identity so fold/programming failures are diagnosable instead of being
+      // flattened into a generic message.
       const code = error !== null && typeof error === 'object' ? error.code : undefined
+      const name = error !== null && typeof error === 'object' && typeof error.name === 'string'
+        ? error.name.slice(0, 80)
+        : 'Error'
+      const detail = error !== null && typeof error === 'object' && typeof error.message === 'string'
+        ? error.message.slice(0, 200)
+        : ''
       warnings.push({
         sessionId: candidate.sessionId,
         message: code === 'SESSION_QUERY_SESSION_NOT_FOUND'
           ? 'Session log is missing'
-          : 'Session log could not be read'
+          : `Session log could not be read (${name}${detail.length > 0 ? `: ${detail}` : ''})`
       })
       return null
     }
@@ -383,6 +397,36 @@ export async function collectProjectSnapshot(ctx, workspace, focusSessionId, rec
 }
 
 /**
+ * Short stable hash for one cache-key component (FNV-1a, 32-bit).
+ * @param {string} text - identity text.
+ * @returns {string} hexadecimal hash.
+ */
+function identityHash(text) {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(16)
+}
+
+/**
+ * Cache identity of the archive state that can change this Workspace's payload.
+ *
+ * The global archived set only affects the snapshot for archived ids that are
+ * Workspace members; sorting makes the identity order-independent and hashing
+ * keeps the key short for large Workspaces.
+ * @param {object} ctx - Host context.
+ * @param {object} workspace - Workspace entity.
+ * @returns {string} bounded cache-key component.
+ */
+function archivedIdentity(ctx, workspace) {
+  const archived = new Set(Array.isArray(ctx.workspaceRegistry.archivedSessionIds) ? ctx.workspaceRegistry.archivedSessionIds : [])
+  const relevant = (Array.isArray(workspace.sessionIds) ? workspace.sessionIds : []).filter((id) => archived.has(id)).sort()
+  return `${relevant.length}:${identityHash(relevant.join('|'))}`
+}
+
+/**
  * `GET /api/power-suite.project` — one Workspace's project snapshot.
  * @param {object} ctx - Host context.
  * @param {Request} request - authenticated request.
@@ -406,9 +450,12 @@ async function handleProject(ctx, request, cache) {
     if (resolution.error !== undefined) return sendJson(resolution.error, { code: resolution.code, message: resolution.message })
     const workspace = resolution.workspace
     const refresh = url.searchParams.get('refresh') === '1'
-    const cacheKey = `${workspace.id}|${workspace.updatedAt}|${workspace.sessionIds.length}`
+    // Payload depends on the archived subset of members and on the focus
+    // Session, so both belong to the cache identity in addition to the
+    // Workspace timestamp/member count.
+    const cacheKey = `${workspace.id}|${workspace.updatedAt}|${workspace.sessionIds.length}|${archivedIdentity(ctx, workspace)}|${resolution.focusSessionId ?? ''}`
     const cached = cache.get(workspace.id)
-    if (!refresh && cached !== undefined && cached.key === cacheKey && now - cached.at < CACHE_TTL_MS) {
+    if (!refresh && cached !== undefined && cached.key === cacheKey && now - cached.at < PROJECT_CACHE_TTL_MS) {
       return sendJson(200, cached.value)
     }
     const records = await ctx.sessionQuery.listSessions()
