@@ -826,9 +826,14 @@ const probe = {
       offsetFromSidebarRight: sidebar ? Math.round(card.getBoundingClientRect().left - sidebar.getBoundingClientRect().right) : null,
       radius: style.borderRadius,
       borderWidth: style.borderTopWidth,
+      borderStyle: style.borderTopStyle,
       boxShadow: style.boxShadow,
       padding: style.padding,
       background: style.backgroundColor,
+      backgroundImage: style.backgroundImage,
+      backdropFilter: style.backdropFilter || style.webkitBackdropFilter || 'none',
+      color: style.color,
+      opacity: style.opacity,
       title: inner('[class*="hoverTitle"]'),
       path: inner('[class*="hoverPath"]'),
       time: inner('[class*="hoverTime"]'),
@@ -860,9 +865,14 @@ const probe = {
       offsetFromSidebarRight: sidebar ? Math.round(card.getBoundingClientRect().left - sidebar.getBoundingClientRect().right) : null,
       radius: style.borderRadius,
       borderWidth: style.borderTopWidth,
+      borderStyle: style.borderTopStyle,
       boxShadow: style.boxShadow,
       padding: style.padding,
       background: style.backgroundColor,
+      backgroundImage: style.backgroundImage,
+      backdropFilter: style.backdropFilter || style.webkitBackdropFilter || 'none',
+      color: style.color,
+      opacity: style.opacity,
       pointerEvents: style.pointerEvents,
       zIndex: style.zIndex,
       pinned: card.getAttribute('data-psd-pinned'),
@@ -1207,9 +1217,36 @@ const probe = {
     el.textContent = 'x'
     document.body.appendChild(el)
     const s = getComputedStyle(el)
-    const result = { borderWidth: s.borderTopWidth, borderStyle: s.borderTopStyle, radius: s.borderRadius, boxShadow: s.boxShadow, background: s.backgroundColor }
+    const result = {
+      borderWidth: s.borderTopWidth,
+      borderStyle: s.borderTopStyle,
+      radius: s.borderRadius,
+      boxShadow: s.boxShadow,
+      background: s.backgroundColor,
+      backgroundImage: s.backgroundImage,
+      backdropFilter: s.backdropFilter || s.webkitBackdropFilter || 'none',
+      color: s.color,
+      opacity: s.opacity,
+    }
     el.remove()
     return result
+  },
+
+  /** Theme + resolved tooltip tokens, for both-theme alignment assertions. */
+  themeSnapshot: () => {
+    const root = document.documentElement
+    const body = document.body
+    const style = body ? getComputedStyle(body) : null
+    return {
+      rootClass: root.className,
+      rootTheme: root.getAttribute('data-theme') ?? root.getAttribute('data-ds-dark-theme') ?? null,
+      bodyDark: body ? body.hasAttribute('data-ds-dark-theme') : null,
+      darkScheme: window.matchMedia('(prefers-color-scheme: dark)').matches,
+      colorScheme: style ? style.colorScheme : null,
+      tooltipBgToken: style ? style.getPropertyValue('--dsw-alias-tooltip-bg').trim() : null,
+      hovercardBgToken: style ? style.getPropertyValue('--dsw-hovercard-bg').trim() : null,
+      bodyBackground: style ? style.backgroundColor : null,
+    }
   },
 }
 
@@ -2066,57 +2103,113 @@ async function runCurrentHighlightChecks({ page, results, state }) {
   })
 }
 
+/**
+ * Hover a native sidebar session row and return the live native tooltip facts.
+ * The native tooltip has its own show delay/heuristic, so retry once.
+ * @param {object} page - Page wrapper.
+ * @returns {Promise<{ row: object, tooltip: object | null }>} native row + tooltip.
+ */
+async function measureNativeTooltip(page, evidenceName = null) {
+  const row = await ensureNativeSessionRow(page)
+  const hover = async () => {
+    await page.moveTo(700, 400)
+    await sleep(400)
+    await page.moveTo(row.rect.left + 40, row.rect.top + Math.round(row.rect.height / 2))
+    await sleep(1500)
+    return page.eval(probe.nativeTooltip)
+  }
+  let tooltip = await hover()
+  if (tooltip === null) tooltip = await hover()
+  // Photograph the live native tooltip while it is still open (the pointer is
+  // still on the row; moving away dismisses it).
+  if (tooltip !== null && evidenceName !== null) await writeEvidenceShot(page, evidenceName, tooltip.rect)
+  await page.moveTo(900, 500)
+  await sleep(300)
+  return { row, tooltip }
+}
+
 async function runHoverCardChecks({ page, results, state }) {
   log('\n=== B5/C2/C3: row hover card vs the native tooltip oracle ===')
-  await results.check('b5-1', 'native sidebar tooltip measured live as the alignment oracle', async () => {
-    const native = await ensureNativeSessionRow(page)
-    await page.moveTo(900, 500)
-    await sleep(400)
-    await page.moveTo(native.rect.left + 40, native.rect.top + Math.round(native.rect.height / 2))
-    await sleep(1200)
-    let tooltip = await page.eval(probe.nativeTooltip)
-    if (tooltip === null) {
-      // The native tooltip has its own show delay/hover heuristic; retry once.
-      await page.moveTo(700, 400)
-      await sleep(400)
-      await page.moveTo(native.rect.left + 40, native.rect.top + Math.round(native.rect.height / 2))
-      await sleep(1400)
-      tooltip = await page.eval(probe.nativeTooltip)
+  await results.check('b5-1', 'native sidebar tooltip measured live as the alignment oracle (light + dark)', async () => {
+    const light = await measureNativeTooltip(page, state.shotsEnabled ? '09-native-tooltip-light' : null)
+    assert(light.tooltip, 'native hover tooltip did not appear over a native session row (light theme)')
+    state.nativeTooltip = light.tooltip
+    state.nativeRow = light.row
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+    await sleep(800)
+    const dark = await measureNativeTooltip(page, state.shotsEnabled ? '09-native-tooltip-dark' : null)
+    await page.emulateMedia([])
+    await sleep(500)
+    assert(dark.tooltip, 'native hover tooltip did not appear over a native session row (dark theme)')
+    state.nativeTooltipDark = dark.tooltip
+    assertEqual(light.tooltip.offsetFromSidebarRight, 0, 'native tooltip must sit flush on the sidebar right edge')
+    assertEqual(light.tooltip.borderWidth, '0px', 'native tooltip must be borderless')
+    // The native hover card recipe is theme-invariant (the shell pins its own
+    // --dsw-hovercard-bg to #2C2C2E); both themes must compute the same surface.
+    assertEqual(dark.tooltip.background, light.tooltip.background, `native tooltip surface must be the same in light and dark (light ${light.tooltip.background}, dark ${dark.tooltip.background})`)
+    assertEqual(dark.tooltip.boxShadow, light.tooltip.boxShadow, 'native tooltip elevation must be the same in light and dark')
+    assertEqual(light.tooltip.backgroundImage, 'none', 'native tooltip surface is a flat colour, no gradient layer')
+    assertEqual(light.tooltip.backdropFilter, 'none', 'native tooltip has no backdrop filter')
+    for (const [label, tooltip] of [['light', light.tooltip], ['dark', dark.tooltip]]) {
+      assertEqual(tooltip.background, 'rgb(44, 44, 46)', `native ${label} tooltip surface must resolve to the shell hover-card colour rgb(44, 44, 46)`)
+      assertEqual(tooltip.radius, '16px', `native ${label} tooltip radius`)
     }
-    assert(tooltip, 'native hover tooltip did not appear over a native session row')
-    state.nativeTooltip = tooltip
-    state.nativeRow = native
-    assertEqual(tooltip.offsetFromSidebarRight, 0, 'native tooltip must sit flush on the sidebar right edge')
-    assertEqual(tooltip.borderWidth, '0px', 'native tooltip must be borderless')
-    return `flush offset ${tooltip.offsetFromSidebarRight}px, radius ${tooltip.radius}, padding ${tooltip.padding}`
+    return `oracle ${light.tooltip.background} both themes, radius ${light.tooltip.radius}, padding ${light.tooltip.padding}, border ${light.tooltip.borderWidth}`
   })
 
-  await results.check('b5-2', 'our hover card reproduces the native geometry and chrome', async () => {
+  await results.check('b5-2', 'our hover card reproduces the native tooltip recipe in light and dark', async () => {
     const native = state.nativeTooltip
+    const nativeDark = state.nativeTooltipDark
     // The live card re-sorts under a stationary pointer; retry until the card is
     // actually showing instead of a single timed hover.
     const target = await hoverRowStable(page, 0)
-    const card = await page.eval(probe.hoverCard)
-    assert(card, 'our hover card did not appear after the hover delay')
+    let card = await page.eval(probe.hoverCard)
+    assert(card, 'our hover card did not appear after the hover delay (light theme)')
     state.hoverCard = card
-    assertEqual(card.offsetFromSidebarRight, native.offsetFromSidebarRight, 'hover card left edge must be flush on the sidebar edge like the native tooltip')
-    assertNear(card.rect.top, target.rowTop, 1, 'hover card top must align to the hovered row top')
-    assertEqual(card.rect.width, 320, 'hover card keeps the native chrome and grows to its documented 320 px so the B6 figure sections fit on one line each')
-    assertEqual(card.radius, native.radius, 'hover card radius must match the native tooltip')
-    assertEqual(card.borderWidth, native.borderWidth, 'hover card must be borderless like the native tooltip')
-    assertEqual(card.padding, native.padding, 'hover card padding must match the native tooltip')
-    assertEqual(card.pointerEvents, 'none', 'hover card must not capture the pointer in normal mode')
-    assertEqual(card.pinned, null, 'normal mode must not pin (data-psd-pinned) the hover card')
-    // Native recipe typography + elevation (light theme uses the shell tooltip surface).
-    assertEqual(card.title.fontSize, native.title.fontSize, 'hover card title font-size vs native')
-    assertEqual(card.title.lineHeight, native.title.lineHeight, 'hover card title line-height vs native')
-    assertEqual(card.title.fontWeight, native.title.fontWeight, 'hover card title font-weight vs native')
-    assertEqual(card.status.fontSize, native.status.fontSize, 'hover card status font-size vs native')
-    assertEqual(card.status.lineHeight, native.status.lineHeight, 'hover card status line-height vs native')
-    assertEqual(card.background, native.background, 'hover card background must use the native tooltip surface')
-    assert(card.boxShadow.includes('12px 32px'), `hover card must use the native tooltip elevation, got ${short(card.boxShadow, 120)}`)
-    state.screenshots = state.screenshots || []
-    return `flush ${card.offsetFromSidebarRight}px, top ${card.rect.top} (row ${target.rowTop}), ${card.rect.width}px, radius ${card.radius}, border ${card.borderWidth}`
+    const compare = (actual, expected, label) => {
+      assertEqual(actual.offsetFromSidebarRight, expected.offsetFromSidebarRight, `${label}: hover card left edge must be flush on the sidebar edge like the native tooltip`)
+      assertNear(actual.rect.top, target.rowTop, 1, `${label}: hover card top must align to the hovered row top`)
+      assertEqual(actual.rect.width, 320, `${label}: hover card keeps the native chrome and grows to its documented 320 px so the B6 figure sections fit on one line each`)
+      assertEqual(actual.radius, expected.radius, `${label}: hover card radius must match the native tooltip`)
+      assertEqual(actual.borderWidth, expected.borderWidth, `${label}: hover card must be borderless like the native tooltip`)
+      assertEqual(actual.padding, expected.padding, `${label}: hover card padding must match the native tooltip`)
+      assertEqual(actual.background, expected.background, `${label}: hover card background must match the native tooltip surface`)
+      assertEqual(actual.backgroundImage, expected.backgroundImage, `${label}: hover card background image layer must match the native tooltip`)
+      assertEqual(actual.backdropFilter, expected.backdropFilter, `${label}: hover card backdrop filter must match the native tooltip`)
+      assertEqual(actual.boxShadow, expected.boxShadow, `${label}: hover card elevation must match the native tooltip exactly`)
+      assertEqual(actual.pointerEvents, 'none', `${label}: hover card must not capture the pointer in normal mode`)
+      assertEqual(actual.pinned, null, `${label}: normal mode must not pin (data-psd-pinned) the hover card`)
+      assertEqual(actual.title.fontSize, expected.title.fontSize, `${label}: hover card title font-size vs native`)
+      assertEqual(actual.title.lineHeight, expected.title.lineHeight, `${label}: hover card title line-height vs native`)
+      assertEqual(actual.title.fontWeight, expected.title.fontWeight, `${label}: hover card title font-weight vs native`)
+      assertEqual(actual.title.color, expected.title.color, `${label}: hover card title colour vs native title`)
+      assertEqual(actual.path.color, expected.path.color, `${label}: hover card path colour vs native path`)
+      assertEqual(actual.status.color, expected.status.color, `${label}: hover card status colour vs native status`)
+      assertEqual(actual.status.fontSize, expected.status.fontSize, `${label}: hover card status font-size vs native`)
+      assertEqual(actual.status.lineHeight, expected.status.lineHeight, `${label}: hover card status line-height vs native`)
+    }
+    if (state.shotsEnabled) await writeEvidenceShot(page, '10-our-hovercard-light', card.rect)
+    compare(card, native, 'light')
+    assertEqual(card.background, 'rgb(44, 44, 46)', `our light hover card must resolve to the native hover-card surface #2C2C2E, got ${card.background}`)
+    const lastLight = card
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+    await sleep(800)
+    try {
+      await page.moveTo(900, 500)
+      await sleep(300)
+      await hoverRowStable(page, 0)
+      card = await page.eval(probe.hoverCard)
+      assert(card, 'our hover card did not appear after the hover delay (dark theme)')
+      if (state.shotsEnabled) await writeEvidenceShot(page, '10-our-hovercard-dark', card.rect)
+      compare(card, nativeDark, 'dark')
+      assertEqual(card.background, 'rgb(44, 44, 46)', `our dark hover card must resolve to the native hover-card surface #2C2C2E (not the theme-dependent --dsw-alias-tooltip-bg), got ${card.background}`)
+      assertEqual(card.background, lastLight.background, 'our hover card surface must be the same in light and dark, like the native tooltip')
+    } finally {
+      await page.emulateMedia([])
+      await sleep(400)
+    }
+    await page.moveTo(900, 500)
+    return `light ${lastLight.background} / dark ${card.background}; radius ${card.radius}, border ${card.borderWidth}, elevation matched`
   })
 
   await results.check('b5-3', 'hover card dismisses on pointer leave (normal mode unchanged)', async () => {
@@ -2127,15 +2220,33 @@ async function runHoverCardChecks({ page, results, state }) {
     return 'card closed on leave (140 ms delay preserved)'
   })
 
-  await results.check('c2-1', 'plugin floating cards are borderless like the native tooltip', async () => {
-    const quicklook = await page.eval(probe.computedForClass, 'dsa-quicklook')
-    assertEqual(quicklook.borderWidth, '0px', 'quick-look card must be borderless')
-    assert(quicklook.boxShadow.includes('12px 32px'), `quick-look must use the native elevation, got ${short(quicklook.boxShadow, 120)}`)
-    const railCard = await page.eval(probe.computedForClass, 'psp-rail-card')
-    assertEqual(railCard.borderWidth, '0px', 'prompt-history card must be borderless')
-    assert(!/0px 0px 0px 0\.5px/.test(railCard.boxShadow), `prompt-history card still paints a 0.5px stroke ring: ${short(railCard.boxShadow, 120)}`)
-    assert(railCard.boxShadow.includes('12px 32px'), 'prompt-history card must use the native elevation')
-    return `quicklook border ${quicklook.borderWidth} / rail-card border ${railCard.borderWidth}`
+  await results.check('c2-1', 'every plugin tooltip-like card uses the native tooltip surface in both themes', async () => {
+    const native = state.nativeTooltip
+    assert(native, 'the native tooltip oracle was not measured earlier')
+    const surfaces = ['psd-hovercard', 'dsa-quicklook', 'psp-rail-card', 'psp-search-card']
+    const measured = {}
+    for (const theme of ['light', 'dark']) {
+      if (theme === 'dark') {
+        await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+        await sleep(700)
+      }
+      for (const surface of surfaces) {
+        const card = await page.eval(probe.computedForClass, surface)
+        measured[`${theme}:${surface}`] = card
+        assertEqual(card.background, 'rgb(44, 44, 46)', `${surface} (${theme}) must resolve to the native hover-card surface #2C2C2E, got ${card.background}`)
+        assertEqual(card.background, native.background, `${surface} (${theme}) background must equal the live native hover-card background (${native.background}), got ${card.background}`)
+        assertEqual(card.backgroundImage, native.backgroundImage, `${surface} (${theme}) must not add a background-image layer`)
+        assertEqual(card.backdropFilter, native.backdropFilter, `${surface} (${theme}) backdrop filter must match the native tooltip`)
+        assertEqual(card.borderWidth, '0px', `${surface} (${theme}) must be borderless`)
+        assertEqual(card.radius, native.radius, `${surface} (${theme}) radius must match the native tooltip`)
+        assertEqual(card.boxShadow, native.boxShadow, `${surface} (${theme}) elevation must match the native tooltip exactly`)
+      }
+    }
+    await page.emulateMedia([])
+    await sleep(300)
+    const unique = new Set(surfaces.map((surface) => measured[`light:${surface}`].background))
+    assertEqual(unique.size, 1, `all plugin tooltip surfaces must share one background: ${[...unique].join(' / ')}`)
+    return `4 surfaces x 2 themes on ${native.background}; radius ${native.radius}; native elevation`
   })
 
   await results.check('c3-1', 'bucket labels are title case, not uppercase', async () => {
@@ -2937,6 +3048,35 @@ async function captureScreenshots(page, state) {
   return shots
 }
 
+/** Viewport-clamped clip around a floating card rect for evidence close-ups. */
+function clipAroundRect(rect) {
+  const pad = 10
+  if (rect === null || rect === undefined) return null
+  const x = Math.max(0, rect.left - pad)
+  const y = Math.max(0, rect.top - pad)
+  const width = Math.min(rect.width + pad * 2, VIEWPORT.width - x)
+  const height = Math.min(rect.height + pad * 2, VIEWPORT.height - y)
+  if (width < 20 || height < 20) return null
+  return { x, y, width, height }
+}
+
+/**
+ * Write a close-up evidence PNG of one floating card while it is on screen.
+ * @param {object} page - Page wrapper.
+ * @param {string} name - evidence file name (without extension).
+ * @param {object} rect - card viewport rect.
+ * @returns {Promise<string | null>} the written path, or null when clipped away.
+ */
+async function writeEvidenceShot(page, name, rect) {
+  const clip = clipAroundRect(rect)
+  if (clip === null) return null
+  await mkdir(SHOTS_DIR, { recursive: true })
+  const file = path.join(SHOTS_DIR, `${name}.png`)
+  await page.screenshot(file, clip)
+  log(`wrote ${file}`)
+  return file
+}
+
 // ---------------------------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------------------------
@@ -2956,7 +3096,7 @@ async function run() {
   let page = null
   let fatal = null
   let exitCode = 0
-  const state = { screenshots: [] }
+  const state = { screenshots: [], shotsEnabled: opts.shots }
   const results = new Results()
   try {
     chrome = await launchChrome(opts)
