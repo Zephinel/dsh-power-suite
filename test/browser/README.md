@@ -926,6 +926,30 @@ was not exercised), annotation S2/S5/S8 **7/0/0 each** (9.7/8.0/11.8 s, border a
 green, `/tmp/t50-ann-s{2,5,8}.log`). Gap: rail overflow/scroll-bottom is conditional and not
 exercised in this session (Lead probe verified overflowing 1..20).
 
+### Alignment right-bias + ring-free launcher, merged build `7014ec9` (client md5 `e6949505…`)
+
+Merged build `7014ec9` / md5 `e6949505f344511438a1784ddb1379b2` (21396 lines, no restart, Host
+route live, unit tests 254/254, check exit 0). The default-state first-character alignment
+now carries a requested **+2 px right bias**: `shift = max(0, 10 − firstGlyph/2)` (CJK 3 px →
+title left 49, centre 56; Latin “U” 4.91 px → 50.91 / 55.99), so the character centre sits
+2 px right of the child-dot centre 54; hover/focus/pinned force shift 0 → title 71. The
+annotation launcher is now a truly ring-free circle: `border-width 0/0/0/0`,
+`border-radius 50%`, computed `corner-shape: superellipse(1)` (so the shell's
+`superellipse(1.5)` cannot render a squircle), 44×44, and a soft shadow with **no 0/0/0
+component** (`0 2px 6px rgb(0 0 0/10%), 0 8px 24px rgb(0 0 0/20%)` instead of the
+dark-theme elevation hairline). The annotation rail overlay, exit dialog and feedback/undo
+toasts use the same ring-free shadow. Oracle updates: rest range `48 < titleLeft < 53`,
+`titleLeft + firstCharWidth/2 ≈ 56 ±0.6`, `shift ≈ 10 − firstGlyph/2`, rest
+`margin-left = shift` (r3-2/r3-3/r3-9/r3-15); full-mode `b2-3` uses `25 − measured rest
+marginLeft`; annotation harness asserts launcher circle/border/shadow (plus rail overlay/
+dialog/toast ring-free shadows when present). Results: `--pin` **29/0/0** (74.5 s,
+`/tmp/t51-pin-1.log`; rest 50.91/shift 4.91/centre 56, expanded 71, Host cleaned),
+`--live` 4/4 (9.9 s), `--smoke` 4/4 (3.0 s), full mode **44/44** (56.4 s,
+`/tmp/t51-full-2.log`; first attempt 43/44 only the known `b4-1` flake; `b2-3` slide 20.09 =
+25 − 4.91; `b3-3` rail 39 ticks 1..39, newest at foot 731 = rail bottom 731, scrolled to
+bottom 232/232), annotation S2/S5/S8 **7/0/0 each** (9.3/8.2/12.5 s,
+`/tmp/t51-ann-s{2b,5,8}.log`, launcher circle/shadow assertions green).
+
 ### Known limitations (`--pin` / `--live`)
 
 - Host sharing and cross-device visibility require the DSH Web service restart that loads

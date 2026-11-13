@@ -1538,3 +1538,46 @@ foot visibility are asserted); the border assertions are conditional on each sur
 present at the moment it is exercised (launcher/rail/empty always in smoke, dialog on exits
 with records, toasts in S5). Intended rule documented: Power Suite **outer surfaces are
 borderless**; inner controls keep their borders.
+
+## ALIGNMENT RIGHT-BIAS + RING-FREE LAUNCHER (merged build `7014ec9`, client md5 `e6949505…`)
+
+Merged client build: worktree and linked checkout at `7014ec9`, injected **and** served
+`src/client.js` md5 `e6949505f344511438a1784ddb1379b2` (21396 lines), no service restart,
+Host pin route live. Two user-feedback follow-ups: (1) the default-state first-character
+alignment carries a requested **+2 px right bias** — `shift = max(0, 10 − firstGlyph/2)`
+(CJK 3 px → title left 49, first-char centre 56; Latin “U” 4.91 px → 50.91 / 55.99), so the
+character centre sits 2 px right of the child-dot centre (54); hover/focus/pinned still
+force shift 0 → title 71. (2) the annotation launcher was still *perceived* as bordered
+although `borderWidth` was 0: the shell's `corner-shape: superellipse(1.5)` turned the 50 %
+radius into a squircle and the dark-theme elevation token painted a `0 0 0 .5px #fff3`
+hairline. The launcher now uses `corner-shape: round` (computed `superellipse(1)`, a perfect
+circle) and a ring-free soft shadow (`0 2px 6px rgb(0 0 0/10%), 0 8px 24px rgb(0 0 0/20%)`,
+no 0/0/0 layer); the annotation rail overlay, exit-confirmation dialog and feedback/undo
+toasts use the same ring-free shadow so no elevation hairline can read as a border.
+
+Oracle updates: the sidebar pin oracles now assert rest range `48 < titleLeft < 53`,
+`titleLeft + firstCharWidth/2 ≈ 56 ±0.6`, `shift ≈ 10 − firstGlyph/2`, rest
+`margin-left = shift` (r3-2/r3-3/r3-9/r3-15; r3-4/r3-14 expanded 71 with forced margin 0);
+full-mode `b2-3` asserts the derived slide `25 − measured rest marginLeft`; the annotation
+harness now asserts the launcher is a borderless perfect circle (`border 0/0/0/0`,
+`border-radius 50%`, square 44×44, computed `corner-shape` `superellipse(1)`) with a
+ring-free open shadow, plus ring-free shadows on the rail overlay / exit dialog / toasts
+when those surfaces are present.
+
+Results on `e6949505…` (Node v24.22.2, Chrome 157.0.8103.78, 1728x900; logs `/tmp/t51-*`):
+
+| Check | Result |
+|-------|--------|
+| `node --check src/client.js`; `npm test`; `npm run check` | exit 0; **254/254** unit tests; repository check exit 0 |
+| `--pin` | **29 PASS / 0 SKIP / 0 FAIL**, 74.5 s, page errors 0, real network failures 0 (`/tmp/t51-pin-1.log`): rest titles measured with the +2 bias (Latin `50.91`, shift `4.91`, first-char centre 56), expanded 71 forced shift 0; `r3-16` borderless panel `0/0/0/0`; r3-host + cross-device r3-8 PASS, Host document cleaned to `pinned: []` (rev 154) |
+| `--live` | **4/4 PASS**, 9.9 s, 0 page errors (`/tmp/t51-live.log`) |
+| `--smoke` | **4/4 PASS**, 3.0 s, 0 page errors (`/tmp/t51-smoke.log`) |
+| Full mode | **44/44 PASS**, 56.4 s, page errors 0 (`/tmp/t51-full-2.log`); first attempt 43/44 with only the known pre-existing `b4-1` canvas-saturation flake (0.372 vs 0.38). `b2-3` derived slide `71 → 91 = 25 − rest marginLeft 4.91` with fixed trailing columns; `b3-3` prompt-history rail now exercised the overflow path: **39 ticks, `data-psp-index` 1..39 ascending in DOM order (oldest first), newest tick at the foot (731 = rail bottom 731), scrolled to bottom (232/232)** |
+| Annotation E2E | S2 **PASS 7/0/0** 9.3 s (`/tmp/t51-ann-s2b.log`), S5 **PASS 7/0/0** 8.2 s (`/tmp/t51-ann-s5.log`), S8 **PASS 7/0/0** 12.5 s (`/tmp/t51-ann-s8.log`), 0 page errors/0 real network failures: launcher border 0, computed `corner-shape` circle, ring-free launcher shadow, ring-free rail overlay/dialog/toast shadows where present; S2 pass-through and S5/S8 content stay green |
+
+Notes: the requested right bias is intentional (the character centre sits 2 px right of the
+dot centre 54); the ring-free shadow rule replaces the elevation token on these floating
+surfaces so a hairline can never mimic a border in either theme. Toast/dialog shadow
+assertions are conditional on those surfaces being present; S2/S5/S8 exercised the launcher
+(always in smoke), rail and toasts/dialog as applicable. Known pre-existing `b4-1` canvas
+saturation flake remains environment-timing-only and passed on the second attempt.

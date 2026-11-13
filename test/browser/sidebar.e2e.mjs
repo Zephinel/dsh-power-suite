@@ -2317,17 +2317,17 @@ async function runLayoutChecks({ page, results, state }) {
         // The hovered row's title slides right as the pin slot expands (16 px slot +
         // 9 px gap) while the default-state first-character centring shift (1–3 px) is
         // removed, so the derived slide is 25 − shift rather than a fixed 25.
-        const shift = Number(before.rows[hoveredIndex].titleShift ?? 0)
-        assertNear(now.title[0] - was.title[0], 25 - shift, 1,
-          `the hovered row title must slide 25 − rest shift = ${(25 - shift).toFixed(2)} px (shift ${shift}; ${was.title[0]} -> ${now.title[0]})`)
+        const restMargin = Number(before.rows[hoveredIndex].titleMarginLeft ?? before.rows[hoveredIndex].titleShift ?? 0)
+        assertNear(now.title[0] - was.title[0], 25 - restMargin, 1,
+          `the hovered row title must slide 25 − measured rest marginLeft = ${(25 - restMargin).toFixed(2)} px (marginLeft ${restMargin}; ${was.title[0]} -> ${now.title[0]})`)
       } else {
         assertNear(now.title[0], was.title[0], 0.5, `row ${index} title left edge moved on hover (${was.title[0]} -> ${now.title[0]})`)
       }
     }
     await page.moveTo(900, 500)
     await sleep(500)
-    const hoveredShift = Number(before.rows[hoveredIndex].titleShift ?? 0)
-    return `columns fixed (time ${before.rows[0].time.rect.right}, action ${before.rows[0].actions.rect.right}, disclosure ${before.rows[0].toggle.right}); hovered title slid ${before.rows[hoveredIndex].title.rect.left} -> ${during.rows[hoveredIndex].title.rect.left} = 25 − rest shift ${hoveredShift} (two-phase reveal), other titles static`
+    const hoveredMargin = Number(before.rows[hoveredIndex].titleMarginLeft ?? before.rows[hoveredIndex].titleShift ?? 0)
+    return `columns fixed (time ${before.rows[0].time.rect.right}, action ${before.rows[0].actions.rect.right}, disclosure ${before.rows[0].toggle.right}); hovered title slid ${before.rows[hoveredIndex].title.rect.left} -> ${during.rows[hoveredIndex].title.rect.left} = 25 − rest marginLeft ${hoveredMargin} (two-phase reveal), other titles static`
   })
 
   await results.check('b2-5', 'the interrupted main-row Continue overlay lands left of the time column without covering it', async () => {
@@ -6202,15 +6202,15 @@ async function runPinChecks({ page, results, state }) {
         // the measured half-advance of its first glyph so that the first character is
         // centred on the child status-dot column (54 px from the row's left edge).
         assertNear(row.slotWidth, 0, 0.25, `unpinned row "${short(row.title, 30)}" pin slot must be collapsed at rest (got ${row.slotWidth})`)
-        assert(titleLeftRel > 46 && titleLeftRel < 51, `unpinned row "${short(row.title, 30)}" rest title must sit between 46 and 51 px (got ${titleLeftRel})`)
+        assert(titleLeftRel > 48 && titleLeftRel < 53, `unpinned row "${short(row.title, 30)}" rest title must sit between 48 and 53 px (got ${titleLeftRel})`)
         assert(row.firstCharWidth !== null && row.firstCharWidth > 0, `unpinned row "${short(row.title, 30)}" first-glyph width could not be measured`)
-        assertNear(titleLeftRel + row.firstCharWidth / 2, 54, 0.7,
-          `unpinned row "${short(row.title, 30)}" first character centre must align with the child-dot column 54 (titleLeft ${titleLeftRel} + firstCharWidth/2 ${(row.firstCharWidth / 2).toFixed(2)})`)
-        assertNear(row.titleShift, 8 - row.firstCharWidth / 2, 0.75,
-          `unpinned row "${short(row.title, 30)}" shift must be 8 − firstGlyph/2 (shift ${row.titleShift}, firstGlyph ${row.firstCharWidth})`)
+        assertNear(titleLeftRel + row.firstCharWidth / 2, 56, 0.7,
+          `unpinned row "${short(row.title, 30)}" first character centre must align with the requested right-biased column 56 (titleLeft ${titleLeftRel} + firstCharWidth/2 ${(row.firstCharWidth / 2).toFixed(2)})`)
+        assertNear(row.titleShift, 10 - row.firstCharWidth / 2, 0.75,
+          `unpinned row "${short(row.title, 30)}" shift must be 10 − firstGlyph/2 (shift ${row.titleShift}, firstGlyph ${row.firstCharWidth})`)
         assertNear(titleLeftRel, 46 + row.titleShift, 0.75,
           `unpinned row "${short(row.title, 30)}" rest title must be 46 + the measured shift (got ${titleLeftRel}, shift ${row.titleShift})`)
-        assert(row.titleShift > 0.5 && row.titleShift < 4, `unpinned row "${short(row.title, 30)}" shift must stay in the 1–3 px family (got ${row.titleShift})`)
+        assert(row.titleShift > 1.5 && row.titleShift < 6, `unpinned row "${short(row.title, 30)}" biased shift must stay in the ~2–5 px family (got ${row.titleShift})`)
         assertNear(row.titleMarginLeft, row.titleShift, 0.75,
           `unpinned row "${short(row.title, 30)}" rest margin-left must equal the shift (got ${row.titleMarginLeft})`)
         assertEqual(row.opacity, '0', `unpinned+not-hovered row "${short(row.title, 30)}" pin must be hidden (opacity ${row.opacity})`)
@@ -6236,7 +6236,7 @@ async function runPinChecks({ page, results, state }) {
     }
     state.pinStructure = { mainRows: pin.mainRows, childRows: pin.childRows }
     const collapsed = pin.rows.filter((row) => row.pinned !== 'true').length
-    return `${pin.mainRows} main rows (${collapsed} unpinned: slot 0 px, first-character-centred rest title 46 + shift px; pinned rows keep 16/71); ${pin.childRows} subagent child rows with no pin DOM; ${glyphGuard}`
+    return `${pin.mainRows} main rows (${collapsed} unpinned: slot 0 px, right-biased first-character-centred rest title 46 + shift px, centre 56; pinned rows keep 16/71); ${pin.childRows} subagent child rows with no pin DOM; ${glyphGuard}`
   })
 
   // ---- R1: running-card hover-card status dot ----------------------------------------------
@@ -6556,12 +6556,12 @@ async function runPinChecks({ page, results, state }) {
     assert(rest !== null, 'the reveal target row disappeared')
     assertEqual(rest.pinned, null, 'the reveal target must start unpinned')
     assertNear(rest.slotWidth, 0, 0.25, `rest slot width must be 0 (got ${rest.slotWidth})`)
-    assert(rest.titleLeftRel > 46 && rest.titleLeftRel < 51, `rest title must sit between 46 and 51 px (got ${rest.titleLeftRel})`)
+    assert(rest.titleLeftRel > 48 && rest.titleLeftRel < 53, `rest title must sit between 48 and 53 px (got ${rest.titleLeftRel})`)
     assert(rest.firstCharWidth !== null && rest.firstCharWidth > 0, 'rest first-glyph width could not be measured')
-    assertNear(rest.titleLeftRel + rest.firstCharWidth / 2, 54, 0.7,
-      `rest first character centre must align with the child-dot column 54 (titleLeft ${rest.titleLeftRel} + ${(rest.firstCharWidth / 2).toFixed(2)})`)
-    assertNear(rest.titleShift, 8 - rest.firstCharWidth / 2, 0.75,
-      `rest shift must be 8 − firstGlyph/2 (shift ${rest.titleShift}, firstGlyph ${rest.firstCharWidth})`)
+    assertNear(rest.titleLeftRel + rest.firstCharWidth / 2, 56, 0.7,
+      `rest first character centre must align with the requested right-biased column 56 (titleLeft ${rest.titleLeftRel} + ${(rest.firstCharWidth / 2).toFixed(2)})`)
+    assertNear(rest.titleShift, 10 - rest.firstCharWidth / 2, 0.75,
+      `rest shift must be 10 − firstGlyph/2 (shift ${rest.titleShift}, firstGlyph ${rest.firstCharWidth})`)
     const restTitle = rest.titleLeftRel
     assertEqual(rest.pinOpacity, '0', `rest pin must be hidden (opacity ${rest.pinOpacity})`)
     assertEqual(rest.pinVisibility, 'hidden', `rest pin must be visibility:hidden (${rest.pinVisibility})`)
@@ -6631,8 +6631,8 @@ async function runPinChecks({ page, results, state }) {
     const collapsedFirstChar = typeof collapsedSample.firstCharWidth === 'number' && collapsedSample.firstCharWidth > 0
       ? collapsedSample.firstCharWidth
       : rest.firstCharWidth
-    assertNear(collapsedSample.titleLeftRel + collapsedFirstChar / 2, 54, 0.7,
-      'the collapsed rest first-character centre must stay on the child-dot column')
+    assertNear(collapsedSample.titleLeftRel + collapsedFirstChar / 2, 56, 0.7,
+      'the collapsed rest first-character centre must stay on the requested right-biased column 56')
     assertEqual(collapsedSample.pinVisibility, 'hidden', 'collapsed pin must be hidden')
     assertColumnsFixed(leaveWindow, 'leave reveal')
     // Reduced motion: both phases are instant (no partial frames).
@@ -6654,7 +6654,7 @@ async function runPinChecks({ page, results, state }) {
       await sleep(250)
       await resetPointer(page)
     }
-    return `rest slot 0/title ${restTitle} (first-char centred, shift ${rest.titleShift} px)/pin hidden; hover phase 1 slot ${phase1.slotWidth} px/title ${phase1.titleLeftRel} px/pin hidden (slide ${(71 - restTitle).toFixed(2)} px); ${midNote}; settled slot 16/title 71/pin interactive; leave fade at ${fade.pinOpacity} with slot 16/title 71 then collapsed to 0/${restTitle}; trailing columns ${restColumns.timeLeft}/${restColumns.actionsLeft}/${restColumns.toggleLeft} unchanged; reduced motion instant`
+    return `rest slot 0/title ${restTitle} (right-biased first-char centre 56, shift ${rest.titleShift} px)/pin hidden; hover phase 1 slot ${phase1.slotWidth} px/title ${phase1.titleLeftRel} px/pin hidden (slide ${(71 - restTitle).toFixed(2)} px); ${midNote}; settled slot 16/title 71/pin interactive; leave fade at ${fade.pinOpacity} with slot 16/title 71 then collapsed to 0/${restTitle}; trailing columns ${restColumns.timeLeft}/${restColumns.actionsLeft}/${restColumns.toggleLeft} unchanged; reduced motion instant`
   })
 
   await results.check('r3-4', 'clicking the pin keeps the pin in the card only: DOM, local cache/effective ids, native sidebar untouched', async () => {
@@ -7024,10 +7024,10 @@ async function runPinChecks({ page, results, state }) {
     assertEqual(calmA.row.opacity, '0', 'the unpinned pin must hide when the pointer is away')
     assertEqual(calmA.row.visibility, 'hidden', 'the unpinned pin must be visibility:hidden when the pointer is away')
     assertNear(calmA.row.slotWidth, 0, 0.25, `an unpinned row must collapse its slot back to 0 px when the pointer is away (got ${calmA.row.slotWidth})`)
-    assert(calmA.row.titleLeftRel > 46 && calmA.row.titleLeftRel < 51,
-      `an unpinned row's title must return to its first-character-centred rest position (got ${calmA.row.titleLeftRel})`)
-    assertNear(calmA.row.titleLeftRel + calmA.row.firstCharWidth / 2, 54, 0.7,
-      `an unpinned row's first character must return to the child-dot column 54 (titleLeft ${calmA.row.titleLeftRel} + ${(calmA.row.firstCharWidth / 2).toFixed(2)})`)
+    assert(calmA.row.titleLeftRel > 48 && calmA.row.titleLeftRel < 53,
+      `an unpinned row's title must return to its right-biased first-character-centred rest position (got ${calmA.row.titleLeftRel})`)
+    assertNear(calmA.row.titleLeftRel + calmA.row.firstCharWidth / 2, 56, 0.7,
+      `an unpinned row's first character must return to the requested right-biased column 56 (titleLeft ${calmA.row.titleLeftRel} + ${(calmA.row.firstCharWidth / 2).toFixed(2)})`)
     assertEqual(calmA.row.rowBackground, targetA.rowBackgroundBefore ?? state.pinBaseline.rowBackgrounds[targetA.title],
       `the violet row tint must be gone after unpinning (row background ${calmA.row.rowBackground})`)
     const firstUnpinned = (await readCardPinState(page)).rows.findIndex((row) => row.pinned !== 'true')
@@ -7081,10 +7081,10 @@ async function runPinChecks({ page, results, state }) {
     debugLog(`r3-9 ${queueNote}`)
     for (const row of normalRows) {
       assertNear(row.slotWidth, 0, 0.25, `unpinned row "${short(row.title, 30)}" must keep the collapsed 0 px slot (got ${row.slotWidth})`)
-      assert(row.titleLeftRel > 46 && row.titleLeftRel < 51,
-        `unpinned row "${short(row.title, 30)}" title must sit in its first-character-centred rest range (got ${row.titleLeftRel})`)
-      assertNear(row.titleLeftRel + row.firstCharWidth / 2, 54, 0.7,
-        `unpinned row "${short(row.title, 30)}" first-character centre must stay on the child-dot column 54 (titleLeft ${row.titleLeftRel})`)
+      assert(row.titleLeftRel > 48 && row.titleLeftRel < 53,
+        `unpinned row "${short(row.title, 30)}" title must sit in its right-biased first-character-centred rest range (got ${row.titleLeftRel})`)
+      assertNear(row.titleLeftRel + row.firstCharWidth / 2, 56, 0.7,
+        `unpinned row "${short(row.title, 30)}" first-character centre must stay on the requested right-biased column 56 (titleLeft ${row.titleLeftRel})`)
     }
     if (state.pinBaseline.expectedChildren > 0) {
       const domChildren = await page.count('.psd-child')
@@ -7760,13 +7760,13 @@ async function runPinChecks({ page, results, state }) {
       `unpinning must clear the row tint (row background ${cleared.row.background}, baseline ${before.row.background})`)
     const clearedReveal = await page.eval(probePin.revealFacts, target.title)
     assertNear(clearedReveal.slotWidth, 0, 0.25, `unpinning must collapse the slot back to 0 px (got ${clearedReveal.slotWidth})`)
-    assert(clearedReveal.titleLeftRel > 46 && clearedReveal.titleLeftRel < 51,
-      `unpinning must return the title to its first-character-centred rest range (got ${clearedReveal.titleLeftRel})`)
+    assert(clearedReveal.titleLeftRel > 48 && clearedReveal.titleLeftRel < 53,
+      `unpinning must return the title to its right-biased first-character-centred rest range (got ${clearedReveal.titleLeftRel})`)
     const clearedFirstChar = typeof clearedReveal.firstCharWidth === 'number' && clearedReveal.firstCharWidth > 0
       ? clearedReveal.firstCharWidth
-      : 2 * (8 - clearedReveal.titleShift)
-    assertNear(clearedReveal.titleLeftRel + clearedFirstChar / 2, 54, 0.7,
-      `unpinning must put the first character back on the child-dot column (titleLeft ${clearedReveal.titleLeftRel})`)
+      : 2 * (10 - clearedReveal.titleShift)
+    assertNear(clearedReveal.titleLeftRel + clearedFirstChar / 2, 56, 0.7,
+      `unpinning must put the first character back on the requested right-biased column 56 (titleLeft ${clearedReveal.titleLeftRel})`)
     assertEqual(cleared.main.background, 'rgba(0, 0, 0, 0)',
       `the unpinned body pill must stay transparent (main background ${cleared.main.background})`)
     return `pinned "${short(target.title, 30)}": row tint ${rowTint} only, body pill ${calm.main.background} at rest and no background-image; hover body ${hovered.main.background}; unpin restored the row to ${cleared.row.background}`

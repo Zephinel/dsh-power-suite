@@ -1239,8 +1239,36 @@ async function runSmoke({ page, results, state }) {
         const computed = getComputedStyle(element)
         return ['Top', 'Right', 'Bottom', 'Left'].map((edge) => Number.parseFloat(computed['border' + edge + 'Width']) || 0)
       }
+      // A soft shadow is ring-free when no layer is a 0/0/0 spread ring (the old
+      // elevation token painted a hairline white ring in the dark theme).
+      const ringFreeShadow = (shadow) => {
+        if (typeof shadow !== 'string' || shadow === 'none' || shadow.length === 0) return true
+        const layers = shadow.split(/,(?![^(]*\\))/).map((part) => part.trim())
+        for (const layer of layers) {
+          const match = layer.match(/(-?\d+(?:\.\d+)?)px\s+(-?\d+(?:\.\d+)?)px\s+(-?\d+(?:\.\d+)?)px(?:\s+(-?\d+(?:\.\d+)?)px)?/)
+          if (match !== null) {
+            const x = Number(match[1])
+            const y = Number(match[2])
+            const blur = Number(match[3])
+            if (x === 0 && y === 0 && blur === 0) return false
+          }
+        }
+        return true
+      }
+      const launcherElement = document.querySelector('[data-psa-launcher]')
+      const launcherStyle = launcherElement === null ? null : getComputedStyle(launcherElement)
+      const launcherRect = launcherElement === null ? null : launcherElement.getBoundingClientRect()
+      const railStyle = rail === null ? null : getComputedStyle(rail)
       return {
         railInOverlay: overlay !== null && rail !== null && overlay.contains(rail),
+        launcherCornerShape: launcherStyle === null ? null : (launcherStyle.cornerShape || null),
+        launcherRadius: launcherStyle === null ? null : launcherStyle.borderRadius,
+        launcherSize: launcherRect === null ? null : { width: Math.round(launcherRect.width), height: Math.round(launcherRect.height) },
+        launcherShadowRingFree: launcherStyle === null ? null : ringFreeShadow(launcherStyle.boxShadow),
+        launcherShadow: launcherStyle === null ? null : launcherStyle.boxShadow,
+        railMode: rail === null ? null : rail.getAttribute('data-psa-mode'),
+        railShadowRingFree: railStyle === null ? null : ringFreeShadow(railStyle.boxShadow),
+        railShadow: railStyle === null ? null : railStyle.boxShadow,
         launcherBorder: borderOf(document.querySelector('[data-psa-launcher]')),
         launcherCountBorder: borderOf(document.querySelector('[data-psa-launcher-count]')),
         railBorder: borderOf(rail),
@@ -1269,6 +1297,21 @@ async function runSmoke({ page, results, state }) {
     for (const entry of probe.emptyBorders) {
       if (entry.border === null) continue
       assert(entry.border.every((width) => width === 0), `${entry.selector} must be borderless (got ${entry.border.join('/')} px)`)
+    }
+    // The launcher is a perfect ring-free circle: radius 50 % rendered with
+    // corner-shape round (computed superellipse(1)), no border, and a soft shadow with
+    // no 0/0/0 hairline layer (the elevation token used to read as a border in dark mode).
+    if (probe.launcherCornerShape !== null) {
+      assert(probe.launcherCornerShape === 'superellipse(1)' || probe.launcherCornerShape === 'round',
+        `annotation launcher must render a perfect circle via corner-shape round (computed ${probe.launcherCornerShape})`)
+      assertEqual(probe.launcherRadius, '50%', 'annotation launcher border-radius must stay 50%')
+      assert(probe.launcherSize.width === probe.launcherSize.height, `annotation launcher must stay square (${probe.launcherSize.width}x${probe.launcherSize.height})`)
+    }
+    if (probe.launcherShadowRingFree === false) {
+      assert(false, `annotation launcher shadow still contains a 0/0/0 ring layer: ${probe.launcherShadow}`)
+    }
+    if (probe.railMode === 'overlay' && probe.railShadowRingFree === false) {
+      assert(false, `annotation rail overlay shadow still contains a 0/0/0 ring layer: ${probe.railShadow}`)
     }
     assertEqual(probe.launchers, 1, `expected exactly one launcher, got ${probe.launchers}`)
     assert(probe.stylesheetHasPromptRailRule, 'annotation stylesheet is missing the hidden prompt-history rail rule')
@@ -3184,14 +3227,28 @@ class Harness {
     const confirmDeadline = Date.now() + 1500
     while (Date.now() < confirmDeadline) {
       if ((await this.page.count('[data-psa-exit-clear]')) > 0) {
-        const dialogBorder = await this.page.evaluate(`(() => {
+        const dialogFacts = await this.page.evaluate(`(() => {
           const dialog = document.querySelector('[data-psa-exit-confirm]')
           if (dialog === null) return null
           const style = getComputedStyle(dialog)
-          return ['Top', 'Right', 'Bottom', 'Left'].map((edge) => Number.parseFloat(style['border' + edge + 'Width']) || 0)
+          const ringFree = (shadow) => {
+            if (typeof shadow !== 'string' || shadow === 'none' || shadow.length === 0) return true
+            const layers = shadow.split(/,(?![^(]*\\))/).map((part) => part.trim())
+            for (const layer of layers) {
+              const match = layer.match(/(-?\d+(?:\.\d+)?)px\s+(-?\d+(?:\.\d+)?)px\s+(-?\d+(?:\.\d+)?)px(?:\s+(-?\d+(?:\.\d+)?)px)?/)
+              if (match !== null && Number(match[1]) === 0 && Number(match[2]) === 0 && Number(match[3]) === 0) return false
+            }
+            return true
+          }
+          return {
+            border: ['Top', 'Right', 'Bottom', 'Left'].map((edge) => Number.parseFloat(style['border' + edge + 'Width']) || 0),
+            shadowRingFree: ringFree(style.boxShadow),
+            shadow: style.boxShadow
+          }
         })()`)
-        if (dialogBorder !== null) {
-          assert(dialogBorder.every((width) => width === 0), `exit-confirmation dialog must be borderless (got ${dialogBorder.join('/')} px)`)
+        if (dialogFacts !== null) {
+          assert(dialogFacts.border.every((width) => width === 0), `exit-confirmation dialog must be borderless (got ${dialogFacts.border.join('/')} px)`)
+          assert(dialogFacts.shadowRingFree, `exit-confirmation dialog shadow still contains a 0/0/0 ring layer: ${dialogFacts.shadow}`)
         }
         await this.click('[data-psa-exit-clear]')
         break
@@ -4012,11 +4069,25 @@ function buildScenarios(harness) {
           const style = getComputedStyle(element)
           return ['Top', 'Right', 'Bottom', 'Left'].map((edge) => Number.parseFloat(style['border' + edge + 'Width']) || 0)
         }
-        return { undo: read('[data-psa-undo-toast]'), feedback: read('[data-psa-feedback]') }
+        const ringFree = (shadow) => {
+          if (typeof shadow !== 'string' || shadow === 'none' || shadow.length === 0) return true
+          const layers = shadow.split(/,(?![^(]*\\))/).map((part) => part.trim())
+          for (const layer of layers) {
+            const match = layer.match(/(-?\d+(?:\.\d+)?)px\s+(-?\d+(?:\.\d+)?)px\s+(-?\d+(?:\.\d+)?)px(?:\s+(-?\d+(?:\.\d+)?)px)?/)
+            if (match !== null && Number(match[1]) === 0 && Number(match[2]) === 0 && Number(match[3]) === 0) return false
+          }
+          return true
+        }
+        const facts = (element) => (element === null ? null : {
+          border: ['Top', 'Right', 'Bottom', 'Left'].map((edge) => Number.parseFloat(getComputedStyle(element)['border' + edge + 'Width']) || 0),
+          shadowRingFree: ringFree(getComputedStyle(element).boxShadow)
+        })
+        return { undo: facts(document.querySelector('[data-psa-undo-toast]')), feedback: facts(document.querySelector('[data-psa-feedback]')) }
       })()`)
-      for (const [surface, border] of [['undo toast', toastBorders.undo], ['feedback toast', toastBorders.feedback]]) {
-        if (border === null) continue
-        assert(border.every((width) => width === 0), `${surface} must be borderless (got ${border.join('/')} px)`)
+      for (const [surface, facts] of [['undo toast', toastBorders.undo], ['feedback toast', toastBorders.feedback]]) {
+        if (facts === null) continue
+        assert(facts.border.every((width) => width === 0), `${surface} must be borderless (got ${facts.border.join('/')} px)`)
+        assert(facts.shadowRingFree, `${surface} shadow still contains a 0/0/0 ring layer`)
       }
       await h.click('[data-psa-undo]')
       await h.page.waitFor(`document.querySelectorAll('[data-psa-group]').length === 1`, { timeout: 5000, label: 'group undo' })
