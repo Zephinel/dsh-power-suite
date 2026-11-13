@@ -1289,7 +1289,9 @@ const probe = {
     const s = getComputedStyle(field, '::after')
     return {
       present: true,
+      afterContent: s.content,
       afterOpacity: s.opacity,
+      afterBorderRadius: s.borderRadius,
       afterAnimation: s.animationName,
       afterAnimationDuration: s.animationDuration,
       afterBackground: s.backgroundImage,
@@ -2733,36 +2735,59 @@ async function runHoverCardChecks({ page, results, state }) {
 
 async function runFocusChecks({ page, results, state }) {
   log('\n=== B3: rainbow focus highlight for plugin inputs ===')
-  await results.check('b3-1', 'prompt-history search input shows the rainbow track glow on focus', async () => {
+  await results.check('b3-1', 'prompt-history search card shows the calm rainbow ring on focus (input stays ringless)', async () => {
     const toggle = await page.findRect('[data-psp-search-toggle]')
     assert(toggle, 'prompt-history search toggle not found (the prompt rail is not mounted)')
     await page.clickAt(toggle.x, toggle.y)
     await sleep(800)
-    const ring = await page.eval(probe.focusRing, '.psp-search-field')
-    assert(ring.present, 'search field wrapper missing')
-    assert(ring.focused, 'the search input did not take focus when the search card opened')
-    // The search field uses the calmer variant of the shared ring (user request):
-    // visible but quiet -- lower opacity, thinner track, softer/dimmer glow.
+    const ring = await page.eval(probe.focusRing, '.psp-search-card')
+    assert(ring.present, 'search card missing')
+    assert(ring.focused, 'the search card did not enter focus-within when it opened')
+    assert(ring.afterContent !== 'none', 'the search card has no rainbow ring pseudo-element')
+    // The calm variant now wraps the whole card: visible but quiet.
     const opacity = Number(ring.afterOpacity)
-    assert(opacity >= 0.5 && opacity <= 0.68, `search-field ring must be the calm variant (opacity ${ring.afterOpacity}, expected 0.5-0.68)`)
-    assert(ring.afterFilter.includes('saturate(0.8)'), `search-field ring must be slightly desaturated (filter ${ring.afterFilter})`)
-    assert(ring.afterFilter.includes('2.5px'), `search-field ring outer glow must be softened to 2.5px (filter ${ring.afterFilter})`)
-    assertEqual(ring.afterPadding, '1.5px', 'search-field ring must be the thinner 1.5 px track')
-    assertEqual(ring.afterInset, '-3px', 'search-field ring must still hug the field on all edges (inset -3px)')
-    assert(ring.afterBackground.includes('conic-gradient'), `focus ring must be the rainbow conic track, got ${short(ring.afterBackground, 100)}`)
-    assert(ring.afterAnimation.includes('psf-ring'), `focus ring animation missing (${ring.afterAnimation})`)
-    assert(ring.afterAnimationDuration.includes('4.6s'), `search-field ring should drift slowly (durations ${ring.afterAnimationDuration})`)
-    assert(ring.afterMask.includes('exclude') || ring.afterMask.includes('xor'), `focus ring must use the mask-composite track recipe (${ring.afterMask})`)
+    assert(opacity >= 0.5 && opacity <= 0.68, `card ring must be the calm variant (opacity ${ring.afterOpacity}, expected 0.5-0.68)`)
+    assert(ring.afterFilter.includes('saturate(0.8)'), `card ring must stay slightly desaturated (filter ${ring.afterFilter})`)
+    assert(ring.afterFilter.includes('2.5px'), `card ring outer glow must stay soft at 2.5px (filter ${ring.afterFilter})`)
+    assertEqual(ring.afterPadding, '1.5px', 'card ring must keep the thinner 1.5 px track')
+    assertEqual(ring.afterInset, '-3px', 'card ring must hug the card border box on all edges (inset -3px)')
+    assertNear(parseFloat(ring.afterBorderRadius), 19, 0.5, `card ring radius must be the card radius + 3 px (got ${ring.afterBorderRadius})`)
+    assert(ring.afterBackground.includes('conic-gradient'), `card ring must be the rainbow conic track, got ${short(ring.afterBackground, 100)}`)
+    assert(ring.afterAnimation.includes('psf-ring'), `card ring animation missing (${ring.afterAnimation})`)
+    assert(ring.afterAnimationDuration.includes('4.6s'), `card ring should drift slowly (durations ${ring.afterAnimationDuration})`)
+    assert(ring.afterMask.includes('exclude') || ring.afterMask.includes('xor'), `card ring must use the mask-composite track recipe (${ring.afterMask})`)
+    const card = await page.eval(() => {
+      const node = document.querySelector('.psp-search-card')
+      const r = node.getBoundingClientRect()
+      return {
+        rect: { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) },
+        overflow: getComputedStyle(node).overflow,
+      }
+    })
+    assertEqual(card.overflow, 'visible', 'search card must not clip its own rainbow ring (overflow visible)')
+    assert(card.rect.width >= 200 && card.rect.height >= 40, `unexpected card box ${JSON.stringify(card.rect)}`)
+    // The inner input must be ringless and keep a clean focus state.
+    const field = await page.eval(probe.focusRing, '.psp-search-field')
+    assert(field.present, 'search field wrapper missing')
+    assertEqual(field.afterContent, 'none', 'the inner search field must NOT carry the rainbow ring anymore')
+    const input = await page.eval(() => {
+      const node = document.querySelector('.psp-search-input')
+      if (node === null) return null
+      const s = getComputedStyle(node)
+      return { outlineStyle: s.outlineStyle, focused: document.activeElement === node }
+    })
+    assert(input && input.focused, 'the inner search input must keep keyboard focus')
+    assertEqual(input.outlineStyle, 'none', 'the inner search input must keep a clean (ringless/outline-less) focus state')
     await page.pressEscape()
     await sleep(400)
-    const afterClose = await page.eval(probe.focusRing, '.psp-search-field')
-    assertEqual(afterClose.present, false, 'search card did not close on Escape')
-    return `conic ring ${ring.afterAnimation}, mask ${short(ring.afterMask, 40)}`
+    const closed = await page.eval(() => document.querySelector('.psp-search-card') === null)
+    assertEqual(closed, true, 'search card did not close on Escape')
+    return `calm conic ring on the card (opacity ${ring.afterOpacity}, ${ring.afterPadding} track, radius ${ring.afterBorderRadius}), input ringless, Esc closes`
   })
 
   await results.check('b3-2', 'settings choice pills replaced their solid focus outline with the same ring', async () => {
     const rules = await page.evaluate(`(() => {
-      const result = { ringRule: false, ringInputs: false, solidChoiceOutline: false, calmScoped: false, sharedDefault: false }
+      const result = { ringRule: false, fieldWired: false, solidChoiceOutline: false, calmScoped: false, sharedDefault: false }
       for (const sheet of document.styleSheets) {
         let rules2
         try { rules2 = sheet.cssRules } catch { continue }
@@ -2770,7 +2795,8 @@ async function runFocusChecks({ page, results, state }) {
         for (const rule of rules2) {
           const text = rule.cssText || ''
           if (text.includes('.psf-rainbow-focus') && text.includes('conic-gradient')) result.ringRule = true
-          if (text.includes('.psf-rainbow-focus') && text.includes('psp-search-field')) result.ringInputs = true
+          if (text.includes('.psp-search-card.psf-rainbow-focus')) result.calmScoped = true
+          if (text.includes('.psf-rainbow-focus.psp-search-field')) result.fieldWired = true
           if (text.includes('dps-choice-option') && text.includes('focus-visible') && text.includes('outline')) result.solidChoiceOutline = true
           if (text.includes('.psf-rainbow-focus.psp-search-field') && /--psf-ring-opacity\\s*:\\s*[.0-9]*58/.test(text)) result.calmScoped = true
           if (/\.psf-rainbow-focus\\s*\\{/.test(text) && /--psf-ring-opacity\\s*:\\s*1\\b/.test(text)) result.sharedDefault = true
@@ -2779,9 +2805,9 @@ async function runFocusChecks({ page, results, state }) {
       return result
     })()`)
     assert(rules.ringRule, 'shared rainbow-focus stylesheet is missing')
-    assert(rules.ringInputs, 'the prompt-history input is not wired to the shared ring')
+    assert(!rules.fieldWired, 'the inner search field must not carry the shared rainbow ring anymore')
     assert(!rules.solidChoiceOutline, 'a solid focus outline rule still targets the settings choice pills')
-    assert(rules.calmScoped, 'the calmer ring variant is not scoped to the prompt-history search field')
+    assert(rules.calmScoped, 'the calmer ring variant is not scoped to the prompt-history search card')
     assert(rules.sharedDefault, 'the shared rainbow ring lost its strong default for the other plugin inputs')
     const rapid = await page.evaluate(`(() => {
       const labels = [...document.querySelectorAll('.dps-choice-option')]
@@ -3659,15 +3685,15 @@ async function captureFocusEvidence(page, shot, theme) {
     await page.clickAt(toggle.x, toggle.y)
     await sleep(800)
     const rect = await page.eval(() => {
-      const field = document.querySelector('.psp-search-field')
-      if (!field) return null
-      const r = field.getBoundingClientRect()
+      const card = document.querySelector('.psp-search-card')
+      if (!card) return null
+      const r = card.getBoundingClientRect()
       return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }
     })
     if (rect !== null) {
       await page.moveTo(900, 700)
       await sleep(450)
-      const clipRect = { left: rect.left - 14, top: rect.top - 14, width: rect.width + 28, height: rect.height + 28 }
+      const clipRect = { left: rect.left - 16, top: rect.top - 16, width: rect.width + 32, height: rect.height + 32 }
       const clip = clipAroundRect(clipRect)
       if (clip !== null) await shot(`16-focus-ring-${theme}`, clip)
     }

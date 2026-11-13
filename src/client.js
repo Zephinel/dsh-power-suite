@@ -7530,15 +7530,16 @@ function dwClearNativeAtmospheres() {
 .psp-search-card{position:fixed;z-index:61;display:flex;flex-direction:column;gap:4px;box-sizing:border-box;overflow:hidden;width:min(300px,calc(100vw - 40px));padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-hovercard-bg,#2c2c2e);box-shadow:var(--dsw-shadow-lv3,none);color:var(--dsw-static-neutral-bluish-00,#fff);font-family:inherit;font-size:12px;line-height:16px}
 .psp-search-row{display:flex;align-items:center;gap:6px}
 .psp-search-field{position:relative;display:flex;flex:1;min-width:0;height:22px;align-items:center;border-radius:var(--dsw-radius-sm,8px)}
-.psf-rainbow-focus.psp-search-field::after{inset:-3px;border-radius:calc(var(--dsw-radius-sm,8px) + 3px)}
-/* Calmer rainbow for the prompt-history search field only (user request): the
-   same conic track, but quieter -- lower focus opacity, a thinner ring, less
-   saturation and a much softer outer glow, with a slower spin/hue drift. The
+/* Calm rainbow focus ring around the WHOLE prompt-history search card (user
+   request: ring the card, not the inner input). The ring hugs the card's border
+   box, so the card keeps overflow visible (otherwise the inset -3px pseudo would
+   be clipped); the inner input stays ringless with a clean focus state. The
    shared class keeps its original stronger defaults for the settings choice
    pills and the annotation surfaces. */
-.psf-rainbow-focus.psp-search-field{--psf-ring-sat:.8;--psf-ring-glow:2.5px;--psf-ring-glow-alpha:.2;--psf-ring-opacity:.58;--psf-ring-thickness:1.5px}
-.psf-rainbow-focus.psp-search-field:focus-within::after,.psf-rainbow-focus.psp-search-field:focus-visible::after{opacity:var(--psf-ring-opacity,.58);animation:psf-ring-spin 4.6s linear infinite,psf-ring-hue 20s linear infinite}
-@media (prefers-reduced-motion: reduce){.psf-rainbow-focus.psp-search-field:focus-within::after,.psf-rainbow-focus.psp-search-field:focus-visible::after{animation:none}}
+.psp-search-card.psf-rainbow-focus{--psf-ring-sat:.8;--psf-ring-glow:2.5px;--psf-ring-glow-alpha:.2;--psf-ring-opacity:.58;--psf-ring-thickness:1.5px;position:fixed;overflow:visible}
+.psp-search-card.psf-rainbow-focus::after{inset:-3px;border-radius:calc(var(--dsw-radius-lg,16px) + 3px)}
+.psp-search-card.psf-rainbow-focus:focus-within::after,.psp-search-card.psf-rainbow-focus:focus-visible::after{opacity:var(--psf-ring-opacity,.58);animation:psf-ring-spin 4.6s linear infinite,psf-ring-hue 20s linear infinite}
+@media (prefers-reduced-motion: reduce){.psp-search-card.psf-rainbow-focus:focus-within::after,.psp-search-card.psf-rainbow-focus:focus-visible::after{animation:none}}
 .psp-search-icon{flex:none;color:var(--dsw-static-neutral-bluish-400,#adb2b8)}
 .psp-search-input{flex:1;min-width:0;height:22px;margin:0;padding:0;border:0;background:transparent;color:var(--dsw-static-neutral-bluish-00,#fff);font:inherit;font-size:12px;line-height:18px;outline:none}
 .psp-search-input::placeholder{color:var(--dsw-static-neutral-bluish-400,#adb2b8)}
@@ -8083,7 +8084,7 @@ function dwClearNativeAtmospheres() {
       // flips to the toggle's left; the toggle itself never moves.
       const searchCard = searchOpen && searchAnchor !== null ? React.createElement('div', {
         ref: searchCardRef,
-        className: 'psp-search-card',
+        className: 'psp-search-card psf-rainbow-focus',
         'data-psp-search-card': '',
         'data-psp-search-mode': searchAnchor.mode,
         style: { top: searchAnchor.top, right: searchAnchor.right },
@@ -8099,9 +8100,9 @@ function dwClearNativeAtmospheres() {
       },
       React.createElement('div', { className: 'psp-search-row' },
         RemixGlyph(REMIX_SEARCH_LINE, 13, 'psp-search-icon'),
-        // The rainbow ring illustrates the input's active state (shared with the
-        // annotation note editors); the input itself stays borderless.
-        React.createElement('span', { className: 'psp-search-field psf-rainbow-focus' },
+        // The rainbow ring now wraps the whole search card (focus-within on the
+        // card); the inner input stays borderless and ringless.
+        React.createElement('span', { className: 'psp-search-field' },
           React.createElement('input', {
             ref: searchRef,
             type: 'text',
