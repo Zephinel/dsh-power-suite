@@ -10279,7 +10279,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         push('class', `.${cssIdentifier(className)}`, 0.55)
       }
       const role = typeof source.role === 'string' ? source.role.trim() : ''
-      if (role.length > 0) push('role', `[role="${cssString(role)}"]`, 0.5)
+      if (role.length > 0) {
+        // A3/T47 (R4): reference role+name composite candidate.
+        if (labelValue !== null) push('label', `[role="${cssString(role)}"][aria-label="${cssString(labelValue)}"]`, 0.8)
+        push('role', `[role="${cssString(role)}"]`, 0.5)
+      }
       if (tag.length > 0 && tag !== 'html' && tag !== 'body') push('tag', tag, 0.2)
       const path = typeof source.path === 'string' ? source.path : ''
       if (path.length > 0) push('path', path, 0.1)
@@ -10383,6 +10387,27 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const wordLike = segments.some((segment) => /^[a-z]+$/i.test(segment) && /[aeiouy]/i.test(segment))
       const bemLike = /__?|--/.test(name) && /^[a-z][a-z0-9]*(?:[-_]{1,2}[a-z][a-z0-9]*)*$/i.test(name)
       return !(wordLike || bemLike)
+    }
+
+    /**
+     * A3/T47 (R2): ephemeral/floating records have no document-wide re-anchoring.
+     * A transient surface that is no longer present is Missing, never Changed or
+     * Resolved through a look-alike. CSS resolution on the still-present surface is
+     * the only accepted outcome.
+     * @param {object} ref - captured record.
+     * @param {{ status: string, via?: string }} outcome - resolution outcome.
+     * @returns {{ status: string, via?: string }} contract-adjusted outcome.
+     */
+    function annotationEphemeralOutcome(ref, outcome, options) {
+      const source = outcome !== null && typeof outcome === 'object' ? outcome : { status: 'missing' }
+      const ephemeral = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object'
+        && (ref.locator.ephemeral === true || ref.locator.surface === 'floating')
+      if (ephemeral !== true) return source
+      // A3/T47 (R2): a vanished transient surface must never claim Changed; Resolved
+      // outcomes are still validated by the identity/quote checks (R1) and a live
+      // floating surface legitimately persists through re-renders.
+      if (source.status === 'changed' && source.via !== 'text-quote') return { ...source, status: 'missing' }
+      return source
     }
 
     /**
@@ -10801,10 +10826,13 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const suffix = typeof q.suffix === 'string' ? q.suffix : ''
       const cap = typeof maxMatches === 'number' && maxMatches > 0 ? Math.round(maxMatches) : 8
       const weights = 0.7 + (prefix.length > 0 ? 0.15 : 0) + (suffix.length > 0 ? 0.15 : 0)
+      // A3/T47 (R4): align the bounded error budget with Hypothesis matchQuote
+      // (maxErrors = min(256, len/2), bounded here to 64 for our ≤120 quotes).
+      const maxErrors = Math.min(64, Math.floor(exact.length / 2))
       const scoreAt = (index) => {
         const candidate = source.slice(index, index + exact.length)
-        const distance = annotationLevenshteinWithin(exact, candidate, Math.min(32, Math.floor(exact.length * 0.4)))
-        if (distance > Math.min(32, Math.floor(exact.length * 0.4))) return null
+        const distance = annotationLevenshteinWithin(exact, candidate, maxErrors)
+        if (distance > maxErrors) return null
         const quoteSim = exact.length === 0 ? 0 : Math.max(0, 1 - distance / exact.length)
         const before = source.slice(Math.max(0, index - prefix.length), index)
         const after = source.slice(index + exact.length, index + exact.length + suffix.length)
@@ -10817,7 +10845,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         // A3/T34 (W2): an approximate hit can be honest "Content changed" but can
         // never claim the Resolved threshold — exactness is required for ≥0.85.
         if (distance > 0) score = Math.min(score, 0.8)
-        if (typeof hintIndex === 'number' && Number.isFinite(hintIndex) && hintIndex >= 0 && Math.abs(index - hintIndex) <= 4) score = Math.min(1, score + 0.02)
+        // Reference hint score: 1 - |Δ|/text.length (distance-faded, weight ~2/92).
+        if (typeof hintIndex === 'number' && Number.isFinite(hintIndex) && hintIndex >= 0) {
+          score += 0.022 * Math.max(0, 1 - Math.abs(index - hintIndex) / Math.max(1, source.length))
+        }
         return Math.min(1, score)
       }
       const matches = []
@@ -10830,9 +10861,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       if (matches.length === 0) {
         // Bounded approximate search: only where the first two chars match or every
         // 8th position, windows of exact length (quote ≤120).
-        const step = source.length > 8000 ? 8 : source.length > 2000 ? 2 : 1
+        // Reference scans broadly; keep it bounded: step 1 up to 6000 chars, then 4.
+        const step = source.length > 6000 ? 4 : 1
         for (let index = 0; index + Math.max(4, exact.length - 2) <= source.length && matches.length < cap; index += step) {
-          if (source[index] !== exact[0] && index % Math.max(8, step) !== 0) continue
+          if (source[index] !== exact[0] && index % 16 !== 0) continue
           const score = scoreAt(index)
           if (score !== null && score >= 0.5) matches.push({ index, score })
         }
@@ -10916,7 +10948,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     function annotationSelectorScore(candidate) {
       const reliability = candidate !== null && typeof candidate === 'object' && typeof candidate.reliability === 'number'
         && Number.isFinite(candidate.reliability) ? candidate.reliability : 0
-      return annotationSelectorTier(candidate) * 100 + Math.round(reliability * 100)
+      const length = candidate !== null && typeof candidate === 'object' && typeof candidate.value === 'string' ? candidate.value.length : 0
+      // A3/T47 (R4): explicit length penalty (reference selector generators penalise
+      // long/composite selectors).
+      return annotationSelectorTier(candidate) * 100 + Math.round(reliability * 100) - Math.min(12, Math.floor(length / 20))
     }
 
     /**
@@ -13117,6 +13152,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     function resolveRefStatus(input) {
       const source = input !== null && typeof input === 'object' ? input : {}
       const { candidates, expectedTag, queryAll, liveInfo } = source
+      const weakIdentity = source.weakIdentity === true
+      const assertQuote = typeof source.assertQuote === 'function' ? source.assertQuote : null
+      const corroborate = typeof source.corroborate === 'function' ? source.corroborate : null
       if (typeof queryAll !== 'function') return 'missing'
       const tag = typeof expectedTag === 'string' ? expectedTag.trim().toLowerCase() : ''
       const ordered = Array.isArray(candidates) ? candidates.slice().sort((left, right) => (right?.reliability ?? 0) - (left?.reliability ?? 0)) : []
@@ -13159,8 +13197,15 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const uniqueSelector = typeof source.uniqueSelector === 'string' && source.uniqueSelector.length > 0 ? source.uniqueSelector : ''
       if (uniqueSelector.length > 0) {
         const hits = queryTagged(uniqueSelector)
-        if (hits !== null && hits.length > 1) stableAmbiguity = true
-        else if (hits !== null && hits.length === 1) unique = hits[0]
+        if (hits !== null && hits.length > 1) {
+          stableAmbiguity = true
+        } else if (hits !== null && hits.length === 1) {
+          // A3/T47 (R1-i): a strong identity must still resolve to an element that
+          // corroborates the captured identity. A stale/weak unique hit does not win.
+          const okayIdentity = !weakIdentity || (corroborate !== null && corroborate(hits[0]) === true)
+          const okayQuote = assertQuote === null || assertQuote(hits[0]) !== false
+          if (okayIdentity && okayQuote) unique = hits[0]
+        }
       }
       if (unique === null) for (const candidate of ordered) {
         if (candidate === null || typeof candidate !== 'object' || typeof candidate.value !== 'string' || candidate.value.length === 0) continue
@@ -13196,12 +13241,21 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         // stable candidate still has priority; the generic result is corroborated
         // by text/name, never a silent identity).
         if (generic) {
-          if (genericMatch === null) {
-            genericMatch = list[0]
+          // A3/T47 (R1-iii): a generic/path CSS hit may only win when the captured
+          // identity is strong, or when the recorded ancestor context corroborates it
+          // AND the captured quote asserts on the candidate (reference maybeAssertQuote).
+          const element = list[0]
+          const corroborated = corroborate !== null && corroborate(element) === true
+          const quoteOk = assertQuote !== null && assertQuote(element) === true
+          const mayWin = weakIdentity !== true || (corroborated && quoteOk)
+          if (mayWin && genericMatch === null) {
+            genericMatch = element
             genericUnique = true
           }
           continue
         }
+        // Stable candidate (data/id/label): quote assertion still applies when present.
+        if (assertQuote !== null && assertQuote(list[0]) === false) continue
         unique = list[0]
         break
       }
@@ -13211,6 +13265,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       if (typeof liveInfo === 'function') {
         const probe = unique === null ? genericMatch : unique
         if (probe !== null) {
+          if (assertQuote !== null && assertQuote(probe) === false) return 'missing'
           const info = liveInfo(probe)
           if (info !== null && typeof info === 'object') {
             if (info.isConnected === false) return 'missing'
@@ -15493,6 +15548,91 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
+       * A3/T47 (R1-i): strong identity must still resolve to a real element. A stale
+       * `uniqueVerified` selector (0 hits / disconnected) does not count as strong.
+       * @param {object} ref - captured record.
+       * @returns {boolean} whether the record still has strong, live identity.
+       */
+      function identityStillStrong(ref) {
+        if (annotationHasStrongIdentity(ref) !== true) return false
+        const locator = ref.locator
+        const text = typeof ref.text === 'string' ? ref.text.trim() : ''
+        const digest = typeof ref.textDigest === 'string' ? ref.textDigest : ''
+        const textStrong = text.length > 0 && digest.length > 0 && digest !== ANNOTATION_EMPTY_TEXT_DIGEST
+        const tag = typeof locator.tag === 'string' ? locator.tag.toLowerCase() : ''
+        const role = typeof locator.role === 'string' ? locator.role.toLowerCase() : ''
+        const name = typeof locator.name === 'string' ? locator.name.trim().toLowerCase() : ''
+        const nameStrong = name.length > 0 && name !== tag && name !== role
+        if (textStrong || nameStrong) return true
+        // Identity relies on the verified unique selector: it must still resolve.
+        const selector = typeof locator.uniqueSelector === 'string' ? locator.uniqueSelector : ''
+        if (selector.length === 0) return false
+        try {
+          const hits = document.querySelectorAll(selector)
+          return hits.length === 1 && hits[0] !== null && hits[0].isConnected !== false && annotationElementVisible(hits[0])
+        } catch {
+          return false
+        }
+      }
+
+      /**
+       * A3/T47 (R1-iii): captured-ancestor corroboration for weak/generic CSS hits.
+       * @param {object} ref - captured record.
+       * @param {Element} element - candidate element.
+       * @returns {boolean} whether a recorded stable ancestor is present on the candidate.
+       */
+      function ancestorCorroborates(ref, element) {
+        if (element === null || typeof element !== 'object') return false
+        const ancestors = ref?.locator?.ancestors
+        if (!Array.isArray(ancestors) || ancestors.length === 0) return false
+        let current = element.parentElement
+        let depth = 0
+        while (current !== null && current !== undefined && depth < 12) {
+          const tag = typeof current.tagName === 'string' ? current.tagName.toLowerCase() : ''
+          for (const ancestor of ancestors) {
+            if (ancestor === null || typeof ancestor !== 'object') continue
+            if (typeof ancestor.tag === 'string' && ancestor.tag.toLowerCase() !== tag) continue
+            const attrs = ancestor.attrs !== null && typeof ancestor.attrs === 'object' ? ancestor.attrs : null
+            if (attrs === null) continue
+            let matched = 0
+            let total = 0
+            for (const [name, value] of Object.entries(attrs)) {
+              total += 1
+              if (typeof value !== 'string') continue
+              if (current.getAttribute(name) === value) matched += 1
+            }
+            if (total > 0 && matched === total) return true
+          }
+          current = current.parentElement
+          depth += 1
+        }
+        return false
+      }
+
+      /**
+       * A3/T47 (R1-ii): Hypothesis-style maybeAssertQuote for structural CSS hits.
+       * @param {object} ref - captured record.
+       * @param {Element} element - candidate element.
+       * @returns {boolean} whether the captured quote asserts on the candidate.
+       */
+      function quoteAssertsOnElement(ref, element) {
+        const quote = ref?.locator?.textQuote
+        if (quote === null || typeof quote !== 'object' || typeof quote.exact !== 'string') return false
+        if (element === null || typeof element !== 'object') return false
+        const candidates = []
+        candidates.push(annotationRenderedTextOf(element, 300).text)
+        if (element.parentElement !== null) candidates.push(annotationRenderedTextOf(element.parentElement, 400).text)
+        for (const text of candidates) {
+          // Reference maybeAssertQuote first requires the quote text itself on the
+          // candidate; context is corroboration, not a precondition for a range hit.
+          if (annotationNormalizeQuoteText(text, 0).includes(quote.exact)) return true
+          const matches = annotationScoreQuoteMatches(text, quote, undefined, 1)
+          if (matches.length > 0 && matches[0].score >= 0.85) return true
+        }
+        return false
+      }
+
+      /**
        * A3/T34 (W4/W6): validate one fallback hit with tag, digest, accessible name
        * and (optionally) viewport proximity. Never fabricates Resolved.
        * @param {Element} element - candidate.
@@ -15535,7 +15675,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         // A3/T36 (MAJOR-1): structural hits require real identity; a tag-only match
         // can never be Resolved (it degrades honestly to Changed and is not marked).
         if (options !== null && typeof options === 'object' && options.structural === true) {
-          return annotationStructuralFallbackStatus(ref, 'resolved')
+          // A3/T47 (R1): structural hit only resolves with live strong identity; a
+          // weak/corroborated hit is honestly Changed; otherwise reject/continue.
+          if (identityStillStrong(ref)) return 'resolved'
+          return ancestorCorroborates(ref, element) ? 'changed' : null
         }
         return 'resolved'
       }
@@ -15951,7 +16094,15 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const cached = fallbackStatusCache.get(cacheKey)
         if (cached !== undefined) return cached
         statusResolveCount += 1
+        const weakIdentity = identityStillStrong(ref) !== true
+        const hasQuote = ref.locator.textQuote !== null && typeof ref.locator.textQuote === 'object'
+          && typeof ref.locator.textQuote.exact === 'string' && ref.locator.textQuote.exact.length > 0
         let outcome = annotationResolveStatus({
+          weakIdentity,
+          assertQuote: hasQuote ? (element) => quoteAssertsOnElement(ref, element) : undefined,
+          // A3/T47: corroboration must also require the candidate to be visible — a
+          // hidden/cloned same-tag node is not the unmounted original.
+          corroborate: (element) => ancestorCorroborates(ref, element) && annotationElementVisible(element),
           candidates: ref.locator.candidates,
           expectedTag: ref.locator.tag,
           uniqueSelector: typeof ref.locator.uniqueSelector === 'string' ? ref.locator.uniqueSelector : '',
@@ -15980,7 +16131,26 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           if (quoteStatus === 'resolved') outcome = { status: 'resolved', via: 'text-quote' }
           else if (quoteStatus === 'ambiguous') outcome = { status: 'ambiguous', via: 'text-quote' }
         }
-        const detail = { ...outcome, confidence: annotationStatusConfidence(ref, outcome) }
+        // A3/T47 (R1): no real identity signal (no text, no usable name, no live
+        // verified selector) and no quote means the target cannot be verified at all;
+        // reference behavior is Missing, never a same-tag promotion.
+        if (weakIdentity && hasQuote !== true) outcome = { status: 'missing', via: outcome.via }
+        // A3/T47 (R2): transient surfaces only keep honest text-layer outcomes while
+        // their captured surface still exists.
+        let surfacePresent = false
+        const position = ref.locator.textPosition
+        if (position !== null && typeof position === 'object' && typeof position.container === 'string' && position.container.length > 0) {
+          try {
+            const container = document.querySelector(position.container)
+            surfacePresent = container !== null && container.isConnected !== false && annotationElementVisible(container)
+          } catch {
+            surfacePresent = false
+          }
+        }
+        outcome = annotationEphemeralOutcome(ref, outcome, { surfacePresent })
+        let confidence = annotationStatusConfidence(ref, outcome)
+        if (weakIdentity && outcome.status === 'changed' && (outcome.via === 'xpath' || outcome.via === 'text-position')) confidence = 'weak'
+        const detail = { ...outcome, confidence }
         if (fallbackStatusCache.size > 400) fallbackStatusCache.clear()
         fallbackStatusCache.set(cacheKey, detail)
         return detail
@@ -21078,6 +21248,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationStatusConfidence,
         annotationStatusLabelKey,
         annotationScopeAuthorityOutcome,
+        annotationEphemeralOutcome,
         debugFallbackScanProbe: () => (annotationController !== null && annotationController !== undefined
           && typeof annotationController.debugFallbackScanProbe === 'function'
           ? annotationController.debugFallbackScanProbe()
