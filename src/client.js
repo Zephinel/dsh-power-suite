@@ -4697,7 +4697,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run-pin:hover{background-color:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-run-pin:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-run[data-pinned='true']{background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,transparent)}
-.psd-run[data-pinned='true'] .psd-run-main{background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 6%,transparent)}
 .psd-run[data-pinned='true'] .psd-run-pin{opacity:1;visibility:visible;pointer-events:none;color:var(--dsw-alias-state-business-primary)}
 .psd-run[data-pinned='true']:hover .psd-run-pin,.psd-run[data-pinned='true']:focus-within .psd-run-pin{pointer-events:auto}
 .psd-run[data-pinned='true']:hover .psd-run-main{background-color:var(--dsw-alias-interactive-bg-hover)}

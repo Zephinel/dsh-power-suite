@@ -366,9 +366,11 @@ restarted with the merged linked checkout. Until then the card is local-only.
   correctly.
 - **Pinned row tint**: only pinned rows get the subtle violet tint —
   `color-mix(in srgb, var(--dsw-alias-state-business-primary) 7%, transparent)`
-  on the row, 6% on its body pill — plus the filled glyph, so "why is this at
-  the top" stays readable after the pointer leaves. Columns, indentation, child
-  rows, and the card width are untouched.
+  on the row itself, as a **single layer**: the body pill inside it stays
+  transparent (a second tint there read as a double highlight inside the row),
+  and the filled glyph carries the state. So "why is this at the top" stays
+  readable after the pointer leaves without stacking two rounded surfaces.
+  Columns, indentation, child rows, and the card width are untouched.
 
 ## Session figures in the hover card
 

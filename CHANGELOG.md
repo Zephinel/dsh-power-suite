@@ -174,6 +174,11 @@ heading is added until the release is cut.
 
 ### Changed
 
+- Pinned-row highlight is a single layer: the pinned row keeps its subtle violet
+  row tint but the body pill inside it no longer paints a second tint (the two
+  rounded surfaces read as a double highlight); the filled pin glyph still marks
+  the state, and ordinary hover feedback on the row is unchanged.
+
 - Running & recent leading glyphs and pin column aligned: every main row's
   leading glyph now sits in a fixed 16 px cell (14 px state dots centred, the
   read-row sparkle enlarged from 14 px to 16 px), the nested-child tree trunk is
