@@ -716,6 +716,33 @@ only the status line and `via` hint update.
 anchors (or are generated from the live node when absent); with no usable anchor
 or node the action shows an honest unavailable toast.
 
+### Descendant anchors, confidence and identity limits
+
+- **Descendant text anchors:** a non-leaf target (row/card/button with child text)
+  captures its first text leaf descendant's rendered quote/position plus
+  `anchorTarget:'descendant'`, the leaf tag and the ancestor tag chain (metadata;
+  the climb matches the target tag + stable attribute signature) of the target.
+  Resolution order stays CSS → descendant text-quote (position.start hint) →
+  descendant text-position → XPath last, with a CSS `changed` hit upgraded by a
+  resolving descendant quote: a text hit is climbed to the closest ancestor matching the recorded tag + signature, and
+  only a unique climb reports **Resolved**; several plausible ancestors report
+  **Matches several** and none continues honestly. Leaf/self anchors keep the old
+  behaviour.
+- **Confidence wording:** the four statuses are unchanged, but when the weak-identity
+  structural gate produces `changed` the UI shows **Unverifiable · weak identity**
+  (`无法验证 · 弱身份`, `data-psa-confidence="weak"`) in popover, detail card and
+  rail row instead of “Content changed”.
+- **Identity limits:** elements without a stable identity (icon-only, no
+  `data-testid`/`data-*`, no accessible name) are inherently position-sensitive —
+  a structural fallback can never verify them, so they stay **Unverifiable** and
+  are not marked/copied as if identified. Host apps should give annotatable
+  elements stable `data-testid`/`data-*` attributes or real accessible names.
+- **Scan/cache probe:** fallback resolution counts resolver invocations and cache misses
+  (exposed as `data-psa-fallback-scans` / the `debugFallbackScanProbe` test hook);
+  repeated status reads on an unchanged DOM add 0 scans/resolutions, while a host
+  mutation re-resolves once and then reuses the cache. Own overlay re-renders do
+  not invalidate page-resolution caches.
+
 ### Anchor hardening (P1/P2)
 
 - **Capture disambiguation:** quote context is occurrence-aware — the target text run

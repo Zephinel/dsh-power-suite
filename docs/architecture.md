@@ -517,8 +517,14 @@ one boundary (tag/digest/accessible name/proximity) with scored approximate
 matching (approximate hits cap below Resolved; ties stay ambiguous). Fallback
 status/nodes are cached per `(record id, DOM revision)` with bounded scans, and
 a weak-identity gate keeps icon-only/tag-only records from resolving through
-structural fallbacks (they report Changed honestly). The four statuses stay
-honest (unique text match resolves, duplicates stay ambiguous, changed
+structural fallbacks (they report Changed honestly). Non-leaf targets with text descendants additionally capture a descendant
+text anchor (first text leaf quote/position + leaf tag, ancestor chain and a
+stable-attribute signature); the resolver climbs a text hit to the closest
+ancestor matching tag+signature, and same-text decoys stay ambiguous. Weak
+structural hits carry `confidence:'weak'` and are labelled "Unverifiable · weak
+identity" rather than Content changed, while the capture scope-climb probe uses
+the rendered-text pipeline and fallback scans/cache misses are counted for a
+test-only probe. The four statuses stay honest (unique text match resolves, duplicates stay ambiguous, changed
 text is content-changed) and the UI shows which strategy resolved the target.
 Records persist in a browser-owned **v3** document
 (`power-suite.ui-annotation.annotations`, 250 ms debounced writes, flush on mode

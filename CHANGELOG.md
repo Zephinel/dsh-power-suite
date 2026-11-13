@@ -388,6 +388,22 @@ heading is added until the release is cut.
   row with live-node-first → saved-anchor → honest-unavailable semantics and
   optimized vs full XPath (full only with a live node, never fabricated).
 
+- UI element annotation descendant anchors + confidence: non-leaf targets with
+  meaningful descendant text now capture a first-text-leaf rendered quote/
+  position plus `anchorTarget:'descendant'`, the leaf tag, the ancestor tag chain
+  and a stable-attribute signature; when CSS candidates go stale the resolver
+  falls back to the descendant text anchor and climbs to the closest ancestor
+  matching tag+signature (unique → Resolved, same-text/same-signature decoys →
+  Matches several with no mark, none → honest continue; floating/ephemeral
+  surfaces deliberately excluded). Weak-identity structural outcomes keep the
+  four statuses but add `confidence:'weak'|'strong'` and present
+  "Unverifiable · weak identity" / "无法验证 · 弱身份" instead of Content changed.
+  The capture scope-climb duplicate probe now uses the rendered-text pipeline
+  (no second text口径), fallback scans/cache misses are instrumented for a
+  test-only probe (repeat resolution on unchanged DOM adds zero scans; host
+  mutation re-resolves once), and docs recommend host apps expose stable
+  `data-testid`/`data-*`/accessible names for position-sensitive elements.
+
 ### Removed
 
 - Standalone Project detail page: the `project-view` feature is removed —

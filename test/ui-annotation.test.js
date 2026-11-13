@@ -77,6 +77,8 @@ if (ui === undefined) {
     'annotationRenderTextChunks', 'annotationDisambiguateQuote', 'annotationScoreQuoteMatches',
     'annotationFullXPathOf', 'annotationFallbackCacheKey', 'annotationLevenshteinWithin',
     'annotationHasStrongIdentity', 'annotationStructuralFallbackStatus', 'annotationCopyAnchorDecision',
+    'annotationRenderedTextRepeatCount', 'annotationFirstTextLeafDescendant', 'annotationAncestorTagChain',
+    'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey', 'debugFallbackScanProbe',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -99,7 +101,8 @@ if (ui === undefined) {
    * 90 = multi-strategy anchors (quote/xpath/js path/scoring/resolution),
    * 91 = P0 selector stability (generated-class filter),
    * 97 = P1/P2 anchor hardening (rendered text/disambiguation/scoring/full xpath/cache),
-   * 100 = review fixes (strong identity gate / structural status / copy decision).
+   * 100 = review fixes (strong identity gate / structural status / copy decision),
+   * 106 = descendant anchors / confidence / rendered climb (repeat count, leaf, chain, match, confidence, label).
    * The E2E `ACCEPTED_SEAM_GENERATIONS` must accept exactly these counts.
    */
   const SEAM_GENERATION = SEAM_EXPORTS.length
@@ -182,6 +185,13 @@ if (ui === undefined) {
     annotationHasStrongIdentity: [1, 1],
     annotationStructuralFallbackStatus: [2, 2],
     annotationCopyAnchorDecision: [1, 1],
+    annotationRenderedTextRepeatCount: [2, 2],
+    annotationFirstTextLeafDescendant: [1, 1],
+    annotationAncestorTagChain: [2, 2],
+    annotationDescendantAncestorMatches: [2, 2],
+    annotationStatusConfidence: [2, 2],
+    annotationStatusLabelKey: [2, 2],
+    debugFallbackScanProbe: [0, 0],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
     annotationSelectedEntries: [2, 2],
@@ -204,7 +214,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 100, 'the frozen task-36 generation is pinned')
+    assert.equal(SEAM_GENERATION, 107, 'the frozen task-38 generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -706,7 +716,7 @@ if (ui === undefined) {
     assert.equal(input.component, 'input')
     assert.equal(input.locator.tag, 'input')
     assert.deepEqual(Object.keys(input).sort(), ['at', 'bounds', 'component', 'context', 'id', 'included', 'lastStatus', 'locator', 'note', 'order', 'route', 'session', 'text', 'textDigest', 'updatedAt', 'version', 'viewport'])
-    assert.deepEqual(Object.keys(input.locator).sort(), ['ancestors', 'candidates', 'ephemeral', 'jsPath', 'key', 'name', 'path', 'role', 'surface', 'tag', 'textPosition', 'textQuote', 'uniqueSelector', 'uniqueVerified', 'xpath'])
+    assert.deepEqual(Object.keys(input.locator).sort(), ['ancestors', 'anchorAncestorChain', 'anchorLeafTag', 'anchorSignature', 'anchorTarget', 'candidates', 'ephemeral', 'jsPath', 'key', 'name', 'path', 'role', 'surface', 'tag', 'textPosition', 'textQuote', 'uniqueSelector', 'uniqueVerified', 'xpath'])
     assert.equal(input.locator.name, 'Search sessions', 'the accessible name survives')
     assert.equal(input.text, '', 'an input contributes no value text')
 
@@ -2818,6 +2828,64 @@ if (ui === undefined) {
     assert.equal(ref.locator.textQuote.prefix.length, 60, 'capture-verified prefix must persist')
     assert.equal(ref.locator.textQuote.suffix.length, 60, 'capture-verified suffix must persist')
     assert(ref.locator.textQuote.prefix.length + ref.locator.textQuote.suffix.length + ref.locator.textQuote.exact.length <= 200)
+  })
+
+  test('A3/T38: rendered repeat count, descendant climb matching, confidence labels', () => {
+    // ⑤ rendered climb counting is separator-aware.
+    const rendered = ui.annotationRenderTextChunks([
+      { text: 'Hello', rawStart: 0, rawEnd: 5 },
+      { text: 'world', blockBefore: true, rawStart: 5, rawEnd: 10 },
+      { text: ' Hello world ', rawStart: 10, rawEnd: 23 }
+    ])
+    assert.equal(rendered.text, 'Hello world Hello world')
+    assert.equal(ui.annotationRenderedTextRepeatCount(rendered.text, 'Hello world'), 2)
+    assert.equal(ui.annotationRenderedTextRepeatCount(rendered.text, 'missing'), 0)
+    // ③ descendant ancestor signature matching (tag + recorded stable attrs).
+    const descendantRef = {
+      tag: 'div',
+      locator: {
+        tag: 'div',
+        anchorTarget: 'descendant',
+        anchorLeafTag: 'span',
+        anchorAncestorChain: ['span', 'p', 'div'],
+        anchorSignature: { tag: 'div', attrs: [{ name: 'data-card', value: 'unique' }] }
+      }
+    }
+    assert.equal(ui.annotationDescendantAncestorMatches(descendantRef, { tag: 'div', attrs: { 'data-card': 'unique' } }), true)
+    assert.equal(ui.annotationDescendantAncestorMatches(descendantRef, { tag: 'div', attrs: { 'data-card': 'other' } }), false, 'signature mismatch must not match')
+    assert.equal(ui.annotationDescendantAncestorMatches(descendantRef, { tag: 'section', attrs: { 'data-card': 'unique' } }), false, 'tag mismatch must not match')
+    assert.equal(ui.annotationDescendantAncestorMatches({ tag: 'div', locator: { tag: 'div' } }, { tag: 'div', attrs: {} }), false, 'leaf/self anchors never climb')
+    // Run→ancestor climb is represented by validate + climb helpers in the controller;
+    // here we pin the tag-chain shape and signature contract.
+    const fakeLeaf = { tagName: 'SPAN', parentElement: { tagName: 'P', parentElement: { tagName: 'DIV', parentElement: null } } }
+    assert.deepEqual(plain(ui.annotationAncestorTagChain(fakeLeaf, fakeLeaf.parentElement.parentElement)), ['p', 'div'])
+    // ② weak-identity confidence + i18n label mapping (statuses unchanged).
+    const iconRef = { tag: 'button', locator: { tag: 'button', role: 'button', name: 'button', uniqueSelector: null, uniqueVerified: false }, text: '', textDigest: '811c9dc5' }
+    const strongRef = { ...iconRef, text: 'Close', textDigest: 'deadbeef' }
+    assert.equal(ui.annotationStatusConfidence(iconRef, { status: 'changed', via: 'xpath' }), 'weak')
+    assert.equal(ui.annotationStatusConfidence(iconRef, { status: 'changed', via: 'text-position' }), 'weak')
+    assert.equal(ui.annotationStatusConfidence(iconRef, { status: 'changed', via: 'text-quote' }), 'strong')
+    assert.equal(ui.annotationStatusConfidence(strongRef, { status: 'changed', via: 'xpath' }), 'strong')
+    assert.equal(ui.annotationStatusLabelKey('changed', 'weak'), 'status.unverifiableWeak')
+    assert.equal(ui.annotationStatusLabelKey('changed', 'strong'), 'popover.status.changed')
+    assert.equal(ui.annotationStatusLabelKey('resolved', 'weak'), 'popover.status.resolved')
+    // Descendant-anchor metadata persists (capture-side fields).
+    const descRef = refOf({
+      tag: 'div',
+      attrs: [{ name: 'data-card', value: 'unique' }],
+      textQuote: { exact: 'Card text', prefix: '', suffix: '' },
+      textPosition: null,
+      anchorTarget: 'descendant',
+      anchorLeafTag: 'span',
+      anchorAncestorChain: ['span', 'p', 'div'],
+      anchorSignature: { tag: 'div', attrs: [{ name: 'data-card', value: 'unique' }] }
+    })
+    assert.equal(descRef.locator.anchorTarget, 'descendant')
+    assert.equal(descRef.locator.anchorLeafTag, 'span')
+    assert.deepEqual(plain(descRef.locator.anchorAncestorChain), ['span', 'p', 'div'])
+    assert.deepEqual(plain(descRef.locator.anchorSignature), { tag: 'div', attrs: [{ name: 'data-card', value: 'unique' }] })
+    const leafRef = refOf({ tag: 'span' })
+    assert.equal(leafRef.locator.anchorTarget, null, 'leaf anchors carry no descendant metadata')
   })
 
   //#region geometry and layout
