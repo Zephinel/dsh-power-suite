@@ -389,7 +389,16 @@
   canvas shrink by the delta and restore on exit, and the narrow-viewport layout
   falls back to the 320 px overlay rail. On very narrow viewports the sidebar can
   feel large — collapse it to the 48 px strip or use the overlay mode.
-- **The settings view is a separate view reached through the header gear.** It
+- **Exiting the mode clears the annotation records (by design).** The header X,
+  the footer **Cancel Annotation** action and the final Esc step ask for
+  confirmation and then clear every single/group record, page mark and the
+  persisted v3 document, so a re-entry starts empty; records still survive a
+  page reload while the mode is active. There is no "keep annotations on exit"
+  option yet.
+- **A group shares one ordinal.** All items of a group show the group's number
+  on their page marks; child sub-labels (e.g. `#7.1`) are subordinate and never
+  advance the top-level sequence.
+- **The settings view is a separate view reached through the header settings-line icon.** It
   keeps the same wide rail width to avoid a jump; the old status-view component
   remains in the code as an unreachable compatibility path (not rendered). The
   launcher dock/undock animation is a transient visual copy — reduced-motion

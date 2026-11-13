@@ -206,13 +206,14 @@ API/plugin network failures in every run below):
   <= .24, blob-core saturation >= .38 animated / >= .28 static, per-theme
   multiply/screen blend), title-case buckets, fold persistence at
   first paint, the browser borderless/typography recipe, the calmer
-  prompt-history search focus ring (parameterised ring, search-field variant:
-  opacity 0.58, saturate(.8), 2.5 px glow, 1.5 px track, slower spin; shared
-  defaults unchanged for the other inputs), the row-highlight text insets (parent `4px 10px 4px 14px`, child `3px 8px 3px 10px`; title text
+  prompt-history search focus ring (parameterised calm ring on the WHOLE search
+  card via focus-within: opacity 0.58, saturate(.8), 2.5 px glow, 1.5 px track,
+  inset -3 px with the card radius +3, inner input ringless; shared defaults
+  unchanged for the other inputs), the row-highlight text insets (parent `4px 10px 4px 14px`, child `3px 8px 3px 10px`; title text
   >= 8 px inside the pill's right edge, pill content-paced, mask boundary
   recalculated), and both cross-branch annotation-mode hover-card pin states.
 - Annotation harness `test/browser/annotation.e2e.mjs`: `--smoke` **6/6 PASS**
-  with the **79-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
+  with the **80-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
   FAIL 0** (including `10b`, the real pinned-cross-branch-card check),
   scenario 11 **PASS 7 / 0 / 0**, scenario 12 **PASS 7 / 0 / 0** (marks, detail
   card, requirement edit with `updatedAt`, delete → 5 s undo, popover layout:
@@ -220,8 +221,14 @@ API/plugin network failures in every run below):
   primary buttons on one non-wrapping row, caption→textarea gap 9 px, rainbow
   ring exact on all edges),
   scenario 4 (multi-select → one batch popover with a single shared Requirement →
-  ONE saved group with N items, group chip `@ UI annotations × N`, child/group
-  delete with undo, reload keeps the group); scenario 13 **PASS 7 / SKIP 1
+  ONE saved group with N items, group chip `@ UI annotations × N`, group items
+  share the group's single ordinal in page marks, child/group delete with undo);
+  scenario 1/8 (launcher hides in place while active with no docked/flight copy,
+  returns with a fade/scale at the remembered rect after a full exit,
+  reduced-motion instant); scenario 9 (default managed list, settings-line icon,
+  equal-width Add annotation / Cancel Annotation footer, exit confirmation with
+  Cancel vs Clear & exit, records cleared + v3 document flushed empty on exit,
+  re-entry empty); scenario 13 **PASS 7 / SKIP 1
   (`13f`) / 0** (single native chip, hover preview
   tooltip with requirement/locator/position/Session/workspace/status, grouped
   chip hover summary, chip click preview, chip × removal (only that chip
@@ -347,7 +354,7 @@ batch removed-member serialization are unit-tested only.
 > [0.3.0 polish round acceptance](#030-polish-round-acceptance-2026-11-13-merged-build)
 > above**; the annotation model has since grown to the v2 record/persistence,
 > floating-surface, marks/detail and composer-chip implementation with the
-> 79-key seam generation.
+> 80-key seam generation.
 
 Date: 2026-11-12 (round-2 fix build, `fix/ui-annotation-review-fixes`). The
 feature is browser-only ([ui-annotation.md](ui-annotation.md)), so its acceptance
