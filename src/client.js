@@ -9285,6 +9285,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     /** A3/T21: estimated composer-chip hover preview size used for clamping. */
     const ANNOTATION_CHIP_PREVIEW_SIZE = { width: 320, height: 150 }
 
+    /** A3/T24: estimated batch popover size used for placement clamping. */
+    const ANNOTATION_BATCH_POPOVER_SIZE = { width: 320, height: 240 }
+
     /** A3/T9: the composer trigger source that owns annotation reference chips. */
     const ANNOTATION_CHIP_SOURCE = 'ui-annotation'
 
@@ -9456,6 +9459,24 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'feedback.chipMissing': 'This reference\'s annotation is no longer available',
       'feedback.selectedDeleted': 'Selected annotations deleted',
       'feedback.marked': 'Marked · {count} total',
+      'feedback.groupAdded': 'Group saved · {count} elements',
+      'batch.title': '{count} elements selected',
+      'batch.requirement': 'Requirement (shared by all selected elements)',
+      'batch.hint': 'One requirement for the whole selection; each element keeps its own locator.',
+      'batch.saveGroup': 'Save as group',
+      'batch.clear': 'Clear selection',
+      'insert.groupHeader': 'Group',
+      'insert.groupRequirement': 'Requirement:',
+      'insert.groupReference': 'Element:',
+      'insert.itemsCountLabel': 'items',
+      'collection.groupBadge': 'Batch',
+      'collection.groupCount': '{count} items',
+      'collection.groupUntitled': 'Untitled batch',
+      'collection.groupPreview': 'Show items',
+      'collection.groupRequirementPlaceholder': 'Requirement shared by all items',
+      'collection.groupEditorTitle': 'Batch requirement · {count} items',
+      'collection.collapse': 'Collapse',
+      'collection.expand': 'Expand',
       'feedback.markUpdated': 'Requirement updated',
       'feedback.markDeleted': 'Annotation deleted',
       'feedback.undo': 'Undo',
@@ -9602,6 +9623,24 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'feedback.chipMissing': '该引用对应的标注已不存在',
       'feedback.selectedDeleted': '已删除选中的标注',
       'feedback.marked': '已标记 · 共 {count} 条',
+      'feedback.groupAdded': '已保存为分组 · {count} 个元素',
+      'batch.title': '已选择 {count} 个元素',
+      'batch.requirement': '要求（所选元素共用）',
+      'batch.hint': '整批元素共用一条要求；每个元素仍保留自己的定位信息。',
+      'batch.saveGroup': '保存为分组',
+      'batch.clear': '清空选择',
+      'insert.groupHeader': '分组',
+      'insert.groupRequirement': '要求：',
+      'insert.groupReference': '元素：',
+      'insert.itemsCountLabel': '项',
+      'collection.groupBadge': '批量',
+      'collection.groupCount': '{count} 项',
+      'collection.groupUntitled': '未命名分组',
+      'collection.groupPreview': '查看项',
+      'collection.groupRequirementPlaceholder': '整组共用的要求',
+      'collection.groupEditorTitle': '分组要求 · {count} 项',
+      'collection.collapse': '收起',
+      'collection.expand': '展开',
       'feedback.markUpdated': '需求已更新',
       'feedback.markDeleted': '标注已删除',
       'feedback.undo': '撤销',
@@ -10612,6 +10651,60 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
+     * A3/T24: normalize one persisted batch group. Tolerant like records: a bad
+     * group yields null; item records go through the same record normalizer, and
+     * the group keeps its shared requirement/timestamps/session/collapse flags.
+     * @param {unknown} raw - raw persisted group.
+     * @param {number} [fallbackOrder] - order when the document did not carry one.
+     * @returns {object | null} normalized group.
+     */
+    function normalizeAnnotationGroup(raw, fallbackOrder) {
+      if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null
+      if (typeof raw.id !== 'string' || raw.id.length === 0 || !ANNOTATION_CHIP_REF_PATTERN.test(raw.id)) return null
+      const rawItems = Array.isArray(raw.items) ? raw.items : []
+      const items = []
+      const seen = new Set()
+      for (let index = 0; index < rawItems.length; index += 1) {
+        if (annotationTotalItemCount([]) + items.length >= 0 && items.length >= ANNOTATION_RECORD_LIMIT) break
+        const item = normalizeAnnotationRecord(rawItems[index], index)
+        if (item === null) continue
+        if (seen.has(item.id)) continue
+        seen.add(item.id)
+        items.push({ ...item, note: '' })
+      }
+      if (items.length === 0) return null
+      const rawSession = raw.session !== null && typeof raw.session === 'object' ? raw.session : {}
+      const sessionId = typeof rawSession.sessionId === 'string' && rawSession.sessionId.length > 0 && rawSession.sessionId.length <= 120
+        ? rawSession.sessionId
+        : (items[0].session?.sessionId ?? null)
+      const cwd = typeof rawSession.cwd === 'string' && rawSession.cwd.length > 0 && rawSession.cwd.length <= 4096
+        ? rawSession.cwd.replace(ANNOTATION_CONTROL_CHARS, '')
+        : (items[0].session?.cwd ?? null)
+      const workspaceLabel = typeof rawSession.workspaceLabel === 'string' && rawSession.workspaceLabel.length > 0
+        ? sanitizeText(rawSession.workspaceLabel, 80)
+        : (items[0].session?.workspaceLabel ?? annotationWorkspaceLabel(cwd))
+      const at = typeof raw.at === 'number' && Number.isFinite(raw.at) && raw.at > 0 ? Math.round(raw.at) : 0
+      const createdAt = typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) && raw.createdAt > 0 ? Math.round(raw.createdAt) : at
+      const updatedAt = typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) && raw.updatedAt > 0 ? Math.round(raw.updatedAt) : (createdAt || at)
+      const order = typeof raw.order === 'number' && Number.isFinite(raw.order) && raw.order >= 0
+        ? Math.round(raw.order)
+        : (typeof fallbackOrder === 'number' && Number.isFinite(fallbackOrder) ? Math.round(fallbackOrder) : 0)
+      return {
+        kind: 'group',
+        id: raw.id,
+        at: createdAt || at,
+        createdAt: createdAt || at,
+        updatedAt,
+        order,
+        session: { sessionId, cwd, workspaceLabel },
+        requirement: normalizeUserNote(raw.requirement),
+        items,
+        collapsed: raw.collapsed === true,
+        included: raw.included !== false
+      }
+    }
+
+    /**
      * Parse the persisted annotation document.
      *
      * Tolerant by contract: bad JSON, unknown document versions, malformed records,
@@ -10621,7 +10714,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
      * @returns {{ version: number, updatedAt: number, records: Array<object> }} sanitized document.
      */
     function parseAnnotationStore(text) {
-      const empty = { version: 2, updatedAt: 0, records: [] }
+      const empty = { version: 3, updatedAt: 0, records: [], groups: [], entries: [] }
       if (typeof text !== 'string' || text.length === 0) return empty
       let parsed
       try {
@@ -10630,13 +10723,18 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         return empty
       }
       let rawRecords
+      let rawGroups = []
+      let version = 3
       if (Array.isArray(parsed)) {
         // Tolerate the bare-array shape while still validating every record.
         rawRecords = parsed
+        version = 1
       } else if (parsed !== null && typeof parsed === 'object') {
-        const version = parsed.version
-        if (version !== undefined && version !== 1 && version !== 2) return empty
+        const declared = parsed.version
+        if (declared !== undefined && declared !== 1 && declared !== 2 && declared !== 3) return empty
+        version = declared === undefined ? 2 : declared
         rawRecords = Array.isArray(parsed.records) ? parsed.records : []
+        rawGroups = Array.isArray(parsed.groups) ? parsed.groups : []
       } else {
         return empty
       }
@@ -10645,16 +10743,31 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         : 0
       const records = []
       const seen = new Set()
+      let total = 0
       for (let index = 0; index < rawRecords.length; index += 1) {
-        if (records.length >= ANNOTATION_RECORD_LIMIT) break
+        if (total >= ANNOTATION_RECORD_LIMIT) break
         const record = normalizeAnnotationRecord(rawRecords[index], index)
         if (record === null) continue
         if (seen.has(record.id)) continue
         seen.add(record.id)
         records.push(record)
+        total += 1
       }
-      records.sort((left, right) => (left.order - right.order) || (left.at - right.at))
-      return { version: 2, updatedAt, records }
+      const groups = []
+      for (let index = 0; index < rawGroups.length; index += 1) {
+        if (total >= ANNOTATION_RECORD_LIMIT) break
+        const group = normalizeAnnotationGroup(rawGroups[index], records.length + groups.length)
+        if (group === null) continue
+        const room = ANNOTATION_RECORD_LIMIT - total
+        if (annotationGroupItems(group).length > room) {
+          if (room <= 0) break
+          group.items = annotationGroupItems(group).slice(0, room)
+        }
+        total += annotationGroupItems(group).length
+        groups.push(group)
+      }
+      const entries = records.concat(groups).sort((left, right) => (left.order - right.order) || (left.at - right.at))
+      return { version: 3, updatedAt, records, groups, entries }
     }
 
     /**
@@ -10663,21 +10776,34 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
      * @param {number} updatedAt - epoch ms of this write.
      * @returns {string} JSON document, records normalized and capped.
      */
-    function serializeAnnotationStore(records, updatedAt) {
-      const list = []
+    function serializeAnnotationStore(collection, updatedAt) {
+      const singles = []
+      const groups = []
       const seen = new Set()
-      const input = Array.isArray(records) ? records : []
+      let total = 0
+      const input = Array.isArray(collection) ? collection : []
       for (let index = 0; index < input.length; index += 1) {
-        if (list.length >= ANNOTATION_RECORD_LIMIT) break
-        const record = normalizeAnnotationRecord(input[index], index)
+        if (total >= ANNOTATION_RECORD_LIMIT) break
+        const entry = input[index]
+        if (entry !== null && typeof entry === 'object' && entry.kind === 'group') {
+          const group = normalizeAnnotationGroup(entry, index)
+          if (group === null) continue
+          if (annotationGroupItems(group).length > ANNOTATION_RECORD_LIMIT - total) continue
+          total += annotationGroupItems(group).length
+          groups.push(group)
+          continue
+        }
+        const record = normalizeAnnotationRecord(entry, index)
         if (record === null) continue
         if (seen.has(record.id)) continue
         seen.add(record.id)
-        list.push(record)
+        singles.push(record)
+        total += 1
       }
-      list.sort((left, right) => (left.order - right.order) || (left.at - right.at))
+      singles.sort((left, right) => (left.order - right.order) || (left.at - right.at))
+      groups.sort((left, right) => (left.order - right.order) || (left.at - right.at))
       const at = typeof updatedAt === 'number' && Number.isFinite(updatedAt) && updatedAt > 0 ? Math.round(updatedAt) : Date.now()
-      return JSON.stringify({ version: 2, updatedAt: at, records: list })
+      return JSON.stringify({ version: 3, updatedAt: at, records: singles, groups })
     }
 
     /**
@@ -10951,6 +11077,17 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const atOf = (entry) => (typeof entry?.at === 'number' && Number.isFinite(entry.at) ? entry.at : 0)
         return merged.slice().sort((left, right) => (orderOf(left) - orderOf(right)) || (atOf(left) - atOf(right)))
       }
+      if (undo.kind === 'groupRestore') {
+        const group = undo.group !== null && typeof undo.group === 'object' && undo.group.kind === 'group' ? undo.group : null
+        if (group === null) return current.slice()
+        const index = current.findIndex((entry) => entry !== null && typeof entry === 'object' && entry.id === group.id)
+        if (index >= 0) {
+          const next = current.slice()
+          next[index] = group
+          return next
+        }
+        return restoreAnnotationRecord(current, group, undo.index)
+      }
       if (undo.kind === 'multi') {
         // Restore in ascending original-index order so every record lands back
         // where it was removed from; a newer duplicate id is left untouched.
@@ -11063,6 +11200,197 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
+     * A3/T24: whether one collection entry is a batch group (singles carry no kind).
+     * @param {unknown} entry - collection entry.
+     * @returns {boolean} whether it is a group.
+     */
+    function annotationIsGroup(entry) {
+      return entry !== null && typeof entry === 'object' && entry.kind === 'group'
+    }
+
+    /**
+     * The element records of one group (an empty array for singles/malformed).
+     * @param {unknown} entry - collection entry.
+     * @returns {Array<object>} group item records.
+     */
+    function annotationGroupItems(entry) {
+      if (!annotationIsGroup(entry)) return []
+      return Array.isArray(entry.items) ? entry.items.filter((item) => item !== null && typeof item === 'object') : []
+    }
+
+    /**
+     * Flatten one collection into element records for marks/chips/status: group
+     * items inherit the group's shared requirement as their display note.
+     * @param {Array<object>} list - top-level collection entries.
+     * @returns {Array<object>} flattened records (copies).
+     */
+    function annotationFlattenRecords(list) {
+      const records = []
+      for (const entry of Array.isArray(list) ? list : []) {
+        if (entry === null || typeof entry !== 'object') continue
+        if (annotationIsGroup(entry)) {
+          const requirement = typeof entry.requirement === 'string' ? entry.requirement : ''
+          for (const item of annotationGroupItems(entry)) records.push({ ...item, note: requirement })
+        } else {
+          records.push(entry)
+        }
+      }
+      return records
+    }
+
+    /**
+     * Total element count of one collection (single records + group items), the
+     * quantity the 100-item cap is enforced on.
+     * @param {Array<object>} list - top-level collection entries.
+     * @returns {number} item count.
+     */
+    function annotationTotalItemCount(list) {
+      let count = 0
+      for (const entry of Array.isArray(list) ? list : []) {
+        if (entry === null || typeof entry !== 'object') continue
+        count += annotationIsGroup(entry) ? annotationGroupItems(entry).length : 1
+      }
+      return count
+    }
+
+    /**
+     * Find one element record by id across singles and group items (A3/T24).
+     * Group items are returned with the group's shared requirement as `note`.
+     * @param {Array<object>} list - top-level collection entries.
+     * @param {string} refId - record id.
+     * @returns {object | null} record, or null.
+     */
+    function annotationFindRecord(list, refId) {
+      if (typeof refId !== 'string' || refId.length === 0) return null
+      for (const entry of Array.isArray(list) ? list : []) {
+        if (entry === null || typeof entry !== 'object') continue
+        if (!annotationIsGroup(entry)) {
+          if (entry.id === refId) return entry
+          continue
+        }
+        const item = annotationGroupItems(entry).find((candidate) => candidate.id === refId)
+        if (item !== undefined) {
+          return { ...item, note: typeof entry.requirement === 'string' ? entry.requirement : (item.note ?? '') }
+        }
+      }
+      return null
+    }
+
+    /**
+     * Find one group entry by id.
+     * @param {Array<object>} list - top-level collection entries.
+     * @param {string} groupId - group id.
+     * @returns {object | null} group, or null.
+     */
+    function annotationFindGroup(list, groupId) {
+      if (typeof groupId !== 'string' || groupId.length === 0) return null
+      const found = (Array.isArray(list) ? list : []).find((entry) => annotationIsGroup(entry) && entry.id === groupId)
+      return found ?? null
+    }
+
+    /**
+     * A3/T24: build ONE group from a multi-selection. Every item keeps its full
+     * captured identity (locator/bounds/session/workspace); the requirement is
+     * shared on the group, never duplicated into per-item notes.
+     * @param {Array<object>} refs - selected ElementRefs.
+     * @param {string} requirement - shared requirement text.
+     * @param {string | null} sessionId - Session owning the selection.
+     * @param {number} [now] - epoch ms.
+     * @param {string} [id] - explicit group id (tests); generated otherwise.
+     * @returns {object | null} group entry, or null when there is no item.
+     */
+    function annotationGroupFromSelection(refs, requirement, sessionId, now, id) {
+      const list = Array.isArray(refs) ? refs.filter((ref) => ref !== null && typeof ref === 'object') : []
+      if (list.length === 0) return null
+      const stamp = typeof now === 'number' && Number.isFinite(now) && now > 0 ? Math.round(now) : Date.now()
+      const groupId = typeof id === 'string' && id.length > 0
+        ? id
+        : `psa-group-${stamp}-${Math.random().toString(36).slice(2, 8)}`
+      const fallbackSession = list[0].session !== null && typeof list[0].session === 'object' ? list[0].session : {}
+      const ownerSessionId = typeof sessionId === 'string' && sessionId.length > 0
+        ? sessionId
+        : (typeof fallbackSession.sessionId === 'string' ? fallbackSession.sessionId : null)
+      const items = list.map((ref) => ({
+        ...ref,
+        session: {
+          ...(ref.session !== null && typeof ref.session === 'object' ? ref.session : {}),
+          sessionId: ref.session?.sessionId ?? ownerSessionId
+        },
+        note: ''
+      }))
+      return {
+        kind: 'group',
+        id: groupId,
+        at: stamp,
+        createdAt: stamp,
+        updatedAt: stamp,
+        order: 0,
+        session: { ...fallbackSession, sessionId: ownerSessionId },
+        requirement: normalizeUserNote(requirement),
+        items,
+        collapsed: false,
+        included: true
+      }
+    }
+
+    /**
+     * Append one group while enforcing the total item cap (singles + group items).
+     * @param {Array<object>} list - current collection.
+     * @param {object} group - group entry.
+     * @param {number} [limit] - total item limit, default 100.
+     * @returns {{ list: Array<object>, added: boolean, rejected: boolean }} next collection and outcome.
+     */
+    function collectionAddGroup(list, group, limit) {
+      const current = Array.isArray(list) ? list : []
+      const cap = typeof limit === 'number' && Number.isFinite(limit) && limit >= 1 ? Math.round(limit) : ANNOTATION_RECORD_LIMIT
+      if (!annotationIsGroup(group) || annotationGroupItems(group).length === 0) return { list: current.slice(), added: false, rejected: false }
+      if (annotationTotalItemCount(current) + annotationGroupItems(group).length > cap) {
+        return { list: current.slice(), added: false, rejected: true }
+      }
+      const order = current.reduce((max, entry) => {
+        const value = entry !== null && typeof entry === 'object' && typeof entry.order === 'number' && Number.isFinite(entry.order) ? entry.order : -1
+        return Math.max(max, value)
+      }, -1) + 1
+      return { list: current.concat([{ ...group, order }]), added: true, rejected: false }
+    }
+
+    /**
+     * Serialize one batch group block (A3/T24): the shared requirement first, then
+     * the numbered element references with their honest status lines (no per-item
+     * Note lines, because items have no individual requirements).
+     * @param {object} group - group entry.
+     * @param {Array<object>} items - [{ ref: { ...record, status } }] children.
+     * @param {object} labels - insertion labels (reference/status/groupHeader/items).
+     * @returns {string} group block text (no trailing blank line).
+     */
+    function serializeGroupBlock(group, items, labels) {
+      const source = labels !== null && typeof labels === 'object' ? labels : {}
+      const reference = typeof source.reference === 'string' ? source.reference : 'Reference:'
+      const requirementLabel = typeof source.groupRequirement === 'string' ? source.groupRequirement : 'Requirement:'
+      const referenceLabel = typeof source.groupReference === 'string' ? source.groupReference : 'Element:'
+      const groupHeader = typeof source.groupHeader === 'string' ? source.groupHeader : 'Group'
+      const statusLabel = typeof source.status === 'string' ? source.status : 'Status: target no longer resolves (locator only)'
+      const statusEphemeral = typeof source.statusEphemeral === 'string' ? source.statusEphemeral : 'Status: transient surface no longer present (locator only)'
+      const statusAmbiguous = typeof source.statusAmbiguous === 'string' ? source.statusAmbiguous : 'Status: target matches more than one element (locator only)'
+      const statusChanged = typeof source.statusChanged === 'string' ? source.statusChanged : 'Status: target content changed'
+      const requirement = normalizeUserNote(annotationIsGroup(group) ? group.requirement : '')
+      const lines = [`${groupHeader} · ${items.length} ${source.itemsCountLabel ?? 'items'}`]
+      lines.push(`   ${annotationJoinLabel(requirementLabel, requirement || (typeof source.emptyNote === 'string' ? source.emptyNote : '—'))}`)
+      items.forEach((item, index) => {
+        const ref = item !== null && typeof item === 'object' && item.ref !== null && typeof item.ref === 'object' ? item.ref : item
+        if (ref === null || typeof ref !== 'object') return
+        lines.push(`   ${index + 1}. ${annotationJoinLabel(referenceLabel, elementLabel(ref))}`)
+        lines.push(`      ${annotationJoinLabel(reference, describeLocator(ref))}`)
+        const status = ref.status
+        const ephemeral = ref.locator !== null && typeof ref.locator === 'object' && ref.locator.ephemeral === true
+        if (status === 'missing') lines.push(`      ${ephemeral ? statusEphemeral : statusLabel}`)
+        else if (status === 'ambiguous') lines.push(`      ${statusAmbiguous}`)
+        else if (status === 'changed') lines.push(`      ${statusChanged}`)
+      })
+      return lines.join('\n')
+    }
+
+    /**
      * Apply several include-flag changes in one immutable pass (A3/T8
      * select-all / deselect-all / other-Session forced exclusion).
      * @param {Array<object>} list - collection entries.
@@ -11105,9 +11433,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
      * @param {string} label - localized batch label (`UI annotations × N`).
      * @returns {{ source: string, ref: string, label: string, clipboardText: string }} chip insertion.
      */
-    function annotationChipRefBatch(records, label) {
-      const ids = (Array.isArray(records) ? records : [])
-        .map((record) => (record !== null && typeof record === 'object' ? record.id : null))
+    function annotationChipRefBatch(entries, label) {
+      const ids = (Array.isArray(entries) ? entries : [])
+        .map((entry) => (entry !== null && typeof entry === 'object' ? entry.id : null))
         .filter((id) => typeof id === 'string' && ANNOTATION_CHIP_REF_PATTERN.test(id))
       const text = typeof label === 'string' && label.length > 0 ? label : `UI annotations × ${ids.length}`
       return {
@@ -11143,10 +11471,13 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
      *   without a custom group header (the shell's slash menu has no title slot for us).
      * @returns {Array<{ name: string, label: string, description?: string, value: string }>} candidates.
      */
-    function annotationChipCandidates(list, sessionId, limit, labelTemplate) {
+    function annotationChipCandidates(collection, sessionId, limit, labelTemplate) {
       const cap = typeof limit === 'number' && Number.isFinite(limit) && limit > 0 ? Math.round(limit) : ANNOTATION_CHIP_CANDIDATE_LIMIT
       const candidates = []
-      for (const entry of Array.isArray(list) ? list : []) {
+      const list = annotationFlattenRecords(Array.isArray(collection)
+        ? collection.filter((entry) => entry === null || typeof entry !== 'object' || entry.included !== false)
+        : [])
+      for (const entry of list) {
         if (candidates.length >= cap) break
         if (entry === null || typeof entry !== 'object') continue
         const entrySession = entry.session !== null && typeof entry.session === 'object' ? entry.session.sessionId ?? null : null
@@ -11194,24 +11525,24 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         }
       }
       const byId = new Map()
-      for (const record of records) {
-        if (record !== null && typeof record === 'object' && typeof record.id === 'string') byId.set(record.id, record)
+      for (const entry of records) {
+        if (entry !== null && typeof entry === 'object' && typeof entry.id === 'string') byId.set(entry.id, entry)
       }
       const found = []
       for (const id of parsed.ids) {
-        const record = byId.get(id)
-        if (record !== undefined) found.push(record)
+        const entry = byId.get(id)
+        if (entry !== undefined) found.push(entry)
       }
       const missing = parsed.ids.length - found.length
       if (found.length === 0) {
         const line = typeof source.noRemaining === 'string' ? source.noRemaining : '(no annotations remain)'
         return { text: `${line}\n`, missing, remaining: 0 }
       }
-      const items = found.map((record) => ({ ref: { ...record, status: resolveStatus(record) }, note: record.note ?? '' }))
+      const remaining = found.reduce((sum, entry) => sum + (annotationIsGroup(entry) ? annotationGroupItems(entry).length : 1), 0)
       return {
-        text: serializeBatchRequest(items, { ...source, skippedCount: 0, removedCount: missing }),
+        text: serializeBatchEntries(found, { ...source, skippedCount: 0, removedCount: missing }, resolveStatus),
         missing,
-        remaining: found.length
+        remaining
       }
     }
 
@@ -11228,11 +11559,21 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         note: '',
         editing: false,
         collection: [],
+        batchOpen: false,
         passThrough: false,
         box: null,
         feedback: null,
         sessionId: null
       }
+    }
+
+    /**
+     * The note draft carried by one reference (single-selection popover seeding).
+     * @param {unknown} ref - ElementRef.
+     * @returns {string} note text.
+     */
+    function noteOfRef(ref) {
+      return ref !== null && typeof ref === 'object' && typeof ref.note === 'string' ? ref.note : ''
     }
 
     /**
@@ -11259,6 +11600,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         selection: [],
         note: '',
         editing: false,
+        batchOpen: false,
         passThrough: false,
         box: null,
         feedback: null
@@ -11300,8 +11642,13 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         }
         case 'selectSingle': {
           const ref = payload.ref !== null && typeof payload.ref === 'object' ? payload.ref : null
-          if (ref === null) return { ...current, phase: 'idle', selection: [], note: '', editing: false }
-          return { ...current, phase: 'selected', selection: [ref], note: ref.note ?? '', editing: false, view: 'status', hoverId: null }
+          if (ref === null) return { ...current, phase: 'idle', selection: [], note: '', editing: false, batchOpen: false }
+          return { ...current, phase: 'selected', selection: [ref], note: ref.note ?? '', editing: false, batchOpen: false, view: 'status', hoverId: null }
+        }
+        case 'batchOpen': {
+          const open = payload.open === true && current.phase === 'multi' && current.selection.length > 1
+          if (current.batchOpen === open) return current
+          return { ...current, batchOpen: open }
         }
         case 'toggleMulti': {
           const ref = payload.ref !== null && typeof payload.ref === 'object' ? payload.ref : null
@@ -11314,8 +11661,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           return {
             ...current,
             selection,
+            batchOpen: false,
             phase: annotationPhaseForCount(selection.length),
-            note: selection.length === 1 ? (selection[0].note ?? '') : '',
+            // A3/T24: the batch popover writes ONE shared requirement; preserve it
+            // while more elements are added/removed instead of resetting per item.
+            note: selection.length === 1 ? (selection[0].note ?? '') : current.note,
             editing: false,
             view: 'status',
             hoverId: null
@@ -11336,8 +11686,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           return {
             ...current,
             selection: merged,
+            batchOpen: false,
             phase: annotationPhaseForCount(merged.length),
-            note: '',
+            note: merged.length === 1 ? noteOfRef(merged[0]) : current.note,
             editing: false,
             view: 'status',
             hoverId: null
@@ -11382,6 +11733,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           const collection = current.collection.map((entry) => {
             if (entry === null || typeof entry !== 'object' || entry.id !== refId) return entry
             changed = true
+            if (entry.kind === 'group') return { ...entry, requirement: normalizeUserNote(note), updatedAt: stamp }
             return { ...entry, note, updatedAt: stamp }
           })
           return changed ? { ...current, collection } : current
@@ -11399,6 +11751,43 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           const undo = payload.undo !== null && typeof payload.undo === 'object' ? payload.undo : null
           if (undo === null) return current
           return { ...current, collection: annotationUndoRestore(current.collection, undo) }
+        }
+        case 'groupAdd': {
+          const result = collectionAddGroup(current.collection, payload.group, ANNOTATION_RECORD_LIMIT)
+          if (!result.added) return current
+          return { ...current, collection: result.list }
+        }
+        case 'groupToggleCollapsed': {
+          const groupId = typeof payload.groupId === 'string' ? payload.groupId : ''
+          let changed = false
+          const collection = current.collection.map((entry) => {
+            if (!annotationIsGroup(entry) || entry.id !== groupId) return entry
+            changed = true
+            return { ...entry, collapsed: entry.collapsed !== true }
+          })
+          return changed ? { ...current, collection } : current
+        }
+        case 'groupSet': {
+          const group = payload.group !== null && typeof payload.group === 'object' && payload.group.kind === 'group' ? payload.group : null
+          if (group === null) return current
+          let changed = false
+          const collection = current.collection.map((entry) => {
+            if (!annotationIsGroup(entry) || entry.id !== group.id) return entry
+            changed = true
+            return group
+          })
+          return changed ? { ...current, collection } : current
+        }
+        case 'groupRemove': {
+          const groupId = typeof payload.groupId === 'string' ? payload.groupId : ''
+          if (groupId.length === 0) return current
+          const next = removeAnnotationRecord(current.collection, groupId)
+          return next.length === current.collection.length ? current : { ...current, collection: next }
+        }
+        case 'groupRestore': {
+          const group = payload.group !== null && typeof payload.group === 'object' && payload.group.kind === 'group' ? payload.group : null
+          if (group === null) return current
+          return { ...current, collection: restoreAnnotationRecord(current.collection, group, payload.index) }
         }
         case 'annotationInclude': {
           const next = toggleAnnotationInclude(current.collection, payload.refId, payload.included)
@@ -11579,6 +11968,61 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         if (index < entries.length - 1) lines.push('')
       })
       lines.push('')
+      return lines.join('\n')
+    }
+
+    /**
+     * A3/T24: serialize a mixed batch of singles and groups as ONE request.
+     * Singles keep their Quick-reference item block; each group emits its shared
+     * requirement header and numbered element references (no per-item Note lines).
+     * @param {Array<object>} entries - top-level singles/groups, insertion order.
+     * @param {object} labels - insertion labels plus skippedCount/removedCount.
+     * @param {(record: object) => string} [statusOf] - live status resolver.
+     * @returns {string} insertion text, trailing newline included.
+     */
+    function serializeBatchEntries(entries, labels, statusOf) {
+      const source = labels !== null && typeof labels === 'object' ? labels : {}
+      const list = Array.isArray(entries) ? entries : []
+      const resolveStatus = typeof statusOf === 'function' ? statusOf : () => 'resolved'
+      const lines = [typeof source.batchHeader === 'string'
+        ? source.batchHeader
+        : 'Please adjust the UI elements below. Each item lists its reference and the requested change.']
+      const skippedCount = typeof source.skippedCount === 'number' && Number.isFinite(source.skippedCount) && source.skippedCount > 0
+        ? Math.round(source.skippedCount)
+        : 0
+      const removedCount = typeof source.removedCount === 'number' && Number.isFinite(source.removedCount) && source.removedCount > 0
+        ? Math.round(source.removedCount)
+        : 0
+      if (removedCount > 0) {
+        lines.push('')
+        lines.push(String(source.removed ?? '({count} annotation(s) no longer exist and were skipped)').replace('{count}', String(removedCount)))
+      }
+      if (skippedCount > 0) {
+        lines.push('')
+        lines.push(String(source.skipped ?? '({count} annotation(s) from other sessions skipped)').replace('{count}', String(skippedCount)))
+      }
+      lines.push('')
+      let number = 0
+      for (const entry of list) {
+        if (entry === null || typeof entry !== 'object') continue
+        if (annotationIsGroup(entry)) {
+          const items = annotationGroupItems(entry).map((item) => ({ ref: { ...item, status: resolveStatus(item) } }))
+          lines.push('')
+          lines.push(serializeGroupBlock(entry, items, source))
+        } else {
+          number += 1
+          const ref = { ...entry, status: resolveStatus(entry) }
+          lines.push(`${number}. ${elementLabel(ref)}`)
+          lines.push(`   ${annotationJoinLabel(source.reference ?? 'Reference:', describeLocator(ref))}`)
+          lines.push(`   ${annotationJoinLabel(source.note ?? 'Note:', normalizeUserNote(ref.note) || (source.emptyNote ?? '—'))}`)
+          const status = ref.status
+          const ephemeral = ref.locator !== null && typeof ref.locator === 'object' && ref.locator.ephemeral === true
+          if (status === 'missing') lines.push(`   ${ephemeral ? (source.statusEphemeral ?? 'Status: transient surface no longer present (locator only)') : (source.status ?? 'Status: target no longer resolves (locator only)')}`)
+          else if (status === 'ambiguous') lines.push(`   ${source.statusAmbiguous ?? 'Status: target matches more than one element (locator only)'}`)
+          else if (status === 'changed') lines.push(`   ${source.statusChanged ?? 'Status: target content changed'}`)
+          lines.push('')
+        }
+      }
       return lines.join('\n')
     }
 
@@ -12918,9 +13362,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const viewport = annotationViewport()
       // Records are the feature's data spine: they survive reloads, so the store
       // starts from the validated persisted document instead of an empty list (D1).
-      const storedRecords = parseAnnotationStore(annotationReadStorage(ANNOTATION_RECORDS_STORAGE_KEY)).records
+      const storedDocument = parseAnnotationStore(annotationReadStorage(ANNOTATION_RECORDS_STORAGE_KEY))
+      const storedEntries = storedDocument.entries
       const store = createAnnotationStore({
-        state: { ...createAnnotationState(), collection: storedRecords },
+        state: { ...createAnnotationState(), collection: storedEntries },
         settings: { ...settings },
         launcherPosition: clampLauncherPosition(readLauncherPosition(), viewport, ANNOTATION_LAUNCHER_SIZE),
         launcherDragging: false,
@@ -12932,6 +13377,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         boxRect: null,
         popoverPosition: null,
         popoverPinned: false,
+        batchPosition: null,
         flashRefId: null,
         flashRect: null,
         noteEditor: null,
@@ -13548,7 +13994,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       function isInCollection(ref) {
         const key = identityKeyOf(ref)
         const sessionId = ref?.session?.sessionId ?? null
-        return snapshot().state.collection.some((entry) => identityKeyOf(entry) === key && (entry?.session?.sessionId ?? null) === sessionId)
+        return snapshot().state.collection.some((entry) => !annotationIsGroup(entry)
+          && identityKeyOf(entry) === key && (entry?.session?.sessionId ?? null) === sessionId)
       }
 
       /**
@@ -13593,9 +14040,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       function markRectsOf(state) {
         const marks = []
         const collection = state !== null && typeof state === 'object' && Array.isArray(state.collection) ? state.collection : []
-        for (let index = 0; index < collection.length; index += 1) {
-          const entry = collection[index]
-          if (entry === null || typeof entry !== 'object') continue
+        // A3/T24: group items are page marks too; the badge shows the group's
+        // shared requirement, and indices count every element across the list.
+        const records = annotationFlattenRecords(collection)
+        for (let index = 0; index < records.length; index += 1) {
+          const entry = records[index]
           if (collectionScopeOf(entry) !== 'current') continue
           if (markStatusRevision !== domRevision) {
             markStatusCache.clear()
@@ -13889,7 +14338,14 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           popoverPosition = null
           popoverPinned = false
         }
-        return { selectionRects, popoverPosition, popoverPinned, boxRect: state.box }
+        // A3/T24: the multi-selection batch popover anchors beside the newest
+        // selected element and follows the selection while items are added.
+        let batchPosition = null
+        if (state.phase === 'multi' && state.selection.length > 1 && selectionRects.length > 0) {
+          const anchor = selectionRects[selectionRects.length - 1].rect
+          batchPosition = clampPopoverPosition(anchor, ANNOTATION_BATCH_POPOVER_SIZE, annotationViewport(), previous.railWidth)
+        }
+        return { selectionRects, popoverPosition, popoverPinned, batchPosition, boxRect: state.box }
       }
 
       /**
@@ -13959,12 +14415,40 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
        * @param {object} action - reducer action.
        * @returns {object} next state.
        */
+      /** Deferred batch-popover timer (A3/T24): it opens after the user stops adding. */
+      let batchOpenTimer = null
+
+      /**
+       * Schedule the batch popover after multi-select activity settles, so the
+       * popover does not appear between Shift-clicks and steal the pointer.
+       * @param {object} nextState - next annotation state.
+       * @param {object} previousState - previous annotation state.
+       * @returns {void}
+       */
+      function scheduleBatchPopover(nextState, previousState) {
+        if (nextState.selection === previousState.selection && nextState.phase === previousState.phase) return
+        if (batchOpenTimer !== null) {
+          window.clearTimeout(batchOpenTimer)
+          batchOpenTimer = null
+        }
+        if (nextState.phase === 'multi' && nextState.selection.length > 1 && nextState.batchOpen !== true) {
+          batchOpenTimer = window.setTimeout(() => {
+            batchOpenTimer = null
+            const current = snapshot().state
+            if (current.phase === 'multi' && current.selection.length > 1 && current.batchOpen !== true) {
+              dispatch({ type: 'batchOpen', open: true })
+            }
+          }, 800)
+        }
+      }
+
       function dispatch(action) {
         const current = snapshot()
         const nextState = reduceAnnotationState(current.state, action)
         if (nextState === current.state) return current.state
         const patch = deriveGeometry(nextState, current)
         store.set({ ...current, state: nextState, ...patch })
+        scheduleBatchPopover(nextState, current.state)
         // D1: every collection mutation schedules one debounced records write.
         if (nextState.collection !== current.state.collection) {
           scheduleAnnotationRecordsPersist()
@@ -15045,6 +15529,41 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
+       * A3/T24: commit the multi-selection as ONE group. Each selected element
+       * becomes a group item with its full locator/bounds/session metadata; the
+       * requirement is stored once on the group. The cap counts every item.
+       * @param {object} state - current annotation state.
+       * @param {{ feedback?: boolean }} [options] - feedback suppression (quick reference).
+       * @returns {boolean} whether the group was saved.
+       */
+      function commitGroupSelection(state, options) {
+        const settingsForCommit = options !== null && typeof options === 'object' ? options : {}
+        const sessionId = annotationBridge.sessionId ?? state.sessionId ?? null
+        const refs = state.selection.filter((ref) => ref !== null && typeof ref === 'object')
+        if (refs.length === 0) return false
+        if (annotationTotalItemCount(state.collection) + refs.length > ANNOTATION_RECORD_LIMIT) {
+          feedback(t('collection.maxReached', { limit: ANNOTATION_RECORD_LIMIT }), 'error')
+          return false
+        }
+        const enriched = refs.map((ref) => ({
+          ...ref,
+          session: { ...(ref.session !== null && typeof ref.session === 'object' ? ref.session : {}), sessionId: ref.session?.sessionId ?? sessionId }
+        }))
+        const group = annotationGroupFromSelection(enriched, state.note, sessionId, Date.now())
+        if (group === null) return false
+        const preview = collectionAddGroup(state.collection, group, ANNOTATION_RECORD_LIMIT)
+        if (preview.rejected) {
+          feedback(t('collection.maxReached', { limit: ANNOTATION_RECORD_LIMIT }), 'error')
+          return false
+        }
+        closeDetailCard({ keepMarker: true })
+        dispatch({ type: 'groupAdd', group })
+        dispatch({ type: 'selectSingle', ref: null })
+        if (settingsForCommit.feedback !== false) feedback(t('feedback.groupAdded', { count: group.items.length }))
+        return true
+      }
+
+      /**
        * Commit the current selection into the collection (A3/T5/T7).
        *
        * This is the popover's primary action: it adds or updates the requirement,
@@ -15060,6 +15579,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const current = snapshot()
         const state = current.state
         if (state.selection.length === 0) return false
+        // A3/T24: a multi-selection is ONE batch group with ONE shared requirement,
+        // never N independent records.
+        if (state.selection.length > 1) return commitGroupSelection(state, settingsForCommit)
         const sessionId = annotationBridge.sessionId ?? state.sessionId ?? null
         const identityMatches = (item, ref) => identityKeyOf(item) === identityKeyOf(ref)
           && (item?.session?.sessionId ?? null) === (ref.session?.sessionId ?? sessionId)
@@ -15194,7 +15716,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           if (input !== null && typeof input.insertReference === 'function') {
             try {
               const ref = batch
-                ? annotationChipRefBatch(list, t('chip.batchLabel', { count: list.length }))
+                ? annotationChipRefBatch(list, t('chip.batchLabel', { count: annotationTotalItemCount(list) }))
                 : annotationChipRefOf(list[0])
               if (ref.ref.length > 0 && input.insertReference(ref, span) === true) {
                 feedback(t(batch ? 'feedback.chipBatchInserted' : 'feedback.chipInserted'))
@@ -15392,14 +15914,16 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           const parsed = /(\d+)/.exec(label)
           const sessionId = annotationBridge.sessionId ?? snapshot().state.sessionId
           const selected = annotationSelectedEntries(snapshot().state.collection, sessionId)
-          const count = parsed !== null ? Number(parsed[1]) : selected.length
+          const flat = annotationFlattenRecords(selected)
+          const count = parsed !== null ? Number(parsed[1]) : flat.length
           return {
             kind: 'batch',
-            count: count > 0 ? count : selected.length,
-            items: selected.slice(0, 6).map((entry) => ({ label: elementLabel(entry), note: typeof entry.note === 'string' ? entry.note : '' }))
+            count: count > 0 ? count : flat.length,
+            items: flat.slice(0, 6).map((record) => ({ label: elementLabel(record), note: typeof record.note === 'string' ? record.note : '' }))
           }
         }
-        const record = snapshot().state.collection.find((entry) => (elementLabel(entry) || 'UI annotation') === label)
+        const flat = annotationFlattenRecords(snapshot().state.collection)
+        const record = flat.find((entry) => (elementLabel(entry) || 'UI annotation') === label)
         if (record === undefined) return null
         return { kind: 'record', refId: record.id }
       }
@@ -15431,11 +15955,6 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const editor = typeof chip.closest === 'function' ? chip.closest('[data-conversation-region="composer"] [data-lexical-editor="true"]') : null
         if (editor === null) return
         const model = chipPreviewModel(chip)
-        try {
-          globalThis.__psaChipHoverTrace = `model:${model === null ? 'null' : model.kind}`
-        } catch {
-          // ignore
-        }
         if (model === null) {
           hideChipPreview('no-model')
           return
@@ -15498,7 +16017,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
        * @returns {object | null} record, or null when it was deleted meanwhile.
        */
       function chipRecord(refId) {
-        return snapshot().state.collection.find((entry) => entry !== null && typeof entry === 'object' && entry.id === refId) ?? null
+        return annotationFindRecord(snapshot().state.collection, refId)
       }
 
       /**
@@ -15579,7 +16098,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const committed = commitSelection({ feedback: false })
         if (!committed) return
         const sessionId = annotationBridge.sessionId ?? state.sessionId ?? null
-        const record = snapshot().state.collection.find((entry) => identityKeyOf(entry) === identityKeyOf(ref)
+        const record = snapshot().state.collection.find((entry) => !annotationIsGroup(entry)
+          && identityKeyOf(entry) === identityKeyOf(ref)
           && (entry?.session?.sessionId ?? null) === (ref.session?.sessionId ?? sessionId))
         if (record === undefined) {
           insertIntoComposer(fallbackText)
@@ -15620,8 +16140,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           return
         }
         const split = batchScopeSplit(state.collection.map((entry) => ({ ref: entry, note: entry.note ?? '' })), sessionId)
-        const fallbackItems = selected.map((record) => ({ ref: { ...record, status: statusOf(record) }, note: record.note ?? '' }))
-        const fallbackText = serializeBatchRequest(fallbackItems, { ...annotationInsertLabels(t), skippedCount: split.other.length })
+        const fallbackText = serializeBatchEntries(selected, {
+          ...annotationInsertLabels(t),
+          skippedCount: split.other.length
+        }, (record) => statusOf(record))
         closeDetailCard()
         if (snapshot().state.selection.length > 0) dispatch({ type: 'selectSingle', ref: null })
         insertReferenceChip(selected, { batch: true, fallbackText })
@@ -15635,11 +16157,41 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
        * @returns {void}
        */
       function setEntryIncluded(refId, included) {
-        const record = chipRecord(refId)
-        if (record === null) return
-        const flag = collectionScopeOf(record) === 'current' && included === true
-        if (record.included === flag) return
+        const entry = snapshot().state.collection.find((item) => item !== null && typeof item === 'object' && item.id === refId) ?? null
+        if (entry === null) return
+        const flag = collectionScopeOf(entry) === 'current' && included === true
+        if (entry.included === flag) return
         dispatch({ type: 'annotationInclude', refId, included: flag })
+      }
+
+      /**
+       * A3/T24: expand/collapse one group card.
+       * @param {string} groupId - group id.
+       * @returns {void}
+       */
+      function toggleGroup(groupId) {
+        dispatch({ type: 'groupToggleCollapsed', groupId })
+      }
+
+      /**
+       * A3/T24: remove one child from a group (the group requirement remains). The
+       * whole previous group is the undo payload, so one undo step restores it.
+       * @param {string} groupId - group id.
+       * @param {string} itemId - child record id.
+       * @returns {void}
+       */
+      function removeGroupItem(groupId, itemId) {
+        const current = snapshot()
+        const group = annotationFindGroup(current.state.collection, groupId)
+        if (group === null) return
+        const items = annotationGroupItems(group).filter((item) => item.id !== itemId)
+        if (items.length === 0) {
+          removeEntry(groupId)
+          return
+        }
+        const next = { ...group, items, updatedAt: Date.now() }
+        dispatch({ type: 'groupSet', group: next })
+        setMarkUndo({ kind: 'groupRestore', group, at: Date.now() })
       }
 
       /**
@@ -16041,6 +16593,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         levelDown: () => shiftChain(-1),
         setModifier,
         updateCollectionNote,
+        toggleGroup,
+        removeGroupItem,
         removeEntry,
         removeSelection,
         undoMark,
@@ -16192,6 +16746,15 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-popover-status{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:16px}
 .psa-levels{display:inline-flex;align-items:center;gap:2px;margin-left:auto}
 .psa-popover-note{display:flex;flex-direction:column;gap:8px}
+.psa-group-items{display:flex;flex-direction:column;gap:3px;margin:2px 0 2px 18px;padding-left:8px;border-left:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent))}
+.psa-group-item{display:flex;align-items:center;gap:5px;min-width:0;font-size:11px;line-height:16px}
+.psa-group-item-name{flex:none;max-width:45%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:none;border:0;padding:0;color:var(--dsw-alias-label-primary);cursor:pointer;font:inherit}
+.psa-group-item-name:hover{text-decoration:underline}
+.psa-group-item-locator{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);font-family:var(--ds-font-family-code,monospace);font-size:10px}
+.psa-group .psa-entry-name{max-width:44%}
+.psa-batch-popover{max-height:calc(100vh - 32px);overflow:auto}
+.psa-batch-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;font-size:11.5px}
+.psa-batch-item{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .psa-popover-note-head{display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:18px}
 .psa-popover-note-head > .psa-muted{flex:1;min-width:0}
 .psa-popover-note-head .psa-icon-btn{width:18px;height:18px;flex:none}
@@ -16349,6 +16912,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       if (active) {
         node.push(React.createElement(AnnotationHighlights, { key: 'layer', snapshot, t }))
         node.push(React.createElement(AnnotationRail, { key: 'rail', t, controller, snapshot }))
+        if (state.phase === 'multi' && state.selection.length > 1 && state.batchOpen === true) {
+          node.push(React.createElement(AnnotationBatchPopover, { key: 'batch-popover', t, controller, snapshot }))
+        }
         if (state.phase === 'selected') {
           node.push(React.createElement(AnnotationPopover, { key: 'popover', t, controller, snapshot }))
         }
@@ -16679,9 +17245,10 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
             type: 'button',
             className: 'psa-btn psa-btn-primary',
             'data-psa-add-multi': '',
+            'data-psa-save-group': '',
             'data-psa-own': '',
-            onClick: () => controller.addSelectionToCollection()
-          }, t('rail.addMulti', { count: selection.length })),
+            onClick: () => controller.commitSelection()
+          }, t('batch.saveGroup')),
           React.createElement('button', {
             type: 'button',
             className: 'psa-btn',
@@ -16790,17 +17357,174 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           React.createElement('div', { className: 'psa-empty-title' }, t('collection.empty')),
           React.createElement('div', { className: 'psa-muted' }, t('collection.emptyHint'))))
       } else {
-        const rows = entries.map((entry, index) => React.createElement(AnnotationEntryRow, {
-          key: entry.id,
-          t,
-          controller,
-          snapshot,
-          entry,
-          index
-        }))
+        const rows = entries.map((entry, index) => (annotationIsGroup(entry)
+          ? React.createElement(AnnotationGroupRow, { key: entry.id, t, controller, snapshot, entry, index })
+          : React.createElement(AnnotationEntryRow, { key: entry.id, t, controller, snapshot, entry, index })))
         nodes.push(React.createElement('div', { key: 'rows', className: 'psa-rail-section' }, rows))
       }
       return React.createElement(React.Fragment, null, nodes)
+    }
+
+    /**
+     * A3/T24: one batch group card in the collection view (phase-1 minimal; the
+     * full redesigned sidebar lands in phase 2). The card shows the shared
+     * requirement, the item count, expand/collapse, include/move/delete and — when
+     * expanded — one child row per selected element with its locator/status,
+     * preview and remove actions.
+     * @param {{ t: Function, controller: object, snapshot: object, entry: object, index: number }} props - row props.
+     * @returns {object} the group card.
+     */
+    function AnnotationGroupRow(props) {
+      const { t, controller, entry, index } = props
+      const scope = controller.collectionScopeOf(entry)
+      const included = scope === 'current' && entry.included !== false
+      const expanded = entry.collapsed !== true
+      const items = annotationGroupItems(entry)
+      const requirement = typeof entry.requirement === 'string' ? entry.requirement : ''
+      const summary = annotationMarkerBadgeText(requirement, 32)
+      const sessionId = entry.session !== null && typeof entry.session === 'object' ? entry.session.sessionId : null
+      return React.createElement('div', {
+        className: 'psa-entry psa-group',
+        'data-psa-entry': '',
+        'data-psa-group': '',
+        'data-psa-own': '',
+        'data-psa-ref': entry.id,
+        'data-psa-entry-scope': scope,
+        'data-psa-status': scope === 'current' ? 'group' : 'other',
+        'data-psa-entry-included': included ? 'true' : 'false',
+        'data-psa-group-collapsed': entry.collapsed === true ? 'true' : 'false'
+      },
+      React.createElement('div', { className: 'psa-entry-head' },
+        React.createElement('label', {
+          className: 'psa-entry-check',
+          'data-psa-own': '',
+          title: scope === 'current' ? t('collection.include') : t('collection.otherSessionHint')
+        },
+        React.createElement('input', {
+          type: 'checkbox',
+          checked: included,
+          disabled: scope !== 'current',
+          'data-psa-own': '',
+          onChange: (event) => controller.setEntryIncluded(entry.id, event.currentTarget.checked === true)
+        })),
+        React.createElement('span', { className: 'psa-entry-index' }, `#${index + 1}`),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-entry-name',
+          'data-psa-group-preview': '',
+          'data-psa-own': '',
+          title: t('collection.groupPreview'),
+          onClick: () => controller.toggleGroup(entry.id)
+        }, summary.text.length > 0 ? summary.text : t('collection.groupUntitled')),
+        React.createElement('span', { className: 'psa-badge', 'data-psa-own': '' },
+          t('collection.groupCount', { count: items.length })),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-group-toggle': '',
+          'data-psa-own': '',
+          'aria-expanded': expanded ? 'true' : 'false',
+          'aria-label': expanded ? t('collection.collapse') : t('collection.expand'),
+          title: expanded ? t('collection.collapse') : t('collection.expand'),
+          onClick: () => controller.toggleGroup(entry.id)
+        }, AnnotationChevron(expanded ? 'down' : 'right'))),
+      React.createElement('div', { className: 'psa-entry-meta', 'data-psa-own': '' },
+        `${t('collection.groupBadge')} · ${sessionShortLabel(sessionId) || t('insert.noSession')}`),
+      React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
+        React.createElement('textarea', {
+          className: 'psa-entry-note',
+          'data-psa-group-requirement': '',
+          'data-psa-own': '',
+          rows: 2,
+          value: requirement,
+          placeholder: t('collection.groupRequirementPlaceholder'),
+          'aria-label': t('collection.groupRequirementPlaceholder'),
+          onChange: (event) => controller.updateCollectionNote(entry.id, event.target.value)
+        })),
+      React.createElement('div', { className: 'psa-entry-actions', 'data-psa-own': '' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-group-insert': '',
+          'data-psa-own': '',
+          disabled: scope !== 'current',
+          title: scope === 'current' ? t('collection.insertChip') : t('collection.otherSessionHint'),
+          onClick: () => controller.insertBatch()
+        }, RemixGlyph(REMIX_LIST_CHECK_2, 13)),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-group-edit': '',
+          'data-psa-own': '',
+          'aria-label': t('collection.expand'),
+          title: t('collection.expand'),
+          onClick: () => controller.openNoteEditor(entry.id)
+        }, RemixGlyph(REMIX_ANNOTATION_COPY_LINE, 13)),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-group-move-up': '',
+          'data-psa-own': '',
+          disabled: index === 0,
+          title: t('collection.moveUp'),
+          onClick: () => controller.moveEntry(entry.id, -1)
+        }, RemixGlyph(REMIX_ARROW_UP_LINE, 13)),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-group-move-down': '',
+          'data-psa-own': '',
+          disabled: index >= (props.snapshot.state.collection.length - 1),
+          title: t('collection.moveDown'),
+          onClick: () => controller.moveEntry(entry.id, 1)
+        }, RemixGlyph(REMIX_ARROW_DOWN_LINE, 13)),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn psa-detail-danger',
+          'data-psa-group-remove': '',
+          'data-psa-own': '',
+          'aria-label': t('collection.remove'),
+          title: t('collection.remove'),
+          onClick: () => controller.removeEntry(entry.id)
+        }, RemixGlyph(REMIX_DELETE_BIN_LINE, 13))),
+      expanded
+        ? React.createElement('div', { className: 'psa-group-items', 'data-psa-group-items': '' },
+          items.map((item, itemIndex) => {
+            const itemStatus = scope === 'current' ? controller.statusOf(item) : 'other'
+            return React.createElement('div', {
+              key: item.id,
+              className: 'psa-group-item',
+              'data-psa-group-item': '',
+              'data-psa-own': '',
+              'data-psa-ref': item.id
+            },
+            React.createElement('span', { className: 'psa-entry-index' }, `#${index + 1}.${itemIndex + 1}`),
+            React.createElement('button', {
+              type: 'button',
+              className: 'psa-group-item-name',
+              'data-psa-group-item-preview': '',
+              'data-psa-own': '',
+              title: t('collection.preview'),
+              onClick: () => controller.previewEntry(item.id)
+            }, elementLabel(item)),
+            React.createElement('span', {
+              className: 'psa-status-dot',
+              'data-psa-status': itemStatus,
+              'data-psa-own': '',
+              title: t(`popover.status.${itemStatus}`)
+            }),
+            React.createElement('span', { className: 'psa-group-item-locator', 'data-psa-own': '' }, describeLocator(item)),
+            React.createElement('button', {
+              type: 'button',
+              className: 'psa-icon-btn psa-detail-danger',
+              'data-psa-group-item-remove': '',
+              'data-psa-own': '',
+              'aria-label': t('collection.remove'),
+              title: t('collection.remove'),
+              onClick: () => controller.removeGroupItem(entry.id, item.id)
+            }, RemixGlyph(REMIX_DELETE_BIN_LINE, 12)))
+          }))
+        : null)
     }
 
     /**
@@ -17331,6 +18055,84 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
+     * A3/T24: ONE popover for a multi-selection. It is the only place a batch
+     * requirement is written: one shared textarea for the whole group, with a
+     * compact list of the selected element labels. Committing saves ONE group
+     * containing every selected element; Esc/X clears the selection.
+     * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
+     * @returns {object | null} the batch popover.
+     */
+    function AnnotationBatchPopover(props) {
+      const { t, controller, snapshot } = props
+      const state = snapshot.state
+      const position = snapshot.batchPosition
+      if (position === null || state.selection.length < 2) return null
+      const labels = state.selection.map((ref) => elementLabel(ref))
+      const shown = labels.slice(0, 4)
+      return React.createElement('div', {
+        className: 'psa-popover psa-batch-popover',
+        'data-psa-batch-popover': '',
+        'data-psa-own': '',
+        'data-psa-count': String(state.selection.length),
+        role: 'dialog',
+        'aria-label': t('batch.title', { count: state.selection.length }),
+        style: { left: `${position.x}px`, top: `${position.y}px` }
+      },
+      React.createElement('div', { className: 'psa-popover-head', 'data-psa-own': '' },
+        React.createElement('span', { className: 'psa-popover-title', 'data-psa-batch-title': '' },
+          t('batch.title', { count: state.selection.length })),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-batch-close': '',
+          'data-psa-own': '',
+          'aria-label': t('batch.clear'),
+          title: t('batch.clear'),
+          onClick: () => controller.clearSelection()
+        }, RemixGlyph(REMIX_CLOSE_LINE, 14))),
+      React.createElement('ul', { className: 'psa-batch-list', 'data-psa-batch-items': '' },
+        shown.map((label, index) => React.createElement('li', { key: `${index}-${label}`, className: 'psa-batch-item', 'data-psa-own': '' },
+          `#${index + 1} ${label}`)),
+        labels.length > shown.length
+          ? React.createElement('li', { className: 'psa-batch-item psa-muted', 'data-psa-own': '' }, `+${labels.length - shown.length}`)
+          : null),
+      React.createElement('div', { className: 'psa-muted', 'data-psa-own': '' }, t('batch.hint')),
+      React.createElement('label', { className: 'psa-popover-note', 'data-psa-own': '' },
+        React.createElement('div', { className: 'psa-popover-note-head', 'data-psa-own': '' },
+          React.createElement('span', { className: 'psa-muted', 'data-psa-batch-requirement-label': '', 'data-psa-own': '' },
+            t('batch.requirement', { count: state.selection.length }))),
+        React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
+          React.createElement('textarea', {
+            className: 'psa-popover-textarea',
+            'data-psa-batch-note': '',
+            'data-psa-own': '',
+            rows: 3,
+            value: state.note,
+            placeholder: t('popover.notePlaceholder'),
+            'aria-label': t('batch.requirement', { count: state.selection.length }),
+            onChange: (event) => controller.updateNote(event.target.value),
+            onFocus: () => controller.beginEdit(),
+            onBlur: () => controller.endEdit()
+          }))),
+      React.createElement('div', { className: 'psa-popover-actions', 'data-psa-own': '' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-batch-clear': '',
+          'data-psa-own': '',
+          onClick: () => controller.clearSelection()
+        }, t('batch.clear')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn psa-btn-primary',
+          'data-psa-save-group': '',
+          'data-psa-add-multi': '',
+          'data-psa-own': '',
+          onClick: () => controller.commitSelection()
+        }, t('batch.saveGroup'))))
+    }
+
+    /**
      * The draggable element popover with the note editor and the two actions.
      * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
      * @returns {object | null} the popover.
@@ -17483,6 +18285,8 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       if (editor === null) return null
       const entry = snapshot.state.collection.find((item) => item.id === editor.refId)
       if (entry === undefined) return null
+      const isGroup = annotationIsGroup(entry)
+      const editorValue = isGroup ? (typeof entry.requirement === 'string' ? entry.requirement : '') : (typeof entry.note === 'string' ? entry.note : '')
       return React.createElement('div', {
         className: 'psa-note-editor',
         'data-psa-entry-note-editor': '',
@@ -17499,12 +18303,13 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           title: t('collection.noteEditorClose'),
           onClick: () => controller.closeNoteEditor()
         }, RemixGlyph(REMIX_CLOSE_LINE, 14))),
-      React.createElement('div', { className: 'psa-muted psa-truncate' }, elementLabel(entry)),
+      React.createElement('div', { className: 'psa-muted psa-truncate' },
+        isGroup ? t('collection.groupEditorTitle', { count: annotationGroupItems(entry).length }) : elementLabel(entry)),
       React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
         React.createElement('textarea', {
           className: 'psa-note-editor-textarea',
           'data-psa-own': '',
-          value: typeof entry.note === 'string' ? entry.note : '',
+          value: editorValue,
           placeholder: t('collection.notePlaceholder'),
           'aria-label': t('collection.notePlaceholder'),
           autoFocus: true,
@@ -17870,6 +18675,14 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationSurfaceLevels,
         annotationSurfacePickLevel,
         annotationLeafPickIndex,
+        annotationIsGroup,
+        annotationGroupItems,
+        annotationFlattenRecords,
+        annotationTotalItemCount,
+        annotationFindRecord,
+        annotationGroupFromSelection,
+        collectionAddGroup,
+        serializeBatchEntries,
         upsertAnnotationRecord,
         removeAnnotationRecord,
         restoreAnnotationRecord,
