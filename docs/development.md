@@ -64,3 +64,5 @@ runs it on push and pull request.
 - [Architecture](architecture.md)
 - [Feature inventory and addition recipe](overview.md)
 - [Verification](verification.md)
+- [Reference implementations for UI annotation](reference-libraries.md) —
+  local XERJ corpus + DevTools/Playwright/Annotator sources for annotation work
