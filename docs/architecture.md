@@ -511,6 +511,12 @@ settle delay; the group inserts as one `UI annotations × N` chip serialized as 
 single request (shared requirement header + numbered references with honest
 status lines). Annotated elements of
 the current Session keep a page mark with a numbered requirement badge; a
+While a floating-surface selection's popover is active the controller pins that
+surface open (capture-phase suppression of `mouseout`/`mouseleave`/`pointerout`/
+`pointerleave` scoped to the surface root and its ancestors) so editing the
+requirement cannot unmount the target; the pin is released on popover close,
+selection clear or mode exit. If the surface still disappears, only the live
+status line changes — the locator summary keeps the captured candidates. A
 hover-intent detail card carries the requirement, locator, position,
 Session/Workspace, status, and surface marker with edit/relocate/copy-locator/
 delete actions, and the requirement popover commits or updates the record,

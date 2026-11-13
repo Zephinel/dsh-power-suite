@@ -277,6 +277,17 @@ heading is added until the release is cut.
   four edges (the inline-level baseline gap that exposed the control's bottom
   border is fixed).
 
+- UI element annotation transient surfaces: selecting an element inside a
+  hover-triggered floating surface (e.g. the subagent hover dropdown) no longer
+  loses its target when the pointer moves into the requirement popover — the
+  surface is pinned open for as long as that popover is active (pointer-leave
+  close events are suppressed for the pinned subtree and released on close/
+  selection clear/mode exit), so the status stays Resolved while editing and the
+  transient hint now explains the keep-open-then-may-disappear behavior. If a
+  surface still closes (timer/scroll/keyboard path), the status changes honestly
+  but the locator summary stays the captured string instead of switching to a
+  look-alike element's label.
+
 ### Removed
 
 - Standalone Project detail page: the `project-view` feature is removed —
