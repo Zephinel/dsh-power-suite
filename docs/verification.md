@@ -22,15 +22,15 @@ npm run pack:check
 
 Current evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round):
 
-- `npm test`: **211 tests, 211 passed, 0 failed, 0 skipped** after the 0.3.0
+- `npm test`: **214 tests, 214 passed, 0 failed, 0 skipped** after the 0.3.0
   Project-view removal (the 24 project-view tests were deleted with the page),
   including **14** read-acks, **22** session-activity Host tests, **7** extra
   interrupted-session tests (error/max-tokens/aborted-cause cases and SSE stream
-  frames), **11** Dynamic-Workspaces hover-card figure tests, and **101**
+  frames), **11** Dynamic-Workspaces hover-card figure tests, and **104**
   UI-element-annotation tests through the browser-factory test seam; per-file:
   dynamic-workspaces-stats 11, interrupted-host 20, interrupted-sessions 7,
   prompt-history 6, read-acks 14, session-activity 22, session-artifacts 16,
-  settings 6, ui-annotation 101, workspace-presets 8.
+  settings 6, ui-annotation 104, workspace-presets 8.
 - `npm run check`: passed (`16 modules, 10 test files`).
 - Interrupted-state SSE transport was verified with cookie auth: 200,
   `content-type: text/event-stream; charset=utf-8`, no-store/no-buffering, first
@@ -184,14 +184,17 @@ API/plugin network failures in every run below):
   >= 8 px inside the pill's right edge, pill content-paced, mask boundary
   recalculated), and both cross-branch annotation-mode hover-card pin states.
 - Annotation harness `test/browser/annotation.e2e.mjs`: `--smoke` **6/6 PASS**
-  with the **68-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
+  with the **76-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
   FAIL 0** (including `10b`, the real pinned-cross-branch-card check),
   scenario 11 **PASS 7 / 0 / 0**, scenario 12 **PASS 7 / 0 / 0** (marks, detail
   card, requirement edit with `updatedAt`, delete → 5 s undo, popover layout:
   delete in the Requirement caption row (marked state only), footer exactly two
   primary buttons on one non-wrapping row, caption→textarea gap 9 px, rainbow
   ring exact on all edges),
-  scenario 13 **PASS 7 / SKIP 1 (`13f`) / 0** (single native chip, hover preview
+  scenario 4 (multi-select → one batch popover with a single shared Requirement →
+  ONE saved group with N items, group chip `@ UI annotations × N`, child/group
+  delete with undo, reload keeps the group); scenario 13 **PASS 7 / SKIP 1
+  (`13f`) / 0** (single native chip, hover preview
   tooltip with requirement/locator/position/Session/workspace/status, grouped
   chip hover summary, chip click preview, chip × removal (only that chip
   removed, one undo step, other chips preserved), Backspace removal, one grouped
@@ -253,7 +256,10 @@ B6 figure totals, and the project-page removal.
   counters, inline SVG icons/paths individually previewable/selectable; the
   full hovered ancestor chain is navigable via Parent/Child; whole surface stays
   reachable via background/padding or Parent), v2 record persistence (localStorage, cap 100, reload
-  restore + status re-resolution), page marks with numbered requirement badges,
+  restore + status re-resolution; v3 document with singles + batch **groups**
+  migrated tolerantly from v2), a batch popover for multi-selections with ONE
+  shared requirement that commits one group (no per-item requirements), page
+  marks with numbered requirement badges,
   hover detail card with edit/relocate/copy-locator/delete, requirement popover
   commit/update/delete + 5 s undo + auto-dismiss, right-rail batch view
   (include checkboxes, other-Session exclusion, inline editing, reorder,
@@ -313,7 +319,7 @@ batch removed-member serialization are unit-tested only.
 > [0.3.0 polish round acceptance](#030-polish-round-acceptance-2026-11-13-merged-build)
 > above**; the annotation model has since grown to the v2 record/persistence,
 > floating-surface, marks/detail and composer-chip implementation with the
-> 68-key seam generation.
+> 76-key seam generation.
 
 Date: 2026-11-12 (round-2 fix build, `fix/ui-annotation-review-fixes`). The
 feature is browser-only ([ui-annotation.md](ui-annotation.md)), so its acceptance
