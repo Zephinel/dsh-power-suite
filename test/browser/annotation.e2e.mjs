@@ -1090,7 +1090,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 stability)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1102,7 +1102,7 @@ async function runSmoke({ page, results, state }) {
     // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
     // rail selection and chip-ref serialization helpers (66). Pin a documented count and
     // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90]
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1171,6 +1171,11 @@ async function runSmoke({ page, results, state }) {
     if (keyCount === 90) {
       for (const key of ['annotationResolveStatus', 'annotationXPathOf', 'annotationTextQuoteMatches', 'annotationSelectorScore']) {
         assert(probe.keys.includes(key), `task-32 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
+      }
+    }
+    if (keyCount === 91) {
+      for (const key of ['annotationIsGeneratedClass', 'resolveRefStatus', 'annotationResolveStatus']) {
+        assert(probe.keys.includes(key), `task-33 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
       }
     }
     state.hooks = probe.keys
@@ -6103,9 +6108,69 @@ function buildScenarios(harness) {
       await sleep(150)
       const anchorChanged = { status: anchorEntry.status, locator: anchorEntry.locator }
       assert(anchorChanged.status !== 'resolved', `A3/T32: changed content must not stay Resolved: ${JSON.stringify(anchorChanged)}`)
+      // ---- A3/T33: duplicate labels resolve via a unique lower-tier candidate ----
+      await h.page.evaluate(`(() => {
+        document.getElementById('psa-duplicate-fixture')?.remove()
+        const fixture = document.createElement('div')
+        fixture.id = 'psa-duplicate-fixture'
+        fixture.style.cssText = 'position:fixed;left:360px;top:340px;width:360px;padding:10px;z-index:400;background:rgb(44,46,52);color:rgb(235,238,245);border-radius:8px'
+        const makeRow = (tag) => {
+          const row = document.createElement('div')
+          row.className = 'row ' + tag
+          const button = document.createElement('button')
+          button.setAttribute('aria-label', 'New session')
+          button.textContent = 'New session'
+          button.style.cssText = 'width:150px;height:28px;display:block'
+          row.append(button)
+          return row
+        }
+        const first = makeRow('first')
+        const second = makeRow('second')
+        fixture.append(first, second)
+        document.body.append(fixture)
+        return true
+      })()`)
+      const duplicateButtons = await h.page.evaluate(`[...document.querySelectorAll('#psa-duplicate-fixture button')].map((button) => { const rect = button.getBoundingClientRect(); return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) } })`)
+      assertEqual(duplicateButtons.length, 2, 'duplicate-label fixture buttons missing')
+      await h.page.moveTo(duplicateButtons[0].x, duplicateButtons[0].y)
+      await sleep(150)
+      await h.page.clickAt(duplicateButtons[0].x, duplicateButtons[0].y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the duplicate-label button' })
+      await sleep(300)
+      const duplicateStatus = await h.page.evaluate(`(() => {
+        const popover = document.querySelector('[data-psa-popover]')
+        if (popover === null) return null
+        return {
+          status: popover.querySelector('[data-psa-popover-status]')?.getAttribute('data-psa-status') ?? null,
+          via: popover.querySelector('[data-psa-via]')?.getAttribute('data-psa-via') ?? null,
+          locator: popover.querySelector('[data-psa-popover-ref] .psa-truncate')?.textContent?.trim() ?? ''
+        }
+      })()`)
+      assert(duplicateStatus !== null, 'duplicate-label popover missing')
+      assertEqual(duplicateStatus.status, 'resolved', `A3/T33: duplicate-label target must resolve via a unique candidate, not be Ambiguous: ${JSON.stringify(duplicateStatus)}`)
+      assertEqual(duplicateStatus.via, 'css', `A3/T33: duplicate-label resolution should stay on CSS candidates: ${JSON.stringify(duplicateStatus)}`)
+      // Measure candidate hit counts from the persisted record: the high-tier
+      // aria-label candidate matches both buttons, the structural candidate matches one.
+      await h.click('[data-psa-add]')
+      await sleep(450)
+      const candidateHits = await h.page.evaluate(`(() => {
+        const record = JSON.parse(localStorage.getItem('power-suite.ui-annotation.annotations') || '{}')
+        for (const item of record.records ?? []) {
+          const candidates = item.locator?.candidates ?? []
+          if (!candidates.some((candidate) => candidate.kind === 'label')) continue
+          const measured = candidates.map((candidate) => ({ kind: candidate.kind, value: candidate.value, hits: document.querySelectorAll(candidate.value).length }))
+          if (measured.some((candidate) => candidate.hits > 1) && measured.some((candidate) => candidate.hits === 1)) return measured
+        }
+        return null
+      })()`)
+      assert(candidateHits !== null, 'candidate hit measurement failed')
+      const nonUniqueCandidate = candidateHits.find((candidate) => candidate.hits > 1)
+      const uniqueCandidate = candidateHits.find((candidate) => candidate.hits === 1)
+      assert(nonUniqueCandidate, `A3/T33: expected a non-unique high-tier candidate: ${JSON.stringify(candidateHits)}`)
+      assert(uniqueCandidate, `A3/T33: expected a unique lower-tier candidate: ${JSON.stringify(candidateHits)}`)
       await h.page.pressKey('escape')
       await sleep(250)
-      await h.page.evaluate(`document.getElementById('psa-anchor-fixture')?.remove()`)
+      await h.page.evaluate(`document.getElementById('psa-duplicate-fixture')?.remove()`)
       await h.ensureStatusPanel()
       await h.exit()
       return `2 marks (#index + requirement excerpt), popover trash in the Requirement caption row + two-button one-row footer (gap ${markedLayout && markedLayout.gap}px), popover delete -> undo toast -> restored, hover detail card (requirement/session/workspace/position/actions, keep-open, no focus steal), edit saved (updatedAt bumped), delete -> role=status undo toast -> restored, other-Session record not drawn after reload, reduced-motion static, native hover-card recipe matched in light+dark (bg ${tooltipRecipe.light.native.backgroundColor} / ${tooltipRecipe.dark.native.backgroundColor}, fixed #2C2C2E)`

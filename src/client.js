@@ -9441,6 +9441,7 @@ function dwClearNativeAtmospheres() {
       const classes = Array.isArray(source.classes) ? source.classes : []
       for (const className of classes.slice(0, 2)) {
         if (typeof className !== 'string' || className.length === 0 || isDynamicValue(className)) continue
+        if (annotationIsGeneratedClass(className)) continue
         push('class', `.${cssIdentifier(className)}`, 0.55)
       }
       const role = typeof source.role === 'string' ? source.role.trim() : ''
@@ -9494,6 +9495,53 @@ function dwClearNativeAtmospheres() {
       const end = typeof raw.end === 'number' && Number.isFinite(raw.end) && raw.end > start ? Math.round(raw.end) : -1
       if (start < 0 || end < 0) return null
       return { container, start, end }
+    }
+
+    /**
+     * A3/T33: whether one class name looks generated/hashed (CSS modules, styled
+     * components, build-tool tokens) rather than authored and stable. Ports the
+     * finder/css-selector-generator heuristics: a class must read as word-like;
+     * mixed-case+digit+underscore tokens and hash segments are rejected.
+     * @param {unknown} className - class token.
+     * @returns {boolean} whether the class should not become a selector candidate.
+     */
+    function annotationIsGeneratedClass(className) {
+      if (typeof className !== 'string') return true
+      const name = className.trim()
+      if (name.length === 0 || name.length > 64) return true
+      if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(name)) return true
+      // `_card_bgejw_9`, `_portal_bgejw_96`: leading _, word, hash segment, digits.
+      if (/^_[a-z][a-z0-9]*_[a-z0-9]{4,8}(?:_?\d+)?$/i.test(name)) return true
+      // `YDXeBa_sessionRow`: random mixed-case prefix + camel suffix.
+      if (/^[A-Za-z0-9]{4,8}_[a-z][A-Za-z0-9]*$/.test(name) && !/^[a-z]+(?:_[a-z]+)*$/.test(name)) {
+        const prefix = name.slice(0, name.indexOf('_'))
+        if ((prefix.match(/[A-Z]/g) ?? []).length >= 2 || /\d/.test(prefix)) return true
+      }
+      // `hHd-Xa_brand` / `wSkVaW_body`: hashed mixed-case tokens with separators.
+      const segments = name.split(/[_-]+/)
+      if (segments.length >= 2) {
+        for (const segment of segments) {
+          if (segment.length < 4) continue
+          const upper = (segment.match(/[A-Z]/g) ?? []).length
+          const lower = (segment.match(/[a-z]/g) ?? []).length
+          const digits = (segment.match(/\d/g) ?? []).length
+          if (upper >= 2 && lower >= 1 && digits >= 1) return true
+          if (upper >= 2 && lower >= 2 && /^[A-Za-z]{4,8}$/.test(segment)) return true
+        }
+      }
+      // `hHd-Xa_brand`: short mixed-case hash segments joined by `-`/`_` before a
+      // word-like suffix (finder's generated-token heuristic).
+      const prefixPart = name.includes('_') ? name.slice(0, name.lastIndexOf('_')) : name
+      if (/[A-Z]/.test(prefixPart) && /[-_]/.test(prefixPart) && prefixPart.length <= 12) {
+        const upperPrefix = (prefixPart.match(/[A-Z]/g) ?? []).length
+        if (upperPrefix >= 2 && /[a-z]/.test(prefixPart)) return true
+      }
+      // `psd-hoverPath`: semantic-ish prefix + camel hash suffix.
+      if (/^(?:psd|dsw|ds)-[a-z]+[A-Z][A-Za-z0-9]*$/.test(name)) return true
+      // Finder-style: require at least one vowel-containing word-like segment.
+      const wordLike = segments.some((segment) => /^[a-z]+$/i.test(segment) && /[aeiouy]/i.test(segment))
+      const bemLike = /__?|--/.test(name) && /^[a-z][a-z0-9]*(?:[-_]{1,2}[a-z][a-z0-9]*)*$/i.test(name)
+      return !(wordLike || bemLike)
     }
 
     /** A3/T32: maximum captured lengths for the fallback anchors. */
@@ -9883,6 +9931,12 @@ function dwClearNativeAtmospheres() {
      * @returns {string} identity key.
      */
     function identityKeyForCandidates(tag, source, candidates) {
+      // A3/T33: a verified unique selector is the strongest identity signal; it
+      // includes its stable ancestor anchors, so two same-label controls do not
+      // collapse into one record. Fall back to the legacy candidate hierarchy.
+      const uniqueSelector = source !== null && typeof source === 'object' && typeof source.uniqueSelector === 'string'
+        ? source.uniqueSelector : ''
+      if (uniqueSelector.length > 0 && source.uniqueVerified === true) return `unique:${uniqueSelector}`
       // A data attribute or id is a real identity; an accessible label alone is not
       // (two different "Close" buttons share it), so label-only identity carries the
       // structural context needed to tell those elements apart (F3).
@@ -11662,6 +11716,12 @@ function dwClearNativeAtmospheres() {
       const ordered = Array.isArray(candidates) ? candidates.slice().sort((left, right) => (right?.reliability ?? 0) - (left?.reliability ?? 0)) : []
       let unique = null
       let genericMatch = null
+      // A3/T33: two-phase resolution. Phase 1 collects per-candidate hit sets and
+      // prefers the first candidate (highest tier/score) with exactly one hit;
+      // a non-unique candidate never short-circuits to Ambiguous while another
+      // candidate may still resolve uniquely.
+      let stableAmbiguity = false
+      let genericUnique = false
       const hasStableCandidate = ordered.some((candidate) => candidate !== null && typeof candidate === 'object'
         && (candidate.kind === 'data' || candidate.kind === 'id' || candidate.kind === 'label'))
       /**
@@ -11693,8 +11753,8 @@ function dwClearNativeAtmospheres() {
       const uniqueSelector = typeof source.uniqueSelector === 'string' && source.uniqueSelector.length > 0 ? source.uniqueSelector : ''
       if (uniqueSelector.length > 0) {
         const hits = queryTagged(uniqueSelector)
-        if (hits !== null && hits.length > 1) return 'ambiguous'
-        if (hits !== null && hits.length === 1) unique = hits[0]
+        if (hits !== null && hits.length > 1) stableAmbiguity = true
+        else if (hits !== null && hits.length === 1) unique = hits[0]
       }
       if (unique === null) for (const candidate of ordered) {
         if (candidate === null || typeof candidate !== 'object' || typeof candidate.value !== 'string' || candidate.value.length === 0) continue
@@ -11716,19 +11776,32 @@ function dwClearNativeAtmospheres() {
         if (list.length === 0) continue
         const generic = candidate.kind === 'tag' || candidate.kind === 'path' || candidate.kind === 'role' || candidate.kind === 'class'
         if (list.length > 1) {
-          // A generic locator matching several elements cannot identify one; a stable
-          // locator matching several is a genuine ambiguity.
-          if (generic) continue
-          return 'ambiguous'
+          // A3/T33: record the ambiguity candidate and keep scanning — a lower-tier
+          // candidate (unique structural path, unique ancestor anchor) may still
+          // identify exactly one element.
+          // Only a genuinely identifying (stable) candidate matching several
+          // elements is CSS ambiguity; a generic role/tag matching many is weak and
+          // must fall through to corroboration/fallback (P0).
+          if (!generic) stableAmbiguity = true
+          continue
         }
+        // Phase 2: a unique STABLE candidate wins. A unique generic candidate is
+        // remembered as the legacy generic match and the scan continues (a later
+        // stable candidate still has priority; the generic result is corroborated
+        // by text/name, never a silent identity).
         if (generic) {
-          // Remember the first generic hit, but keep looking for a stable identity.
-          if (genericMatch === null) genericMatch = list[0]
+          if (genericMatch === null) {
+            genericMatch = list[0]
+            genericUnique = true
+          }
           continue
         }
         unique = list[0]
         break
       }
+      // A3/T33: if every viable candidate is non-unique, report genuine Ambiguous
+      // instead of corroborating an arbitrary generic first hit.
+      if (unique === null && stableAmbiguity && genericUnique !== true) return 'ambiguous'
       if (typeof liveInfo === 'function') {
         const probe = unique === null ? genericMatch : unique
         if (probe !== null) {
@@ -11761,6 +11834,7 @@ function dwClearNativeAtmospheres() {
         }
       }
       if (unique !== null) return 'resolved'
+      if (stableAmbiguity) return 'ambiguous'
       return genericMatch === null ? 'missing' : 'resolved'
     }
 
@@ -12371,6 +12445,7 @@ function dwClearNativeAtmospheres() {
         for (const className of Array.from(element.classList).slice(0, 8)) {
           if (isDynamicValue(className)) continue
           if (!/^[A-Za-z_][A-Za-z0-9_-]{1,39}$/.test(className)) continue
+          if (annotationIsGeneratedClass(className)) continue
           classes.push(className)
           if (classes.length >= 3) break
         }
@@ -12669,6 +12744,7 @@ function dwClearNativeAtmospheres() {
         ['resolveTextQuote', 'text-quote'],
         ['resolveTextPosition', 'text-position']
       ]
+      let weakAmbiguity = null
       for (const [name, via] of fallbacks) {
         if (typeof source[name] !== 'function') continue
         let status = null
@@ -12677,8 +12753,12 @@ function dwClearNativeAtmospheres() {
         } catch {
           status = null
         }
-        if (status === 'resolved' || status === 'changed' || status === 'ambiguous') return { status, via }
+        if (status === 'resolved' || status === 'changed') return { status, via }
+        // A3/T33: ambiguity from a WEAK strategy (xpath/position) must not stop the
+        // chain — a later text quote can still resolve uniquely.
+        if (status === 'ambiguous' && weakAmbiguity === null) weakAmbiguity = { status: 'ambiguous', via }
       }
+      if (weakAmbiguity !== null) return weakAmbiguity
       return { status: cssStatus, via: 'css' }
     }
 
@@ -18922,6 +19002,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationTextQuoteMatches,
         annotationSelectorScore,
         annotationResolveStatus,
+        annotationIsGeneratedClass,
         upsertAnnotationRecord,
         removeAnnotationRecord,
         restoreAnnotationRecord,

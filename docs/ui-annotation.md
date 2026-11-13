@@ -716,6 +716,25 @@ only the status line and `via` hint update.
 anchors (or are generated from the live node when absent); with no usable anchor
 or node the action shows an honest unavailable toast.
 
+**Two-phase candidate resolution (P0)** — resolution collects per-candidate hit
+sets before deciding: the first candidate with exactly **one** hit wins (highest
+tier first), so a non-unique high-tier candidate such as
+`[aria-label="New session"]` no longer short-circuits to **Matches several** when
+a lower-tier candidate (structural path / ancestor anchor) identifies one
+element. **Matches several** is reported only when every viable CSS candidate is
+genuinely non-unique and the weak fallbacks (XPath/text position) are ambiguous
+too; ambiguity from a weak strategy does not terminate the text-quote fallback
+chain. Non-unique candidates are never used as identity: the record identity key
+is the verified unique selector when available (so duplicate-label controls stay
+distinct records), falling back to the legacy stable-candidate hierarchy.
+
+**Generated-class filter (P0)** — CSS-module/hashed class tokens are rejected
+before they can become candidates (`_card_bgejw_9`, `_portal_bgejw_96`,
+`YDXeBa_sessionRow`, `hHd-Xa_brand`, `wSkVaW_body`, `psd-hoverPath`); the filter
+uses word-like segment requirements and generated-token heuristics (mixed-case +
+digit + underscore/hyphen hash segments), while authored classes
+(`annotation-row`, `is-active`, `card`, BEM tokens) are kept.
+
 **Selector stability scoring** — candidates are ordered by explicit tiers:
 stable `data-*` attributes / ids / aria attributes (tier 4) > semantic role and
 non-aria labels (3) > stable classes (2) > positional `tag`/`nth-of-type` paths
