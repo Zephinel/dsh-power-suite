@@ -180,8 +180,10 @@ heading is added until the release is cut.
   rounded highlight stacked inside the rainbow rectangle read as a misaligned
   second highlight. The suppression applies to the running-panel current row,
   its nested child row, and the native sidebar current Session and Workspace
-  rows; small control hovers, keyboard focus rings and the hover opacity rise
-  are unchanged.
+  rows; the affordance is now a brightness lift on the row's own text/icons
+  (`filter: brightness(1.15)` while highlighted, `1.5` on hover/focus, 140 ms,
+  disabled under reduced motion) instead of a background layer. Small control
+  hovers, keyboard focus rings and the hover opacity rise are unchanged.
 
 - UI element annotation launcher placement: the round launcher floats only while
   the mode is off; activating the mode fades/scales it out in place (no docked

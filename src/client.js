@@ -4810,6 +4810,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run-current[data-pinned='true'] .psd-run-main{background-color:transparent}
 .psd-child-current:hover .psd-child-main,.psd-child-current:focus-within .psd-child-main{background-color:transparent}
 [data-psd-current-workspace='true'],[data-psd-current-session='true']{background-color:transparent!important}
+/* With no surface highlight to paint, the row's affordance becomes a brightness
+   lift on the content itself (user request: brighten the text/icons instead of
+   the background). Atmosphere rows sit slightly brighter than plain rows while
+   highlighted, and hover/focus lifts them one more step; the filter brightens
+   the real text and SVG glyphs uniformly in both themes (white text clamps,
+   grey icons/numbers gain contrast on the rainbow). */
+.psd-run-current > *:not(.psd-atmos),.psd-child-current > *:not(.psd-atmos),[data-psd-current-session='true'] > *:not([data-psd-atmos]),[data-psd-current-workspace='true'] > *:not([data-psd-atmos]){filter:brightness(1.15);transition:filter 140ms var(--ds-ease-in-out,ease)}
+.psd-run-current:hover > *:not(.psd-atmos),.psd-run-current:focus-within > *:not(.psd-atmos),.psd-child-current:hover > *:not(.psd-atmos),.psd-child-current:focus-within > *:not(.psd-atmos),[data-psd-current-session='true']:hover > *:not([data-psd-atmos]),[data-psd-current-workspace='true']:hover > *:not([data-psd-atmos]){filter:brightness(1.5)}
+@media (prefers-reduced-motion: reduce){.psd-run-current > *:not(.psd-atmos),.psd-child-current > *:not(.psd-atmos),[data-psd-current-session='true'] > *:not([data-psd-atmos]),[data-psd-current-workspace='true'] > *:not([data-psd-atmos]){transition:none}}
 body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.5) brightness(1.14)}
 body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(16,18,22,.12),rgba(16,18,22,.22))}
 @media (prefers-reduced-motion: reduce){.psd-atmos{transition:none}}

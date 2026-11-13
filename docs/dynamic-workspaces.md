@@ -695,7 +695,12 @@ native sidebar Session row of the open Session:
   atmosphere is present, because a second rounded highlight painted inside the
   rainbow rectangle reads as a misaligned double highlight (user feedback). The
   small control hovers (pin, New session, disclosure), the keyboard focus rings
-  and the hover opacity rise remain.
+  and the hover opacity rise remain. Because the row has no surface highlight,
+  the atmosphere row's **text and icons are brightened instead**: while
+  highlighted the content sits at `filter: brightness(1.15)`, and hovering or
+  focusing the row lifts it to `brightness(1.5)` (140 ms transition, off under
+  reduced motion) — the brightness lives on the real text/SVG content, never on a
+  background layer.
 - **Workspace and Session rows**: the native Workspace row of the current
   Session's project is marked with `data-psd-current-workspace="true"`, and the
   native sidebar Session row of the open Session with
