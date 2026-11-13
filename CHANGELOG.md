@@ -174,6 +174,15 @@ heading is added until the release is cut.
 
 ### Changed
 
+- Current-Session rainbow atmosphere rows no longer receive the ordinary
+  row-body hover pill (card parent and child rows) or the native sidebar row's
+  own hover/selected background while the atmosphere is painted: the extra
+  rounded highlight stacked inside the rainbow rectangle read as a misaligned
+  second highlight. The suppression applies to the running-panel current row,
+  its nested child row, and the native sidebar current Session and Workspace
+  rows; small control hovers, keyboard focus rings and the hover opacity rise
+  are unchanged.
+
 - UI element annotation launcher placement: the round launcher floats only while
   the mode is off; activating the mode fades/scales it out in place (no docked
   or flying copy in the rail header), and a full exit (header X, Cancel

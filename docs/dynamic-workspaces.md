@@ -651,9 +651,10 @@ native sidebar Session row of the open Session:
 - **Visual / layer order**: the highlight is the row's **own rounded-rectangle
   background**, now filled with a rainbow gas instead of a bottom-edge flourish.
   Inside one clipped rounded rect, bottom to top:
-  1. the row's existing neutral surface stays untouched (the native rows keep
-     their own gray/business highlight; the plugin's own card rows stay
-     transparent);
+  1. the row's existing neutral surface is left transparent on atmosphere rows
+     (the native hover/selected background is suppressed so it cannot paint a
+     second highlight inside the rainbow; plain rows keep their normal
+     backgrounds);
   2. `.psd-atmos` — an absolutely positioned wrapper (`inset: 0`,
      `border-radius: inherit`, `overflow: hidden`, `pointer-events: none`) that
      hosts a small self-contained **Canvas 2D gas renderer**. The canvas is
@@ -688,6 +689,13 @@ native sidebar Session row of the open Session:
   loop, and the renderer/canvas/listeners are destroyed as soon as the row stops
   being highlighted. There is no rainbow border, ring or outer glow, and no
   layout shift (the wrapper is absolutely positioned).
+- **No stacked highlight**: an atmosphere row keeps only the rainbow surface.
+  The ordinary row-body hover pill (card parent and child rows) and the native
+  sidebar rows' own hover/selected background are suppressed while the
+  atmosphere is present, because a second rounded highlight painted inside the
+  rainbow rectangle reads as a misaligned double highlight (user feedback). The
+  small control hovers (pin, New session, disclosure), the keyboard focus rings
+  and the hover opacity rise remain.
 - **Workspace and Session rows**: the native Workspace row of the current
   Session's project is marked with `data-psd-current-workspace="true"`, and the
   native sidebar Session row of the open Session with

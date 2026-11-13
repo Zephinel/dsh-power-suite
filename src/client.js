@@ -4798,6 +4798,18 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run-current,.psd-child-current,[data-psd-current-workspace='true'],[data-psd-current-session='true']{position:relative;isolation:isolate}
 .psd-run-current > *:not(.psd-atmos),.psd-child-current > *:not(.psd-atmos){position:relative;z-index:2}
 [data-psd-current-workspace='true'] > *:not([data-psd-atmos]),[data-psd-current-session='true'] > *:not([data-psd-atmos]){position:relative;z-index:2}
+/* Rainbow-atmosphere rows must not receive the ordinary hover/pinned surface
+   highlight on top of the animation: the extra rounded pill inside the rainbow
+   rectangle reads as a second, misaligned highlight (user report). Suppress only
+   the row-body surface highlight for atmosphere rows — the small control hovers
+   (pin, New session, disclosure) stay. The native sidebar current Session and
+   Workspace rows get the same treatment so their own hover/selected background
+   never mixes into the rainbow paint. */
+.psd-run-current:hover:not(:has(.psd-run-toggle:hover)) .psd-run-main,.psd-run-current:focus-within:not(:has(.psd-run-toggle:focus)) .psd-run-main{background-color:transparent}
+.psd-run-current[data-pinned='true']{background-color:transparent}
+.psd-run-current[data-pinned='true'] .psd-run-main{background-color:transparent}
+.psd-child-current:hover .psd-child-main,.psd-child-current:focus-within .psd-child-main{background-color:transparent}
+[data-psd-current-workspace='true'],[data-psd-current-session='true']{background-color:transparent!important}
 body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.5) brightness(1.14)}
 body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(16,18,22,.12),rgba(16,18,22,.22))}
 @media (prefers-reduced-motion: reduce){.psd-atmos{transition:none}}
