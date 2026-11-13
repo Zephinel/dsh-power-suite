@@ -16,17 +16,26 @@ xerj code ui-annotation-refs "highlight node content padding border margin" -k 5
 xerj corpus list            # ui-annotation-refs (loaded)
 ```
 
-- Corpus home: `~/.xerj-code/corpora/ui-annotation-refs/<repo>/` (full clones).
-- `~/.xerj-code/corpora/ui-annotation-refs/corpus.json` — manifest (sources,
-  pinned SHA, detected license).
-- Full DevTools frontend sparse checkout (larger than the corpus subset):
-  `.tmp-refs/devtools-frontend/` (gitignored, local only).
-- Rebuild the corpus after adding sources:
-  `xerj corpus add ui-annotation-refs --from ~/.xerj-code/corpora/ui-annotation-refs/corpus.json`
-  then `xerj corpus index ui-annotation-refs`.
-- The corpus root `.xerjignore` keeps JSON/data/asset files out: indexing
-  `corpus.json` creates a numeric `files` field, and a numeric field in a
-  wildcard `multi_match` makes BM25 fail with `For input string`.
+- The indexed corpus is built from a **filtered source tree**:
+  `.tmp-refs/ui-annotation-refs-src/` (gitignored, ~770 files/15 MB) — only the
+  directories worth searching (DevTools elements/sdk/overlay, Chromium overlay
+  backend, browser-use DOM serializer, Playwright injected selectors, finder,
+  css-selector-generator, Apache Annotator, Hypothesis anchoring, driver.js
+  overlay, Floating UI positioning, html2canvas renderer). It is registered as
+  `ui-annotation-refs` (manifest at
+  `~/.xerj-code/corpora/ui-annotation-refs/corpus.json`).
+- **Full checkouts for direct reading** (not indexed) live in
+  `.tmp-refs/full-clones-ui-annotation-refs/` plus the sparse DevTools tree
+  `.tmp-refs/devtools-frontend/`.
+- Rebuild: `xerj corpus index ui-annotation-refs` (the corpus source is the
+  filtered tree; re-run `xerj corpus add ui-annotation-refs
+  file://$PWD/.tmp-refs/ui-annotation-refs-src` after changing the tree).
+- Keep data/assets out of the indexed tree: a JSON file such as `corpus.json`
+  creates a numeric `files` field, and a numeric field in a wildcard
+  `multi_match` makes BM25 fail with `For input string` (the old full-clone
+  corpus hit this; the filtered tree avoids it).
+- Corpus-level license detection reports `NONE-FOUND` because the collection is
+  mixed-license; per-source licenses are in the table below.
 
 ## Sources and what to read
 
