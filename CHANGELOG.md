@@ -245,9 +245,12 @@ heading is added until the release is cut.
   hovering or focusing a single/grouped annotation chip shows an own 16 px ×
   that removes exactly that reference chip through the composer editor in one
   undo step (other chips and text preserved, never sent), while the chip hover
-  tooltip stays read-only; and the rainbow input focus ring now hugs the wrapped
-  control's border box on all four edges (the inline-level baseline gap that
-  exposed the control's bottom border is fixed).
+  tooltip stays read-only; the requirement popover keeps its Delete action in the
+  Requirement caption row (marked state only) so the footer holds exactly the two
+  primary buttons on one non-wrapping row, with a wider caption→textarea gap; and
+  the rainbow input focus ring now hugs the wrapped control's border box on all
+  four edges (the inline-level baseline gap that exposed the control's bottom
+  border is fixed).
 
 ### Removed
 
