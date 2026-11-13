@@ -51,13 +51,14 @@ page's content elements, never reads form values, and never sends the message.
   Chips are atomic, carry their clipboard text, and serialize to the documented
   quick-reference/batch text at send time. When the chip services are unavailable
   the plugin falls back to the Phase 1 plain text with an explanatory toast.
-- **Batch rail** — the collection view is a full batch surface: per-row include
-  checkbox (other-Session rows are disabled and explained), select-all-current /
-  clear-selection, inline requirement editing, insert-reference, preview (scroll +
-  flash + detail card), move up/down, delete X, delete-selected, clear, and a
-  batch footer that reports exactly what will be inserted. Batch groups appear as
-  cards with their shared requirement, item count, expand/collapse and child rows
-  (phase 1 minimal collection rendering; the full redesigned sidebar follows).
+- **Annotation sidebar (collection view)** — the redesigned management surface:
+  header `Annotations` + total badge + subtitle, filter chips `All / Singles /
+  Groups` with live counts, a scrollable unified list of single rows and group
+  cards, and a two-action footer. Every row/card/child exposes always-visible
+  edit + delete controls (never hover-only); groups show their shared requirement,
+  item count, collapse/expand and child rows. Batch include/insert tools live in
+  the list toolbar; the footer primary is **Add annotation** and the danger action
+  switches between **Clear selection** and **Clear collection** (undoable).
 - **Page marks** — every current-Session annotation whose target still resolves
   stays visible on the page as a pointer-transparent overlay mask with a numbered
   badge (`#3` plus a one-line requirement excerpt). Missing, ambiguous, and
@@ -120,8 +121,12 @@ a strip freed from the right edge instead of covering the conversation.
 
 ![Annotation mode with the page shrunk and the rail in the freed right strip](assets/annotation-mode.png)
 
-- The rail width is `clamp(188px, 11.6vw, 236px)` — about 200 px at a 1728 px
-  viewport — and it holds the rail content, not the page.
+- The compact rail (status/settings) is `clamp(188px, 11.6vw, 236px)` — about
+  200 px at a 1728 px viewport. The **collection sidebar widens** to
+  `clamp(320px, 24vw, 420px)` (≈415 px at 1728 px) so rows and group cards stay
+  readable; the frame padding follows the wider strip and shrinks back when the
+  view closes. At narrow viewports the wide sidebar switches to the overlay mode
+  at its 320 px floor. Collapsing still wins (48 px strip).
 - The **launcher docks into the rail header** (26 px round button next to the
   collapse/exit controls, same glyph and count badge) whenever the mode is
   active, in both the page-shrunk and the narrow-viewport overlay layouts; it is
@@ -366,6 +371,49 @@ A batch is a first-class **group** with one shared requirement:
 - Page marks, chips, detail cards and status resolution flatten group items with
   the group's shared requirement as their display note, so each child is still
   individually hoverable/relocatable while its requirement is the group's.
+
+### Sidebar (collection view)
+
+The collection view is the redesigned management surface for singles and groups
+(phase 2). It uses only shell tokens and the existing rail/frame mechanics.
+
+- **Header** — `Annotations` title, a total badge counting every element (single
+  records + group items across scopes), a one-line subtitle, and the existing
+  rail controls (docked launcher, collapse, exit) at the right.
+- **Filters** — three client-side filter chips `All`, `Singles`, `Groups` with
+  live current-Session counts; the active chip reports `aria-pressed="true"`.
+  Filtering never mutates data and the header badge keeps the global total.
+- **List** — one scrollable unified list:
+  - **Single row** — type badge `Single`, element title (click = preview/scroll +
+    flash + detail card), live status dot, requirement description (inline
+    rainbow textarea), metadata line with Session/Workspace + updated time, a
+    `Selector …` line and `Page … · Area …` line, batch include checkbox, and
+    always-visible actions: insert reference chip, copy locator, edit, move
+    up/down, delete.
+  - **Group card** — badge `Group · N items`, auto title/description from the
+    shared requirement (first line = title), collapse chevron with
+    `aria-expanded`, requirement editor, metadata/selector/page lines, include
+    checkbox and always-visible insert/edit/move/delete actions; expanded shows
+    one child row per element with status dot, selector, updated time and
+    always-visible edit (preview) + delete controls.
+- **Toolbar** — select-all-current / deselect-all, one-chip batch insert, and
+  delete-selected stay available above the list (they are the batch operations
+  inherited from phases 1–2, kept out of the two-action footer).
+- **Footer** — primary **Add annotation** saves the current page selection (one
+  group for a multi-selection, one single record otherwise) or returns to the
+  page when nothing is selected; the danger action is **Clear selection** when a
+  page selection exists and **Clear collection** otherwise (same 5 s undo slot).
+- **States** — populated (only singles / singles + groups / multiple groups),
+  group collapsed/expanded, empty collection, filter-empty, hover,
+  focus-visible; every action is a real button (keyboard tabbable, ≥24 px hit
+  target, visible focus ring) and no action depends on hover.
+- **Accessibility** — filters are pressed-state buttons, groups expose
+  `aria-expanded`, rows/cards are semantic lists (`role="list"`), icons carry
+  localized `aria-label`/`title`, and the footer/labels are localized EN/ZH.
+- **Width** — the sidebar widens to `clamp(320px, 24vw, 420px)` while the
+  collection view is open (frame padding follows; compact rail returns on close);
+  narrow viewports use the overlay rail at the 320 px floor. Screenshots:
+  `docs/assets/annotation-collection.png` (light) and the phase-2 evidence set.
 
 ### Pass-through
 
