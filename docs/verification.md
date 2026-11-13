@@ -1261,7 +1261,13 @@ Remaining work is the same post-restart step: after the user restarts DSH Web, r
 `--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS (pre-restart local pins
 migrate on first Host contact) and full-mode `b6-5` no longer sees the 404 console line.
 
-## FOLLOW-UP 7: leading glyph cell, child-tree trunk and pin column share one centre; sparkle enlarged (build `53f159e`)
+## FOLLOW-UP 7: leading glyph cell, child-tree trunk and pin column share one centre; sparkle enlarged (build `53f159e` — previous build)
+
+> **Build note:** the evidence in this section is for the previous build `53f159e`. The final
+> served feature build is `436a81c` (client md5 `113e1365…`), which replaces the reserved pin
+> slot with the user-requested two-phase space-saving reveal and removes the inner pinned-row
+> tint; its evidence is under "FOLLOW-UP 8 (FINAL)" at the end of this file. All earlier
+> "no layout jump"/reserved-slot statements are historical and superseded by that change.
 
 User screenshot feedback: enlarge the read-row sparkle slightly; the child-tree indicator
 line was not horizontally centred with the glyph; and the pin button was not centred over
@@ -1296,3 +1302,47 @@ native sidebar pin state untouched.
 Remaining work is the same post-restart step: after the user restarts DSH Web, re-run
 `--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS (pre-restart local pins
 migrate on first Host contact) and full-mode `b6-5` no longer sees the 404 console line.
+
+## FOLLOW-UP 8 (FINAL): Host-shared pin acceptance with the restarted service, two-phase slowed reveal and single highlight layer (build `436a81c`)
+
+This is the final acceptance round. Two user-requested changes landed after follow-up 7:
+(1) the pin reveal became a **two-phase, space-saving animation** (replacing the old fixed
+16 px reserved slot / "no layout jump" spec): at rest the slot is 0 px and the title starts
+at 46 px, hovering expands the slot first (220 ms) and then fades the button in (160 ms,
+delay 220 ms), leaving fades the button out first (160 ms) and collapses the slot afterwards
+(220 ms delayed), reduced motion is instant; the reveal was later slowed from the first
+timing version ("动画再稍微缓一缓") with `cubic-bezier(.4,0,.2,1)`; (2) a pinned row now paints
+**exactly one highlight layer** — the row-level violet tint stays, the inner body-pill tint
+was removed (`.psd-run-main` transparent at rest, ordinary hover feedback unchanged, filled
+pin glyph marks the state). In the same round the DSH Web service was restarted, making the
+Host pin route LIVE (`pinShared=true`): pins are genuinely Host-shared/cross-device, the
+pre-restart SKIP rows became real PASS rows and the pre-restart 404 console noise is gone.
+
+Verified build: worktree `436a81c` ("style(dynamic-workspaces): slow the pin reveal
+animation"), injected `src/client.js` md5 `113e1365272ef7769868a31e19310faa` (20881 lines).
+Node v24.22.2, Chrome 157.0.8103.78, 1728x900; logs under `/tmp`, screenshots under
+`.tmp-work/sidebar-e2e/` (gitignored).
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Static gates | `node --check src/client.js`; `npm test`; `npm run check` | exit 0; **250/250** unit tests pass, 0 fail; repository check exit 0 (pack entryCount 73) |
+| Two-phase slowed reveal (`r3-3`, rewritten) | `node test/browser/sidebar.e2e.mjs --pin` | **PASS**: in-page ~10 ms sampling with real CDP pointer — rest slot **0 px**/title **46 px**/pin hidden; hover phase 1 slot 1.08 px/title 47.69 px with the pin still hidden; after the slot reaches 16 px the title is at 71 px and the pin fades in (observed opacity 0.017 mid-reveal); settled slot **16 px**, margin-right **9 px**, title **71 px**, pin opacity 1/interactive; leave fades the button first (observed 0.972 with slot 16/title 71) then collapses to 0/46/hidden; the time/New session/disclosure columns are fixed throughout; reduced motion instant. The old "title x must not move" oracle was intentionally replaced by this user-approved spec |
+| Single highlight layer (`r3-15`, new) | same run | **PASS**: a pinned ordinary row parked under the pointer paints only the row-level tint `color(srgb 0.2549 0.4627 0.902 / 0.07)`; `.psd-run-main` is `rgba(0, 0, 0, 0)` with no background-image; hovering the pinned row still shows the ordinary body hover `rgba(38, 49, 72, 0.06)` (not a second tint); unpinning restores the row background and collapses the slot to 0/46 |
+| Host-shared pin document (`r3-host`) | same run | **PASS** (route live): Host document `{version:1,rev:91,pinned:[…]}` contains the card pin; the former pre-restart SKIP is replaced by this real evidence |
+| Cross-device Host proof (`r3-8`) | same run | **PASS**: a second fresh Chrome profile sees the same Host pins (`["55c765df…","029aeb48…"]`) in the card's newest-activity-first pinned prefix, 0 page errors — the pre-restart SKIP is replaced by this real cross-device evidence |
+| Full `--pin` aggregate | `node test/browser/sidebar.e2e.mjs --pin` | **28 PASS / 0 SKIP / 0 FAIL**, 83.6 s, page errors **0**, real network failures **0**, exit 0 (`/tmp/f9-pin-final.log`); alignment (`r3-14` 16×20 glyph cell, sparkle 16×16, dots 14×14, trunk = cell centre, expanded 9/9 gaps/title 71), `r3-14b` read-row sparkle and row-height/atmosphere checks all PASS. Cleanup: Host document back to `pinned: []` (rev 90 → 98), 8 documented pin-route writes (pin/unpin pairs), no residual pins, native sidebar pin untouched |
+| Shipped install (no injection) | `node test/browser/sidebar.e2e.mjs --live` | **4/4 PASS**, 6.2 s, 0 page errors, exit 0 (`/tmp/f9-live-final.log`) |
+| Smoke | `node test/browser/sidebar.e2e.mjs --smoke` | **4/4 PASS**, 2.1 s, 0 page errors, exit 0 (`/tmp/f9-smoke-final.log`) |
+| Full mode | `node test/browser/sidebar.e2e.mjs --no-shots` | **43/43 PASS**, 50.5 s, page errors 0 (`/tmp/f9-full-3.log`): the former `b6-5` 404 console noise is gone (0 new network failures); `b2-3` was intentionally updated to assert the hovered title slides exactly 25 px (67 → 92 absolute = 46 → 71 row-relative) while the time/New session/disclosure columns stay fixed; `b4-1` atmosphere vivid; `b6-2` cold-subagent one-shot read (1 read, 3 sections). No other full-mode oracle changed |
+
+Build note: at run time the linked checkout HEAD had advanced beyond the injected target to
+`9513b71` (annotation capture-scope merges; `436a81c` is an ancestor) with served
+`src/client.js` md5 `d816e64d…` (21000 lines). The injected pin/atmosphere suites verified
+md5 `113e1365…` as requested; the served non-injected client passed `--live` 4/4 but was not
+re-run through the injected suites. After committing/ffing, if the served md5 changes, the
+injected suites should be re-run on the merged md5. `api/changes.summary` 404s (a shell
+deliverables probe whose route this Host build does not serve) are classified separately
+from real network failures and are not feature failures (one intermediate run saw 6, the
+final runs 0). The known `b4-1` live-canvas flake passed in the final run; `b6-2` is
+environment-aware (explicit SKIP when no cold subagent row exists) and found a cold child in
+the final run.

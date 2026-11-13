@@ -521,8 +521,8 @@ HTTP failure predicate) and adds:
 |---|-------|--------|
 | `pin-net` | Network failure oracle ready | `Network.enable` succeeded. The card's own pin-route probes (`/api/power-suite.session-pins`) are classified separately from real failures: while `pinShared === false` their pre-restart 404s are the documented missing-route probe and never fail the run; once `pinShared === true` any pin-route failure is a real defect |
 | `r3-1` | Default card is the normal running/recent surface | card main rows > 0; **zero pinned rows** and **zero `data-pinned` nodes** (no default tint); the user's old/native pin titles never appear as pinned rows; effective card pin set empty; the running Session's **subagent child rows are rendered** (compared against the live `childrenByParent` count when > 0) |
-| `r3-2` | Pin slot scope/resting states + glyph-squeeze guard | every `.psd-run` main row has the 16 px `.psd-run-pin-slot` (order head > slot > title) with a hidden resting pin (`opacity:0/visibility:hidden/pointer-events:none`, `aria-pressed=false`); `.psd-child` rows expose no pin slot/button/`data-pinned`; clipped-title glyph cell width == glyph width, pin slot one 8 px gap after it |
-| `r3-3` | Hover reveal, no layout jump | real hover on a stable finished target (never the current Session) shows the interactive pin; `.psd-run-title` x unchanged before/during/after; pointer leave hides it |
+| `r3-2` | Pin slot scope/collapsed resting states + glyph-squeeze guard | every `.psd-run` main row renders the `.psd-run-pin-slot` (order head > slot > title). **Two-phase spec:** unpinned rest = slot **0 px**, title starts at **46 px** from the row left, pin `opacity:0/visibility:hidden/pointer-events:none`, `aria-pressed=false`; pinned rest = slot **16 px**, title **71 px**, filled marker visible with `pointer-events:none`; `.psd-child` rows expose no pin slot/button/`data-pinned`; clipped-title glyph cell width == glyph width, head-to-slot gap **9 px** |
+| `r3-3` | Two-phase slowed pin reveal (replaces the old "no layout jump" spec) | in-page ~10 ms sampling with real CDP pointer: rest 0/46/pin hidden; hover **phase 1 (~220 ms)** slot expands with title sliding 46→71 while the pin stays hidden and the time/New session/disclosure columns never move; **mid reveal** slot 16/title 71 with the pin fading in; **settled (>~380 ms)** slot 16/margin-right 9/title 71/pin opacity 1 and interactive; leave fades the pin out first (opacity partly visible with slot 16/title 71) then collapses to 0/46/pin hidden; reduced motion sets both phases instantly. The previous "title x must not move on hover" expectation is **superseded by this user-requested change**. It also records the run target and data/cell facts used by the later pin checks |
 | `r3-4` | Pin click stays in the card | row/slot/button `data-pinned=true`, `aria-pressed`, localised Unpin label, filled shell pin glyph in the violet/blue accent, subtle tint on that row only (other rows keep their normal background); the card's **effective pin ids** (live seam) become exactly the clicked id; the local cache document (`power-suite.dynamic-workspaces.pinned`) records the pin (`pinned` or a queued `pin` op); the native sidebar pin marker for that Session is unchanged (the native pin is never read/written) |
 | `r3-host` | Host-shared pin document contains the pin | when `pinShared === true`: direct same-origin `GET /api/power-suite.session-pins` succeeds, `{version:1,rev,pinned}` shape holds and `pinned` includes the id; when `pinShared === false`: **explicit SKIP** row stating the route is absent until the DSH Web service is restarted with the merged plugin and that the local cache/queue is authoritative meanwhile (never a fake PASS) |
 | `r3-5` | Pinned-first placement | exactly the run pin leads the card as a one-row pinned prefix at index 0; effective ids are exactly that id; ordinary child rows keep rendering |
@@ -534,7 +534,9 @@ HTTP failure predicate) and adds:
 | `r3-11` | Native current Session/Workspace rows keep only the rainbow and brighten content + action buttons | the native sidebar current Session row (revealed like a user) and `[data-psd-current-workspace="true"]` row at rest: non-atmosphere content children `filter: brightness(1.15)` with the filter transition; hovered with a real pointer: `brightness(1.5)`, computed background `rgba(0,0,0,0)` each, atmosphere wrapper + canvas present, and their hover-revealed action buttons keep a `rgba(0,0,0,0)` background with `filter: brightness(1.2)`; an ordinary native session row still shows its native hover background with `filter:none` (control also unfiltered). If the open Session is a subagent (no native sidebar row), the check first switches back to a main card row like a user |
 | `r3-12` | Atmosphere brightness respects reduced motion | with `prefers-reduced-motion: reduce`, the current card row's content children keep the static `brightness(1.15)` lift while the filter transition is disabled (`transition-property:none` / `0s`); media emulation is reset afterwards |
 | `r3-13` | Card rows match the native Workspace project row height | measured in the same page like a user: the native `[data-row-key^="workspace:"]` project-row height is the reference (asserted equality, not hardcoded); every `.psd-run` and `.psd-child` height equals it; `.psd-run-main`/`.psd-child-main` height equals their row height with `box-sizing:border-box` and pill top/bottom matching the row (±1) so the highlight fills the row; titles/times stay vertically centred (±1), titles stay single-line (`white-space:nowrap`, no vertical wrap/clip); native session rows explicitly keep the shell's own 32 px height; the taller rows still scroll inside the clamped card body when it overflows (else the five-row/View-all behavior is covered by the expansion log + full-mode checks) |
-| `r3-14` | Leading glyph / tree trunk / pin column share their centres; sparkle enlarged | real GUI measurements on every main row: `.psd-run-glyph-cell` is 16×20 px and all cells share one centre column (±0.5 px); the read-row sparkle svg is **16×16** and visually centred in the cell, while running/unread state dots stay **14×14** centred in the same cell (cross-state cell centres equal); the child-tree trunk centre equals the glyph-cell centre (±0.5) and the child status-dot centre equals the pin centre (±0.5); the pin button is centred in its slot, the slot has zero horizontal margins and equal **9 px** gaps on both sides (`pinSlot.left - glyphCell.right == title.left - pinSlot.right`, ±0.5) |
+| `r3-14` | Leading glyph / tree trunk / pin column share their centres; sparkle enlarged | **rest**: `.psd-run-glyph-cell` is 16×20 px on every main row and all cells share one centre column (±0.5 px); the read-row sparkle svg is **16×16** and visually centred while running/unread **14×14** state dots stay centred in the same cell; the child-tree trunk centre equals the glyph-cell centre (±0.5). **Expanded** (pin revealed): pin button centred in its 16 px slot, slot margins 0/**9 px**, equal **9/9 px** gaps, title at 71 px, child status-dot centre equals the pin centre (±0.5) |
+| `r3-14b` | The read-row sparkle is 16×16 and centred | explicit read-row confirmation when an acknowledged/finished row is present; if a long verification session has warmed every card row (all visible mains running) the check is an explicit SKIP, never a fake pass |
+| `r3-15` | A pinned row paints exactly one highlight layer | pin an ordinary card row and park the pointer: the row carries the row-level violet tint (`color(srgb … / 0.07)`), `.psd-run-main` stays `rgba(0, 0, 0, 0)` and neither element paints a background-image; hovering the pinned row still shows the ordinary body hover (`rgba(38, 49, 72, 0.06)`) and not a second tint layer; unpin restores the row background and collapses the slot back to 0/46 |
 
 R1/R2 checks are unchanged from the original delivery (`r1-1`/`r1-2` perfect-circle dot;
 `r2-1`..`r2-4` native hover figures, same-Session label alignment, 244 px native frame,
@@ -741,7 +743,13 @@ Remaining for the final green table (unchanged): after the user restarts the DSH
 service, re-run `--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS and
 full-mode `b6-5` no longer sees the 404 console line.
 
-### Recorded evidence (follow-up 7: glyph / trunk / pin column alignment + sparkle size, build `53f159e`)
+### Recorded evidence (follow-up 7: glyph / trunk / pin column alignment + sparkle size, build `53f159e` — previous build)
+
+> **Build note:** the results below are for the previous build `53f159e`. The final served
+> feature build is `436a81c` (client md5 `113e1365…`), which replaces the reserved pin slot
+> with the user-requested two-phase reveal and adds the single-tint layer; its evidence is
+> recorded under "follow-up 8" below. Any "no layout jump"/reserved-slot statements in the
+> older evidence tables are historical and superseded by that change.
 
 Build: worktree and linked checkout at `53f159e` ("fix(dynamic-workspaces): centre the
 leading glyph cell, tree trunk and pin column"), injected/loaded `src/client.js` md5
@@ -770,6 +778,55 @@ Remaining for the final green table (unchanged): after the user restarts the DSH
 service, re-run `--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS and
 full-mode `b6-5` no longer sees the 404 console line.
 
+### FINAL recorded evidence (follow-up 8: Host-shared pin acceptance + two-phase slowed reveal + single highlight layer, build `436a81c`)
+
+Build: worktree at `436a81c` ("style(dynamic-workspaces): slow the pin reveal animation"),
+injected `src/client.js` md5 `113e1365272ef7769868a31e19310faa` (20881 lines). **The DSH Web
+service was restarted and the Host pin route is LIVE** (`pinShared=true`, browser `GET
+/api/power-suite.session-pins` → `{version:1,rev,pinned}`, 200), so the former pre-restart
+SKIP rows are real PASS rows and the 404 console noise is gone. No further service restart
+was needed for this client change. This is the current/build-of-record evidence; all earlier
+tables are historical for their builds. Node v24.22.2, Chrome 157.0.8103.78, 1728x900;
+logs under `/tmp`, screenshots under `.tmp-work/sidebar-e2e/` (gitignored).
+
+> **Superseded spec:** the previous "fixed 16 px reserved slot / title x must not move on
+> hover" requirement is replaced by the user-requested **two-phase, space-saving reveal**
+> (rest slot 0/title 46; hover expands first, button fades second; leave reverses). The
+> full-mode `b2-3` oracle was intentionally updated to assert that the hovered title slides
+> exactly 25 px (16 slot + 9 gap) while the time/New session/disclosure columns stay fixed;
+> no other oracle was weakened.
+
+| Run | Command | Result |
+|-----|---------|--------|
+| Static gates | `node --check src/client.js`; `npm test`; `npm run check` | exit 0; **250/250** unit tests pass, 0 fail; repository check exit 0 (pack entryCount 73) |
+| Final `--pin` acceptance (Host route live) | `node test/browser/sidebar.e2e.mjs --pin` | **28 PASS / 0 SKIP / 0 FAIL**, 83.6 s, page errors **0**, real network failures **0**, exit 0 (`/tmp/f9-pin-final.log`); Host route probes classified separately = 0 failures. Key rows: **`r3-3`** rest slot 0/title 46/pin hidden → hover phase 1 slot 1.08 px/title 47.69 px with the pin still hidden and the fixed columns unchanged → mid-reveal pin fading in (0.017) once the slot reached 16/title 71 → settled slot 16/margin 9/title 71/pin opacity 1 → leave fade 0.972 with slot 16/title 71 then collapse to 0/46 → reduced motion instant; **`r3-host`** Host document rev 91 contains the card pin; **`r3-8` cross-device** second fresh Chrome profile sees the same Host pins (`["55c765df…","029aeb48…"]`) in the card's newest-activity-first prefix with 0 page errors — the pre-restart SKIP is now a real PASS; **`r3-14`** glyph cell 16×20/centre column shared across 4 main rows, sparkle 16×16, state dots 14×14, trunk = cell centre, expanded pin 9/9 gaps/title 71; **`r3-14b`** read-row sparkle 16×16 PASS; **`r3-15`** single highlight layer: row tint `color(srgb 0.2549 0.4627 0.902 / 0.07)` only, body pill `rgba(0, 0, 0, 0)` at rest and no background-image, hover body `rgba(38, 49, 72, 0.06)`, unpin restored. Cleanup: Host document back to `pinned: []` (rev 90 → 98), 8 documented pin-route writes (pin/unpin pairs), cache migrated, **0 residual pins**, native sidebar pin untouched |
+| Shipped install, no injection | `node test/browser/sidebar.e2e.mjs --live` | **4/4 PASS**, 6.2 s, 0 page errors, exit 0 (`/tmp/f9-live-final.log`): both fresh profiles served the client, 0 pinned rows/nodes, empty local cache, no injected factory |
+| Smoke | `node test/browser/sidebar.e2e.mjs --smoke` | **4/4 PASS**, 2.1 s, 0 page errors, exit 0 (`/tmp/f9-smoke-final.log`) |
+| Full mode | `node test/browser/sidebar.e2e.mjs --no-shots` | **43/43 PASS**, 50.5 s, page errors 0 (`/tmp/f9-full-3.log`) — the former `b6-5` 404 console noise is **gone** (0 new network failures); `b2-3` now asserts the intentional 25 px title slide with fixed trailing columns (67→92 absolute = 46→71 row-relative); `b4-1` atmosphere vivid; `b6-2` cold subagent one-shot read (1 read, 3 sections). No other oracle changed |
+
+Honest notes / environment observations:
+- `--live` was run against the currently served client of the linked checkout, which at run
+  time was **newer** than the injected target: linked checkout HEAD had advanced to
+  `9513b71` (annotation capture-scope merges; `436a81c` is an ancestor) and its
+  `src/client.js` md5 is `d816e64d…` (21000 lines). The injected pin/atmosphere suites above
+  verified md5 `113e1365…` as requested; the served non-injected client passed `--live`
+  4/4 but was not re-run through the injected suites. The Lead should ff/rebase the branch
+  and, if the served md5 changes, re-run the injected suites on the merged md5.
+- `api/changes.summary` 404s (a shell deliverables probe whose route this Host build does
+  not serve) are classified separately from real network failures; one intermediate run saw
+  6 such probes, the final runs saw **0**. They are not pin/atmosphere failures.
+- `b4-1` live-canvas saturation is a known pre-existing live-animation flake (0.373 vs the
+  0.38 threshold) and passed on the final run; `b6-2` needs a cold subagent row and is an
+  explicit SKIP (never a fake PASS) when a long verification session has warmed every row
+  — the final run found a cold child and passed.
+- The two-phase reveal checks sample every ~10 ms in-page, so they observe the slowed
+  phases (expansion 220 ms, fade 160 ms with delay 220 ms, leave fade 160 ms + delayed
+  220 ms collapse) without CDP round-trip races; tolerances are ±0.75 px for title/slot
+  positions and ±0.5 px for the fixed columns.
+
+Remaining: none for the pin/atmosphere/two-phase feature on md5 `113e1365…`; the final
+commit + linked-checkout ff is the Lead's step.
+
 ### Known limitations (`--pin` / `--live`)
 
 - Host sharing and cross-device visibility require the DSH Web service restart that loads
@@ -779,7 +836,17 @@ full-mode `b6-5` no longer sees the 404 console line.
   expected to clear; until then it reports the expected pre-restart 404 log line.
 - The glyph-alignment check (`r3-14`) needs a read-row sparkle and a main row with nested
   child rows; it opens a finished row like a user when the live card has no acknowledged
-  row yet, so that Session is touched but never edited.
+  row yet (and may open a native sidebar Session as a last resort), so those Sessions are
+  touched but never edited. If every visible card row is running, the read-row sparkle
+  sub-check is an explicit SKIP (`r3-14b`), never a fake PASS.
+- The two-phase reveal checks need the row to stay hovered while sampling; the card can
+  re-sort under the pointer during live activity, so they sample in-page and use the
+  documented tolerances instead of exact frame timing.
+- The live pin-order oracles read the Host activity ledger (`$DSH_HOME/dsh-power-suite/session-activity.json`)
+  as the same source the card sorts by; this is read-only evidence. The client's own
+  activity poll can be up to 30 s stale, so after an unpin the relative order inside the
+  normal queue is recorded rather than hard-failed (the pinned ordering itself is
+  asserted in `r3-6`/`r3-7`/`r3-8`).
 - The row-height check measures the live native Workspace project row as the reference and
   requires at least one rendered nested subagent row plus visible native session rows (it
   reveals/expands them like a user first); a shell-side row-height change shows up as an
