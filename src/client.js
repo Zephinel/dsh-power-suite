@@ -9220,6 +9220,7 @@ function dwClearNativeAtmospheres() {
       'popover.status.ambiguous': 'Matches several',
       'popover.status.missing': 'No longer resolves',
       'popover.status.changed': 'Content changed',
+      'status.unverifiableWeak': 'Unverifiable · weak identity',
       'popover.levelUp': 'Parent element',
       'popover.levelDown': 'Child element',
       'popover.noteLabel': 'Requested change',
@@ -9430,6 +9431,7 @@ function dwClearNativeAtmospheres() {
       'popover.status.ambiguous': '有多个匹配',
       'popover.status.missing': '无法定位',
       'popover.status.changed': '内容已变化',
+      'status.unverifiableWeak': '无法验证 · 弱身份',
       'popover.levelUp': '上一级元素',
       'popover.levelDown': '下一级元素',
       'popover.noteLabel': '修改说明',
@@ -10240,6 +10242,130 @@ function dwClearNativeAtmospheres() {
       return !(wordLike || bemLike)
     }
 
+    /**
+     * A3/T38 (⑤): count non-overlapping occurrences of `exact` in rendered text.
+     * Used by the capture climb so it never falls back to raw textContent.
+     * @param {string} text - rendered text.
+     * @param {string} exact - normalized exact text.
+     * @returns {number} repeat count.
+     */
+    function annotationRenderedTextRepeatCount(text, exact) {
+      const source = typeof text === 'string' ? text : ''
+      const needle = typeof exact === 'string' ? exact : ''
+      if (needle.length === 0 || source.length === 0) return 0
+      let count = 0
+      let at = source.indexOf(needle)
+      while (at >= 0) {
+        count += 1
+        at = source.indexOf(needle, at + needle.length)
+      }
+      return count
+    }
+
+    /**
+     * A3/T38 (③): first text-bearing leaf descendant (no element children, not
+     * editable, rendered text non-empty), depth-first bounded.
+     * @param {Element} element - target element.
+     * @returns {Element | null} leaf.
+     */
+    function annotationFirstTextLeafDescendant(element) {
+      if (element === null || typeof element !== 'object' || element.childElementCount === 0) return null
+      const stack = Array.from(element.children ?? []).reverse()
+      let visited = 0
+      while (stack.length > 0 && visited < 200) {
+        visited += 1
+        const current = stack.pop()
+        if (current === null || typeof current !== 'object') continue
+        const tag = typeof current.tagName === 'string' ? current.tagName.toLowerCase() : ''
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'script' || tag === 'style') continue
+        if (current.isContentEditable === true) continue
+        if (current.childElementCount === 0) {
+          if (annotationNormalizeQuoteText(typeof current.textContent === 'string' ? current.textContent : '', 0).length > 0) return current
+          continue
+        }
+        const children = Array.from(current.children ?? [])
+        for (let index = children.length - 1; index >= 0; index -= 1) stack.push(children[index])
+      }
+      return null
+    }
+
+    /**
+     * A3/T38 (③): tag chain from a leaf up to (and including) the recorded target.
+     * @param {Element} leaf - text leaf.
+     * @param {Element} target - recorded ancestor target.
+     * @returns {Array<string>} tags leaf→target.
+     */
+    function annotationAncestorTagChain(leaf, target) {
+      const chain = []
+      let current = leaf.parentElement
+      let depth = 0
+      while (current !== null && current !== undefined && depth < 16) {
+        const tag = typeof current.tagName === 'string' ? current.tagName.toLowerCase() : ''
+        if (tag.length > 0) chain.push(tag)
+        if (current === target) break
+        current = current.parentElement
+        depth += 1
+      }
+      return chain
+    }
+
+    /**
+     * A3/T38 (③): whether one ancestor matches the recorded descendant-anchor
+     * signature (tag + stable attrs). Pure; used by the DOM climb.
+     * @param {object} ref - captured record.
+     * @param {{ tag: string, attrs?: Record<string, string> }} ancestor - ancestor info.
+     * @returns {boolean} match.
+     */
+    function annotationDescendantAncestorMatches(ref, ancestor) {
+      if (ref === null || typeof ref !== 'object' || ref.locator === null || typeof ref.locator !== 'object') return false
+      if (ref.locator.anchorTarget !== 'descendant') return false
+      const locator = ref.locator
+      const tag = typeof locator.tag === 'string' ? locator.tag.toLowerCase() : ''
+      const ancestorTag = typeof ancestor?.tag === 'string' ? ancestor.tag.toLowerCase() : ''
+      if (tag.length === 0 || ancestorTag !== tag) return false
+      const chain = Array.isArray(locator.anchorAncestorChain) ? locator.anchorAncestorChain : []
+      if (chain.length > 0 && chain[0] !== undefined) {
+        // The recorded chain starts at the leaf's parent; the target is the last tag.
+        if (chain[chain.length - 1] !== tag) return false
+      }
+      const signature = locator.anchorSignature !== null && typeof locator.anchorSignature === 'object' ? locator.anchorSignature : null
+      const attrs = ancestor?.attrs !== null && typeof ancestor?.attrs === 'object' ? ancestor.attrs : {}
+      if (signature !== null && Array.isArray(signature.attrs)) {
+        for (const attr of signature.attrs) {
+          if (attr === null || typeof attr !== 'object' || typeof attr.name !== 'string') continue
+          if (attrs[attr.name] !== attr.value) return false
+        }
+      }
+      return true
+    }
+
+    /**
+     * A3/T38 (②): confidence orthogonal to the four statuses. A weakened structural
+     * hit is 'weak'; everything else is 'strong'.
+     * @param {object} ref - captured record.
+     * @param {{ status?: string, via?: string }} outcome - resolution outcome.
+     * @returns {'weak' | 'strong'} confidence.
+     */
+    function annotationStatusConfidence(ref, outcome) {
+      const status = outcome !== null && typeof outcome === 'object' ? outcome.status : ''
+      const via = outcome !== null && typeof outcome === 'object' ? outcome.via : ''
+      if (status !== 'changed') return 'strong'
+      if (via !== 'xpath' && via !== 'text-position') return 'strong'
+      return annotationHasStrongIdentity(ref) ? 'strong' : 'weak'
+    }
+
+    /**
+     * A3/T38 (②): i18n key for one status + confidence. Four statuses are unchanged;
+     * weak structural outcomes get the honest "unverifiable" label.
+     * @param {string} status - status id.
+     * @param {string} confidence - 'weak' | 'strong'.
+     * @returns {string} dictionary key.
+     */
+    function annotationStatusLabelKey(status, confidence) {
+      if (status === 'changed' && confidence === 'weak') return 'status.unverifiableWeak'
+      return `popover.status.${status}`
+    }
+
     /** A3/T36: identity strength + fallback bounds. */
     const ANNOTATION_EMPTY_TEXT_DIGEST = textDigest('')
     const ANNOTATION_FALLBACK_SCAN_MAX = 400
@@ -10323,7 +10449,7 @@ function dwClearNativeAtmospheres() {
           if (text.length > 0 && /\s/.test(rawText)) pendingSpace = true
           continue
         }
-        const needsSpace = text.length > 0 && (chunk.blockBefore === true || pendingSpace === true || text.endsWith(' '))
+        const needsSpace = text.length > 0 && (chunk.blockBefore === true || pendingSpace === true || text.endsWith(' ') || /^\s/.test(rawText))
         if (needsSpace && !text.endsWith(' ')) text += ' '
         pendingSpace = false
         const start = text.length
@@ -10388,6 +10514,40 @@ function dwClearNativeAtmospheres() {
         node = walker.nextNode()
       }
       return annotationRenderTextChunks(chunks)
+    }
+
+    /**
+     * A3/T38 (③): sanitize the descendant-anchor metadata persisted with a record.
+     * @param {unknown} rawTarget - anchor target ('self' | 'descendant').
+     * @param {unknown} rawLeafTag - leaf tag.
+     * @param {unknown} rawChain - ancestor tag chain.
+     * @param {unknown} rawSignature - target signature { tag, attrs }.
+     * @returns {{ anchorTarget: string | null, anchorLeafTag: string | null, anchorAncestorChain: Array<string> | null, anchorSignature: object | null }} safe fields.
+     */
+    function sanitizeDescendantAnchor(rawTarget, rawLeafTag, rawChain, rawSignature) {
+      const anchorTarget = rawTarget === 'descendant' ? 'descendant' : null
+      if (anchorTarget !== 'descendant') return { anchorTarget: null, anchorLeafTag: null, anchorAncestorChain: null, anchorSignature: null }
+      const anchorLeafTag = typeof rawLeafTag === 'string' && /^[a-z][a-z0-9-]{0,39}$/i.test(rawLeafTag) ? rawLeafTag.toLowerCase() : null
+      const chain = []
+      if (Array.isArray(rawChain)) {
+        for (const tag of rawChain.slice(0, 16)) {
+          if (typeof tag === 'string' && /^[a-z][a-z0-9-]{0,39}$/i.test(tag)) chain.push(tag.toLowerCase())
+        }
+      }
+      let anchorSignature = null
+      if (rawSignature !== null && typeof rawSignature === 'object' && Array.isArray(rawSignature.attrs)) {
+        const attrs = []
+        for (const attr of rawSignature.attrs.slice(0, 8)) {
+          if (attr === null || typeof attr !== 'object') continue
+          const name = sanitizeAnchorString(attr.name, 64)
+          const value = sanitizeAnchorString(attr.value, 128)
+          if (name === null || value === null) continue
+          attrs.push({ name, value })
+        }
+        const tag = sanitizeAnchorString(rawSignature.tag, 40)
+        if (tag !== null) anchorSignature = { tag: tag.toLowerCase(), attrs }
+      }
+      return { anchorTarget, anchorLeafTag, anchorAncestorChain: chain.length > 0 ? chain : null, anchorSignature }
     }
 
     /**
@@ -10730,13 +10890,11 @@ function dwClearNativeAtmospheres() {
           // same text repeats elsewhere in the document — climb to a wider scope so
           // the persisted prefix/suffix actually distinguishes this occurrence.
           if (quote !== null && quote.prefix.length === 0 && quote.suffix.length === 0 && container !== document.body) {
-            // Climb only when the PARENT scope still contains this text more than
-            // once; page-wide text includes our own annotation UI and is not a scope.
+            // A3/T38 (⑤): climb/duplicate probe uses the rendered-text pipeline
+            // (same <br>/block-boundary normalization as matching), never raw textContent.
             const parentScope = container.parentElement
-            const parentText = parentScope === null ? ''
-              : annotationNormalizeQuoteText(typeof parentScope.textContent === 'string' ? parentScope.textContent : '', 0)
-            const first = parentText.indexOf(exact)
-            if (first >= 0 && parentText.indexOf(exact, first + 1) >= 0) {
+            const parentRendered = parentScope === null ? '' : annotationRenderedTextOf(parentScope, 800).text
+            if (annotationRenderedTextRepeatCount(parentRendered, exact) > 1) {
               container = container.parentElement
               depth += 1
               continue
@@ -11080,6 +11238,10 @@ function dwClearNativeAtmospheres() {
           jsPath: sanitizeAnchorString(source.jsPath, ANNOTATION_JS_PATH_MAX),
           textQuote: sanitizeTextQuote(source.textQuote),
           textPosition: sanitizeTextPosition(source.textPosition),
+          // A3/T38 (③): descendant-anchor metadata (nil for leaf/self anchors).
+          // Floating surfaces are transient: a descendant text hit elsewhere must
+          // not turn a genuinely removed card into a false "changed" identity.
+          ...sanitizeDescendantAnchor(surface === 'floating' ? null : source.anchorTarget, source.anchorLeafTag, source.anchorAncestorChain, source.anchorSignature),
           surface,
           // A floating surface is transient by definition: it can disappear when
           // the card/menu closes, so its locator is the only thing that survives.
@@ -11232,6 +11394,9 @@ function dwClearNativeAtmospheres() {
       const jsPath = sanitizeAnchorString(rawLocator.jsPath, ANNOTATION_JS_PATH_MAX)
       const textQuote = sanitizeTextQuote(rawLocator.textQuote)
       const textPosition = sanitizeTextPosition(rawLocator.textPosition)
+      const descendantAnchor = surface === 'floating'
+        ? sanitizeDescendantAnchor(null, null, null, null)
+        : sanitizeDescendantAnchor(rawLocator.anchorTarget, rawLocator.anchorLeafTag, rawLocator.anchorAncestorChain, rawLocator.anchorSignature)
       const ancestorInput = Array.isArray(rawLocator.ancestors) ? rawLocator.ancestors : []
       const ancestors = buildStableAncestors(ancestorInput.map((entry) => {
         const item = entry !== null && typeof entry === 'object' ? entry : {}
@@ -11282,7 +11447,8 @@ function dwClearNativeAtmospheres() {
           xpath,
           jsPath,
           textQuote,
-          textPosition
+          textPosition,
+          ...descendantAnchor
         },
         component,
         text,
@@ -13536,8 +13702,36 @@ function dwClearNativeAtmospheres() {
       }, (selector) => document.querySelectorAll(selector))
       const textBearingLeaf = element.childElementCount === 0 && !isEditable
       const xpath = annotationXPathOf(element)
-      const textQuote = textBearingLeaf ? annotationTextQuoteOf(element) : null
-      const textPosition = textBearingLeaf ? annotationTextPositionOf(element) : null
+      // A3/T38 (③): non-leaf targets capture the first text leaf descendant's
+      // quote/position plus the recorded ancestor chain + stable target signature.
+      let textQuote = textBearingLeaf ? annotationTextQuoteOf(element) : null
+      let textPosition = textBearingLeaf ? annotationTextPositionOf(element) : null
+      let anchorTarget = textBearingLeaf ? 'self' : null
+      let anchorLeafTag = null
+      let anchorAncestorChain = null
+      let anchorSignature = null
+      if (!textBearingLeaf && !isEditable) {
+        const leaf = annotationFirstTextLeafDescendant(element)
+        if (leaf !== null) {
+          const leafQuote = annotationTextQuoteOf(leaf)
+          if (leafQuote !== null) {
+            textQuote = leafQuote
+            textPosition = annotationTextPositionOf(leaf)
+            anchorTarget = 'descendant'
+            anchorLeafTag = typeof leaf.tagName === 'string' ? leaf.tagName.toLowerCase() : null
+            anchorAncestorChain = annotationAncestorTagChain(leaf, element)
+            const stableAttrs = []
+            for (const attr of attrs) {
+              if (attr === null || typeof attr !== 'object') continue
+              if (typeof attr.name !== 'string') continue
+              if (!/^(data-|aria-|role$|id$|name$)/.test(attr.name)) continue
+              stableAttrs.push({ name: attr.name, value: attr.value })
+              if (stableAttrs.length >= 6) break
+            }
+            anchorSignature = { tag, attrs: stableAttrs }
+          }
+        }
+      }
       const jsPath = annotationJsPathFor({ selector: unique.selector, xpath })
       return {
         tag,
@@ -13559,7 +13753,11 @@ function dwClearNativeAtmospheres() {
         xpath,
         jsPath,
         textQuote,
-        textPosition
+        textPosition,
+        anchorTarget,
+        anchorLeafTag,
+        anchorAncestorChain,
+        anchorSignature
       }
     }
 
@@ -14831,7 +15029,30 @@ function dwClearNativeAtmospheres() {
         if (domObserver !== null) return
         if (typeof MutationObserver !== 'function') return
         if (typeof document === 'undefined' || document.body === null) return
-        domObserver = new MutationObserver(() => {
+        domObserver = new MutationObserver((mutations) => {
+          // A3/T38 (④): own overlay/mark renders must not invalidate page-resolution
+          // caches; only host-page mutations bump the DOM revision.
+          let ownOnly = true
+          for (const record of Array.isArray(mutations) ? mutations : []) {
+            let node = record.target
+            if (node !== null && node !== undefined && node.nodeType !== 1) node = node.parentElement
+            if (node === null || node === undefined || typeof node.closest !== 'function') {
+              ownOnly = false
+              break
+            }
+            const isPageRoot = node === document.body || node === document.documentElement
+            if (isPageRoot) {
+              ownOnly = false
+              break
+            }
+            // Own UI nodes, or the overlay-slot host container that React updates
+            // when it inserts/replaces our overlay root, are not page mutations.
+            if (node.closest('[data-psa-own]') !== null) continue
+            if (typeof node.querySelector === 'function' && node.querySelector('[data-psa-own]') !== null) continue
+            ownOnly = false
+            break
+          }
+          if (ownOnly) return
           domRevision += 1
           // F3: a floating card that appears/expands under a stationary pointer has
           // no pointermove to trigger a recompute. Re-resolve after a short debounce
@@ -14996,6 +15217,63 @@ function dwClearNativeAtmospheres() {
       /** A3/T34: per-(record, DOM revision) fallback status cache; avoids re-scanning on every geometry render. */
       const fallbackStatusCache = new Map()
       const fallbackNodeCache = new Map()
+      /** A3/T38 (④): fallback DOM-scan counter exposed on the root for the E2E probe. */
+      let fallbackScanCount = 0
+      /** A3/T38 (④): cache-miss resolution count (independent of fallback scan count). */
+      let statusResolveCount = 0
+
+      /** Count one fallback DOM scan (querySelectorAll/evaluate/getElementsByTagName etc). @returns {void} */
+      function noteFallbackScan() {
+        fallbackScanCount += 1
+        try {
+          document.documentElement.setAttribute('data-psa-fallback-scans', String(fallbackScanCount))
+        } catch {
+          // The counter is diagnostic only; rendering must not depend on it.
+        }
+      }
+
+      /**
+       * A3/T38 (③): climb a descendant-anchor text hit back to the recorded ancestor.
+       * @param {object} ref - captured record.
+       * @param {Element} leaf - matched text leaf.
+       * @returns {{ target: Element | null, ambiguous?: boolean }} climb result.
+       */
+      function climbDescendantTarget(ref, leaf) {
+        if (ref?.locator?.anchorTarget !== 'descendant') return { target: leaf }
+        const matches = []
+        let current = leaf !== null && leaf !== undefined ? leaf.parentElement : null
+        let depth = 0
+        while (current !== null && current !== undefined && current !== document.body && depth < 16) {
+          const attrs = {}
+          try {
+            for (const attr of Array.from(current.attributes ?? [])) attrs[attr.name] = attr.value
+          } catch {
+            // Attribute reads are best effort.
+          }
+          const tag = typeof current.tagName === 'string' ? current.tagName.toLowerCase() : ''
+          if (annotationDescendantAncestorMatches(ref, { tag, attrs })) matches.push(current)
+          current = current.parentElement
+          depth += 1
+        }
+        if (matches.length === 0) return { target: null }
+        if (matches.length > 1) return { target: null, ambiguous: true }
+        return { target: matches[0] }
+      }
+
+      /**
+       * A3/T38 (③): climb + validate a descendant text hit.
+       * @param {object} ref - captured record.
+       * @param {Element} leaf - matched leaf.
+       * @returns {{ status: string, element: Element | null } | null} outcome.
+       */
+      function resolveDescendantClimb(ref, leaf) {
+        const climbed = climbDescendantTarget(ref, leaf)
+        if (climbed.ambiguous === true) return { status: 'ambiguous', element: null }
+        if (climbed.target === null) return null
+        const status = validateFallbackHit(climbed.target, ref, { proximity: true })
+        if (status === 'resolved' || status === 'changed') return { status, element: climbed.target }
+        return null
+      }
 
       /**
        * A3/T34: resolve one rendered text offset back to the element containing it.
@@ -15113,12 +15391,49 @@ function dwClearNativeAtmospheres() {
        * @returns {string | null} status.
        */
       function resolveRefTextQuote(ref) {
+        noteFallbackScan()
         const locator = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : null
         if (locator === null || locator.textQuote === null || typeof locator.textQuote !== 'object') return null
         const quote = locator.textQuote
         if (typeof quote.exact !== 'string' || quote.exact.length === 0) return null
         const hint = locator.textPosition !== null && typeof locator.textPosition === 'object' && typeof locator.textPosition.start === 'number'
           ? locator.textPosition.start : undefined
+        if (locator.anchorTarget === 'descendant') {
+          // A3/T38 (③): collect all plausible descendant leaves across scopes, climb
+          // each to its signed ancestor, then decide uniqueness — a single scope hit
+          // with drifted context must not terminate as Changed while a decoy exists.
+          const targets = []
+          let ambiguous = false
+          const considerLeaf = (leaf) => {
+            if (leaf === null || leaf === undefined) return
+            const climb = resolveDescendantClimb(ref, leaf)
+            if (climb === null) return
+            if (climb.status === 'ambiguous') ambiguous = true
+            else if (climb.element !== null && !targets.includes(climb.element)) targets.push(climb.element)
+          }
+          for (const scope of quoteSearchScopes(ref)) {
+            const rendered = annotationRenderedTextOf(scope, 1400)
+            const matches = annotationScoreQuoteMatches(rendered.text, quote, hint, 6)
+            for (const match of matches) {
+              if (match.score < 0.5) continue
+              considerLeaf(annotationElementAtRenderedOffset(scope, match.index))
+            }
+          }
+          const leafTag = typeof locator.anchorLeafTag === 'string' && locator.anchorLeafTag.length > 0 ? locator.anchorLeafTag : locator.tag
+          const elements = document.getElementsByTagName(leafTag.length > 0 ? String(leafTag).toLowerCase() : '*')
+          for (let index = 0; index < elements.length && index < ANNOTATION_FALLBACK_SCAN_MAX; index += 1) {
+            const leaf = elements[index]
+            if (leaf === null || typeof leaf !== 'object' || leaf.closest('[data-psa-own]') !== null) continue
+            if (annotationRenderedTextOf(leaf, 120).text !== quote.exact) continue
+            considerLeaf(leaf)
+          }
+          if (ambiguous || targets.length > 1) return 'ambiguous'
+          if (targets.length === 1) {
+            const status = validateFallbackHit(targets[0], ref, { proximity: true })
+            if (status === 'resolved' || status === 'changed') return status
+          }
+          return null
+        }
         for (const scope of quoteSearchScopes(ref)) {
           const rendered = annotationRenderedTextOf(scope, 1400)
           if (rendered.text.length === 0) continue
@@ -15130,6 +15445,13 @@ function dwClearNativeAtmospheres() {
           if (best.score < 0.5) continue
           if (best.score < 0.85) return 'changed'
           const element = annotationElementAtRenderedOffset(scope, best.index)
+          if (element === null) continue
+          if (locator.anchorTarget === 'descendant') {
+            const climb = resolveDescendantClimb(ref, element)
+            if (climb === null) continue
+            if (climb.status === 'ambiguous') return 'ambiguous'
+            return climb.status
+          }
           const status = validateFallbackHit(element, ref, { proximity: false })
           if (status === 'resolved' || status === 'changed') return status
           continue
@@ -15138,7 +15460,9 @@ function dwClearNativeAtmospheres() {
         // the leaf text itself is unchanged (structure reorder). Compare each
         // candidate element's rendered text, count exact matches, and only resolve
         // when exactly one candidate carries the quote.
-        const expectedTag = typeof locator.tag === 'string' && locator.tag.length > 0 ? locator.tag.toLowerCase() : ''
+        const expectedTag = locator.anchorTarget === 'descendant' && typeof locator.anchorLeafTag === 'string' && locator.anchorLeafTag.length > 0
+          ? locator.anchorLeafTag
+          : (typeof locator.tag === 'string' && locator.tag.length > 0 ? locator.tag.toLowerCase() : '')
         const candidates = []
         const elements = document.getElementsByTagName(expectedTag.length > 0 ? expectedTag : '*')
         let scanned = 0
@@ -15167,11 +15491,26 @@ function dwClearNativeAtmospheres() {
           const approximate = annotationScoreQuoteMatches(elementText, quote, undefined, 1)
           if (approximate.length > 0 && approximate[0].score >= 0.5) candidates.push(element)
         }
-        if (candidates.length > 1) return 'ambiguous'
-        if (candidates.length === 1) {
-          const status = validateFallbackHit(candidates[0], ref, { proximity: false })
-          if (status === 'resolved' || status === 'changed') return status
+        if (candidates.length === 0) return null
+        if (locator.anchorTarget === 'descendant') {
+          const targets = []
+          let ambiguous = false
+          for (const leaf of candidates) {
+            const climb = resolveDescendantClimb(ref, leaf)
+            if (climb === null) continue
+            if (climb.status === 'ambiguous') ambiguous = true
+            else if (climb.element !== null && !targets.includes(climb.element)) targets.push(climb.element)
+          }
+          if (ambiguous || targets.length > 1) return 'ambiguous'
+          if (targets.length === 1) {
+            const status = validateFallbackHit(targets[0], ref, { proximity: true })
+            if (status === 'resolved' || status === 'changed') return status
+          }
+          return null
         }
+        if (candidates.length > 1) return 'ambiguous'
+        const status = validateFallbackHit(candidates[0], ref, { proximity: false })
+        if (status === 'resolved' || status === 'changed') return status
         return null
       }
 
@@ -15182,6 +15521,7 @@ function dwClearNativeAtmospheres() {
        * @returns {string | null} status.
        */
       function resolveRefTextPosition(ref) {
+        noteFallbackScan()
         const locator = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : null
         if (locator === null || locator.textPosition === null || typeof locator.textPosition !== 'object') return null
         const position = locator.textPosition
@@ -15201,6 +15541,13 @@ function dwClearNativeAtmospheres() {
         // A slice that occurs more than once cannot identify one occurrence.
         if (rendered.text.indexOf(quote.exact) !== position.start) return null
         const element = annotationElementAtRenderedOffset(container, position.start)
+        if (element === null) return null
+        if (locator.anchorTarget === 'descendant') {
+          const climb = resolveDescendantClimb(ref, element)
+          if (climb === null) return null
+          if (climb.status === 'ambiguous') return 'ambiguous'
+          return validateFallbackHit(climb.element, ref, { proximity: true, structural: true })
+        }
         return validateFallbackHit(element, ref, { proximity: true, structural: true })
       }
 
@@ -15211,6 +15558,7 @@ function dwClearNativeAtmospheres() {
        * @returns {string | null} status or null to continue.
        */
       function resolveRefXPath(ref) {
+        noteFallbackScan()
         const xpath = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' && typeof ref.locator.xpath === 'string'
           ? ref.locator.xpath : ''
         if (xpath.length === 0) return null
@@ -15253,6 +15601,7 @@ function dwClearNativeAtmospheres() {
 
       /** Resolve the quote's element for fallback marks. @param {object} ref - record. @returns {Element | null} node. */
       function resolveRefTextQuoteNode(ref) {
+        noteFallbackScan()
         const quote = ref?.locator?.textQuote ?? null
         if (quote === null || typeof quote !== 'object' || typeof quote.exact !== 'string') return null
         for (const scope of quoteSearchScopes(ref)) {
@@ -15260,9 +15609,16 @@ function dwClearNativeAtmospheres() {
           const matches = annotationScoreQuoteMatches(rendered.text, quote, undefined, 2)
           if (matches.length === 0 || matches[0].score < 0.85) continue
           const element = annotationElementAtRenderedOffset(scope, matches[0].index)
+          if (ref?.locator?.anchorTarget === 'descendant') {
+            const climb = resolveDescendantClimb(ref, element)
+            if (climb !== null && climb.status !== 'ambiguous' && climb.element !== null) return climb.element
+            continue
+          }
           if (validateFallbackHit(element, ref) === 'resolved') return element
         }
-        const tag = ref?.locator?.tag ?? ''
+        const tag = ref?.locator?.anchorTarget === 'descendant' && typeof ref?.locator?.anchorLeafTag === 'string'
+          ? ref.locator.anchorLeafTag
+          : (ref?.locator?.tag ?? '')
         const elements = document.getElementsByTagName(tag.length > 0 ? String(tag).toLowerCase() : '*')
         for (let index = 0; index < elements.length && index < ANNOTATION_FALLBACK_SCAN_MAX; index += 1) {
           const element = elements[index]
@@ -15275,6 +15631,11 @@ function dwClearNativeAtmospheres() {
           if (contextMatches.length === 0 || contextMatches[0].score < 0.85) continue
           const mapped = annotationElementAtRenderedOffset(parent, contextMatches[0].index)
           if (mapped !== element && (mapped === null || (!element.contains(mapped) && !mapped.contains(element)))) continue
+          if (ref?.locator?.anchorTarget === 'descendant') {
+            const climb = resolveDescendantClimb(ref, element)
+            if (climb !== null && climb.status !== 'ambiguous' && climb.element !== null) return climb.element
+            continue
+          }
           if (validateFallbackHit(element, ref) === 'resolved') return element
         }
         return null
@@ -15282,6 +15643,7 @@ function dwClearNativeAtmospheres() {
 
       /** Resolve the text-position element for fallback marks. @param {object} ref - record. @returns {Element | null} node. */
       function resolveRefTextPositionNode(ref) {
+        noteFallbackScan()
         const position = ref?.locator?.textPosition ?? null
         const quote = ref?.locator?.textQuote ?? null
         if (position === null || quote === null || typeof quote.exact !== 'string') return null
@@ -15291,6 +15653,11 @@ function dwClearNativeAtmospheres() {
           const rendered = annotationRenderedTextOf(container, 1200)
           if (rendered.text.slice(position.start, position.end) !== quote.exact) return null
           const element = annotationElementAtRenderedOffset(container, position.start)
+          if (ref?.locator?.anchorTarget === 'descendant') {
+            const climb = resolveDescendantClimb(ref, element)
+            if (climb === null || climb.status === 'ambiguous' || climb.element === null) return null
+            return validateFallbackHit(climb.element, ref, { proximity: true, structural: true }) === 'resolved' ? climb.element : null
+          }
           return validateFallbackHit(element, ref, { structural: true }) === 'resolved' ? element : null
         } catch {
           return null
@@ -15299,6 +15666,7 @@ function dwClearNativeAtmospheres() {
 
       /** Resolve the XPath element for fallback marks. @param {object} ref - record. @returns {Element | null} node. */
       function resolveRefXPathNode(ref) {
+        noteFallbackScan()
         const xpath = ref?.locator?.xpath ?? ''
         if (typeof xpath !== 'string' || xpath.length === 0) return null
         try {
@@ -15321,7 +15689,8 @@ function dwClearNativeAtmospheres() {
         const cacheKey = annotationFallbackCacheKey(ref.id, domRevision)
         const cached = fallbackStatusCache.get(cacheKey)
         if (cached !== undefined) return cached
-        const outcome = annotationResolveStatus({
+        statusResolveCount += 1
+        let outcome = annotationResolveStatus({
           candidates: ref.locator.candidates,
           expectedTag: ref.locator.tag,
           uniqueSelector: typeof ref.locator.uniqueSelector === 'string' ? ref.locator.uniqueSelector : '',
@@ -15343,9 +15712,48 @@ function dwClearNativeAtmospheres() {
           resolveTextPosition: () => resolveRefTextPosition(ref),
           resolveXPath: () => resolveRefXPath(ref)
         })
+        // A3/T38 (③): descendant anchors trust the text layer over a CSS "changed"
+        // hit on a look-alike; resolved/ambiguous from the descendant decides.
+        if (ref.locator.anchorTarget === 'descendant' && outcome.status === 'changed') {
+          const quoteStatus = resolveRefTextQuote(ref)
+          if (quoteStatus === 'resolved') outcome = { status: 'resolved', via: 'text-quote' }
+          else if (quoteStatus === 'ambiguous') outcome = { status: 'ambiguous', via: 'text-quote' }
+        }
+        const detail = { ...outcome, confidence: annotationStatusConfidence(ref, outcome) }
         if (fallbackStatusCache.size > 400) fallbackStatusCache.clear()
-        fallbackStatusCache.set(cacheKey, outcome)
-        return outcome
+        fallbackStatusCache.set(cacheKey, detail)
+        return detail
+      }
+
+      /**
+       * A3/T38 (④): deterministic test hook — resolve the first current record
+       * twice and report scan-counter deltas (first may scan, second must be 0).
+       * @returns {object} probe result.
+       */
+      function debugFallbackScanProbe() {
+        const state = snapshot().state
+        const ref = state.collection.find((entry) => entry !== null && typeof entry === 'object' && !annotationIsGroup(entry)
+          && (entry.session?.sessionId ?? null) === currentSessionId())
+        if (ref === undefined) return { ok: false, reason: 'no current record' }
+        const before = fallbackScanCount
+        const resolvesBefore = statusResolveCount
+        statusDetailOf(ref)
+        const afterFirst = fallbackScanCount
+        const resolvesFirst = statusResolveCount
+        const second = statusDetailOf(ref)
+        const afterSecond = fallbackScanCount
+        const resolvesSecond = statusResolveCount
+        return {
+          ok: true,
+          id: ref.id,
+          before,
+          firstDelta: afterFirst - before,
+          secondDelta: afterSecond - afterFirst,
+          resolutionFirstDelta: resolvesFirst - resolvesBefore,
+          resolutionSecondDelta: resolvesSecond - resolvesFirst,
+          status: second.status,
+          confidence: second.confidence ?? 'strong'
+        }
       }
 
       /** Compat status accessor: the four statuses keep their meaning.      /** Compat status accessor: the four statuses keep their meaning. @param {object} ref - record. @returns {string} status. */
@@ -18090,6 +18498,7 @@ function dwClearNativeAtmospheres() {
         copyXPath,
         copyJsPath,
         copyFullXPath,
+        debugFallbackScanProbe,
         isInCollection,
         collectionScopeOf,
         currentSessionId,
@@ -19170,7 +19579,10 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       const scope = controller.collectionScopeOf(entry)
       // A resolution chip only means something for the current page's Session; for
       // another Session the row is marked `other` instead of claiming a live match (F9).
-      const status = scope === 'current' ? controller.statusOf(entry) : 'other'
+      const statusDetail = scope === 'current' ? controller.statusDetailOf(entry) : null
+      const status = statusDetail === null ? 'other' : statusDetail.status
+      const confidence = statusDetail !== null && typeof statusDetail === 'object' ? (statusDetail.confidence ?? 'strong') : 'strong'
+      const statusLabel = status !== 'other' ? t(annotationStatusLabelKey(status, confidence)) : ''
       const locator = describeLocator(entry)
       const included = scope === 'current' && entry.included !== false
       const sessionId = entry.session !== null && typeof entry.session === 'object' ? entry.session.sessionId : null
@@ -19189,6 +19601,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         'data-psa-ref': entry.id,
         'data-psa-entry-scope': scope,
         'data-psa-status': status,
+        'data-psa-confidence': confidence,
         'data-psa-entry-included': included ? 'true' : 'false'
       },
       React.createElement('div', { className: 'psa-entry-head' },
@@ -19223,8 +19636,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
             className: 'psa-status-dot',
             'data-psa-status': status,
             'data-psa-own': '',
-            title: t(`popover.status.${status}`),
-            'aria-label': t(`popover.status.${status}`)
+            'data-psa-confidence': confidence,
+            title: statusLabel,
+            'aria-label': statusLabel
           })),
       React.createElement('div', { className: 'psa-entry-meta psa-sb-meta', 'data-psa-entry-meta': '', 'data-psa-own': '' },
         `${metadata.join(' · ')} · ${t('sidebar.updated', { time: formatAnnotationTime(entry.updatedAt || entry.at) })}`),
@@ -19543,7 +19957,11 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
             }, t('detail.save')))
           : null),
       React.createElement('dl', { className: 'psa-detail-meta', 'data-psa-detail-meta': '', 'data-psa-own': '' },
-        metaRow(t('detail.status'), `${t(`popover.status.${status}`)}${controller.statusDetailOf(record).via !== 'css' ? ` · ${t(`via.${controller.statusDetailOf(record).via}`)}` : ''}`, 'data-psa-detail-status'),
+        (() => {
+          const detail = controller.statusDetailOf(record)
+          const confidence = detail.confidence ?? 'strong'
+          return metaRow(t('detail.status'), `${t(annotationStatusLabelKey(status, confidence))}${detail.via !== 'css' ? ` · ${t(`via.${detail.via}`)}` : ''}`, 'data-psa-detail-status')
+        })(),
         metaRow(t('detail.locator'), locator, 'data-psa-detail-locator'),
         metaRow(t('detail.position'), positionText, 'data-psa-detail-position'),
         metaRow(t('detail.session'), sessionText, 'data-psa-detail-session'),
@@ -19886,8 +20304,8 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         'data-psa-status': status
       },
       React.createElement('span', { className: 'psa-status-dot', 'data-psa-status': status, 'data-psa-own': '' }),
-      React.createElement('span', { 'data-psa-via': via, 'data-psa-own': '' },
-        `${t('popover.statusLabel')} · ${t(`popover.status.${status}`)}${via !== 'css' ? ` · ${t(`via.${via}`)}` : ''}`),
+      React.createElement('span', { 'data-psa-via': via, 'data-psa-confidence': statusDetail.confidence ?? 'strong', 'data-psa-own': '' },
+        `${t('popover.statusLabel')} · ${t(annotationStatusLabelKey(status, statusDetail.confidence ?? 'strong'))}${via !== 'css' ? ` · ${t(`via.${via}`)}` : ''}`),
       React.createElement('span', { className: 'psa-levels' },
         React.createElement('button', {
           type: 'button',
@@ -20392,6 +20810,16 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationHasStrongIdentity,
         annotationStructuralFallbackStatus,
         annotationCopyAnchorDecision,
+        annotationRenderedTextRepeatCount,
+        annotationFirstTextLeafDescendant,
+        annotationAncestorTagChain,
+        annotationDescendantAncestorMatches,
+        annotationStatusConfidence,
+        annotationStatusLabelKey,
+        debugFallbackScanProbe: () => (annotationController !== null && annotationController !== undefined
+          && typeof annotationController.debugFallbackScanProbe === 'function'
+          ? annotationController.debugFallbackScanProbe()
+          : { ok: false, reason: 'controller unavailable' }),
         upsertAnnotationRecord,
         removeAnnotationRecord,
         restoreAnnotationRecord,
