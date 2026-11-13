@@ -82,7 +82,11 @@ heading is added until the release is cut.
   when its data is absent, so an empty Session keeps the plain card. The card
   grows to 320 px (still flush on the sidebar edge with the same native tooltip
   chrome) and clamps at `min(560px, 100vh - 16px)`; subagent cards gain a compact
-  Session-title line. No Host route, new inject, or package dependency.
+  Session-title line. While a **live** Session's card stays open the figures
+  keep refreshing in place from the pushed projection frames (the panel's 1 s
+  clock re-reads the live snapshot; no extra polling or network); a cold/persisted
+  Session still gets exactly one deduplicated `refreshProjections` read. No Host
+  route, new inject, or package dependency.
 - Interrupted-state SSE stream: `GET /api/power-suite.interrupted-events`
   pushes `turn/start`/`turn/end` invalidations (`{sessionId, parentSession,
   event}`) to every connected browser page, so cross-device badges/Continue/
@@ -115,9 +119,14 @@ heading is added until the release is cut.
   the gaps. The row-body hover pill stays content-paced while the action/chevron
   highlights keep fixed 22×22 / 24×26 geometry on one column.
 - Running & recent current-highlight: the animated conic rainbow ring is replaced
-  by a low-intensity animated rainbow **atmosphere painted inside the row's own
+  by a vivid animated rainbow **atmosphere painted inside the row's own
   rounded-rectangle highlight**, with the row's real content (title, time,
-  leading glyph, actions) layered above it under a faint contrast scrim. It
+  leading glyph, actions) layered above it under a faint contrast scrim. The
+  renderer uses source-over saturated blobs (vibrance 1.72, intensity .64,
+  `saturate(1.5)` plus per-theme multiply/screen blending and a lightened scrim)
+  so the pill reads as saturated rainbow gas rather than a grey wash; measured
+  blob-core saturation is ~0.40–0.43 (static ~0.30–0.34 under reduced motion)
+  and the harness pins that baseline. It
   applies to the current Session's card row (parent and nested child rows), the
   owning native Workspace row, and the native sidebar Session row of the open
   Session (`data-psd-current-session`), is clipped to each row's own radius, is
