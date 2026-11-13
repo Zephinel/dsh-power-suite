@@ -753,7 +753,7 @@ if (ui === undefined) {
     const initial = ui.createAnnotationState()
     assert.deepEqual(Object.keys(initial).sort(), STATE_KEYS)
     assert.equal(initial.phase, 'off')
-    assert.equal(initial.view, 'status')
+    assert.equal(initial.view, 'collection', 'the managed list is the default rail body')
     assert.equal(initial.hoverId, null)
     assert.deepEqual(plain(initial.selection), [])
     assert.equal(initial.note, '')
@@ -768,7 +768,7 @@ if (ui === undefined) {
 
     const active = ui.reduceAnnotationState(initial, { type: 'activate' })
     assert.equal(active.phase, 'idle')
-    assert.equal(active.view, 'status')
+    assert.equal(active.view, 'collection', 'activation shows the managed list immediately')
     assert.equal(initial.phase, 'off', 'reducer is pure')
   })
 
@@ -836,25 +836,25 @@ if (ui === undefined) {
     const selected = ui.reduceAnnotationState(state, { type: 'selectSingle', ref: state.collection[0] })
     const deactivated = ui.reduceAnnotationState(selected, { type: 'deactivate' })
     assert.equal(deactivated.phase, 'off')
+    assert.equal(deactivated.view, 'collection', 'the next activation defaults to the list')
     assert.deepEqual(plain(deactivated.collection), plain(state.collection), 'collection survives deactivation')
     assert.deepEqual(plain(deactivated.selection), [])
-    assert.equal(deactivated.view, 'status')
 
     const switched = ui.reduceAnnotationState(deactivated, { type: 'activate' })
     const withSelection = ui.reduceAnnotationState(switched, { type: 'selectSingle', ref })
     const switchedSession = ui.reduceAnnotationState(withSelection, { type: 'session', sessionId: SESSION_B })
     assert.equal(switchedSession.sessionId, SESSION_B)
+    assert.equal(switchedSession.view, 'collection', 'the list stays the default view across sessions')
     assert.deepEqual(plain(switchedSession.selection), [], 'session switch clears the selection')
     assert.equal(switchedSession.hoverId, null)
     assert.equal(switchedSession.note, '')
-    assert.equal(switchedSession.view, 'status')
     assert.deepEqual(plain(switchedSession.collection), plain(state.collection), 'collection survives the switch')
 
     const off = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'session', sessionId: SESSION_B })
     assert.equal(off.phase, 'off', 'a switch while inactive stays off')
   })
 
-  test('reducer Esc ladder steps note -> selection -> view -> off', () => {
+  test('reducer Esc ladder steps note -> selection -> settings -> off', () => {
     const ref = refOf({ name: 'Target' })
     let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
     state = ui.reduceAnnotationState(state, { type: 'selectSingle', ref })
@@ -868,11 +868,12 @@ if (ui === undefined) {
     assert.deepEqual(plain(state.selection), [], 'clears the selection next')
     assert.equal(state.phase, 'idle')
 
-    state = ui.reduceAnnotationState(state, { type: 'openView', view: 'collection' })
-    assert.equal(state.view, 'collection')
-    assert.equal(state.phase, 'collection')
+    // A3/T26: the list is the default view; settings is the only stepped-back view.
+    state = ui.reduceAnnotationState(state, { type: 'openView', view: 'settings' })
+    assert.equal(state.view, 'settings')
+    assert.equal(state.phase, 'idle')
     state = ui.reduceAnnotationState(state, { type: 'exitOne' })
-    assert.equal(state.view, 'status', 'a rail view closes before the mode')
+    assert.equal(state.view, 'collection', 'Esc leaves settings back to the list')
     assert.equal(state.phase, 'idle')
 
     state = ui.reduceAnnotationState(state, { type: 'exitOne' })
