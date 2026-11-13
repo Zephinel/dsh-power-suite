@@ -371,6 +371,17 @@
   Session has annotation records; it is an addition to that menu, not a separate
   picker.
 
+- **Chip hover preview matches records by element label.** Two annotations with
+  the same element label resolve to the first matching record for the preview
+  (the record itself is correct); native composer chips are ignored. Annotations
+  captured before the message/turn-anchor change keep their older positional
+  locators and can still report missing/changed — re-annotate those elements to
+  get the stable anchor (no automatic remap is performed, because silently
+  pointing an old annotation at a same-looking element would be dishonest).
+- **Virtualized-offscreen nodes report missing.** A chat node that has been
+  unmounted by virtualization genuinely no longer exists in the DOM; the
+  annotation stays usable as locator data and shows the honest status.
+
 ## Raw artifacts and implicit continuation
 
 - The raw/preview routes accept any owner-authorized absolute path (the same

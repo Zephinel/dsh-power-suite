@@ -2315,6 +2315,84 @@ if (ui === undefined) {
     assert.ok(source.includes('pointer-events:none') && source.includes('.psa-layer{position:fixed'), 'marks layer remains pointer-transparent')
   })
 
+  test('A3/T21: chat leaf locators anchor to stable message/turn wrappers instead of positional chat paths', () => {
+    const expected = '[data-message-id="message-7"] > div:nth-of-type(1) > li:nth-of-type(2)'
+    const descriptor = {
+      tag: 'li',
+      role: 'listitem',
+      attrs: [{ name: 'role', value: 'listitem' }],
+      anchorPaths: [
+        { selector: '[data-message-id="message-7"]', steps: [{ tag: 'div', index: 1 }, { tag: 'li', index: 2 }] },
+        { selector: '[data-conversation-region="chat"]', steps: [{ tag: 'div', index: 3 }, { tag: 'ul', index: 1 }, { tag: 'li', index: 2 }] }
+      ]
+    }
+    const queried = []
+    const unique = ui.buildUniqueSelector(descriptor, (selector) => {
+      queried.push(selector)
+      return selector === expected ? [{ tagName: 'LI' }] : []
+    })
+    assert.equal(unique.verified, true, 'the message-anchored selector must verify as unique')
+    assert.equal(unique.selector, expected, 'capture must use the stable message/turn anchor first, not the chat-region nth path')
+    assert(queried.some((selector) => selector.includes('data-message-id="message-7"')), 'the message anchor was never tried')
+    const source = client.source
+    for (const [listName, attr] of [
+      ['UNIQUE_SELECTOR_ATTRIBUTES', 'data-message-id'],
+      ['UNIQUE_SELECTOR_ATTRIBUTES', 'data-turn-id'],
+      ['LOCATOR_DATA_ATTRIBUTES', 'data-message-id'],
+      ['LOCATOR_DATA_ATTRIBUTES', 'data-turn-id'],
+      ['STABLE_ANCESTOR_ATTRIBUTES', 'data-message-id'],
+      ['STABLE_ANCESTOR_ATTRIBUTES', 'data-turn-id']
+    ]) {
+      const start = source.indexOf(`const ${listName}`)
+      const slice = start >= 0 ? source.slice(start, start + 800) : ''
+      assert(start >= 0 && slice.includes(attr), `${listName} must keep ${attr} as a stable anchor`)
+    }
+  })
+
+  test('A3/T21: chip hover preview is a pointer-transparent tooltip backed by the local record store', () => {
+    const source = client.source
+    assert(source.includes('function AnnotationChipPreview'), 'the chip hover preview component exists')
+    const componentStart = source.indexOf('function AnnotationChipPreview')
+    const componentEnd = source.indexOf('\n    /**', componentStart)
+    const component = source.slice(componentStart, componentEnd > 0 ? componentEnd : source.length)
+    assert(component.includes("role: 'tooltip'"), 'the preview must be a tooltip')
+    assert(component.includes("'data-psa-chip-preview': ''"), 'the preview must be queryable for E2E')
+    assert(component.includes("annotationLocatorText(record)"), 'the preview shows the recorded locator')
+    assert(component.includes("t('detail.position')"), 'the preview shows the captured position box')
+    assert(component.includes("controller.statusOf(record)"), 'the preview shows the live resolution status')
+    const controllerStart = source.indexOf('function onChipPointerOver')
+    const controllerEnd = source.indexOf('\n      /**', controllerStart)
+    const controller = source.slice(controllerStart, controllerEnd > 0 ? controllerEnd : source.length)
+    assert(controller.includes("'[data-composer-chip=\"ui-annotation\"]'"),
+      'only chips rendered with our source get the preview (shell data attribute, no shell modification)')
+    assert(controller.includes('chipPreviewModel'), 'the preview reads the local collection, not the network')
+    assert(source.includes('.psa-chip-preview{') && /\.psa-chip-preview\{[^}]*pointer-events:none/.test(source),
+      'the preview CSS must be pointer-transparent')
+    assert(source.includes("document.addEventListener('pointerout'"), 'leaving the chip hides the preview')
+    assert(source.includes("document.addEventListener('pointermove'"), 'a stationary re-show after Esc is supported')
+    assert(source.includes('function onChipScroll'), 'scrolling a chip ancestor hides the preview')
+    const keyStart = source.indexOf('function onKeyDown(event)')
+    const keyEnd = source.indexOf('\n      function ', keyStart)
+    const keyBody = source.slice(keyStart, keyEnd > 0 ? keyEnd : source.length)
+    assert(keyBody.includes('chipPreview !== null') && keyBody.includes('hideChipPreview()'),
+      'Esc closes the chip preview before the mode Esc ladder')
+  })
+
+  test('A3/T21: the rainbow wrapper hugs the control border box (no bottom baseline gap)', () => {
+    const source = client.source
+    const rule = /\.psa-rainbow-field > textarea,[\s\S]{0,220}display:block;vertical-align:top/
+    assert(rule.test(source), 'wrapped textarea/input/select must render as blocks inside the ring wrapper')
+    const start = source.indexOf('.psa-rainbow-field{')
+    const end = source.indexOf('}', start)
+    const base = source.slice(start, end)
+    assert(base.includes('position:relative') && base.includes('display:block'),
+      'the ring wrapper must be a relative block so its border box matches the control')
+    const after = source.indexOf('.psa-rainbow-field::after{')
+    const afterEnd = source.indexOf('}', after)
+    const ring = source.slice(after, afterEnd)
+    assert(ring.includes('inset:-2px'), 'the ring stays a symmetric 2px band around the control border box')
+  })
+
   //#region geometry and layout
 
   test('clampLauncherPosition keeps the launcher fully inside the viewport with an 8px margin', () => {

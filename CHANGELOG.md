@@ -232,6 +232,17 @@ heading is added until the release is cut.
   longer list PTC mode (`ptc-mode` is a message-source key; `tool/ptc-dispatch`
   remains activity).
 
+- UI element annotation follow-ups: hovering a composer annotation reference
+  chip (single or grouped) now shows the custom annotation detail tooltip —
+  requirement, locator, captured position box, Session/Workspace, live status,
+  or the group count/list — while clicking keeps its existing behavior; chat-flow
+  element picks now anchor to `data-message-id`/`data-turn-id`, so leaf targets in
+  a streaming/virtualized chat resolve across re-renders instead of reporting a
+  stale positional locator (the four statuses stay truthful, and annotations
+  captured before this change are not silently remapped); and the rainbow input
+  focus ring now hugs the wrapped control's border box on all four edges (the
+  inline-level baseline gap that exposed the control's bottom border is fixed).
+
 ### Removed
 
 - Standalone Project detail page: the `project-view` feature is removed —
