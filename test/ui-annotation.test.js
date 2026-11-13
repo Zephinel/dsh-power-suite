@@ -2316,13 +2316,13 @@ if (ui === undefined) {
   })
 
   test('A3/T21: chat leaf locators anchor to stable message/turn wrappers instead of positional chat paths', () => {
-    const expected = '[data-message-id="message-7"] > div:nth-of-type(1) > li:nth-of-type(2)'
+    const expected = '[data-chat-node-key="node-7"] > div:nth-of-type(1) > li:nth-of-type(2)'
     const descriptor = {
       tag: 'li',
       role: 'listitem',
       attrs: [{ name: 'role', value: 'listitem' }],
       anchorPaths: [
-        { selector: '[data-message-id="message-7"]', steps: [{ tag: 'div', index: 1 }, { tag: 'li', index: 2 }] },
+        { selector: '[data-chat-node-key="node-7"]', steps: [{ tag: 'div', index: 1 }, { tag: 'li', index: 2 }] },
         { selector: '[data-conversation-region="chat"]', steps: [{ tag: 'div', index: 3 }, { tag: 'ul', index: 1 }, { tag: 'li', index: 2 }] }
       ]
     }
@@ -2333,15 +2333,24 @@ if (ui === undefined) {
     })
     assert.equal(unique.verified, true, 'the message-anchored selector must verify as unique')
     assert.equal(unique.selector, expected, 'capture must use the stable message/turn anchor first, not the chat-region nth path')
-    assert(queried.some((selector) => selector.includes('data-message-id="message-7"')), 'the message anchor was never tried')
+    assert(queried.some((selector) => selector.includes('data-chat-node-key="node-7"')), 'the real chat-node anchor was never tried')
     const source = client.source
     for (const [listName, attr] of [
-      ['UNIQUE_SELECTOR_ATTRIBUTES', 'data-message-id'],
-      ['UNIQUE_SELECTOR_ATTRIBUTES', 'data-turn-id'],
-      ['LOCATOR_DATA_ATTRIBUTES', 'data-message-id'],
-      ['LOCATOR_DATA_ATTRIBUTES', 'data-turn-id'],
-      ['STABLE_ANCESTOR_ATTRIBUTES', 'data-message-id'],
-      ['STABLE_ANCESTOR_ATTRIBUTES', 'data-turn-id']
+      ['UNIQUE_SELECTOR_ATTRIBUTES', 'data-chat-node-key'],
+      ['UNIQUE_SELECTOR_ATTRIBUTES', 'data-chat-anchor-key'],
+      ['UNIQUE_SELECTOR_ATTRIBUTES', 'data-chat-group-key'],
+      ['UNIQUE_SELECTOR_ATTRIBUTES', 'data-chat-turn'],
+      ['UNIQUE_SELECTOR_ATTRIBUTES', 'data-chat-flow-key'],
+      ['LOCATOR_DATA_ATTRIBUTES', 'data-chat-node-key'],
+      ['LOCATOR_DATA_ATTRIBUTES', 'data-chat-anchor-key'],
+      ['LOCATOR_DATA_ATTRIBUTES', 'data-chat-group-key'],
+      ['LOCATOR_DATA_ATTRIBUTES', 'data-chat-turn'],
+      ['LOCATOR_DATA_ATTRIBUTES', 'data-chat-flow-key'],
+      ['STABLE_ANCESTOR_ATTRIBUTES', 'data-chat-node-key'],
+      ['STABLE_ANCESTOR_ATTRIBUTES', 'data-chat-anchor-key'],
+      ['STABLE_ANCESTOR_ATTRIBUTES', 'data-chat-group-key'],
+      ['STABLE_ANCESTOR_ATTRIBUTES', 'data-chat-turn'],
+      ['STABLE_ANCESTOR_ATTRIBUTES', 'data-chat-flow-key']
     ]) {
       const start = source.indexOf(`const ${listName}`)
       const slice = start >= 0 ? source.slice(start, start + 800) : ''
@@ -2391,6 +2400,38 @@ if (ui === undefined) {
     const afterEnd = source.indexOf('}', after)
     const ring = source.slice(after, afterEnd)
     assert(ring.includes('inset:-2px'), 'the ring stays a symmetric 2px band around the control border box')
+  })
+
+  test('A3/T22: chat-node anchored selectors survive re-renders and report honest missing/changed', () => {
+    const selector = '[data-chat-node-key="node-7"] > div:nth-of-type(1) > li:nth-of-type(2)'
+    let elements = [{ tagName: 'LI', isConnected: true, textContent: 'Fixture markdown list item' }]
+    const queryAll = (query) => (query === selector ? elements : [])
+    const liveInfo = (element) => ({
+      isConnected: element.isConnected,
+      textContent: element.textContent,
+      expectedText: 'Fixture markdown list item',
+      expectedDigest: '',
+      actualDigest: '',
+      expectedName: '',
+      actualName: ''
+    })
+    const resolve = () => ui.resolveRefStatus({
+      candidates: [],
+      expectedTag: 'li',
+      uniqueSelector: selector,
+      queryAll,
+      liveInfo
+    })
+    assert.equal(resolve(), 'resolved', 'the chat-node anchored leaf must resolve on first capture')
+    // Assistant markdown re-render replaced the li DOM node but kept the chat node.
+    elements = [{ tagName: 'LI', isConnected: true, textContent: 'Fixture markdown list item' }]
+    assert.equal(resolve(), 'resolved', 'a re-rendered li inside the same chat node must stay resolved')
+    // Real content change → Changed (never a fake Resolved).
+    elements = [{ tagName: 'LI', isConnected: true, textContent: 'Different content' }]
+    assert.equal(resolve(), 'changed', 'changed chat content must report changed')
+    // Chat node unmounted/virtualized away → honest Missing.
+    elements = []
+    assert.equal(resolve(), 'missing', 'a genuinely unmounted chat leaf must report missing')
   })
 
   //#region geometry and layout
