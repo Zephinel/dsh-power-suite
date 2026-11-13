@@ -112,8 +112,8 @@ reviewed files) to publish `docs/assets/annotation-idle.png`, `annotation-mode.p
 ## Evidence scope (pre-merge branch builds)
 
 > The Phase 1, Phase 2-A and Phase 2-B tables below are **pre-merge branch
-> evidence** for `feat/annotation-ux`: seam 48/57/66 and `npm test` 193/204/214
-> counts were recorded on those branch builds. The merged-build acceptance record
+> evidence** for `feat/annotation-ux`: seam 48/57/66/67 and `npm test`
+> 193/204/214/217 counts were recorded on those branch builds. The merged-build acceptance record
 > (Lead, after the final merge + verifier round 2) lives in
 > [`docs/verification.md`](../../docs/verification.md); use that for the release
 > verdict instead of these branch numbers.
@@ -177,7 +177,9 @@ Scenario 10 now also guards the F-2 regression that Phase 1 silently persisted `
 ## Current evidence (Phase 2-B annotation build)
 
 Phase 2-B (on top of the Phase 2-A commits), Node v24.22.2, live GUI at 1728x900,
-**66-key** seam. Logs are external evidence under `.tmp-work/` (gitignored).
+**66-key** seam for the Phase 2-B build; the later inner-first surface-hover
+follow-up bumps it to **67 keys**. Logs are external evidence under `.tmp-work/`
+(gitignored).
 
 | Check | Command | Result |
 |-------|---------|--------|
@@ -207,6 +209,23 @@ probe's exact reason in the SKIP text. When the marker IS produced but the
 pin/select/no-mode-close check fails, scenario 11 retries once and then **FAILS**;
 it is never masked as SKIP. `13f` (plain-text chip fallback) is SKIP because the
 live GUI always installs the chip services; the fallback path is unit-tested.
+
+## Post-merge follow-up evidence: inner-first surface hover
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Unit model | `npm test` | **217/217** pass (new `annotationSurfacePickLevel` cases + pickLevels wiring) |
+| Repository gate | `npm run check` | exit 0 |
+| Smoke | `node test/browser/annotation.e2e.mjs --smoke` | **6/6**, seam **67** keys, 0 page errors |
+| Floating-surface inner-first hover/click | `--scenario 10 --no-shots` | **PASS**: native card row hover 212×16 inside 244×92 card; synthetic panel row 298×16 inside 320×150 panel; background/padding hover → whole surface; click inner row → that row's popover; Parent → whole card, Child → row; F3/F4/style/ordinary-page regressions unchanged |
+
+Semantics: a pointer hit inside a floating surface now resolves to the deepest
+meaningful level under the pointer (nearest semantic candidate or text-block row);
+background/padding hits keep the whole surface; Parent/Child walk the same capped
+level table. Close-up clips can be captured with
+`PSA_SURFACE_EVIDENCE_DIR=<dir> --scenario 10 --no-shots`
+(`native-card-inner-hover.png`, `native-card-whole-hover.png`,
+`synthetic-panel-inner-hover.png`, `synthetic-panel-whole-hover.png`).
 
 ## Current evidence (round 2, pre-merge annotation build)
 

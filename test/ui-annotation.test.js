@@ -64,7 +64,7 @@ if (ui === undefined) {
     'annotationWorkspaceLabel', 'annotationRoutePath', 'normalizeAnnotationViewport',
     'buildStableAncestors', 'buildUniqueSelector', 'annotationLocatorText',
     'normalizeAnnotationRecord', 'parseAnnotationStore', 'serializeAnnotationStore',
-    'annotationSurfaceRoot', 'annotationSurfaceLevels',
+    'annotationSurfaceRoot', 'annotationSurfaceLevels', 'annotationSurfacePickLevel',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -78,8 +78,9 @@ if (ui === undefined) {
    * selector/ancestors, v2 record store), 57 = A3 Phase 2-A (record commit/undo/
    * move/include helpers, mark badge excerpt, detail-card clamp), 66 = A3 Phase
    * 2-B (multi-delete undo, rail scope/selection helpers, chip ref round-trip,
-   * candidates and model serialization). The E2E `ACCEPTED_SEAM_GENERATIONS` must
-   * accept exactly these counts.
+   * candidates and model serialization), 67 = inner-first floating-surface pick
+   * level (hover an inner dropdown row, background keeps the whole surface). The
+   * E2E `ACCEPTED_SEAM_GENERATIONS` must accept exactly these counts.
    */
   const SEAM_GENERATION = SEAM_EXPORTS.length
   /** Accepted `Function.length` ranges from the frozen signatures (defaults reduce length). */
@@ -127,6 +128,7 @@ if (ui === undefined) {
     serializeAnnotationStore: [1, 2],
     annotationSurfaceRoot: [1, 2],
     annotationSurfaceLevels: [1, 2],
+    annotationSurfacePickLevel: [2, 4],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
     annotationSelectedEntries: [2, 2],
@@ -149,7 +151,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 66, 'the frozen Phase 2-B generation is pinned')
+    assert.equal(SEAM_GENERATION, 67, 'the frozen inner-first surface-pick generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -1043,6 +1045,80 @@ if (ui === undefined) {
     assert.equal(ui.annotationSurfaceLevels(null, surfaceAccess([])).length, 0)
     const many = Array.from({ length: 30 }, (_, index) => ({ id: `row-${index}`, text: `row ${index}` }))
     assert.equal(ui.annotationSurfaceLevels(root, surfaceAccess(many)).length, 12, 'inner levels are capped at 12')
+  })
+
+  test('A3 inner-first: annotationSurfacePickLevel picks the deepest level under the pointer', () => {
+    const root = { id: 'card' }
+    const row = { id: 'row' }
+    const text = { id: 'text' }
+    const span = { id: 'span' }
+    const portal = { id: 'portal' }
+    const floating = (element) => element.id === 'card' || element.id === 'inner'
+    const levels = [root, row, text].map((element) => ({ element, insideComposer: false }))
+    const chainOf = (...elements) => elements.map((element) => ({ element, insideComposer: false }))
+    // A hit on an inner text level (and its wrapper ancestors) resolves that level.
+    assert.deepEqual(
+      plain(ui.annotationSurfacePickLevel(chainOf(text, row, root, portal), levels, floating)),
+      { surface: { root, index: 2 }, index: 2 }
+    )
+    // A hit on a wrapper that is not itself a level resolves the nearest level ancestor.
+    assert.deepEqual(
+      plain(ui.annotationSurfacePickLevel(chainOf(span, row, root, portal), levels, floating)),
+      { surface: { root, index: 2 }, index: 1 }
+    )
+    // A semantic row candidate wins over the nearer leaf text inside it (dropdown rows).
+    const titleLeaf = { id: 'title-leaf' }
+    const rowButton = { id: 'row-button' }
+    const rowChain = chainOf(titleLeaf, rowButton, root, portal)
+    const rowLevels = [root, rowButton, titleLeaf].map((element) => ({ element, insideComposer: false }))
+    assert.equal(
+      plain(ui.annotationSurfacePickLevel(rowChain, rowLevels, floating, (element) => element.id === 'row-button')).index,
+      1,
+      'a semantic row candidate outranks the nearest text leaf'
+    )
+    assert.equal(
+      plain(ui.annotationSurfacePickLevel(rowChain, rowLevels, floating, () => false)).index,
+      2,
+      'without a semantic candidate the nearest text-block level wins'
+    )
+    // A background/padding hit (the surface root itself) keeps the whole surface.
+    assert.deepEqual(
+      plain(ui.annotationSurfacePickLevel(chainOf(root, portal), levels, floating)),
+      { surface: { root, index: 0 }, index: 0 }
+    )
+    // Containment fallback: an unknown wrapper hit resolves the LAST containing level.
+    row.contains = (element) => element === span || element === text
+    text.contains = () => false
+    const nested = { id: 'nested', contains: (element) => element === span }
+    const containmentLevels = [root, row, nested].map((element) => ({ element, insideComposer: false }))
+    assert.equal(plain(ui.annotationSurfacePickLevel(chainOf(span, root, portal), containmentLevels, floating)).index, 2)
+    // No surface at all: page chains keep the ordinary picker (index -1).
+    assert.deepEqual(
+      plain(ui.annotationSurfacePickLevel(chainOf(span, row), levels, () => false)),
+      { surface: null, index: -1 }
+    )
+    // Empty level list falls back to the surface root.
+    assert.deepEqual(
+      plain(ui.annotationSurfacePickLevel(chainOf(text, root, portal), [], floating)),
+      { surface: { root, index: 1 }, index: 0 }
+    )
+  })
+
+  test('A3 inner-first: pickLevels wires the deepest hover/click level and keeps Parent/Child legal', () => {
+    const source = client.source
+    const start = source.indexOf('function pickLevels')
+    assert.ok(start >= 0, 'the controller pickLevels exists')
+    const nextFunction = source.indexOf('\\n      function ', start + 'function pickLevels'.length)
+    const pickBody = source.slice(start, nextFunction > 0 ? nextFunction : source.length)
+    assert.ok(pickBody.includes('annotationSurfacePickLevel(chain, entries)'), 'pickLevels uses the inner-first helper')
+    assert.ok(pickBody.includes("surface: 'floating'"), 'surface metadata is preserved')
+    assert.ok(pickBody.includes('parentStep: -1'), 'surface Parent/Child direction is unchanged')
+    assert.ok(pickBody.includes('const index = pick.index'), 'the resolved index is used for hover/click')
+    assert.ok(source.includes('function shiftChain(delta)'), 'the Parent/Child control still exists')
+    const shiftStart = source.indexOf('function shiftChain(delta)')
+    const shiftEnd = source.indexOf('\\n      function ', shiftStart + 'function shiftChain'.length)
+    const shiftBody = source.slice(shiftStart, shiftEnd > 0 ? shiftEnd : source.length)
+    assert.ok(shiftBody.includes('lastPick.index + delta * lastPick.parentStep'), 'Parent/Child walks the same level table')
   })
 
   //#endregion
