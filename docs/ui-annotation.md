@@ -689,6 +689,40 @@ the recorded locator are inserted; the plugin never
 modifies the page to fix a stale reference. Re-locate works only for a resolved
 element and explains why when it cannot.
 
+### Multi-strategy anchors (CSS → XPath → text quote → text position)
+
+Text-bearing leaf records capture extra fallback anchors at annotation time
+(backward-compatible optional locator fields; the v3 document and old records stay
+valid):
+
+- `xpath` — absolute XPath, with an `//*[@id="…"]` short-circuit for a stable id;
+- `textQuote` — normalized (whitespace-collapsed, trimmed, bounded) `exact` text
+  plus `prefix`/`suffix` context;
+- `textPosition` — nearest container selector plus `start`/`end` offsets into the
+  container's normalized text;
+- `jsPath` — a DevTools-style `document.querySelector(...)` (or
+  `document.evaluate(...)`) expression.
+
+Resolution order on every re-resolve is **CSS candidates → XPath → text quote →
+text position**; the first unique match wins and the UI shows a small
+`via` hint (`· XPath`, `· text anchor`, `· text position`) beside the status. Only
+a unique text quotation resolves — multiple matches report **Matches several**;
+absent or changed text reports **No longer resolves** / **Content changed**
+honestly. The popover/detail status keeps the captured locator text unchanged;
+only the status line and `via` hint update.
+
+**Copy actions** — besides Copy locator, the popover exposes **Copy XPath** and
+**Copy JS path** (clipboard + toast, EN/ZH). The values come from the captured
+anchors (or are generated from the live node when absent); with no usable anchor
+or node the action shows an honest unavailable toast.
+
+**Selector stability scoring** — candidates are ordered by explicit tiers:
+stable `data-*` attributes / ids / aria attributes (tier 4) > semantic role and
+non-aria labels (3) > stable classes (2) > positional `tag`/`nth-of-type` paths
+(1/0), with the existing reliability as the within-tier score. Verified-unique
+CSS selectors still win the copy-locator string, and all candidates keep their
+unique verification.
+
 Change detection compares an 8-hex lowercase digest of the whitespace-collapsed
 sanitized text (derived data only; the raw page text is not stored, and the
 digest is empty for live input surfaces) and the captured accessible name with
