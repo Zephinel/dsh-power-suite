@@ -726,6 +726,31 @@ or node the action shows an honest unavailable toast.
   (block boundaries and `<br>` → a single space) with a rendered→raw offset map;
   quote exact/prefix/suffix and text-position offsets all use it (input values are
   still never read).
+- **Fail-closed identity (review MAJOR-1):** structural fallbacks (XPath and
+  text-position) only return **Resolved** when the record carries a real identity
+  signal — non-empty captured text (not the constant empty-FNV digest), a real
+  accessible name that is not the tag/role fallback, or a verified unique stable
+  locator that *still resolves to this element*. Icon-only/tag-only records
+  degrade honestly to **Content changed** and are never marked/copied through a
+  weak structural hit. This is one gate at the fallback boundary
+  (`annotationHasStrongIdentity` → `annotationStructuralFallbackStatus`), not
+  scattered checks.
+- **Capture scope/context:** quote context expands from the target occurrence
+  (≤60 prefix/suffix, total ≤200) and climbs to a wider scope when the same text
+  repeats outside the immediate parent; the sanitizer persists exactly what capture
+  verified (same constants). If the target occurrence cannot be located explicitly
+  and the text is duplicated, the quote is dropped (never first-match guessed).
+- **Bounded work:** fallback element scans are capped (400 elements / 32
+  candidates) and both fallback status and node caches are bounded per DOM
+  revision (cleared past 400 entries); repeated geometry frames reuse the cache.
+- **Rendered whitespace:** whitespace-only text nodes and skipped form-control
+  boundaries are preserved as separators, so `"Hello" + " " + "world"` renders as
+  `Hello world` (with offset mapping), matching visible text.
+- **Copy live-vs-saved:** Copy actions use a live node first and say so; when only
+  a saved anchor exists the toast explicitly says “saved … (target not live)”;
+  full XPath is only produced from a live node (otherwise an honest unavailable
+  toast). Copy XPath/JS path live in popover, detail card and rail row.
+
 - **Order and validation:** fallback order is now CSS → text quote (captured
   position.start as hint) → text position → XPath **last**. Every fallback hit must
   pass tag + text digest + accessible-name checks; XPath/text-position hits also

@@ -10307,11 +10307,18 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null
       const exact = annotationNormalizeQuoteText(typeof raw.exact === 'string' ? raw.exact : '', ANNOTATION_TEXT_QUOTE_MAX)
       if (exact.length === 0) return null
-      return {
-        exact,
-        prefix: annotationNormalizeQuoteText(typeof raw.prefix === 'string' ? raw.prefix : '', ANNOTATION_TEXT_CONTEXT_MAX),
-        suffix: annotationNormalizeQuoteText(typeof raw.suffix === 'string' ? raw.suffix : '', ANNOTATION_TEXT_CONTEXT_MAX)
+      // A3/T36 (MINOR-2): one source of truth — persist what capture verified
+      // (≤60 prefix/suffix each) and enforce the same ≤200 total invariant.
+      let prefix = annotationNormalizeQuoteText(typeof raw.prefix === 'string' ? raw.prefix : '', ANNOTATION_QUOTE_CONTEXT_MAX)
+      let suffix = annotationNormalizeQuoteText(typeof raw.suffix === 'string' ? raw.suffix : '', ANNOTATION_QUOTE_CONTEXT_MAX)
+      let excess = exact.length + prefix.length + suffix.length - ANNOTATION_QUOTE_TOTAL_MAX
+      if (excess > 0) {
+        const suffixCut = Math.min(excess, suffix.length)
+        suffix = suffix.slice(0, suffix.length - suffixCut)
+        excess -= suffixCut
       }
+      if (excess > 0) prefix = prefix.slice(0, Math.max(0, prefix.length - excess))
+      return { exact, prefix, suffix }
     }
 
     /**
@@ -10376,6 +10383,61 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       return !(wordLike || bemLike)
     }
 
+    /** A3/T36: identity strength + fallback bounds. */
+    const ANNOTATION_EMPTY_TEXT_DIGEST = textDigest('')
+    const ANNOTATION_FALLBACK_SCAN_MAX = 400
+
+    /**
+     * A3/T36 (MAJOR-1): whether a record carries a REAL identity signal. Empty
+     * text (constant empty FNV digest), a tag-derived accessible name like
+     * "button", or an unverified structural path are not identity. Structural
+     * fallbacks (XPath/text-position) fail closed for weak-identity records.
+     * @param {object} ref - captured record.
+     * @returns {boolean} whether the record has strong identity.
+     */
+    function annotationHasStrongIdentity(ref) {
+      if (ref === null || typeof ref !== 'object') return false
+      const locator = ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : {}
+      const text = typeof ref.text === 'string' ? ref.text.trim() : ''
+      const digest = typeof ref.textDigest === 'string' ? ref.textDigest : ''
+      const textIdentity = text.length > 0 && digest.length > 0 && digest !== ANNOTATION_EMPTY_TEXT_DIGEST
+      const tag = typeof locator.tag === 'string' ? locator.tag.toLowerCase() : ''
+      const role = typeof locator.role === 'string' ? locator.role.toLowerCase() : ''
+      const name = typeof locator.name === 'string' ? locator.name.trim().toLowerCase() : ''
+      // annotationAccessibleName falls back to the tag/role; that is not identity.
+      const nameIdentity = name.length > 0 && name !== tag && name !== role
+      const selectorIdentity = locator.uniqueVerified === true
+        && typeof locator.uniqueSelector === 'string' && locator.uniqueSelector.length > 0
+      return textIdentity || nameIdentity || selectorIdentity
+    }
+
+    /**
+     * A3/T36 (MAJOR-1): structural fallback gate. A structural hit may never claim
+     * Resolved without strong identity; it degrades honestly to Changed.
+     * @param {object} ref - captured record.
+     * @param {string} status - candidate status.
+     * @returns {string} gated status.
+     */
+    function annotationStructuralFallbackStatus(ref, status) {
+      if (status !== 'resolved') return status
+      return annotationHasStrongIdentity(ref) ? 'resolved' : 'changed'
+    }
+
+    /**
+     * A3/T36 (P2 review): pure copy-anchor decision — live node first, then the
+     * saved anchor, except full XPath which requires a live node.
+     * @param {{ liveText?: string, storedText?: string, full?: boolean }} input - candidates.
+     * @returns {{ text: string, source: 'live' | 'saved' | 'none' }} decision.
+     */
+    function annotationCopyAnchorDecision(input) {
+      const source = input !== null && typeof input === 'object' ? input : {}
+      const liveText = typeof source.liveText === 'string' ? source.liveText : ''
+      if (liveText.length > 0) return { text: liveText, source: 'live' }
+      if (source.full === true) return { text: '', source: 'none' }
+      const storedText = typeof source.storedText === 'string' ? source.storedText : ''
+      return storedText.length > 0 ? { text: storedText, source: 'saved' } : { text: '', source: 'none' }
+    }
+
     /** A3/T34: rendered-text/quote-hardening bounds. */
     const ANNOTATION_QUOTE_CONTEXT_MAX = 60
     const ANNOTATION_QUOTE_TOTAL_MAX = 200
@@ -10391,19 +10453,36 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     function annotationRenderTextChunks(chunks) {
       const list = Array.isArray(chunks) ? chunks : []
       let text = ''
+      let pendingSpace = false
       const spans = []
       for (const chunk of list) {
         if (chunk === null || typeof chunk !== 'object') continue
+        const rawText = typeof chunk.text === 'string' ? chunk.text : ''
         const rawStart = typeof chunk.rawStart === 'number' && Number.isFinite(chunk.rawStart) ? Math.max(0, Math.round(chunk.rawStart)) : 0
-        const collapsed = annotationNormalizeQuoteText(typeof chunk.text === 'string' ? chunk.text : '', 0)
-        if (collapsed.length === 0) continue
-        const needsSpace = text.length > 0 && (chunk.blockBefore === true || text.endsWith(' '))
+        const rawEnd = typeof chunk.rawEnd === 'number' && Number.isFinite(chunk.rawEnd) ? Math.max(rawStart, Math.round(chunk.rawEnd)) : rawStart + rawText.length
+        const collapsed = annotationNormalizeQuoteText(rawText, 0)
+        if (collapsed.length === 0) {
+          // A3/T36 (MINOR-5): a whitespace-only text node is a real separator.
+          if (text.length > 0 && /\s/.test(rawText)) pendingSpace = true
+          continue
+        }
+        const needsSpace = text.length > 0 && (chunk.blockBefore === true || pendingSpace === true || text.endsWith(' '))
         if (needsSpace && !text.endsWith(' ')) text += ' '
+        pendingSpace = false
         const start = text.length
         text += collapsed
-        spans.push({ start, end: text.length, rawStart, rawEnd: rawStart + collapsed.length })
+        spans.push({ start, end: text.length, rawStart, rawEnd })
       }
-      return { text: text.trim(), spans }
+      // Keep span offsets aligned with the trimmed output (block separators can make
+      // the pre-trim text start with a space); raw offsets are unaffected.
+      const leading = text.length - text.trimStart().length
+      const trimmed = text.trim()
+      const adjusted = trimmed.length === 0 ? [] : spans.map((span) => ({
+        ...span,
+        start: Math.max(0, span.start - leading),
+        end: Math.max(0, span.end - leading)
+      })).filter((span) => span.end > span.start)
+      return { text: trimmed, spans: adjusted }
     }
 
     /**
@@ -10430,11 +10509,13 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           const parent = node.parentElement
           const parentTag = parent === null ? '' : parent.tagName.toLowerCase()
           if (parent !== null && (parentTag === 'input' || parentTag === 'textarea' || parentTag === 'select')) {
+            // A3/T36 (MINOR-5): a skipped form-control boundary separates text.
+            blockPending = true
             node = walker.nextNode()
             continue
           }
           const rawValue = node.nodeValue ?? ''
-          chunks.push({ text: rawValue, blockBefore: blockPending, rawStart: rawCursor })
+          chunks.push({ text: rawValue, blockBefore: blockPending, rawStart: rawCursor, rawEnd: rawCursor + rawValue.length })
           rawCursor += rawValue.length
           blockPending = false
           node = walker.nextNode()
@@ -10765,21 +10846,22 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
             const value = node.nodeValue ?? ''
             const start = rawCursor
             rawCursor += value.length
-            if (element.contains(node)) elementRawRanges.push({ start })
+            if (element.contains(node) && annotationNormalizeQuoteText(value, 0).length > 0) elementRawRanges.push({ start })
             node = walker.nextNode()
           }
           const firstRaw = elementRawRanges.length > 0 ? elementRawRanges[0].start : 0
           let targetIndex = -1
           for (const span of rendered.spans) {
-            if (span.rawStart === firstRaw) {
-              const local = rendered.text.slice(span.start, span.start + exact.length)
-              if (annotationNormalizeQuoteText(local, 0) === exact) targetIndex = span.start
-              break
-            }
+            if (span.rawStart !== firstRaw && !(span.rawStart <= firstRaw && firstRaw < span.rawEnd)) continue
+            const local = rendered.text.slice(span.start, span.start + exact.length)
+            if (annotationNormalizeQuoteText(local, 0) === exact) targetIndex = span.start
+            break
           }
           if (targetIndex < 0) {
+            // A3/T36 (MINOR-3): never fall back to the FIRST indexOf for duplicate
+            // text — accept only an explicit unique occurrence, else drop the quote.
             const at = rendered.text.indexOf(exact)
-            if (at < 0) {
+            if (at < 0 || rendered.text.indexOf(exact, at + 1) >= 0) {
               container = container.parentElement
               depth += 1
               continue
@@ -10787,6 +10869,22 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
             targetIndex = at
           }
           const quote = annotationDisambiguateQuote(rendered.text, exact, targetIndex, ANNOTATION_QUOTE_CONTEXT_MAX)
+          // A3/T36: uniqueness inside the immediate parent is not enough when the
+          // same text repeats elsewhere in the document — climb to a wider scope so
+          // the persisted prefix/suffix actually distinguishes this occurrence.
+          if (quote !== null && quote.prefix.length === 0 && quote.suffix.length === 0 && container !== document.body) {
+            // Climb only when the PARENT scope still contains this text more than
+            // once; page-wide text includes our own annotation UI and is not a scope.
+            const parentScope = container.parentElement
+            const parentText = parentScope === null ? ''
+              : annotationNormalizeQuoteText(typeof parentScope.textContent === 'string' ? parentScope.textContent : '', 0)
+            const first = parentText.indexOf(exact)
+            if (first >= 0 && parentText.indexOf(exact, first + 1) >= 0) {
+              container = container.parentElement
+              depth += 1
+              continue
+            }
+          }
           if (quote !== null) return quote
         }
         container = container.parentElement
@@ -14783,21 +14881,18 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         }
         const locator = ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : {}
         const node = liveNode(ref)
-        let text = ''
-        let source = 'saved'
-        // A3/T34 (P2): live node first (fresh optimized/full XPath + JS path); the
-        // saved anchor is only the fallback and says so honestly.
+        let liveText = ''
+        // A3/T34/T36 (P2): live node first (fresh optimized/full XPath + JS path);
+        // the saved anchor is only the fallback and says so honestly.
         if (node !== null) {
-          source = 'live'
-          if (full) text = annotationFullXPathOf(node)
-          else if (kind === 'xpath') text = annotationXPathOf(node)
-          else text = annotationJsPathFor({ selector: typeof locator.uniqueSelector === 'string' ? locator.uniqueSelector : (typeof locator.path === 'string' ? locator.path : null), xpath: annotationXPathOf(node) })
+          if (full) liveText = annotationFullXPathOf(node)
+          else if (kind === 'xpath') liveText = annotationXPathOf(node)
+          else liveText = annotationJsPathFor({ selector: typeof locator.uniqueSelector === 'string' ? locator.uniqueSelector : (typeof locator.path === 'string' ? locator.path : null), xpath: annotationXPathOf(node) })
         }
-        if (text.length === 0 && full !== true) {
-          source = 'saved'
-          if (kind === 'xpath') text = typeof locator.xpath === 'string' ? locator.xpath : ''
-          else text = typeof locator.jsPath === 'string' ? locator.jsPath : ''
-        }
+        const storedText = full ? '' : (kind === 'xpath' ? (typeof locator.xpath === 'string' ? locator.xpath : '') : (typeof locator.jsPath === 'string' ? locator.jsPath : ''))
+        const decision = annotationCopyAnchorDecision({ liveText, storedText, full })
+        text = decision.text
+        source = decision.source
         if (typeof text !== 'string' || text.length === 0) {
           feedback(t(failKey), 'error')
           return false
@@ -15125,6 +15220,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
             // Proximity is best effort; tag/name/digest checks still stand.
           }
         }
+        // A3/T36 (MAJOR-1): structural hits require real identity; a tag-only match
+        // can never be Resolved (it degrades honestly to Changed and is not marked).
+        if (options !== null && typeof options === 'object' && options.structural === true) {
+          return annotationStructuralFallbackStatus(ref, 'resolved')
+        }
         return 'resolved'
       }
 
@@ -15184,13 +15284,26 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const expectedTag = typeof locator.tag === 'string' && locator.tag.length > 0 ? locator.tag.toLowerCase() : ''
         const candidates = []
         const elements = document.getElementsByTagName(expectedTag.length > 0 ? expectedTag : '*')
-        for (let index = 0; index < elements.length && candidates.length <= 32; index += 1) {
+        let scanned = 0
+        for (let index = 0; index < elements.length && scanned < ANNOTATION_FALLBACK_SCAN_MAX && candidates.length <= 32; index += 1) {
+          scanned += 1
           const element = elements[index]
           if (element === null || typeof element !== 'object') continue
           if (element.closest('[data-psa-own]') !== null) continue
           const elementText = annotationRenderedTextOf(element, 120).text
           if (elementText.length === 0) continue
           if (elementText === quote.exact) {
+            // A3/T36: exact text alone is not identity for duplicate rows — score the
+            // captured prefix/suffix against the parent's rendered text and only keep
+            // the occurrence whose context matches.
+            const parent = element.parentElement
+            if (parent === null) continue
+            const parentRendered = annotationRenderedTextOf(parent, 300)
+            const contextMatches = annotationScoreQuoteMatches(parentRendered.text, quote, undefined, 1)
+            if (contextMatches.length === 0 || contextMatches[0].score < 0.85) continue
+            const mapped = annotationElementAtRenderedOffset(parent, contextMatches[0].index)
+            if (mapped === null) continue
+            if (mapped !== element && !element.contains(mapped) && !mapped.contains(element)) continue
             candidates.push(element)
             continue
           }
@@ -15231,7 +15344,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         // A slice that occurs more than once cannot identify one occurrence.
         if (rendered.text.indexOf(quote.exact) !== position.start) return null
         const element = annotationElementAtRenderedOffset(container, position.start)
-        return validateFallbackHit(element, ref, { proximity: true })
+        return validateFallbackHit(element, ref, { proximity: true, structural: true })
       }
 
       /**
@@ -15257,7 +15370,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         }
         if (elements.length > 1) return 'ambiguous'
         if (elements.length === 0) return null
-        return validateFallbackHit(elements[0], ref, { proximity: true })
+        return validateFallbackHit(elements[0], ref, { proximity: true, structural: true })
       }
 
       /**
@@ -15275,6 +15388,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         } catch {
           found = null
         }
+        // A3/T36 (MINOR-4): same bound as the status cache; never grow per mutation.
+        if (fallbackNodeCache.size > ANNOTATION_FALLBACK_SCAN_MAX) fallbackNodeCache.clear()
         fallbackNodeCache.set(key, found)
         return found
       }
@@ -15292,10 +15407,17 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         }
         const tag = ref?.locator?.tag ?? ''
         const elements = document.getElementsByTagName(tag.length > 0 ? String(tag).toLowerCase() : '*')
-        for (let index = 0; index < elements.length && index < 400; index += 1) {
+        for (let index = 0; index < elements.length && index < ANNOTATION_FALLBACK_SCAN_MAX; index += 1) {
           const element = elements[index]
           if (element === null || typeof element !== 'object' || element.closest('[data-psa-own]') !== null) continue
           if (annotationRenderedTextOf(element, 120).text !== quote.exact) continue
+          const parent = element.parentElement
+          if (parent === null) continue
+          const parentRendered = annotationRenderedTextOf(parent, 300)
+          const contextMatches = annotationScoreQuoteMatches(parentRendered.text, quote, undefined, 1)
+          if (contextMatches.length === 0 || contextMatches[0].score < 0.85) continue
+          const mapped = annotationElementAtRenderedOffset(parent, contextMatches[0].index)
+          if (mapped !== element && (mapped === null || (!element.contains(mapped) && !mapped.contains(element)))) continue
           if (validateFallbackHit(element, ref) === 'resolved') return element
         }
         return null
@@ -15312,7 +15434,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           const rendered = annotationRenderedTextOf(container, 1200)
           if (rendered.text.slice(position.start, position.end) !== quote.exact) return null
           const element = annotationElementAtRenderedOffset(container, position.start)
-          return validateFallbackHit(element, ref) === 'resolved' ? element : null
+          return validateFallbackHit(element, ref, { structural: true }) === 'resolved' ? element : null
         } catch {
           return null
         }
@@ -15325,7 +15447,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         try {
           const snapshot = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null)
           const node = snapshot.singleNodeValue
-          return validateFallbackHit(node, ref, { proximity: true }) === 'resolved' ? node : null
+          return validateFallbackHit(node, ref, { proximity: true, structural: true }) === 'resolved' ? node : null
         } catch {
           return null
         }
@@ -20410,6 +20532,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationFullXPathOf,
         annotationFallbackCacheKey,
         annotationLevenshteinWithin,
+        annotationHasStrongIdentity,
+        annotationStructuralFallbackStatus,
+        annotationCopyAnchorDecision,
         upsertAnnotationRecord,
         removeAnnotationRecord,
         restoreAnnotationRecord,

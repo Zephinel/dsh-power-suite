@@ -1090,7 +1090,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 stability / 97 anchor hardening)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 / 97 anchor / 100 review fixes)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1102,7 +1102,7 @@ async function runSmoke({ page, results, state }) {
     // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
     // rail selection and chip-ref serialization helpers (66). Pin a documented count and
     // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97]
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97, 100]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1181,6 +1181,11 @@ async function runSmoke({ page, results, state }) {
     if (keyCount === 97) {
       for (const key of ['annotationDisambiguateQuote', 'annotationScoreQuoteMatches', 'annotationRenderTextChunks', 'annotationFullXPathOf', 'annotationFallbackCacheKey']) {
         assert(probe.keys.includes(key), `task-34 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
+      }
+    }
+    if (keyCount === 100) {
+      for (const key of ['annotationHasStrongIdentity', 'annotationStructuralFallbackStatus', 'annotationCopyAnchorDecision']) {
+        assert(probe.keys.includes(key), `task-36 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
       }
     }
     state.hooks = probe.keys
@@ -6112,18 +6117,18 @@ function buildScenarios(harness) {
       assert(copyFromRail, 'A3/T34: rail row copy XPath/JS path actions missing')
       await sleep(250)
       let anchorCopyToast = await h.page.evaluate(`document.querySelector('[data-psa-feedback]')?.innerText ?? ''`)
-      assert(/XPath copied|已复制 XPath|saved XPath/.test(anchorCopyToast), `A3/T34: rail copy XPath toast missing: ${short(anchorCopyToast)}`)
+      assertEqual(/XPath copied|已复制 XPath/.test(anchorCopyToast), true, `A3/T36: live rail copy must use the live toast, not saved: ${short(anchorCopyToast)}`)
       await h.page.evaluate(`(() => { const row = [...document.querySelectorAll('[data-psa-entry]')].find((entry) => entry.innerText.includes('Anchor phrase UNIQUE-T32')); row?.querySelector('[data-psa-entry-copy-js-path]')?.click(); return true })()`)
       await sleep(250)
       anchorCopyToast = await h.page.evaluate(`document.querySelector('[data-psa-feedback]')?.innerText ?? ''`)
-      assert(/JS path copied|已复制 JS 路径|saved JS path/.test(anchorCopyToast), `A3/T34: rail copy JS path toast missing: ${short(anchorCopyToast)}`)
+      assertEqual(/JS path copied|已复制 JS 路径/.test(anchorCopyToast), true, `A3/T36: live rail JS copy must use the live toast: ${short(anchorCopyToast)}`)
       await h.page.evaluate(`(() => { const row = [...document.querySelectorAll('[data-psa-entry]')].find((entry) => entry.innerText.includes('Anchor phrase UNIQUE-T32')); row?.querySelector('[data-psa-entry-preview]')?.click(); return true })()`)
       await h.page.waitFor(`!!document.querySelector('[data-psa-detail]')`, { timeout: 8000, label: 'anchor detail card for copy parity' })
       await sleep(250)
       for (const [selector, pattern] of [
-        ['[data-psa-detail-copy-xpath]', /XPath copied|已复制 XPath|saved XPath/],
+        ['[data-psa-detail-copy-xpath]', /^XPath copied$|^已复制 XPath$/],
         ['[data-psa-detail-copy-full-xpath]', /Full XPath copied|已复制完整 XPath/],
-        ['[data-psa-detail-copy-js-path]', /JS path copied|已复制 JS 路径|saved JS path/]
+        ['[data-psa-detail-copy-js-path]', /^JS path copied$|^已复制 JS 路径$/]
       ]) {
         await h.click(selector)
         await sleep(300)
@@ -6144,12 +6149,25 @@ function buildScenarios(harness) {
       const anchorEntries = await h.entries()
       const anchorEntry = anchorEntries.find((entry) => String(entry.name).includes('Anchor phrase UNIQUE-T32'))
       assert(anchorEntry, `the anchor record is missing from the collection: ${JSON.stringify(anchorEntries.map((entry) => entry.name))}`)
-      assert(anchorEntry.status !== 'resolved', `A3/T32: the captured record stayed Resolved after its content changed: ${JSON.stringify(anchorEntry)}`)
+      assertEqual(anchorEntry.status, 'changed', `A3/T36: a small text edit must report Content changed exactly: ${JSON.stringify(anchorEntry)}`)
       assert(String(anchorEntry.locator).includes(anchorBefore.locator), `A3/T32: locator display changed after the content changed (${short(anchorEntry.locator)})`)
+      // A3/T36: target no longer live → copy says saved; full XPath is unavailable.
+      await h.page.evaluate(`(() => { const row = [...document.querySelectorAll('[data-psa-entry]')].find((entry) => entry.innerText.includes('Anchor phrase')); row?.querySelector('[data-psa-entry-copy-xpath]')?.click(); return true })()`)
+      await sleep(300)
+      const savedToast = await h.page.evaluate(`document.querySelector('[data-psa-feedback]')?.innerText ?? ''`)
+      assert(/saved XPath|保存的 XPath/.test(savedToast), `A3/T36: saved-anchor copy must say saved: ${short(savedToast)}`)
+      await h.page.evaluate(`(() => { const row = [...document.querySelectorAll('[data-psa-entry]')].find((entry) => entry.innerText.includes('Anchor phrase')); row?.querySelector('[data-psa-entry-preview]')?.click(); return true })()`)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-detail]')`, { timeout: 8000, label: 'detail card for saved-copy assertions' })
+      await sleep(200)
+      await h.click('[data-psa-detail-copy-full-xpath]')
+      await sleep(300)
+      const fullFailedToast = await h.page.evaluate(`document.querySelector('[data-psa-feedback]')?.innerText ?? ''`)
+      assert(/Full XPath needs a live target|完整 XPath 需要/.test(fullFailedToast), `A3/T36: full XPath without a live target must be unavailable: ${short(fullFailedToast)}`)
+      await h.click('[data-psa-detail-close]')
+      await sleep(150)
       await h.clickBack()
       await sleep(150)
       const anchorChanged = { status: anchorEntry.status, locator: anchorEntry.locator }
-      assert(anchorChanged.status !== 'resolved', `A3/T32: changed content must not stay Resolved: ${JSON.stringify(anchorChanged)}`)
       // ---- A3/T33: duplicate labels resolve via a unique lower-tier candidate ----
       await h.page.evaluate(`(() => {
         document.getElementById('psa-duplicate-fixture')?.remove()
@@ -6213,6 +6231,136 @@ function buildScenarios(harness) {
       await h.page.pressKey('escape')
       await sleep(250)
       await h.page.evaluate(`document.getElementById('psa-duplicate-fixture')?.remove()`)
+      // ---- A3/T36 (MAJOR-1): icon-only replacement must not falsely Resolve ----
+      const iconFixture = await h.page.evaluate(`(() => {
+        document.getElementById('psa-icon-fixture')?.remove()
+        const wrap = document.createElement('div')
+        wrap.setAttribute('data-psa-icon-fixture', '')
+        wrap.style.cssText = 'position:fixed;left:420px;top:340px;width:220px;padding:10px;z-index:500;background:rgb(40,42,48);border-radius:8px'
+        for (let index = 0; index < 2; index += 1) {
+          const button = document.createElement('button')
+          button.type = 'button'
+          button.style.cssText = 'display:block;width:96px;height:30px;border:0;background:rgb(70,72,80);border-radius:6px;margin-bottom:4px'
+          wrap.append(button)
+        }
+        document.body.append(wrap)
+        const rect = wrap.querySelector('button').getBoundingClientRect()
+        return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+      })()`)
+      assert(iconFixture, 'icon-only fixture missing')
+      await h.page.moveTo(iconFixture.x, iconFixture.y)
+      await sleep(150)
+      await h.page.clickAt(iconFixture.x, iconFixture.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the icon-only button' })
+      await sleep(200)
+      await h.click('[data-psa-add]')
+      await sleep(450)
+      const iconRecord = await h.page.evaluate(`(() => {
+        const doc = JSON.parse(localStorage.getItem('power-suite.ui-annotation.annotations') || '{}')
+        const record = (doc.records ?? []).find((item) => item.text === '' && String(item.locator?.name ?? '') === 'button')
+        return record === undefined ? null : { id: record.id, textDigest: record.textDigest, name: record.locator?.name, xpath: record.locator?.xpath }
+      })()`)
+      assert(iconRecord, 'icon-only record was not captured')
+      assertEqual(iconRecord.textDigest, '811c9dc5', 'icon-only record should carry the constant empty digest')
+      await h.page.evaluate(`(() => {
+        document.getElementById('psa-icon-fixture')?.remove()
+        const wrap = document.createElement('div')
+        wrap.setAttribute('data-psa-icon-fixture', '')
+        wrap.style.cssText = 'position:fixed;left:420px;top:340px;width:220px;padding:10px;z-index:500;background:rgb(40,42,48);border-radius:8px'
+        for (let index = 0; index < 2; index += 1) {
+          const button = document.createElement('button')
+          button.type = 'button'
+          button.style.cssText = 'display:block;width:64px;height:22px;border:0;background:rgb(30,32,38);border-radius:4px;margin-bottom:4px'
+          wrap.append(button)
+        }
+        document.body.append(wrap)
+        return true
+      })()`)
+      await sleep(350)
+      await h.openCollection()
+      await sleep(350)
+      const iconEntryStatus = await h.page.evaluate(`(() => {
+        const entry = document.querySelector('[data-psa-entry][data-psa-ref="${iconRecord.id}"]')
+        return entry === null ? null : { status: entry.getAttribute('data-psa-status'), text: entry.innerText }
+      })()`)
+      assert(iconEntryStatus !== null, 'icon-only record row missing')
+      assert(iconEntryStatus.status !== 'resolved', `A3/T36: icon-only replacement must not be Resolved via XPath: ${JSON.stringify(iconEntryStatus)}`)
+      const iconMarks = await h.page.eval(probes.marksState)
+      assertEqual(iconMarks.find((mark) => mark.id === iconRecord.id) ?? null, null, 'A3/T36: no mark may be drawn on the replacement icon-only button')
+      await h.clickBack()
+      await sleep(200)
+      await h.page.evaluate(`document.getElementById('psa-icon-fixture')?.remove()`)
+      // ---- A3/T36: duplicate text distinguished by capture context ----
+      const dupFixture = await h.page.evaluate(`(() => {
+        document.querySelectorAll('[data-psa-dup-fixture]').forEach((node) => node.remove())
+        const wrap = document.createElement('div')
+        wrap.setAttribute('data-psa-dup-fixture', '')
+        wrap.style.cssText = 'position:fixed;left:420px;top:300px;width:320px;padding:8px;z-index:500;background:rgb(40,42,48);color:rgb(235,238,245);border-radius:8px'
+        for (const label of ['Row A: ', 'Row B: ']) {
+          const paragraph = document.createElement('p')
+          paragraph.style.cssText = 'margin:4px 0;font-size:12px'
+          paragraph.append(document.createTextNode(label))
+          const span = document.createElement('span')
+          span.setAttribute('data-psa-dup-leaf', '')
+          span.textContent = 'Duplicate row text'
+          paragraph.append(span)
+          wrap.append(paragraph)
+        }
+        document.body.append(wrap)
+        const rect = wrap.querySelector('[data-psa-dup-leaf]').getBoundingClientRect()
+        return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+      })()`)
+      assert(dupFixture, 'duplicate-text fixture missing')
+      await h.page.moveTo(dupFixture.x, dupFixture.y)
+      await sleep(150)
+      await h.page.clickAt(dupFixture.x, dupFixture.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the first duplicate-text leaf' })
+      await sleep(200)
+      await h.click('[data-psa-add]')
+      await sleep(450)
+      const dupRecord = await h.page.evaluate(`(() => {
+        const doc = JSON.parse(localStorage.getItem('power-suite.ui-annotation.annotations') || '{}')
+        const record = (doc.records ?? []).find((item) => item.locator?.textQuote?.exact === 'Duplicate row text')
+        return record === undefined ? null : { id: record.id, quote: record.locator.textQuote }
+      })()`)
+      assert(dupRecord, 'duplicate-text record was not captured')
+      assert(dupRecord.quote.prefix.length > 0 && dupRecord.quote.prefix.includes('A:'), `A3/T36: duplicate-text quote must capture distinguishing context: ${JSON.stringify(dupRecord.quote)}`)
+      // Break the structural selectors by re-wrapping the fixture, then re-resolve:
+      // only the context-aware text quote may identify the correct occurrence.
+      await h.page.evaluate(`(() => {
+        const old = document.querySelector('[data-psa-dup-fixture]')
+        const holder = document.createElement('div')
+        holder.setAttribute('data-psa-dup-fixture', '')
+        holder.style.cssText = 'position:fixed;left:420px;top:300px;width:320px;padding:8px;z-index:500;background:rgb(40,42,48);color:rgb(235,238,245);border-radius:8px'
+        for (const label of ['Row B: ', 'Row A: ']) {
+          const paragraph = document.createElement('p')
+          paragraph.style.cssText = 'margin:4px 0;font-size:12px'
+          paragraph.append(document.createTextNode(label))
+          const span = document.createElement('span')
+          span.setAttribute('data-psa-dup-leaf', '')
+          span.textContent = 'Duplicate row text'
+          paragraph.append(span)
+          holder.append(paragraph)
+        }
+        old?.remove()
+        document.body.append(holder)
+        return true
+      })()`)
+      await sleep(300)
+      await h.openCollection()
+      await sleep(350)
+      const dupEntry = await h.page.evaluate(`(() => {
+        const entry = document.querySelector('[data-psa-entry][data-psa-ref="${dupRecord.id}"]')
+        return entry === null ? null : { status: entry.getAttribute('data-psa-status'), text: entry.innerText }
+      })()`)
+      assert(dupEntry !== null, 'duplicate-text record row missing')
+      assertEqual(dupEntry.status, 'resolved', `A3/T36: context-disambiguated duplicate text must stay Resolved: ${JSON.stringify(dupEntry)}`)
+      const dupMarks = await h.page.eval(probes.marksState)
+      const dupMark = dupMarks.find((mark) => mark.id === dupRecord.id) ?? null
+      assert(dupMark !== null, 'A3/T36: duplicate-text resolved record should still be marked')
+      await h.clickBack()
+      await sleep(150)
+      await h.page.evaluate(`document.querySelectorAll('[data-psa-dup-fixture]').forEach((node) => node.remove())`)
       await h.ensureStatusPanel()
       await h.exit()
       return `2 marks (#index + requirement excerpt), popover trash in the Requirement caption row + two-button one-row footer (gap ${markedLayout && markedLayout.gap}px), popover delete -> undo toast -> restored, hover detail card (requirement/session/workspace/position/actions, keep-open, no focus steal), edit saved (updatedAt bumped), delete -> role=status undo toast -> restored, other-Session record not drawn after reload, reduced-motion static, native hover-card recipe matched in light+dark (bg ${tooltipRecipe.light.native.backgroundColor} / ${tooltipRecipe.dark.native.backgroundColor}, fixed #2C2C2E)`

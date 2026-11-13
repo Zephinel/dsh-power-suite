@@ -76,6 +76,7 @@ if (ui === undefined) {
     'annotationIsGeneratedClass',
     'annotationRenderTextChunks', 'annotationDisambiguateQuote', 'annotationScoreQuoteMatches',
     'annotationFullXPathOf', 'annotationFallbackCacheKey', 'annotationLevenshteinWithin',
+    'annotationHasStrongIdentity', 'annotationStructuralFallbackStatus', 'annotationCopyAnchorDecision',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -97,7 +98,8 @@ if (ui === undefined) {
    * 82 = transient-surface pinning (eligible selection + capture-phase match),
    * 90 = multi-strategy anchors (quote/xpath/js path/scoring/resolution),
    * 91 = P0 selector stability (generated-class filter),
-   * 97 = P1/P2 anchor hardening (rendered text/disambiguation/scoring/full xpath/cache).
+   * 97 = P1/P2 anchor hardening (rendered text/disambiguation/scoring/full xpath/cache),
+   * 100 = review fixes (strong identity gate / structural status / copy decision).
    * The E2E `ACCEPTED_SEAM_GENERATIONS` must accept exactly these counts.
    */
   const SEAM_GENERATION = SEAM_EXPORTS.length
@@ -177,6 +179,9 @@ if (ui === undefined) {
     annotationFullXPathOf: [1, 1],
     annotationFallbackCacheKey: [2, 2],
     annotationLevenshteinWithin: [3, 3],
+    annotationHasStrongIdentity: [1, 1],
+    annotationStructuralFallbackStatus: [2, 2],
+    annotationCopyAnchorDecision: [1, 1],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
     annotationSelectedEntries: [2, 2],
@@ -199,7 +204,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 97, 'the frozen task-34 generation is pinned')
+    assert.equal(SEAM_GENERATION, 100, 'the frozen task-36 generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -2763,6 +2768,56 @@ if (ui === undefined) {
     // P1.5 cache key: same record + same revision shares, revision change invalidates.
     assert.equal(ui.annotationFallbackCacheKey('psa-1', 7), 'psa-1:7')
     assert.equal(ui.annotationFallbackCacheKey('psa-1', 8), 'psa-1:8')
+  })
+
+  test('A3/T36: weak-identity structural fallbacks fail closed; strong identity still resolves', () => {
+    const iconRecord = {
+      tag: 'button',
+      locator: {
+        tag: 'button', role: 'button', name: 'button', candidates: [{ kind: 'tag', value: 'button', reliability: 0.2 }],
+        xpath: '/html[1]/body[1]/div[3]/button[1]', textQuote: null, textPosition: null,
+        uniqueSelector: null, uniqueVerified: false
+      },
+      text: '', textDigest: '811c9dc5'
+    }
+    assert.equal(ui.annotationHasStrongIdentity(iconRecord), false, 'empty text + tag-derived name is not identity')
+    assert.equal(ui.annotationStructuralFallbackStatus(iconRecord, 'resolved'), 'changed', 'weak identity must not claim Resolved via XPath/text-position')
+    assert.equal(ui.annotationStructuralFallbackStatus(iconRecord, 'changed'), 'changed')
+    const textRecord = { ...iconRecord, text: 'New session', textDigest: 'deadbeef' }
+    assert.equal(ui.annotationHasStrongIdentity(textRecord), true)
+    assert.equal(ui.annotationStructuralFallbackStatus(textRecord, 'resolved'), 'resolved')
+    const namedRecord = { ...iconRecord, locator: { ...iconRecord.locator, name: 'Close dialog' } }
+    assert.equal(ui.annotationHasStrongIdentity(namedRecord), true, 'a real accessible name is identity')
+    const uniqueRecord = { ...iconRecord, locator: { ...iconRecord.locator, uniqueSelector: '[data-testid="close"]', uniqueVerified: true } }
+    assert.equal(ui.annotationHasStrongIdentity(uniqueRecord), true, 'a verified unique locator is identity')
+    // Copy decision: live-first, saved fallback, full XPath only with a live node.
+    assert.deepEqual(plain(ui.annotationCopyAnchorDecision({ liveText: 'document.querySelector("#x")', storedText: 'saved', full: false })),
+      { text: 'document.querySelector("#x")', source: 'live' })
+    assert.deepEqual(plain(ui.annotationCopyAnchorDecision({ liveText: '', storedText: '/html[1]/body[1]/div[1]', full: false })),
+      { text: '/html[1]/body[1]/div[1]', source: 'saved' })
+    assert.deepEqual(plain(ui.annotationCopyAnchorDecision({ liveText: '', storedText: '/saved', full: true })),
+      { text: '', source: 'none' }, 'full XPath is never fabricated from a saved anchor')
+  })
+
+  test('A3/T36: rendered-text whitespace separators and quote context round-trip', () => {
+    const rendered = ui.annotationRenderTextChunks([
+      { text: 'Hello', rawStart: 0, rawEnd: 5 },
+      { text: ' ', rawStart: 5, rawEnd: 6 },
+      { text: 'world', rawStart: 6, rawEnd: 11 }
+    ])
+    assert.equal(rendered.text, 'Hello world', 'whitespace-only text node must remain a separator')
+    assert.deepEqual(plain(rendered.spans.map((span) => ({ start: span.start, rawStart: span.rawStart }))),
+      [{ start: 0, rawStart: 0 }, { start: 6, rawStart: 6 }])
+    // MINOR-2 round-trip: capture-verified ≤60 context persists through buildElementRef.
+    const prefix = 'p'.repeat(60)
+    const suffix = 's'.repeat(60)
+    const ref = refOf({
+      tag: 'span', text: 'quote text',
+      textQuote: { exact: 'quote text', prefix, suffix }
+    })
+    assert.equal(ref.locator.textQuote.prefix.length, 60, 'capture-verified prefix must persist')
+    assert.equal(ref.locator.textQuote.suffix.length, 60, 'capture-verified suffix must persist')
+    assert(ref.locator.textQuote.prefix.length + ref.locator.textQuote.suffix.length + ref.locator.textQuote.exact.length <= 200)
   })
 
   //#region geometry and layout
