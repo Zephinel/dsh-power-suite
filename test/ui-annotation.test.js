@@ -70,7 +70,7 @@ if (ui === undefined) {
     'annotationTotalItemCount', 'annotationFindRecord', 'annotationGroupFromSelection',
     'collectionAddGroup', 'serializeBatchEntries',
     'annotationSidebarCounts', 'annotationFilterEntries', 'annotationGroupSummary',
-    'annotationEntryOrdinals',
+    'annotationEntryOrdinals', 'annotationSurfacePinEligible', 'annotationSurfacePinEventMatches',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -88,7 +88,8 @@ if (ui === undefined) {
    * level, 68 = leaf-first picking (deepest eligible element, full ancestor
    * Parent/Child chain), 69 = batch groups (group model helpers, flatten/cap,
    * group serializer), 79 = redesigned sidebar (derived counts, client-side
-   * filter, group auto-summary), 80 = shared group ordinals (A3/T29 numbering).
+   * filter, group auto-summary), 80 = shared group ordinals (A3/T29 numbering),
+   * 82 = transient-surface pinning (eligible selection + capture-phase match).
    * The E2E `ACCEPTED_SEAM_GENERATIONS` must accept exactly these counts.
    */
   const SEAM_GENERATION = SEAM_EXPORTS.length
@@ -151,6 +152,8 @@ if (ui === undefined) {
     annotationFilterEntries: [2, 2],
     annotationGroupSummary: [1, 1],
     annotationEntryOrdinals: [1, 1],
+    annotationSurfacePinEligible: [2, 2],
+    annotationSurfacePinEventMatches: [3, 3],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
     annotationSelectedEntries: [2, 2],
@@ -173,7 +176,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 80, 'the frozen task-29 generation is pinned')
+    assert.equal(SEAM_GENERATION, 82, 'the frozen task-30 generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -2564,6 +2567,26 @@ if (ui === undefined) {
     assert.equal(summary.description, 'Group description line')
     const longSummary = ui.annotationGroupSummary({ ...group, requirement: 'x'.repeat(60) })
     assert(longSummary.title.endsWith('…') && longSummary.title.length <= 42, 'long group titles are bounded')
+  })
+
+  test('A3/T30: transient-surface pinning eligibility and capture-phase event matching', () => {
+    const floatingRef = { locator: { surface: 'floating' }, id: 'psa-float' }
+    const pageRef = { locator: { surface: 'page' }, id: 'psa-page' }
+    assert.equal(ui.annotationSurfacePinEligible({ selection: [floatingRef] }, true), true, 'a floating selection in active mode must pin')
+    assert.equal(ui.annotationSurfacePinEligible({ selection: [pageRef, floatingRef] }, true), true, 'a mixed selection with a floating ref pins')
+    assert.equal(ui.annotationSurfacePinEligible({ selection: [pageRef] }, true), false, 'page selections never pin')
+    assert.equal(ui.annotationSurfacePinEligible({ selection: [floatingRef] }, false), false, 'pinning only happens while the mode is active')
+    assert.equal(ui.annotationSurfacePinEligible({ selection: [] }, true), false, 'empty selections never pin')
+    const leaf = { name: 'leaf' }
+    const inner = { name: 'inner', contains: (node) => node === leaf || node === inner }
+    const pinned = { name: 'pinned', contains: (node) => node === inner || node === pinned || node === leaf }
+    const wrapper = { name: 'wrapper', contains: (node) => node === pinned || node === wrapper }
+    const outside = { name: 'outside', contains: (node) => node === outside }
+    assert.equal(ui.annotationSurfacePinEventMatches(pinned, inner, null), true, 'events from inside the pinned subtree are suppressed')
+    assert.equal(ui.annotationSurfacePinEventMatches(pinned, outside, leaf), true, 'events whose relatedTarget is inside are suppressed')
+    assert.equal(ui.annotationSurfacePinEventMatches(pinned, wrapper, null), true, 'events on an ancestor wrapper are suppressed')
+    assert.equal(ui.annotationSurfacePinEventMatches(pinned, outside, null), false, 'unrelated page events pass through')
+    assert.equal(ui.annotationSurfacePinEventMatches(null, leaf, null), false, 'without a pin nothing is suppressed')
   })
 
   //#region geometry and layout

@@ -8552,7 +8552,7 @@ function dwClearNativeAtmospheres() {
       'popover.delete': 'Delete annotation',
       'popover.close': 'Close',
       'popover.copyLocator': 'Copy locator',
-      'popover.ephemeralHint': 'Transient surface: this element can disappear when its card closes; the locator is kept.',
+      'popover.ephemeralHint': 'Transient surface: kept open while you edit this annotation; it may disappear after the popover closes (the locator is kept).',
       'detail.title': 'Annotation details',
       'detail.requirement': 'Requirement',
       'detail.emptyRequirement': 'No requirement yet',
@@ -8747,7 +8747,7 @@ function dwClearNativeAtmospheres() {
       'popover.delete': '删除标注',
       'popover.close': '关闭',
       'popover.copyLocator': '复制定位器',
-      'popover.ephemeralHint': '瞬态浮层：卡片关闭后该元素可能消失，仅保留定位信息。',
+      'popover.ephemeralHint': '瞬态浮层：编辑这条标注期间会保持打开；关闭气泡后该浮层可能消失（定位信息会保留）。',
       'detail.title': '标注详情',
       'detail.requirement': '需求',
       'detail.emptyRequirement': '尚未填写需求',
@@ -12361,6 +12361,45 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
+     * A3/T30: whether the current selection should pin a detected floating surface
+     * open while its popover is being edited. Eligible = active mode, a live
+     * selection, and at least one selected ref captured inside a floating surface.
+     * @param {object} state - annotation state.
+     * @param {boolean} active - whether the mode is active.
+     * @returns {boolean} whether a surface pin is wanted.
+     */
+    function annotationSurfacePinEligible(state, active) {
+      if (active !== true || state === null || typeof state !== 'object') return false
+      const selection = Array.isArray(state.selection) ? state.selection : []
+      if (selection.length === 0) return false
+      return selection.some((ref) => ref !== null && typeof ref === 'object'
+        && ref.locator !== null && typeof ref.locator === 'object'
+        && ref.locator.surface === 'floating')
+    }
+
+    /**
+     * A3/T30: whether one leaving event must be suppressed to keep a pinned surface
+     * open. Matches events whose target or relatedTarget belongs to the pinned
+     * surface's subtree or to one of its ancestors (some menus close from an
+     * ancestor wrapper). Injection-friendly for unit tests.
+     * @param {object | null} pinned - pinned surface element.
+     * @param {object | null} target - event target.
+     * @param {object | null} related - event relatedTarget.
+     * @returns {boolean} whether the event should be swallowed.
+     */
+    function annotationSurfacePinEventMatches(pinned, target, related) {
+      if (pinned === null || pinned === undefined || typeof pinned !== 'object') return false
+      const relevant = (node) => {
+        if (node === null || node === undefined || typeof node !== 'object') return false
+        if (node === pinned) return true
+        if (typeof pinned.contains === 'function' && pinned.contains(node)) return true
+        if (typeof node.contains === 'function' && node.contains(pinned)) return true
+        return false
+      }
+      return relevant(target) || relevant(related)
+    }
+
+    /**
      * Choose the deepest eligible element of one pointer chain (DevTools-like
      * leaf-first picking, A3 follow-up).
      *
@@ -13292,6 +13331,97 @@ function dwClearNativeAtmospheres() {
        * @param {object} ref - ElementRef.
        * @returns {'resolved' | 'ambiguous' | 'missing' | 'changed'} status.
        */
+      /** A3/T30: the floating surface pinned open while a floating selection is edited. */
+      let pinnedSurfaceElement = null
+      /** Capture-phase listeners installed by the active surface pin. */
+      let pinnedSurfaceListeners = []
+
+      /**
+       * The surface root for the current pick: pickLevels cuts a floating hit's
+       * chain at the surface root, so the last chain entry is that root.
+       * @returns {Element | null} surface root element, or null.
+       */
+      function pinnedSurfaceCandidate() {
+        const state = snapshot()
+        if (!annotationSurfacePinEligible(state.state, isActive())) return null
+        const pick = lastPick
+        if (pick === null || pick.surface !== 'floating') return null
+        const entries = Array.isArray(pick.entries) ? pick.entries : []
+        if (entries.length === 0) return null
+        const root = entries[entries.length - 1] !== null && typeof entries[entries.length - 1] === 'object'
+          ? entries[entries.length - 1].element
+          : null
+        if (root === null || root === undefined || root.isConnected === false) return null
+        return root
+      }
+
+      /** Detach the capture-phase hover-close suppression listeners. @returns {void} */
+      function detachSurfacePinListeners() {
+        for (const entry of pinnedSurfaceListeners) window.removeEventListener(entry.type, entry.handler, entry.options)
+        pinnedSurfaceListeners = []
+      }
+
+      /**
+       * Release the pinned surface; optionally emit a synthetic leave so a native
+       * hover menu closes naturally once the pin is gone.
+       * @param {boolean} [emitLeave] - dispatch mouseout/pointerout on the root.
+       * @returns {void}
+       */
+      function releaseSurfacePin(emitLeave) {
+        const root = pinnedSurfaceElement
+        pinnedSurfaceElement = null
+        detachSurfacePinListeners()
+        if (emitLeave !== true || root === null || root === undefined || root.isConnected === false) return
+        // If the pointer is still physically over the surface, let the real pointer
+        // leave close it later; a synthetic leave here would confuse native hover
+        // cards that are still hovered (and can make a reopened card unreachable).
+        try {
+          if (typeof root.matches === 'function' && root.matches(':hover')) return
+        } catch {
+          // A throwing matches() keeps the synthetic-close path.
+        }
+        try {
+          root.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, cancelable: true, relatedTarget: document.body }))
+          root.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false, cancelable: false, relatedTarget: document.body }))
+          root.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, cancelable: true, relatedTarget: document.body, pointerType: 'mouse' }))
+          root.dispatchEvent(new PointerEvent('pointerleave', { bubbles: false, cancelable: false, relatedTarget: document.body, pointerType: 'mouse' }))
+        } catch {
+          // Synthetic leave is best effort; releasing the pin is the guarantee.
+        }
+      }
+
+      /**
+       * Keep the current floating surface open while its annotation popover is
+       * active. Capture-phase suppression of mouse/pointer leave events scoped to
+       * the pinned subtree/ancestors stops React hover menus from closing as the
+       * pointer moves into our requirement textarea.
+       * @returns {void}
+       */
+      function syncSurfacePin() {
+        const root = pinnedSurfaceCandidate()
+        if (root === null) {
+          // Selection/popover closed: unpin and let the native hover surface close.
+          if (pinnedSurfaceElement !== null) releaseSurfacePin(true)
+          return
+        }
+        if (pinnedSurfaceElement === root) return
+        if (pinnedSurfaceElement !== null) releaseSurfacePin(false)
+        pinnedSurfaceElement = root
+        const handler = (event) => {
+          if (pinnedSurfaceElement === null) return
+          const target = event !== null && event.target instanceof Element ? event.target : null
+          const related = event !== null && event.relatedTarget instanceof Element ? event.relatedTarget : null
+          if (!annotationSurfacePinEventMatches(pinnedSurfaceElement, target, related)) return
+          // Swallow the close trigger before React/document handlers see it.
+          event.stopImmediatePropagation()
+          event.stopPropagation()
+        }
+        for (const type of ['mouseout', 'mouseleave', 'pointerout', 'pointerleave']) {
+          window.addEventListener(type, handler, { capture: true, passive: true })
+          pinnedSurfaceListeners.push({ type, handler, options: { capture: true, passive: true } })
+        }
+      }
+
       function statusOf(ref) {
         if (ref === null || typeof ref !== 'object' || ref.locator === null || typeof ref.locator !== 'object') return 'missing'
         return resolveRefStatus({
@@ -13799,6 +13929,7 @@ function dwClearNativeAtmospheres() {
         const patch = deriveGeometry(nextState, current)
         store.set({ ...current, state: nextState, ...patch })
         scheduleBatchPopover(nextState, current.state)
+        syncSurfacePin()
         if (nextState.view !== current.state.view) updateLayout()
         // D1: every collection mutation schedules one debounced records write.
         if (nextState.collection !== current.state.collection) {
@@ -14674,6 +14805,7 @@ function dwClearNativeAtmospheres() {
           return
         }
         try {
+          releaseSurfacePin(true)
           dispatch({ type: 'deactivate' })
         } finally {
           // Layout restoration and listener removal come first and unconditionally; the
@@ -18266,6 +18398,8 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationFilterEntries,
         annotationGroupSummary,
         annotationEntryOrdinals,
+        annotationSurfacePinEligible,
+        annotationSurfacePinEventMatches,
         upsertAnnotationRecord,
         removeAnnotationRecord,
         restoreAnnotationRecord,
