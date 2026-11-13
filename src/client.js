@@ -12545,24 +12545,69 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       return levels
     }
 
+    /** Structural tags that are never a pick target; the walk falls through them. */
+    const ANNOTATION_INELIGIBLE_TAGS = new Set([
+      'html', 'body', 'head', 'script', 'style', 'link', 'meta', 'title', 'template',
+      'noscript', 'br', 'wbr', 'base', 'col', 'colgroup'
+    ])
+
     /**
-     * Choose the meaningful index in one candidate chain.
+     * Whether one DOM element is a valid LEAF pick target (A3 leaf-first picking).
      *
-     * A hit inside a floating surface defaults to the surface root (the whole
-     * card), never to a page ancestor behind it; everything else keeps the v1
-     * semantic-candidate-then-solid-box behavior.
-     * @param {Array<{ element: Element, insideComposer: boolean }>} chain - candidate chain.
-     * @returns {number} chosen index, or -1.
+     * Eligible = a real visible box, not our own annotation UI, and not a
+     * structural tag. Everything else (spans, SVGs, paths, buttons, rows, …) is
+     * eligible, exactly like a DevTools inspect hit; ineligible nodes are skipped
+     * and the ancestor walk continues.
+     * @param {unknown} element - element under consideration.
+     * @returns {boolean} whether the element can be hovered/selected itself.
      */
-    function annotationPickChainIndex(chain) {
-      const surface = annotationSurfaceRoot(chain)
-      if (surface !== null) return surface.index
-      for (let index = 0; index < chain.length; index += 1) {
-        if (annotationIsCandidate(chain[index].element)) return index
+    function annotationLeafEligible(element) {
+      if (element === null || element === undefined || typeof element !== 'object') return false
+      if (typeof element.tagName !== 'string' || typeof element.closest !== 'function') return false
+      const tag = element.tagName.toLowerCase()
+      if (tag.length === 0 || ANNOTATION_INELIGIBLE_TAGS.has(tag)) return false
+      if (element.closest('[data-psa-own]') !== null) return false
+      try {
+        if (!annotationElementVisible(element)) return false
+      } catch {
+        return false
       }
-      for (let index = 0; index < chain.length; index += 1) {
-        const rect = annotationRectOf(chain[index].element)
-        if (rect !== null && rect.width > 0 && rect.height > 0) return index
+      const rect = annotationRectOf(element)
+      if (rect === null || rect === undefined) return false
+      return rect.width > 0 && rect.height > 0
+    }
+
+    /**
+     * Choose the deepest eligible element of one pointer chain (DevTools-like
+     * leaf-first picking, A3 follow-up).
+     *
+     * The chain is nearest-first, so index 0 is the element under the pointer.
+     * The walk only moves upward when that element is ineligible (own UI, zero
+     * box, structural tag) and NEVER crosses the floating-surface root: a hit
+     * inside a floating surface resolves inside the surface, and a page hit
+     * resolves within the page chain (up to the page container just below body).
+     * @param {Array<{ element: Element, insideComposer: boolean }>} chain - ancestor chain, nearest first.
+     * @param {(element: Element) => boolean} [isFloating] - injectable surface predicate for unit tests.
+     * @param {(element: Element) => boolean} [isEligible] - injectable eligibility predicate for unit tests.
+     * @returns {number} chosen chain index, or -1 when nothing is eligible.
+     */
+    function annotationLeafPickIndex(chain, isFloating, isEligible) {
+      const entries = Array.isArray(chain) ? chain : []
+      if (entries.length === 0) return -1
+      const surface = annotationSurfaceRoot(entries, isFloating)
+      const boundary = surface !== null ? Math.min(surface.index, entries.length - 1) : entries.length - 1
+      const eligible = typeof isEligible === 'function' ? isEligible : (element) => annotationLeafEligible(element)
+      for (let index = 0; index <= boundary; index += 1) {
+        const entry = entries[index]
+        const element = entry !== null && typeof entry === 'object' ? entry.element : null
+        if (element === null || element === undefined) continue
+        let ok = false
+        try {
+          ok = eligible(element) === true
+        } catch {
+          ok = false
+        }
+        if (ok) return index
       }
       return -1
     }
@@ -12913,6 +12958,13 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const elementTokens = new WeakMap()
       /** Chain and index of the last picked selection, for level up/down. */
       let lastPick = null
+      /**
+       * Live element identity per selected ref id (A3/T18 leaf-first): the picked
+       * chain element itself, so a selected span/svg row and its Parent/Child walk
+       * paint their real rects even when an arbitrary ancestor's locator is weak
+       * and re-resolution could land on a same-tag lookalike.
+       */
+      const pickedSelection = new Map()
       /** Pointer gesture in flight. */
       let pointer = null
       /** Last pointer point used for hover resolution. */
@@ -13122,25 +13174,29 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
        * @returns {{ entries: Array<object>, index: number, parentStep: number, surface: 'page' | 'floating' }} pick levels.
        */
       function pickLevels(chain) {
-        const surface = annotationSurfaceRoot(chain)
+        const entries = Array.isArray(chain) ? chain : []
+        if (entries.length === 0) return { entries: [], index: -1, parentStep: 1, surface: 'page' }
+        const surface = annotationSurfaceRoot(entries)
         if (surface !== null) {
-          const levels = annotationSurfaceLevels(surface.root)
-          const entries = levels.length > 0 ? levels : [{ element: surface.root, insideComposer: false }]
-          // Inner-first (A3 follow-up): the hover/click target is the deepest
-          // meaningful element under the pointer, so hovering a dropdown row
-          // previews that row; background/padding hits keep the whole surface.
-          const pick = annotationSurfacePickLevel(chain, entries)
-          const index = pick.index >= 0 && pick.index < entries.length ? pick.index : 0
+          // A3 leaf-first: inside a floating surface the chain is cut at the
+          // surface root (never escape upward), and the pick is the deepest
+          // eligible element under the pointer (span/svg/path included). The
+          // whole surface stays reachable through its background/padding hit or
+          // by pressing Parent up the full chain.
+          const boundary = entries.slice(0, Math.min(surface.index + 1, entries.length))
           return {
-            entries,
-            index,
-            parentStep: -1,
+            entries: boundary,
+            index: annotationLeafPickIndex(boundary),
+            parentStep: 1,
             surface: 'floating'
           }
         }
+        // Leaf-first everywhere: the page chain is the full ancestor chain and the
+        // pick is the deepest eligible element (spans/svg included); Parent walks
+        // up element by element towards the page container, Child back down.
         return {
-          entries: chain.map((entry) => ({ element: entry.element, insideComposer: entry.insideComposer })),
-          index: annotationPickChainIndex(chain),
+          entries,
+          index: annotationLeafPickIndex(entries),
           parentStep: 1,
           surface: 'page'
         }
@@ -13774,16 +13830,35 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
+       * Outline rect for one selected ref: prefer the live element identity captured
+       * at pick time (leaf-first selections and their Parent/Child walk), then fall
+       * back to locator resolution / captured bounds.
+       * @param {object} ref - selected ElementRef.
+       * @returns {{ x: number, y: number, width: number, height: number } | null} rect.
+       */
+      function selectionRectOf(ref) {
+        if (ref !== null && typeof ref === 'object') {
+          const picked = pickedSelection.get(ref.id)
+          if (picked !== undefined && picked !== null && picked.isConnected !== false) {
+            const pickedRect = annotationRectOf(picked)
+            if (pickedRect !== null) return pickedRect
+          }
+        }
+        const node = liveNode(ref)
+        return node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref.bounds)
+      }
+
+      /**
        * Derive selection/popover geometry for one state.
        * @param {object} state - next state.
        * @param {object} previous - previous snapshot.
        * @returns {object} snapshot patch.
        */
       function deriveGeometry(state, previous) {
+        if (state.selection.length === 0 && pickedSelection.size > 0) pickedSelection.clear()
         const selectionRects = []
         for (const ref of state.selection) {
-          const node = liveNode(ref)
-          const rect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref.bounds)
+          const rect = selectionRectOf(ref)
           if (rect !== null) selectionRects.push({ id: ref.id, rect })
         }
         let popoverPosition = previous.popoverPosition
@@ -13796,8 +13871,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
             popoverPosition = null
           }
           if (popoverPosition === null || !popoverPinned) {
-            const node = liveNode(ref)
-            const rect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref.bounds)
+            const rect = selectionRectOf(ref)
             popoverPosition = rect === null
               ? null
               : clampPopoverPosition(rect, popoverMeasuredSize, annotationViewport(), previous.railWidth)
@@ -13823,8 +13897,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           return
         }
         const ref = current.state.selection[0]
-        const node = liveNode(ref)
-        const targetRect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref.bounds)
+        const targetRect = selectionRectOf(ref)
         if (targetRect === null) return
         publish({ popoverPosition: clampPopoverPosition(targetRect, popoverMeasuredSize, viewport, current.railWidth) })
       }
@@ -13978,8 +14051,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
             patch.popoverPosition = clampPopoverPositionToViewport(current.popoverPosition, popoverMeasuredSize, size, railWidth)
           } else {
             const ref = current.state.selection[0]
-            const node = ref === undefined ? null : liveNode(ref)
-            const rect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref?.bounds)
+            const rect = ref === undefined ? null : selectionRectOf(ref)
             if (rect !== null) patch.popoverPosition = clampPopoverPosition(rect, popoverMeasuredSize, size, railWidth)
           }
         }
@@ -14146,8 +14218,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           const patch = { selectionRects: [] }
           const rects = []
           for (const ref of current.state.selection) {
-            const node = liveNode(ref)
-            const rect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref.bounds)
+            const rect = selectionRectOf(ref)
             if (rect !== null) rects.push({ id: ref.id, rect })
           }
           patch.selectionRects = rects
@@ -14179,8 +14250,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           }
           if (current.popoverPosition !== null && current.popoverPinned === false && current.state.phase === 'selected') {
             const ref = current.state.selection[0]
-            const node = ref === undefined ? null : liveNode(ref)
-            const rect = node !== null ? annotationRectOf(node) : normalizeAnnotationBounds(ref?.bounds)
+            const rect = ref === undefined ? null : selectionRectOf(ref)
             if (rect !== null) patch.popoverPosition = clampPopoverPosition(rect, popoverMeasuredSize, annotationViewport(), current.railWidth)
           }
           publish(patch)
@@ -14304,6 +14374,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         if (levels.index < 0) return
         const ref = refFromPick(levels, null)
         lastPick = levels
+        pickedSelection.clear()
+        pickedSelection.set(ref.id, levels.entries[levels.index].element)
         dispatch({ type: 'selectSingle', ref })
       }
 
@@ -14323,6 +14395,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const like = existing !== undefined ? { ...existing, note: state.note } : null
         const ref = refFromPick(levels, like)
         lastPick = levels
+        pickedSelection.set(ref.id, levels.entries[levels.index].element)
         dispatch({ type: 'toggleMulti', ref })
       }
 
@@ -15338,6 +15411,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         if (nextIndex < 0 || nextIndex >= lastPick.entries.length) return
         lastPick = { ...lastPick, index: nextIndex }
         const nextRef = refFromPick(lastPick, { ...ref, note: state.note })
+        pickedSelection.clear()
+        pickedSelection.set(nextRef.id, lastPick.entries[nextIndex].element)
         dispatch({ type: 'selectSingle', ref: nextRef })
       }
 
@@ -17246,6 +17321,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationSurfaceRoot,
         annotationSurfaceLevels,
         annotationSurfacePickLevel,
+        annotationLeafPickIndex,
         upsertAnnotationRecord,
         removeAnnotationRecord,
         restoreAnnotationRecord,
