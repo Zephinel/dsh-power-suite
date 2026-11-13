@@ -9374,6 +9374,12 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'popover.delete': 'Delete annotation',
       'popover.close': 'Close',
       'popover.copyLocator': 'Copy locator',
+      'popover.copyXPath': 'Copy XPath',
+      'popover.copyJsPath': 'Copy JS path',
+      'via.css': 'locator',
+      'via.xpath': 'XPath',
+      'via.text-quote': 'text anchor',
+      'via.text-position': 'text position',
       'popover.ephemeralHint': 'Transient surface: kept open while you edit this annotation; it may disappear after the popover closes (the locator is kept).',
       'detail.title': 'Annotation details',
       'detail.requirement': 'Requirement',
@@ -9452,6 +9458,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'feedback.relocateFailed': 'The element cannot be located ({status})',
       'feedback.relocateOtherSession': 'This annotation belongs to another session',
       'feedback.locatorCopied': 'Locator copied',
+      'feedback.copyXPathSuccess': 'XPath copied',
+      'feedback.copyJsPathSuccess': 'JS path copied',
+      'feedback.copyXPathFailed': 'XPath unavailable for this target',
+      'feedback.copyJsPathFailed': 'JS path unavailable for this target',
       'feedback.locatorCopyFailed': 'Could not copy the locator',
       'feedback.chipInserted': 'Inserted as a reference chip (not sent)',
       'feedback.chipRemoveFailed': 'Could not remove that reference chip',
@@ -9569,6 +9579,12 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'popover.delete': '删除标注',
       'popover.close': '关闭',
       'popover.copyLocator': '复制定位器',
+      'popover.copyXPath': '复制 XPath',
+      'popover.copyJsPath': '复制 JS 路径',
+      'via.css': '定位器',
+      'via.xpath': 'XPath',
+      'via.text-quote': '文本锚点',
+      'via.text-position': '文本位置',
       'popover.ephemeralHint': '瞬态浮层：编辑这条标注期间会保持打开；关闭气泡后该浮层可能消失（定位信息会保留）。',
       'detail.title': '标注详情',
       'detail.requirement': '需求',
@@ -9635,6 +9651,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'modifier.ctrl': 'Ctrl',
       'modifier.meta': '⌘ / Meta',
       'modifier.shift': '⇧ / Shift',
+      'feedback.copyXPathSuccess': '已复制 XPath',
+      'feedback.copyJsPathSuccess': '已复制 JS 路径',
+      'feedback.copyXPathFailed': '该目标没有可用的 XPath',
+      'feedback.copyJsPathFailed': '该目标没有可用的 JS 路径',
       'feedback.modeOn': '已进入标注模式',
       'feedback.inserted': '已插入当前会话输入框（不会发送）',
       'feedback.insertFailed': '无法插入输入框',
@@ -10234,18 +10254,256 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
       if (id.length > 0 && !isDynamicValue(id)) push('id', `#${cssIdentifier(id)}`, 0.88)
       const labelValue = attrValue('aria-label')
-      if (labelValue !== null) push('label', `[aria-label="${cssString(labelValue)}"]`, 0.8)
+      if (labelValue !== null) push('label', `[aria-label="${cssString(labelValue)}"]`, 0.9)
       if (isFormTag(tag)) {
         const nameValue = attrValue('name')
         if (nameValue !== null && !isDynamicValue(nameValue)) push('label', `[name="${cssString(nameValue)}"]`, 0.72)
       }
+      // A3/T32: stable, non-generated classes are a middle tier anchor.
+      const classes = Array.isArray(source.classes) ? source.classes : []
+      for (const className of classes.slice(0, 2)) {
+        if (typeof className !== 'string' || className.length === 0 || isDynamicValue(className)) continue
+        push('class', `.${cssIdentifier(className)}`, 0.55)
+      }
       const role = typeof source.role === 'string' ? source.role.trim() : ''
-      if (role.length > 0) push('role', `[role="${cssString(role)}"]`, 0.35)
+      if (role.length > 0) push('role', `[role="${cssString(role)}"]`, 0.5)
       if (tag.length > 0 && tag !== 'html' && tag !== 'body') push('tag', tag, 0.2)
       const path = typeof source.path === 'string' ? source.path : ''
       if (path.length > 0) push('path', path, 0.1)
-      candidates.sort((left, right) => right.reliability - left.reliability)
+      candidates.sort((left, right) => annotationSelectorScore(right) - annotationSelectorScore(left))
       return candidates.slice(0, 6)
+    }
+
+    /**
+     * A3/T32: sanitize one stored anchor string (control chars stripped, bounded).
+     * @param {unknown} value - raw anchor.
+     * @param {number} max - maximum length.
+     * @returns {string | null} safe string or null.
+     */
+    function sanitizeAnchorString(value, max) {
+      if (typeof value !== 'string' || value.length === 0) return null
+      const cleaned = value.replace(ANNOTATION_CONTROL_CHARS, '').trim()
+      if (cleaned.length === 0) return null
+      return cleaned.slice(0, typeof max === 'number' && max > 0 ? max : 512)
+    }
+
+    /**
+     * A3/T32: sanitize one stored quote anchor.
+     * @param {unknown} raw - raw quote.
+     * @returns {{ exact: string, prefix: string, suffix: string } | null} quote.
+     */
+    function sanitizeTextQuote(raw) {
+      if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null
+      const exact = annotationNormalizeQuoteText(typeof raw.exact === 'string' ? raw.exact : '', ANNOTATION_TEXT_QUOTE_MAX)
+      if (exact.length === 0) return null
+      return {
+        exact,
+        prefix: annotationNormalizeQuoteText(typeof raw.prefix === 'string' ? raw.prefix : '', ANNOTATION_TEXT_CONTEXT_MAX),
+        suffix: annotationNormalizeQuoteText(typeof raw.suffix === 'string' ? raw.suffix : '', ANNOTATION_TEXT_CONTEXT_MAX)
+      }
+    }
+
+    /**
+     * A3/T32: sanitize one stored text-position anchor.
+     * @param {unknown} raw - raw position.
+     * @returns {{ container: string, start: number, end: number } | null} position.
+     */
+    function sanitizeTextPosition(raw) {
+      if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null
+      const container = sanitizeAnchorString(raw.container, 256)
+      if (container === null) return null
+      const start = typeof raw.start === 'number' && Number.isFinite(raw.start) && raw.start >= 0 ? Math.round(raw.start) : -1
+      const end = typeof raw.end === 'number' && Number.isFinite(raw.end) && raw.end > start ? Math.round(raw.end) : -1
+      if (start < 0 || end < 0) return null
+      return { container, start, end }
+    }
+
+    /** A3/T32: maximum captured lengths for the fallback anchors. */
+    const ANNOTATION_TEXT_QUOTE_MAX = 120
+    const ANNOTATION_TEXT_CONTEXT_MAX = 30
+    const ANNOTATION_XPATH_MAX = 512
+    const ANNOTATION_JS_PATH_MAX = 512
+
+    /**
+     * A3/T32: explicit selector stability tiers. Higher is better; the numeric
+     * reliability orders within a tier. Stable data attributes / ids / aria
+     * attributes beat semantic roles and labels, which beat stable classes, which
+     * beat positional tag/nth-of-type paths.
+     */
+    const ANNOTATION_SELECTOR_TIERS = Object.freeze({ data: 4, id: 4, aria: 4, label: 3, role: 3, class: 2, tag: 1, path: 0 })
+
+    /**
+     * The stability tier of one locator candidate.
+     * @param {object} candidate - { kind, value, reliability }.
+     * @returns {number} tier (0..4).
+     */
+    function annotationSelectorTier(candidate) {
+      const kind = candidate !== null && typeof candidate === 'object' && typeof candidate.kind === 'string' ? candidate.kind : ''
+      if (kind === 'label' && candidate !== null && typeof candidate === 'object' && typeof candidate.value === 'string'
+        && candidate.value.includes('aria-label')) return ANNOTATION_SELECTOR_TIERS.aria
+      return ANNOTATION_SELECTOR_TIERS[kind] ?? ANNOTATION_SELECTOR_TIERS.tag
+    }
+
+    /**
+     * The ordering score of one locator candidate (tier first, reliability inside).
+     * @param {object} candidate - { kind, value, reliability }.
+     * @returns {number} score.
+     */
+    function annotationSelectorScore(candidate) {
+      const reliability = candidate !== null && typeof candidate === 'object' && typeof candidate.reliability === 'number'
+        && Number.isFinite(candidate.reliability) ? candidate.reliability : 0
+      return annotationSelectorTier(candidate) * 100 + Math.round(reliability * 100)
+    }
+
+    /**
+     * A3/T32: normalized quote text: whitespace-collapsed, trimmed, bounded.
+     * @param {unknown} text - raw text.
+     * @param {number} [max] - maximum length (0/undefined = no cap, tests).
+     * @returns {string} normalized text.
+     */
+    function annotationNormalizeQuoteText(text, max) {
+      if (typeof text !== 'string') return ''
+      const collapsed = text.replace(/\s+/g, ' ').trim()
+      const cap = typeof max === 'number' && Number.isFinite(max) && max > 0 ? Math.round(max) : 0
+      if (cap === 0 || collapsed.length <= cap) return collapsed
+      return collapsed.slice(0, cap)
+    }
+
+    /**
+     * A3/T32: stable id usable in an XPath id short-circuit, or null.
+     * @param {Element} element - live element.
+     * @returns {string | null} stable id.
+     */
+    function annotationXPathId(element) {
+      if (element === null || typeof element !== 'object' || typeof element.getAttribute !== 'function') return null
+      const raw = element.getAttribute('id')
+      if (typeof raw !== 'string' || raw.length === 0) return null
+      const value = sanitizeAttributeValue('id', raw)
+      if (value === null || value.length === 0 || isDynamicValue(value)) return null
+      return value
+    }
+
+    /**
+     * A3/T32: absolute XPath for one element, with an id short-circuit where a
+     * stable id exists (same idea as Chrome DevTools' Copy XPath).
+     * @param {Element} element - live element.
+     * @returns {string} xpath ('' when unavailable).
+     */
+    function annotationXPathOf(element) {
+      if (element === null || typeof element !== 'object' || typeof element.tagName !== 'string') return ''
+      const id = annotationXPathId(element)
+      if (id !== null) return `//*[@id="${cssString(id)}"]`
+      const parts = []
+      let current = element
+      let depth = 0
+      while (current !== null && current !== undefined && typeof current.tagName === 'string'
+        && current.tagName.toLowerCase() !== 'html' && depth < 40) {
+        const tag = current.tagName.toLowerCase()
+        let index = 1
+        let sibling = current.previousElementSibling
+        while (sibling !== null) {
+          if (typeof sibling.tagName === 'string' && sibling.tagName.toLowerCase() === tag) index += 1
+          sibling = sibling.previousElementSibling
+        }
+        parts.unshift(`${tag}[${index}]`)
+        current = current.parentElement
+        depth += 1
+      }
+      if (parts.length === 0) return ''
+      return `/html[1]/${parts.join('/')}`.slice(0, ANNOTATION_XPATH_MAX)
+    }
+
+    /**
+     * A3/T32: DevTools-style JS path expression (`document.querySelector(...)`,
+     * or `document.evaluate(...)` for an XPath-only fallback).
+     * @param {{ selector?: string | null, xpath?: string | null }} anchors - captured anchors.
+     * @returns {string} JS expression ('' when unavailable).
+     */
+    function annotationJsPathFor(anchors) {
+      const source = anchors !== null && typeof anchors === 'object' ? anchors : {}
+      if (typeof source.selector === 'string' && source.selector.length > 0) {
+        return `document.querySelector(${JSON.stringify(source.selector)})`.slice(0, ANNOTATION_JS_PATH_MAX)
+      }
+      if (typeof source.xpath === 'string' && source.xpath.length > 0) {
+        return `document.evaluate(${JSON.stringify(source.xpath)}, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue`.slice(0, ANNOTATION_JS_PATH_MAX)
+      }
+      return ''
+    }
+
+    /**
+     * A3/T32: quote anchor for one text-bearing element: exact normalized text
+     * plus bounded surrounding context from the parent's normalized text.
+     * @param {Element} element - live element.
+     * @returns {{ exact: string, prefix: string, suffix: string } | null} quote.
+     */
+    function annotationTextQuoteOf(element) {
+      if (element === null || typeof element !== 'object') return null
+      const exact = annotationNormalizeQuoteText(typeof element.textContent === 'string' ? element.textContent : '', ANNOTATION_TEXT_QUOTE_MAX)
+      if (exact.length === 0) return null
+      const parent = element.parentElement
+      const parentText = parent !== null && typeof parent.textContent === 'string'
+        ? annotationNormalizeQuoteText(parent.textContent, 0)
+        : ''
+      const at = parentText.indexOf(exact)
+      if (at < 0) return { exact, prefix: '', suffix: '' }
+      return {
+        exact,
+        prefix: parentText.slice(Math.max(0, at - ANNOTATION_TEXT_CONTEXT_MAX), at),
+        suffix: parentText.slice(at + exact.length, at + exact.length + ANNOTATION_TEXT_CONTEXT_MAX)
+      }
+    }
+
+    /**
+     * A3/T32: text position anchor: nearest ancestor container selector + offsets
+     * of the element's normalized text inside the container's normalized text.
+     * @param {Element} element - live element.
+     * @returns {{ container: string, start: number, end: number } | null} position.
+     */
+    function annotationTextPositionOf(element) {
+      if (element === null || typeof element !== 'object') return null
+      const exact = annotationNormalizeQuoteText(typeof element.textContent === 'string' ? element.textContent : '', ANNOTATION_TEXT_QUOTE_MAX)
+      if (exact.length === 0) return null
+      let container = element.parentElement
+      let depth = 0
+      let selector = ''
+      while (container !== null && container !== undefined && depth < 4) {
+        const candidate = annotationStableSelectorCandidate(container)
+        if (candidate !== null) { selector = candidate.selector; break }
+        const pathInfo = annotationTagPath(container)
+        if (pathInfo !== null && typeof pathInfo.selector === 'string' && pathInfo.selector.length > 0) { selector = pathInfo.selector; break }
+        container = container.parentElement
+        depth += 1
+      }
+      if (container === null || container === undefined || selector.length === 0) return null
+      const text = annotationNormalizeQuoteText(typeof container.textContent === 'string' ? container.textContent : '', 0)
+      const at = text.indexOf(exact)
+      if (at < 0) return null
+      return { container: selector.slice(0, 256), start: at, end: at + exact.length }
+    }
+
+    /**
+     * A3/T32: whether one normalized text string contains the quote exactly once
+     * (prefix/suffix disambiguate multiple occurrences).
+     * @param {unknown} text - candidate normalized text.
+     * @param {object} quote - { exact, prefix, suffix }.
+     * @returns {boolean} whether the quote matches uniquely in this text.
+     */
+    function annotationTextQuoteMatches(text, quote) {
+      const normalized = annotationNormalizeQuoteText(text, 0)
+      const source = quote !== null && typeof quote === 'object' ? quote : {}
+      const exact = typeof source.exact === 'string' ? source.exact : ''
+      if (exact.length === 0 || normalized.length === 0) return false
+      const prefix = typeof source.prefix === 'string' ? source.prefix : ''
+      const suffix = typeof source.suffix === 'string' ? source.suffix : ''
+      let matches = 0
+      let at = normalized.indexOf(exact)
+      while (at >= 0) {
+        const before = normalized.slice(0, at)
+        const after = normalized.slice(at + exact.length)
+        if ((prefix.length === 0 || before.endsWith(prefix)) && (suffix.length === 0 || after.startsWith(suffix))) matches += 1
+        at = normalized.indexOf(exact, at + 1)
+      }
+      return matches === 1
     }
 
     /**
@@ -10509,6 +10767,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           uniqueSelector,
           uniqueVerified: uniqueSelector !== null && source.uniqueVerified === true,
           ancestors: buildStableAncestors(source.ancestors),
+          // A3/T32 fallback anchors (text leaves; backward compatible optional).
+          xpath: sanitizeAnchorString(source.xpath, ANNOTATION_XPATH_MAX),
+          jsPath: sanitizeAnchorString(source.jsPath, ANNOTATION_JS_PATH_MAX),
+          textQuote: sanitizeTextQuote(source.textQuote),
+          textPosition: sanitizeTextPosition(source.textPosition),
           surface,
           // A floating surface is transient by definition: it can disappear when
           // the card/menu closes, so its locator is the only thing that survives.
@@ -10579,7 +10842,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /** Locator candidate kinds persisted by the resolver. */
-    const ANNOTATION_CANDIDATE_KINDS = new Set(['data', 'id', 'label', 'role', 'tag', 'path'])
+    const ANNOTATION_CANDIDATE_KINDS = new Set(['data', 'id', 'label', 'role', 'class', 'tag', 'path'])
 
     /** Resolution statuses a persisted record may carry (display-only in Phase 1). */
     const ANNOTATION_STATUS_VALUES = new Set(['resolved', 'ambiguous', 'missing', 'changed'])
@@ -10657,6 +10920,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const uniqueSelector = sanitizeStoredSelector(rawLocator.uniqueSelector)
       const uniqueVerified = uniqueSelector !== null && rawLocator.uniqueVerified === true
       const surface = rawLocator.surface === 'floating' ? 'floating' : 'page'
+      const xpath = sanitizeAnchorString(rawLocator.xpath, ANNOTATION_XPATH_MAX)
+      const jsPath = sanitizeAnchorString(rawLocator.jsPath, ANNOTATION_JS_PATH_MAX)
+      const textQuote = sanitizeTextQuote(rawLocator.textQuote)
+      const textPosition = sanitizeTextPosition(rawLocator.textPosition)
       const ancestorInput = Array.isArray(rawLocator.ancestors) ? rawLocator.ancestors : []
       const ancestors = buildStableAncestors(ancestorInput.map((entry) => {
         const item = entry !== null && typeof entry === 'object' ? entry : {}
@@ -10703,7 +10970,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           uniqueVerified,
           ancestors,
           surface,
-          ephemeral: surface === 'floating'
+          ephemeral: surface === 'floating',
+          xpath,
+          jsPath,
+          textQuote,
+          textPosition
         },
         component,
         text,
@@ -12265,7 +12536,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           if (tag.length === 0 || elementTag === tag) list.push(element)
         }
         if (list.length === 0) continue
-        const generic = candidate.kind === 'tag' || candidate.kind === 'path' || candidate.kind === 'role'
+        const generic = candidate.kind === 'tag' || candidate.kind === 'path' || candidate.kind === 'role' || candidate.kind === 'class'
         if (list.length > 1) {
           // A generic locator matching several elements cannot identify one; a stable
           // locator matching several is a genuine ambiguity.
@@ -12917,6 +13188,15 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
       const role = sanitizeText(element.getAttribute('role') ?? '', 32) || annotationRoleOf(tag, element)
       const pathInfo = annotationTagPath(element)
+      const classes = []
+      if (typeof element.classList !== 'undefined' && element.classList !== null) {
+        for (const className of Array.from(element.classList).slice(0, 8)) {
+          if (isDynamicValue(className)) continue
+          if (!/^[A-Za-z_][A-Za-z0-9_-]{1,39}$/.test(className)) continue
+          classes.push(className)
+          if (classes.length >= 3) break
+        }
+      }
       // A verified unique selector costs a handful of querySelectorAll calls at
       // select time (never on the pointermove hot path) and is the locator that
       // fixes duplicate-label controls such as `New session` (A2/D11).
@@ -12925,6 +13205,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         attrs,
         anchorPaths: annotationAnchorPaths(element)
       }, (selector) => document.querySelectorAll(selector))
+      const textBearingLeaf = element.childElementCount === 0 && !isEditable
+      const xpath = annotationXPathOf(element)
+      const textQuote = textBearingLeaf ? annotationTextQuoteOf(element) : null
+      const textPosition = textBearingLeaf ? annotationTextPositionOf(element) : null
+      const jsPath = annotationJsPathFor({ selector: unique.selector, xpath })
       return {
         tag,
         id: annotationStableId(element),
@@ -12940,7 +13225,12 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         insideComposer: insideComposer === true,
         uniqueSelector: unique.selector,
         uniqueVerified: unique.verified,
-        ancestors: annotationStableAncestorEntries(element)
+        ancestors: annotationStableAncestorEntries(element),
+        classes,
+        xpath,
+        jsPath,
+        textQuote,
+        textPosition
       }
     }
 
@@ -13180,6 +13470,38 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const rect = annotationRectOf(element)
       if (rect === null || rect === undefined) return false
       return rect.width > 0 && rect.height > 0
+    }
+
+    /**
+     * A3/T32: full multi-strategy resolution. CSS candidates keep precedence; when
+     * they do not resolve (ambiguous/missing), the injected fallbacks run in order:
+     * XPath → text quote → text position. Returns the winning status plus a `via`
+     * hint for the UI.
+     * @param {object} input - base resolveRefStatus input plus optional
+     *   `resolveXPath`, `resolveTextQuote`, `resolveTextPosition` functions returning
+     *   a status or null.
+     * @returns {{ status: string, via: 'css' | 'xpath' | 'text-quote' | 'text-position' }} outcome.
+     */
+    function annotationResolveStatus(input) {
+      const source = input !== null && typeof input === 'object' ? input : {}
+      const cssStatus = resolveRefStatus(source)
+      if (cssStatus === 'resolved' || cssStatus === 'changed') return { status: cssStatus, via: 'css' }
+      const fallbacks = [
+        ['resolveXPath', 'xpath'],
+        ['resolveTextQuote', 'text-quote'],
+        ['resolveTextPosition', 'text-position']
+      ]
+      for (const [name, via] of fallbacks) {
+        if (typeof source[name] !== 'function') continue
+        let status = null
+        try {
+          status = source[name]()
+        } catch {
+          status = null
+        }
+        if (status === 'resolved' || status === 'changed' || status === 'ambiguous') return { status, via }
+      }
+      return { status: cssStatus, via: 'css' }
     }
 
     /**
@@ -14033,6 +14355,71 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
+       * A3/T32: copy the captured/generated XPath for one selection or record.
+       * @param {string} [refId] - record id (defaults to the current selection).
+       * @returns {Promise<boolean>} whether the copy succeeded.
+       */
+      async function copyXPath(refId) {
+        return copyAnchorText(refId, 'xpath')
+      }
+
+      /**
+       * A3/T32: copy the DevTools-style JS path for one selection or record.
+       * @param {string} [refId] - record id (defaults to the current selection).
+       * @returns {Promise<boolean>} whether the copy succeeded.
+       */
+      async function copyJsPath(refId) {
+        return copyAnchorText(refId, 'jsPath')
+      }
+
+      /**
+       * A3/T32: shared clipboard path for the XPath/JS-path actions.
+       * @param {string | undefined} refId - record id or undefined for the selection.
+       * @param {'xpath' | 'jsPath'} kind - which anchor to copy.
+       * @returns {Promise<boolean>} whether the copy succeeded.
+       */
+      async function copyAnchorText(refId, kind) {
+        const state = snapshot().state
+        const detailId = snapshot().detailCard !== null ? snapshot().detailCard.refId : null
+        const ref = typeof refId === 'string' && refId.length > 0
+          ? state.collection.find((entry) => entry !== null && typeof entry === 'object' && entry.id === refId)
+          : (state.selection[0] ?? (detailId === null ? undefined : state.collection.find((entry) => entry !== null && typeof entry === 'object' && entry.id === detailId)))
+        if (ref === undefined || ref === null) {
+          feedback(t(kind === 'xpath' ? 'feedback.copyXPathFailed' : 'feedback.copyJsPathFailed'), 'error')
+          return false
+        }
+        const node = liveNode(ref)
+        let text = ref.locator !== null && typeof ref.locator === 'object' && typeof ref.locator[kind] === 'string' ? ref.locator[kind] : ''
+        if (text.length === 0 && node !== null) {
+          text = kind === 'xpath'
+            ? annotationXPathOf(node)
+            : annotationJsPathFor({ selector: ref.locator?.uniqueSelector ?? ref.locator?.path ?? null, xpath: annotationXPathOf(node) })
+        }
+        if (typeof text !== 'string' || text.length === 0) {
+          feedback(t(kind === 'xpath' ? 'feedback.copyXPathFailed' : 'feedback.copyJsPathFailed'), 'error')
+          return false
+        }
+        let clipboard = null
+        try {
+          clipboard = typeof navigator !== 'undefined' && navigator !== null ? navigator.clipboard : null
+        } catch {
+          clipboard = null
+        }
+        if (clipboard === null || clipboard === undefined || typeof clipboard.writeText !== 'function') {
+          feedback(t(kind === 'xpath' ? 'feedback.copyXPathFailed' : 'feedback.copyJsPathFailed'), 'error')
+          return false
+        }
+        try {
+          await clipboard.writeText(text)
+          feedback(t(kind === 'xpath' ? 'feedback.copyXPathSuccess' : 'feedback.copyJsPathSuccess'))
+          return true
+        } catch {
+          feedback(t(kind === 'xpath' ? 'feedback.copyXPathFailed' : 'feedback.copyJsPathFailed'), 'error')
+          return false
+        }
+      }
+
+      /**
        * Copy the best locator of one record ("Copy locator", D10) and report the
        * outcome through the feedback toast. Uses the verified unique selector when
        * present, else the best ordered candidate.
@@ -14244,9 +14631,104 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         }
       }
 
-      function statusOf(ref) {
-        if (ref === null || typeof ref !== 'object' || ref.locator === null || typeof ref.locator !== 'object') return 'missing'
-        return resolveRefStatus({
+      /**
+       * A3/T32: compare one fallback candidate to the captured record. Never fakes
+       * Resolved: a tag mismatch or a changed text digest is reported honestly.
+       * @param {Element} element - resolved candidate.
+       * @param {object} ref - captured record.
+       * @returns {'resolved' | 'changed' | 'missing'} status.
+       */
+      function compareFallbackElement(element, ref) {
+        if (element === null || element === undefined || element.isConnected === false) return 'missing'
+        const expectedTag = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object'
+          && typeof ref.locator.tag === 'string' ? ref.locator.tag.toLowerCase() : ''
+        const liveTag = typeof element.tagName === 'string' ? element.tagName.toLowerCase() : ''
+        if (expectedTag.length > 0 && liveTag !== expectedTag) return 'changed'
+        const expectedDigest = typeof ref.textDigest === 'string' ? ref.textDigest : ''
+        if (expectedDigest.length > 0) {
+          const actual = textDigest(typeof element.textContent === 'string' ? element.textContent : '')
+          if (actual !== expectedDigest) return 'changed'
+        }
+        return 'resolved'
+      }
+
+      /**
+       * A3/T32: resolve via the captured absolute XPath.
+       * @param {object} ref - captured record.
+       * @returns {string | null} status or null when this anchor is absent/failed.
+       */
+      function resolveRefXPath(ref) {
+        const xpath = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' && typeof ref.locator.xpath === 'string'
+          ? ref.locator.xpath : ''
+        if (xpath.length === 0) return null
+        let snapshot = null
+        try {
+          snapshot = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null)
+        } catch {
+          return null
+        }
+        const elements = []
+        for (let index = 0; index < snapshot.snapshotLength; index += 1) {
+          const node = snapshot.snapshotItem(index)
+          if (node !== null && typeof node === 'object' && typeof node.tagName === 'string') elements.push(node)
+        }
+        if (elements.length > 1) return 'ambiguous'
+        if (elements.length === 0) return null
+        return compareFallbackElement(elements[0], ref)
+      }
+
+      /**
+       * A3/T32: resolve via the captured text quote (unique match only).
+       * @param {object} ref - captured record.
+       * @returns {string | null} status or null.
+       */
+      function resolveRefTextQuote(ref) {
+        const locator = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : null
+        if (locator === null || locator.textQuote === null || typeof locator.textQuote !== 'object') return null
+        const tag = typeof locator.tag === 'string' ? locator.tag.toLowerCase() : ''
+        const candidates = []
+        for (const element of Array.from(document.getElementsByTagName(tag.length > 0 ? tag : '*'))) {
+          if (element === null || typeof element !== 'object') continue
+          if (element.closest('[data-psa-own]') !== null) continue
+          if (!annotationTextQuoteMatches(typeof element.textContent === 'string' ? element.textContent : '', locator.textQuote)) continue
+          candidates.push(element)
+        }
+        if (candidates.length > 1) return 'ambiguous'
+        if (candidates.length === 0) return null
+        return compareFallbackElement(candidates[0], ref)
+      }
+
+      /**
+       * A3/T32: resolve via the captured text position (container + offsets).
+       * @param {object} ref - captured record.
+       * @returns {string | null} status or null.
+       */
+      function resolveRefTextPosition(ref) {
+        const locator = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : null
+        if (locator === null || locator.textPosition === null || typeof locator.textPosition !== 'object') return null
+        const position = locator.textPosition
+        let container = null
+        try {
+          container = document.querySelector(position.container)
+        } catch {
+          return null
+        }
+        if (container === null) return null
+        const text = annotationNormalizeQuoteText(typeof container.textContent === 'string' ? container.textContent : '', 0)
+        const slice = text.slice(position.start, position.end)
+        const quote = locator.textQuote !== null && typeof locator.textQuote === 'object' ? locator.textQuote : null
+        if (quote !== null && typeof quote.exact === 'string' && slice === quote.exact) return 'resolved'
+        return 'changed'
+      }
+
+      /**
+       * A3/T32: resolution outcome with the winning strategy for the UI.
+       * @param {object} ref - captured record.
+       * @returns {{ status: string, via: string }} outcome.
+       */
+      function statusDetailOf(ref) {
+        if (ref === null || typeof ref !== 'object' || ref.locator === null || typeof ref.locator !== 'object') return { status: 'missing', via: 'css' }
+        return annotationResolveStatus({
           candidates: ref.locator.candidates,
           expectedTag: ref.locator.tag,
           uniqueSelector: typeof ref.locator.uniqueSelector === 'string' ? ref.locator.uniqueSelector : '',
@@ -14263,8 +14745,16 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
               expectedName: ref.locator !== null && typeof ref.locator === 'object' && typeof ref.locator.name === 'string' ? ref.locator.name : '',
               actualName: liveTag.length > 0 ? annotationAccessibleName(element, liveTag) : ''
             }
-          }
+          },
+          resolveXPath: () => resolveRefXPath(ref),
+          resolveTextQuote: () => resolveRefTextQuote(ref),
+          resolveTextPosition: () => resolveRefTextPosition(ref)
         })
+      }
+
+      /** Compat status accessor: the four statuses keep their meaning. @param {object} ref - record. @returns {string} status. */
+      function statusOf(ref) {
+        return statusDetailOf(ref).status
       }
 
       /**
@@ -17000,6 +17490,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         openNoteEditor,
         closeNoteEditor,
         statusOf,
+        statusDetailOf,
+        copyXPath,
+        copyJsPath,
         isInCollection,
         collectionScopeOf,
         currentSessionId,
@@ -18434,7 +18927,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
             }, t('detail.save')))
           : null),
       React.createElement('dl', { className: 'psa-detail-meta', 'data-psa-detail-meta': '', 'data-psa-own': '' },
-        metaRow(t('detail.status'), t(`popover.status.${status}`), 'data-psa-detail-status'),
+        metaRow(t('detail.status'), `${t(`popover.status.${status}`)}${controller.statusDetailOf(record).via !== 'css' ? ` · ${t(`via.${controller.statusDetailOf(record).via}`)}` : ''}`, 'data-psa-detail-status'),
         metaRow(t('detail.locator'), locator, 'data-psa-detail-locator'),
         metaRow(t('detail.position'), positionText, 'data-psa-detail-position'),
         metaRow(t('detail.session'), sessionText, 'data-psa-detail-session'),
@@ -18680,7 +19173,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       }, [controller])
       const ref = state.selection[0]
       if (ref === undefined || snapshot.popoverPosition === null) return null
-      const status = controller.statusOf(ref)
+      const statusDetail = controller.statusDetailOf(ref)
+      const status = statusDetail.status
+      const via = statusDetail.via
       const inCollection = controller.isInCollection(ref)
       const locator = describeLocator(ref)
       const surface = ref?.locator?.surface === 'floating' ? 'floating' : 'page'
@@ -18722,7 +19217,25 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           'aria-label': t('popover.copyLocator'),
           title: t('popover.copyLocator'),
           onClick: () => controller.copyLocator()
-        }, RemixGlyph(REMIX_ANNOTATION_COPY_LINE, 13))),
+        }, RemixGlyph(REMIX_ANNOTATION_COPY_LINE, 13)),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-popover-copy-xpath': '',
+          'data-psa-own': '',
+          'aria-label': t('popover.copyXPath'),
+          title: t('popover.copyXPath'),
+          onClick: () => controller.copyXPath()
+        }, RemixGlyph(REMIX_LINK, 13)),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-popover-copy-js-path': '',
+          'data-psa-own': '',
+          'aria-label': t('popover.copyJsPath'),
+          title: t('popover.copyJsPath'),
+          onClick: () => controller.copyJsPath()
+        }, RemixGlyph(REMIX_FILE_COPY_LINE, 13))),
       ephemeral
         ? React.createElement('div', {
           className: 'psa-muted',
@@ -18736,7 +19249,8 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         'data-psa-status': status
       },
       React.createElement('span', { className: 'psa-status-dot', 'data-psa-status': status, 'data-psa-own': '' }),
-      React.createElement('span', { 'data-psa-own': '' }, `${t('popover.statusLabel')} · ${t(`popover.status.${status}`)}`),
+      React.createElement('span', { 'data-psa-via': via, 'data-psa-own': '' },
+        `${t('popover.statusLabel')} · ${t(`popover.status.${status}`)}${via !== 'css' ? ` · ${t(`via.${via}`)}` : ''}`),
       React.createElement('span', { className: 'psa-levels' },
         React.createElement('button', {
           type: 'button',
@@ -19223,6 +19737,14 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationEntryOrdinals,
         annotationSurfacePinEligible,
         annotationSurfacePinEventMatches,
+        annotationNormalizeQuoteText,
+        annotationXPathOf,
+        annotationJsPathFor,
+        annotationTextQuoteOf,
+        annotationTextPositionOf,
+        annotationTextQuoteMatches,
+        annotationSelectorScore,
+        annotationResolveStatus,
         upsertAnnotationRecord,
         removeAnnotationRecord,
         restoreAnnotationRecord,
