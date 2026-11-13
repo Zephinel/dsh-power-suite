@@ -9469,6 +9469,31 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'insert.groupRequirement': 'Requirement:',
       'insert.groupReference': 'Element:',
       'insert.itemsCountLabel': 'items',
+      'sidebar.title': 'Annotations',
+      'sidebar.subtitle': 'Manage single annotations and batch groups together.',
+      'sidebar.filter.all': 'All',
+      'sidebar.filter.single': 'Singles',
+      'sidebar.type.single': 'Single',
+      'sidebar.type.group': 'Group',
+      'sidebar.filter.group': 'Groups',
+      'sidebar.groupBadge': 'Group · {count} items',
+      'sidebar.groupUntitled': 'Untitled group',
+      'sidebar.updated': 'Updated {time}',
+      'sidebar.page': 'Page',
+      'sidebar.area': 'Area',
+      'sidebar.selector': 'Selector',
+      'sidebar.addAnnotation': 'Add annotation',
+      'sidebar.clearSelection': 'Clear selection',
+      'sidebar.clearCollection': 'Clear collection',
+      'sidebar.emptyTitle': 'No annotations yet',
+      'sidebar.emptyHint': 'Select an element on the page to add your first annotation.',
+      'sidebar.filterEmpty': 'Nothing matches this filter.',
+      'sidebar.addHint': 'Switch to the page and select elements to annotate.',
+      'sidebar.edit': 'Edit annotation',
+      'sidebar.delete': 'Delete annotation',
+      'sidebar.insert': 'Insert reference',
+      'sidebar.include': 'Include in batch',
+      'sidebar.total': '{count} total',
       'collection.groupBadge': 'Batch',
       'collection.groupCount': '{count} items',
       'collection.groupUntitled': 'Untitled batch',
@@ -9633,6 +9658,31 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'insert.groupRequirement': '要求：',
       'insert.groupReference': '元素：',
       'insert.itemsCountLabel': '项',
+      'sidebar.title': '标注',
+      'sidebar.subtitle': '单条标注与批量分组在同一列表中管理。',
+      'sidebar.filter.all': '全部',
+      'sidebar.filter.single': '单条',
+      'sidebar.type.single': '单条',
+      'sidebar.type.group': '分组',
+      'sidebar.filter.group': '分组',
+      'sidebar.groupBadge': '分组 · {count} 项',
+      'sidebar.groupUntitled': '未命名分组',
+      'sidebar.updated': '更新于 {time}',
+      'sidebar.page': '页面',
+      'sidebar.area': '区域',
+      'sidebar.selector': '选择器',
+      'sidebar.addAnnotation': '添加标注',
+      'sidebar.clearSelection': '清空选择',
+      'sidebar.clearCollection': '清空标注集',
+      'sidebar.emptyTitle': '还没有标注',
+      'sidebar.emptyHint': '在页面上选择一个元素即可添加第一条标注。',
+      'sidebar.filterEmpty': '当前筛选下没有内容。',
+      'sidebar.addHint': '切换到页面并选择要标注的元素。',
+      'sidebar.edit': '编辑标注',
+      'sidebar.delete': '删除标注',
+      'sidebar.insert': '插入引用',
+      'sidebar.include': '加入批量',
+      'sidebar.total': '共 {count} 条',
       'collection.groupBadge': '批量',
       'collection.groupCount': '{count} 项',
       'collection.groupUntitled': '未命名分组',
@@ -11180,6 +11230,65 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
+     * A3/T25: derived counts for the redesigned sidebar header/filters. Filter
+     * counts are current-Session top-level entries; the total badge counts every
+     * element (single records + group items) regardless of scope.
+     * @param {Array<object>} collection - top-level collection entries.
+     * @param {string | null} sessionId - current Session identity.
+     * @returns {{ all: number, single: number, group: number, items: number, current: number, other: number }} counts.
+     */
+    function annotationSidebarCounts(collection, sessionId) {
+      const list = Array.isArray(collection) ? collection : []
+      let single = 0
+      let group = 0
+      let other = 0
+      let items = 0
+      for (const entry of list) {
+        if (entry === null || typeof entry !== 'object') continue
+        const entrySession = entry.session !== null && typeof entry.session === 'object' ? entry.session.sessionId ?? null : null
+        const isCurrent = typeof sessionId === 'string' && sessionId.length > 0 && entrySession === sessionId
+        if (!isCurrent) {
+          other += 1
+          continue
+        }
+        if (annotationIsGroup(entry)) group += 1
+        else single += 1
+        items += annotationIsGroup(entry) ? annotationGroupItems(entry).length : 1
+      }
+      const all = single + group
+      return { all, single, group, items, current: all, other }
+    }
+
+    /**
+     * A3/T25: client-side filter of the sidebar list.
+     * @param {Array<object>} collection - top-level collection entries.
+     * @param {'all' | 'single' | 'group'} filter - active filter.
+     * @returns {Array<object>} filtered entries.
+     */
+    function annotationFilterEntries(collection, filter) {
+      const list = Array.isArray(collection) ? collection : []
+      if (filter === 'single') return list.filter((entry) => entry !== null && typeof entry === 'object' && !annotationIsGroup(entry))
+      if (filter === 'group') return list.filter((entry) => annotationIsGroup(entry))
+      return list.slice()
+    }
+
+    /**
+     * A3/T25: auto title/description for a group card. The title is the first
+     * requirement line (bounded); the description is the remaining requirement
+     * (or the full requirement when the title is the whole text).
+     * @param {object} group - group entry.
+     * @returns {{ title: string, description: string }} summary strings.
+     */
+    function annotationGroupSummary(group) {
+      const requirement = annotationIsGroup(group) && typeof group.requirement === 'string' ? group.requirement : ''
+      const lines = requirement.split(/\r?\n/).map((line) => line.replace(/\s+/g, ' ').trim()).filter((line) => line.length > 0)
+      const first = lines.length > 0 ? lines[0] : ''
+      const title = first.length > 42 ? `${first.slice(0, 41).trimEnd()}…` : first
+      const description = lines.length > 1 ? lines.slice(1).join(' ') : (first.length > 42 ? requirement.trim() : '')
+      return { title, description }
+    }
+
+    /**
      * The ordered current-Session records selected for a batch insert (A3/T8):
      * only `included !== false` entries of the current Session qualify; an
      * other-Session record can never be part of a batch.
@@ -11559,6 +11668,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         note: '',
         editing: false,
         collection: [],
+        filter: 'all',
         batchOpen: false,
         passThrough: false,
         box: null,
@@ -11600,6 +11710,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         selection: [],
         note: '',
         editing: false,
+        filter: 'all',
         batchOpen: false,
         passThrough: false,
         box: null,
@@ -11643,7 +11754,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         case 'selectSingle': {
           const ref = payload.ref !== null && typeof payload.ref === 'object' ? payload.ref : null
           if (ref === null) return { ...current, phase: 'idle', selection: [], note: '', editing: false, batchOpen: false }
-          return { ...current, phase: 'selected', selection: [ref], note: ref.note ?? '', editing: false, batchOpen: false, view: 'status', hoverId: null }
+          // A3/T25: keep the collection sidebar open when the user selects a page
+          // element while managing the list (the footer then offers Clear selection).
+          return { ...current, phase: 'selected', selection: [ref], note: ref.note ?? '', editing: false, batchOpen: false, view: current.view === 'collection' ? 'collection' : 'status', hoverId: null }
         }
         case 'batchOpen': {
           const open = payload.open === true && current.phase === 'multi' && current.selection.length > 1
@@ -11667,7 +11780,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
             // while more elements are added/removed instead of resetting per item.
             note: selection.length === 1 ? (selection[0].note ?? '') : current.note,
             editing: false,
-            view: 'status',
+            view: current.view === 'collection' ? 'collection' : 'status',
             hoverId: null
           }
         }
@@ -11690,12 +11803,16 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
             phase: annotationPhaseForCount(merged.length),
             note: merged.length === 1 ? noteOfRef(merged[0]) : current.note,
             editing: false,
-            view: 'status',
+            view: current.view === 'collection' ? 'collection' : 'status',
             hoverId: null
           }
         }
         case 'setNote':
           return { ...current, note: typeof payload.text === 'string' ? payload.text : '' }
+        case 'setFilter': {
+          const filter = payload.filter === 'single' || payload.filter === 'group' ? payload.filter : 'all'
+          return current.filter === filter ? current : { ...current, filter }
+        }
         case 'beginEdit':
           return { ...current, editing: true }
         case 'endEdit':
@@ -12293,9 +12410,12 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
      * @param {boolean} [collapsed] - whether the rail is collapsed to its strip, default false.
      * @returns {number} rail width in pixels.
      */
-    function computeRailWidth(viewportWidth, collapsed) {
+    function computeRailWidth(viewportWidth, collapsed, view) {
       if (collapsed === true) return 48
       const width = typeof viewportWidth === 'number' && Number.isFinite(viewportWidth) ? viewportWidth : 0
+      // A3/T25: the redesigned collection sidebar needs room for readable rows and
+      // group cards; status/settings keep the compact rail.
+      if (view === 'collection') return Math.min(420, Math.max(320, Math.round(width * 0.24)))
       return Math.min(236, Math.max(188, Math.round(width * 0.116)))
     }
 
@@ -13369,7 +13489,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         settings: { ...settings },
         launcherPosition: clampLauncherPosition(readLauncherPosition(), viewport, ANNOTATION_LAUNCHER_SIZE),
         launcherDragging: false,
-        railWidth: computeRailWidth(viewport.width, railCollapsed),
+        railWidth: computeRailWidth(viewport.width, railCollapsed, 'status'),
         railCollapsed,
         layoutMode: 'shrink',
         hoverRect: null,
@@ -14449,6 +14569,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const patch = deriveGeometry(nextState, current)
         store.set({ ...current, state: nextState, ...patch })
         scheduleBatchPopover(nextState, current.state)
+        if (nextState.view !== current.state.view) updateLayout()
         // D1: every collection mutation schedules one debounced records write.
         if (nextState.collection !== current.state.collection) {
           scheduleAnnotationRecordsPersist()
@@ -14513,7 +14634,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       function updateLayout() {
         const current = snapshot()
         const size = annotationViewport()
-        const railWidth = computeRailWidth(size.width, current.railCollapsed)
+        const railWidth = computeRailWidth(size.width, current.railCollapsed, current.state.view)
         const mode = layoutModeFor(size.width, annotationMeasureSidebarWidths(), railWidth)
         const frame = annotationLayoutFrame()
         if (isActive() && frame !== null) {
@@ -16165,6 +16286,43 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
+       * A3/T25: switch the sidebar filter (client-side).
+       * @param {'all' | 'single' | 'group'} filter - target filter.
+       * @returns {void}
+       */
+      function setFilter(filter) {
+        dispatch({ type: 'setFilter', filter })
+      }
+
+      /**
+       * A3/T25: footer primary action — save the current page selection (single
+       * record or batch group) when one exists, otherwise return to the selection
+       * status view so the user can pick elements.
+       * @returns {void}
+       */
+      function primaryAddAnnotation() {
+        if (snapshot().state.selection.length > 0) {
+          commitSelection()
+          return
+        }
+        if (snapshot().state.view !== 'status') dispatch({ type: 'openView', view: 'status' })
+        feedback(t('sidebar.addHint'))
+      }
+
+      /**
+       * A3/T25: footer danger action — clear the current selection when there is
+       * one, otherwise clear the whole collection (with undo).
+       * @returns {void}
+       */
+      function clearSelectionOrCollection() {
+        if (snapshot().state.selection.length > 0) {
+          clearSelection()
+          return
+        }
+        clearCollection()
+      }
+
+      /**
        * A3/T24: expand/collapse one group card.
        * @param {string} groupId - group id.
        * @returns {void}
@@ -16594,6 +16752,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         setModifier,
         updateCollectionNote,
         toggleGroup,
+        setFilter,
+        primaryAddAnnotation,
+        clearSelectionOrCollection,
         removeGroupItem,
         removeEntry,
         removeSelection,
@@ -16746,6 +16907,55 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-popover-status{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:16px}
 .psa-levels{display:inline-flex;align-items:center;gap:2px;margin-left:auto}
 .psa-popover-note{display:flex;flex-direction:column;gap:8px}
+.psa-sb-rail-title{font-weight:600;font-size:13px;letter-spacing:.01em}
+.psa-sb-total{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 6px;border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);color:var(--dsw-alias-label-secondary);font-size:11px;font-weight:600;flex:none}
+.psa-sb-head{display:flex;flex-direction:column;gap:2px;padding:2px 2px 0}
+.psa-sb-head-row{display:flex;align-items:center;gap:6px}
+.psa-sb-back{appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;padding:2px 4px;border-radius:var(--dsw-radius-sm,4px);cursor:pointer}
+.psa-sb-back:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.psa-sb-subtitle{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:15px}
+.psa-sb-filters{display:flex;gap:4px;padding:0 2px}
+.psa-sb-filter{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:28px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,8px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11.5px;cursor:pointer}
+.psa-sb-filter:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.psa-sb-filter[aria-pressed=true]{background:color-mix(in srgb,var(--dsw-alias-label-primary) 10%,transparent);color:var(--dsw-alias-label-primary);border-color:color-mix(in srgb,var(--dsw-alias-label-primary) 22%,transparent)}
+.psa-sb-filter-count{color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums}
+.psa-sb-filter[aria-pressed=true] .psa-sb-filter-count{color:var(--dsw-alias-label-secondary)}
+.psa-sb-scope{font-size:10.5px;padding:0 2px}
+.psa-sb-tools{display:flex;gap:4px;padding:0 2px;flex-wrap:wrap}
+.psa-sb-tool{min-height:24px;padding:0 7px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:10.5px;cursor:pointer}
+.psa-sb-tool:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
+.psa-sb-tool:disabled{opacity:.45;cursor:default}
+.psa-sb-tool-primary{color:var(--dsw-alias-label-primary)}
+.psa-sb-tool-danger{color:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-secondary))}
+.psa-sb-sort{font-size:10.5px;color:var(--dsw-alias-label-tertiary);padding:0 2px}
+.psa-sb-note{font-size:10.5px;color:var(--dsw-alias-label-tertiary);padding:0 2px}
+.psa-sb-list{display:flex;flex-direction:column;gap:6px;padding:0 2px 4px}
+.psa-sb-empty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:26px 12px;border:1px dashed var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-md,8px);text-align:center;color:var(--dsw-alias-label-tertiary)}
+.psa-sb-empty-icon{color:var(--dsw-alias-label-tertiary);opacity:.7}
+.psa-sb-empty-title{color:var(--dsw-alias-label-secondary);font-weight:600;font-size:12px}
+.psa-sb-empty-hint{font-size:11px;line-height:15px;max-width:240px}
+.psa-sb-type{flex:none;display:inline-flex;align-items:center;height:17px;padding:0 6px;border-radius:999px;font-size:10px;font-weight:600;letter-spacing:.02em;background:color-mix(in srgb,var(--dsw-alias-label-primary) 9%,transparent);color:var(--dsw-alias-label-secondary)}
+.psa-sb-type[data-psa-type-badge=group]{background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 22%,transparent);color:var(--dsw-alias-label-primary)}
+.psa-sb-meta{font-size:10.5px;color:var(--dsw-alias-label-tertiary)}
+.psa-sb-selector{font-size:10px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.psa-sb-page{font-size:10px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.psa-sb-child-time{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary)}
+.psa-entry{padding:9px;gap:5px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 3%,transparent)}
+.psa-entry:hover{border-color:color-mix(in srgb,var(--dsw-alias-label-primary) 24%,transparent);background:color-mix(in srgb,var(--dsw-alias-label-primary) 5%,transparent)}
+.psa-entry:focus-within{border-color:color-mix(in srgb,var(--dsw-alias-label-primary) 34%,transparent)}
+.psa-entry-actions{display:flex;align-items:center;justify-content:flex-end;gap:2px;flex-wrap:wrap;margin-top:2px}
+.psa-entry-actions .psa-icon-btn{min-width:24px;min-height:24px}
+.psa-group .psa-entry-name{font-weight:600}
+.psa-group-items{margin-left:6px}
+.psa-group-item{min-height:26px}
+.psa-sb-footer{flex:none;display:flex;gap:8px;padding:10px 12px 12px;border-top:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent))}
+.psa-sb-primary{flex:1;min-height:34px;border:0;border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-state-business-primary);color:#fff;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+.psa-sb-primary:hover:not(:disabled){filter:brightness(1.06)}
+.psa-sb-primary:disabled{opacity:.5;cursor:default}
+.psa-sb-danger{flex:none;min-height:34px;padding:0 14px;border:1px solid color-mix(in srgb,var(--dsw-alias-state-error-primary,var(--dsw-alias-label-secondary)) 55%,transparent);border-radius:var(--dsw-radius-sm,8px);background:transparent;color:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-secondary));font:inherit;font-size:12px;cursor:pointer}
+.psa-sb-danger:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-error-primary,var(--dsw-alias-label-secondary)) 10%,transparent)}
+.psa-sb-danger:disabled{opacity:.45;cursor:default}
+.psa-sb-filter:focus-visible,.psa-sb-tool:focus-visible,.psa-sb-primary:focus-visible,.psa-sb-danger:focus-visible,.psa-entry-name:focus-visible,.psa-icon-btn:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}
 .psa-group-items{display:flex;flex-direction:column;gap:3px;margin:2px 0 2px 18px;padding-left:8px;border-left:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent))}
 .psa-group-item{display:flex;align-items:center;gap:5px;min-width:0;font-size:11px;line-height:16px}
 .psa-group-item-name{flex:none;max-width:45%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:none;border:0;padding:0;color:var(--dsw-alias-label-primary);cursor:pointer;font:inherit}
@@ -17132,7 +17342,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       const collapsed = snapshot.railCollapsed
       const count = state.collection.length
       const title = state.view === 'collection'
-        ? t('collection.title')
+        ? t('sidebar.title')
         : (state.view === 'settings' ? t('settings.title') : t('rail.title'))
       const collapseButton = React.createElement('button', {
         type: 'button',
@@ -17159,6 +17369,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           'data-psa-own': '',
           'data-psa-collapsed': 'true',
           'data-psa-mode': snapshot.layoutMode,
+          'data-psa-view': state.view,
           role: 'complementary',
           'aria-label': t('rail.aria')
         },
@@ -17188,12 +17399,21 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         'data-psa-rail': '',
         'data-psa-own': '',
         'data-psa-mode': snapshot.layoutMode,
+        'data-psa-view': state.view,
         role: 'complementary',
         'aria-label': t('rail.aria')
       },
       React.createElement('div', { className: 'psa-rail-header' },
         React.createElement('span', { className: 'psa-dot', 'aria-hidden': true }),
-        React.createElement('span', { className: 'psa-rail-title', title }, title),
+        React.createElement('span', { className: 'psa-rail-title psa-sb-rail-title', title }, title),
+        state.view === 'collection'
+          ? React.createElement('span', {
+            className: 'psa-sb-total',
+            'data-psa-total-badge': '',
+            'data-psa-own': '',
+            title: t('sidebar.subtitle')
+          }, String(annotationSidebarCounts(state.collection, controller.currentSessionId()).items))
+          : null,
         AnnotationDockedLauncher({ t, controller, snapshot }),
         collapseButton,
         exitButton),
@@ -17279,89 +17499,136 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
-     * Rail collection view (A3/T8): scope counts, batch selection tools, ordered
-     * rows, empty/cap/other-Session notices, and the batch footer.
+     * A3/T25: the redesigned annotation sidebar body — header subtitle, filter
+     * chips with live counts, scope/tools, scrollable unified list (single rows +
+     * group cards), empty states. Shell tokens only; no new dependencies.
      * @param {{ t: Function, controller: object, snapshot: object }} props - rail props.
-     * @returns {object} the collection view.
+     * @returns {object} the sidebar body.
      */
     function AnnotationCollectionView(props) {
       const { t, controller, snapshot } = props
       const state = snapshot.state
       const entries = state.collection
       const sessionId = controller.currentSessionId()
-      const counts = annotationScopeCounts(entries, sessionId)
+      const counts = annotationSidebarCounts(entries, sessionId)
+      const scopeCounts = annotationScopeCounts(entries, sessionId)
+      const filter = state.filter === 'single' || state.filter === 'group' ? state.filter : 'all'
+      const filtered = annotationFilterEntries(entries, filter)
+      const filterLabel = (key, count) => React.createElement('button', {
+        key,
+        type: 'button',
+        className: 'psa-sb-filter',
+        'data-psa-filter': key,
+        'data-psa-own': '',
+        'aria-pressed': filter === key ? 'true' : 'false',
+        onClick: () => controller.setFilter(key)
+      },
+      React.createElement('span', null, t(`sidebar.filter.${key}`)),
+      React.createElement('span', { className: 'psa-sb-filter-count' }, String(counts[key])))
       const nodes = [
-        React.createElement('div', { key: 'head', className: 'psa-rail-section' },
-          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+        React.createElement('div', { key: 'head', className: 'psa-sb-head' },
+          React.createElement('div', { className: 'psa-sb-head-row' },
             React.createElement('button', {
               type: 'button',
-              className: 'psa-icon-btn',
+              className: 'psa-sb-back',
+              'data-psa-back': '',
               'data-psa-own': '',
-              'aria-label': t('rail.back'),
               title: t('rail.back'),
               onClick: () => controller.backView()
-            }, AnnotationChevron('left')),
-            React.createElement('span', { className: 'psa-status-line psa-status-strong' }, t('collection.title')),
-            React.createElement('span', { className: 'psa-btn-count', style: { marginLeft: 'auto' } },
-              entries.length === 1 ? t('collection.countOne') : t('collection.count', { count: entries.length })))),
+            }, t('rail.back'))),
+          React.createElement('div', { className: 'psa-sb-subtitle' }, t('sidebar.subtitle'))),
+        React.createElement('div', { key: 'filters', className: 'psa-sb-filters', 'data-psa-filters': '', 'data-psa-own': '' },
+          filterLabel('all', counts.all), filterLabel('single', counts.single), filterLabel('group', counts.group)),
         React.createElement('div', {
           key: 'scope',
-          className: 'psa-muted',
+          className: 'psa-muted psa-sb-scope',
           'data-psa-scope-counts': '',
-          'data-psa-current-count': String(counts.current),
-          'data-psa-other-count': String(counts.other),
-          'data-psa-included-count': String(counts.included)
-        }, t('collection.countScope', { current: counts.current, other: counts.other })),
-        React.createElement('div', { key: 'tools', className: 'psa-rail-tools', 'data-psa-rail-tools': '', 'data-psa-own': '' },
+          'data-psa-current-count': String(scopeCounts.current),
+          'data-psa-other-count': String(scopeCounts.other),
+          'data-psa-included-count': String(scopeCounts.included)
+        }, t('collection.countScope', { current: scopeCounts.current, other: scopeCounts.other })),
+        React.createElement('div', { key: 'tools', className: 'psa-sb-tools', 'data-psa-rail-tools': '', 'data-psa-own': '' },
           React.createElement('button', {
             type: 'button',
-            className: 'psa-btn',
+            className: 'psa-sb-tool',
             'data-psa-select-all': '',
             'data-psa-own': '',
-            disabled: counts.current === 0 || counts.included === counts.current,
+            title: t('collection.selectAllCurrent'),
+            'aria-label': t('collection.selectAllCurrent'),
+            disabled: scopeCounts.current === 0 || scopeCounts.included === scopeCounts.current,
             onClick: () => controller.selectAllCurrent()
           }, t('collection.selectAllCurrent')),
           React.createElement('button', {
             type: 'button',
-            className: 'psa-btn',
+            className: 'psa-sb-tool',
             'data-psa-deselect-all': '',
             'data-psa-own': '',
-            disabled: counts.included === 0,
+            title: t('collection.deselectAll'),
+            'aria-label': t('collection.deselectAll'),
+            disabled: scopeCounts.included === 0,
             onClick: () => controller.deselectAll()
-          }, t('collection.deselectAll'))),
-        React.createElement('div', { key: 'sort', className: 'psa-muted' }, t('collection.sortHint'))
+          }, t('collection.deselectAll')),
+          React.createElement('button', {
+            type: 'button',
+            className: 'psa-sb-tool psa-sb-tool-primary',
+            'data-psa-insert-batch': '',
+            'data-psa-own': '',
+            title: t('collection.insertChip'),
+            'aria-label': t('collection.insertChip'),
+            disabled: scopeCounts.included === 0,
+            onClick: () => controller.insertBatch()
+          }, t('collection.insertBatch')),
+          React.createElement('button', {
+            type: 'button',
+            className: 'psa-sb-tool psa-sb-tool-danger',
+            'data-psa-delete-selected': '',
+            'data-psa-own': '',
+            title: t('collection.deleteSelected'),
+            'aria-label': t('collection.deleteSelected'),
+            disabled: scopeCounts.included === 0,
+            onClick: () => controller.removeSelected()
+          }, t('collection.deleteSelected'))),
+        React.createElement('div', { key: 'sort', className: 'psa-sb-sort' }, t('collection.sortHint'))
       ]
       if (sessionId === null && entries.length > 0) {
-        // Without a mounted Composer seat there is no current Session, so scope is
-        // unknown for every entry; say that explicitly instead of implying the
-        // entries are merely from another Session (F8).
-        nodes.push(React.createElement('div', {
-          key: 'no-session',
-          className: 'psa-muted',
-          'data-psa-no-session': '',
-          'data-psa-own': ''
-        }, t('feedback.noComposer')))
-      } else if (counts.other > 0) {
-        nodes.push(React.createElement('div', { key: 'other', className: 'psa-muted', 'data-psa-other-notice': '' }, t('collection.crossSession', { count: counts.other })))
+        nodes.push(React.createElement('div', { key: 'no-session', className: 'psa-sb-note', 'data-psa-no-session': '', 'data-psa-own': '' },
+          t('feedback.noComposer')))
+      } else if (scopeCounts.other > 0) {
+        nodes.push(React.createElement('div', { key: 'other', className: 'psa-sb-note', 'data-psa-other-notice': '' },
+          t('collection.crossSession', { count: scopeCounts.other })))
       }
       if (entries.length >= ANNOTATION_RECORD_LIMIT) {
         nodes.push(React.createElement('div', {
           key: 'cap',
-          className: 'psa-muted psa-rail-max',
+          className: 'psa-sb-note psa-sb-max',
           'data-psa-max-reached': '',
           'data-psa-own': ''
         }, t('collection.maxReached', { limit: ANNOTATION_RECORD_LIMIT })))
       }
+      const list = []
       if (entries.length === 0) {
-        nodes.push(React.createElement('div', { key: 'empty', className: 'psa-empty', 'data-psa-empty': '', 'data-psa-own': '' },
-          React.createElement('div', { className: 'psa-empty-title' }, t('collection.empty')),
-          React.createElement('div', { className: 'psa-muted' }, t('collection.emptyHint'))))
+        list.push(React.createElement('div', { key: 'empty', className: 'psa-sb-empty', 'data-psa-empty': '', 'data-psa-own': '' },
+          React.createElement('div', { className: 'psa-sb-empty-icon', 'aria-hidden': 'true' }, RemixGlyph(REMIX_LIST_CHECK_2, 18)),
+          React.createElement('div', { className: 'psa-sb-empty-title' }, t('sidebar.emptyTitle')),
+          React.createElement('div', { className: 'psa-sb-empty-hint' }, t('sidebar.emptyHint'))))
+      } else if (filtered.length === 0) {
+        list.push(React.createElement('div', { key: 'filter-empty', className: 'psa-sb-empty', 'data-psa-filter-empty': '', 'data-psa-own': '' },
+          React.createElement('div', { className: 'psa-sb-empty-hint' }, t('sidebar.filterEmpty'))))
       } else {
-        const rows = entries.map((entry, index) => (annotationIsGroup(entry)
-          ? React.createElement(AnnotationGroupRow, { key: entry.id, t, controller, snapshot, entry, index })
-          : React.createElement(AnnotationEntryRow, { key: entry.id, t, controller, snapshot, entry, index })))
-        nodes.push(React.createElement('div', { key: 'rows', className: 'psa-rail-section' }, rows))
+        filtered.forEach((entry) => {
+          const index = entries.indexOf(entry)
+          list.push(annotationIsGroup(entry)
+            ? React.createElement(AnnotationGroupRow, { key: entry.id, t, controller, snapshot, entry, index })
+            : React.createElement(AnnotationEntryRow, { key: entry.id, t, controller, snapshot, entry, index }))
+        })
       }
+      nodes.push(React.createElement('div', {
+        key: 'list',
+        className: 'psa-sb-list',
+        'data-psa-sidebar-list': '',
+        'data-psa-filter-active': filter,
+        role: 'list'
+      }, list))
       return React.createElement(React.Fragment, null, nodes)
     }
 
@@ -17416,8 +17683,8 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           title: t('collection.groupPreview'),
           onClick: () => controller.toggleGroup(entry.id)
         }, summary.text.length > 0 ? summary.text : t('collection.groupUntitled')),
-        React.createElement('span', { className: 'psa-badge', 'data-psa-own': '' },
-          t('collection.groupCount', { count: items.length })),
+        React.createElement('span', { className: 'psa-badge psa-sb-type', 'data-psa-type-badge': 'group', 'data-psa-own': '' },
+          t('sidebar.groupBadge', { count: items.length })),
         React.createElement('button', {
           type: 'button',
           className: 'psa-icon-btn',
@@ -17428,8 +17695,12 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           title: expanded ? t('collection.collapse') : t('collection.expand'),
           onClick: () => controller.toggleGroup(entry.id)
         }, AnnotationChevron(expanded ? 'down' : 'right'))),
-      React.createElement('div', { className: 'psa-entry-meta', 'data-psa-own': '' },
-        `${t('collection.groupBadge')} · ${sessionShortLabel(sessionId) || t('insert.noSession')}`),
+      React.createElement('div', { className: 'psa-entry-meta psa-sb-meta', 'data-psa-own': '' },
+        `${sessionShortLabel(sessionId) || t('insert.noSession')} · ${t('sidebar.updated', { time: formatAnnotationTime(entry.updatedAt || entry.createdAt || entry.at) })}`),
+      React.createElement('div', { className: 'psa-entry-locator psa-sb-selector', 'data-psa-own': '', title: describeLocator(items[0] ?? entry) },
+        `${t('sidebar.selector')} ${describeLocator(items[0] ?? entry)}`),
+      React.createElement('div', { className: 'psa-sb-page', 'data-psa-own': '' },
+        `${t('sidebar.page')} ${items[0]?.route || '—'} · ${t('sidebar.area')} ${items[0]?.component || '—'}`),
       React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
         React.createElement('textarea', {
           className: 'psa-entry-note',
@@ -17514,6 +17785,17 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
               title: t(`popover.status.${itemStatus}`)
             }),
             React.createElement('span', { className: 'psa-group-item-locator', 'data-psa-own': '' }, describeLocator(item)),
+            React.createElement('span', { className: 'psa-sb-child-time', 'data-psa-own': '' },
+              formatAnnotationTime(item.updatedAt || item.at)),
+            React.createElement('button', {
+              type: 'button',
+              className: 'psa-icon-btn',
+              'data-psa-group-item-edit': '',
+              'data-psa-own': '',
+              'aria-label': t('sidebar.edit'),
+              title: t('sidebar.edit'),
+              onClick: () => controller.previewEntry(item.id)
+            }, RemixGlyph(REMIX_ANNOTATION_COPY_LINE, 12)),
             React.createElement('button', {
               type: 'button',
               className: 'psa-icon-btn psa-detail-danger',
@@ -17575,6 +17857,8 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           onChange: (event) => controller.setEntryIncluded(entry.id, event.currentTarget.checked === true)
         })),
         React.createElement('span', { className: 'psa-entry-index' }, `#${index + 1}`),
+        React.createElement('span', { className: 'psa-sb-type', 'data-psa-type-badge': 'single', 'data-psa-own': '' },
+          t('sidebar.type.single')),
         React.createElement('button', {
           type: 'button',
           className: 'psa-entry-name',
@@ -17593,8 +17877,12 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
             title: t(`popover.status.${status}`),
             'aria-label': t(`popover.status.${status}`)
           })),
-      React.createElement('div', { className: 'psa-entry-meta', 'data-psa-entry-meta': '', 'data-psa-own': '' }, metadata.join(' · ')),
-      React.createElement('div', { className: 'psa-entry-locator', title: locator }, locator),
+      React.createElement('div', { className: 'psa-entry-meta psa-sb-meta', 'data-psa-entry-meta': '', 'data-psa-own': '' },
+        `${metadata.join(' · ')} · ${t('sidebar.updated', { time: formatAnnotationTime(entry.updatedAt || entry.at) })}`),
+      React.createElement('div', { className: 'psa-entry-locator psa-sb-selector', title: locator },
+        `${t('sidebar.selector')} ${locator}`),
+      React.createElement('div', { className: 'psa-sb-page', 'data-psa-own': '' },
+        `${t('sidebar.page')} ${entry.route || '—'} · ${t('sidebar.area')} ${entry.component || '—'}`),
       React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
         React.createElement('textarea', {
           className: 'psa-entry-note',
@@ -17673,10 +17961,12 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
-     * Rail collection footer (A3/T8): delete the selected annotations, insert the
-     * selected current-Session annotations as ONE group chip, or clear everything;
-     * each destructive action uses the same 5 s undo slot. Visible disable reasons
-     * explain why a batch insert is unavailable.
+     * A3/T25: redesigned sidebar footer. Primary "Add annotation" saves the
+     * current page selection (single record or batch group) / returns to the page;
+     * the danger action clears the current selection, or the whole collection when
+     * nothing is selected (with the existing undo slot). Sort/clear admin tools
+     * (select-all / deselect / batch insert / delete selected) live in the list
+     * toolbar above, keeping the footer to the two specified actions.
      * @param {Function} t - bound translate.
      * @param {object} controller - annotation controller.
      * @param {object} snapshot - current snapshot.
@@ -17684,42 +17974,33 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
      */
     function annotationCollectionFooter(t, controller, snapshot) {
       const state = snapshot.state
+      const hasSelection = state.selection.length > 0
       const sessionId = controller.currentSessionId()
-      const counts = annotationScopeCounts(state.collection, sessionId)
-      const canInsert = counts.included > 0
-      const reason = state.collection.length === 0
-        ? t('collection.emptyHint')
-        : (sessionId === null ? t('feedback.noComposer') : (counts.current === 0 ? t('collection.crossSession', { count: counts.other }) : t('collection.batchDisabled')))
-      return React.createElement('div', { className: 'psa-rail-footer', 'data-psa-own': '' },
+      const scopeCounts = annotationScopeCounts(state.collection, sessionId)
+      const canClearCollection = state.collection.length > 0
+      return React.createElement('div', { className: 'psa-sb-footer', 'data-psa-sidebar-footer': '', 'data-psa-own': '' },
         React.createElement('button', {
           type: 'button',
-          className: 'psa-btn psa-btn-danger',
-          'data-psa-delete-selected': '',
+          className: 'psa-sb-primary',
+          'data-psa-add-annotation': '',
+          'data-psa-add': '',
           'data-psa-own': '',
-          disabled: counts.included === 0,
-          title: counts.included === 0 ? t('collection.batchDisabled') : t('collection.deleteSelected'),
-          onClick: () => controller.removeSelected()
-        }, `${t('collection.deleteSelected')} (${counts.included})`),
+          disabled: !hasSelection && state.collection.length === 0 && false,
+          title: hasSelection ? t('batch.saveGroup') : t('sidebar.addAnnotation'),
+          onClick: () => controller.primaryAddAnnotation()
+        }, hasSelection
+          ? (state.selection.length > 1 ? t('batch.saveGroup') : t('popover.commit'))
+          : t('sidebar.addAnnotation')),
         React.createElement('button', {
           type: 'button',
-          className: 'psa-btn psa-btn-primary',
-          'data-psa-insert-batch': '',
-          'data-psa-own': '',
-          disabled: !canInsert,
-          title: canInsert ? t('collection.insertChip') : reason,
-          onClick: () => controller.insertBatch()
-        }, `${t('collection.insertBatch')} (${counts.included})`),
-        canInsert
-          ? null
-          : React.createElement('div', { className: 'psa-muted', 'data-psa-batch-reason': '', 'data-psa-own': '' }, reason),
-        React.createElement('button', {
-          type: 'button',
-          className: 'psa-btn',
+          className: 'psa-sb-danger',
+          'data-psa-clear-selection': '',
           'data-psa-clear': '',
           'data-psa-own': '',
-          disabled: state.collection.length === 0,
-          onClick: () => controller.clearCollection()
-        }, t('collection.clear')))
+          disabled: !hasSelection && !canClearCollection,
+          title: hasSelection ? t('sidebar.clearSelection') : t('sidebar.clearCollection'),
+          onClick: () => controller.clearSelectionOrCollection()
+        }, hasSelection ? t('sidebar.clearSelection') : t('sidebar.clearCollection')))
     }
 
     /**
@@ -18683,6 +18964,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationGroupFromSelection,
         collectionAddGroup,
         serializeBatchEntries,
+        annotationSidebarCounts,
+        annotationFilterEntries,
+        annotationGroupSummary,
         upsertAnnotationRecord,
         removeAnnotationRecord,
         restoreAnnotationRecord,

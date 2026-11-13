@@ -69,6 +69,7 @@ if (ui === undefined) {
     'annotationIsGroup', 'annotationGroupItems', 'annotationFlattenRecords',
     'annotationTotalItemCount', 'annotationFindRecord', 'annotationGroupFromSelection',
     'collectionAddGroup', 'serializeBatchEntries',
+    'annotationSidebarCounts', 'annotationFilterEntries', 'annotationGroupSummary',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -85,8 +86,9 @@ if (ui === undefined) {
    * candidates and model serialization), 67 = inner-first floating-surface pick
    * level, 68 = leaf-first picking (deepest eligible element, full ancestor
    * Parent/Child chain), 69 = batch groups (group model helpers, flatten/cap,
-   * group serializer). The E2E `ACCEPTED_SEAM_GENERATIONS` must accept exactly
-   * these counts.
+   * group serializer), 79 = redesigned sidebar (derived counts, client-side
+   * filter, group auto-summary). The E2E `ACCEPTED_SEAM_GENERATIONS` must accept
+   * exactly these counts.
    */
   const SEAM_GENERATION = SEAM_EXPORTS.length
   /** Accepted `Function.length` ranges from the frozen signatures (defaults reduce length). */
@@ -117,7 +119,7 @@ if (ui === undefined) {
     resolveNodeCandidate: [1, 1],
     clampLauncherPosition: [2, 4],
     clampPopoverPosition: [3, 5],
-    computeRailWidth: [1, 2],
+    computeRailWidth: [1, 3],
     layoutModeFor: [3, 3],
     collectionAdd: [2, 3],
     collectionRemove: [2, 2],
@@ -144,6 +146,9 @@ if (ui === undefined) {
     annotationGroupFromSelection: [5, 5],
     collectionAddGroup: [3, 3],
     serializeBatchEntries: [3, 3],
+    annotationSidebarCounts: [2, 2],
+    annotationFilterEntries: [2, 2],
+    annotationGroupSummary: [1, 1],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
     annotationSelectedEntries: [2, 2],
@@ -166,7 +171,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 76, 'the frozen batch-group generation is pinned')
+    assert.equal(SEAM_GENERATION, 79, 'the frozen sidebar-redesign generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -742,7 +747,7 @@ if (ui === undefined) {
   //#region state machine
 
   /** Sorted keys of the frozen reducer state. */
-  const STATE_KEYS = ['batchOpen', 'box', 'collection', 'editing', 'feedback', 'hoverId', 'note', 'passThrough', 'phase', 'selection', 'sessionId', 'view']
+  const STATE_KEYS = ['batchOpen', 'box', 'collection', 'editing', 'feedback', 'filter', 'hoverId', 'note', 'passThrough', 'phase', 'selection', 'sessionId', 'view']
 
   test('reducer starts from the frozen off state and activates to idle', () => {
     const initial = ui.createAnnotationState()
@@ -755,6 +760,7 @@ if (ui === undefined) {
     assert.equal(initial.editing, false)
     assert.deepEqual(plain(initial.collection), [])
     assert.equal(initial.batchOpen, false)
+    assert.equal(initial.filter, 'all')
     assert.equal(initial.passThrough, false)
     assert.equal(initial.box, null)
     assert.equal(initial.feedback, null)
@@ -2533,6 +2539,28 @@ if (ui === undefined) {
     assert(/Group · 2 items/.test(mixed), 'group block still present in a mixed batch')
   })
 
+  test('A3/T25: sidebar counts/filter/group auto-summary are derived from singles + groups', () => {
+    const singleA = { ...recordAt(1), note: 'Single A' }
+    const singleB = { ...recordAt(2), note: 'Single B' }
+    const group = ui.annotationGroupFromSelection([recordAt(3), recordAt(4)], 'Group title line\nGroup description line', SESSION_A, 1, 'psa-group-sidebar')
+    const other = { ...recordAt(5), note: 'Other session', session: { sessionId: 'session-other', cwd: '/x', workspaceLabel: 'x' } }
+    const collection = [singleA, group, singleB, other]
+    const counts = ui.annotationSidebarCounts(collection, SESSION_A)
+    assert.equal(counts.all, 3)
+    assert.equal(counts.single, 2)
+    assert.equal(counts.group, 1)
+    assert.equal(counts.items, 4)
+    assert.equal(counts.other, 1)
+    assert.equal(ui.annotationFilterEntries(collection, 'single').length, 3, 'single filter returns singles from every scope')
+    assert.equal(ui.annotationFilterEntries(collection, 'group').length, 1)
+    assert.equal(ui.annotationFilterEntries(collection, 'all').length, 4)
+    const summary = ui.annotationGroupSummary(group)
+    assert.equal(summary.title, 'Group title line')
+    assert.equal(summary.description, 'Group description line')
+    const longSummary = ui.annotationGroupSummary({ ...group, requirement: 'x'.repeat(60) })
+    assert(longSummary.title.endsWith('…') && longSummary.title.length <= 42, 'long group titles are bounded')
+  })
+
   //#region geometry and layout
 
   test('clampLauncherPosition keeps the launcher fully inside the viewport with an 8px margin', () => {
@@ -2564,10 +2592,15 @@ if (ui === undefined) {
     assert.ok(noRail.x + popoverSize.width <= viewport.width - margin)
   })
 
-  test('computeRailWidth follows clamp(188, round(0.116 * vw), 236) and collapses to 48', () => {
+  test('computeRailWidth follows the compact clamp by default and the wide collection clamp', () => {
     assert.equal(ui.computeRailWidth(1728), 200)
     assert.equal(ui.computeRailWidth(1000), 188)
     assert.equal(ui.computeRailWidth(3000), 236)
+    // A3/T25: the collection sidebar is wider: clamp(320, 24vw, 420).
+    assert.equal(ui.computeRailWidth(1728, false, 'collection'), 415)
+    assert.equal(ui.computeRailWidth(1000, false, 'collection'), 320)
+    assert.equal(ui.computeRailWidth(3000, false, 'collection'), 420)
+    assert.equal(ui.computeRailWidth(1728, true, 'collection'), 48, 'collapsed wins over the wide view')
     assert.equal(ui.computeRailWidth(1600), Math.min(236, Math.max(188, Math.round(0.116 * 1600))))
     assert.equal(ui.computeRailWidth(1728, true), 48)
     assert.equal(ui.computeRailWidth(1000, true), 48)
