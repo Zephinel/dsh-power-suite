@@ -396,6 +396,15 @@
   the false-ambiguous fix. Generic tag/role matches still corroborate by text,
   so a genuinely removed target can report Changed rather than Missing when a
   same-tag DOM node remains.
+- **Captured-scope authority applies to descendant text anchors.** A unique
+  in-scope hit wins over out-of-scope duplicates and in-scope ambiguity is
+  terminal; self-anchor text resolution keeps the previous weak-ambiguity chain.
+  Residual consistency notes: when the captured container resolves but contains
+  zero targets, the legacy bounded scan may still return a fallback node while
+  the status fallback is ambiguous (copy can use a non-authoritative live node),
+  and an in-scope unique-but-changed target returns no live node (live copy may
+  fall back to the saved anchor; changed descendant marks can be lost when CSS
+  is also dead). Both are minor follow-ups.
 - **Descendant anchors cover non-leaf text-bearing targets only.** They are
   captured for normal-flow targets with a text leaf descendant; floating/
   ephemeral surfaces are deliberately excluded (a removed hover card must not be
