@@ -389,6 +389,13 @@
   canvas shrink by the delta and restore on exit, and the narrow-viewport layout
   falls back to the 320 px overlay rail. On very narrow viewports the sidebar can
   feel large — collapse it to the 48 px strip or use the overlay mode.
+- **Fallback anchors are additive and partial.** Only text-bearing leaf
+  elements capture `textQuote`/`textPosition`; absolute XPath is
+  structure-sensitive (an id short-circuit helps, but reparenting can break it),
+  text-position is a container-level fallback, and Copy XPath / Copy JS path are
+  currently in the popover only (detail-card/rail variants not yet added).
+  Records captured before the anchor change have no fallback anchors until
+  re-annotated.
 - **Transient-surface pinning covers pointer-leave closes only.** While a
   floating-surface annotation's popover is open, pointer-leave close events are
   suppressed so the surface stays put; a menu that closes from a timer, scroll
