@@ -53,9 +53,15 @@ heading is added until the release is cut.
   one request (shared requirement + numbered references with honest status
   lines). The persisted document is v3 (singles + groups, tolerant v2 migration,
   cap counts singles + group items, visible refusal) and the right rail's
-  collection view renders singles and group cards with shared-requirement
-  editing, item count, expand/collapse, include/reorder, preview, per-row
-  insert/delete and undo. Page
+  collection view is redesigned into a real managed **annotation sidebar**
+  (widened to `clamp(320px, 24vw, 420px)`, status/settings views stay compact):
+  an **Annotations** header with a total badge and subtitle, **All / Singles /
+  Groups** filters with live counts, a unified scrollable list of single rows and
+  group cards (count badge, collapse/expand, shared-requirement editing,
+  always-visible edit/delete/insert actions), per-item metadata (Selector,
+  Page/Area, Session/Workspace, updated time), empty/filter-empty states, and a
+  footer with **Add annotation** plus dynamic **Clear selection / Clear
+  collection** (undoable). Page
   pointer events are consumed in the capture phase so native controls cannot
   act while annotating; the configurable multi-select modifier toggles selection
   or starts a marquee, and the configurable pass-through modifier restores real
