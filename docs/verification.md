@@ -913,6 +913,12 @@ their feature references.
 
 ## Session dot, native hover figures and running-panel pin (2026-11-13)
 
+> **SUPERSEDED pin evidence.** The pin-storage design recorded here (card-local
+> localStorage document) was replaced first by the native-pin experiment and then by the
+> final card-owned Host-shared pin (see "FOLLOW-UP 2" at the end of this file). The R1
+> dot and R2 native-hover-figures evidence below still applies; the R3 pin evidence is
+> historical and must not be read as the shipped behavior.
+
 Independent live verification of the three `session-pin-stats` requirements against the
 **real running DSH Web GUI** (`https://192.168.5.210:3080`, launchd `com.rexxin.dsh-web`).
 The committed harness injects this worktree's `src/client.js` into the live page with a
@@ -957,6 +963,11 @@ watches for that squeeze.
 
 ## Follow-up: Host-shared cross-device pin + shipped-install proof (2026-11-13)
 
+> **SUPERSEDED (native-pin experiment).** The native-sidebar-pin coupling recorded in this
+> section was rejected by the user (old native pins flooded the running panel and its
+> children disappeared). It is kept as history only; the shipped design is the card-owned
+> Host-shared pin recorded under "FOLLOW-UP 2" at the end of this file.
+>
 > **Supersedes the pin-storage design recorded in the section above.** After the first
 > delivery the user asked for shared/cross-device pins, so the running-card pin was
 > re-pointed at the DSH shell's Host-persisted Session pin (`WorkspaceSnapshot.
@@ -998,3 +1009,150 @@ the full-mode live-row animation/refresh probes occasionally flaky; `--live` pro
 served linked-checkout client and is read-only; headless runs cover one viewport and the
 current UI language only (ZH copy is unit-tested); and native pinning's saved-order
 fronting side effect is disclosed rather than undone.
+
+## FOLLOW-UP 2: panel-owned Host-shared pin with the normal card restored (2026-11-13)
+
+> **Build note:** this section records build `9780a18` (client md5 `60e2573e…`). It is kept
+> as history for that build; the current build `dbd3165` (client md5 `66d6df97…`) adds the
+> atmosphere no-stack fix and its evidence is under "FOLLOW-UP 3" at the end of this file.
+
+Final design after the user rejected the native-pin coupling: the pin is the **card's own
+state**, independent of the native sidebar pin. It is shared through the suite's own Host
+route `/api/power-suite.session-pins` (new Host feature `src/features/session-pins/`,
+document `$DSH_HOME/dsh-power-suite/session-pins.json`) with a versioned client
+localStorage cache + pending-op queue (`power-suite.dynamic-workspaces.pinned`). Default
+card content is the normal Running & recent surface again: ordinary running/recent rows
+including the running Session's subagent children, no prefilled/native pins, no default
+tint. The client-only fix reaches the served GUI on page reload; the **Host route only
+exists after the user restarts the DSH Web service**, so at this stage
+`pinShared === false` and the Host-sync/cross-device checks are explicit SKIP rows.
+
+Independent live verification on the merged build: worktree and linked checkout
+`9780a18` ("fix(dynamic-workspaces): panel-owned Host-shared pin with the normal card
+restored"), injected/loaded `src/client.js` md5
+`60e2573eb1e8d1dea1eff988a38f85a0` (20418 lines) + `src/features/session-pins/`.
+Node v24.22.2, Chrome 157.0.8103.78, 1728x900, throwaway profiles, token redacted.
+Logs under `/tmp`; screenshots under `.tmp-work/sidebar-e2e/` (gitignored).
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Static gates | `node --check src/client.js` + `src/features/session-pins/*` + `src/index.js`; `npm test`; `npm run check` | all exit 0; **249/249** unit tests pass, 0 fail; repository check exit 0 (pack entryCount 73) |
+| Pipeline smoke | `node test/browser/sidebar.e2e.mjs --smoke` | **4/4 PASS**, 0 page errors, exit 0, 2.8 s (`/tmp/f2-smoke-final.log`) |
+| R1/R2 (unchanged) | `node test/browser/sidebar.e2e.mjs --pin` (`r1-*`, `r2-*`) | **PASS**: perfect-circle dot (corner-shape equals the round control, 50%, 10x10, screenshots); native sidebar hover card shows the three figure sections with values, same-Session label alignment against the plugin card (a running Session's real projection drift between the two hover reads is accepted only when the label structure stays identical and logged), 244/212 px native frame, blank Session shows none |
+| Default card restored | same run (`r3-1`, `r3-2`) | **PASS**: 2 ordinary main rows + **6 subagent child rows** (equal to the live `childrenByParent` count), **0 pinned rows / 0 `data-pinned` nodes / no tint**, effective card pins empty; the user's old native-pin titles never appear pinned; every main row has the 16 px pin slot with hidden resting states, children expose no pin DOM, clipped-title glyph-squeeze guard green |
+| Pin flow (card-owned) | same run (`r3-3`..`r3-6`) | **PASS**: hover reveals the pin with `.psd-run-title` x unchanged (84 px), no layout jump; click → `data-pinned` on row/slot/button, `aria-pressed`, localized Unpin label, filled `dsw-icon-pin-fill-regular` glyph in the violet/blue accent, tint on that row only; effective ids exactly the clicked id and the local cache records the pin; the native sidebar pin marker is unchanged (never read/written); one-row pinned prefix, then two pins newest-first with children still normal and unpinned; second pin's native marker also unchanged |
+| Host sync + cross-device | same run (`r3-host`, `r3-8`) | **explicit SKIP** (`pinShared === false`): the running Host process does not serve `/api/power-suite.session-pins` yet (baseline GET 404) because the new Host feature needs a DSH Web service restart; the local cache/queue is authoritative meanwhile. These are SKIP rows, never passes; they will be re-run after the restart |
+| Reload persistence (local) | same run (`r3-7`) | **PASS**: after reload the card restored both pins pinned-first in order from the local cache/queue (`migrated:false`, pending ops replay), effective ids included both, children still rendered |
+| Unpin baseline restored | same run (`r3-9` + `finally`) | **PASS**: unpin via UI removed tint/marker, unpinned row returned to the head of the normal queue, effective ids empty, replayed cache effective set empty, card back to 0 pinned rows; residual cache queue and missing Host route reported honestly; native sidebar markers 0 → 0 for both run targets |
+| `--pin` aggregate | `node test/browser/sidebar.e2e.mjs --pin` | **19 PASS / 2 SKIP / 0 FAIL**, 27.7 s, page errors **0**, real network failures **0**, 8 expected pre-restart pin-route probes classified separately, exit 0 (`/tmp/f2-pin-final2.log`) |
+| Shipped install (no injection) | `node test/browser/sidebar.e2e.mjs --live` | **4/4 PASS**, 6.7 s, exit 0 (`/tmp/f2-live.log`): both fresh profiles served the corrected client with **2 main rows, 6 subagent child rows, 2 pin buttons, 0 pinned rows/nodes, no injected factory, empty local pin cache, 0 page errors**; the rejected native-pin default state is gone |
+| Full mode | `node test/browser/sidebar.e2e.mjs --no-shots` | **42/43 PASS**, page errors 0, two runs (`/tmp/f2-full-1.log`, `/tmp/f2-full-2.log`); the only failure is the untouched `b6-5` check counting Chrome's console log of the expected pre-restart pin-route 404 (`Failed to load resource: ... 404`) between its marks. No pin-path assertion failed; this line clears once the DSH Web service is restarted with the route |
+
+Remaining step for the complete green: after the user restarts the DSH Web service (route
+loaded), re-run `--pin` so `r3-host` and `r3-8` turn from SKIP into PASS (Host document +
+second fresh-profile cross-device proof, with the pre-restart local pins migrating
+automatically) and so full-mode `b6-5` no longer sees the expected 404 console line.
+
+Gaps: the Host-shared path is intentionally unproven until that restart; the
+cross-device proof (post-restart) uses a second fresh browser profile on this machine, not
+a second physical device; the harness's own active Session keeps re-sorting the live card
+(`--pin` works around it with finished targets, never the current Session, stable-geometry
+clicks and id-based retries; the full-mode live-animation `b4-1` threshold remains a known
+occasional flake with 0 page errors); headless runs cover one viewport and the current UI
+language only (ZH copy unit-tested); and a hard crash between a pin click and cleanup can
+leave the printed ids in the local cache/Host (documented cleanup: unpin via the card).
+
+## FOLLOW-UP 3: atmosphere rows keep only the rainbow surface (build `dbd3165` — previous build)
+
+> **Build note:** the evidence in this section is for the previous build `dbd3165`. The
+> current served build `4ec7ba5` adds the atmosphere **content-brightness** fix; its
+> evidence is under "FOLLOW-UP 4" at the end of this file.
+
+User report after the final pin build: the current-Session rainbow-atmosphere rows also
+painted the ordinary row-body hover highlight inside the rainbow (card `.psd-run-main`
+pill; the native current Session/Workspace row's own hover/selected background), reading
+as a second misaligned highlight. Commit `dbd3165` suppresses **only the surface
+highlights on atmosphere rows** (`.psd-run-current` parent hover/focus pill, pinned tint on
+a current row, `.psd-child-current` child hover pill, and
+`[data-psd-current-session="true"]` / `[data-psd-current-workspace="true"]` native
+backgrounds -> `transparent !important`). Ordinary rows keep their hover affordance;
+pin/New-session/disclosure control hovers, focus rings and the atmosphere hover opacity
+rise stay.
+
+Independent E2E regression checks were added to the `--pin` mode (`r3-10`, `r3-11`, real
+CDP pointer input, existing stable-targeting helpers; full-mode oracles untouched) and the
+whole suite was re-run on the new build. Build: worktree and linked checkout `dbd3165`
+(no service restart; Host pin route still absent → `pinShared=false`); injected/loaded
+`src/client.js` md5 `66d6df9735e891b5d3905de3cb0189ab` (20430 lines). Node v24.22.2,
+Chrome 157.0.8103.78, 1728x900; logs under `/tmp`, screenshots under
+`.tmp-work/sidebar-e2e/` (gitignored).
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Static gates | `node --check src/client.js`; `npm test`; `npm run check` | exit 0; **249/249** unit tests pass, 0 fail; repository check exit 0 (pack entryCount 73) |
+| Card atmosphere rows (new) | `node test/browser/sidebar.e2e.mjs --pin` (`r3-10`) | **PASS**: current parent card row hovered with a real pointer → `.psd-atmos` wrapper + canvas present, `.psd-run-main` background **`rgba(0, 0, 0, 0)`** (no stacked hover pill), row surface transparent, pin control still reveals (`opacity:1`, `visibility:visible`); pinning the current row adds **no violet tint** (row and main stay transparent) and is unpinned again; an ordinary card row keeps its hover pill (measured `rgba(38, 49, 72, 0.06)`); a nested subagent row opened like a user becomes current and its `.psd-child-main` background is `rgba(0, 0, 0, 0)` with the atmosphere present |
+| Native atmosphere rows (new) | same run (`r3-11`) | **PASS**: native sidebar current Session row and `[data-psd-current-workspace="true"]` row hovered with a real pointer after being revealed like a user → computed background **`rgba(0, 0, 0, 0)`** each, atmosphere wrapper + canvas present; an ordinary native session row still shows its native hover background (`rgba(38, 49, 72, 0.06)` here); when the open Session is a subagent (no native sidebar row) the check switches back to a main card row first |
+| `--pin` aggregate | `node test/browser/sidebar.e2e.mjs --pin` | **21 PASS / 2 SKIP / 0 FAIL**, 42.4 s, page errors **0**, real network failures **0**, 8 expected pre-restart pin-route probes classified separately, exit 0 (`/tmp/f3-pin-2.log`). The two SKIPs remain the documented pre-restart Host rows (`r3-host`, `r3-8`); everything else from the final pin design is green |
+| Shipped install (no injection) | `node test/browser/sidebar.e2e.mjs --live` | **4/4 PASS**, 7.2 s, exit 0 (`/tmp/f3-live.log`): both fresh profiles served the corrected client with 2 main rows, 4 subagent child rows (current child count), 2 pin buttons, 0 pinned rows/nodes, no injected factory, empty local pin cache, 0 page errors |
+| Smoke | `node test/browser/sidebar.e2e.mjs --smoke` | **4/4 PASS**, 0 page errors, 3.2 s, exit 0 (`/tmp/f3-smoke.log`) |
+| Full mode | `node test/browser/sidebar.e2e.mjs --no-shots` | **42/43 PASS**, 53.8 s, page errors 0 (`/tmp/f3-full-1.log`); the only failure is the untouched `b6-5` check counting Chrome's console log of the expected pre-restart pin-route 404 (`Failed to load resource: ... 404`). No pin/atmosphere assertion failed; this line is expected to clear once the DSH Web service is restarted with the merged Host route |
+
+Side effects of the new checks: they open one existing main card row and one existing nested
+subagent Session (real user row clicks, no typing, no edits) to produce the current
+atmosphere rows, then switch back to a main Session for the native current-row checks.
+Sessions touched by the recorded `--pin` run: the run's blank/current Session, plus
+`session-52ac5008-0bc3-4904-a0da-9f123aa22243` / `session-d829ba3a-645d-4f4b-9581-3bce648f4882`
+(pinned + unpinned by the pin flow) and the current Session/subagent row opened by
+`r3-10`/`r3-11`; the final effective card pins are `[]` and the native sidebar pin state
+was never touched.
+
+Remaining work for the final green table (unchanged): after the user restarts the DSH Web
+service, re-run `--pin` so `r3-host` and the second-profile `r3-8` turn from SKIP into PASS
+(the pre-restart local pins migrate on first Host contact) and full-mode `b6-5` no longer
+sees the expected 404 console line. Gaps otherwise match the FOLLOW-UP 2 section
+(cross-device proof is two fresh profiles on this machine; the harness runs inside the
+active Session so the live card re-sorts — the checks use finished targets, stable geometry
+and id-based retries; headless single viewport/language; a hard crash can leave the printed
+pin ids in the cache/Host).
+
+## FOLLOW-UP 4: atmosphere content brightness instead of any background highlight (build `4ec7ba5`)
+
+User clarification after the surface highlights were removed: the atmosphere row should
+brighten **its own text/icons** rather than paint any background. Commit `4ec7ba5` adds a
+content brightness lift to the non-atmosphere content children of atmosphere rows
+(`filter: brightness(1.15)`, `brightness(1.5)` on hover/focus-within, 140 ms filter
+transition, disabled under `prefers-reduced-motion: reduce`) for `.psd-run-current`
+parent/child card rows and the native `[data-psd-current-session="true"]` /
+`[data-psd-current-workspace="true"]` rows. Backgrounds stay transparent; ordinary rows
+keep their normal hover pill and no brightness filter.
+
+The `--pin` atmosphere checks were extended with real-CDP brightness assertions
+(`r3-10`/`r3-11` enriched, new `r3-12` reduced-motion row; full-mode oracles untouched)
+and the whole suite was re-run. Build: worktree and linked checkout `4ec7ba5` (no service
+restart; Host pin route still absent → `pinShared=false`); injected/loaded
+`src/client.js` md5 `4bed32000b34c293f44499922619d959` (20439 lines). Node v24.22.2,
+Chrome 157.0.8103.78, 1728x900; logs under `/tmp`, screenshots under
+`.tmp-work/sidebar-e2e/` (gitignored).
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Static gates | `node --check src/client.js`; `npm test`; `npm run check` | exit 0; **249/249** unit tests pass, 0 fail; repository check exit 0 (pack entryCount 73) |
+| Card atmosphere brightness (`r3-10`) | `node test/browser/sidebar.e2e.mjs --pin` | **PASS**: current parent card row **at rest** → every non-atmosphere content child `filter: brightness(1.15)` with the 140 ms filter transition, atmosphere wrapper + canvas present, row/body backgrounds transparent, pointer parked (not hovered) for the reading; **hovered** → every content child `brightness(1.5)` while `.psd-run-main` background stays `rgba(0, 0, 0, 0)` and the pin control still reveals (`opacity:1`/`visible`); pinning the current row adds no violet tint (then unpinned); an ordinary card row keeps its hover pill (`rgba(38, 49, 72, 0.06)`) and has `filter:none` at rest and on hover; a nested subagent row opened like a user becomes current with `brightness(1.15)` at rest / `brightness(1.5)` on hover and a transparent `.psd-child-main` with atmosphere |
+| Native atmosphere brightness (`r3-11`) | same run | **PASS**: native sidebar current Session row and `[data-psd-current-workspace="true"]` row **at rest** → non-atmosphere content children `brightness(1.15)` with the filter transition; **hovered** (real pointer) → `brightness(1.5)` each, computed backgrounds `rgba(0, 0, 0, 0)`, atmosphere wrapper + canvas present; an ordinary native session row keeps its native hover background (`rgba(38, 49, 72, 0.06)`) with `filter:none` |
+| Reduced motion (`r3-12`) | same run | **PASS**: under `prefers-reduced-motion: reduce` the current card row keeps the static `brightness(1.15)` lift while the filter transition is disabled (`transition-property:none`, duration `0s`); media emulation reset afterwards |
+| `--pin` aggregate | `node test/browser/sidebar.e2e.mjs --pin` | **22 PASS / 2 SKIP / 0 FAIL**, 45.5 s, page errors **0**, real network failures **0**, expected pre-restart pin-route probes classified separately, exit 0 (`/tmp/f4-pin-3.log`); the two SKIPs remain the pre-restart `r3-host`/`r3-8` Host rows |
+| Shipped install (no injection) | `node test/browser/sidebar.e2e.mjs --live` | **4/4 PASS**, 7.2 s, exit 0 (`/tmp/f4-live.log`): both fresh profiles served the corrected client with 2 main rows, 4 subagent child rows, 2 pin buttons, 0 pinned rows/nodes, no injected factory, empty local pin cache, 0 page errors |
+| Smoke | `node test/browser/sidebar.e2e.mjs --smoke` | **4/4 PASS**, 0 page errors, 2.2 s, exit 0 (`/tmp/f4-smoke.log`) |
+| Full mode | `node test/browser/sidebar.e2e.mjs --no-shots` | **42/43 PASS**, 50.2 s, page errors 0 (`/tmp/f4-full-1.log`); the only failure is the untouched `b6-5` check counting Chrome's console log of the expected pre-restart pin-route 404. No pin/atmosphere/brightness assertion failed; this clears once the DSH Web service is restarted with the merged Host route |
+
+Brightness values match the lead's independent injected probe: card current row content
+`brightness(1.15)` at rest ×5 children, `brightness(1.5)` hovered with body background
+transparent and pin visible; native current Session/Workspace `brightness(1.15)` rest →
+`brightness(1.5)` hovered with transparent backgrounds; ordinary rows `filter:none` and a
+normal hover background. Side effects are unchanged from FOLLOW-UP 3 (the checks may open
+existing main/subagent Sessions to create current atmosphere rows; no typing/edits; final
+effective card pins `[]`, native sidebar pin state untouched).
+
+Remaining work is the same post-restart step: after the user restarts DSH Web, re-run
+`--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS (pre-restart local pins
+migrate on first Host contact) and full-mode `b6-5` no longer sees the 404 console line.
