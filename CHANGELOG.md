@@ -288,6 +288,29 @@ heading is added until the release is cut.
   but the locator summary stays the captured string instead of switching to a
   look-alike element's label.
 
+- UI element annotation anchors: text-bearing leaf captures now also record a
+  bounded absolute `xpath`, a normalized `textQuote` (exact + prefix/suffix),
+  a container-relative `textPosition`, and a `document.querySelector(...)`
+  `jsPath`; resolution falls back **CSS → XPath → text quote → text position**
+  when the primary candidates go stale, and the popover/detail card show which
+  strategy resolved the target (`via` hint) without changing the four honest
+  statuses. Selector candidates get explicit stability tiers (stable
+  data/ids/aria > semantic role/label > stable classes > positional paths), and
+  the detail/popover actions gain **Copy XPath** and **Copy JS path** (clipboard
+  + toast, honest unavailable state when no anchor exists). Records captured
+  before this change keep working without the new anchors.
+
+- UI element annotation selector stability (P0, from the reference-coding
+  round): resolution is now two-phase — per-candidate hit sets are collected and
+  the first unique candidate (highest stability tier/score) wins, so a
+  non-unique high-tier candidate (e.g. a duplicated `aria-label`) no longer
+  short-circuits to Ambiguous when a lower-tier structural/anchor candidate
+  resolves uniquely; Ambiguous is reserved for genuinely all-non-unique
+  candidates, and weak XPath/text-position ambiguity no longer terminates the
+  text-quote fallback. CSS-module/hashed class names are filtered by a
+  word-like/generated-pattern heuristic, and record identity uses the verified
+  unique selector.
+
 ### Removed
 
 - Standalone Project detail page: the `project-view` feature is removed —

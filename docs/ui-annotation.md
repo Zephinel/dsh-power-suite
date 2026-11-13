@@ -689,6 +689,59 @@ the recorded locator are inserted; the plugin never
 modifies the page to fix a stale reference. Re-locate works only for a resolved
 element and explains why when it cannot.
 
+### Multi-strategy anchors (CSS → XPath → text quote → text position)
+
+Text-bearing leaf records capture extra fallback anchors at annotation time
+(backward-compatible optional locator fields; the v3 document and old records stay
+valid):
+
+- `xpath` — absolute XPath, with an `//*[@id="…"]` short-circuit for a stable id;
+- `textQuote` — normalized (whitespace-collapsed, trimmed, bounded) `exact` text
+  plus `prefix`/`suffix` context;
+- `textPosition` — nearest container selector plus `start`/`end` offsets into the
+  container's normalized text;
+- `jsPath` — a DevTools-style `document.querySelector(...)` (or
+  `document.evaluate(...)`) expression.
+
+Resolution order on every re-resolve is **CSS candidates → XPath → text quote →
+text position**; the first unique match wins and the UI shows a small
+`via` hint (`· XPath`, `· text anchor`, `· text position`) beside the status. Only
+a unique text quotation resolves — multiple matches report **Matches several**;
+absent or changed text reports **No longer resolves** / **Content changed**
+honestly. The popover/detail status keeps the captured locator text unchanged;
+only the status line and `via` hint update.
+
+**Copy actions** — besides Copy locator, the popover exposes **Copy XPath** and
+**Copy JS path** (clipboard + toast, EN/ZH). The values come from the captured
+anchors (or are generated from the live node when absent); with no usable anchor
+or node the action shows an honest unavailable toast.
+
+**Two-phase candidate resolution (P0)** — resolution collects per-candidate hit
+sets before deciding: the first candidate with exactly **one** hit wins (highest
+tier first), so a non-unique high-tier candidate such as
+`[aria-label="New session"]` no longer short-circuits to **Matches several** when
+a lower-tier candidate (structural path / ancestor anchor) identifies one
+element. **Matches several** is reported only when every viable CSS candidate is
+genuinely non-unique and the weak fallbacks (XPath/text position) are ambiguous
+too; ambiguity from a weak strategy does not terminate the text-quote fallback
+chain. Non-unique candidates are never used as identity: the record identity key
+is the verified unique selector when available (so duplicate-label controls stay
+distinct records), falling back to the legacy stable-candidate hierarchy.
+
+**Generated-class filter (P0)** — CSS-module/hashed class tokens are rejected
+before they can become candidates (`_card_bgejw_9`, `_portal_bgejw_96`,
+`YDXeBa_sessionRow`, `hHd-Xa_brand`, `wSkVaW_body`, `psd-hoverPath`); the filter
+uses word-like segment requirements and generated-token heuristics (mixed-case +
+digit + underscore/hyphen hash segments), while authored classes
+(`annotation-row`, `is-active`, `card`, BEM tokens) are kept.
+
+**Selector stability scoring** — candidates are ordered by explicit tiers:
+stable `data-*` attributes / ids / aria attributes (tier 4) > semantic role and
+non-aria labels (3) > stable classes (2) > positional `tag`/`nth-of-type` paths
+(1/0), with the existing reliability as the within-tier score. Verified-unique
+CSS selectors still win the copy-locator string, and all candidates keep their
+unique verification.
+
 Change detection compares an 8-hex lowercase digest of the whitespace-collapsed
 sanitized text (derived data only; the raw page text is not stored, and the
 digest is empty for live input surfaces) and the captured accessible name with

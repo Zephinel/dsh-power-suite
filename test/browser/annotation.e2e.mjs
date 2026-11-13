@@ -1090,7 +1090,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 stability)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1102,7 +1102,7 @@ async function runSmoke({ page, results, state }) {
     // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
     // rail selection and chip-ref serialization helpers (66). Pin a documented count and
     // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82]
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1166,6 +1166,16 @@ async function runSmoke({ page, results, state }) {
     if (keyCount === 82) {
       for (const key of ['annotationSurfacePinEligible', 'annotationSurfacePinEventMatches', 'annotationEntryOrdinals']) {
         assert(probe.keys.includes(key), `task-30 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
+      }
+    }
+    if (keyCount === 90) {
+      for (const key of ['annotationResolveStatus', 'annotationXPathOf', 'annotationTextQuoteMatches', 'annotationSelectorScore']) {
+        assert(probe.keys.includes(key), `task-32 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
+      }
+    }
+    if (keyCount === 91) {
+      for (const key of ['annotationIsGeneratedClass', 'resolveRefStatus', 'annotationResolveStatus']) {
+        assert(probe.keys.includes(key), `task-33 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
       }
     }
     state.hooks = probe.keys
@@ -2313,6 +2323,10 @@ const probes = {
         ephemeral: record?.locator?.ephemeral ?? null,
         uniqueSelector: record?.locator?.uniqueSelector ?? null,
         uniqueVerified: record?.locator?.uniqueVerified ?? null,
+        xpath: record?.locator?.xpath ?? null,
+        jsPath: record?.locator?.jsPath ?? null,
+        textQuote: record?.locator?.textQuote ?? null,
+        textPosition: record?.locator?.textPosition ?? null,
         ancestorCount: Array.isArray(record?.locator?.ancestors) ? record.locator.ancestors.length : null,
         candidateCount: Array.isArray(record?.locator?.candidates) ? record.locator.candidates.length : null,
         context: record?.context ?? null,
@@ -5493,7 +5507,8 @@ function buildScenarios(harness) {
       assert((pageRecord.candidateCount ?? 0) >= 1, 'A2: the persisted record has no locator candidates')
       assertEqual(pageRecord.note, 'Keep this note', 'D1: the user note did not survive serialization')
       assertEqual(floatingRecord.ephemeral, true, 'A2: the floating record is not marked ephemeral')
-      for (const forbidden of ['outerHTML', 'innerHTML', 'querySelector', 'xpath', 'computedStyle', 'value']) {
+      // A3/T32: xpath/jsPath are intended stored anchors now; HTML/styles/input values remain forbidden.
+      for (const forbidden of ['outerHTML', 'innerHTML', 'computedStyle', 'value']) {
         assert(!JSON.stringify(pageRecord).includes(forbidden), `D11: the persisted record leaks ${forbidden}`)
       }
       // A2/F-2: Session identity must actually resolve (cwd + workspace basename),
@@ -5988,6 +6003,174 @@ function buildScenarios(harness) {
       await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 2`, { timeout: 5000, label: 'mark restore after popover undo' })
       await sleep(200)
       await h.clearSelection()
+      // ---- A3/T32: multi-strategy anchors (XPath / text quote fallback + copy actions) ----
+      const anchorPhrase = 'Anchor phrase UNIQUE-T32-' + Math.round(Date.now() % 100000)
+      await h.page.evaluate(`(() => {
+        document.getElementById('psa-anchor-fixture')?.remove()
+        const wrap = document.createElement('div')
+        wrap.id = 'psa-anchor-fixture'
+        Object.assign(wrap.style, { position: 'fixed', left: '360px', top: '300px', width: '360px', padding: '10px', zIndex: '400', background: 'rgb(44, 46, 52)', color: 'rgb(235, 238, 245)', borderRadius: '8px', fontSize: '13px' })
+        const section = document.createElement('section')
+        section.id = 'psa-anchor-section'
+        const paragraph = document.createElement('p')
+        paragraph.style.margin = '0'
+        const leaf = document.createElement('span')
+        leaf.setAttribute('data-anchor-leaf', '')
+        leaf.textContent = ${JSON.stringify(anchorPhrase)}
+        paragraph.append(leaf)
+        section.append(paragraph)
+        wrap.append(section)
+        document.body.append(wrap)
+        return true
+      })()`)
+      const anchorLeafRect = await h.page.findRect('[data-anchor-leaf]')
+      assert(anchorLeafRect, 'anchor fixture leaf missing')
+      await h.page.moveTo(anchorLeafRect.x, anchorLeafRect.y)
+      await sleep(150)
+      await h.page.clickAt(anchorLeafRect.x, anchorLeafRect.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the anchor fixture' })
+      await sleep(250)
+      const readAnchorPopover = () => h.page.evaluate(`(() => {
+        const popover = document.querySelector('[data-psa-popover]')
+        if (popover === null) return null
+        const locator = popover.querySelector('[data-psa-popover-ref] .psa-truncate')?.textContent ?? ''
+        const via = popover.querySelector('[data-psa-via]')?.getAttribute('data-psa-via') ?? null
+        return { status: popover.querySelector('[data-psa-popover-status]')?.getAttribute('data-psa-status') ?? null, via, locator: locator.trim() }
+      })()`)
+      const anchorBefore = await readAnchorPopover()
+      assertEqual(anchorBefore.status, 'resolved', `anchor fixture did not start Resolved: ${JSON.stringify(anchorBefore)}`)
+      assertEqual(anchorBefore.via, 'css', `initial resolution should be via CSS: ${JSON.stringify(anchorBefore)}`)
+      // Copy XPath / Copy JS path actions.
+      await h.click('[data-psa-popover-copy-xpath]')
+      await sleep(300)
+      let copyToast = await h.page.evaluate(`document.querySelector('[data-psa-feedback]')?.innerText ?? ''`)
+      assert(/XPath copied|已复制 XPath/.test(copyToast), `copy XPath toast missing: ${short(copyToast)}`)
+      await h.click('[data-psa-popover-copy-js-path]')
+      await sleep(300)
+      copyToast = await h.page.evaluate(`document.querySelector('[data-psa-feedback]')?.innerText ?? ''`)
+      assert(/JS path copied|已复制 JS 路径/.test(copyToast), `copy JS path toast missing: ${short(copyToast)}`)
+      // Commit the annotation so the captured anchors are persisted, then re-select
+      // the leaf for the fallback-resolution assertions.
+      await h.click('[data-psa-add]')
+      await sleep(450)
+      const anchorRecords = (await h.page.eval(probes.annotationStorage)).records.filter((record) => String(record.textQuote?.exact ?? '').includes('UNIQUE-T32'))
+      assert(anchorRecords.length >= 1, 'captured record does not carry the text quote anchor')
+      assert(typeof anchorRecords[0].xpath === 'string' && anchorRecords[0].xpath.length > 0, 'captured record has no XPath')
+      assert(typeof anchorRecords[0].jsPath === 'string' && anchorRecords[0].jsPath.length > 0, 'captured record has no JS path')
+      const reselectRect = await h.page.findRect('[data-anchor-leaf]')
+      assert(reselectRect, 'anchor leaf missing for re-selection')
+      await h.page.moveTo(reselectRect.x, reselectRect.y)
+      await sleep(150)
+      await h.page.clickAt(reselectRect.x, reselectRect.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'anchor popover after commit re-select' })
+      await sleep(250)
+      // Break the structural/CSS path (and absolute XPath) by reparenting + inserting a
+      // sibling section; the unique text quote must keep the target Resolved.
+      await h.page.evaluate(`(() => {
+        const wrap = document.getElementById('psa-anchor-fixture')
+        const section = document.getElementById('psa-anchor-section')
+        const holder = document.createElement('div')
+        const extra = document.createElement('section')
+        extra.textContent = 'unrelated sibling'
+        holder.append(extra)
+        const paragraph = section.querySelector('p')
+        section.removeChild(paragraph)
+        holder.append(paragraph)
+        wrap.replaceChildren(holder)
+        return true
+      })()`)
+      const anchorNote = await h.page.findRect('[data-psa-note]')
+      assert(anchorNote, 'anchor popover note missing')
+      await h.page.clickAt(anchorNote.x, anchorNote.y)
+      await sleep(350)
+      const anchorFallback = await readAnchorPopover()
+      assertEqual(anchorFallback.status, 'resolved', `A3/T32: text-quote fallback did not resolve after the path broke: ${JSON.stringify(anchorFallback)}`)
+      assert(anchorFallback.via !== 'css', `A3/T32: fallback did not report a non-css via hint: ${JSON.stringify(anchorFallback)}`)
+      assertEqual(anchorFallback.locator, anchorBefore.locator, 'A3/T32: locator display changed on fallback resolution')
+      if (process.env.PSA_ANCHOR_EVIDENCE_DIR) {
+        await mkdir(process.env.PSA_ANCHOR_EVIDENCE_DIR, { recursive: true })
+        const clip = { x: 300, y: 220, width: 620, height: 300, scale: 1 }
+        const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip })
+        await writeFile(path.join(process.env.PSA_ANCHOR_EVIDENCE_DIR, 'fallback-anchor-resolved.png'), Buffer.from(data.data, 'base64'))
+      }
+      // Content change is honest: the status changes, the captured locator does not.
+      await h.page.evaluate(`(() => { const leaf = document.querySelector('[data-anchor-leaf]'); if (leaf !== null) leaf.textContent = 'totally different content'; return true })()`)
+      await h.page.pressKey('escape')
+      await sleep(250)
+      await h.openCollection()
+      await sleep(350)
+      const anchorEntries = await h.entries()
+      const anchorEntry = anchorEntries.find((entry) => String(entry.name).includes('Anchor phrase UNIQUE-T32'))
+      assert(anchorEntry, `the anchor record is missing from the collection: ${JSON.stringify(anchorEntries.map((entry) => entry.name))}`)
+      assert(anchorEntry.status !== 'resolved', `A3/T32: the captured record stayed Resolved after its content changed: ${JSON.stringify(anchorEntry)}`)
+      assert(String(anchorEntry.locator).includes(anchorBefore.locator), `A3/T32: locator display changed after the content changed (${short(anchorEntry.locator)})`)
+      await h.clickBack()
+      await sleep(150)
+      const anchorChanged = { status: anchorEntry.status, locator: anchorEntry.locator }
+      assert(anchorChanged.status !== 'resolved', `A3/T32: changed content must not stay Resolved: ${JSON.stringify(anchorChanged)}`)
+      // ---- A3/T33: duplicate labels resolve via a unique lower-tier candidate ----
+      await h.page.evaluate(`(() => {
+        document.getElementById('psa-duplicate-fixture')?.remove()
+        const fixture = document.createElement('div')
+        fixture.id = 'psa-duplicate-fixture'
+        fixture.style.cssText = 'position:fixed;left:360px;top:340px;width:360px;padding:10px;z-index:400;background:rgb(44,46,52);color:rgb(235,238,245);border-radius:8px'
+        const makeRow = (tag) => {
+          const row = document.createElement('div')
+          row.className = 'row ' + tag
+          const button = document.createElement('button')
+          button.setAttribute('aria-label', 'New session')
+          button.textContent = 'New session'
+          button.style.cssText = 'width:150px;height:28px;display:block'
+          row.append(button)
+          return row
+        }
+        const first = makeRow('first')
+        const second = makeRow('second')
+        fixture.append(first, second)
+        document.body.append(fixture)
+        return true
+      })()`)
+      const duplicateButtons = await h.page.evaluate(`[...document.querySelectorAll('#psa-duplicate-fixture button')].map((button) => { const rect = button.getBoundingClientRect(); return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) } })`)
+      assertEqual(duplicateButtons.length, 2, 'duplicate-label fixture buttons missing')
+      await h.page.moveTo(duplicateButtons[0].x, duplicateButtons[0].y)
+      await sleep(150)
+      await h.page.clickAt(duplicateButtons[0].x, duplicateButtons[0].y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the duplicate-label button' })
+      await sleep(300)
+      const duplicateStatus = await h.page.evaluate(`(() => {
+        const popover = document.querySelector('[data-psa-popover]')
+        if (popover === null) return null
+        return {
+          status: popover.querySelector('[data-psa-popover-status]')?.getAttribute('data-psa-status') ?? null,
+          via: popover.querySelector('[data-psa-via]')?.getAttribute('data-psa-via') ?? null,
+          locator: popover.querySelector('[data-psa-popover-ref] .psa-truncate')?.textContent?.trim() ?? ''
+        }
+      })()`)
+      assert(duplicateStatus !== null, 'duplicate-label popover missing')
+      assertEqual(duplicateStatus.status, 'resolved', `A3/T33: duplicate-label target must resolve via a unique candidate, not be Ambiguous: ${JSON.stringify(duplicateStatus)}`)
+      assertEqual(duplicateStatus.via, 'css', `A3/T33: duplicate-label resolution should stay on CSS candidates: ${JSON.stringify(duplicateStatus)}`)
+      // Measure candidate hit counts from the persisted record: the high-tier
+      // aria-label candidate matches both buttons, the structural candidate matches one.
+      await h.click('[data-psa-add]')
+      await sleep(450)
+      const candidateHits = await h.page.evaluate(`(() => {
+        const record = JSON.parse(localStorage.getItem('power-suite.ui-annotation.annotations') || '{}')
+        for (const item of record.records ?? []) {
+          const candidates = item.locator?.candidates ?? []
+          if (!candidates.some((candidate) => candidate.kind === 'label')) continue
+          const measured = candidates.map((candidate) => ({ kind: candidate.kind, value: candidate.value, hits: document.querySelectorAll(candidate.value).length }))
+          if (measured.some((candidate) => candidate.hits > 1) && measured.some((candidate) => candidate.hits === 1)) return measured
+        }
+        return null
+      })()`)
+      assert(candidateHits !== null, 'candidate hit measurement failed')
+      const nonUniqueCandidate = candidateHits.find((candidate) => candidate.hits > 1)
+      const uniqueCandidate = candidateHits.find((candidate) => candidate.hits === 1)
+      assert(nonUniqueCandidate, `A3/T33: expected a non-unique high-tier candidate: ${JSON.stringify(candidateHits)}`)
+      assert(uniqueCandidate, `A3/T33: expected a unique lower-tier candidate: ${JSON.stringify(candidateHits)}`)
+      await h.page.pressKey('escape')
+      await sleep(250)
+      await h.page.evaluate(`document.getElementById('psa-duplicate-fixture')?.remove()`)
       await h.ensureStatusPanel()
       await h.exit()
       return `2 marks (#index + requirement excerpt), popover trash in the Requirement caption row + two-button one-row footer (gap ${markedLayout && markedLayout.gap}px), popover delete -> undo toast -> restored, hover detail card (requirement/session/workspace/position/actions, keep-open, no focus steal), edit saved (updatedAt bumped), delete -> role=status undo toast -> restored, other-Session record not drawn after reload, reduced-motion static, native hover-card recipe matched in light+dark (bg ${tooltipRecipe.light.native.backgroundColor} / ${tooltipRecipe.dark.native.backgroundColor}, fixed #2C2C2E)`
