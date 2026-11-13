@@ -47,8 +47,10 @@ prompts.
   (`scaleX(0.6)`) in the border colour. Hovering a mark grows it to 90 % and
   switches it to the tertiary label colour; keyboard focus keeps the native
   hairline treatment (a brand-coloured tick at full width with a 20 px ring on
-  the right edge). The marks have a fixed pitch, newest at the top, oldest at
-  the bottom. The rail has no visible scrollbar but still scrolls with the wheel
+  the right edge). The marks have a fixed pitch, oldest at the top and newest at
+  the bottom (reading order, like a chat log), and the rail keeps the newest
+  tick in view when the list loads or grows. The rail has no visible scrollbar
+  but still scrolls with the wheel
   or trackpad when there are more prompts than fit, and it caps its height at
   `min(available band, 420 px)` like the native turn rail: a long history
   scrolls its ticks inside that frame with 24 px fade masks at the top and

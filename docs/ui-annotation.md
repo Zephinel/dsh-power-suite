@@ -19,6 +19,11 @@ page's content elements, never reads form values, and never sends the message.
   to any corner, position remembered) and **docks into the right rail while the
   mode is on**, so it never covers page content. Clicking it toggles the mode;
   dragging never toggles it.
+- **Borderless surfaces** — every Power Suite floating surface is borderless:
+  the launcher and its count badge, the annotation rail (docked or overlay), the
+  requirement/batch popovers, the hover detail card, the note editor, the
+  exit-confirmation dialog, and the feedback/undo toasts rely on their
+  background and shadow alone; only inner controls keep their own borders.
 - **Mode layout** — the page shrinks by a responsive right rail; on narrow
   viewports the rail overlaps the right edge instead of squeezing the page, and
   can collapse to a narrow strip.

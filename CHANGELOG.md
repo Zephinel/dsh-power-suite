@@ -176,6 +176,23 @@ heading is added until the release is cut.
 
 ### Changed
 
+- Running & recent default-state alignment: the title's first character is now
+  centred on the child status-dot column (a measured 1–3 px per-row offset from
+  the first glyph's advance width), so the tree line, pin column, child dots and
+  the first character share one centre line; hover/focus/pinned states keep the
+  expanded 71 px column.
+
+- Prompt-history rail order reversed to reading order: the oldest prompt is the
+  top tick and the newest sits at the bottom, and the rail keeps the newest tick
+  in view when the list loads or grows.
+
+- Power Suite floating surfaces are borderless: the annotation launcher and its
+  count badge, the annotation rail (docked and overlay), the exit-confirmation
+  dialog, the feedback and undo toasts, and the Running & recent panel card no
+  longer paint an outer border (the popovers, detail card and note editor were
+  already borderless); separation comes from background and shadow, inner
+  controls keep their own borders.
+
 - Annotation mode no longer swallows composer interaction: the current Session's
   composer stays natively clickable/typable while the mode is active (it is also
   no longer an annotation target), so an inserted reference chip can be edited

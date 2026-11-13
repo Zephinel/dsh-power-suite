@@ -124,7 +124,11 @@ sidebar's panel tabs. It starts expanded.
   nested-child tree trunk is centred under that cell, and the pin control's
   column is centred on the child status-dot column with equal gaps on both
   sides, so the sparkle, the tree line, the pin and the child dots share one
-  vertical centre line. The panel header's all-complete glyph is the DeepSeek brand mark
+  vertical centre line. In the default state the title's **first character is
+  centred on that same column** as well: a 1–3 px per-row offset (measured from
+  the first glyph's advance width) keeps the character centre on the dot line,
+  while hover/focus/pinned states slide the title back to the expanded 71 px
+  column. The panel header's all-complete glyph is the DeepSeek brand mark
   (`deepseek-fill`) in the same 14 px indicator slot; the swap changes only which
   static glyph each slot paints, never the pulse dot, the green dot, the glyph
   column, or any state branch. Opening a Session from this card or anywhere else
