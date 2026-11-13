@@ -78,7 +78,7 @@ if (ui === undefined) {
     'annotationFullXPathOf', 'annotationFallbackCacheKey', 'annotationLevenshteinWithin',
     'annotationHasStrongIdentity', 'annotationStructuralFallbackStatus', 'annotationCopyAnchorDecision',
     'annotationRenderedTextRepeatCount', 'annotationFirstTextLeafDescendant', 'annotationAncestorTagChain',
-    'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey', 'annotationScopeAuthorityOutcome', 'annotationEphemeralOutcome', 'debugFallbackScanProbe',
+    'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey', 'annotationScopeAuthorityOutcome', 'annotationEphemeralOutcome', 'annotationMenuMoveIndex', 'annotationMenuPosition', 'debugFallbackScanProbe',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -193,6 +193,8 @@ if (ui === undefined) {
     annotationStatusLabelKey: [2, 2],
     annotationScopeAuthorityOutcome: [1, 1],
     annotationEphemeralOutcome: [2, 3],
+    annotationMenuMoveIndex: [3, 3],
+    annotationMenuPosition: [1, 1],
     debugFallbackScanProbe: [0, 0],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
@@ -216,7 +218,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 109, 'the frozen task-47 generation is pinned')
+    assert.equal(SEAM_GENERATION, 111, 'the frozen task-51 generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -2376,9 +2378,10 @@ if (ui === undefined) {
     const footer = source.slice(footerStart, footerEnd > 0 ? footerEnd : source.length)
     assert.ok(footer.includes("t('sidebar.cancelAnnotation')"), 'footer danger label is Cancel Annotation')
     assert.ok(footer.includes('controller.requestExit()'), 'footer danger uses the confirmed exit path')
-    assert.ok(source.includes('REMIX_SETTINGS_LINE'), 'settings-line glyph constant exists')
-    assert.ok(source.includes("M12 1L21.5 6.5V17.5L12 23L2.5 17.5V6.5L12 1Z"), 'settings-line constant carries the official Remix settings-line path (hexagon + ring), not a different gear glyph')
-    assert.ok(source.includes('RemixGlyph(REMIX_SETTINGS_LINE'), 'rail header uses the settings-line glyph')
+    assert.ok(source.includes('REMIX_INFORMATION_LINE'), 'information-line glyph constant exists')
+    assert.ok(source.includes("M12 22C6.47715 22 2 17.5228 2 12C2 6.47715"), 'information-line constant carries the Remix information-line path')
+    assert.ok(source.includes('RemixGlyph(REMIX_INFORMATION_LINE'), 'rail header uses the information-line glyph')
+    assert.ok(!source.includes("'data-psa-open-settings': ''"), 'legacy settings gear marker must be gone')
     assert.ok(source.includes('pointer-events:none') && source.includes('.psa-layer{position:fixed'), 'marks layer remains pointer-transparent')
   })
 
@@ -3026,6 +3029,22 @@ if (ui === undefined) {
     const far = ui.annotationScoreQuoteMatches(text, { exact: 'target phrase' }, 0)
     assert(near[0].score > far[near[0].index === far[0].index ? 1 : 0].score || near[0].index === far[0].index,
       'the hint must fade with distance, not add a binary bonus')
+  })
+
+  test('A3/T51: modifier menu navigation and fixed-position geometry', () => {
+    assert.equal(ui.annotationMenuMoveIndex(0, 1, 4), 1)
+    assert.equal(ui.annotationMenuMoveIndex(3, 1, 4), 0, 'ArrowDown wraps')
+    assert.equal(ui.annotationMenuMoveIndex(0, -1, 4), 3, 'ArrowUp wraps')
+    assert.equal(ui.annotationMenuMoveIndex(-1, 1, 4), 1)
+    assert.equal(ui.annotationMenuMoveIndex(0, 1, 0), -1, 'empty list has no active index')
+    const viewport = { width: 1728, height: 900 }
+    const below = ui.annotationMenuPosition({ trigger: { left: 1200, top: 200, width: 96, height: 26 }, menu: { width: 180, height: 130 }, viewport })
+    assert.deepEqual(plain(below), { left: 1200, top: 232, width: 180, placement: 'below' })
+    const flipped = ui.annotationMenuPosition({ trigger: { left: 1200, top: 820, width: 96, height: 26 }, menu: { width: 180, height: 130 }, viewport })
+    assert.deepEqual(plain(flipped), { left: 1200, top: 684, width: 180, placement: 'above' })
+    const clamped = ui.annotationMenuPosition({ trigger: { left: 1700, top: 200, width: 320, height: 26 }, menu: { width: 320, height: 130 }, viewport })
+    assert.equal(clamped.width, 320)
+    assert(clamped.left <= viewport.width - clamped.width - 8, 'menu must be clamped inside the viewport')
   })
 
   //#region geometry and layout
