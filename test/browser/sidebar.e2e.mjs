@@ -871,12 +871,17 @@ const probe = {
         clientWidth: node.clientWidth,
       }
     }
-    const rows = [...document.querySelectorAll('.psd-run, .psd-child')].map((el) => ({
+    const rows = [...document.querySelectorAll('.psd-run, .psd-child')].map((el) => {
+      const titleElement = el.querySelector('.psd-run-title, .psd-child-title')
+      const openButton = el.querySelector('.psd-run-open')
+      return {
       kind: el.classList.contains('psd-run') ? 'parent' : 'child',
       state: el.dataset.state,
       dataActions: el.getAttribute('data-actions'),
       rect: rect(el),
       title: titleOf(el, '.psd-run-title, .psd-child-title'),
+      titleShift: titleElement === null ? null : (Number.parseFloat(getComputedStyle(titleElement).getPropertyValue('--psd-title-shift')) || 0),
+      titleMarginLeft: openButton === null ? null : Number.parseFloat(getComputedStyle(openButton).marginLeft),
       time: (() => {
         const node = el.querySelector('.psd-run-time, .psd-child-time')
         return node ? { rect: rect(node), text: (node.innerText || '').trim(), style: styleOf(node) } : null
@@ -897,7 +902,8 @@ const probe = {
         const node = el.querySelector('.psd-run-toggle') || el.querySelector('.psd-run-toggle-spacer')
         return node ? rect(node) : null
       })(),
-    }))
+      }
+    })
     const head = [...document.querySelectorAll('.psd-panel-head > *')].map((el) => ({
       className: String(el.className),
       rect: rect(el),
@@ -2308,17 +2314,20 @@ async function runLayoutChecks({ page, results, state }) {
       }
       if (was.title === null || now.title === null) continue
       if (index === hoveredIndex) {
-        // Superseded user-requested spec: the hovered row's title intentionally slides right
-        // as the pin slot expands (16 px slot + 9 px trailing gap = 25 px).
-        assertNear(now.title[0] - was.title[0], 25, 1,
-          `the hovered row title must slide exactly 25 px right with the pin reveal (${was.title[0]} -> ${now.title[0]})`)
+        // The hovered row's title slides right as the pin slot expands (16 px slot +
+        // 9 px gap) while the default-state first-character centring shift (1–3 px) is
+        // removed, so the derived slide is 25 − shift rather than a fixed 25.
+        const shift = Number(before.rows[hoveredIndex].titleShift ?? 0)
+        assertNear(now.title[0] - was.title[0], 25 - shift, 1,
+          `the hovered row title must slide 25 − rest shift = ${(25 - shift).toFixed(2)} px (shift ${shift}; ${was.title[0]} -> ${now.title[0]})`)
       } else {
         assertNear(now.title[0], was.title[0], 0.5, `row ${index} title left edge moved on hover (${was.title[0]} -> ${now.title[0]})`)
       }
     }
     await page.moveTo(900, 500)
     await sleep(500)
-    return `columns fixed (time ${before.rows[0].time.rect.right}, action ${before.rows[0].actions.rect.right}, disclosure ${before.rows[0].toggle.right}); hovered title slid ${before.rows[hoveredIndex].title.rect.left} -> ${during.rows[hoveredIndex].title.rect.left} (two-phase reveal), other titles static`
+    const hoveredShift = Number(before.rows[hoveredIndex].titleShift ?? 0)
+    return `columns fixed (time ${before.rows[0].time.rect.right}, action ${before.rows[0].actions.rect.right}, disclosure ${before.rows[0].toggle.right}); hovered title slid ${before.rows[hoveredIndex].title.rect.left} -> ${during.rows[hoveredIndex].title.rect.left} = 25 − rest shift ${hoveredShift} (two-phase reveal), other titles static`
   })
 
   await results.check('b2-5', 'the interrupted main-row Continue overlay lands left of the time column without covering it', async () => {
@@ -3020,6 +3029,57 @@ async function runFocusChecks({ page, results, state }) {
       return labels.length
     })()`)
     return `shared ring present, solid choice outline removed (${rapid} choice pills in the DOM if the settings page is mounted)`
+  })
+
+  await results.check('b3-3', 'prompt-history rail lists the oldest tick first with the newest visible at its foot', async () => {
+    const rail = await page.eval(() => {
+      const railElement = document.querySelector('[data-psp-rail]')
+      const marksElement = document.querySelector('.psp-marks')
+      if (railElement === null || marksElement === null) return { present: false }
+      const rectOf = (element) => {
+        const r = element.getBoundingClientRect()
+        return { top: Number(r.top.toFixed(2)), bottom: Number(r.bottom.toFixed(2)), height: Number(r.height.toFixed(2)) }
+      }
+      const marks = [...marksElement.querySelectorAll('[data-psp-mark]')].map((mark) => ({
+        index: Number(mark.getAttribute('data-psp-index')),
+        ...rectOf(mark),
+        visible: mark.getBoundingClientRect().height > 0 && getComputedStyle(mark).visibility !== 'hidden'
+      }))
+      return {
+        present: true,
+        marks,
+        marksRect: rectOf(marksElement),
+        scrollTop: Number(marksElement.scrollTop.toFixed(2)),
+        scrollHeight: marksElement.scrollHeight,
+        clientHeight: marksElement.clientHeight
+      }
+    })
+    if (rail.present !== true || rail.marks.length < 2) {
+      results.skip('b3-3', 'prompt-history rail lists the oldest tick first with the newest visible at its foot',
+        `the prompt-history rail currently has ${rail.present === true ? rail.marks.length : 0} tick(s) in this environment; at least two are needed to verify the reversed order. Explicit SKIP, not a pass.`)
+      return
+    }
+    const indices = rail.marks.map((mark) => mark.index)
+    for (let index = 1; index < indices.length; index += 1) {
+      assertEqual(indices[index], indices[index - 1] + 1,
+        `data-psp-index must ascend in DOM order (oldest first): got ${short(JSON.stringify(indices), 160)}`)
+    }
+    for (let index = 1; index < rail.marks.length; index += 1) {
+      assert(rail.marks[index].top > rail.marks[index - 1].top,
+        `mark ${indices[index - 1]} must sit above mark ${indices[index]} (oldest at the top)`)
+    }
+    const newest = rail.marks[rail.marks.length - 1]
+    assertEqual(newest.index, Math.max(...indices), 'the DOM-last tick must carry the highest prompt index (newest)')
+    assert(newest.visible, 'the newest tick is not visible in the rail')
+    assert(rail.marks[0].visible, 'the oldest tick is not visible in the rail')
+    const overflowing = rail.scrollHeight > rail.clientHeight + 2
+    if (overflowing) {
+      assertNear(rail.scrollTop, rail.scrollHeight - rail.clientHeight, 2,
+        `an overflowing prompt-history rail must be scrolled to its bottom (scrollTop ${rail.scrollTop}, max ${rail.scrollHeight - rail.clientHeight})`)
+    }
+    assert(newest.bottom <= rail.marksRect.bottom + 2,
+      `the newest tick must be visible at the rail foot (newest bottom ${newest.bottom}, rail bottom ${rail.marksRect.bottom})`)
+    return `${rail.marks.length} ticks, data-psp-index ${indices[0]}..${indices[indices.length - 1]} ascending in DOM order, oldest first; newest tick at the foot (bottom ${newest.bottom} vs rail ${rail.marksRect.bottom}); ${overflowing ? `scrolled to bottom (${rail.scrollTop}/${rail.scrollHeight - rail.clientHeight})` : 'list fits without overflow'}`
   })
 }
 
@@ -4230,6 +4290,23 @@ const probePin = {
       }
     }
     const text = (node) => (node ? (node.innerText || node.textContent || '').trim() : '')
+    // Advance width of the title's first non-space character (used by the default-state
+    // first-character centring assertion: titleLeft + firstCharWidth / 2 ≈ the dot column).
+    const firstGlyphWidth = (element) => {
+      if (element === null) return null
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+      let node = walker.nextNode()
+      while (node !== null && (node.nodeValue ?? '').trim().length === 0) node = walker.nextNode()
+      if (node === null) return null
+      const value = node.nodeValue ?? ''
+      const index = value.search(/\S/)
+      if (index < 0) return null
+      const range = document.createRange()
+      range.setStart(node, index)
+      range.setEnd(node, index + 1)
+      const box = range.getBoundingClientRect()
+      return Number(box.width.toFixed(2))
+    }
     // Resolve the shell business-primary token to its used colour once per read.
     const tokenProbe = document.createElement('span')
     tokenProbe.setAttribute('style', 'position:fixed;left:-9999px;top:0;color:var(--dsw-alias-state-business-primary)')
@@ -4252,11 +4329,16 @@ const probePin = {
         ordered = Boolean(order[index - 1].compareDocumentPosition(order[index]) & Node.DOCUMENT_POSITION_FOLLOWING)
       }
       const titleRect = rect(titleElement)
+      const rowRectValue = rect(row)
       return {
         title: text(titleElement),
         state: row.getAttribute('data-state'),
         titleLeft: titleRect === null ? null : titleRect.left,
         titleTop: titleRect === null ? null : titleRect.top,
+        titleLeftRel: titleRect === null || rowRectValue === null ? null : Number((titleRect.left - rowRectValue.left).toFixed(2)),
+        titleShift: titleElement === null ? null : (Number.parseFloat(getComputedStyle(titleElement).getPropertyValue('--psd-title-shift')) || 0),
+        titleMarginLeft: openButton === null ? null : Number.parseFloat(getComputedStyle(openButton).marginLeft),
+        firstCharWidth: firstGlyphWidth(titleElement),
         titleClipped: titleElement !== null && titleElement.getAttribute('data-clipped') === 'true',
         rowRect: rect(row),
         hovered: row.matches(':hover'),
@@ -4681,6 +4763,21 @@ const probePin = {
     const toggle = row.querySelector('.psd-run-toggle, .psd-run-toggle-spacer')
     const pinStyle = pin === null ? null : getComputedStyle(pin)
     const slotStyle = slot === null ? null : getComputedStyle(slot)
+    const open = row.querySelector('.psd-run-open')
+    const firstGlyphWidth = (element) => {
+      if (element === null) return null
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+      let node = walker.nextNode()
+      while (node !== null && (node.nodeValue ?? '').trim().length === 0) node = walker.nextNode()
+      if (node === null) return null
+      const value = node.nodeValue ?? ''
+      const index = value.search(/\S/)
+      if (index < 0) return null
+      const range = document.createRange()
+      range.setStart(node, index)
+      range.setEnd(node, index + 1)
+      return Number(range.getBoundingClientRect().width.toFixed(2))
+    }
     return {
       title,
       rowLeft: Number(rowRect.left.toFixed(2)),
@@ -4688,6 +4785,9 @@ const probePin = {
       focusWithin: row.matches(':focus-within'),
       pinned: row.getAttribute('data-pinned'),
       titleLeftRel: titleEl === null ? null : Number((titleEl.getBoundingClientRect().left - rowRect.left).toFixed(2)),
+      titleShift: titleEl === null ? null : (Number.parseFloat(getComputedStyle(titleEl).getPropertyValue('--psd-title-shift')) || 0),
+      titleMarginLeft: open === null ? null : Number.parseFloat(getComputedStyle(open).marginLeft),
+      firstCharWidth: firstGlyphWidth(titleEl),
       slotWidth: slot === null ? null : Number(slot.getBoundingClientRect().width.toFixed(2)),
       slotMarginRight: slotStyle === null ? null : slotStyle.marginRight,
       slotRect: rectOf(slot),
@@ -6092,15 +6192,27 @@ async function runPinChecks({ page, results, state }) {
         // A pinned row keeps the revealed space permanently.
         assertNear(row.slotWidth, 16, 0.75, `pinned row "${short(row.title, 30)}" must keep the 16 px slot at rest (got ${row.slotWidth})`)
         assertNear(titleLeftRel, 71, 0.75, `pinned row "${short(row.title, 30)}" title must start at 71 px at rest (got ${titleLeftRel})`)
+        assertNear(row.titleMarginLeft, 0, 0.25, `pinned row "${short(row.title, 30)}" must force the title shift to 0 (margin-left ${row.titleMarginLeft})`)
         assertEqual(row.ariaPressed, 'true', `pinned row "${short(row.title, 30)}" must expose aria-pressed=true`)
         assertEqual(row.opacity, '1', `pinned row "${short(row.title, 30)}" must keep its filled marker visible without hover (opacity ${row.opacity})`)
         assertEqual(row.visibility, 'visible', `pinned row "${short(row.title, 30)}" marker must stay visibility:visible without hover (${row.visibility})`)
         assertEqual(row.pointerEvents, 'none', `pinned+not-hovered row "${short(row.title, 30)}" marker must be pointer-events:none (${row.pointerEvents})`)
       } else {
-        // Unpinned rest: the two-phase reveal starts collapsed so the title sits next to
-        // the leading glyph exactly like the pre-pin layout.
+        // Unpinned rest: the slot is collapsed and the default-state title is shifted by
+        // the measured half-advance of its first glyph so that the first character is
+        // centred on the child status-dot column (54 px from the row's left edge).
         assertNear(row.slotWidth, 0, 0.25, `unpinned row "${short(row.title, 30)}" pin slot must be collapsed at rest (got ${row.slotWidth})`)
-        assertNear(titleLeftRel, 46, 0.75, `unpinned row "${short(row.title, 30)}" title must start at 46 px at rest (got ${titleLeftRel})`)
+        assert(titleLeftRel > 46 && titleLeftRel < 51, `unpinned row "${short(row.title, 30)}" rest title must sit between 46 and 51 px (got ${titleLeftRel})`)
+        assert(row.firstCharWidth !== null && row.firstCharWidth > 0, `unpinned row "${short(row.title, 30)}" first-glyph width could not be measured`)
+        assertNear(titleLeftRel + row.firstCharWidth / 2, 54, 0.7,
+          `unpinned row "${short(row.title, 30)}" first character centre must align with the child-dot column 54 (titleLeft ${titleLeftRel} + firstCharWidth/2 ${(row.firstCharWidth / 2).toFixed(2)})`)
+        assertNear(row.titleShift, 8 - row.firstCharWidth / 2, 0.75,
+          `unpinned row "${short(row.title, 30)}" shift must be 8 − firstGlyph/2 (shift ${row.titleShift}, firstGlyph ${row.firstCharWidth})`)
+        assertNear(titleLeftRel, 46 + row.titleShift, 0.75,
+          `unpinned row "${short(row.title, 30)}" rest title must be 46 + the measured shift (got ${titleLeftRel}, shift ${row.titleShift})`)
+        assert(row.titleShift > 0.5 && row.titleShift < 4, `unpinned row "${short(row.title, 30)}" shift must stay in the 1–3 px family (got ${row.titleShift})`)
+        assertNear(row.titleMarginLeft, row.titleShift, 0.75,
+          `unpinned row "${short(row.title, 30)}" rest margin-left must equal the shift (got ${row.titleMarginLeft})`)
         assertEqual(row.opacity, '0', `unpinned+not-hovered row "${short(row.title, 30)}" pin must be hidden (opacity ${row.opacity})`)
         assertEqual(row.visibility, 'hidden', `unpinned+not-hovered row "${short(row.title, 30)}" pin must be visibility:hidden (${row.visibility})`)
         assertEqual(row.pointerEvents, 'none', `unpinned+not-hovered row "${short(row.title, 30)}" pin must be pointer-events:none (${row.pointerEvents})`)
@@ -6124,7 +6236,7 @@ async function runPinChecks({ page, results, state }) {
     }
     state.pinStructure = { mainRows: pin.mainRows, childRows: pin.childRows }
     const collapsed = pin.rows.filter((row) => row.pinned !== 'true').length
-    return `${pin.mainRows} main rows (${collapsed} unpinned: slot 0 px, title 46 px at rest; pinned rows keep 16/71); ${pin.childRows} subagent child rows with no pin DOM; ${glyphGuard}`
+    return `${pin.mainRows} main rows (${collapsed} unpinned: slot 0 px, first-character-centred rest title 46 + shift px; pinned rows keep 16/71); ${pin.childRows} subagent child rows with no pin DOM; ${glyphGuard}`
   })
 
   // ---- R1: running-card hover-card status dot ----------------------------------------------
@@ -6444,7 +6556,13 @@ async function runPinChecks({ page, results, state }) {
     assert(rest !== null, 'the reveal target row disappeared')
     assertEqual(rest.pinned, null, 'the reveal target must start unpinned')
     assertNear(rest.slotWidth, 0, 0.25, `rest slot width must be 0 (got ${rest.slotWidth})`)
-    assertNear(rest.titleLeftRel, 46, 0.75, `rest title must start at 46 px (got ${rest.titleLeftRel})`)
+    assert(rest.titleLeftRel > 46 && rest.titleLeftRel < 51, `rest title must sit between 46 and 51 px (got ${rest.titleLeftRel})`)
+    assert(rest.firstCharWidth !== null && rest.firstCharWidth > 0, 'rest first-glyph width could not be measured')
+    assertNear(rest.titleLeftRel + rest.firstCharWidth / 2, 54, 0.7,
+      `rest first character centre must align with the child-dot column 54 (titleLeft ${rest.titleLeftRel} + ${(rest.firstCharWidth / 2).toFixed(2)})`)
+    assertNear(rest.titleShift, 8 - rest.firstCharWidth / 2, 0.75,
+      `rest shift must be 8 − firstGlyph/2 (shift ${rest.titleShift}, firstGlyph ${rest.firstCharWidth})`)
+    const restTitle = rest.titleLeftRel
     assertEqual(rest.pinOpacity, '0', `rest pin must be hidden (opacity ${rest.pinOpacity})`)
     assertEqual(rest.pinVisibility, 'hidden', `rest pin must be visibility:hidden (${rest.pinVisibility})`)
     const restColumns = { timeLeft: rest.timeLeft, actionsLeft: rest.actionsLeft, toggleLeft: rest.toggleLeft }
@@ -6466,7 +6584,7 @@ async function runPinChecks({ page, results, state }) {
     const hoverWindow = hoverSamples.slice(hoverStart)
     // Phase 1 (~220 ms): the slot expands and the title slides right while the pin is hidden.
     const phase1 = hoverWindow.find((sample) => sample.slotWidth > 0.5 && sample.slotWidth < 15.5
-      && sample.titleLeftRel > 46 && sample.titleLeftRel < 71)
+      && sample.titleLeftRel > restTitle && sample.titleLeftRel < 71)
     assert(phase1 !== undefined,
       `the hover samples must include the slot-expansion phase (${short(JSON.stringify(hoverWindow.slice(0, 10)), 360)})`)
     assert(phase1.pinOpacity === 0 || phase1.pinVisibility === 'hidden',
@@ -6508,7 +6626,13 @@ async function runPinChecks({ page, results, state }) {
     assertNear(fade.titleLeftRel, 71, 0.75, `during the fade-out the title must stay at 71 px (got ${fade.titleLeftRel})`)
     const collapsedSample = leaveWindow[leaveWindow.length - 1]
     assertNear(collapsedSample.slotWidth, 0, 0.25, `collapsed slot width must be 0 (got ${collapsedSample.slotWidth})`)
-    assertNear(collapsedSample.titleLeftRel, 46, 0.75, `collapsed title must return to 46 px (got ${collapsedSample.titleLeftRel})`)
+    assertNear(collapsedSample.titleLeftRel, restTitle, 0.75,
+      `collapsed title must return to its first-character-centred rest position (${collapsedSample.titleLeftRel} vs ${restTitle})`)
+    const collapsedFirstChar = typeof collapsedSample.firstCharWidth === 'number' && collapsedSample.firstCharWidth > 0
+      ? collapsedSample.firstCharWidth
+      : rest.firstCharWidth
+    assertNear(collapsedSample.titleLeftRel + collapsedFirstChar / 2, 54, 0.7,
+      'the collapsed rest first-character centre must stay on the child-dot column')
     assertEqual(collapsedSample.pinVisibility, 'hidden', 'collapsed pin must be hidden')
     assertColumnsFixed(leaveWindow, 'leave reveal')
     // Reduced motion: both phases are instant (no partial frames).
@@ -6524,13 +6648,13 @@ async function runPinChecks({ page, results, state }) {
       const reducedRest = await waitRevealPhase(page, target.title,
         (facts) => !facts.rowHovered && facts.slotWidth === 0 && facts.pinVisibility === 'hidden',
         { timeout: 700, interval: 20, label: 'instant collapse under reduced motion' })
-      assertNear(reducedRest.titleLeftRel, 46, 0.75, 'reduced motion must collapse the title back to 46 px immediately')
+      assertNear(reducedRest.titleLeftRel, restTitle, 0.75, 'reduced motion must collapse the title back to its rest position immediately')
     } finally {
       await page.emulateMedia([])
       await sleep(250)
       await resetPointer(page)
     }
-    return `rest slot 0/title 46/pin hidden; hover phase 1 slot ${phase1.slotWidth} px/title ${phase1.titleLeftRel} px/pin hidden; ${midNote}; settled slot 16/title 71/pin interactive; leave fade at ${fade.pinOpacity} with slot 16/title 71 then collapsed to 0/46; trailing columns ${restColumns.timeLeft}/${restColumns.actionsLeft}/${restColumns.toggleLeft} unchanged; reduced motion instant`
+    return `rest slot 0/title ${restTitle} (first-char centred, shift ${rest.titleShift} px)/pin hidden; hover phase 1 slot ${phase1.slotWidth} px/title ${phase1.titleLeftRel} px/pin hidden (slide ${(71 - restTitle).toFixed(2)} px); ${midNote}; settled slot 16/title 71/pin interactive; leave fade at ${fade.pinOpacity} with slot 16/title 71 then collapsed to 0/${restTitle}; trailing columns ${restColumns.timeLeft}/${restColumns.actionsLeft}/${restColumns.toggleLeft} unchanged; reduced motion instant`
   })
 
   await results.check('r3-4', 'clicking the pin keeps the pin in the card only: DOM, local cache/effective ids, native sidebar untouched', async () => {
@@ -6900,8 +7024,10 @@ async function runPinChecks({ page, results, state }) {
     assertEqual(calmA.row.opacity, '0', 'the unpinned pin must hide when the pointer is away')
     assertEqual(calmA.row.visibility, 'hidden', 'the unpinned pin must be visibility:hidden when the pointer is away')
     assertNear(calmA.row.slotWidth, 0, 0.25, `an unpinned row must collapse its slot back to 0 px when the pointer is away (got ${calmA.row.slotWidth})`)
-    assertNear(calmA.row.titleLeft - calmA.row.rowRect.left, 46, 0.75,
-      `an unpinned row's title must return to 46 px after unpinning (got ${calmA.row.titleLeft - calmA.row.rowRect.left})`)
+    assert(calmA.row.titleLeftRel > 46 && calmA.row.titleLeftRel < 51,
+      `an unpinned row's title must return to its first-character-centred rest position (got ${calmA.row.titleLeftRel})`)
+    assertNear(calmA.row.titleLeftRel + calmA.row.firstCharWidth / 2, 54, 0.7,
+      `an unpinned row's first character must return to the child-dot column 54 (titleLeft ${calmA.row.titleLeftRel} + ${(calmA.row.firstCharWidth / 2).toFixed(2)})`)
     assertEqual(calmA.row.rowBackground, targetA.rowBackgroundBefore ?? state.pinBaseline.rowBackgrounds[targetA.title],
       `the violet row tint must be gone after unpinning (row background ${calmA.row.rowBackground})`)
     const firstUnpinned = (await readCardPinState(page)).rows.findIndex((row) => row.pinned !== 'true')
@@ -6955,7 +7081,10 @@ async function runPinChecks({ page, results, state }) {
     debugLog(`r3-9 ${queueNote}`)
     for (const row of normalRows) {
       assertNear(row.slotWidth, 0, 0.25, `unpinned row "${short(row.title, 30)}" must keep the collapsed 0 px slot (got ${row.slotWidth})`)
-      assertNear(row.titleLeft - row.rowRect.left, 46, 0.75, `unpinned row "${short(row.title, 30)}" title must sit at 46 px (got ${row.titleLeft - row.rowRect.left})`)
+      assert(row.titleLeftRel > 46 && row.titleLeftRel < 51,
+        `unpinned row "${short(row.title, 30)}" title must sit in its first-character-centred rest range (got ${row.titleLeftRel})`)
+      assertNear(row.titleLeftRel + row.firstCharWidth / 2, 54, 0.7,
+        `unpinned row "${short(row.title, 30)}" first-character centre must stay on the child-dot column 54 (titleLeft ${row.titleLeftRel})`)
     }
     if (state.pinBaseline.expectedChildren > 0) {
       const domChildren = await page.count('.psd-child')
@@ -7519,6 +7648,7 @@ async function runPinChecks({ page, results, state }) {
       (reveal) => reveal.rowHovered && reveal.slotWidth === 16 && reveal.pinOpacity === '1',
       { timeout: 3000, label: 'expanded reveal for the alignment checks' })
     assertNear(expanded.titleLeftRel, 71, 0.75, `expanded title must start at 71 px (got ${expanded.titleLeftRel})`)
+    assertNear(expanded.titleMarginLeft, 0, 0.25, `the expanded state must force the first-character shift to 0 (margin-left ${expanded.titleMarginLeft})`)
     const expandedFacts = await page.eval(probePin.glyphAlignment)
     const hoveredRow = expandedFacts.rows.find((row) => row.title === expandedTitle)
     assert(hoveredRow !== undefined, `the expanded alignment row "${short(expandedTitle, 50)}" disappeared`)
@@ -7630,10 +7760,45 @@ async function runPinChecks({ page, results, state }) {
       `unpinning must clear the row tint (row background ${cleared.row.background}, baseline ${before.row.background})`)
     const clearedReveal = await page.eval(probePin.revealFacts, target.title)
     assertNear(clearedReveal.slotWidth, 0, 0.25, `unpinning must collapse the slot back to 0 px (got ${clearedReveal.slotWidth})`)
-    assertNear(clearedReveal.titleLeftRel, 46, 0.75, `unpinning must return the title to 46 px (got ${clearedReveal.titleLeftRel})`)
+    assert(clearedReveal.titleLeftRel > 46 && clearedReveal.titleLeftRel < 51,
+      `unpinning must return the title to its first-character-centred rest range (got ${clearedReveal.titleLeftRel})`)
+    const clearedFirstChar = typeof clearedReveal.firstCharWidth === 'number' && clearedReveal.firstCharWidth > 0
+      ? clearedReveal.firstCharWidth
+      : 2 * (8 - clearedReveal.titleShift)
+    assertNear(clearedReveal.titleLeftRel + clearedFirstChar / 2, 54, 0.7,
+      `unpinning must put the first character back on the child-dot column (titleLeft ${clearedReveal.titleLeftRel})`)
     assertEqual(cleared.main.background, 'rgba(0, 0, 0, 0)',
       `the unpinned body pill must stay transparent (main background ${cleared.main.background})`)
     return `pinned "${short(target.title, 30)}": row tint ${rowTint} only, body pill ${calm.main.background} at rest and no background-image; hover body ${hovered.main.background}; unpin restored the row to ${cleared.row.background}`
+  })
+
+  await results.check('r3-16', 'Power Suite surfaces are borderless (no outer border on the Running & recent panel card)', async () => {
+    const surfaces = await page.eval(() => {
+      const side = ['Top', 'Right', 'Bottom', 'Left']
+      const read = (name, selector) => {
+        const element = document.querySelector(selector)
+        if (element === null) return { name, present: false }
+        const style = getComputedStyle(element)
+        return {
+          name,
+          present: true,
+          widths: side.map((edge) => Number.parseFloat(style[`border${edge}Width`]) || 0),
+          styles: side.map((edge) => style[`border${edge}Style`])
+        }
+      }
+      return [
+        read('Running & recent panel card', '.psd-panel'),
+        read('plugin hover card', '.psd-hovercard'),
+        read('prompt-history rail card', '.psp-rail-card')
+      ]
+    })
+    const panel = surfaces.find((surface) => surface.name === 'Running & recent panel card' && surface.present)
+    assert(panel !== undefined, 'the Running & recent panel card is not rendered')
+    for (const surface of surfaces.filter((entry) => entry.present)) {
+      assert(surface.widths.every((width) => width === 0),
+        `${surface.name} must be borderless: intended rule is 0 outer border (got ${surface.widths.join('/')} px, styles ${surface.styles.join('/')})`)
+    }
+    return `intended borderless rule: ${surfaces.filter((entry) => entry.present).map((entry) => `${entry.name} ${entry.widths.join('/')} px`).join('; ')}`
   })
 
 }

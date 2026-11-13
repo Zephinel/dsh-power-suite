@@ -1493,3 +1493,48 @@ merged; worktree = linked checkout; injected **and** served `src/client.js` md5
   targets stay blocked; batch popover drags exactly +80/+60 and stays fully on-screen;
   footer primary → "Insert all into composer" → chip `UI annotations × 1` inserted and Send
   enabled; Active/Inactive Projects headings match native Workspaces (14 px / 400).
+
+## ALIGNMENT / PROMPT-HISTORY ORDER / BORDERLESS SURFACES (merged build `3fa4f1c`, client md5 `5da30708…`)
+
+Merged client build: worktree and linked checkout at `3fa4f1c`, injected **and** served
+`src/client.js` md5 `5da3070817cc5d5fa21dd56668fce865` (21393 lines), no service restart,
+Host pin route live. Three user-requested changes: (1) **Running & recent default-state
+alignment (option C)** — the title's first character is centred on the child status-dot
+column via a measured per-row `--psd-title-shift` (½ first-glyph advance, 1–3 px; title
+rest 46 + shift px, e.g. CJK 47, Latin 48.91 with shift 2.91; first-char centre = 54), while
+hover/focus/pinned force the shift to 0 so the expanded title stays at 71 px; (2)
+**prompt-history rail reversed** — oldest tick at the top, newest at the bottom,
+`data-psp-index` ascending top→bottom, rail scrolled to the bottom when the list overflows;
+(3) **borderless Power Suite surfaces** — annotation launcher (+count badge), annotation rail
+(docked/overlay), exit-confirmation dialog, feedback/undo toasts, empty-state hints and the
+Running & recent panel card now have **0 outer border** (popovers/detail card/note editor
+were already borderless; inner controls keep theirs).
+
+Oracle updates (all in this round): the sidebar pin oracles now derive the default-state
+title from the measured first-glyph width — `46 < titleLeft < 51`, `titleLeft +
+firstCharWidth/2 ≈ 54 ±0.6`, `shift = 8 − firstGlyph/2`, rest margin-left = shift — and the
+two-phase slide is `25 − shift` (≈22–24 px) instead of a fixed 25 px (`r3-2`/`r3-3`/`r3-4`/
+`r3-9`/`r3-14`); pinned/expanded geometry (71 px, 9/9 gaps, pin centre 54, trunk = glyph
+cell centre, 34 px heights) is unchanged. Full-mode `b2-3` now asserts the derived
+`25 − shift` slide. New checks: `r3-16` borderless panel card (and any rendered plugin
+surface) in `--pin`, `b3-3` prompt-history ordering in full mode, and annotation-harness
+border-width assertions for the launcher (+badge), rail, empty-state hints, exit-confirmation
+dialog and undo/feedback toasts.
+
+Results on `5da30708…` (Node v24.22.2, Chrome 157.0.8103.78, 1728x900; logs `/tmp/t50-*`):
+
+| Check | Result |
+|-------|--------|
+| `node --check src/client.js`; `npm test`; `npm run check` | exit 0; **254/254** unit tests; repository check exit 0 |
+| `--pin` (sidebar) | **29 PASS / 0 SKIP / 0 FAIL**, 73.5 s, page errors 0, real network failures 0 (`/tmp/t50-pin-2.log`): rest titles measured first-character-centred (e.g. `48.91` with shift `2.91`, centre 54), expanded 71, two-phase slide derived; `r3-16` borderless `Running & recent` panel **0/0/0/0 px**; r3-host + cross-device r3-8 PASS on the live Host route, Host document cleaned to `pinned: []` |
+| `--live` | **4/4 PASS**, 7.0 s, 0 page errors (`/tmp/t50-live.log`) |
+| `--smoke` | **4/4 PASS**, 2.3 s (`/tmp/t50-smoke.log`) |
+| Full mode | **44/44 PASS**, 54.5 s, page errors 0 (`/tmp/t50-full-1.log`): `b2-3` derived slide (67→91 = 25 − shift 1) with fixed trailing columns; new `b3-3` prompt-history rail — **7 ticks, `data-psp-index` 1..7 ascending in DOM order (oldest first), newest tick at the foot** (bottom 558 vs rail 558); list fits without overflow this session, so the scroll-to-bottom branch was not exercised (Lead probe verified overflowing 1..20; the assertion remains conditional on overflow) |
+| Annotation E2E | S2 **PASS 7/0/0** 9.7 s (`/tmp/t50-ann-s2.log`), S5 **PASS 7/0/0** 8.0 s (`/tmp/t50-ann-s5.log`), S8 **PASS 7/0/0** 11.8 s (`/tmp/t50-ann-s8.log`), 0 page errors / 0 real network failures each: smoke-level launcher + rail + empty-state border assertions, exit-confirmation dialog (accepted exits), undo/feedback toast borders all **0**; S2 pass-through oracle and S5/S8 content stay green |
+
+Honest gaps/notes: the prompt-history rail in this session renders 7 ticks without overflow,
+so the E2E overflow/scroll-to-bottom branch is conditional and unexercised here (order and
+foot visibility are asserted); the border assertions are conditional on each surface being
+present at the moment it is exercised (launcher/rail/empty always in smoke, dialog on exits
+with records, toasts in S5). Intended rule documented: Power Suite **outer surfaces are
+borderless**; inner controls keep their borders.

@@ -902,6 +902,30 @@ annotation-usability row failed. Lead probe on this md5 confirms the usability f
 survived (composer clicks `prevented=false`, drag +80/+60 on-screen, footer primary → chip,
 heading 14 px/400).
 
+### Alignment, prompt-history order and borderless surfaces, merged build `3fa4f1c` (client md5 `5da30708…`)
+
+Merged client build `3fa4f1c` / md5 `5da3070817cc5d5fa21dd56668fce865` (21393 lines, no
+restart, Host pin route live, unit tests 254/254, check exit 0). Default-state alignment
+(option C): the title's first character is centred on the child status-dot column via a
+measured per-row `--psd-title-shift` (½ first-glyph advance, 1–3 px) — rest title 46 + shift
+(CJK 47, Latin 48.91 with shift 2.91; first-char centre 54), hover/focus/pinned force shift 0
+so the expanded title stays 71; the two-phase slide is therefore **25 − shift** (≈22–24 px).
+Prompt history is oldest-first with the newest tick at the rail's foot (`data-psp-index`
+ascending top→bottom) and scrolls to the bottom when it overflows. Power Suite outer surfaces
+are **borderless** (annotation launcher + count badge, rail docked/overlay, exit dialog,
+undo/feedback toasts, empty-state hints, Running & recent panel card) while inner controls
+keep their borders. Oracle updates: `r3-2`/`r3-3`/`r3-4`/`r3-9`/`r3-14` derive the rest title
+from the measured first-glyph width and assert `titleLeft + firstCharWidth/2 ≈ 54 ±0.6`;
+full-mode `b2-3` asserts the derived `25 − shift` slide; new `r3-16` (borderless panel) and
+`b3-3` (rail order/foot), plus annotation-harness border assertions (smoke launcher/rail/
+empty, exit dialog, undo/feedback toast). Results on this md5: `--pin` **29 PASS / 0 SKIP /
+0 FAIL** (73.5 s, `/tmp/t50-pin-2.log`; panel border `0/0/0/0`, Host cleaned), `--live` 4/4
+(7.0 s), `--smoke` 4/4 (2.3 s), full mode **44/44** (54.5 s, `/tmp/t50-full-1.log`; `b3-3`
+rail 7 ticks 1..7 newest at the foot, list fits without overflow so the scroll-bottom branch
+was not exercised), annotation S2/S5/S8 **7/0/0 each** (9.7/8.0/11.8 s, border assertions
+green, `/tmp/t50-ann-s{2,5,8}.log`). Gap: rail overflow/scroll-bottom is conditional and not
+exercised in this session (Lead probe verified overflowing 1..20).
+
 ### Known limitations (`--pin` / `--live`)
 
 - Host sharing and cross-device visibility require the DSH Web service restart that loads

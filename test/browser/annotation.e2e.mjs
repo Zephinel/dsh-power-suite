@@ -1234,8 +1234,17 @@ async function runSmoke({ page, results, state }) {
       const rail = document.querySelector('[data-psa-rail]')
       const psp = document.querySelector('[data-psp-rail]')
       const style = document.querySelector('style[data-power-suite-css="ui-annotation"]')
+      const borderOf = (element) => {
+        if (element === null) return null
+        const computed = getComputedStyle(element)
+        return ['Top', 'Right', 'Bottom', 'Left'].map((edge) => Number.parseFloat(computed['border' + edge + 'Width']) || 0)
+      }
       return {
         railInOverlay: overlay !== null && rail !== null && overlay.contains(rail),
+        launcherBorder: borderOf(document.querySelector('[data-psa-launcher]')),
+        launcherCountBorder: borderOf(document.querySelector('[data-psa-launcher-count]')),
+        railBorder: borderOf(rail),
+        emptyBorders: ['.psa-empty', '.psa-sb-empty'].map((selector) => ({ selector, border: borderOf(document.querySelector(selector)) })),
         launchers: document.querySelectorAll('[data-psa-launcher]').length,
         pspRail: psp !== null,
         pspDisplay: psp !== null ? getComputedStyle(psp).display : null,
@@ -1252,6 +1261,15 @@ async function runSmoke({ page, results, state }) {
     )
     await sleep(250)
     assert(probe.railInOverlay, 'the annotation rail is not a descendant of [data-shell-overlay]')
+    // Intended borderless rule: Power Suite floating surfaces carry no outer border.
+    for (const [surface, border] of [['annotation launcher', probe.launcherBorder], ['annotation rail', probe.railBorder], ['launcher count badge', probe.launcherCountBorder]]) {
+      if (border === null) continue
+      assert(border.every((width) => width === 0), `${surface} must be borderless (got ${border.join('/')} px)`)
+    }
+    for (const entry of probe.emptyBorders) {
+      if (entry.border === null) continue
+      assert(entry.border.every((width) => width === 0), `${entry.selector} must be borderless (got ${entry.border.join('/')} px)`)
+    }
     assertEqual(probe.launchers, 1, `expected exactly one launcher, got ${probe.launchers}`)
     assert(probe.stylesheetHasPromptRailRule, 'annotation stylesheet is missing the hidden prompt-history rail rule')
     if (probe.pspRail) {
@@ -3166,6 +3184,15 @@ class Harness {
     const confirmDeadline = Date.now() + 1500
     while (Date.now() < confirmDeadline) {
       if ((await this.page.count('[data-psa-exit-clear]')) > 0) {
+        const dialogBorder = await this.page.evaluate(`(() => {
+          const dialog = document.querySelector('[data-psa-exit-confirm]')
+          if (dialog === null) return null
+          const style = getComputedStyle(dialog)
+          return ['Top', 'Right', 'Bottom', 'Left'].map((edge) => Number.parseFloat(style['border' + edge + 'Width']) || 0)
+        })()`)
+        if (dialogBorder !== null) {
+          assert(dialogBorder.every((width) => width === 0), `exit-confirmation dialog must be borderless (got ${dialogBorder.join('/')} px)`)
+        }
         await this.click('[data-psa-exit-clear]')
         break
       }
@@ -3978,6 +4005,19 @@ function buildScenarios(harness) {
       await h.page.waitFor(`document.querySelectorAll('[data-psa-group]').length === 0`, { timeout: 5000, label: 'group removal' })
       const groupUndoToast = await h.page.eval(probes.undoToast)
       assertEqual(groupUndoToast.present, true, 'group deletion did not show the undo toast')
+      const toastBorders = await h.page.evaluate(`(() => {
+        const read = (selector) => {
+          const element = document.querySelector(selector)
+          if (element === null) return null
+          const style = getComputedStyle(element)
+          return ['Top', 'Right', 'Bottom', 'Left'].map((edge) => Number.parseFloat(style['border' + edge + 'Width']) || 0)
+        }
+        return { undo: read('[data-psa-undo-toast]'), feedback: read('[data-psa-feedback]') }
+      })()`)
+      for (const [surface, border] of [['undo toast', toastBorders.undo], ['feedback toast', toastBorders.feedback]]) {
+        if (border === null) continue
+        assert(border.every((width) => width === 0), `${surface} must be borderless (got ${border.join('/')} px)`)
+      }
       await h.click('[data-psa-undo]')
       await h.page.waitFor(`document.querySelectorAll('[data-psa-group]').length === 1`, { timeout: 5000, label: 'group undo' })
       await sleep(250)
