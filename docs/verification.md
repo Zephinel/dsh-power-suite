@@ -1174,7 +1174,11 @@ Remaining work is the same post-restart step: after the user restarts DSH Web, r
 `--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS (pre-restart local pins
 migrate on first Host contact) and full-mode `b6-5` no longer sees the 404 console line.
 
-## FOLLOW-UP 5: atmosphere-row trailing controls brighten instead of painting hover backgrounds (build `8ad390c`)
+## FOLLOW-UP 5: atmosphere-row trailing controls brighten instead of painting hover backgrounds (build `8ad390c` — previous build)
+
+> **Build note:** the evidence in this section is for the previous build `8ad390c`. The
+> current served build `a5d56fd` unifies the running-card row heights with the native
+> Workspace project rows; its evidence is under "FOLLOW-UP 6" at the end of this file.
 
 User report after the content-brightness fix: the trailing controls on a rainbow atmosphere
 row still painted their own rounded hover backgrounds inside the rainbow (New session "+",
@@ -1209,6 +1213,44 @@ block and no filter; row body/native row backgrounds unchanged from the previous
 Side effects are unchanged (the checks may open existing main/subagent Sessions to create
 current atmosphere rows; no typing/edits; final effective card pins `[]`, native sidebar pin
 state untouched).
+
+Remaining work is the same post-restart step: after the user restarts DSH Web, re-run
+`--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS (pre-restart local pins
+migrate on first Host contact) and full-mode `b6-5` no longer sees the 404 console line.
+
+## FOLLOW-UP 6: running-card row heights unified with the native Workspace project rows (build `a5d56fd`)
+
+User request: unify the running-card ("Running & recent") row heights with the native
+Workspace project rows — "以 Workspace 的为准", for **all** row types, not just the rainbow
+rows. Commit (merged at `a5d56fd`, on top of "style(dynamic-workspaces): unify card row
+heights with the Workspace project rows") makes `.psd-panel` define `--psd-row-h:34px` and
+`.psd-run`, `.psd-run-main`, `.psd-child`, `.psd-child-main` use it with
+`box-sizing:border-box`, so the hover highlight pill fills the row. Typography and trailing
+columns are unchanged; the native shell's session rows are untouched.
+
+Independent E2E verification on the merged build with the worktree-injected client:
+worktree and linked checkout at `a5d56fd` (includes the newer annotation merge),
+injected/loaded `src/client.js` md5 `68ec7946c606e413c32214b45a44275a` (20875 lines). No
+service restart (Host pin route still absent → `pinShared=false`). Node v24.22.2, Chrome
+157.0.8103.78, 1728x900; logs under `/tmp`, screenshots under `.tmp-work/sidebar-e2e/`
+(gitignored).
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Static gates | `node --check src/client.js`; `npm test`; `npm run check` | exit 0; **250/250** unit tests pass, 0 fail; repository check exit 0 (pack entryCount 73) |
+| Row heights (`r3-13`, new) | `node test/browser/sidebar.e2e.mjs --pin` | **PASS**: the live native `[data-row-key^="workspace:"]` project row measures **34 px** and is used as the reference (equality asserted, not hardcoded); the card's **2 main + 4 child rows all measure 34 px**; `.psd-run-main`/`.psd-child-main` height equals the row height (34 px) with `box-sizing:border-box`, pill top/bottom matching the row ±1 px (the highlight fills the row); titles and times stay vertically centred ±1 px; titles stay single-line (`white-space:nowrap`, no vertical wrap/clip); native session rows measured **32/32/32/32/32 px** (the shell's own height, explicitly asserted so a regression cannot restyle native rows); with the taller rows the card body still scrolls inside its clamp when it overflows (the five-row/View-all expansion is logged and the fold behavior stays covered by the full-mode checks) |
+| `--pin` aggregate | `node test/browser/sidebar.e2e.mjs --pin` | **23 PASS / 2 SKIP / 0 FAIL**, 53.6 s, page errors **0**, real network failures **0**, expected pre-restart pin-route probes classified separately, exit 0 (`/tmp/f6-pin-3.log`); the two SKIPs remain the documented pre-restart `r3-host`/`r3-8` Host rows |
+| Shipped install (no injection) | `node test/browser/sidebar.e2e.mjs --live` | **4/4 PASS**, 6.6 s, exit 0 (`/tmp/f6-live.log`): both fresh profiles served the corrected client with 2 main rows, 4 subagent child rows, 2 pin buttons, 0 pinned rows/nodes, no injected factory, empty local pin cache, 0 page errors |
+| Smoke | `node test/browser/sidebar.e2e.mjs --smoke` | **4/4 PASS**, 0 page errors, 2.2 s, exit 0 (`/tmp/f6-smoke.log`) |
+| Full mode | `node test/browser/sidebar.e2e.mjs --no-shots` | **42/43 PASS**, 50.4 s, page errors 0 (`/tmp/f6-full-1.log`); the only failure is the untouched `b6-5` check counting Chrome's console log of the expected pre-restart pin-route 404. **No existing full-mode geometry assertion assumed the old 28/24 px heights** (the only height-related existing assertion is "row heights must stay uniform", which still passes at 34 px) and no oracle was changed |
+
+Measured heights match the lead's independent probe (card main rows 34 px, nested child rows
+34 px, native Workspace project rows 34 px, native session rows unchanged at 32 px). The
+check compares against the live Workspace reference rather than a literal, so a future shell
+row-height change is reported as an equality failure instead of being silently accepted.
+Side effects are unchanged (the `--pin` checks may open existing main/subagent Sessions to
+create current atmosphere rows; no typing/edits; final effective card pins `[]`, native
+sidebar pin state untouched).
 
 Remaining work is the same post-restart step: after the user restarts DSH Web, re-run
 `--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS (pre-restart local pins

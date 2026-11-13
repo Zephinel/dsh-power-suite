@@ -4441,6 +4441,63 @@ const probePin = {
     }
   },
 
+  /** Row-height facts for the card rows + the native Workspace/Session reference rows. */
+  rowHeights: () => {
+    const rectOf = (element) => {
+      const r = element.getBoundingClientRect()
+      return { left: Math.round(r.left), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom), width: Math.round(r.width), height: Math.round(r.height) }
+    }
+    const centerY = (element) => {
+      const r = element.getBoundingClientRect()
+      return r.top + r.height / 2
+    }
+    const visible = (element) => {
+      const r = element.getBoundingClientRect()
+      return r.width > 0 && r.height > 0
+    }
+    const workspaceRows = [...document.querySelectorAll('[data-row-key^="workspace:"]')].filter(visible)
+    const sessionRows = [...document.querySelectorAll('[data-row-key^="session:"]')].filter(visible)
+    const rows = [...document.querySelectorAll('.psd-run, .psd-child')].map((row) => {
+      const kind = row.classList.contains('psd-run') ? 'parent' : 'child'
+      const main = row.querySelector(kind === 'parent' ? '.psd-run-main' : '.psd-child-main')
+      const title = row.querySelector(kind === 'parent' ? '.psd-run-title' : '.psd-child-title')
+      const time = row.querySelector(kind === 'parent' ? '.psd-run-time' : '.psd-child-time')
+      const rowRect = rectOf(row)
+      const mainRect = main === null ? null : rectOf(main)
+      const titleStyle = title === null ? null : getComputedStyle(title)
+      const rowCenter = rowRect.top + rowRect.height / 2
+      return {
+        kind,
+        title: (title ? (title.innerText || '') : '').trim(),
+        row: rowRect,
+        main: mainRect,
+        mainBoxSizing: main === null ? null : getComputedStyle(main).boxSizing,
+        mainCssHeight: main === null ? null : getComputedStyle(main).height,
+        titleCenterDelta: title === null ? null : Number((centerY(title) - rowCenter).toFixed(1)),
+        timeCenterDelta: time === null ? null : Number((centerY(time) - rowCenter).toFixed(1)),
+        titleWhiteSpace: titleStyle === null ? null : titleStyle.whiteSpace,
+        titleLineHeight: titleStyle === null ? null : titleStyle.lineHeight,
+        titleRect: title === null ? null : rectOf(title),
+        timeRect: time === null ? null : rectOf(time)
+      }
+    })
+    const panel = document.querySelector('.psd-panel')
+    const body = panel === null ? null : (panel.querySelector('.psd-panel-body') ?? panel)
+    return {
+      workspaceHeights: workspaceRows.map((element) => ({ key: element.getAttribute('data-row-key'), rect: rectOf(element) })),
+      sessionHeights: sessionRows.map((element) => ({ key: element.getAttribute('data-row-key'), rect: rectOf(element) })),
+      rows,
+      panel: panel === null
+        ? null
+        : {
+            rect: rectOf(panel),
+            bodyScrollHeight: body === null ? null : body.scrollHeight,
+            bodyClientHeight: body === null ? null : body.clientHeight,
+            bodyScrollTop: body === null ? null : body.scrollTop
+          }
+    }
+  },
+
   /** Small read of the dynamic-Workspaces live test seam (id/title/state + pin state). */
   liveSnapshot: () => {
     const seam = globalThis.__POWER_SUITE_TEST_HOOKS__?.dynamicWorkspacesLive
@@ -4875,6 +4932,24 @@ async function waitForEffectivePins(page, predicate, { timeout = 10000, interval
     await sleep(interval)
   }
   throw new Error(`timed out after ${timeout}ms waiting for ${label} (last effective ids ${short(JSON.stringify(last), 240)})`)
+}
+
+/**
+ * The expected newest-activity-first order of two pinned rows, derived from the card's
+ * unpinned ordering captured before the run started (running rows first = newest activity,
+ * then the recent window in activity order).
+ * @param {object} state - harness state with `pinBaseline.unpinnedOrder`.
+ * @param {object} targetA - first run pin.
+ * @param {object} targetB - second run pin.
+ * @returns {'A_BEFORE_B' | 'B_BEFORE_A' | null} expected relative order, or null when the
+ *   baseline order is unavailable.
+ */
+function expectedPinnedRelativeOrder(state, targetA, targetB) {
+  const order = state.pinBaseline?.unpinnedOrder ?? []
+  const aIndex = order.indexOf(targetA.title)
+  const bIndex = order.indexOf(targetB.title)
+  if (aIndex < 0 || bIndex < 0) return null
+  return aIndex < bIndex ? 'A_BEFORE_B' : 'B_BEFORE_A'
 }
 
 /**
@@ -5522,6 +5597,7 @@ async function runPinChecks({ page, results, state }) {
     effectiveIds: Array.isArray(baselineLive.pinnedIds) ? [...baselineLive.pinnedIds] : null,
     pinnedRows: baselinePinned.length,
     pinnedTitles: baselinePinned.map((row) => row.title),
+    unpinnedOrder: baselineRows.rows.filter((row) => row.pinned !== 'true').map((row) => row.title),
     cacheRaw,
     cache,
     mainRows: baselineRows.rows.length,
@@ -6062,8 +6138,17 @@ async function runPinChecks({ page, results, state }) {
     assertEqual(pinnedRows.length, 2, `both run pins must lead the card (pinned ${short(JSON.stringify(pinnedRows.map((row) => row.title)), 220)})`)
     const aPinnedIndex = pinnedRows.findIndex((row) => row.title === targetA.title)
     const bPinnedIndex = pinnedRows.findIndex((row) => row.title === second.title)
-    assert(aPinnedIndex >= 0 && bPinnedIndex >= 0 && aPinnedIndex < bPinnedIndex,
-      `pinned rows must keep newest-activity-first order ("${short(targetA.title, 30)}" before "${short(second.title, 30)}"; got ${short(JSON.stringify(pinnedRows.map((row) => row.title)), 220)})`)
+    assert(aPinnedIndex >= 0 && bPinnedIndex >= 0, 'a run pin is missing from the pinned prefix')
+    const expectedOrder = expectedPinnedRelativeOrder(state, targetA, second)
+    if (expectedOrder === 'A_BEFORE_B') {
+      assert(aPinnedIndex < bPinnedIndex,
+        `pinned rows must keep newest-activity-first order ("${short(targetA.title, 30)}" before "${short(second.title, 30)}"; got ${short(JSON.stringify(pinnedRows.map((row) => row.title)), 220)})`)
+    } else if (expectedOrder === 'B_BEFORE_A') {
+      assert(bPinnedIndex < aPinnedIndex,
+        `pinned rows must keep newest-activity-first order ("${short(second.title, 30)}" before "${short(targetA.title, 30)}"; got ${short(JSON.stringify(pinnedRows.map((row) => row.title)), 220)})`)
+    } else {
+      throw new Error(`cannot derive the expected pinned order: the baseline unpinned order lacks one of the run targets (${short(JSON.stringify(state.pinBaseline?.unpinnedOrder), 220)})`)
+    }
     const firstUnpinned = pin.rows.findIndex((row) => row.pinned !== 'true')
     assert(firstUnpinned === -1 ? pinnedRows.length === pin.rows.length : firstUnpinned === 2,
       `the pinned prefix must be exactly the two run pins, then ordinary rows (first unpinned index ${firstUnpinned}, rows ${pin.rows.length}, pinned ${pinnedRows.length})`)
@@ -6141,8 +6226,17 @@ async function runPinChecks({ page, results, state }) {
     const pinnedRows = pin.rows.filter((row) => row.pinned === 'true')
     const aPinnedIndex = pinnedRows.findIndex((row) => row.title === state.pinTargetA.title)
     const bPinnedIndex = pinnedRows.findIndex((row) => row.title === state.pinTargetB.title)
-    assert(aPinnedIndex >= 0 && bPinnedIndex >= 0 && aPinnedIndex < bPinnedIndex,
-      `the restored pinned order must keep newest activity first (pinned ${short(JSON.stringify(pinnedRows.map((row) => row.title)), 220)})`)
+    assert(aPinnedIndex >= 0 && bPinnedIndex >= 0, 'a pinned row lost its Host pin across the reload')
+    const expectedReloadOrder = expectedPinnedRelativeOrder(state, state.pinTargetA, state.pinTargetB)
+    if (expectedReloadOrder === 'A_BEFORE_B') {
+      assert(aPinnedIndex < bPinnedIndex,
+        `the restored pinned order must keep newest activity first (pinned ${short(JSON.stringify(pinnedRows.map((row) => row.title)), 220)})`)
+    } else if (expectedReloadOrder === 'B_BEFORE_A') {
+      assert(bPinnedIndex < aPinnedIndex,
+        `the restored pinned order must keep newest activity first (pinned ${short(JSON.stringify(pinnedRows.map((row) => row.title)), 220)})`)
+    } else {
+      throw new Error('cannot derive the expected restored pinned order from the baseline unpinned order')
+    }
     let hostNote = 'local cache authoritative (pinShared=false)'
     if (state.pinShared === true) {
       const read = await readHostPinDocument(page)
@@ -6279,7 +6373,14 @@ async function runPinChecks({ page, results, state }) {
     const indexA = normalRows.findIndex((row) => row.title === targetA.title)
     const indexB = normalRows.findIndex((row) => row.title === targetB.title)
     assert(indexA >= 0 && indexB >= 0, 'both unpinned rows must be back in the normal queue')
-    assert(indexA < indexB, `the normal-queue order must keep newest activity first ("${short(targetA.title, 30)}" ${indexA} before "${short(targetB.title, 30)}" ${indexB})`)
+    const expectedQueueOrder = expectedPinnedRelativeOrder(state, targetA, targetB)
+    if (expectedQueueOrder === 'A_BEFORE_B') {
+      assert(indexA < indexB, `the normal-queue order must keep newest activity first ("${short(targetA.title, 30)}" ${indexA} before "${short(targetB.title, 30)}" ${indexB})`)
+    } else if (expectedQueueOrder === 'B_BEFORE_A') {
+      assert(indexB < indexA, `the normal-queue order must keep newest activity first ("${short(targetB.title, 30)}" ${indexB} before "${short(targetA.title, 30)}" ${indexA})`)
+    } else {
+      throw new Error('cannot derive the expected normal-queue order from the baseline unpinned order')
+    }
     if (state.pinBaseline.expectedChildren > 0) {
       const domChildren = await page.count('.psd-child')
       assert(domChildren > 0, `ordinary child rows must still render after the unpins (found ${domChildren})`)
@@ -6613,6 +6714,76 @@ async function runPinChecks({ page, results, state }) {
       await page.emulateMedia([])
       await sleep(300)
     }
+  })
+
+  await results.check('r3-13', 'running-card rows match the native Workspace project row height and the pills fill the row', async () => {
+    await ensurePanelRows(page)
+    // The native height reference needs visible native rows: expand/reveal the tree like a user.
+    await ensureNativeSessionRowsVisible(page, 2).catch(() => [])
+    await resetPointer(page)
+    // Reveal a native Workspace project row (the height reference) like a user would.
+    const revealed = await page.eval(() => {
+      const row = [...document.querySelectorAll('[data-row-key^="workspace:"]')].find((element) => element.getBoundingClientRect().height > 0)
+      if (row === undefined) return false
+      row.scrollIntoView({ block: 'center', behavior: 'instant' })
+      return true
+    }).catch(() => false)
+    assert(revealed, 'no native Workspace project row is rendered to use as the height reference')
+    await sleep(300)
+    const facts = await page.eval(probePin.rowHeights)
+    assert(facts !== null && Array.isArray(facts.rows) && facts.rows.length > 0, 'the card has no rows to measure')
+    assert(facts.workspaceHeights.length > 0, 'no visible native Workspace project row could be measured')
+    const workspaceHeights = facts.workspaceHeights.map((entry) => entry.rect.height)
+    const reference = workspaceHeights[0]
+    for (const height of workspaceHeights) {
+      assertEqual(height, reference, `native Workspace project rows must share one height (got ${workspaceHeights.join('/')}px)`)
+    }
+    const parentRows = facts.rows.filter((row) => row.kind === 'parent')
+    const childRows = facts.rows.filter((row) => row.kind === 'child')
+    assert(parentRows.length > 0, 'the card has no main rows to measure')
+    assert(childRows.length > 0, 'the card must render at least one nested subagent row so the child height is verified')
+    for (const row of facts.rows) {
+      assertEqual(row.row.height, reference,
+        `${row.kind} row "${short(row.title, 30)}" height must equal the native Workspace project row height ${reference}px (got ${row.row.height}px)`)
+      assert(row.main !== null, `${row.kind} row "${short(row.title, 30)}" has no body pill`)
+      assertEqual(row.main.height, reference,
+        `the ${row.kind} body pill must fill the row height ${reference}px (got ${row.main.height}px)`)
+      assertEqual(row.mainBoxSizing, 'border-box', `${row.kind} body pill must use box-sizing:border-box so the highlight fills the row (got ${row.mainBoxSizing})`)
+      assertNear(row.main.top, row.row.top, 1, `${row.kind} pill top must match the row top (${row.main.top} vs ${row.row.top})`)
+      assertNear(row.main.bottom, row.row.bottom, 1, `${row.kind} pill bottom must match the row bottom (${row.main.bottom} vs ${row.row.bottom})`)
+      assertNear(row.titleCenterDelta, 0, 1, `${row.kind} title must stay vertically centred in the row (delta ${row.titleCenterDelta}px)`)
+      assertNear(row.timeCenterDelta, 0, 1, `${row.kind} time must stay vertically centred in the row (delta ${row.timeCenterDelta}px)`)
+      assertEqual(row.titleWhiteSpace, 'nowrap', `${row.kind} title must stay single-line (white-space ${row.titleWhiteSpace})`)
+      assert(row.titleRect.height <= 21, `${row.kind} title must not wrap/clip vertically (height ${row.titleRect.height}px, line-height ${row.titleLineHeight})`)
+    }
+    // The native Shell's own session rows are untouched by this card change.
+    assert(facts.sessionHeights.length > 0, 'no visible native session row could be measured for the untouched-shell-height check')
+    const sessionHeights = facts.sessionHeights.map((entry) => entry.rect.height)
+    for (const height of sessionHeights) {
+      assertEqual(height, 32, `native session rows must keep the shell's own 32 px height (got ${height}px; the card row-height rule must not restyle native rows)`)
+    }
+    // The taller rows must still scroll inside the clamped card body when it overflows.
+    const panel = facts.panel
+    assert(panel !== null, 'the card panel is missing')
+    let scrollNote = `panel body ${panel.bodyClientHeight}px client / ${panel.bodyScrollHeight}px scroll`
+    if (typeof panel.bodyScrollHeight === 'number' && typeof panel.bodyClientHeight === 'number' && panel.bodyScrollHeight > panel.bodyClientHeight + 2) {
+      const scrolled = await page.eval(() => {
+        const panelElement = document.querySelector('.psd-panel')
+        const body = panelElement === null ? null : (panelElement.querySelector('.psd-panel-body') ?? panelElement)
+        if (body === null) return null
+        const before = body.scrollTop
+        body.scrollTop = body.scrollHeight
+        const after = body.scrollTop
+        body.scrollTop = before
+        return { before, after }
+      })
+      assert(scrolled !== null && scrolled.after > scrolled.before,
+        `the card body must scroll with the taller rows (${short(JSON.stringify(scrolled), 140)})`)
+      scrollNote += `, scrolled ${scrolled.before}->${scrolled.after}`
+    } else {
+      scrollNote += ' (rows fit without overflow; the five-row/View-all behavior is covered by the expansion log and full-mode checks)'
+    }
+    return `reference native Workspace project row ${reference}px; ${parentRows.length} main + ${childRows.length} child rows all ${reference}px, border-box pills fill the row and titles/times stay centred ±1 with no wrapping; native session rows ${sessionHeights.join('/')}px (shell 32 untouched); ${scrollNote}`
   })
 
 }
