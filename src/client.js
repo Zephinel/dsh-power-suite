@@ -4691,11 +4691,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
    put), then the button fades in. Leaving reverses it: the button fades out
    first, then the slot collapses and the title expands back. Pinned rows keep
    the filled marker and its space permanently; the row tint marks the state. */
-.psd-run-pin-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:0;height:20px;margin-right:0;overflow:hidden;transition:width 150ms var(--ds-ease-in-out,ease) 120ms,margin-right 150ms var(--ds-ease-in-out,ease) 120ms}
-.psd-run:hover .psd-run-pin-slot,.psd-run:focus-within .psd-run-pin-slot{width:16px;margin-right:9px;transition:width 150ms var(--ds-ease-in-out,ease) 0ms,margin-right 150ms var(--ds-ease-in-out,ease) 0ms}
+.psd-run-pin-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:0;height:20px;margin-right:0;overflow:hidden;transition:width 220ms cubic-bezier(.4,0,.2,1) 160ms,margin-right 220ms cubic-bezier(.4,0,.2,1) 160ms}
+.psd-run:hover .psd-run-pin-slot,.psd-run:focus-within .psd-run-pin-slot{width:16px;margin-right:9px;transition:width 220ms cubic-bezier(.4,0,.2,1) 0ms,margin-right 220ms cubic-bezier(.4,0,.2,1) 0ms}
 .psd-run[data-pinned='true'] .psd-run-pin-slot{width:16px;margin-right:9px;transition:none}
-.psd-run-pin{appearance:none;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:16px;height:16px;padding:0;border:0;border-radius:var(--dsw-radius-xs,4px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;opacity:0;visibility:hidden;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease) 0ms,visibility 0s linear 120ms,background-color 120ms var(--ds-ease-in-out,ease)}
-.psd-run:hover .psd-run-pin,.psd-run:focus-within .psd-run-pin{opacity:1;visibility:visible;pointer-events:auto;transition:opacity 120ms var(--ds-ease-in-out,ease) 150ms,visibility 0s linear 150ms,background-color 120ms var(--ds-ease-in-out,ease)}
+.psd-run-pin{appearance:none;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:16px;height:16px;padding:0;border:0;border-radius:var(--dsw-radius-xs,4px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;opacity:0;visibility:hidden;pointer-events:none;transition:opacity 160ms cubic-bezier(.4,0,.2,1) 0ms,visibility 0s linear 160ms,background-color 120ms var(--ds-ease-in-out,ease)}
+.psd-run:hover .psd-run-pin,.psd-run:focus-within .psd-run-pin{opacity:1;visibility:visible;pointer-events:auto;transition:opacity 160ms cubic-bezier(.4,0,.2,1) 220ms,visibility 0s linear 220ms,background-color 120ms var(--ds-ease-in-out,ease)}
 .psd-run-pin:hover{background-color:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-run-pin:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-run[data-pinned='true']{background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,transparent)}

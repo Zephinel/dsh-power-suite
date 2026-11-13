@@ -358,8 +358,11 @@ restarted with the merged linked checkout. Until then the card is local-only.
   slides right while the time, New session, and disclosure columns stay put),
   and only after it has opened does the button fade in. Leaving reverses it —
   the button fades out first, then the slot collapses and the title expands
-  back. Pinned rows keep the filled marker and its 16 px space permanently.
-  Reduced motion turns both phases into an instant state.
+  back. The pace is deliberately gentle — 220 ms for the slot expansion or
+  collapse and 160 ms for each fade (`cubic-bezier(.4,0,.2,1)`, the fade-in
+  starting only after the slot has opened, the fade-out finishing before the
+  collapse begins). Pinned rows keep the filled marker and its 16 px space
+  permanently. Reduced motion turns both phases into an instant state.
 - **Three button states**: unpinned and neither hovered nor keyboard-focused —
   hidden (`opacity: 0`, `visibility: hidden`, `pointer-events: none`); unpinned
   with the row hovered or `focus-within` — the outline pin glyph, interactive;

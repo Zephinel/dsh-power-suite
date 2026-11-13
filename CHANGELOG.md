@@ -179,8 +179,9 @@ heading is added until the release is cut.
 - The pin control's reveal is two-phase and space-saving: the slot collapses
   when the button is hidden (the title sits next to the leading glyph), hover or
   keyboard focus expands the slot before the button fades in, and leaving fades
-  the button out before the title expands back; pinned rows keep the marker and
-  its space permanently.
+  the button out before the title expands back (220 ms slot expand/collapse,
+  160 ms fades, gentle easing); pinned rows keep the marker and its space
+  permanently.
 
 - Pinned-row highlight is a single layer: the pinned row keeps its subtle violet
   row tint but the body pill inside it no longer paints a second tint (the two
