@@ -2281,6 +2281,40 @@ if (ui === undefined) {
     assert.equal(source.serialize('psa-gone-one').text, null)
   })
 
+  test('A3/T19: the launcher is docked only while active and the idle position survives a mode cycle', () => {
+    const source = client.source
+    assert.equal(typeof source, 'string')
+    const overlayStart = source.indexOf('A3/T19: exactly one launcher control at any time')
+    assert.ok(overlayStart >= 0, 'the overlay documents the one-launcher rule')
+    const launcherRender = source.indexOf("React.createElement(AnnotationLauncher", overlayStart)
+    assert.ok(launcherRender > overlayStart, 'the floating launcher render exists')
+    const guard = source.slice(overlayStart, launcherRender)
+    assert.ok(guard.includes('if (!active)'), 'the floating launcher must be rendered only while idle')
+    assert.ok(source.includes('function AnnotationDockedLauncher'), 'the docked launcher component exists')
+    const dockedStart = source.indexOf('function AnnotationDockedLauncher')
+    const dockedEnd = source.indexOf("\\n    /**", dockedStart)
+    const docked = source.slice(dockedStart, dockedEnd > 0 ? dockedEnd : source.length)
+    for (const marker of ["'data-psa-launcher': ''", "'data-psa-launcher-docked': 'true'", "'aria-pressed': 'true'", 'controller.deactivate()']) {
+      assert.ok(docked.includes(marker), `the docked launcher must include ${marker}`)
+    }
+    const railStart = source.indexOf('function AnnotationRail')
+    const railEnd = source.indexOf('\\n    /**', railStart)
+    const rail = source.slice(railStart, railEnd > 0 ? railEnd : source.length)
+    assert.ok(rail.includes('AnnotationDockedLauncher({ t, controller, snapshot })'), 'the rail header must render the docked launcher')
+    assert.equal((rail.match(/AnnotationDockedLauncher\(/g) ?? []).length, 2, 'the docked launcher is rendered in both rail header layouts')
+    assert.ok(source.includes('idleLauncherPosition = snapshot().launcherPosition'), 'activation remembers the idle floating position')
+    assert.ok(source.includes('clampLauncherPosition(restoreLauncher, annotationViewport(), ANNOTATION_LAUNCHER_SIZE)'),
+      'deactivation restores the remembered idle position')
+    const layoutStart = source.indexOf('function updateLayout')
+    const layoutEnd = source.indexOf('\\n      function ', layoutStart)
+    const layout = source.slice(layoutStart, layoutEnd > 0 ? layoutEnd : source.length)
+    assert.ok(layout.includes('isActive()'), 'updateLayout keeps the idle position untouched while active')
+    assert.ok(!layout.includes('clampLauncherForLayout'), 'the old rail-reserving launcher clamp is gone')
+    assert.ok(source.includes('function clampLauncherForLayout') === false, 'the obsolete launcher-layout clamp helper is removed')
+    assert.ok(source.includes('.psa-launcher-docked{'), 'the docked launcher CSS exists')
+    assert.ok(source.includes('pointer-events:none') && source.includes('.psa-layer{position:fixed'), 'marks layer remains pointer-transparent')
+  })
+
   //#region geometry and layout
 
   test('clampLauncherPosition keeps the launcher fully inside the viewport with an 8px margin', () => {

@@ -15,8 +15,10 @@ page's content elements, never reads form values, and never sends the message.
 
 ## What it does
 
-- **Launcher** — a round entry button, draggable to any corner, that toggles the
-  mode. Dragging never toggles it, and its position is remembered.
+- **Launcher** — a round entry button that floats while the mode is off (draggable
+  to any corner, position remembered) and **docks into the right rail while the
+  mode is on**, so it never covers page content. Clicking it toggles the mode;
+  dragging never toggles it.
 - **Mode layout** — the page shrinks by a responsive right rail; on narrow
   viewports the rail overlaps the right edge instead of squeezing the page, and
   can collapse to a narrow strip.
@@ -73,25 +75,33 @@ page's content elements, never reads form values, and never sends the message.
 
 ## Turning the mode on
 
-The launcher is a round floating button with an annotation glyph, bottom-right by
-default. Click it to toggle the mode on or off; its accessible name states the
-action and its pressed state follows the mode.
+The launcher is a round button with an annotation glyph. While the mode is
+**off** it floats bottom-right by default; while the mode is **on** the same
+control is **docked inside the right rail** (rail header, next to the
+collapse/exit buttons) so it never covers the page. Click it to toggle the mode;
+its accessible name states the action and its pressed state follows the mode.
 
-![The annotation launcher in the page's bottom-right corner](assets/annotation-idle.png)
+![The floating annotation launcher in the page's bottom-right corner while idle](assets/annotation-idle.png)
 
-- **Drag** the launcher to move it. A drag never toggles the mode, and the
-  position is clamped inside the viewport with an 8 px margin on drag end, on
-  window resize, and on mode change.
-- The launcher position is stored in the browser, so a page reload puts the
-  button back where it was. The mode itself starts off on every page load.
-- While the rail is open, the launcher is moved just left of the rail's column
-  so it cannot sit under the rail or its footer controls.
+- **Exactly one launcher control exists at a time** (`[data-psa-launcher]`): the
+  floating round button while idle, the docked rail button while active. The
+  docked copy keeps the same glyph, the collection count badge, `aria-pressed`
+  and the "Exit annotation mode" name; clicking it exits the mode.
+- **Drag** the floating launcher to move it. A drag never toggles the mode and is
+  only possible while idle (the docked control never starts a drag); the
+  position is clamped inside the viewport with an 8 px margin.
+- The floating position is stored in the browser, so a page reload puts the
+  button back where it was. **A mode cycle preserves it too**: activating docks
+  the control, and exiting restores the floating launcher at the remembered
+  position (or the default bottom-right corner when nothing was dragged). The
+  mode itself starts off on every page load.
 - While the mode is off, the page has no capture listeners and no injected
   layout: only the launcher stays. One window resize handler remains installed
-  for the plugin's lifetime by design, so the launcher stays clamped inside the
-  viewport even in idle.
-- A count badge appears on the launcher when the collection has entries, so the
-  mode's state is visible before opening it.
+  for the plugin's lifetime by design, so the floating launcher stays clamped
+  inside the viewport even in idle (resizes do not move the remembered position
+  while the mode is active).
+- A count badge appears on the launcher (floating or docked) when the collection
+  has entries, so the mode's state is visible either way.
 
 ## Mode layout
 
@@ -102,6 +112,15 @@ a strip freed from the right edge instead of covering the conversation.
 
 - The rail width is `clamp(188px, 11.6vw, 236px)` — about 200 px at a 1728 px
   viewport — and it holds the rail content, not the page.
+- The **launcher docks into the rail header** (26 px round button next to the
+  collapse/exit controls, same glyph and count badge) whenever the mode is
+  active, in both the page-shrunk and the narrow-viewport overlay layouts; it is
+  never rendered over the page content while active. Exiting returns it to the
+  remembered floating position.
+- Live geometry (E2E scenario 1): at 1728×900 the docked control is 26×26 inside
+  the rail (`x=1528…1728`); at 800×700 the rail switches to overlay layout and the
+  docked control stays inside the rail bounds; after exit the floating launcher
+  returns to the exact remembered position (e.g. `(618, 298)` after a drag).
 - The layout shrinks by setting the shell frame's `padding-right` to the rail
   width. The frame's content box shrinks: the left sidebar keeps its width while
   the conversation column and the native right sidebar give up the rail width,
