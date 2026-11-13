@@ -513,9 +513,15 @@ hover-intent detail card carries the requirement, locator, position,
 Session/Workspace, status, and surface marker with edit/relocate/copy-locator/
 delete actions, and the requirement popover commits or updates the record,
 deletes it with a 5 s undo slot, and auto-dismisses after either action. The
-right rail's collection view is the batch surface (include checkboxes with
-other-Session exclusion, inline/expanded note editing, reorder, preview, delete
-with undo, and one grouped batch chip).
+right rail's collection view is the managed **annotation sidebar**: it widens
+to `clamp(320px, 24vw, 420px)` (the frame padding and canvas follow; the compact
+~200 px width returns for the status/settings views) and renders an
+**Annotations** header with a total badge, **All / Singles / Groups** filters
+with live counts, a unified list of single rows and collapsible group cards
+(shared requirement, item count, always-visible edit/delete/insert actions,
+Selector/Page/Session metadata and updated time), empty/filter-empty states, and
+a footer with **Add annotation** plus dynamic **Clear selection / Clear
+collection** (undoable). Groups insert as one grouped batch chip.
 
 Annotation reference chips also carry a hover preview: the browser watches the
 shell's `[data-composer-chip="ui-annotation"]` markup, looks the record up in the

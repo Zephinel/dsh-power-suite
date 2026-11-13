@@ -383,6 +383,17 @@
   virtualization reports the honest missing status, and annotations captured
   before this change keep their older positional locator (re-annotate to get the
   stable anchor).
+- **The annotation sidebar widens the right rail in collection view.** It uses
+  `clamp(320px, 24vw, 420px)` (415 px at 1728×900) so the managed list fits; the
+  status/settings views keep the compact ~200 px rail, the frame padding and
+  canvas shrink by the delta and restore on exit, and the narrow-viewport layout
+  falls back to the 320 px overlay rail. On very narrow viewports the sidebar can
+  feel large — collapse it to the 48 px strip or use the overlay mode.
+- **Batch tooling lives in the list toolbar.** Include/insert/delete-selected
+  stay in the sidebar toolbar rather than hover-only per-row affordances (the
+  footer keeps exactly the two primary/danger actions); group child "edit"
+  previews/relocates the element because the batch requirement is shared on the
+  group, and child delete removes the item with undo restoring the group.
 - **Batch groups are a v3 document.** Groups hold one shared requirement and N
   element items; the 100-element cap counts singles plus group items (an
   over-limit group commit is refused visibly). The batch popover is not
