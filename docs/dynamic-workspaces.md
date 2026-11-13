@@ -267,31 +267,25 @@ retires with time.
 ## Pinned Sessions
 
 Main Sessions can be pinned from their row in the Running & recent card. The pin
-is the **card's own fixed state**, not the native sidebar Session pin: it keeps
-one main Session at the top of **Running & recent** instead of letting time
-retire it. Reusing the shell's sidebar pin was rejected on measured evidence —
-the live DSH Host already carried six pre-existing sidebar pins (on Sessions
-2–19 days old, kept for project organisation), which would have surfaced here as
-permanent top rows, and pinning from this card would have reordered the user's
-native project lists. The card therefore never reads or writes
-`WorkspaceSnapshot.pinnedSessionIds`, and the native sidebar pin is untouched.
+is the DSH shell's own **Host-persisted Session pin** — the same
+`WorkspaceSnapshot.pinnedSessionIds` set and the same
+`ctx.uiWorkspace.pinSession(id)` / `unpinSession(id)` services the native
+sidebar row's pin marker and menu use — not a second plugin-owned state. One set
+of facts therefore drives both surfaces: a pin made from this card pins the
+Session in the native sidebar (its marker, and the shell's saved-order fronting),
+a pin made from the native sidebar or its context menu shows up here, and
+because the Host owns the set it follows the user across every browser and
+device paired with that `$DSH_HOME`. The card keeps only its presentation rule —
+pinned main Sessions lead the card and never retire with time. It adds no Host
+route, store, or profile change, so shipping it needs no DSH Web service
+restart: the client half loads with the page (a merge into the linked checkout
+plus a page reload is enough).
 
-The pinned set is a versioned browser `localStorage` document, in the same class
-of storage as the bucket-fold document `power-suite.dynamic-workspaces.folds`:
-
-```text
-power-suite.dynamic-workspaces.pinned
-{ "version": 1, "pinned": ["<sessionId>", ...] }
-```
-
-It survives a page reload for that browser/profile, is not synced across devices
-or profiles, and is not Host-shared (the read-acknowledgement document remains
-this feature's only Host-shared state). Ids are read as non-empty strings only —
-junk entries and duplicates are dropped — and the list keeps at most **200**
-ids, dropping the oldest pin first; a corrupt, missing, or storage-denied
-document reads as empty, and on a storage-denied browser the toggles still work
-in memory for the current page. Pin appends the id to the document and unpin
-removes it.
+The measured live Host already carried **six native sidebar pins** (on Sessions
+2–19 days old, kept for project organisation); they now appear as the card's
+pinned prefix, so the five-row default can start fully pinned and **View all**
+reveals the rest. That is the intended consequence of one shared state: the card
+lists exactly what the native sidebar marks as pinned.
 
 - **Pinned first, newest activity first**: pinned rows sort before every
   unpinned row, newest activity first — a pinned running row and a pinned
@@ -308,13 +302,26 @@ removes it.
   with **no retention cutoff**. Its last-activity/`updatedAt` time stays the
   original value: pinning never re-times or resets the row's end time, so
   **unpin** re-derives the row immediately under the ordinary rules — the card
-  recomputes from the same facts on the click itself, with no Host round-trip,
-  no reload, and no re-timing: an ended Session already outside the retention
-  window leaves the card at once, and a still-running one returns to the running
-  group in activity order.
+  recomputes from the same facts as soon as the Host's updated Workspaces
+  snapshot arrives, with no reload and no re-timing: an ended Session already
+  outside the retention window leaves the card, and a still-running one returns
+  to the running group in activity order.
+- **Native reorder is a one-way side effect**: pinning through the shell also
+  fronts the Session in the native sidebar's saved Session order — exactly what
+  the native pin menu does. Unpinning removes the pin and returns the row to the
+  ordinary card rules, but does **not** restore the saved position the pin
+  fronted. This is native shell behaviour the card reuses, not a plugin
+  reordering rule.
 - **Scope: main Sessions only**: nested subagent child rows carry no pin slot,
   no marker, and no tint. Blank, archived, `origin: "subagent"`, and unknown
-  Session ids are ignored even when a stale id sits in the pinned document.
+  Session ids are ignored even when a pinned id in the Host set has no usable
+  summary.
+- **Host support**: the pin control is rendered only when the shell exposes both
+  `pinSession` and `unpinSession`; on an older Host the card keeps its exact
+  previous shape (no pin slot). A toggle is in-flight guarded per row, so a
+  double click cannot race the Host snapshot; a refused write (access policy,
+  archived row, transport) leaves the pin state unchanged and the card follows
+  the next snapshot — there is no optimistic local marker.
 - **No layout jump**: every main row reserves a fixed 16 px pin slot **between
   the leading state glyph and the title**. The slot is always in the DOM; only
   `opacity` / `visibility` / `pointer-events` change, so revealing the control

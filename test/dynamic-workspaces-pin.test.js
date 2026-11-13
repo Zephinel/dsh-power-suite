@@ -21,18 +21,19 @@
  * 6. EN and ZH define the same pin keys.
  * 7. Source-level regression for requirement 1: the running-card status dot
  *    opts out of the shell's global superellipse with `corner-shape: round`.
- * 8. The card-owned pin document (`power-suite.dynamic-workspaces.pinned`):
- *    constants, a fresh browser profile reads empty, write→read round-trip,
- *    junk/duplicate sanitization on read, and the 200-id bound dropping the
- *    oldest pins first.
+ * 8. Source-level regression for the Host-shared design: the client toggles the
+ *    shell's own Session pin through `uiWorkspace.pinSession` /
+ *    `unpinSession`, and the removed panel-local document
+ *    (`power-suite.dynamic-workspaces.pinned`, `dwReadPinnedIds`,
+ *    `dwWritePinnedIds`) is gone.
  *
- * Known gap: `loadClientModule` does not expose the vm sandbox's `localStorage`
- * object, so a corrupt/foreign-version document cannot be seeded from the test.
- * The read path's corrupt/missing/storage-denied `[]` fallback is reviewed in
- * `src/client.js` but not unit-tested here (stated gap, not silently assumed).
- *
- * Data-only behavior (hover reveal, focus rings, row tint) belongs to
- * `test/browser/sidebar.e2e.mjs`.
+ * Scope: this file pins the pure helper derivation/sanitization and the source
+ * wiring only. The Host round-trip cannot be unit-tested here — the vm sandbox
+ * materializes the factory without a live Host `WorkspaceSnapshot` — so the
+ * cross-device proof (one Host-shared pin set observed by two browser profiles,
+ * the native sidebar pin marker, reload persistence) belongs to the live
+ * `--pin` E2E harness (`test/browser/sidebar.e2e.mjs`). Data-only behavior
+ * (hover reveal, focus rings, row tint) belongs there too.
  */
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
@@ -171,11 +172,29 @@ test('dynamic-Workspaces pin seam is present and production stays inert', () => 
     undefined,
     'hooks.dynamicWorkspacesPin is missing from src/client.js (test seam not wired yet)'
   )
+  assert.deepEqual(
+    [...Object.keys(pin)].sort(),
+    ['dwPinPanelRows', 'dwPinnedSessionIds'],
+    'the seam exposes exactly the two pure pin helpers; the Host owns the pin state'
+  )
   assert.equal(typeof pin.dwPinnedSessionIds, 'function', 'dwPinnedSessionIds is exported through the seam')
   assert.equal(typeof pin.dwPinPanelRows, 'function', 'dwPinPanelRows is exported through the seam')
-  assert.equal(typeof pin.dwReadPinnedIds, 'function', 'dwReadPinnedIds is exported through the seam')
-  assert.equal(typeof pin.dwWritePinnedIds, 'function', 'dwWritePinnedIds is exported through the seam')
   assert.equal(production.hooks, undefined, 'the test-hook seam must stay inert when the flag is not set')
+})
+
+test('the Host-shared pin is wired through the shell services, not a panel-local document', () => {
+  const source = client.source
+  // Toggling mirrors the native sidebar marker/menu: the card calls the shell's
+  // own Host-persisted Session pin services.
+  assert.match(source, /uiWorkspace\.pinSession/, 'the card pins through the shell service uiWorkspace.pinSession')
+  assert.match(source, /uiWorkspace\.unpinSession/, 'the card unpins through the shell service uiWorkspace.unpinSession')
+  // The superseded panel-local localStorage document is gone.
+  assert.doesNotMatch(
+    source,
+    /power-suite\.dynamic-workspaces\.pinned/,
+    'the removed panel-local pin document must not reappear'
+  )
+  assert.doesNotMatch(source, /dwReadPinnedIds|dwWritePinnedIds/, 'the removed pin-document helpers must not reappear')
 })
 
 test('pinned ids sanitize, dedupe, and tolerate a missing or malformed snapshot', () => {
@@ -361,62 +380,6 @@ test('EN and ZH dictionaries define the same pin keys', () => {
     assert.ok(stats.DW_EN[key].trim().length > 0, `EN copy for ${key} must not be blank`)
     assert.ok(stats.DW_ZH[key].trim().length > 0, `ZH copy for ${key} must not be blank`)
   }
-})
-
-/**
- * Materialize an isolated browser module for a pin-document test. Every
- * `loadClientModule()` call builds its own vm sandbox with a fresh `localStorage`
- * stand-in, so document writes in one test never leak into another.
- * @returns {object} that instance's `dynamicWorkspacesPin` seam.
- */
-function freshPinSeam() {
-  const instance = loadClientModule()
-  const seam = instance.hooks?.dynamicWorkspacesPin
-  assert.notEqual(
-    seam,
-    undefined,
-    'dynamicWorkspacesPin test seam is missing from src/client.js'
-  )
-  return seam
-}
-
-test('pin document: constants describe the versioned panel-owned store', () => {
-  assert.equal(pin.DW_PIN_KEY, 'power-suite.dynamic-workspaces.pinned')
-  assert.equal(pin.DW_PIN_VERSION, 1)
-  assert.equal(pin.DW_PIN_LIMIT, 200)
-})
-
-test('pin document: a fresh browser profile reads no pinned ids', () => {
-  const seam = freshPinSeam()
-  assert.deepEqual([...seam.dwReadPinnedIds()], [], 'a fresh localStorage document reads empty')
-})
-
-test('pin document: ids round-trip through one write and clear to empty', () => {
-  const seam = freshPinSeam()
-  seam.dwWritePinnedIds(['session-a', 'session-b'])
-  assert.deepEqual([...seam.dwReadPinnedIds()], ['session-a', 'session-b'])
-  // Unpinning the last ids rewrites the document; the next read is empty again.
-  seam.dwWritePinnedIds([])
-  assert.deepEqual([...seam.dwReadPinnedIds()], [])
-})
-
-test('pin document: junk entries and duplicates are sanitized on read', () => {
-  const seam = freshPinSeam()
-  // The writer persists exactly what it is given; the reader is the sanitizing
-  // boundary (non-empty strings only, deduplicated, insertion order kept).
-  seam.dwWritePinnedIds(['session-a', '', null, 42, {}, 'session-b', 'session-a'])
-  assert.deepEqual([...seam.dwReadPinnedIds()], ['session-a', 'session-b'])
-})
-
-test('pin document: more than the cap keeps the newest pins and drops the oldest first', () => {
-  const seam = freshPinSeam()
-  const ids = Array.from({ length: seam.DW_PIN_LIMIT + 5 }, (_, index) => `session-${index + 1}`)
-  seam.dwWritePinnedIds(ids)
-  const read = [...seam.dwReadPinnedIds()]
-  assert.equal(read.length, seam.DW_PIN_LIMIT, 'the document never keeps more than the cap')
-  assert.equal(read[0], 'session-6', 'the five oldest pins are dropped first')
-  assert.equal(read.includes('session-5'), false, 'the oldest pin is gone')
-  assert.equal(read[read.length - 1], 'session-205', 'the newest pin is kept')
 })
 
 test('requirement 1: the running-card status dot opts out of the shell superellipse', () => {

@@ -137,22 +137,22 @@ heading is added until the release is cut.
 - Running & recent pinning, shared native hover figures, and a circular status
   dot: **main Session rows** in the Running & recent card now carry a
   hover-revealed **Pin** control (a fixed 16 px slot between the leading state
-  glyph and the title, so the title never shifts) that writes the card's own
-  fixed state — a versioned browser `localStorage` document
-  (`power-suite.dynamic-workspaces.pinned`, schema 1, sanitized and deduplicated,
-  at most 200 ids with the oldest pin dropped), like the bucket-fold document.
-  It never reads or writes the native sidebar pin
-  (`WorkspaceSnapshot.pinnedSessionIds` is deliberately not consulted: the live
-  Host's pre-existing project-organisation pins would otherwise become permanent
-  top rows here, and card pins would reorder the user's native project lists),
-  so the pin persists across reloads for that browser/profile instead of being
-  Host-shared or cross-device synced. Pinned main Sessions sort first,
-  newest activity first, and never retire with time: a pinned finished Session
-  stays listed with its original title/Workspace/path and last-activity time (no
-  re-timing), unpin immediately returns the row to the ordinary queue under the
-  normal retention rules, and pinned rows show a filled violet pin glyph plus a
-  subtle violet tint; subagent child rows keep no pin control, and blank,
-  archived, or unknown Session ids cannot be pinned. The **native sidebar
+  glyph and the title, so the title never shifts) that toggles the DSH Session's
+  own **Host-persisted pin** — `WorkspaceSnapshot.pinnedSessionIds` through
+  `ctx.uiWorkspace.pinSession` / `unpinSession`, the same state and services as
+  the native sidebar row's pin marker and menu. The pin therefore follows the
+  user across every browser and device paired with the Host: card and native
+  sidebar agree in both directions (the user's pre-existing native pins appear
+  as the card's pinned prefix, and a card pin marks/fronts the native sidebar
+  row and survives a reload), with no plugin localStorage document, no new Host
+  route or store, and no DSH Web service restart. Pinned main Sessions sort
+  first, newest activity first, and never retire with time: a pinned finished
+  Session stays listed with its original title/Workspace/path and last-activity
+  time (no re-timing), unpin immediately returns the row to the ordinary queue
+  under the normal retention rules (it does not restore the saved order the pin
+  fronted — native shell behaviour), and pinned rows show a filled violet pin
+  glyph plus a subtle violet tint; subagent child rows keep no pin control, and
+  blank, archived, or unknown Session ids cannot be pinned. The **native sidebar
   session hover card** now renders the same **Session statistics**, **Token
   usage**, and **context** sections as the card's hover card through the
   shell's `sidebar.session.row.hover` slot, reusing the same strings, formatter

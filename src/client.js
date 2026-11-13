@@ -4420,24 +4420,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** localStorage key holding the two bucket fold states. */
     const DW_FOLD_KEY = 'power-suite.dynamic-workspaces.folds'
 
-    /**
-     * localStorage key holding the card's own pinned main-Session ids.
-     *
-     * The card pin is a state of this panel only: the user asked for "keep this
-     * Session at the top of Running & recent instead of letting time retire it",
-     * so it must not import the native sidebar's independent pin set (an old
-     * project-organisation pin would otherwise surface here forever). It is
-     * stored per browser like the fold states; the read-ack document stays the
-     * only Host-shared session state of this feature.
-     */
-    const DW_PIN_KEY = 'power-suite.dynamic-workspaces.pinned'
-
-    /** Schema version of the persisted pin document. */
-    const DW_PIN_VERSION = 1
-
-    /** Most pinned Session ids one document keeps; the oldest pin drops first. */
-    const DW_PIN_LIMIT = 200
-
     /** Highest number of rows the summary card lists before "view all". */
     const DW_PANEL_LIMIT = 5
 
@@ -5503,13 +5485,16 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
-     * Pinned main-Session ids from a document carrying `pinnedSessionIds`.
+     * Pinned main-Session ids from the Workspaces snapshot.
      *
-     * The card's own pin document (localStorage) and any Workspaces snapshot the
-     * card reads share this shape, so one sanitizer serves both: only non-empty
-     * string ids are kept and each id appears once. The card deliberately pins
-     * only its own set; see {@link DW_PIN_KEY}.
-     * @param {object | undefined} snapshot - document with a `pinnedSessionIds` list.
+     * The pin is the DSH Session's own Host-persisted fixed state
+     * (`WorkspaceSnapshot.pinnedSessionIds`, written by the shell's
+     * `uiWorkspace.pinSession` / `unpinSession`), shared with the native sidebar's
+     * pin marker and delivered to every browser/device paired with this Host. The
+     * card reads that same set, so a pin made in the card or in the native
+     * sidebar/menu is one shared state everywhere. Only non-empty string ids are
+     * kept and each id appears once.
+     * @param {object | undefined} snapshot - Workspaces snapshot carrying `pinnedSessionIds`.
      * @returns {Set<string>} valid pinned Session ids.
      */
     function dwPinnedSessionIds(snapshot) {
@@ -5677,39 +5662,6 @@ function dwClearNativeAtmospheres() {
     function dwWriteFolds(folds) {
       try {
         window.localStorage.setItem(DW_FOLD_KEY, JSON.stringify({ active: folds.active, inactive: folds.inactive }))
-      } catch {
-        // A storage-denied browser keeps the in-memory state only.
-      }
-    }
-
-    /**
-     * Read the persisted pinned main-Session ids of the card. A corrupt,
-     * missing, or storage-denied document reads as empty; the read is sanitized
-     * and deduplicated through {@link dwPinnedSessionIds}.
-     * @returns {string[]} pinned Session ids, oldest pin first.
-     */
-    function dwReadPinnedIds() {
-      try {
-        const raw = window.localStorage.getItem(DW_PIN_KEY)
-        if (raw === null) return []
-        const value = JSON.parse(raw)
-        const source = value !== null && typeof value === 'object' && Array.isArray(value.pinned) ? value.pinned : []
-        return [...dwPinnedSessionIds({ pinnedSessionIds: source })]
-      } catch {
-        return []
-      }
-    }
-
-    /**
-     * Persist the card's pinned Session ids. The document is bounded; dropping
-     * the oldest pin first keeps it small without ever losing a recent one.
-     * @param {readonly string[]} ids - pinned Session ids, oldest pin first.
-     * @returns {void}
-     */
-    function dwWritePinnedIds(ids) {
-      try {
-        const bounded = ids.length > DW_PIN_LIMIT ? ids.slice(ids.length - DW_PIN_LIMIT) : ids
-        window.localStorage.setItem(DW_PIN_KEY, JSON.stringify({ version: DW_PIN_VERSION, pinned: bounded }))
       } catch {
         // A storage-denied browser keeps the in-memory state only.
       }
@@ -6537,7 +6489,7 @@ function dwClearNativeAtmospheres() {
       const {
         t, rows, expanded, showAll, now, durations, childrenByParent, collapsedParents, acked,
         onToggle, onToggleAll, onToggleChildren, onOpen, interruptedT, onNewSession, currentSessionId,
-        projections, onEnsureProjections, pinnedIds, onTogglePin
+        projections, onEnsureProjections, pinnedIds, pinEnabled, onTogglePin
       } = props
       const visible = expanded && !showAll ? rows.slice(0, DW_PANEL_LIMIT) : rows
       const canExpand = rows.length > DW_PANEL_LIMIT
@@ -6820,12 +6772,14 @@ function dwClearNativeAtmospheres() {
                     title: interruptedTitle(row.id)
                   }, RemixGlyph(REMIX_WARNING_FILL, 13))
                   : null),
-              React.createElement(DwPinSlot, {
-                key: 'pin',
-                t,
-                pinned,
-                onToggle: () => onTogglePin(row.id)
-              }),
+              pinEnabled
+                ? React.createElement(DwPinSlot, {
+                  key: 'pin',
+                  t,
+                  pinned,
+                  onToggle: () => onTogglePin(row.id, pinned)
+                })
+                : null,
               React.createElement('button', {
                 type: 'button',
                 className: 'psd-run-open',
@@ -7204,31 +7158,41 @@ function dwClearNativeAtmospheres() {
         })
       }, [parentSessions, uiWorkspace])
 
-      // The card pin is this panel's own fixed state: it keeps a main Session at
-      // the top of Running & recent instead of letting the retention window retire
-      // it. It is deliberately independent from the native sidebar pin (a
-      // project-organisation pin the Host persists for the Workspaces browser):
-      // an old sidebar pin must not surface here forever, and pinning here must
-      // not reorder the user's project lists. Like the bucket folds it persists
-      // per browser; the read-ack document stays the only Host-shared state.
-      const [pinnedIdList, setPinnedIdList] = React.useState(dwReadPinnedIds)
-      const pinnedIds = React.useMemo(
-        () => dwPinnedSessionIds({ pinnedSessionIds: pinnedIdList }),
-        [pinnedIdList]
-      )
-      // Persist outside the state updater (updaters must stay pure and React may
-      // replay them); the document is tiny and rewrite-on-change is idempotent.
-      React.useEffect(() => {
-        dwWritePinnedIds(pinnedIdList)
-      }, [pinnedIdList])
-      const togglePin = React.useCallback((sessionId) => {
-        if (typeof sessionId !== 'string' || sessionId.length === 0) return
-        setPinnedIdList((previous) => (
-          previous.includes(sessionId)
-            ? previous.filter((id) => id !== sessionId)
-            : previous.concat(sessionId)
-        ))
-      }, [])
+      // Pin is the DSH Session's own Host-persisted fixed state: the card reads
+      // the same `WorkspaceSnapshot.pinnedSessionIds` the native sidebar pin
+      // marker uses and toggles it through the same `uiWorkspace.pinSession` /
+      // `unpinSession`, so a pin follows the user across browsers and devices
+      // paired with this Host, and pinning from the native sidebar or menu shows
+      // up here too. The card adds only its own presentation/ordering rule:
+      // pinned main Sessions lead and never retire with time.
+      const pinnedIds = dwPinnedSessionIds(workspaceSnapshot)
+      const pinEnabled = uiWorkspace !== null && uiWorkspace !== undefined
+        && typeof uiWorkspace.pinSession === 'function'
+        && typeof uiWorkspace.unpinSession === 'function'
+      const pinInFlightRef = React.useRef(new Set())
+      const togglePin = React.useCallback((sessionId, pinned) => {
+        if (!pinEnabled || typeof sessionId !== 'string' || sessionId.length === 0) return
+        // One write per Session at a time: a double click cannot race the Host
+        // snapshot and flip the pin twice.
+        const inFlight = pinInFlightRef.current
+        if (inFlight.has(sessionId)) return
+        const method = pinned ? 'unpinSession' : 'pinSession'
+        if (typeof uiWorkspace[method] !== 'function') return
+        inFlight.add(sessionId)
+        let pending
+        try {
+          pending = uiWorkspace[method](sessionId)
+        } catch {
+          inFlight.delete(sessionId)
+          return
+        }
+        // A refused write (access policy, archived row, transport) leaves the
+        // Workspaces snapshot untouched; the row keeps its previous state and the
+        // failure stays out of the unhandled-rejection log.
+        Promise.resolve(pending).catch(() => {}).finally(() => {
+          inFlight.delete(sessionId)
+        })
+      }, [pinEnabled, uiWorkspace])
 
       const runningParents = dwRunningSubagentParents(sessions, statuses)
       const workspaces = workspaceSnapshot?.items ?? []
@@ -7301,9 +7265,10 @@ function dwClearNativeAtmospheres() {
             const projections = source !== null && typeof source === 'object' ? source.projectionsBySession : undefined
             return {
               currentSessionId: latest.currentSessionId,
-              // The card's own pin document (localStorage, per browser), mirrored
-              // so E2E cleanup can prove the set it touched is empty.
-              pinnedIds: [...pinnedIdList],
+              // Host-shared native pin state, mirrored so E2E can verify the card
+              // and the native sidebar read the same set across browser profiles.
+              pinnedIds: Array.isArray(latest.workspaces?.pinnedSessionIds) ? [...latest.workspaces.pinnedSessionIds] : [],
+              pinSupported: typeof uiWorkspace?.pinSession === 'function' && typeof uiWorkspace?.unpinSession === 'function',
               rows: ids.map((id) => ({ id, title: byId?.[id]?.displayTitle ?? null, state: latest.statuses?.get?.(id) ?? null })),
               values: Object.fromEntries(ids.map((id) => [id, projections?.[id]?.values ?? null]).filter(([, value]) => value !== null))
             }
@@ -7726,6 +7691,7 @@ function dwClearNativeAtmospheres() {
         onEnsureProjections: ensureProjections,
         onNewSession: openNewSession,
         pinnedIds,
+        pinEnabled,
         onTogglePin: togglePin,
         onToggle: () => setPanelExpanded((value) => !value),
         onToggleAll: () => setShowAll((value) => !value),
@@ -19456,16 +19422,11 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         dwBilledInputTokens,
         dwContextOccupancy
       }
-      // Pin derivation seam: pure helpers for the card's pinned-first ordering,
-      // the "never retires" row reconstruction, and the card's own pin document.
+      // Pin derivation seam: pure helpers for the card's pinned-first ordering
+      // and the "never retires" row reconstruction over the Host-shared pin set.
       globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesPin = {
         dwPinnedSessionIds,
-        dwPinPanelRows,
-        dwReadPinnedIds,
-        dwWritePinnedIds,
-        DW_PIN_KEY,
-        DW_PIN_VERSION,
-        DW_PIN_LIMIT
+        dwPinPanelRows
       }
     }
 
