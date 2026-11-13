@@ -720,10 +720,11 @@ or node the action shows an honest unavailable toast.
 
 - **Descendant text anchors:** a non-leaf target (row/card/button with child text)
   captures its first text leaf descendant's rendered quote/position plus
-  `anchorTarget:'descendant'`, the leaf tag and the ancestor tag chain + stable
-  attribute signature of the target. Resolution order stays CSS → descendant
-  text-quote (position.start hint) → descendant text-position → XPath last: a text
-  hit is climbed to the closest ancestor matching the recorded tag + signature, and
+  `anchorTarget:'descendant'`, the leaf tag and the ancestor tag chain (metadata;
+  the climb matches the target tag + stable attribute signature) of the target.
+  Resolution order stays CSS → descendant text-quote (position.start hint) →
+  descendant text-position → XPath last, with a CSS `changed` hit upgraded by a
+  resolving descendant quote: a text hit is climbed to the closest ancestor matching the recorded tag + signature, and
   only a unique climb reports **Resolved**; several plausible ancestors report
   **Matches several** and none continues honestly. Leaf/self anchors keep the old
   behaviour.
@@ -736,7 +737,7 @@ or node the action shows an honest unavailable toast.
   a structural fallback can never verify them, so they stay **Unverifiable** and
   are not marked/copied as if identified. Host apps should give annotatable
   elements stable `data-testid`/`data-*` attributes or real accessible names.
-- **Scan/cache probe:** fallback resolution counts its DOM scans and cache misses
+- **Scan/cache probe:** fallback resolution counts resolver invocations and cache misses
   (exposed as `data-psa-fallback-scans` / the `debugFallbackScanProbe` test hook);
   repeated status reads on an unchanged DOM add 0 scans/resolutions, while a host
   mutation re-resolves once and then reuses the cache. Own overlay re-renders do
