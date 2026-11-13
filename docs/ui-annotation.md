@@ -716,6 +716,68 @@ only the status line and `via` hint update.
 anchors (or are generated from the live node when absent); with no usable anchor
 or node the action shows an honest unavailable toast.
 
+### Anchor hardening (P1/P2)
+
+- **Capture disambiguation:** quote context is occurrence-aware — the target text run
+  is located, prefix/suffix expand symmetrically (≤60 chars each, ≤200 total) until
+  the quote is unique in its scope; if it cannot be made unique the quote is
+  **dropped** (CSS/XPath remain) rather than storing a misleading anchor.
+- **Rendered text:** capture and matching share one rendered-text pipeline
+  (block boundaries and `<br>` → a single space) with a rendered→raw offset map;
+  quote exact/prefix/suffix and text-position offsets all use it (input values are
+  still never read).
+- **Fail-closed identity (review MAJOR-1):** structural fallbacks (XPath and
+  text-position) only return **Resolved** when the record carries a real identity
+  signal — non-empty captured text (not the constant empty-FNV digest), a real
+  accessible name that is not the tag/role fallback, or a verified unique stable
+  locator that *still resolves to this element*. Icon-only/tag-only records
+  degrade honestly to **Content changed** and are never marked/copied through a
+  weak structural hit. This is one gate at the fallback boundary
+  (`annotationHasStrongIdentity` → `annotationStructuralFallbackStatus`), not
+  scattered checks.
+- **Capture scope/context:** quote context expands from the target occurrence
+  (≤60 prefix/suffix, total ≤200) and climbs to a wider scope when the same text
+  repeats outside the immediate parent; the sanitizer persists exactly what capture
+  verified (same constants). If the target occurrence cannot be located explicitly
+  and the text is duplicated, the quote is dropped (never first-match guessed).
+- **Bounded work:** fallback element scans are capped (400 elements / 32
+  candidates) and both fallback status and node caches are bounded per DOM
+  revision (cleared past 400 entries); repeated geometry frames reuse the cache.
+- **Rendered whitespace:** whitespace-only text nodes and skipped form-control
+  boundaries are preserved as separators, so `"Hello" + " " + "world"` renders as
+  `Hello world` (with offset mapping), matching visible text.
+- **Copy live-vs-saved:** Copy actions use a live node first and say so; when only
+  a saved anchor exists the toast explicitly says “saved … (target not live)”;
+  full XPath is only produced from a live node (otherwise an honest unavailable
+  toast). Copy XPath/JS path live in popover, detail card and rail row.
+
+- **Order and validation:** fallback order is now CSS → text quote (captured
+  position.start as hint) → text position → XPath **last**. Every fallback hit must
+  pass tag + text digest + accessible-name checks; XPath/text-position hits also
+  need viewport proximity. Text-position resolves only when its container slice is
+  unique; weak-strategy ambiguity continues the chain.
+- **Scoring:** exact quote matches are scored 0.7·quote + 0.15·prefix +
+  0.15·suffix (normalized over present components); bounded approximate matching
+  (bounded Levenshtein) is capped below the Resolved threshold so an edited text
+  lands in **Content changed** (0.5–0.85), exact/unique context in **Resolved**
+  (≥0.85), unrelated text continues down the chain; tied best matches report
+  **Matches several**.
+- **Performance:** fallback outcomes and fallback-resolved nodes are cached per
+  `(record id, DOM revision)`; the cache clears on DOM mutation/deactivate, so
+  geometry frames do not rescan the document, and quote search is scoped to the
+  captured container first with a bounded per-element document fallback.
+- **Deferred:** descendant anchors for non-leaf targets (`textAnchorTarget:
+  'descendant'`) are explicitly deferred — mapping a descendant hit back to the
+  recorded ancestor is not structurally sound in the current pick model.
+- **Copy parity (P2):** Copy locator / Copy XPath / Copy JS path are available in
+  the popover, the detail card and the rail row (plus **Copy full XPath** in the
+  detail card). Copy uses a **live node first** (fresh optimized/full XPath or JS
+  path), then the saved anchor (with a distinct “target not live” toast); full
+  XPath requires a live node and reports honestly when there is none — it is never
+  fabricated. Optimized XPath may short-circuit through a stable id; full XPath is
+  the absolute nth path. Shadow-root internals are **out of contract** (a shadow
+  leaf resolves to its host for annotation; copy paths stop at the host).
+
 **Two-phase candidate resolution (P0)** — resolution collects per-candidate hit
 sets before deciding: the first candidate with exactly **one** hit wins (highest
 tier first), so a non-unique high-tier candidate such as
