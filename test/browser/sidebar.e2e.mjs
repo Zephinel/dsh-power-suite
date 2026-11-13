@@ -4381,6 +4381,66 @@ const probePin = {
     }
   },
 
+  /** Hoverable controls inside one card row (New session / Continue / disclosure / pin). */
+  cardRowControls: (kind, title) => {
+    const rowSelector = kind === 'child' ? '.psd-child' : '.psd-run'
+    const titleSelector = kind === 'child' ? '.psd-child-title' : '.psd-run-title'
+    const row = [...document.querySelectorAll(rowSelector)]
+      .find((element) => ((element.querySelector(titleSelector)?.innerText ?? '').trim()) === title)
+    if (row === undefined) return null
+    const controls = [...row.querySelectorAll('.psd-row-action, .psd-row-continue, .psd-run-toggle, .psd-run-pin')]
+      .map((element) => {
+        const rect = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        return {
+          className: String(element.className || ''),
+          variant: element.getAttribute('data-variant'),
+          label: element.getAttribute('aria-label'),
+          visible: rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && Number(style.opacity) > 0,
+          hovered: element.matches(':hover'),
+          background: style.backgroundColor,
+          filter: style.filter,
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.top + rect.height / 2),
+          rect: { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }
+        }
+      })
+      .filter((control) => control.visible)
+    return {
+      rowBackground: getComputedStyle(row).backgroundColor,
+      rowHovered: row.matches(':hover'),
+      controls
+    }
+  },
+
+  /** Hoverable native action buttons inside one native session/workspace row. */
+  nativeRowControls: (rowSelector) => {
+    const row = document.querySelector(rowSelector)
+    if (row === null) return null
+    const controls = [...row.querySelectorAll('button, [role="button"]')]
+      .map((element) => {
+        const rect = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        return {
+          className: String(element.className || ''),
+          label: element.getAttribute('aria-label'),
+          visible: rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden',
+          hovered: element.matches(':hover'),
+          background: style.backgroundColor,
+          filter: style.filter,
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.top + rect.height / 2),
+          rect: { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }
+        }
+      })
+      .filter((control) => control.visible)
+    return {
+      rowBackground: getComputedStyle(row).backgroundColor,
+      rowHovered: row.matches(':hover'),
+      controls
+    }
+  },
+
   /** Small read of the dynamic-Workspaces live test seam (id/title/state + pin state). */
   liveSnapshot: () => {
     const seam = globalThis.__POWER_SUITE_TEST_HOOKS__?.dynamicWorkspacesLive
@@ -4936,6 +4996,128 @@ async function hoverSelector(page, selector) {
     debugLog(`hoverSelector "${selector}" pointer at ${point.x},${point.y} did not hover`)
   }
   throw new Error(`could not hover "${short(selector, 80)}" (the element is clipped/virtualized or the pointer did not land)`)
+}
+
+/**
+ * Hover one trailing control of a card row with a real CDP pointer (the row itself is
+ * hovered first so the actions/chevron reveal), then read the control's computed
+ * background/filter.
+ * @param {'parent'|'child'} kind - row kind.
+ * @param {string} title - exact row title.
+ * @param {string} controlSelector - control selector inside the row.
+ * @returns {Promise<object>} the hovered control facts.
+ */
+async function hoverCardControl(page, kind, title, controlSelector) {
+  for (let attempt = 0; attempt < PIN_ROW_ATTEMPTS; attempt += 1) {
+    try {
+      await hoverCardRowByTitle(page, kind, title)
+    } catch {
+      await sleep(250)
+      continue
+    }
+    await sleep(260)
+    const point = await page.eval((rowKind, rowTitle, selector) => {
+      const rowSelector = rowKind === 'child' ? '.psd-child' : '.psd-run'
+      const titleSelector = rowKind === 'child' ? '.psd-child-title' : '.psd-run-title'
+      const row = [...document.querySelectorAll(rowSelector)]
+        .find((element) => ((element.querySelector(titleSelector)?.innerText ?? '').trim()) === rowTitle)
+      if (row === undefined) return null
+      const control = [...row.querySelectorAll(selector)].find((element) => {
+        const rect = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && Number(style.opacity) > 0
+      })
+      if (control === undefined) return null
+      const rect = control.getBoundingClientRect()
+      return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+    }, kind, title, controlSelector).catch(() => null)
+    if (point === null) {
+      await sleep(250)
+      continue
+    }
+    await page.moveTo(point.x, point.y)
+    await sleep(260)
+    const facts = await page.eval((rowKind, rowTitle, selector) => {
+      const rowSelector = rowKind === 'child' ? '.psd-child' : '.psd-run'
+      const titleSelector = rowKind === 'child' ? '.psd-child-title' : '.psd-run-title'
+      const row = [...document.querySelectorAll(rowSelector)]
+        .find((element) => ((element.querySelector(titleSelector)?.innerText ?? '').trim()) === rowTitle)
+      if (row === undefined) return null
+      const controls = [...row.querySelectorAll(selector)].map((element) => {
+        const rect = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        return {
+          className: String(element.className || ''),
+          variant: element.getAttribute('data-variant'),
+          label: element.getAttribute('aria-label'),
+          visible: rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && Number(style.opacity) > 0,
+          hovered: element.matches(':hover'),
+          background: style.backgroundColor,
+          filter: style.filter
+        }
+      })
+      return { rowHovered: row.matches(':hover'), controls }
+    }, kind, title, controlSelector).catch(() => null)
+    if (facts !== null) {
+      const hovered = facts.controls.find((control) => control.hovered)
+      if (hovered !== undefined) return hovered
+    }
+  }
+  throw new Error(`could not hover control "${short(controlSelector, 40)}" on the card ${kind} row "${short(title, 50)}"`)
+}
+
+/**
+ * Hover one native action button of a native session/workspace row (the row is hovered
+ * first so its actions reveal), then read the button's computed background/filter.
+ * @param {string} rowSelector - native row selector.
+ * @returns {Promise<object | null>} the hovered button facts, or null when the row has no
+ *   visible action button (e.g. a placeholder row).
+ */
+async function hoverNativeRowControl(page, rowSelector) {
+  for (let attempt = 0; attempt < PIN_ROW_ATTEMPTS; attempt += 1) {
+    try {
+      await hoverSelector(page, rowSelector)
+    } catch {
+      await sleep(250)
+      continue
+    }
+    await sleep(280)
+    const point = await page.eval((selector) => {
+      const row = document.querySelector(selector)
+      if (row === null) return null
+      const button = [...row.querySelectorAll('button, [role="button"]')].find((element) => {
+        const rect = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden'
+      })
+      if (button === undefined) return null
+      const rect = button.getBoundingClientRect()
+      return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+    }, rowSelector).catch(() => null)
+    if (point === null) return null
+    await page.moveTo(point.x, point.y)
+    await sleep(260)
+    const facts = await page.eval((selector) => {
+      const row = document.querySelector(selector)
+      if (row === null) return null
+      const buttons = [...row.querySelectorAll('button, [role="button"]')].map((element) => {
+        const style = getComputedStyle(element)
+        return {
+          className: String(element.className || ''),
+          label: element.getAttribute('aria-label'),
+          hovered: element.matches(':hover'),
+          background: style.backgroundColor,
+          filter: style.filter
+        }
+      })
+      return { rowHovered: row.matches(':hover'), buttons }
+    }, rowSelector).catch(() => null)
+    if (facts !== null) {
+      const hovered = facts.buttons.find((button) => button.hovered)
+      if (hovered !== undefined) return hovered
+    }
+  }
+  return null
 }
 
 /** Blur the focused element and park the pointer away from rows/cards. */
@@ -6184,6 +6366,17 @@ async function runPinChecks({ page, results, state }) {
     assertEqual(hovered.pin.opacity, '1', `the pin control must still reveal on hover over the atmosphere row (opacity ${hovered.pin.opacity})`)
     assertEqual(hovered.pin.visibility, 'visible', `the pin control must be visible on hover over the atmosphere row (${hovered.pin.visibility})`)
     assertContentBrightness(hovered, 'brightness(1.5)', 'hovered current card row', { expectTransition: true })
+    // Fix #4: trailing controls on an atmosphere row keep a transparent background and
+    // brighten their icon (extra brightness(1.2)) instead of painting the hover block.
+    const controlChecks = []
+    for (const selector of ['.psd-row-action', '.psd-run-toggle', '.psd-run-pin']) {
+      const control = await hoverCardControl(page, 'parent', currentTitle, selector)
+      assertEqual(control.background, 'rgba(0, 0, 0, 0)',
+        `atmosphere-row control "${selector}" must keep a transparent background on hover (got ${control.background})`)
+      assertEqual(control.filter, 'brightness(1.2)',
+        `atmosphere-row control "${selector}" must brighten its icon on hover (filter ${control.filter})`)
+      controlChecks.push(`${selector}${control.variant === null ? '' : `[${control.variant}]`}=transparent+brightness(1.2)`)
+    }
     // Pinning the current row must not add the violet tint under the rainbow.
     const resolved = await sessionIdByTitle(page, currentTitle)
     assert(resolved.id !== null, `could not resolve the current card row Session id (${resolved.source})`)
@@ -6216,6 +6409,11 @@ async function runPinChecks({ page, results, state }) {
     assert(ordinaryHovered.mainBackground !== 'rgba(0, 0, 0, 0)',
       `an ordinary card row must keep its hover pill (main background ${ordinaryHovered.mainBackground})`)
     assertContentBrightness(ordinaryHovered, 'none', 'hovered ordinary card row')
+    const ordinaryControl = await hoverCardControl(page, 'parent', ordinary.title, '.psd-row-action')
+    assert(ordinaryControl.background !== 'rgba(0, 0, 0, 0)',
+      `an ordinary-row control must keep its normal hover block (background ${ordinaryControl.background})`)
+    assertEqual(ordinaryControl.filter, 'none',
+      `an ordinary-row control must not carry the atmosphere brightness filter (filter ${ordinaryControl.filter})`)
     // Nested subagent current row: open one child like a user, then hover it.
     const childTarget = await page.eval(() => {
       const child = [...document.querySelectorAll('.psd-child')]
@@ -6249,7 +6447,17 @@ async function runPinChecks({ page, results, state }) {
     assertEqual(childHovered.mainBackground, 'rgba(0, 0, 0, 0)',
       `the current child body must not stack the ordinary hover pill inside the rainbow (background ${childHovered.mainBackground})`)
     assertContentBrightness(childHovered, 'brightness(1.5)', 'hovered current child row', { expectTransition: true })
-    return `parent "${short(currentTitle, 30)}": atmosphere + transparent body on hover, pin revealed, pinned tint suppressed; ordinary "${short(ordinary.title, 26)}" hover ${ordinaryHovered.mainBackground}; child "${short(childCurrent.title, 26)}" body transparent with atmosphere`
+    let continueNote = 'no interrupted child Continue control was reachable'
+    const childControls = await page.eval(probePin.cardRowControls, 'child', childCurrent.title).catch(() => null)
+    if (childControls !== null && childControls.controls.some((control) => control.className.includes('psd-row-continue'))) {
+      const control = await hoverCardControl(page, 'child', childCurrent.title, '.psd-row-continue')
+      assertEqual(control.background, 'rgba(0, 0, 0, 0)',
+        `the child Continue overlay on an atmosphere row must keep a transparent background on hover (got ${control.background})`)
+      assertEqual(control.filter, 'brightness(1.2)',
+        `the child Continue overlay on an atmosphere row must brighten its icon on hover (filter ${control.filter})`)
+      continueNote = `child Continue ${control.background} + ${control.filter}`
+    }
+    return `parent "${short(currentTitle, 30)}": atmosphere + transparent body on hover, pin revealed/works, pinned tint suppressed; controls ${controlChecks.join(', ')}; ordinary "${short(ordinary.title, 26)}" hover ${ordinaryHovered.mainBackground} (control ${ordinaryControl.background}/${ordinaryControl.filter}); child "${short(childCurrent.title, 26)}" body transparent with atmosphere; ${continueNote}`
   })
 
   await results.check('r3-11', 'native current Session/Workspace atmosphere rows keep only the rainbow surface (no stacked hover background)', async () => {
@@ -6303,6 +6511,13 @@ async function runPinChecks({ page, results, state }) {
     assertEqual(facts.session.atmosPresent, true, 'the native current Session row must carry the atmosphere wrapper')
     assertEqual(facts.session.atmosCanvas, true, 'the native current Session row atmosphere must keep its canvas')
     assertContentBrightness(facts.session, 'brightness(1.5)', 'hovered native current Session', { expectTransition: true })
+    const sessionControl = await hoverNativeRowControl(page, `[data-row-key="session:${initial.sessionId}"]`)
+    if (sessionControl !== null) {
+      assertEqual(sessionControl.background, 'rgba(0, 0, 0, 0)',
+        `a native current-Session action button must keep a transparent background on hover (got ${sessionControl.background})`)
+      assertEqual(sessionControl.filter, 'brightness(1.2)',
+        `a native current-Session action button must brighten its icon on hover (filter ${sessionControl.filter})`)
+    }
     const workspacePresent = await page.eval(() => document.querySelector('[data-psd-current-workspace="true"]') !== null)
     assertEqual(workspacePresent, true, 'no native current Workspace row marker is rendered')
     assertContentBrightness(facts.workspace, 'brightness(1.15)', 'native current Workspace at rest (Session hover must not affect it)', { expectTransition: true })
@@ -6316,6 +6531,13 @@ async function runPinChecks({ page, results, state }) {
     assertEqual(facts.workspace.atmosPresent, true, 'the native current Workspace row must carry the atmosphere wrapper')
     assertEqual(facts.workspace.atmosCanvas, true, 'the native current Workspace row atmosphere must keep its canvas')
     assertContentBrightness(facts.workspace, 'brightness(1.5)', 'hovered native current Workspace', { expectTransition: true })
+    const workspaceControl = await hoverNativeRowControl(page, '[data-psd-current-workspace="true"]')
+    if (workspaceControl !== null) {
+      assertEqual(workspaceControl.background, 'rgba(0, 0, 0, 0)',
+        `a native current-Workspace action button must keep a transparent background on hover (got ${workspaceControl.background})`)
+      assertEqual(workspaceControl.filter, 'brightness(1.2)',
+        `a native current-Workspace action button must brighten its icon on hover (filter ${workspaceControl.filter})`)
+    }
     let ordinaryNote = 'no ordinary native session row was available for the affordance comparison'
     const ordinarySelector = `[data-row-key^="session:"]:not([data-row-key="session:${initial.sessionId}"]):not([data-psd-current-session="true"])`
     const hasOrdinary = await page.eval((sel) => {
@@ -6340,10 +6562,17 @@ async function runPinChecks({ page, results, state }) {
         assert(ordinary.background !== 'rgba(0, 0, 0, 0)',
           `an ordinary native session row must keep its native hover background (${ordinary.background})`)
         assertContentBrightness(ordinary, 'none', 'hovered ordinary native session row')
-        ordinaryNote = `ordinary native row hover ${ordinary.background}, content filter none`
+        const ordinaryControl = await hoverNativeRowControl(page, ordinarySelector)
+        if (ordinaryControl !== null) {
+          assertEqual(ordinaryControl.filter, 'none',
+            `an ordinary native action button must not carry the atmosphere brightness filter (filter ${ordinaryControl.filter})`)
+          ordinaryNote = `ordinary native row hover ${ordinary.background}, content filter none, control bg ${ordinaryControl.background}/filter ${ordinaryControl.filter}`
+        } else {
+          ordinaryNote = `ordinary native row hover ${ordinary.background}, content filter none`
+        }
       }
     }
-    return `native current Session transparent + atmosphere + content brightness 1.15->1.5 on hover; native current Workspace transparent + atmosphere + brightness 1.15->1.5; ${ordinaryNote}`
+    return `native current Session transparent + atmosphere + content brightness 1.15->1.5 on hover${sessionControl === null ? '' : ` + action button ${sessionControl.background}/${sessionControl.filter}`}; native current Workspace transparent + atmosphere + brightness 1.15->1.5${workspaceControl === null ? '' : ` + action button ${workspaceControl.background}/${workspaceControl.filter}`}; ${ordinaryNote}`
   })
 
   await results.check('r3-12', 'atmosphere content brightness transition is disabled under reduced motion while the static lift stays', async () => {

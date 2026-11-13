@@ -530,8 +530,8 @@ HTTP failure predicate) and adds:
 | `r3-7` | Reload persistence | after a reload the card restores both pins pinned-first in order from the authoritative source: the local cache/queue always (pre-restart), plus the Host document when `pinShared === true` (both run ids checked); cache retains both ids; children still render |
 | `r3-8` | Cross-device proof (second fresh profile) | only when `pinShared === true`: a second fresh throwaway Chrome profile (new `--user-data-dir`, separate CDP, same injected client) has an empty cache, adopts the Host document (`pinShared=true`, effective ids include both run ids), shows both rows pinned in the same A<B order, and the Host document lists both ids; second-profile page errors must be 0. When `pinShared === false`: **explicit SKIP** row |
 | `r3-9` | Unpin restores the normal card | unpin both via the UI: DOM pin/tint gone, localised Pin label, unpinned row returns to the head of the normal queue immediately, effective ids empty, cache effective set (confirmed + queued ops replayed) no longer paints them; card pinned count back to the baseline (0); Host document no longer lists the run ids when `pinShared === true`; children still render; residual cache/queue and Host document printed honestly |
-| `r3-10` | Atmosphere card rows keep only the rainbow (no stacked highlight) and brighten their content | real CDP pointer: a current parent card row at rest → every non-atmosphere content child has `filter: brightness(1.15)` with the 140 ms filter transition, `.psd-atmos` + canvas present, row/body backgrounds transparent; hovered → every content child `brightness(1.5)`, `.psd-run-main` background still `rgba(0,0,0,0)` (no hover pill), pin control still reveals (`opacity:1`/`visible`); pinning the current row adds no violet tint (row/main stay transparent) and the check unpins again; an ordinary card row keeps its hover pill (non-transparent, measured `rgba(38,49,72,0.06)`) and has `filter:none` at rest and on hover; a nested subagent row opened like a user becomes current with `brightness(1.15)` at rest / `brightness(1.5)` on hover and `.psd-child-main` background transparent with the atmosphere present |
-| `r3-11` | Native current Session/Workspace rows keep only the rainbow and brighten their content | the native sidebar current Session row (revealed like a user) and `[data-psd-current-workspace="true"]` row at rest: non-atmosphere content children `filter: brightness(1.15)` with the filter transition; hovered with a real pointer: `brightness(1.5)`, computed background `rgba(0,0,0,0)` each, atmosphere wrapper + canvas present; an ordinary native session row still shows its native hover background with `filter:none`. If the open Session is a subagent (no native sidebar row), the check first switches back to a main card row like a user |
+| `r3-10` | Atmosphere card rows keep only the rainbow (no stacked highlight), brighten their content and their trailing controls | real CDP pointer: a current parent card row at rest → every non-atmosphere content child has `filter: brightness(1.15)` with the 140 ms filter transition, `.psd-atmos` + canvas present, row/body backgrounds transparent; hovered → every content child `brightness(1.5)`, `.psd-run-main` background still `rgba(0,0,0,0)` (no hover pill), pin control still reveals (`opacity:1`/`visible`); hovering each trailing control (New session `.psd-row-action`, disclosure `.psd-run-toggle`, pin `.psd-run-pin`) → control background `rgba(0,0,0,0)` and `filter: brightness(1.2)` (no rounded hover block inside the rainbow, the pin still works); pinning the current row adds no violet tint (row/main stay transparent) and the check unpins again; an ordinary card row keeps its hover pill (non-transparent, measured `rgba(38,49,72,0.06)`) and has `filter:none` at rest and on hover, and its New session control keeps its normal hover block with `filter:none`; a nested subagent row opened like a user becomes current with `brightness(1.15)` at rest / `brightness(1.5)` on hover and `.psd-child-main` background transparent with the atmosphere present; an interrupted child Continue overlay is asserted too when reachable |
+| `r3-11` | Native current Session/Workspace rows keep only the rainbow and brighten content + action buttons | the native sidebar current Session row (revealed like a user) and `[data-psd-current-workspace="true"]` row at rest: non-atmosphere content children `filter: brightness(1.15)` with the filter transition; hovered with a real pointer: `brightness(1.5)`, computed background `rgba(0,0,0,0)` each, atmosphere wrapper + canvas present, and their hover-revealed action buttons keep a `rgba(0,0,0,0)` background with `filter: brightness(1.2)`; an ordinary native session row still shows its native hover background with `filter:none` (control also unfiltered). If the open Session is a subagent (no native sidebar row), the check first switches back to a main card row like a user |
 | `r3-12` | Atmosphere brightness respects reduced motion | with `prefers-reduced-motion: reduce`, the current card row's content children keep the static `brightness(1.15)` lift while the filter transition is disabled (`transition-property:none` / `0s`); media emulation is reset afterwards |
 
 R1/R2 checks are unchanged from the original delivery (`r1-1`/`r1-2` perfect-circle dot;
@@ -640,7 +640,11 @@ authoritative current-Session atmosphere state without changing any existing ful
 oracle. They use real CDP pointer input and the same stable-targeting helpers as the pin
 checks.
 
-### Recorded evidence (follow-up 4: atmosphere content brightness, build `4ec7ba5`)
+### Recorded evidence (follow-up 4: atmosphere content brightness, build `4ec7ba5` — previous build)
+
+> **Build note:** the results below are for the previous build `4ec7ba5`; the current
+> served build `8ad390c` adds the atmosphere **trailing-control** fix and its evidence is
+> recorded under "follow-up 5" below.
 
 Build: worktree and linked checkout at `4ec7ba5` ("fix(dynamic-workspaces): brighten
 atmosphere content instead of adding a background highlight"), injected/loaded
@@ -663,6 +667,34 @@ CDP pointer input and the existing stable-targeting helpers; no full-mode oracle
 Side effects are unchanged from follow-up 3 (the checks may open existing main/subagent
 Sessions to create the current atmosphere rows; no typing or edits). Final effective card
 pins `[]`, native sidebar pin state untouched.
+
+Remaining for the final green table (unchanged): after the user restarts the DSH Web
+service, re-run `--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS and
+full-mode `b6-5` no longer sees the 404 console line.
+
+### Recorded evidence (follow-up 5: atmosphere trailing controls, build `8ad390c`)
+
+Build: worktree and linked checkout at `8ad390c` ("fix(dynamic-workspaces): atmosphere-row
+controls brighten instead of painting hover backgrounds"), injected/loaded
+`src/client.js` md5 `c8a314e8e3da999b9c3d4d2e66261328` (20447 lines). No service restart
+(Host pin route still absent → `pinShared=false`). This section is the current build's
+evidence; the `4ec7ba5`/`4bed3200…` and earlier tables above are historical for those
+builds. Node v24.22.2, Chrome 157.0.8103.78, 1728x900; logs under `/tmp`, screenshots
+under `.tmp-work/sidebar-e2e/` (gitignored).
+
+| Run | Command | Result |
+|-----|---------|--------|
+| Static gates | `node --check src/client.js`; `npm test`; `npm run check` | exit 0; **249/249** unit tests pass, 0 fail; repository check exit 0 (pack entryCount 73) |
+| Pin acceptance (+ atmosphere/trailing-control checks) | `node test/browser/sidebar.e2e.mjs --pin` | **22 PASS / 2 SKIP / 0 FAIL**, 58.2 s, page errors **0**, real network failures **0**, 10 expected pre-restart pin-route probes classified separately, exit 0 (`/tmp/f5-pin-1.log`). New assertions: hovering the current atmosphere row's trailing controls (New session `.psd-row-action`, disclosure `.psd-run-toggle`, pin `.psd-run-pin`) gives each background `rgba(0,0,0,0)` + `filter: brightness(1.2)` with the pin still working; an ordinary row's New session control keeps its normal hover block (non-transparent) + `filter:none`; the current child row's body stays transparent with atmosphere (child Continue asserted when reachable); the native current Session and current Workspace rows' action buttons are `rgba(0,0,0,0)` + `brightness(1.2)`, with their row backgrounds transparent and content brightness 1.15→1.5 on hover; an ordinary native control is unfiltered. The two SKIPs remain the documented pre-restart `r3-host`/`r3-8` |
+| Shipped install, no injection | `node test/browser/sidebar.e2e.mjs --live` | **4/4 PASS**, 8.9 s, exit 0 (`/tmp/f5-live.log`): both fresh profiles served the corrected client with 2 main rows, 4 subagent child rows, 2 pin buttons, 0 pinned rows/nodes, no injected factory, empty local pin cache, 0 page errors |
+| Smoke | `node test/browser/sidebar.e2e.mjs --smoke` | **4/4 PASS**, 0 page errors, 3.8 s, exit 0 (`/tmp/f5-smoke.log`) |
+| Full mode | `node test/browser/sidebar.e2e.mjs --no-shots` | **42/43 PASS**, 55.7 s, page errors 0 (`/tmp/f5-full-1.log`); only failure is still the untouched `b6-5` counting Chrome's console log of the expected pre-restart pin-route 404. No pin/atmosphere/brightness/control assertion failed; it clears after the DSH Web service restart |
+
+The fix-4 assertions extend the `--pin` atmosphere rows (`r3-10`/`r3-11`) with real CDP
+pointer input and the existing stable-targeting/hover helpers; no full-mode oracle changed.
+Side effects are unchanged (the checks may open existing main/subagent Sessions to create
+current atmosphere rows; no typing/edits; final effective card pins `[]`, native sidebar
+pin state untouched).
 
 Remaining for the final green table (unchanged): after the user restarts the DSH Web
 service, re-run `--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS and
