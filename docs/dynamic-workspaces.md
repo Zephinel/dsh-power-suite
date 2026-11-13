@@ -700,7 +700,10 @@ native sidebar Session row of the open Session:
   highlighted the content sits at `filter: brightness(1.15)`, and hovering or
   focusing the row lifts it to `brightness(1.5)` (140 ms transition, off under
   reduced motion) — the brightness lives on the real text/SVG content, never on a
-  background layer.
+  background layer. The row's own trailing controls (New session, disclosure,
+  pin, Continue, and the native sidebar rows' action buttons) follow the same
+  rule: while the row is an atmosphere row they never paint their own hover
+  background; the hovered control just brightens one extra step.
 - **Workspace and Session rows**: the native Workspace row of the current
   Session's project is marked with `data-psd-current-workspace="true"`, and the
   native sidebar Session row of the open Session with

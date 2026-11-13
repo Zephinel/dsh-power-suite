@@ -182,8 +182,11 @@ heading is added until the release is cut.
   its nested child row, and the native sidebar current Session and Workspace
   rows; the affordance is now a brightness lift on the row's own text/icons
   (`filter: brightness(1.15)` while highlighted, `1.5` on hover/focus, 140 ms,
-  disabled under reduced motion) instead of a background layer. Small control
-  hovers, keyboard focus rings and the hover opacity rise are unchanged.
+  disabled under reduced motion) instead of a background layer. The row's
+  trailing controls (New session, disclosure, pin, Continue, and the native
+  sidebar action buttons) follow the same rule: on an atmosphere row they never
+  paint their own hover background and just brighten one extra step. Keyboard
+  focus rings and the hover opacity rise are unchanged.
 
 - UI element annotation launcher placement: the round launcher floats only while
   the mode is off; activating the mode fades/scales it out in place (no docked

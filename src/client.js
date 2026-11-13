@@ -4819,6 +4819,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run-current > *:not(.psd-atmos),.psd-child-current > *:not(.psd-atmos),[data-psd-current-session='true'] > *:not([data-psd-atmos]),[data-psd-current-workspace='true'] > *:not([data-psd-atmos]){filter:brightness(1.15);transition:filter 140ms var(--ds-ease-in-out,ease)}
 .psd-run-current:hover > *:not(.psd-atmos),.psd-run-current:focus-within > *:not(.psd-atmos),.psd-child-current:hover > *:not(.psd-atmos),.psd-child-current:focus-within > *:not(.psd-atmos),[data-psd-current-session='true']:hover > *:not([data-psd-atmos]),[data-psd-current-workspace='true']:hover > *:not([data-psd-atmos]){filter:brightness(1.5)}
 @media (prefers-reduced-motion: reduce){.psd-run-current > *:not(.psd-atmos),.psd-child-current > *:not(.psd-atmos),[data-psd-current-session='true'] > *:not([data-psd-atmos]),[data-psd-current-workspace='true'] > *:not([data-psd-atmos]){transition:none}}
+/* The trailing controls on an atmosphere row follow the same rule: New session,
+   disclosure, pin and Continue must not paint their own hover background inside
+   the rainbow rectangle either (user report). Their feedback is the same content
+   brightness lift — the row-level lift already applies while hovered, and the
+   control under the pointer brightens one small extra step. Native sidebar
+   rows' action buttons get the same treatment. */
+.psd-run-current .psd-row-action:hover,.psd-run-current .psd-run-toggle:hover,.psd-run-current .psd-run-pin:hover,.psd-run-current[data-pinned='true'] .psd-run-pin:hover,.psd-child-current .psd-row-action:hover{background-color:transparent;filter:brightness(1.2)}
+[data-psd-current-session='true'] button:hover,[data-psd-current-session='true'] [role='button']:hover,[data-psd-current-workspace='true'] button:hover,[data-psd-current-workspace='true'] [role='button']:hover{background-color:transparent!important;filter:brightness(1.2)}
 body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.5) brightness(1.14)}
 body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(16,18,22,.12),rgba(16,18,22,.22))}
 @media (prefers-reduced-motion: reduce){.psd-atmos{transition:none}}
