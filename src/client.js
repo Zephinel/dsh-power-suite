@@ -9376,6 +9376,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'popover.copyLocator': 'Copy locator',
       'popover.copyXPath': 'Copy XPath',
       'popover.copyJsPath': 'Copy JS path',
+      'popover.copyFullXPath': 'Copy full XPath',
       'via.css': 'locator',
       'via.xpath': 'XPath',
       'via.text-quote': 'text anchor',
@@ -9462,6 +9463,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'feedback.copyJsPathSuccess': 'JS path copied',
       'feedback.copyXPathFailed': 'XPath unavailable for this target',
       'feedback.copyJsPathFailed': 'JS path unavailable for this target',
+      'feedback.copyXPathSaved': 'Copied saved XPath (target not live)',
+      'feedback.copyJsPathSaved': 'Copied saved JS path (target not live)',
+      'feedback.copyFullXPathSuccess': 'Full XPath copied',
+      'feedback.copyFullXPathFailed': 'Full XPath needs a live target',
       'feedback.locatorCopyFailed': 'Could not copy the locator',
       'feedback.chipInserted': 'Inserted as a reference chip (not sent)',
       'feedback.chipRemoveFailed': 'Could not remove that reference chip',
@@ -9581,6 +9586,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'popover.copyLocator': '复制定位器',
       'popover.copyXPath': '复制 XPath',
       'popover.copyJsPath': '复制 JS 路径',
+      'popover.copyFullXPath': '复制完整 XPath',
       'via.css': '定位器',
       'via.xpath': 'XPath',
       'via.text-quote': '文本锚点',
@@ -9655,6 +9661,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'feedback.copyJsPathSuccess': '已复制 JS 路径',
       'feedback.copyXPathFailed': '该目标没有可用的 XPath',
       'feedback.copyJsPathFailed': '该目标没有可用的 JS 路径',
+      'feedback.copyXPathSaved': '已复制保存的 XPath（目标当前不在页面）',
+      'feedback.copyJsPathSaved': '已复制保存的 JS 路径（目标当前不在页面）',
+      'feedback.copyFullXPathSuccess': '已复制完整 XPath',
+      'feedback.copyFullXPathFailed': '完整 XPath 需要目标仍在页面',
       'feedback.modeOn': '已进入标注模式',
       'feedback.inserted': '已插入当前会话输入框（不会发送）',
       'feedback.insertFailed': '无法插入输入框',
@@ -10366,6 +10376,250 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       return !(wordLike || bemLike)
     }
 
+    /** A3/T34: rendered-text/quote-hardening bounds. */
+    const ANNOTATION_QUOTE_CONTEXT_MAX = 60
+    const ANNOTATION_QUOTE_TOTAL_MAX = 200
+    const ANNOTATION_BLOCK_TAGS = new Set(['address', 'article', 'aside', 'blockquote', 'div', 'dl', 'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hr', 'li', 'main', 'nav', 'ol', 'p', 'pre', 'section', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'ul'])
+
+    /**
+     * A3/T34 (W3): join rendered text chunks into one normalized string while
+     * keeping a rendered→raw offset map. Block boundaries and `<br>` contribute a
+     * single separating space (not a line break), matching what the user sees.
+     * @param {Array<{ text: string, blockBefore?: boolean, rawStart: number }>} chunks - text chunks.
+     * @returns {{ text: string, spans: Array<{ start: number, end: number, rawStart: number, rawEnd: number }> }} rendered text + spans.
+     */
+    function annotationRenderTextChunks(chunks) {
+      const list = Array.isArray(chunks) ? chunks : []
+      let text = ''
+      const spans = []
+      for (const chunk of list) {
+        if (chunk === null || typeof chunk !== 'object') continue
+        const rawStart = typeof chunk.rawStart === 'number' && Number.isFinite(chunk.rawStart) ? Math.max(0, Math.round(chunk.rawStart)) : 0
+        const collapsed = annotationNormalizeQuoteText(typeof chunk.text === 'string' ? chunk.text : '', 0)
+        if (collapsed.length === 0) continue
+        const needsSpace = text.length > 0 && (chunk.blockBefore === true || text.endsWith(' '))
+        if (needsSpace && !text.endsWith(' ')) text += ' '
+        const start = text.length
+        text += collapsed
+        spans.push({ start, end: text.length, rawStart, rawEnd: rawStart + collapsed.length })
+      }
+      return { text: text.trim(), spans }
+    }
+
+    /**
+     * A3/T34 (W3): rendered text of one DOM element (`<br>`/block boundaries →
+     * space) with a rendered→raw offset mapping. Text inside form controls is not
+     * read (privacy contract).
+     * @param {Element} element - root element.
+     * @param {number} [maxChunks] - safety cap, default 400.
+     * @returns {{ text: string, spans: Array<object> }} rendered text.
+     */
+    function annotationRenderedTextOf(element, maxChunks) {
+      const empty = { text: '', spans: [] }
+      if (element === null || typeof element !== 'object' || typeof document === 'undefined') return empty
+      const cap = typeof maxChunks === 'number' && Number.isFinite(maxChunks) && maxChunks > 0 ? Math.round(maxChunks) : 400
+      const chunks = []
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT)
+      let node = walker.nextNode()
+      let blockPending = false
+      let count = 0
+      let rawCursor = 0
+      while (node !== null && count < cap) {
+        count += 1
+        if (node.nodeType === Node.TEXT_NODE) {
+          const parent = node.parentElement
+          const parentTag = parent === null ? '' : parent.tagName.toLowerCase()
+          if (parent !== null && (parentTag === 'input' || parentTag === 'textarea' || parentTag === 'select')) {
+            node = walker.nextNode()
+            continue
+          }
+          const rawValue = node.nodeValue ?? ''
+          chunks.push({ text: rawValue, blockBefore: blockPending, rawStart: rawCursor })
+          rawCursor += rawValue.length
+          blockPending = false
+          node = walker.nextNode()
+          continue
+        }
+        const tag = typeof node.tagName === 'string' ? node.tagName.toLowerCase() : ''
+        if (tag === 'br') {
+          blockPending = true
+          node = walker.nextNode()
+          continue
+        }
+        if (ANNOTATION_BLOCK_TAGS.has(tag)) blockPending = true
+        node = walker.nextNode()
+      }
+      return annotationRenderTextChunks(chunks)
+    }
+
+    /**
+     * A3/T34 (W1): disambiguate a text quote against its capture scope. The target
+     * occurrence is located by `targetIndex`; prefix/suffix expand symmetrically
+     * until exactly one occurrence matches both contexts, or bounds are exhausted.
+     * Returns null when the quote cannot be made unique (drop it rather than store
+     * a misleading anchor).
+     * @param {string} scopeText - normalized scope text.
+     * @param {string} exact - normalized exact text.
+     * @param {number} targetIndex - rendered index of the target occurrence.
+     * @param {number} [maxContext] - max prefix/suffix chars each side, default 60.
+     * @returns {{ exact: string, prefix: string, suffix: string } | null} quote.
+     */
+    function annotationDisambiguateQuote(scopeText, exact, targetIndex, maxContext) {
+      const text = typeof scopeText === 'string' ? scopeText : ''
+      const needle = typeof exact === 'string' ? exact : ''
+      if (needle.length === 0 || text.length === 0) return null
+      const occurrences = []
+      let at = text.indexOf(needle)
+      while (at >= 0) {
+        occurrences.push(at)
+        at = text.indexOf(needle, at + 1)
+      }
+      if (occurrences.length === 0) return null
+      const limit = typeof maxContext === 'number' && Number.isFinite(maxContext) && maxContext > 0 ? Math.round(maxContext) : ANNOTATION_QUOTE_CONTEXT_MAX
+      const target = occurrences.includes(targetIndex) ? targetIndex : occurrences[0]
+      if (occurrences.length === 1) return { exact: needle, prefix: '', suffix: '' }
+      for (let size = 4; size <= limit; size += 4) {
+        const prefix = text.slice(Math.max(0, target - size), target)
+        const suffix = text.slice(target + needle.length, target + needle.length + size)
+        let matches = 0
+        for (const occurrence of occurrences) {
+          const before = text.slice(0, occurrence)
+          const after = text.slice(occurrence + needle.length)
+          if ((prefix.length === 0 || before.endsWith(prefix)) && (suffix.length === 0 || after.startsWith(suffix))) matches += 1
+        }
+        if (matches === 1) {
+          const quote = { exact: needle, prefix, suffix }
+          if (needle.length + prefix.length + suffix.length > ANNOTATION_QUOTE_TOTAL_MAX) return null
+          return quote
+        }
+      }
+      return null
+    }
+
+    /** Bounded Levenshtein distance; returns `max + 1` when the bound is exceeded. @param {string} a - first. @param {string} b - second. @param {number} max - bound. @returns {number} distance. */
+    function annotationLevenshteinWithin(a, b, max) {
+      const left = typeof a === 'string' ? a : ''
+      const right = typeof b === 'string' ? b : ''
+      const bound = typeof max === 'number' && max >= 0 ? Math.round(max) : 0
+      if (Math.abs(left.length - right.length) > bound) return bound + 1
+      let previous = new Array(right.length + 1)
+      for (let index = 0; index <= right.length; index += 1) previous[index] = index
+      for (let row = 1; row <= left.length; row += 1) {
+        const current = [row]
+        let rowMin = row
+        for (let column = 1; column <= right.length; column += 1) {
+          const cost = left[row - 1] === right[column - 1] ? 0 : 1
+          const value = Math.min(previous[column] + 1, current[column - 1] + 1, previous[column - 1] + cost)
+          current[column] = value
+          if (value < rowMin) rowMin = value
+        }
+        if (rowMin > bound) return bound + 1
+        previous = current
+      }
+      return previous[right.length]
+    }
+
+    /**
+     * A3/T34 (W2): score quote matches in one rendered text. Exact matches come
+     * first; bounded approximate matches are then searched. Score weights are
+     * 0.7 (quote) / 0.15 (prefix) / 0.15 (suffix), normalized over the components
+     * the quote actually carries. Returns matches sorted by score.
+     * @param {string} text - normalized rendered text.
+     * @param {{ exact: string, prefix?: string, suffix?: string }} quote - quote.
+     * @param {number} [hintIndex] - optional position hint.
+     * @param {number} [maxMatches] - cap, default 8.
+     * @returns {Array<{ index: number, score: number }>} scored matches.
+     */
+    function annotationScoreQuoteMatches(text, quote, hintIndex, maxMatches) {
+      const source = typeof text === 'string' ? text : ''
+      const q = quote !== null && typeof quote === 'object' ? quote : {}
+      const exact = typeof q.exact === 'string' ? q.exact : ''
+      if (exact.length === 0 || source.length === 0) return []
+      const prefix = typeof q.prefix === 'string' ? q.prefix : ''
+      const suffix = typeof q.suffix === 'string' ? q.suffix : ''
+      const cap = typeof maxMatches === 'number' && maxMatches > 0 ? Math.round(maxMatches) : 8
+      const weights = 0.7 + (prefix.length > 0 ? 0.15 : 0) + (suffix.length > 0 ? 0.15 : 0)
+      const scoreAt = (index) => {
+        const candidate = source.slice(index, index + exact.length)
+        const distance = annotationLevenshteinWithin(exact, candidate, Math.min(32, Math.floor(exact.length * 0.4)))
+        if (distance > Math.min(32, Math.floor(exact.length * 0.4))) return null
+        const quoteSim = exact.length === 0 ? 0 : Math.max(0, 1 - distance / exact.length)
+        const before = source.slice(Math.max(0, index - prefix.length), index)
+        const after = source.slice(index + exact.length, index + exact.length + suffix.length)
+        const prefixSim = prefix.length === 0 ? 1 : (before === prefix ? 1 : annotationLevenshteinWithin(prefix, before, Math.max(2, Math.floor(prefix.length / 3))) <= Math.floor(prefix.length / 3) ? 0.5 : 0)
+        const suffixSim = suffix.length === 0 ? 1 : (after === suffix ? 1 : annotationLevenshteinWithin(suffix, after, Math.max(2, Math.floor(suffix.length / 3))) <= Math.floor(suffix.length / 3) ? 0.5 : 0)
+        let weighted = 0.7 * quoteSim
+        if (prefix.length > 0) weighted += 0.15 * prefixSim
+        if (suffix.length > 0) weighted += 0.15 * suffixSim
+        let score = weighted / weights
+        // A3/T34 (W2): an approximate hit can be honest "Content changed" but can
+        // never claim the Resolved threshold — exactness is required for ≥0.85.
+        if (distance > 0) score = Math.min(score, 0.8)
+        if (typeof hintIndex === 'number' && Number.isFinite(hintIndex) && hintIndex >= 0 && Math.abs(index - hintIndex) <= 4) score = Math.min(1, score + 0.02)
+        return Math.min(1, score)
+      }
+      const matches = []
+      let at = source.indexOf(exact)
+      while (at >= 0 && matches.length < cap) {
+        const score = scoreAt(at)
+        if (score !== null) matches.push({ index: at, score })
+        at = source.indexOf(exact, at + 1)
+      }
+      if (matches.length === 0) {
+        // Bounded approximate search: only where the first two chars match or every
+        // 8th position, windows of exact length (quote ≤120).
+        const step = source.length > 8000 ? 8 : source.length > 2000 ? 2 : 1
+        for (let index = 0; index + Math.max(4, exact.length - 2) <= source.length && matches.length < cap; index += step) {
+          if (source[index] !== exact[0] && index % Math.max(8, step) !== 0) continue
+          const score = scoreAt(index)
+          if (score !== null && score >= 0.5) matches.push({ index, score })
+        }
+      }
+      matches.sort((left, right) => right.score - left.score)
+      return matches.slice(0, cap)
+    }
+
+    /**
+     * A3/T34 (P1.5): cache key for one fallback resolution within a DOM revision.
+     * @param {string} refId - record id.
+     * @param {number} revision - DOM revision counter.
+     * @returns {string} cache key.
+     */
+    function annotationFallbackCacheKey(refId, revision) {
+      const id = typeof refId === 'string' ? refId : ''
+      const rev = typeof revision === 'number' && Number.isFinite(revision) ? Math.round(revision) : 0
+      return `${id}:${rev}`
+    }
+
+    /**
+     * A3/T34 (P2): full (non-short-circuited) absolute XPath for one live element,
+     * used by "Copy full XPath" — unlike annotationXPathOf it never uses the id
+     * shortcut. Full XPath requires a live node by contract.
+     * @param {Element} element - live element.
+     * @returns {string} full xpath ('' when unavailable).
+     */
+    function annotationFullXPathOf(element) {
+      if (element === null || typeof element !== 'object' || typeof element.tagName !== 'string') return ''
+      const parts = []
+      let current = element
+      let depth = 0
+      while (current !== null && current !== undefined && typeof current.tagName === 'string'
+        && current.tagName.toLowerCase() !== 'html' && depth < 60) {
+        const tag = current.tagName.toLowerCase()
+        let index = 1
+        let sibling = current.previousElementSibling
+        while (sibling !== null) {
+          if (typeof sibling.tagName === 'string' && sibling.tagName.toLowerCase() === tag) index += 1
+          sibling = sibling.previousElementSibling
+        }
+        parts.unshift(`${tag}[${index}]`)
+        current = current.parentElement
+        depth += 1
+      }
+      if (parts.length === 0) return ''
+      return `/html[1]/${parts.join('/')}`.slice(0, ANNOTATION_XPATH_MAX)
+    }
+
     /** A3/T32: maximum captured lengths for the fallback anchors. */
     const ANNOTATION_TEXT_QUOTE_MAX = 120
     const ANNOTATION_TEXT_CONTEXT_MAX = 30
@@ -10484,21 +10738,62 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
      * @param {Element} element - live element.
      * @returns {{ exact: string, prefix: string, suffix: string } | null} quote.
      */
+    /**
+     * A3/T34 (W1/W3): disambiguated quote for one text-bearing element, built from
+     * rendered text and expanded until unique in the nearest scope. Returns null
+     * (dropping the anchor) when the quote cannot be made unique — never stores a
+     * misleading quote.
+     * @param {Element} element - live element.
+     * @returns {{ exact: string, prefix: string, suffix: string } | null} quote.
+     */
     function annotationTextQuoteOf(element) {
-      if (element === null || typeof element !== 'object') return null
-      const exact = annotationNormalizeQuoteText(typeof element.textContent === 'string' ? element.textContent : '', ANNOTATION_TEXT_QUOTE_MAX)
+      if (element === null || typeof element !== 'object' || typeof document === 'undefined') return null
+      const own = annotationRenderedTextOf(element, 120)
+      const exact = annotationNormalizeQuoteText(own.text, ANNOTATION_TEXT_QUOTE_MAX)
       if (exact.length === 0) return null
-      const parent = element.parentElement
-      const parentText = parent !== null && typeof parent.textContent === 'string'
-        ? annotationNormalizeQuoteText(parent.textContent, 0)
-        : ''
-      const at = parentText.indexOf(exact)
-      if (at < 0) return { exact, prefix: '', suffix: '' }
-      return {
-        exact,
-        prefix: parentText.slice(Math.max(0, at - ANNOTATION_TEXT_CONTEXT_MAX), at),
-        suffix: parentText.slice(at + exact.length, at + exact.length + ANNOTATION_TEXT_CONTEXT_MAX)
+      let container = element.parentElement
+      let depth = 0
+      while (container !== null && container !== undefined && depth < 4) {
+        const rendered = annotationRenderedTextOf(container, 600)
+        if (rendered.text.length > 0 && rendered.spans.length > 0) {
+          // Locate the target occurrence through the rendered→raw span map.
+          const elementRawRanges = []
+          let rawCursor = 0
+          const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+          let node = walker.nextNode()
+          while (node !== null) {
+            const value = node.nodeValue ?? ''
+            const start = rawCursor
+            rawCursor += value.length
+            if (element.contains(node)) elementRawRanges.push({ start })
+            node = walker.nextNode()
+          }
+          const firstRaw = elementRawRanges.length > 0 ? elementRawRanges[0].start : 0
+          let targetIndex = -1
+          for (const span of rendered.spans) {
+            if (span.rawStart === firstRaw) {
+              const local = rendered.text.slice(span.start, span.start + exact.length)
+              if (annotationNormalizeQuoteText(local, 0) === exact) targetIndex = span.start
+              break
+            }
+          }
+          if (targetIndex < 0) {
+            const at = rendered.text.indexOf(exact)
+            if (at < 0) {
+              container = container.parentElement
+              depth += 1
+              continue
+            }
+            targetIndex = at
+          }
+          const quote = annotationDisambiguateQuote(rendered.text, exact, targetIndex, ANNOTATION_QUOTE_CONTEXT_MAX)
+          if (quote !== null) return quote
+        }
+        container = container.parentElement
+        depth += 1
       }
+      // No scope could make the quote unique: drop it rather than store a guess.
+      return null
     }
 
     /**
@@ -10508,8 +10803,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
      * @returns {{ container: string, start: number, end: number } | null} position.
      */
     function annotationTextPositionOf(element) {
-      if (element === null || typeof element !== 'object') return null
-      const exact = annotationNormalizeQuoteText(typeof element.textContent === 'string' ? element.textContent : '', ANNOTATION_TEXT_QUOTE_MAX)
+      if (element === null || typeof element !== 'object' || typeof document === 'undefined') return null
+      const own = annotationRenderedTextOf(element, 120)
+      const exact = annotationNormalizeQuoteText(own.text, ANNOTATION_TEXT_QUOTE_MAX)
       if (exact.length === 0) return null
       let container = element.parentElement
       let depth = 0
@@ -10523,9 +10819,12 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         depth += 1
       }
       if (container === null || container === undefined || selector.length === 0) return null
-      const text = annotationNormalizeQuoteText(typeof container.textContent === 'string' ? container.textContent : '', 0)
-      const at = text.indexOf(exact)
+      const rendered = annotationRenderedTextOf(container, 800)
+      if (rendered.text.length === 0) return null
+      const at = rendered.text.indexOf(exact)
       if (at < 0) return null
+      // Only a unique slice is a trustworthy position anchor.
+      if (rendered.text.indexOf(exact, at + 1) >= 0) return null
       return { container: selector.slice(0, 256), start: at, end: at + exact.length }
     }
 
@@ -13548,10 +13847,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
-     * A3/T32: full multi-strategy resolution. CSS candidates keep precedence; when
-     * they do not resolve (ambiguous/missing), the injected fallbacks run in order:
-     * XPath → text quote → text position. Returns the winning status plus a `via`
-     * hint for the UI.
+     * A3/T34: full multi-strategy resolution. CSS candidates keep precedence; when
+     * they do not resolve (ambiguous/missing), the injected fallbacks run from the
+     * least structure-sensitive to the most: text quote (position.start as hint) →
+     * text position → XPath. Returns the winning status plus a `via` hint.
      * @param {object} input - base resolveRefStatus input plus optional
      *   `resolveXPath`, `resolveTextQuote`, `resolveTextPosition` functions returning
      *   a status or null.
@@ -13562,9 +13861,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       const cssStatus = resolveRefStatus(source)
       if (cssStatus === 'resolved' || cssStatus === 'changed') return { status: cssStatus, via: 'css' }
       const fallbacks = [
-        ['resolveXPath', 'xpath'],
         ['resolveTextQuote', 'text-quote'],
-        ['resolveTextPosition', 'text-position']
+        ['resolveTextPosition', 'text-position'],
+        ['resolveXPath', 'xpath']
       ]
       let weakAmbiguity = null
       for (const [name, via] of fallbacks) {
@@ -14453,30 +14752,54 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
+       * A3/T34 (P2): copy the FULL (non-short-circuited) XPath for one record.
+       * Full XPath requires a live node; without one the action reports honestly
+       * instead of fabricating a path.
+       * @param {string} [refId] - record id (defaults to the current selection).
+       * @returns {Promise<boolean>} whether the copy succeeded.
+       */
+      async function copyFullXPath(refId) {
+        return copyAnchorText(refId, 'xpath', { full: true })
+      }
+
+      /**
        * A3/T32: shared clipboard path for the XPath/JS-path actions.
        * @param {string | undefined} refId - record id or undefined for the selection.
        * @param {'xpath' | 'jsPath'} kind - which anchor to copy.
        * @returns {Promise<boolean>} whether the copy succeeded.
        */
-      async function copyAnchorText(refId, kind) {
+      async function copyAnchorText(refId, kind, options) {
         const state = snapshot().state
         const detailId = snapshot().detailCard !== null ? snapshot().detailCard.refId : null
         const ref = typeof refId === 'string' && refId.length > 0
           ? state.collection.find((entry) => entry !== null && typeof entry === 'object' && entry.id === refId)
           : (state.selection[0] ?? (detailId === null ? undefined : state.collection.find((entry) => entry !== null && typeof entry === 'object' && entry.id === detailId)))
+        const opts = options !== null && typeof options === 'object' ? options : {}
+        const full = opts.full === true
+        const failKey = full ? 'feedback.copyFullXPathFailed' : (kind === 'xpath' ? 'feedback.copyXPathFailed' : 'feedback.copyJsPathFailed')
         if (ref === undefined || ref === null) {
-          feedback(t(kind === 'xpath' ? 'feedback.copyXPathFailed' : 'feedback.copyJsPathFailed'), 'error')
+          feedback(t(failKey), 'error')
           return false
         }
+        const locator = ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : {}
         const node = liveNode(ref)
-        let text = ref.locator !== null && typeof ref.locator === 'object' && typeof ref.locator[kind] === 'string' ? ref.locator[kind] : ''
-        if (text.length === 0 && node !== null) {
-          text = kind === 'xpath'
-            ? annotationXPathOf(node)
-            : annotationJsPathFor({ selector: ref.locator?.uniqueSelector ?? ref.locator?.path ?? null, xpath: annotationXPathOf(node) })
+        let text = ''
+        let source = 'saved'
+        // A3/T34 (P2): live node first (fresh optimized/full XPath + JS path); the
+        // saved anchor is only the fallback and says so honestly.
+        if (node !== null) {
+          source = 'live'
+          if (full) text = annotationFullXPathOf(node)
+          else if (kind === 'xpath') text = annotationXPathOf(node)
+          else text = annotationJsPathFor({ selector: typeof locator.uniqueSelector === 'string' ? locator.uniqueSelector : (typeof locator.path === 'string' ? locator.path : null), xpath: annotationXPathOf(node) })
+        }
+        if (text.length === 0 && full !== true) {
+          source = 'saved'
+          if (kind === 'xpath') text = typeof locator.xpath === 'string' ? locator.xpath : ''
+          else text = typeof locator.jsPath === 'string' ? locator.jsPath : ''
         }
         if (typeof text !== 'string' || text.length === 0) {
-          feedback(t(kind === 'xpath' ? 'feedback.copyXPathFailed' : 'feedback.copyJsPathFailed'), 'error')
+          feedback(t(failKey), 'error')
           return false
         }
         let clipboard = null
@@ -14486,15 +14809,17 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           clipboard = null
         }
         if (clipboard === null || clipboard === undefined || typeof clipboard.writeText !== 'function') {
-          feedback(t(kind === 'xpath' ? 'feedback.copyXPathFailed' : 'feedback.copyJsPathFailed'), 'error')
+          feedback(t(failKey), 'error')
           return false
         }
         try {
           await clipboard.writeText(text)
-          feedback(t(kind === 'xpath' ? 'feedback.copyXPathSuccess' : 'feedback.copyJsPathSuccess'))
+          if (full) feedback(t('feedback.copyFullXPathSuccess'))
+          else if (source === 'saved') feedback(t(kind === 'xpath' ? 'feedback.copyXPathSaved' : 'feedback.copyJsPathSaved'))
+          else feedback(t(kind === 'xpath' ? 'feedback.copyXPathSuccess' : 'feedback.copyJsPathSuccess'))
           return true
         } catch {
-          feedback(t(kind === 'xpath' ? 'feedback.copyXPathFailed' : 'feedback.copyJsPathFailed'), 'error')
+          feedback(t(failKey), 'error')
           return false
         }
       }
@@ -14579,6 +14904,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       function clearResolvedNodeCache() {
         resolvedNodeCache.clear()
         markStatusCache.clear()
+        fallbackStatusCache.clear()
+        fallbackNodeCache.clear()
         markStatusRevision = -1
         domRevision += 1
         if (domObserver !== null) {
@@ -14610,7 +14937,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           }
           resolvedNodeCache.delete(ref.id)
         }
-        const node = annotationResolveNode(ref)
+        const cssNode = annotationResolveNode(ref)
+        // A3/T34: when CSS candidates fail, fall back to text quote/position/XPath
+        // so page marks/geometry can still draw fallback-resolved records.
+        const node = cssNode === null ? fallbackNodeFor(ref) : cssNode
         resolvedNodeCache.set(ref.id, { node, rev: domRevision })
         return node
       }
@@ -14711,17 +15041,62 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         }
       }
 
+      /** A3/T34: per-(record, DOM revision) fallback status cache; avoids re-scanning on every geometry render. */
+      const fallbackStatusCache = new Map()
+      const fallbackNodeCache = new Map()
+
       /**
-       * A3/T32: compare one fallback candidate to the captured record. Never fakes
-       * Resolved: a tag mismatch or a changed text digest is reported honestly.
-       * @param {Element} element - resolved candidate.
-       * @param {object} ref - captured record.
-       * @returns {'resolved' | 'changed' | 'missing'} status.
+       * A3/T34: resolve one rendered text offset back to the element containing it.
+       * @param {Element} container - scope container.
+       * @param {number} offset - rendered text offset.
+       * @returns {Element | null} containing element.
        */
-      function compareFallbackElement(element, ref) {
+      function annotationElementAtRenderedOffset(container, offset) {
+        if (container === null || typeof container !== 'object' || typeof document === 'undefined') return null
+        try {
+          const rendered = annotationRenderedTextOf(container, 1200)
+          let rawStart = 0
+          for (const span of rendered.spans) {
+            if (offset < span.start || offset >= span.end) continue
+            const jump = offset - span.start
+            const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+            let node = walker.nextNode()
+            rawStart = 0
+            while (node !== null) {
+              const value = node.nodeValue ?? ''
+              if (rawStart <= span.rawStart && span.rawStart < rawStart + value.length) {
+                const targetRaw = rawStart + jump
+                let consumed = 0
+                let current = node
+                while (current !== null && consumed + (current.nodeValue ?? '').length <= targetRaw) {
+                  consumed += (current.nodeValue ?? '').length
+                  current = current.nextSibling
+                  while (current !== null && current.nodeType !== Node.TEXT_NODE) current = current.nextSibling
+                }
+                return (current ?? node).parentElement ?? container
+              }
+              rawStart += value.length
+              node = walker.nextNode()
+            }
+          }
+        } catch {
+          return null
+        }
+        return null
+      }
+
+      /**
+       * A3/T34 (W4/W6): validate one fallback hit with tag, digest, accessible name
+       * and (optionally) viewport proximity. Never fabricates Resolved.
+       * @param {Element} element - candidate.
+       * @param {object} ref - captured record.
+       * @param {{ proximity?: boolean }} [options] - proximity check for structural hits.
+       * @returns {'resolved' | 'changed' | 'missing' | null} status, null = reject/continue.
+       */
+      function validateFallbackHit(element, ref, options) {
         if (element === null || element === undefined || element.isConnected === false) return 'missing'
-        const expectedTag = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object'
-          && typeof ref.locator.tag === 'string' ? ref.locator.tag.toLowerCase() : ''
+        const locator = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : {}
+        const expectedTag = typeof locator.tag === 'string' ? locator.tag.toLowerCase() : ''
         const liveTag = typeof element.tagName === 'string' ? element.tagName.toLowerCase() : ''
         if (expectedTag.length > 0 && liveTag !== expectedTag) return 'changed'
         const expectedDigest = typeof ref.textDigest === 'string' ? ref.textDigest : ''
@@ -14729,13 +15104,141 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           const actual = textDigest(typeof element.textContent === 'string' ? element.textContent : '')
           if (actual !== expectedDigest) return 'changed'
         }
+        const expectedName = typeof locator.name === 'string' ? locator.name : ''
+        const actualName = liveTag.length > 0 ? annotationAccessibleName(element, liveTag) : ''
+        if (expectedName.length > 0 && actualName.length > 0 && expectedName !== actualName) return 'changed'
+        if (options !== null && typeof options === 'object' && options.proximity === true) {
+          try {
+            const rect = element.getBoundingClientRect()
+            const bounds = ref !== null && typeof ref === 'object' && ref.bounds !== null && typeof ref.bounds === 'object' ? ref.bounds : null
+            const viewport = ref !== null && typeof ref === 'object' && ref.viewport !== null && typeof ref.viewport === 'object' ? ref.viewport : null
+            if (rect !== null && bounds !== null && typeof bounds.x === 'number' && typeof bounds.y === 'number'
+              && typeof bounds.width === 'number' && typeof bounds.height === 'number' && viewport !== null) {
+              const viewWidth = typeof viewport.width === 'number' ? viewport.width : 0
+              const viewHeight = typeof viewport.height === 'number' ? viewport.height : 0
+              const limit = Math.max(320, Math.max(viewWidth, viewHeight) * 0.7)
+              const dx = (bounds.x + bounds.width / 2) - (rect.left + rect.width / 2)
+              const dy = (bounds.y + bounds.height / 2) - (rect.top + rect.height / 2)
+              if (Math.sqrt(dx * dx + dy * dy) > limit) return null
+            }
+          } catch {
+            // Proximity is best effort; tag/name/digest checks still stand.
+          }
+        }
         return 'resolved'
       }
 
       /**
-       * A3/T32: resolve via the captured absolute XPath.
+       * A3/T34: scope containers for text quote search — captured container first,
+       * document body as the bounded fallback.
        * @param {object} ref - captured record.
-       * @returns {string | null} status or null when this anchor is absent/failed.
+       * @returns {Array<Element>} scopes.
+       */
+      function quoteSearchScopes(ref) {
+        const scopes = []
+        const position = ref?.locator?.textPosition ?? null
+        if (position !== null && typeof position.container === 'string') {
+          try {
+            const container = document.querySelector(position.container)
+            if (container !== null) scopes.push(container)
+          } catch {
+            // Ignore malformed stored selectors; body scope still applies.
+          }
+        }
+        if (scopes.length === 0 || scopes[0] !== document.body) scopes.push(document.body)
+        return scopes
+      }
+
+      /**
+       * A3/T34 (W2/W4): score-based quote resolution with bounded approximate
+       * matching; returns null to continue the chain, or an honest status.
+       * @param {object} ref - captured record.
+       * @returns {string | null} status.
+       */
+      function resolveRefTextQuote(ref) {
+        const locator = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : null
+        if (locator === null || locator.textQuote === null || typeof locator.textQuote !== 'object') return null
+        const quote = locator.textQuote
+        if (typeof quote.exact !== 'string' || quote.exact.length === 0) return null
+        const hint = locator.textPosition !== null && typeof locator.textPosition === 'object' && typeof locator.textPosition.start === 'number'
+          ? locator.textPosition.start : undefined
+        for (const scope of quoteSearchScopes(ref)) {
+          const rendered = annotationRenderedTextOf(scope, 1400)
+          if (rendered.text.length === 0) continue
+          const matches = annotationScoreQuoteMatches(rendered.text, quote, hint, 8)
+          if (matches.length === 0) continue
+          const best = matches[0]
+          // Ties cannot identify one occurrence -> honest Matches several.
+          if (matches.length > 1 && best.score - matches[1].score <= 0.02) return 'ambiguous'
+          if (best.score < 0.5) continue
+          if (best.score < 0.85) return 'changed'
+          const element = annotationElementAtRenderedOffset(scope, best.index)
+          const status = validateFallbackHit(element, ref, { proximity: false })
+          if (status === 'resolved' || status === 'changed') return status
+          continue
+        }
+        // Bounded per-element fallback: a scoped container selector may break while
+        // the leaf text itself is unchanged (structure reorder). Compare each
+        // candidate element's rendered text, count exact matches, and only resolve
+        // when exactly one candidate carries the quote.
+        const expectedTag = typeof locator.tag === 'string' && locator.tag.length > 0 ? locator.tag.toLowerCase() : ''
+        const candidates = []
+        const elements = document.getElementsByTagName(expectedTag.length > 0 ? expectedTag : '*')
+        for (let index = 0; index < elements.length && candidates.length <= 32; index += 1) {
+          const element = elements[index]
+          if (element === null || typeof element !== 'object') continue
+          if (element.closest('[data-psa-own]') !== null) continue
+          const elementText = annotationRenderedTextOf(element, 120).text
+          if (elementText.length === 0) continue
+          if (elementText === quote.exact) {
+            candidates.push(element)
+            continue
+          }
+          const approximate = annotationScoreQuoteMatches(elementText, quote, undefined, 1)
+          if (approximate.length > 0 && approximate[0].score >= 0.5) candidates.push(element)
+        }
+        if (candidates.length > 1) return 'ambiguous'
+        if (candidates.length === 1) {
+          const status = validateFallbackHit(candidates[0], ref, { proximity: false })
+          if (status === 'resolved' || status === 'changed') return status
+        }
+        return null
+      }
+
+      /**
+       * A3/T34 (W4/W6): text-position resolution using rendered offsets. Only a
+       * unique container slice, validated for tag/name/digest/proximity, resolves.
+       * @param {object} ref - captured record.
+       * @returns {string | null} status.
+       */
+      function resolveRefTextPosition(ref) {
+        const locator = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : null
+        if (locator === null || locator.textPosition === null || typeof locator.textPosition !== 'object') return null
+        const position = locator.textPosition
+        const quote = locator.textQuote !== null && typeof locator.textQuote === 'object' ? locator.textQuote : null
+        if (quote === null || typeof quote.exact !== 'string') return null
+        let container = null
+        try {
+          container = document.querySelector(position.container)
+        } catch {
+          return null
+        }
+        if (container === null) return null
+        const rendered = annotationRenderedTextOf(container, 1200)
+        if (rendered.text.length === 0) return null
+        const slice = rendered.text.slice(position.start, position.end)
+        if (slice !== quote.exact) return 'changed'
+        // A slice that occurs more than once cannot identify one occurrence.
+        if (rendered.text.indexOf(quote.exact) !== position.start) return null
+        const element = annotationElementAtRenderedOffset(container, position.start)
+        return validateFallbackHit(element, ref, { proximity: true })
+      }
+
+      /**
+       * A3/T34 (W4): XPath is the LAST resort and must pass tag/digest/name +
+       * proximity validation (structure-sensitive by nature).
+       * @param {object} ref - captured record.
+       * @returns {string | null} status or null to continue.
        */
       function resolveRefXPath(ref) {
         const xpath = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' && typeof ref.locator.xpath === 'string'
@@ -14754,61 +15257,92 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         }
         if (elements.length > 1) return 'ambiguous'
         if (elements.length === 0) return null
-        return compareFallbackElement(elements[0], ref)
+        return validateFallbackHit(elements[0], ref, { proximity: true })
       }
 
       /**
-       * A3/T32: resolve via the captured text quote (unique match only).
+       * A3/T34: fallback-resolved live node for page marks (quote/position/XPath in
+       * that order), cached per DOM revision.
        * @param {object} ref - captured record.
-       * @returns {string | null} status or null.
+       * @returns {Element | null} node.
        */
-      function resolveRefTextQuote(ref) {
-        const locator = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : null
-        if (locator === null || locator.textQuote === null || typeof locator.textQuote !== 'object') return null
-        const tag = typeof locator.tag === 'string' ? locator.tag.toLowerCase() : ''
-        const candidates = []
-        for (const element of Array.from(document.getElementsByTagName(tag.length > 0 ? tag : '*'))) {
-          if (element === null || typeof element !== 'object') continue
-          if (element.closest('[data-psa-own]') !== null) continue
-          if (!annotationTextQuoteMatches(typeof element.textContent === 'string' ? element.textContent : '', locator.textQuote)) continue
-          candidates.push(element)
-        }
-        if (candidates.length > 1) return 'ambiguous'
-        if (candidates.length === 0) return null
-        return compareFallbackElement(candidates[0], ref)
-      }
-
-      /**
-       * A3/T32: resolve via the captured text position (container + offsets).
-       * @param {object} ref - captured record.
-       * @returns {string | null} status or null.
-       */
-      function resolveRefTextPosition(ref) {
-        const locator = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object' ? ref.locator : null
-        if (locator === null || locator.textPosition === null || typeof locator.textPosition !== 'object') return null
-        const position = locator.textPosition
-        let container = null
+      function fallbackNodeFor(ref) {
+        const key = annotationFallbackCacheKey(ref?.id, domRevision)
+        if (fallbackNodeCache.has(key)) return fallbackNodeCache.get(key)
+        let found = null
         try {
-          container = document.querySelector(position.container)
+          found = resolveRefTextQuoteNode(ref) ?? resolveRefTextPositionNode(ref) ?? resolveRefXPathNode(ref)
+        } catch {
+          found = null
+        }
+        fallbackNodeCache.set(key, found)
+        return found
+      }
+
+      /** Resolve the quote's element for fallback marks. @param {object} ref - record. @returns {Element | null} node. */
+      function resolveRefTextQuoteNode(ref) {
+        const quote = ref?.locator?.textQuote ?? null
+        if (quote === null || typeof quote !== 'object' || typeof quote.exact !== 'string') return null
+        for (const scope of quoteSearchScopes(ref)) {
+          const rendered = annotationRenderedTextOf(scope, 1400)
+          const matches = annotationScoreQuoteMatches(rendered.text, quote, undefined, 2)
+          if (matches.length === 0 || matches[0].score < 0.85) continue
+          const element = annotationElementAtRenderedOffset(scope, matches[0].index)
+          if (validateFallbackHit(element, ref) === 'resolved') return element
+        }
+        const tag = ref?.locator?.tag ?? ''
+        const elements = document.getElementsByTagName(tag.length > 0 ? String(tag).toLowerCase() : '*')
+        for (let index = 0; index < elements.length && index < 400; index += 1) {
+          const element = elements[index]
+          if (element === null || typeof element !== 'object' || element.closest('[data-psa-own]') !== null) continue
+          if (annotationRenderedTextOf(element, 120).text !== quote.exact) continue
+          if (validateFallbackHit(element, ref) === 'resolved') return element
+        }
+        return null
+      }
+
+      /** Resolve the text-position element for fallback marks. @param {object} ref - record. @returns {Element | null} node. */
+      function resolveRefTextPositionNode(ref) {
+        const position = ref?.locator?.textPosition ?? null
+        const quote = ref?.locator?.textQuote ?? null
+        if (position === null || quote === null || typeof quote.exact !== 'string') return null
+        try {
+          const container = document.querySelector(position.container)
+          if (container === null) return null
+          const rendered = annotationRenderedTextOf(container, 1200)
+          if (rendered.text.slice(position.start, position.end) !== quote.exact) return null
+          const element = annotationElementAtRenderedOffset(container, position.start)
+          return validateFallbackHit(element, ref) === 'resolved' ? element : null
         } catch {
           return null
         }
-        if (container === null) return null
-        const text = annotationNormalizeQuoteText(typeof container.textContent === 'string' ? container.textContent : '', 0)
-        const slice = text.slice(position.start, position.end)
-        const quote = locator.textQuote !== null && typeof locator.textQuote === 'object' ? locator.textQuote : null
-        if (quote !== null && typeof quote.exact === 'string' && slice === quote.exact) return 'resolved'
-        return 'changed'
+      }
+
+      /** Resolve the XPath element for fallback marks. @param {object} ref - record. @returns {Element | null} node. */
+      function resolveRefXPathNode(ref) {
+        const xpath = ref?.locator?.xpath ?? ''
+        if (typeof xpath !== 'string' || xpath.length === 0) return null
+        try {
+          const snapshot = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null)
+          const node = snapshot.singleNodeValue
+          return validateFallbackHit(node, ref, { proximity: true }) === 'resolved' ? node : null
+        } catch {
+          return null
+        }
       }
 
       /**
-       * A3/T32: resolution outcome with the winning strategy for the UI.
+       * A3/T32/T34: resolution outcome with the winning strategy for the UI, cached
+       * per (record id, DOM revision).
        * @param {object} ref - captured record.
        * @returns {{ status: string, via: string }} outcome.
        */
       function statusDetailOf(ref) {
         if (ref === null || typeof ref !== 'object' || ref.locator === null || typeof ref.locator !== 'object') return { status: 'missing', via: 'css' }
-        return annotationResolveStatus({
+        const cacheKey = annotationFallbackCacheKey(ref.id, domRevision)
+        const cached = fallbackStatusCache.get(cacheKey)
+        if (cached !== undefined) return cached
+        const outcome = annotationResolveStatus({
           candidates: ref.locator.candidates,
           expectedTag: ref.locator.tag,
           uniqueSelector: typeof ref.locator.uniqueSelector === 'string' ? ref.locator.uniqueSelector : '',
@@ -14826,13 +15360,16 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
               actualName: liveTag.length > 0 ? annotationAccessibleName(element, liveTag) : ''
             }
           },
-          resolveXPath: () => resolveRefXPath(ref),
           resolveTextQuote: () => resolveRefTextQuote(ref),
-          resolveTextPosition: () => resolveRefTextPosition(ref)
+          resolveTextPosition: () => resolveRefTextPosition(ref),
+          resolveXPath: () => resolveRefXPath(ref)
         })
+        if (fallbackStatusCache.size > 400) fallbackStatusCache.clear()
+        fallbackStatusCache.set(cacheKey, outcome)
+        return outcome
       }
 
-      /** Compat status accessor: the four statuses keep their meaning. @param {object} ref - record. @returns {string} status. */
+      /** Compat status accessor: the four statuses keep their meaning.      /** Compat status accessor: the four statuses keep their meaning. @param {object} ref - record. @returns {string} status. */
       function statusOf(ref) {
         return statusDetailOf(ref).status
       }
@@ -17573,6 +18110,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         statusDetailOf,
         copyXPath,
         copyJsPath,
+        copyFullXPath,
         isInCollection,
         collectionScopeOf,
         currentSessionId,
@@ -18713,6 +19251,25 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         `${metadata.join(' · ')} · ${t('sidebar.updated', { time: formatAnnotationTime(entry.updatedAt || entry.at) })}`),
       React.createElement('div', { className: 'psa-entry-locator psa-sb-selector', title: locator },
         `${t('sidebar.selector')} ${locator}`),
+      React.createElement('div', { className: 'psa-entry-actions', 'data-psa-own': '' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-entry-copy-xpath': '',
+          'data-psa-own': '',
+          'aria-label': t('popover.copyXPath'),
+          title: t('popover.copyXPath'),
+          onClick: () => controller.copyXPath(entry.id)
+        }, RemixGlyph(REMIX_LINK, 12)),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-icon-btn',
+          'data-psa-entry-copy-js-path': '',
+          'data-psa-own': '',
+          'aria-label': t('popover.copyJsPath'),
+          title: t('popover.copyJsPath'),
+          onClick: () => controller.copyJsPath(entry.id)
+        }, RemixGlyph(REMIX_FILE_COPY_LINE, 12))),
       React.createElement('div', { className: 'psa-sb-page', 'data-psa-own': '' },
         `${t('sidebar.page')} ${entry.route || '—'} · ${t('sidebar.area')} ${entry.component || '—'}`),
       React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
@@ -19044,6 +19601,27 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           'data-psa-own': '',
           onClick: () => controller.copyLocator(record.id)
         }, t('detail.copyLocator')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-detail-copy-xpath': '',
+          'data-psa-own': '',
+          onClick: () => controller.copyXPath(record.id)
+        }, t('popover.copyXPath')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-detail-copy-full-xpath': '',
+          'data-psa-own': '',
+          onClick: () => controller.copyFullXPath(record.id)
+        }, t('popover.copyFullXPath')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-btn',
+          'data-psa-detail-copy-js-path': '',
+          'data-psa-own': '',
+          onClick: () => controller.copyJsPath(record.id)
+        }, t('popover.copyJsPath')),
         React.createElement('button', {
           type: 'button',
           className: 'psa-icon-btn psa-detail-danger',
@@ -19826,6 +20404,12 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationSelectorScore,
         annotationResolveStatus,
         annotationIsGeneratedClass,
+        annotationRenderTextChunks,
+        annotationDisambiguateQuote,
+        annotationScoreQuoteMatches,
+        annotationFullXPathOf,
+        annotationFallbackCacheKey,
+        annotationLevenshteinWithin,
         upsertAnnotationRecord,
         removeAnnotationRecord,
         restoreAnnotationRecord,

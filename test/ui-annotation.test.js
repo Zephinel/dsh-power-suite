@@ -74,6 +74,8 @@ if (ui === undefined) {
     'annotationNormalizeQuoteText', 'annotationXPathOf', 'annotationJsPathFor', 'annotationTextQuoteOf',
     'annotationTextPositionOf', 'annotationTextQuoteMatches', 'annotationSelectorScore', 'annotationResolveStatus',
     'annotationIsGeneratedClass',
+    'annotationRenderTextChunks', 'annotationDisambiguateQuote', 'annotationScoreQuoteMatches',
+    'annotationFullXPathOf', 'annotationFallbackCacheKey', 'annotationLevenshteinWithin',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -94,7 +96,8 @@ if (ui === undefined) {
    * filter, group auto-summary), 80 = shared group ordinals (A3/T29 numbering),
    * 82 = transient-surface pinning (eligible selection + capture-phase match),
    * 90 = multi-strategy anchors (quote/xpath/js path/scoring/resolution),
-   * 91 = P0 selector stability (generated-class filter).
+   * 91 = P0 selector stability (generated-class filter),
+   * 97 = P1/P2 anchor hardening (rendered text/disambiguation/scoring/full xpath/cache).
    * The E2E `ACCEPTED_SEAM_GENERATIONS` must accept exactly these counts.
    */
   const SEAM_GENERATION = SEAM_EXPORTS.length
@@ -168,6 +171,12 @@ if (ui === undefined) {
     annotationSelectorScore: [1, 1],
     annotationResolveStatus: [1, 1],
     annotationIsGeneratedClass: [1, 1],
+    annotationRenderTextChunks: [1, 1],
+    annotationDisambiguateQuote: [3, 4],
+    annotationScoreQuoteMatches: [2, 4],
+    annotationFullXPathOf: [1, 1],
+    annotationFallbackCacheKey: [2, 2],
+    annotationLevenshteinWithin: [3, 3],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
     annotationSelectedEntries: [2, 2],
@@ -190,7 +199,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 91, 'the frozen task-33 generation is pinned')
+    assert.equal(SEAM_GENERATION, 97, 'the frozen task-34 generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -2644,8 +2653,8 @@ if (ui === undefined) {
     const base = { candidates: [], expectedTag: 'span', queryAll: () => [] }
     const cssResolved = ui.annotationResolveStatus({ ...base, candidates: [{ kind: 'data', value: '[data-x="1"]', reliability: 0.9 }], queryAll: (selector) => [{ tagName: 'SPAN', isConnected: true }] })
     assert.deepEqual(plain(cssResolved), { status: 'resolved', via: 'css' })
-    const viaXPath = ui.annotationResolveStatus({ ...base, resolveXPath: () => 'resolved', resolveTextQuote: () => 'resolved' })
-    assert.deepEqual(plain(viaXPath), { status: 'resolved', via: 'xpath' }, 'XPath comes before text quote')
+    const viaQuoteFirst = ui.annotationResolveStatus({ ...base, resolveXPath: () => 'resolved', resolveTextQuote: () => 'resolved' })
+    assert.deepEqual(plain(viaQuoteFirst), { status: 'resolved', via: 'text-quote' }, 'A3/T34: text quote comes before XPath')
     const viaQuote = ui.annotationResolveStatus({ ...base, resolveXPath: () => null, resolveTextQuote: () => 'changed', resolveTextPosition: () => 'resolved' })
     assert.deepEqual(plain(viaQuote), { status: 'changed', via: 'text-quote' })
     const viaPosition = ui.annotationResolveStatus({ ...base, resolveXPath: () => null, resolveTextQuote: () => null, resolveTextPosition: () => 'ambiguous' })
@@ -2718,6 +2727,42 @@ if (ui === undefined) {
     assert.equal(ref.locator.key, 'unique:[data-testid="unique-anchor"] button:nth-of-type(1)')
     const nonUnique = refOf({ tag: 'button', attrs: [{ name: 'data-slot', value: 'sidebar' }] })
     assert(nonUnique.locator.key.startsWith('data:'), `non-unique identity should keep the data fallback: ${nonUnique.locator.key}`)
+  })
+
+  test('A3/T34: rendered text offsets, quote disambiguation, scoring, full XPath and cache keys', () => {
+    // W3 rendered text: block boundary contributes one space + raw offset mapping.
+    const rendered = ui.annotationRenderTextChunks([
+      { text: '  line one ', rawStart: 0 },
+      { text: 'line two', blockBefore: true, rawStart: 11 }
+    ])
+    assert.equal(rendered.text, 'line one line two')
+    assert.deepEqual(plain(rendered.spans.map((span) => ({ start: span.start, end: span.end, rawStart: span.rawStart }))),
+      [{ start: 0, end: 8, rawStart: 0 }, { start: 9, end: 17, rawStart: 11 }])
+    // W1 disambiguation: duplicate exact text requires context to become unique.
+    const scope = 'alpha beta alpha beta gamma'
+    const quote = ui.annotationDisambiguateQuote(scope, 'alpha beta', 11, 20)
+    assert(quote !== null, 'a unique context should produce a quote')
+    assert.equal(quote.exact, 'alpha beta')
+    assert(quote.prefix.length > 0 || quote.suffix.length > 0, 'expanded context expected')
+    assert.equal(ui.annotationDisambiguateQuote('aa aa', 'aa', 0, 2), null, 'unresolvable duplicate text must drop the quote')
+    // W2 scoring thresholds: exact full context ≈1, small edit in 0.5..0.85, unrelated low.
+    const full = 'start unique phrase end'
+    const scored = ui.annotationScoreQuoteMatches(full, { exact: 'unique phrase', prefix: 'start ', suffix: ' end' })
+    assert(scored.length === 1 && scored[0].score >= 0.85, `exact quote with context should score high: ${JSON.stringify(scored)}`)
+    const edited = ui.annotationScoreQuoteMatches('start unique phras end', { exact: 'unique phrase', prefix: 'start ', suffix: ' end' })
+    assert(edited.length === 1 && edited[0].score >= 0.5 && edited[0].score < 0.85, `small edit should land in 0.5..0.85: ${JSON.stringify(edited)}`)
+    assert.equal(ui.annotationLevenshteinWithin('abc', 'abd', 2), 1)
+    assert.equal(ui.annotationLevenshteinWithin('abc', 'xyz', 1), 2, 'bounded distance exceeds the bound')
+    // P2 full XPath never short-circuits on ids.
+    const makeElement = (tag, parent) => ({ tagName: tag.toUpperCase(), parentElement: parent ?? null, previousElementSibling: null, getAttribute: () => 'stable-id' })
+    const html = makeElement('html')
+    const body = makeElement('body', html)
+    const div = makeElement('div', body)
+    assert.equal(ui.annotationFullXPathOf(div), '/html[1]/body[1]/div[1]')
+    assert.equal(ui.annotationXPathOf(div), '//*[@id="stable-id"]', 'optimized XPath still uses the id short-circuit')
+    // P1.5 cache key: same record + same revision shares, revision change invalidates.
+    assert.equal(ui.annotationFallbackCacheKey('psa-1', 7), 'psa-1:7')
+    assert.equal(ui.annotationFallbackCacheKey('psa-1', 8), 'psa-1:8')
   })
 
   //#region geometry and layout

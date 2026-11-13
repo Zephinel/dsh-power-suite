@@ -1090,7 +1090,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 stability)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 stability / 97 anchor hardening)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1102,7 +1102,7 @@ async function runSmoke({ page, results, state }) {
     // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
     // rail selection and chip-ref serialization helpers (66). Pin a documented count and
     // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91]
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1176,6 +1176,11 @@ async function runSmoke({ page, results, state }) {
     if (keyCount === 91) {
       for (const key of ['annotationIsGeneratedClass', 'resolveRefStatus', 'annotationResolveStatus']) {
         assert(probe.keys.includes(key), `task-33 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
+      }
+    }
+    if (keyCount === 97) {
+      for (const key of ['annotationDisambiguateQuote', 'annotationScoreQuoteMatches', 'annotationRenderTextChunks', 'annotationFullXPathOf', 'annotationFallbackCacheKey']) {
+        assert(probe.keys.includes(key), `task-34 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
       }
     }
     state.hooks = probe.keys
@@ -6093,8 +6098,45 @@ function buildScenarios(harness) {
         const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip })
         await writeFile(path.join(process.env.PSA_ANCHOR_EVIDENCE_DIR, 'fallback-anchor-resolved.png'), Buffer.from(data.data, 'base64'))
       }
-      // Content change is honest: the status changes, the captured locator does not.
-      await h.page.evaluate(`(() => { const leaf = document.querySelector('[data-anchor-leaf]'); if (leaf !== null) leaf.textContent = 'totally different content'; return true })()`)
+      // P2: copy parity from the rail row and the detail card (live-first anchors).
+      await h.click('[data-psa-popover-close]')
+      await sleep(250)
+      await h.openCollection()
+      await sleep(300)
+      const copyFromRail = await h.page.evaluate(`(() => {
+        const row = [...document.querySelectorAll('[data-psa-entry]')].find((entry) => entry.innerText.includes('Anchor phrase UNIQUE-T32'))
+        if (!row) return null
+        row.querySelector('[data-psa-entry-copy-xpath]')?.click()
+        return !!row.querySelector('[data-psa-entry-copy-js-path]')
+      })()`)
+      assert(copyFromRail, 'A3/T34: rail row copy XPath/JS path actions missing')
+      await sleep(250)
+      let anchorCopyToast = await h.page.evaluate(`document.querySelector('[data-psa-feedback]')?.innerText ?? ''`)
+      assert(/XPath copied|已复制 XPath|saved XPath/.test(anchorCopyToast), `A3/T34: rail copy XPath toast missing: ${short(anchorCopyToast)}`)
+      await h.page.evaluate(`(() => { const row = [...document.querySelectorAll('[data-psa-entry]')].find((entry) => entry.innerText.includes('Anchor phrase UNIQUE-T32')); row?.querySelector('[data-psa-entry-copy-js-path]')?.click(); return true })()`)
+      await sleep(250)
+      anchorCopyToast = await h.page.evaluate(`document.querySelector('[data-psa-feedback]')?.innerText ?? ''`)
+      assert(/JS path copied|已复制 JS 路径|saved JS path/.test(anchorCopyToast), `A3/T34: rail copy JS path toast missing: ${short(anchorCopyToast)}`)
+      await h.page.evaluate(`(() => { const row = [...document.querySelectorAll('[data-psa-entry]')].find((entry) => entry.innerText.includes('Anchor phrase UNIQUE-T32')); row?.querySelector('[data-psa-entry-preview]')?.click(); return true })()`)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-detail]')`, { timeout: 8000, label: 'anchor detail card for copy parity' })
+      await sleep(250)
+      for (const [selector, pattern] of [
+        ['[data-psa-detail-copy-xpath]', /XPath copied|已复制 XPath|saved XPath/],
+        ['[data-psa-detail-copy-full-xpath]', /Full XPath copied|已复制完整 XPath/],
+        ['[data-psa-detail-copy-js-path]', /JS path copied|已复制 JS 路径|saved JS path/]
+      ]) {
+        await h.click(selector)
+        await sleep(300)
+        const toast = await h.page.evaluate(`document.querySelector('[data-psa-feedback]')?.innerText ?? ''`)
+        assert(pattern.test(toast), `A3/T34: detail copy toast for ${selector} missing: ${short(toast)}`)
+      }
+      await h.click('[data-psa-detail-close]')
+      await sleep(200)
+      await h.clickBack()
+      await sleep(200)
+      // Content change is honest (small edit → Changed, not Missing): the captured
+      // locator display does not change.
+      await h.page.evaluate(`(() => { const leaf = document.querySelector('[data-anchor-leaf]'); if (leaf !== null) leaf.textContent = 'Anchor phrase UNIQXE-T32 edit'; return true })()`)
       await h.page.pressKey('escape')
       await sleep(250)
       await h.openCollection()
