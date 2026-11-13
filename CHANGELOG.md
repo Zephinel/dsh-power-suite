@@ -435,6 +435,19 @@ heading is added until the release is cut.
   fallback. The fallback-node resolver mirrors the same decision so ambiguous
   records do not expose a non-authoritative live node for copy.
 
+- UI element annotation structural-identity honesty (reference-aligned):
+  a stale `uniqueVerified` selector no longer counts as identity unless it still
+  resolves to a single connected/visible element; structural (CSS/XPath)
+  fallback hits must pass a Hypothesis-style quote assertion plus
+  captured-ancestor corroboration before Resolved, and weak-identity records
+  without a quote are **Missing** — no mark or live-node copy on a same-tag
+  look-alike. Removed floating/ephemeral targets now report **Missing** instead
+  of Changed after reload, matching the documented transient contract.
+  Reference-alignment subset: approximate matching recall now mirrors
+  Hypothesis `matchQuote` bounds (maxErrors ≈ len/2, distance-faded hint,
+  broader scan), selector candidates add a role+name composite and a length
+  penalty, and the docs correct the identity/transient/order claims.
+
 ### Removed
 
 - Standalone Project detail page: the `project-view` feature is removed —

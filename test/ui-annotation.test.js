@@ -78,7 +78,7 @@ if (ui === undefined) {
     'annotationFullXPathOf', 'annotationFallbackCacheKey', 'annotationLevenshteinWithin',
     'annotationHasStrongIdentity', 'annotationStructuralFallbackStatus', 'annotationCopyAnchorDecision',
     'annotationRenderedTextRepeatCount', 'annotationFirstTextLeafDescendant', 'annotationAncestorTagChain',
-    'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey', 'annotationScopeAuthorityOutcome', 'debugFallbackScanProbe',
+    'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey', 'annotationScopeAuthorityOutcome', 'annotationEphemeralOutcome', 'debugFallbackScanProbe',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -192,6 +192,7 @@ if (ui === undefined) {
     annotationStatusConfidence: [2, 2],
     annotationStatusLabelKey: [2, 2],
     annotationScopeAuthorityOutcome: [1, 1],
+    annotationEphemeralOutcome: [2, 3],
     debugFallbackScanProbe: [0, 0],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
@@ -215,7 +216,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 108, 'the frozen task-42 generation is pinned')
+    assert.equal(SEAM_GENERATION, 109, 'the frozen task-47 generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -2942,6 +2943,58 @@ if (ui === undefined) {
       { source: 'scope', target: null, ambiguous: true }, 'scope ambiguity is terminal')
     assert.deepEqual(decide({ targets: [], ambiguous: false }, { targets: [], ambiguous: false }),
       { source: 'none', target: null, ambiguous: false })
+  })
+
+  test('A3/T47: stale weak identity rejects look-alikes; quote assertion and ephemeral contract', () => {
+    // R1 (i)/(iii): weak identity + generic path candidate matching a same-tag
+    // look-alike must be Missing, not a silent Resolved.
+    const candidates = [{ kind: 'path', value: 'div > span > svg > use', reliability: 0.1 }]
+    const queryAll = () => [{ tagName: 'use', isConnected: true, textContent: '' }]
+    const liveInfo = (element) => ({
+      isConnected: element.isConnected,
+      textContent: '',
+      expectedText: '',
+      expectedDigest: '811c9dc5',
+      actualDigest: '811c9dc5',
+      expectedName: '',
+      actualName: ''
+    })
+    const base = { candidates, expectedTag: 'use', queryAll, liveInfo, weakIdentity: true }
+    assert.equal(ui.resolveRefStatus(base), 'missing',
+      'weak identity must not promote a same-tag generic look-alike to Resolved')
+    assert.equal(ui.resolveRefStatus({ ...base, corroborate: () => true }), 'missing',
+      'ancestor corroboration alone does not promote an icon-only look-alike without a quote assertion')
+    // R1 (ii): quote assertion rejects a structural hit whose content no longer
+    // matches the captured quote, even for a strong identity.
+    assert.equal(ui.resolveRefStatus({ ...base, weakIdentity: false, assertQuote: () => false }), 'missing',
+      'maybeAssertQuote must reject a mismatching structural hit')
+    assert.equal(ui.resolveRefStatus({ ...base, weakIdentity: false, assertQuote: () => true }), 'resolved',
+      'a corroborated structural hit still resolves')
+    // R1 (i): stale unique selector 0 hits -> weak identity -> Missing.
+    const stale = {
+      ...base,
+      weakIdentity: true,
+      uniqueSelector: '[data-never]',
+      queryAll: (selector) => (selector === '[data-never]' ? [] : [{ tagName: 'use', isConnected: true, textContent: '' }])
+    }
+    assert.equal(ui.resolveRefStatus(stale), 'missing')
+    // R2: ephemeral/floating contract — only visible CSS resolution survives.
+    const floatingRef = { locator: { surface: 'floating', ephemeral: true } }
+    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'changed', via: 'css' })),
+      { status: 'missing', via: 'css' })
+    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'text-quote' })),
+      { status: 'resolved', via: 'text-quote' }, 'a resolving text anchor is still validated by R1 checks')
+    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'css' })),
+      { status: 'resolved', via: 'css' })
+    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'changed', via: 'text-quote' })),
+      { status: 'changed', via: 'text-quote' }, 'a text anchor matching the still-present surface keeps honest Changed')
+    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'changed', via: 'css' })),
+      { status: 'missing', via: 'css' }, 'a document-wide CSS look-alike cannot claim Changed')
+    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'text-quote' }, { surfacePresent: true })),
+      { status: 'resolved', via: 'text-quote' })
+    const pageRef = { locator: { surface: 'page', ephemeral: false } }
+    assert.deepEqual(plain(ui.annotationEphemeralOutcome(pageRef, { status: 'changed', via: 'xpath' })),
+      { status: 'changed', via: 'xpath' })
   })
 
   //#region geometry and layout
