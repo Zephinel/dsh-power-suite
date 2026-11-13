@@ -558,6 +558,23 @@ digest is empty for live input surfaces) and the captured accessible name with
 the live element, so a content or label change is reported as **Content changed**
 even when the captured text itself was empty or truncated.
 
+**Why some targets are red and others green.** Green **Resolved** means the
+captured locator still matches exactly one element whose text/name is unchanged.
+Red **Missing** / **No longer resolves** means the captured element is not in the
+DOM any more (or, for a floating record, its transient surface is gone); that is
+a truthful report, not an error: the chat flow streams and virtualizes, so a
+leaf inside a message can be unmounted or replaced after it was annotated. The
+capture now anchors chat leaves to the stable **message/turn wrappers**
+(`data-message-id` / `data-turn-id`) instead of a positional path through the
+message list, so a leaf inside a re-rendered message resolves (green) as long as
+the message/turn itself survives; sibling inserts, list virtualization around
+that message and streaming re-renders no longer break it. Only genuinely
+replaced/removed targets stay red/amber, and the resolver never fakes
+**Resolved**. Annotations captured before this locator fix keep their old
+positional locator and can still show red — re-annotate them; there is no
+automatic remap because silently pointing an old annotation at a same-looking
+element would be dishonest.
+
 ## Insertion format
 
 Every insertion path targets the current Session's composer through the shell's
@@ -582,6 +599,18 @@ afterwards, and is never sent automatically.
   `batch:<id>|<id>…` over the included current-Session records in collection
   order. D2 explicitly rejects per-item chips. Clicking it opens the collection
   view.
+- **Hover preview** — resting the pointer on a single or grouped annotation chip
+  opens a read-only custom tooltip anchored to the chip (native hover-card
+  recipe, `role="tooltip"`, pointer-transparent, no focus steal) with the
+  requirement text, locator, captured position box, Session + Workspace, and the
+  live resolution status; the group chip shows the count and the first records
+  instead. It hides on pointer leave, Esc, and an ancestor/window scroll (Esc is
+  consumed by the tooltip first, so it never also clears the selection or leaves
+  the mode), and an unrelated inner scroll container does not flicker it away.
+  Detection uses the shell's own chip markup:
+  `[data-composer-chip="ui-annotation"]` plus a local-store label match, so
+  native chips are ignored and the shell is untouched. Click behavior is
+  unchanged (single → detail card, group → collection view).
 - **`@` source** — while typing an `@` reference in the composer, this source
   contributes current-Session records only, capped at 20. It renders **no custom
   group header** (`showGroupTitle: false`): the shell's slash-menu dictionary has
@@ -761,7 +790,11 @@ expanded note editor, and the two settings selects — uses the plugin's shared
 wrapper's `::after` mask ring (2 px band, `inset: -2px`, no layout shift), fades
 in over 140 ms, spins once every 3.2 s while drifting hue over 14 s, and uses the
 same conic-gradient stops and glow as the Dynamic Workspaces focus treatment, so
-the whole plugin reads as one effect. Under `prefers-reduced-motion` the ring is
+the whole plugin reads as one effect. The wrapped `textarea`/`input`/`select` is
+rendered as a block inside the wrapper, so the wrapper's border box is exactly the
+control's border box and the ring is symmetric on all four edges — no baseline
+gap under the control and no exposed bottom border (measured live: wrapper rect ==
+control rect). Under `prefers-reduced-motion` the ring is
 static; under `forced-colors` the ring is replaced by a 2 px system `Highlight`
 outline. Buttons keep their own focus rings — the rainbow ring is for inputs.
 
