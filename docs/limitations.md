@@ -396,6 +396,17 @@
   the false-ambiguous fix. Generic tag/role matches still corroborate by text,
   so a genuinely removed target can report Changed rather than Missing when a
   same-tag DOM node remains.
+- **Descendant anchors cover non-leaf text-bearing targets only.** They are
+  captured for normal-flow targets with a text leaf descendant; floating/
+  ephemeral surfaces are deliberately excluded (a removed hover card must not be
+  re-identified by a document look-alike), the ancestor climb matches tag plus a
+  bounded stable-attribute signature (the full chain is metadata), and the E2E
+  fixture depends on host normal-flow containers (`[data-conversation-region=
+  "chat"]` / `[data-slot="main"]`) for placement. S10's native hover-preview
+  startup is environment-red in this harness (reproduced with the pre-delta
+  client), so scenario-10-dependent assertions (strict D1) are code-verified but
+  not observable here; the descendant fixture's body fallback is acceptable with
+  a clear failure message.
 - **Weak-identity records fail closed.** Icon-only/tag-only targets with no real
   text digest, no real accessible name and no verified unique locator cannot be
   resolved through XPath/text-position structural fallbacks; they report
