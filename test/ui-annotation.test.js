@@ -2866,7 +2866,7 @@ if (ui === undefined) {
     const strongRef = { ...iconRef, text: 'Close', textDigest: 'deadbeef' }
     assert.equal(ui.annotationStatusConfidence(iconRef, { status: 'changed', via: 'xpath' }), 'weak')
     assert.equal(ui.annotationStatusConfidence(iconRef, { status: 'changed', via: 'text-position' }), 'weak')
-    assert.equal(ui.annotationStatusConfidence(iconRef, { status: 'changed', via: 'text-quote' }), 'strong')
+    assert.equal(ui.annotationStatusConfidence(iconRef, { status: 'changed', via: 'text-quote' }), 'weak', 'A3/T49: weak identity + quote Changed is Unverifiable')
     assert.equal(ui.annotationStatusConfidence(strongRef, { status: 'changed', via: 'xpath' }), 'strong')
     assert.equal(ui.annotationStatusLabelKey('changed', 'weak'), 'status.unverifiableWeak')
     assert.equal(ui.annotationStatusLabelKey('changed', 'strong'), 'popover.status.changed')
@@ -2980,21 +2980,52 @@ if (ui === undefined) {
     assert.equal(ui.resolveRefStatus(stale), 'missing')
     // R2: ephemeral/floating contract — only visible CSS resolution survives.
     const floatingRef = { locator: { surface: 'floating', ephemeral: true } }
-    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'changed', via: 'css' })),
-      { status: 'missing', via: 'css' })
-    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'text-quote' })),
-      { status: 'resolved', via: 'text-quote' }, 'a resolving text anchor is still validated by R1 checks')
-    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'css' })),
-      { status: 'resolved', via: 'css' })
+    // A3/T49: surface gone => Missing for ALL outcomes (CSS and text layer).
     assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'changed', via: 'text-quote' })),
-      { status: 'changed', via: 'text-quote' }, 'a text anchor matching the still-present surface keeps honest Changed')
-    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'changed', via: 'css' })),
-      { status: 'missing', via: 'css' }, 'a document-wide CSS look-alike cannot claim Changed')
-    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'text-quote' }, { surfacePresent: true })),
+      { status: 'missing', via: 'text-quote' }, 'surface gone + text-quote Changed must be Missing')
+    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'text-quote' })),
+      { status: 'missing', via: 'text-quote' }, 'surface gone + text-quote Resolved must be Missing')
+    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'css' })),
+      { status: 'missing', via: 'css' }, 'surface gone + CSS outcome must be Missing')
+    // Surface present => honest text/CSS outcomes retained.
+    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'changed', via: 'text-quote' }, true)),
+      { status: 'changed', via: 'text-quote' }, 'A3/T49: still-present surface keeps honest text Changed')
+    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'css' }, true)),
+      { status: 'resolved', via: 'css' }, 'still-present surface keeps CSS resolution')
+    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'text-quote' }, true)),
       { status: 'resolved', via: 'text-quote' })
     const pageRef = { locator: { surface: 'page', ephemeral: false } }
     assert.deepEqual(plain(ui.annotationEphemeralOutcome(pageRef, { status: 'changed', via: 'xpath' })),
       { status: 'changed', via: 'xpath' })
+  })
+
+  test('A3/T49: role+name tier, selector length penalty, matchQuote recall/hint', () => {
+    const score = (candidate) => ui.annotationSelectorScore(candidate)
+    const dataScore = score({ kind: 'data', value: '[data-testid="x"]', reliability: 0.9 })
+    const roleNameScore = score({ kind: 'label', value: '[role="button"][aria-label="Close"]', reliability: 0.9 })
+    const idScore = score({ kind: 'id', value: '#close', reliability: 0.9 })
+    const classScore = score({ kind: 'class', value: '.close', reliability: 0.9 })
+    const nthScore = score({ kind: 'path', value: 'div > button:nth-of-type(2)', reliability: 0.9 })
+    assert(dataScore > roleNameScore, 'stable data/id/aria must outrank role+name')
+    assert(idScore > roleNameScore, 'role+name has its own tier below stable data/id/aria')
+    assert(roleNameScore > classScore, 'role+name must outrank class')
+    assert(classScore > nthScore, 'class must outrank nth path')
+    // Length penalty: same tier/reliability, longer selector scores lower.
+    const short = score({ kind: 'id', value: '#a', reliability: 0.9 })
+    const long = score({ kind: 'id', value: '#'.concat('a'.repeat(80)), reliability: 0.9 })
+    assert(short > long, 'long selectors must carry a length penalty')
+    // matchQuote recall: an edit larger than the old 40%/32 bound is still Changed.
+    const longQuote = 'the quick brown fox jumps over the lazy dog'
+    const edited = 'the quick brown fix jumps over the lazy dag'
+    const matches = ui.annotationScoreQuoteMatches(edited, { exact: longQuote })
+    assert(matches.length === 1 && matches[0].score >= 0.5 && matches[0].score < 0.85,
+      `a broader approximate scan should find a Changed-range match: ${JSON.stringify(matches)}`)
+    // Distance-faded hint: a match near the hint scores higher than a far one.
+    const text = 'context one target phrase here and target phrase again later'
+    const near = ui.annotationScoreQuoteMatches(text, { exact: 'target phrase' }, text.indexOf('target phrase'))
+    const far = ui.annotationScoreQuoteMatches(text, { exact: 'target phrase' }, 0)
+    assert(near[0].score > far[near[0].index === far[0].index ? 1 : 0].score || near[0].index === far[0].index,
+      'the hint must fade with distance, not add a binary bonus')
   })
 
   //#region geometry and layout

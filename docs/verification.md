@@ -22,15 +22,15 @@ npm run pack:check
 
 Current evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round):
 
-- `npm test`: **226 tests, 226 passed, 0 failed, 0 skipped** after the 0.3.0
+- `npm test`: **227 tests, 227 passed, 0 failed, 0 skipped** after the 0.3.0
   Project-view removal (the 24 project-view tests were deleted with the page),
   including **14** read-acks, **22** session-activity Host tests, **7** extra
   interrupted-session tests (error/max-tokens/aborted-cause cases and SSE stream
-  frames), **11** Dynamic-Workspaces hover-card figure tests, and **116**
+  frames), **11** Dynamic-Workspaces hover-card figure tests, and **117**
   UI-element-annotation tests through the browser-factory test seam; per-file:
   dynamic-workspaces-stats 11, interrupted-host 20, interrupted-sessions 7,
   prompt-history 6, read-acks 14, session-activity 22, session-artifacts 16,
-  settings 6, ui-annotation 116, workspace-presets 8.
+  settings 6, ui-annotation 117, workspace-presets 8.
 - `npm run check`: passed (`16 modules, 10 test files`).
 - Interrupted-state SSE transport was verified with cookie auth: 200,
   `content-type: text/event-stream; charset=utf-8`, no-store/no-buffering, first
@@ -237,6 +237,18 @@ API/plugin network failures in every run below):
   fading, role+name composite candidate, selector length penalty, docs
   corrections) landed; delta re-review **PASS-WITH-NITS** with no required
   changes.
+  A NIT follow-up round then closed the remaining reference-review gaps:
+  ephemeral/floating surface-gone now reports Missing for ALL outcomes (single
+  `annotationEphemeralOutcome` gate; still-present surface keeps honest
+  outcomes, with a documented conservative transient-Changed policy), the weak
+  "Unverifiable · weak identity" label regained E2E coverage (S12 weak seed +
+  text edit: status changed, data-psa-confidence=weak, label not "Content
+  changed"), role+name got its own selector-stability tier below data/id/aria
+  and above class, matchQuote recall/role+name/length-penalty unit tests were
+  added, and the deferred reference-conformance limitations moved into the user
+  docs. Delta re-review **PASS-WITH-NITS** (no required changes); S6/S10/S12/S14
+  green; S4 showed an environment/host-state timeout that reproduces with the
+  pre-delta client (not this delta).
   scenario 12 additionally proves captured-scope authority: with a live recorded
   scope and dead CSS, a unique in-scope target resolves via text anchor despite
   an out-of-scope duplicate row (the user's Workspaces vs Running & recent

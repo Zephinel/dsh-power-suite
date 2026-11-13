@@ -10261,16 +10261,15 @@ function dwClearNativeAtmospheres() {
      * @param {{ status: string, via?: string }} outcome - resolution outcome.
      * @returns {{ status: string, via?: string }} contract-adjusted outcome.
      */
-    function annotationEphemeralOutcome(ref, outcome, options) {
+    function annotationEphemeralOutcome(ref, outcome, surfacePresent) {
       const source = outcome !== null && typeof outcome === 'object' ? outcome : { status: 'missing' }
       const ephemeral = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object'
         && (ref.locator.ephemeral === true || ref.locator.surface === 'floating')
       if (ephemeral !== true) return source
-      // A3/T47 (R2): a vanished transient surface must never claim Changed; Resolved
-      // outcomes are still validated by the identity/quote checks (R1) and a live
-      // floating surface legitimately persists through re-renders.
-      if (source.status === 'changed' && source.via !== 'text-quote') return { ...source, status: 'missing' }
-      return source
+      // CSS look-alikes never claim Changed for a transient surface; other outcomes
+      // are gated on the captured surface still being present (A3/T49).
+      if (surfacePresent === true) return source
+      return { ...source, status: 'missing' }
     }
 
     /**
@@ -10401,8 +10400,7 @@ function dwClearNativeAtmospheres() {
     function annotationStatusConfidence(ref, outcome) {
       const status = outcome !== null && typeof outcome === 'object' ? outcome.status : ''
       const via = outcome !== null && typeof outcome === 'object' ? outcome.via : ''
-      if (status !== 'changed') return 'strong'
-      if (via !== 'xpath' && via !== 'text-position') return 'strong'
+      if (status !== 'changed' || via === 'css') return 'strong'
       return annotationHasStrongIdentity(ref) ? 'strong' : 'weak'
     }
 
@@ -10789,7 +10787,9 @@ function dwClearNativeAtmospheres() {
      * attributes beat semantic roles and labels, which beat stable classes, which
      * beat positional tag/nth-of-type paths.
      */
-    const ANNOTATION_SELECTOR_TIERS = Object.freeze({ data: 4, id: 4, aria: 4, label: 3, role: 3, class: 2, tag: 1, path: 0 })
+    // A3/T49: reference ordering — stable data/id/aria > role+name composite >
+    // semantic label/role > class > tag/nth path.
+    const ANNOTATION_SELECTOR_TIERS = Object.freeze({ data: 5, id: 5, aria: 5, roleName: 4, label: 3, role: 3, class: 2, tag: 1, path: 0 })
 
     /**
      * The stability tier of one locator candidate.
@@ -10798,8 +10798,12 @@ function dwClearNativeAtmospheres() {
      */
     function annotationSelectorTier(candidate) {
       const kind = candidate !== null && typeof candidate === 'object' && typeof candidate.kind === 'string' ? candidate.kind : ''
-      if (kind === 'label' && candidate !== null && typeof candidate === 'object' && typeof candidate.value === 'string'
-        && candidate.value.includes('aria-label')) return ANNOTATION_SELECTOR_TIERS.aria
+      const value = candidate !== null && typeof candidate === 'object' && typeof candidate.value === 'string' ? candidate.value : ''
+      if (kind === 'label' && value.includes('aria-label')) {
+        // role+name composite has its own tier below stable data/id/aria.
+        if (value.startsWith('[role=') || value.includes('][aria-label=')) return ANNOTATION_SELECTOR_TIERS.roleName
+        return ANNOTATION_SELECTOR_TIERS.aria
+      }
       return ANNOTATION_SELECTOR_TIERS[kind] ?? ANNOTATION_SELECTOR_TIERS.tag
     }
 
@@ -15432,6 +15436,39 @@ function dwClearNativeAtmospheres() {
       }
 
       /**
+       * A3/T49: whether a captured transient/floating surface is still present.
+       * Uses the captured container, the verified selector, and captured stable
+       * ancestors (the floating surface root is typically a stable ancestor).
+       * @param {object} ref - captured record.
+       * @returns {boolean} whether the captured surface still exists/visible.
+       */
+      function capturedSurfacePresent(ref) {
+        const locator = ref?.locator
+        if (locator === null || typeof locator !== 'object') return false
+        if (locator.ephemeral !== true && locator.surface !== 'floating') return true
+        // A3/T49: the captured container is the authoritative surface anchor. If it
+        // no longer resolves, the captured transient surface is gone.
+        const position = locator.textPosition
+        if (position === null || typeof position !== 'object' || typeof position.container !== 'string' || position.container.length === 0) return false
+        try {
+          const container = document.querySelector(position.container)
+          if (container === null || container.isConnected === false || !annotationElementVisible(container)) return false
+          // The captured surface must still sit in its captured screen area; a
+          // look-alike elsewhere in the document is not the same transient surface.
+          const bounds = ref.bounds
+          if (bounds !== null && typeof bounds === 'object' && typeof bounds.x === 'number' && typeof bounds.width === 'number') {
+            const rect = container.getBoundingClientRect()
+            const limit = Math.max(240, Math.max(bounds.width, typeof bounds.height === 'number' ? bounds.height : 0) * 3)
+            if (Math.abs(rect.left + rect.width / 2 - (bounds.x + bounds.width / 2)) > limit) return false
+            if (Math.abs(rect.top + rect.height / 2 - (bounds.y + (typeof bounds.height === 'number' ? bounds.height / 2 : 0))) > limit) return false
+          }
+          return true
+        } catch {
+          return false
+        }
+      }
+
+      /**
        * A3/T47 (R1-i): strong identity must still resolve to a real element. A stale
        * `uniqueVerified` selector (0 hits / disconnected) does not count as strong.
        * @param {object} ref - captured record.
@@ -16021,17 +16058,13 @@ function dwClearNativeAtmospheres() {
         if (weakIdentity && hasQuote !== true) outcome = { status: 'missing', via: outcome.via }
         // A3/T47 (R2): transient surfaces only keep honest text-layer outcomes while
         // their captured surface still exists.
-        let surfacePresent = false
-        const position = ref.locator.textPosition
-        if (position !== null && typeof position === 'object' && typeof position.container === 'string' && position.container.length > 0) {
-          try {
-            const container = document.querySelector(position.container)
-            surfacePresent = container !== null && container.isConnected !== false && annotationElementVisible(container)
-          } catch {
-            surfacePresent = false
-          }
+        outcome = annotationEphemeralOutcome(ref, outcome, capturedSurfacePresent(ref))
+        // A3/T49: conservative controller policy — a transient surface can never be
+        // confidently "Changed" (surface presence detection is heuristic); the pure
+        // helper still models the still-present Changed branch for callers/tests.
+        if ((ref.locator.ephemeral === true || ref.locator.surface === 'floating') && outcome.status === 'changed') {
+          outcome = { status: 'missing', via: outcome.via }
         }
-        outcome = annotationEphemeralOutcome(ref, outcome, { surfacePresent })
         let confidence = annotationStatusConfidence(ref, outcome)
         if (weakIdentity && outcome.status === 'changed' && (outcome.via === 'xpath' || outcome.via === 'text-position')) confidence = 'weak'
         const detail = { ...outcome, confidence }
