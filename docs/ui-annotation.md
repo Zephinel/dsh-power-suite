@@ -689,7 +689,7 @@ the recorded locator are inserted; the plugin never
 modifies the page to fix a stale reference. Re-locate works only for a resolved
 element and explains why when it cannot.
 
-### Multi-strategy anchors (CSS → XPath → text quote → text position)
+### Multi-strategy anchors (CSS → text quote → text position → XPath)
 
 Text-bearing leaf records capture extra fallback anchors at annotation time
 (backward-compatible optional locator fields; the v3 document and old records stay
@@ -744,10 +744,15 @@ or node the action shows an honest unavailable toast.
   (`无法验证 · 弱身份`, `data-psa-confidence="weak"`) in popover, detail card and
   rail row instead of “Content changed”.
 - **Identity limits:** elements without a stable identity (icon-only, no
-  `data-testid`/`data-*`, no accessible name) are inherently position-sensitive —
-  a structural fallback can never verify them, so they stay **Unverifiable** and
-  are not marked/copied as if identified. Host apps should give annotatable
-  elements stable `data-testid`/`data-*` attributes or real accessible names.
+  `data-testid`/`data-*`, no accessible name, or a stale verified selector) cannot
+  be re-verified: reference behavior (Hypothesis `maybeAssertQuote` / re-anchoring)
+  is **Missing** rather than promoting a same-tag look-alike. Structural CSS/XPath
+  hits additionally need captured-ancestor corroboration and, when a text quote
+  exists, the quote must assert on the candidate. Weak identity with a resolvable
+  quote and a still-present surface may honestly report Content changed
+  (“Unverifiable · weak identity”). Transient/floating records whose captured
+  surface is gone are **Missing**, never Changed/Resolved. Host apps should give
+  annotatable elements stable `data-testid`/`data-*` or real accessible names.
 - **Scan/cache probe:** fallback resolution counts resolver invocations and cache misses
   (exposed as `data-psa-fallback-scans` / the `debugFallbackScanProbe` test hook);
   repeated status reads on an unchanged DOM add 0 scans/resolutions, while a host
@@ -790,10 +795,13 @@ or node the action shows an honest unavailable toast.
   toast). Copy XPath/JS path live in popover, detail card and rail row.
 
 - **Order and validation:** fallback order is now CSS → text quote (captured
-  position.start as hint) → text position → XPath **last**. Every fallback hit must
-  pass tag + text digest + accessible-name checks; XPath/text-position hits also
-  need viewport proximity. Text-position resolves only when its container slice is
-  unique; weak-strategy ambiguity continues the chain.
+  position.start as hint) → text position → XPath **last**. Fallback hits pass
+  tag + text digest + accessible-name checks where those signals are meaningful;
+  weak/empty-identity records instead use the structural identity gate (no
+  same-tag promotion), and a `maybeAssertQuote`-style check applies to structural
+  CSS hits when a text quote exists. XPath/text-position hits also need viewport
+  proximity. Text-position resolves only when its container slice is unique;
+  weak-strategy ambiguity continues the chain.
 - **Scoring:** exact quote matches are scored 0.7·quote + 0.15·prefix +
   0.15·suffix (normalized over present components); bounded approximate matching
   (bounded Levenshtein) is capped below the Resolved threshold so an edited text
