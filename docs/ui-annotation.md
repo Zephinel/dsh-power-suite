@@ -728,6 +728,17 @@ or node the action shows an honest unavailable toast.
   only a unique climb reports **Resolved**; several plausible ancestors report
   **Matches several** and none continues honestly. Leaf/self anchors keep the old
   behaviour.
+- **Captured scope is authoritative (A3/T42):** for descendant text anchors, if
+  the recorded `textPosition.container` still resolves, resolution searches that
+  container only: exactly one valid climbed target → Resolved (an out-of-scope
+  duplicate can never downgrade it to Matches several); multiple distinct in-scope
+  targets → Matches several (real decoy inside the captured scope); zero in-scope
+  target → the bounded document fallback runs (honest re-anchor when content moved
+  out of the container). Body/document fallback therefore only fills an empty
+  scope result and never overrides an in-scope resolution. In-scope ambiguity is
+  **terminal**: multiple distinct targets inside the authoritative captured scope
+  report Matches several and later text-position/XPath fallbacks cannot override
+  it (self-anchor text resolution keeps the older weak-ambiguity chain).
 - **Confidence wording:** the four statuses are unchanged, but when the weak-identity
   structural gate produces `changed` the UI shows **Unverifiable · weak identity**
   (`无法验证 · 弱身份`, `data-psa-confidence="weak"`) in popover, detail card and

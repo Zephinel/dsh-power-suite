@@ -78,7 +78,7 @@ if (ui === undefined) {
     'annotationFullXPathOf', 'annotationFallbackCacheKey', 'annotationLevenshteinWithin',
     'annotationHasStrongIdentity', 'annotationStructuralFallbackStatus', 'annotationCopyAnchorDecision',
     'annotationRenderedTextRepeatCount', 'annotationFirstTextLeafDescendant', 'annotationAncestorTagChain',
-    'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey', 'debugFallbackScanProbe',
+    'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey', 'annotationScopeAuthorityOutcome', 'debugFallbackScanProbe',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -191,6 +191,7 @@ if (ui === undefined) {
     annotationDescendantAncestorMatches: [2, 2],
     annotationStatusConfidence: [2, 2],
     annotationStatusLabelKey: [2, 2],
+    annotationScopeAuthorityOutcome: [1, 1],
     debugFallbackScanProbe: [0, 0],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
@@ -214,7 +215,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 107, 'the frozen task-38 generation is pinned')
+    assert.equal(SEAM_GENERATION, 108, 'the frozen task-42 generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -2886,6 +2887,61 @@ if (ui === undefined) {
     assert.deepEqual(plain(descRef.locator.anchorSignature), { tag: 'div', attrs: [{ name: 'data-card', value: 'unique' }] })
     const leafRef = refOf({ tag: 'span' })
     assert.equal(leafRef.locator.anchorTarget, null, 'leaf anchors carry no descendant metadata')
+  })
+
+  test('A3/T44: authoritative (terminal) descendant ambiguity cannot be overridden by later fallbacks', () => {
+    const base = { candidates: [], expectedTag: 'div', queryAll: () => [] }
+    const liveInfo = () => ({ isConnected: true, textContent: '', actualDigest: '', expectedName: '', actualName: '' })
+    const terminal = ui.annotationResolveStatus({
+      ...base,
+      liveInfo,
+      resolveTextQuote: () => ({ status: 'ambiguous', terminal: true }),
+      resolveTextPosition: () => 'resolved',
+      resolveXPath: () => 'resolved'
+    })
+    assert.deepEqual(plain(terminal), { status: 'ambiguous', via: 'text-quote' },
+      'in-scope descendant ambiguity must be terminal; text-position/xpath cannot override it')
+    // Self-anchor semantics preserved: a plain weak ambiguity still lets a later
+    // strategy resolve (A3/T33/T34 behavior).
+    const weak = ui.annotationResolveStatus({
+      ...base,
+      liveInfo,
+      resolveTextQuote: () => 'ambiguous',
+      resolveTextPosition: () => 'resolved'
+    })
+    assert.deepEqual(plain(weak), { status: 'resolved', via: 'text-position' })
+    // Empty scope -> the resolver returns terminal only when the scope itself is
+    // ambiguous; a normal fallback target still resolves.
+    const fallback = ui.annotationResolveStatus({
+      ...base,
+      liveInfo,
+      resolveTextQuote: () => 'resolved',
+      resolveTextPosition: () => null,
+      resolveXPath: () => null
+    })
+    assert.deepEqual(plain(fallback), { status: 'resolved', via: 'text-quote' })
+  })
+
+  test('A3/T42: captured scope is authoritative for descendant text anchors', () => {
+    const a = { id: 'scope-a-target' }
+    const b = { id: 'doc-b-target' }
+    const decide = (inScope, fallback) => plain(ui.annotationScopeAuthorityOutcome({ inScope, fallback }))
+    // 1) unique in-scope target + out-of-scope duplicate → the scope target wins.
+    assert.deepEqual(decide({ targets: [a], ambiguous: false }, { targets: [a, b], ambiguous: false }),
+      { source: 'scope', target: a, ambiguous: false })
+    // 2) two in-scope targets → genuine ambiguity; never downgraded by fallback.
+    assert.deepEqual(decide({ targets: [a, b], ambiguous: false }, { targets: [a], ambiguous: false }),
+      { source: 'scope', target: null, ambiguous: true })
+    // 3) empty scope + one document fallback target → resolved via fallback.
+    assert.deepEqual(decide({ targets: [], ambiguous: false }, { targets: [b], ambiguous: false }),
+      { source: 'fallback', target: b, ambiguous: false })
+    // 4) empty scope + multiple/ambiguous document fallback → ambiguous.
+    assert.deepEqual(decide({ targets: [], ambiguous: false }, { targets: [a, b], ambiguous: false }),
+      { source: 'fallback', target: null, ambiguous: true })
+    assert.deepEqual(decide({ targets: [a], ambiguous: true }, { targets: [a], ambiguous: false }),
+      { source: 'scope', target: null, ambiguous: true }, 'scope ambiguity is terminal')
+    assert.deepEqual(decide({ targets: [], ambiguous: false }, { targets: [], ambiguous: false }),
+      { source: 'none', target: null, ambiguous: false })
   })
 
   //#region geometry and layout
