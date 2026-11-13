@@ -3084,42 +3084,47 @@ class Harness {
   }
 
   async openCollection() {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const ui = await this.ui()
-      if (ui.panel === 'collection') return true
-      const rect = await this.page.findRect('[data-psa-open-collection]')
-      assert(rect, 'no visible collection switch button')
-      await this.page.clickAt(rect.x, rect.y)
+    // A3/T26: the managed annotation list is the default rail body; this helper
+    // only has to leave the settings view when that happens to be open.
+    const ui = await this.ui()
+    if (ui.panel === 'collection') return true
+    if (ui.panel === 'settings') {
+      const back = await this.page.findRect('[data-psa-rail-back]')
+      if (back !== null) await this.page.clickAt(back.x, back.y)
       await sleep(250)
-      try {
-        await this.page.waitFor(
-          `document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel') === 'collection'`,
-          { timeout: 2000, label: 'collection rail panel' }
-        )
-        await sleep(150)
-        return true
-      } catch {
-        // The rail may have re-rendered between the rect read and the click; retry.
-      }
     }
-    throw new Error('the collection rail panel did not open after 3 real clicks')
+    await this.page.waitFor(
+      `document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel') === 'collection'`,
+      { timeout: 3000, label: 'collection rail panel (default list)' }
+    )
+    await sleep(120)
+    return true
   }
 
   async clickBack() {
+    // A3/T26: the list is the root view; Back now only leaves the settings view.
+    const ui = await this.ui()
+    if (ui.panel === 'collection') return true
     for (let attempt = 0; attempt < 3; attempt++) {
-      const rect = await this.clickByText('[data-psa-rail]', /^(Back|返回)$/)
+      const back = await this.page.findRect('[data-psa-rail-back]')
+      if (back !== null) await this.page.clickAt(back.x, back.y)
+      else {
+        const rect = await this.clickByText('[data-psa-rail]', /^(Back|返回)$/)
+        if (rect === null || rect === undefined) return false
+      }
+      await sleep(200)
       try {
         await this.page.waitFor(
-          `document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel') === 'status'`,
-          { timeout: 2000, label: 'status rail panel' }
+          `document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel') === 'collection'`,
+          { timeout: 2000, label: 'collection rail panel after Back' }
         )
-        await sleep(150)
-        return rect
+        await sleep(120)
+        return true
       } catch {
         // retry: the rail may have re-rendered between the lookup and the click
       }
     }
-    throw new Error('the rail did not return to the status view after 3 real clicks')
+    throw new Error('the rail did not return to the list view after 3 real clicks')
   }
 
   /** Wait until the launcher's centre actually receives pointer input (no overlay covering it). */
@@ -3158,9 +3163,10 @@ class Harness {
   }
 
   async ensureStatusPanel() {
+    // A3/T26 compatibility name: the default rail body is now the managed list.
     const ui = await this.ui()
-    if (ui.panel === null || ui.panel === 'status') return true
-    await this.clickBack()
+    if (ui.panel === null || ui.panel === 'collection') return true
+    if (ui.panel === 'settings') await this.clickBack()
     return true
   }
 
@@ -3285,6 +3291,57 @@ function buildScenarios(harness) {
       await h.ensurePluginsView()
       const baseline = await h.frame()
       assertEqual(baseline.htmlActive, null, 'mode should be off before the scenario starts')
+      // A3/T26: the launcher flies from its floating slot into the docked header slot
+      // (and back on exit) instead of vanishing instantly.
+      const animLauncher = await h.page.findRect('[data-psa-launcher]')
+      assert(animLauncher, 'idle launcher missing for the dock-animation probe')
+      const flightVisible = () => h.page.evaluate(`document.querySelector('[data-psa-launcher-flight]') !== null`)
+      await h.page.clickAt(animLauncher.x, animLauncher.y)
+      let dockFlight = false
+      const dockDeadline = Date.now() + 1500
+      while (Date.now() < dockDeadline) {
+        if (await flightVisible()) { dockFlight = true; break }
+        await sleep(25)
+      }
+      await h.page.waitFor(`document.documentElement.getAttribute('data-psa-active') === 'true'`, { timeout: 8000, label: 'mode active after the dock-animation click' })
+      assert(dockFlight, 'A3/T26: no [data-psa-launcher-flight] element appeared during activation')
+      if (process.env.PSA_LAUNCHER_ANIM_DIR) {
+        await mkdir(process.env.PSA_LAUNCHER_ANIM_DIR, { recursive: true })
+        const frameNow = await h.frame()
+        const railX = frameNow.rail === null ? VIEWPORT.width - 420 : frameNow.rail.x
+        const left = Math.max(0, Math.min(animLauncher.x, railX) - 24)
+        const top = Math.max(0, Math.min(animLauncher.y, frameNow.rail === null ? 0 : frameNow.rail.y) - 24)
+        const width = Math.min(VIEWPORT.width - left, Math.max(animLauncher.x + 60, railX + 60) - left)
+        const height = Math.min(VIEWPORT.height - top, Math.max(animLauncher.y + 80, 120) - top)
+        const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip: { x: left, y: top, width, height, scale: 1 } })
+        await writeFile(path.join(process.env.PSA_LAUNCHER_ANIM_DIR, 'launcher-docking-midflight.png'), Buffer.from(data.data, 'base64'))
+      }
+      await sleep(500)
+      assertEqual(await flightVisible(), false, 'A3/T26: the dock flight element did not go away')
+      // h.exit() sleeps past the short flight, so drive the real exit click and poll
+      // for the transient element concurrently.
+      await h.click('[data-psa-exit]')
+      let undockFlight = false
+      const undockDeadline = Date.now() + 1500
+      while (Date.now() < undockDeadline) {
+        if (await flightVisible()) { undockFlight = true; break }
+        await sleep(25)
+      }
+      await h.page.waitFor(`document.documentElement.getAttribute('data-psa-active') === null`, { timeout: 8000, label: 'mode off after the undock-animation exit' })
+      assert(undockFlight, 'A3/T26: no [data-psa-launcher-flight] element appeared during exit')
+      if (process.env.PSA_LAUNCHER_ANIM_DIR) {
+        const frameOff = await h.frame()
+        const railX = frameOff.rail === null ? VIEWPORT.width - 420 : frameOff.rail.x
+        const left = Math.max(0, Math.min(animLauncher.x, railX) - 24)
+        const top = 0
+        const width = Math.min(VIEWPORT.width - left, Math.max(animLauncher.x + 60, railX + 60) - left)
+        const height = Math.min(VIEWPORT.height - top, Math.max(animLauncher.y + 80, 160) - top)
+        const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip: { x: left, y: top, width, height, scale: 1 } })
+        await writeFile(path.join(process.env.PSA_LAUNCHER_ANIM_DIR, 'launcher-undocking-midflight.png'), Buffer.from(data.data, 'base64'))
+      }
+      await sleep(500)
+      assertEqual(await flightVisible(), false, 'A3/T26: the undock flight element did not go away')
+      assertEqual(await h.page.count('[data-psa-launcher]'), 1, 'A3/T26: the flight left the resting launcher count wrong')
       // A3/T19: the launcher floats only while idle. Drag it to a known place first;
       // it must return to that exact place after a docked mode cycle.
       const idleLauncherStart = await h.page.findRect('[data-psa-launcher]')
@@ -3335,7 +3392,7 @@ function buildScenarios(harness) {
       assert(frame.rail !== null, 'rail is missing after activation')
       assertEqual(frame.htmlActive, 'true', 'html[data-psa-active] marker')
       assertEqual(frame.frameMarker, 'true', 'frame[data-psa-frame] marker')
-      assert(railWidth >= 188 && railWidth <= 236, `rail width ${railWidth}px outside the 188..236 contract range`)
+      assert(railWidth >= 320 && railWidth <= 420, `active-mode list rail width ${railWidth}px outside the 320..420 contract range`)
       assertNear(padding, railWidth, 2, 'frame padding-right vs computed rail width')
       assertEqual(frame.grid, baseline.grid, 'inline grid-template-columns must stay untouched')
       assert(frame.rail.width <= railWidth + 2, `rail is ${frame.rail.width}px wide, reserved ${railWidth}px`)
@@ -3625,7 +3682,7 @@ function buildScenarios(harness) {
       assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), 'true', 'second Esc must keep the mode on')
       await h.page.pressKey('escape')
       await sleep(380)
-      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), null, 'third Esc did not leave the mode')
+      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), null, `third Esc did not leave the mode ui=${JSON.stringify(await h.ui())} panel=${JSON.stringify(await h.page.evaluate(`document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel')`))}`)
       await h.activate()
       return `wheel over ${wheelTarget} ${scrollable.scrollTop}->${scrolled.scrollTop} with 0 preventDefault (conversationScrollable=${scrollable.conversationScrollable}), ${keyLog.length} keydowns uncancelled, marquee selected ${marqueeCount} candidate(s) with [data-psa-box], F6 Esc ladder end-edit -> clear-selection -> mode-off`
     },
@@ -4525,25 +4582,54 @@ function buildScenarios(harness) {
       const canvasWidthBaseline = baseline.canvas.width
       await h.activate()
       const active = await h.frame()
-      const statusRailWidth = Number.parseFloat(active.railWidthVar || '0')
+      const activeRailWidth = Number.parseFloat(active.railWidthVar || '0')
       assert(active.rail !== null, 'rail missing after activation')
-      assertNear(statusRailWidth, 200, 8, `status-view rail width lost its compact width: ${statusRailWidth}`)
-      assertNear(active.canvas.width, canvasWidthBaseline - statusRailWidth, 3, 'conversation canvas width after activation')
-      await h.openCollection()
-      await sleep(450)
-      const collectionFrame = await h.frame()
-      const collectionRailWidth = Number.parseFloat(collectionFrame.railWidthVar || '0')
-      // A3/T25: opening the collection expands the annotation sidebar to
-      // clamp(320, 24vw, 420) and the frame padding follows it.
-      assertEqual(collectionFrame.panel, 'collection', `collection panel not visible (rail=${JSON.stringify(collectionFrame.rail)})`)
-      assertNear(collectionRailWidth, 415, 2, `collection sidebar width is not the wide clamp(320,24vw,420): ${collectionRailWidth}`)
-      assertNear(Number.parseFloat(collectionFrame.paddingRight || '0'), collectionRailWidth, 2, 'frame padding does not follow the wide sidebar')
-      assertNear(collectionFrame.rail.x + collectionFrame.rail.width, collectionFrame.viewport.width, 2, 'wide sidebar must stay right-anchored')
-      assert(collectionFrame.rail.width <= collectionRailWidth + 2, `wide sidebar overflows its reserved strip: ${collectionFrame.rail.width}`)
-      assertNear(collectionFrame.canvas.width, active.canvas.width - (collectionRailWidth - statusRailWidth), 3,
-        'conversation canvas width did not shrink by the sidebar width delta')
-      assertEqual(collectionFrame.grid, active.grid, 'inline grid style changed when the collection opened')
-      // ---- Structure: header, badges, subtitle, filters, list, footer ----
+      // A3/T26: the managed list is the default body; its wide width is the active-mode
+      // rail width (clamp(320px, 24vw, 420px)).
+      assertEqual(active.panel, 'collection', `the rail must open on the managed list, got panel=${JSON.stringify(active.panel)}`)
+      assertNear(activeRailWidth, 415, 2, `active list rail width is not clamp(320,24vw,420): ${activeRailWidth}`)
+      assertNear(Number.parseFloat(active.paddingRight || '0'), activeRailWidth, 2, 'frame padding does not follow the list width')
+      assertNear(active.rail.x + active.rail.width, active.viewport.width, 2, 'list rail must stay right-anchored')
+      assert(active.rail.width <= activeRailWidth + 2, `list rail overflows its reserved strip: ${active.rail.width}`)
+      assertNear(active.canvas.width, canvasWidthBaseline - activeRailWidth, 3, 'conversation canvas width does not shrink with the list rail')
+      const defaultViewProbe = await h.page.evaluate(`({
+        collectionRows: document.querySelectorAll('[data-psa-open-collection]').length,
+        settingsRows: document.querySelectorAll('[data-psa-rail] [data-psa-open-settings]').length,
+        gear: !!document.querySelector('[data-psa-rail] [data-psa-open-settings][aria-label]'),
+        filters: document.querySelectorAll('[data-psa-filter]').length,
+        footer: !!document.querySelector('[data-psa-add-annotation]'),
+        empty: !!document.querySelector('[data-psa-empty]'),
+        hint: (document.querySelector('[data-psa-selection-hint]')?.innerText || '').trim(),
+        title: (document.querySelector('.psa-sb-rail-title')?.innerText || '').trim()
+      })`)
+      assertEqual(defaultViewProbe.collectionRows, 0, 'A3/T26: the old full-width Collection row must be gone')
+      assertEqual(defaultViewProbe.settingsRows, 1, 'A3/T26: the header must contain exactly one settings gear icon')
+      assertEqual(defaultViewProbe.gear, true, 'A3/T26: the settings gear has no aria-label')
+      assertEqual(defaultViewProbe.filters, 3, 'the managed list filters did not render on activation')
+      assertEqual(defaultViewProbe.footer, true, 'the managed list footer did not render on activation')
+      assertEqual(defaultViewProbe.empty, true, 'the empty state did not render for an empty collection')
+      assert(/Click an element to annotate it|点击页面元素开始标注/.test(defaultViewProbe.hint),
+        `the selection hint is not discoverable on the list: ${defaultViewProbe.hint}`)
+      assertEqual(defaultViewProbe.title, 'Annotations', `default list title wrong: ${defaultViewProbe.title}`)
+      // Gear opens the settings view; Back (or the gear again) returns to the list.
+      await h.click('[data-psa-open-settings]')
+      await h.page.waitFor(`document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel') === 'settings'`,
+        { timeout: 4000, label: 'settings view from the gear icon' })
+      assertEqual(await h.page.count('[data-psa-setting-passthrough]'), 1, 'settings view did not render its fields')
+      await h.click('[data-psa-rail-back]')
+      await h.page.waitFor(`document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel') === 'collection'`,
+        { timeout: 4000, label: 'list view after settings Back' })
+      // Esc from settings also returns to the list (one step, mode stays on).
+      await h.click('[data-psa-open-settings]')
+      await h.page.waitFor(`document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel') === 'settings'`,
+        { timeout: 4000, label: 'settings view before Esc' })
+      await h.page.pressKey('escape')
+      await sleep(250)
+      assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel')`), 'collection',
+        'Esc in settings must return to the list, not leave the mode')
+      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), 'true',
+        'Esc in settings left the annotation mode')
+      // ---- Structure: header, badges, subtitle, filters, list, footer ----      // ---- Structure: header, badges, subtitle, filters, list, footer ----
       // A3/T25: seed a deterministic v3 document in an init script so the page's own
       // unload flush cannot overwrite it, then reload into the seeded state.
       const fixtureSessionId = await h.refreshSession()
@@ -4768,7 +4854,7 @@ function buildScenarios(harness) {
       assertEqual(restored.paddingRight, '', 'frame padding not removed after exit')
       assertNear(restored.canvas.width, canvasWidthBaseline, 2, 'conversation canvas width not restored after exit')
       assertEqual(restored.grid, baseline.grid, 'inline grid style changed after exit')
-      return `status rail ${statusRailWidth}px -> collection sidebar ${collectionRailWidth}px (clamp 320..420; frame padding follows, canvas shrinks); header/badge/subtitle/filters (2 singles, 2 groups, 8 items) + always-visible edit/delete; client-side filters; group collapse/expand aria; footer Add annotation / Clear collection; narrow overlay 320px no overflow; empty state; exit restores baseline`
+      return `active list rail ${activeRailWidth}px (clamp 320..420; frame padding follows, canvas shrink, no Collection/Settings rows, gear settings + Back/Esc); header/badge/subtitle/filters (2 singles, 2 groups, 8 items) + always-visible edit/delete; client-side filters; group collapse/expand aria; footer Add annotation / Clear collection; narrow overlay 320px no overflow; empty state; exit restores baseline`
     },
 
     10: async () => {
