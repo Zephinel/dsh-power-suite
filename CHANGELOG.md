@@ -61,7 +61,12 @@ heading is added until the release is cut.
   always-visible edit/delete/insert actions), per-item metadata (Selector,
   Page/Area, Session/Workspace, updated time), empty/filter-empty states, and a
   footer with **Add annotation** plus dynamic **Clear selection / Clear
-  collection** (undoable). Page
+  collection** (undoable). The list is the rail's default body on activation
+  (the intermediate status/Collection/Settings rows are gone; a compact
+  **settings gear** in the header opens settings, Back/Esc returns), with the
+  selection hint in the header, and the launcher animates a ~220 ms ease-out
+  flight between its remembered floating slot and the rail header on
+  activation/exit (reduced-motion instant). Page
   pointer events are consumed in the capture phase so native controls cannot
   act while annotating; the configurable multi-select modifier toggles selection
   or starts a marquee, and the configurable pass-through modifier restores real
@@ -195,7 +200,11 @@ heading is added until the release is cut.
   replaces solid-color focus outlines/borders on plugin text inputs (annotation
   note fields, prompt-history search field, settings choice pills); it fades in
   in 140 ms, rotates and hue-drifts, keeps a static ring under reduced motion,
-  and falls back to the system `Highlight` outline under forced colors.
+  and falls back to the system `Highlight` outline under forced colors. The ring
+  is parameterised and the prompt-history **search field** uses a deliberately
+  calmer variant (opacity 0.58, desaturated 2.5 px glow, 1.5 px track, slower
+  4.6 s/20 s drift) so it reads as a soft accent; the other inputs keep the
+  shared stronger defaults.
 - Interrupted-session detection now covers **every unfinished turn ending**, not
   only Host restarts/crashes: any `turn/end` reason `error` (quota/usage limit,
   request timeout, transport/network failure, rate limit, malformed response,

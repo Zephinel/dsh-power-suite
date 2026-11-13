@@ -121,12 +121,12 @@ a strip freed from the right edge instead of covering the conversation.
 
 ![Annotation mode with the page shrunk and the rail in the freed right strip](assets/annotation-mode.png)
 
-- The compact rail (status/settings) is `clamp(188px, 11.6vw, 236px)` — about
-  200 px at a 1728 px viewport. The **collection sidebar widens** to
-  `clamp(320px, 24vw, 420px)` (≈415 px at 1728 px) so rows and group cards stay
-  readable; the frame padding follows the wider strip and shrinks back when the
-  view closes. At narrow viewports the wide sidebar switches to the overlay mode
-  at its 320 px floor. Collapsing still wins (48 px strip).
+- The active-mode rail (managed annotation list and its settings view) uses the
+  wide `clamp(320px, 24vw, 420px)` — ≈415 px at a 1728 px viewport — so rows and
+  group cards stay readable; the frame padding follows and the canvas shrinks by
+  the rail width. There is no compact intermediate view any more; only the
+  collapsed 48 px strip and the narrow-viewport overlay (320 px floor) are
+  smaller. Collapsing/collapse-Esc/exit still restore the exact page layout.
 - The **launcher docks into the rail header** (26 px round button next to the
   collapse/exit controls, same glyph and count badge) whenever the mode is
   active, in both the page-shrunk and the narrow-viewport overlay layouts; it is
@@ -173,23 +173,33 @@ a strip freed from the right edge instead of covering the conversation.
   the frame marker is cleared after the short transition; and the rail DOM is
   removed.
 
-### Rail status view
+### Rail default list
 
-The rail's default **status** view reports what the mode would act on:
+With the mode on, the rail body **is the managed annotation list** — there is no
+intermediate status screen and no full-width "Collection" / "Settings" entry
+rows:
 
-- while idle: `Click an element to annotate it`, a short hint that names the
-  current pass-through and multi-select modifiers, and the **Collection** (with
-  its count) and **Settings** entries;
-- with one element selected: `1 element selected`, a secondary line naming the
-  selected element, and the **Collection** and **Settings** entries — the note
-  popover is open at the same time, and adding lives there;
-- with several elements selected: `{count} elements selected`,
-  **Add {count} to collection**, **Clear selection**, then the **Collection** and
-  **Settings** entries.
+- header `Annotations` + total badge + a compact one-line subtitle and, when
+  elements are selected, a `N elements selected` hint; the docked launcher
+  control, a **settings gear icon**, collapse and exit icons sit in the top rail
+  header;
+- the filter chips, list toolbar, singles/group cards and the two-action footer
+  are visible immediately (empty state when nothing is annotated yet);
+- the gear opens the existing settings view; its Back control or Esc returns to
+  the list, and Esc from the list leaves the mode (after the usual edit/selection
+  rungs). The launcher/collapse/exit controls stay available in that header.
 
-Collection and settings replace the rail's body in place. Each view has a back
-control to the status view, and Esc also returns to the status view from either
-view.
+### Launcher animation
+
+Activating the mode no longer just swaps the floating launcher for the docked
+one: a transient, pointer-transparent copy flies from the remembered floating
+slot into the rail-header slot over ~220 ms (ease-out), and the reverse plays on
+exit. The flying element has `data-psa-launcher-flight` and never replaces the
+real controls: at rest there is exactly one `[data-psa-launcher]` (floating only
+while idle, docked only while active), the docked control keeps ignoring drags,
+and position persistence is unchanged. Under `prefers-reduced-motion: reduce`
+both the flight and the small dock/float entrance animations are disabled
+(instant final state).
 
 ## Selecting elements
 

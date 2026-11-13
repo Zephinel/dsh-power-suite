@@ -1291,8 +1291,12 @@ const probe = {
       present: true,
       afterOpacity: s.opacity,
       afterAnimation: s.animationName,
+      afterAnimationDuration: s.animationDuration,
       afterBackground: s.backgroundImage,
       afterMask: `${s.maskImage || s.webkitMaskImage || ''} ${s.maskComposite || s.webkitMaskComposite || ''}`.trim(),
+      afterFilter: s.filter,
+      afterPadding: s.padding,
+      afterInset: s.inset,
       focused: field.contains(document.activeElement),
     }
   },
@@ -2737,9 +2741,17 @@ async function runFocusChecks({ page, results, state }) {
     const ring = await page.eval(probe.focusRing, '.psp-search-field')
     assert(ring.present, 'search field wrapper missing')
     assert(ring.focused, 'the search input did not take focus when the search card opened')
-    assert(Number(ring.afterOpacity) > 0.9, `rainbow ring must be visible when focused (opacity ${ring.afterOpacity})`)
+    // The search field uses the calmer variant of the shared ring (user request):
+    // visible but quiet -- lower opacity, thinner track, softer/dimmer glow.
+    const opacity = Number(ring.afterOpacity)
+    assert(opacity >= 0.5 && opacity <= 0.68, `search-field ring must be the calm variant (opacity ${ring.afterOpacity}, expected 0.5-0.68)`)
+    assert(ring.afterFilter.includes('saturate(0.8)'), `search-field ring must be slightly desaturated (filter ${ring.afterFilter})`)
+    assert(ring.afterFilter.includes('2.5px'), `search-field ring outer glow must be softened to 2.5px (filter ${ring.afterFilter})`)
+    assertEqual(ring.afterPadding, '1.5px', 'search-field ring must be the thinner 1.5 px track')
+    assertEqual(ring.afterInset, '-3px', 'search-field ring must still hug the field on all edges (inset -3px)')
     assert(ring.afterBackground.includes('conic-gradient'), `focus ring must be the rainbow conic track, got ${short(ring.afterBackground, 100)}`)
     assert(ring.afterAnimation.includes('psf-ring'), `focus ring animation missing (${ring.afterAnimation})`)
+    assert(ring.afterAnimationDuration.includes('4.6s'), `search-field ring should drift slowly (durations ${ring.afterAnimationDuration})`)
     assert(ring.afterMask.includes('exclude') || ring.afterMask.includes('xor'), `focus ring must use the mask-composite track recipe (${ring.afterMask})`)
     await page.pressEscape()
     await sleep(400)
@@ -2750,7 +2762,7 @@ async function runFocusChecks({ page, results, state }) {
 
   await results.check('b3-2', 'settings choice pills replaced their solid focus outline with the same ring', async () => {
     const rules = await page.evaluate(`(() => {
-      const result = { ringRule: false, ringInputs: false, solidChoiceOutline: false }
+      const result = { ringRule: false, ringInputs: false, solidChoiceOutline: false, calmScoped: false, sharedDefault: false }
       for (const sheet of document.styleSheets) {
         let rules2
         try { rules2 = sheet.cssRules } catch { continue }
@@ -2760,6 +2772,8 @@ async function runFocusChecks({ page, results, state }) {
           if (text.includes('.psf-rainbow-focus') && text.includes('conic-gradient')) result.ringRule = true
           if (text.includes('.psf-rainbow-focus') && text.includes('psp-search-field')) result.ringInputs = true
           if (text.includes('dps-choice-option') && text.includes('focus-visible') && text.includes('outline')) result.solidChoiceOutline = true
+          if (text.includes('.psf-rainbow-focus.psp-search-field') && /--psf-ring-opacity\\s*:\\s*[.0-9]*58/.test(text)) result.calmScoped = true
+          if (/\.psf-rainbow-focus\\s*\\{/.test(text) && /--psf-ring-opacity\\s*:\\s*1\\b/.test(text)) result.sharedDefault = true
         }
       }
       return result
@@ -2767,6 +2781,8 @@ async function runFocusChecks({ page, results, state }) {
     assert(rules.ringRule, 'shared rainbow-focus stylesheet is missing')
     assert(rules.ringInputs, 'the prompt-history input is not wired to the shared ring')
     assert(!rules.solidChoiceOutline, 'a solid focus outline rule still targets the settings choice pills')
+    assert(rules.calmScoped, 'the calmer ring variant is not scoped to the prompt-history search field')
+    assert(rules.sharedDefault, 'the shared rainbow ring lost its strong default for the other plugin inputs')
     const rapid = await page.evaluate(`(() => {
       const labels = [...document.querySelectorAll('.dps-choice-option')]
       return labels.length
@@ -3488,11 +3504,13 @@ async function captureScreenshots(page, state) {
   await captureAtmosphereEvidence(page, shot, 'light')
   await captureLayoutEvidence(page, shot, 'light')
   await capturePillEvidence(page, shot, 'light')
+  await captureFocusEvidence(page, shot, 'light')
   await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
   await sleep(800)
   await captureAtmosphereEvidence(page, shot, 'dark')
   await captureLayoutEvidence(page, shot, 'dark')
   await capturePillEvidence(page, shot, 'dark')
+  await captureFocusEvidence(page, shot, 'dark')
   await page.emulateMedia([])
   await sleep(300)
   return shots
@@ -3625,6 +3643,39 @@ async function capturePillEvidence(page, shot, theme) {
   if (childIndex > 0) await capture(`15-pill-child-${theme}`, childIndex)
   await page.moveTo(900, 500)
   await sleep(300)
+}
+
+/**
+ * Photograph the focused prompt-history search field's rainbow ring close-up.
+ * @param {object} page - Page wrapper.
+ * @param {Function} shot - screenshot(name, clip) helper.
+ * @param {'light' | 'dark'} theme - theme label used in the file name.
+ * @returns {Promise<void>}
+ */
+async function captureFocusEvidence(page, shot, theme) {
+  try {
+    const toggle = await page.findRect('[data-psp-search-toggle]')
+    if (!toggle) return
+    await page.clickAt(toggle.x, toggle.y)
+    await sleep(800)
+    const rect = await page.eval(() => {
+      const field = document.querySelector('.psp-search-field')
+      if (!field) return null
+      const r = field.getBoundingClientRect()
+      return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }
+    })
+    if (rect !== null) {
+      await page.moveTo(900, 700)
+      await sleep(450)
+      const clipRect = { left: rect.left - 14, top: rect.top - 14, width: rect.width + 28, height: rect.height + 28 }
+      const clip = clipAroundRect(clipRect)
+      if (clip !== null) await shot(`16-focus-ring-${theme}`, clip)
+    }
+    await page.pressEscape()
+    await sleep(450)
+  } catch {
+    // best-effort evidence
+  }
 }
 
 /** Viewport-clamped clip around a floating card rect for evidence close-ups. */

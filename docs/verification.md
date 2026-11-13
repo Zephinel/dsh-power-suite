@@ -158,6 +158,17 @@ figure model, and the existing Host suites.
 injected into the running GUI at 1728×900; 0 page errors and 0 real same-origin
 API/plugin network failures in every run below):
 
+- Annotation rail default body: activating the mode opens the managed
+  annotation list directly (no intermediate status/Collection click) — header
+  **Annotations** + total badge + subtitle + selection hint (switches to
+  "N elements selected"), filters, toolbar, singles/group cards, footer and
+  empty state; a **settings gear icon** in the header opens the settings view
+  (Back/Esc returns to the list). The docked launcher animates a ~220 ms
+  ease-out flight between the remembered floating slot and the rail-header slot
+  on activation/exit (transient pointer-transparent flight element; exactly one
+  resting launcher; reduced-motion instant). The rail uses the wide list width
+  while active (415 px at 1728×900), restores on exit, collapses to 48 px and
+  falls back to the 320 px overlay on narrow viewports.
 - Annotation sidebar redesign: the rail's collection view widens to
   `clamp(320px, 24vw, 420px)` (415 px at 1728×900; status/settings views stay
   ~200 px) and shows a real managed list — **Annotations** header + total badge
@@ -167,8 +178,10 @@ API/plugin network failures in every run below):
   filter-empty states, and a footer with **Add annotation** plus dynamic
   **Clear selection / Clear collection** (undoable). Scenario 9 asserts the
   width/frame/canvas delta, restore-on-exit, the list structure/counts/filters,
-  collapse/expand, always-visible actions, footer states and the narrow-viewport
-  overlay. The full `--from 4` sequence showed intermittent post-scenario
+  collapse/expand, always-visible actions, footer states, the default-list
+  activation (no Collection/Settings rows, gear icon) and the narrow-viewport
+  overlay; scenario 1 asserts the launcher flight element appears during
+  activation/exit and that exactly one resting launcher remains. The full `--from 4` sequence showed intermittent post-scenario
   activation/reload timeouts that do not reproduce standalone or in `--from 9`
   (0 page errors) — recorded as a long-sequence flake, not a green full run.
 - Sidebar harness `test/browser/sidebar.e2e.mjs`: **43/43 PASS**. It
@@ -192,8 +205,10 @@ API/plugin network failures in every run below):
   atmosphere baseline (saturate(1.5) filter, wrapper opacity >= .78, scrim alpha
   <= .24, blob-core saturation >= .38 animated / >= .28 static, per-theme
   multiply/screen blend), title-case buckets, fold persistence at
-  first paint, the browser borderless/typography recipe, the row-highlight text
-  insets (parent `4px 10px 4px 14px`, child `3px 8px 3px 10px`; title text
+  first paint, the browser borderless/typography recipe, the calmer
+  prompt-history search focus ring (parameterised ring, search-field variant:
+  opacity 0.58, saturate(.8), 2.5 px glow, 1.5 px track, slower spin; shared
+  defaults unchanged for the other inputs), the row-highlight text insets (parent `4px 10px 4px 14px`, child `3px 8px 3px 10px`; title text
   >= 8 px inside the pill's right edge, pill content-paced, mask boundary
   recalculated), and both cross-branch annotation-mode hover-card pin states.
 - Annotation harness `test/browser/annotation.e2e.mjs`: `--smoke` **6/6 PASS**

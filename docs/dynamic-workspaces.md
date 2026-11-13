@@ -675,19 +675,25 @@ Plugin surfaces follow the shell's own recipes instead of bespoke chrome:
 - **Rainbow focus highlight for plugin inputs**: focused plugin text inputs and
   choice controls show the same flowing rainbow track that used to draw the
   current-chat ring, in place of a solid-colour focus border. The shared class
-  is `.psf-rainbow-focus` (see `DW_CSS`): a `::after` overlay with
-  `padding: 2px`, a `conic-gradient` of the seven rainbow stops, a
-  `mask-composite: exclude` ring mask, a blurred `drop-shadow` glow, and a
-  3.2 s `@property --psf-ring-angle` rotation plus a 14 s hue drift; opacity
-  transitions in at 140 ms and the ring is inset by 2–3 px so it never shifts
-  layout. It is wired to the **prompt-history search field**
-  (`span.psp-search-field.psf-rainbow-focus` around the borderless input) and
-  the **settings choice pills** (`.dps-choice-option.psf-rainbow-focus`, whose
-  old solid outline rule is removed). Any other plugin input can adopt the same
-  class; the annotation note editors are expected to use it once their surface
-  is rewritten. `prefers-reduced-motion: reduce` leaves a static rainbow ring,
-  and `forced-colors` mode replaces it with a system `Highlight` outline so
-  focus stays visible in high-contrast mode.
+  is `.psf-rainbow-focus` (see `DW_CSS`): a `::after` overlay with a
+  `conic-gradient` of the seven rainbow stops, a `mask-composite: exclude` ring
+  mask, a blurred `drop-shadow` glow, and a 3.2 s `@property --psf-ring-angle`
+  rotation plus a 14 s hue drift. The look is parameterised with CSS custom
+  properties (`--psf-ring-sat`, `--psf-ring-glow`, `--psf-ring-glow-alpha`,
+  `--psf-ring-opacity`, `--psf-ring-thickness`); the shared defaults keep the
+  original stronger look (saturate .92, 5 px glow at .38 alpha, opacity 1,
+  2 px track), so the **settings choice pills** (`.dps-choice-option` — whose
+  old solid outline rule is removed) and any annotation surface using the class
+  are unchanged. The **prompt-history search field**
+  (`span.psp-search-field.psf-rainbow-focus` around the borderless input) uses
+  the deliberately calmer variant: focus opacity `.58`, a 1.5 px track,
+  `saturate(.8)`, a 2.5 px glow at .2 alpha, and a slower 4.6 s spin / 20 s hue
+  drift — the same rainbow, just a soft accent instead of a bright border. The
+  ring keeps its `inset: -3px` hug on every edge (including under the input's
+  baseline descender), opacity transitions in at 140 ms and nothing shifts
+  layout. `prefers-reduced-motion: reduce` leaves a static rainbow ring (the
+  calm search variant stays static too), and `forced-colors` mode replaces it
+  with a system `Highlight` outline so focus stays visible in high-contrast mode.
 
 ## Annotation mode integration
 

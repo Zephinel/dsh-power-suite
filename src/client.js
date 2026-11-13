@@ -4695,11 +4695,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
    used by the prompt-history search field and the settings choice pills, and
    available to the annotation note editors once that surface is rewritten. */
 @property --psf-ring-angle{syntax:'<angle>';inherits:false;initial-value:0deg}
-.psf-rainbow-focus{position:relative}
-.psf-rainbow-focus::after{content:'';position:absolute;inset:-2px;border-radius:calc(var(--dsw-radius-sm,8px) + 2px);padding:2px;background:conic-gradient(from var(--psf-ring-angle,0deg),#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:0;transition:opacity 140ms var(--ds-ease-in-out,ease);filter:saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38));z-index:2}
-.psf-rainbow-focus:focus-within::after,.psf-rainbow-focus:focus-visible::after{opacity:1;animation:psf-ring-spin 3.2s linear infinite,psf-ring-hue 14s linear infinite}
+.psf-rainbow-focus{--psf-ring-sat:.92;--psf-ring-glow:5px;--psf-ring-glow-alpha:.38;--psf-ring-opacity:1;--psf-ring-thickness:2px;position:relative}
+.psf-rainbow-focus::after{content:'';position:absolute;inset:-2px;border-radius:calc(var(--dsw-radius-sm,8px) + 2px);padding:var(--psf-ring-thickness,2px);background:conic-gradient(from var(--psf-ring-angle,0deg),#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:0;transition:opacity 140ms var(--ds-ease-in-out,ease);filter:saturate(var(--psf-ring-sat,.92)) drop-shadow(0 0 var(--psf-ring-glow,5px) rgba(178,150,255,var(--psf-ring-glow-alpha,.38)));z-index:2}
+.psf-rainbow-focus:focus-within::after,.psf-rainbow-focus:focus-visible::after{opacity:var(--psf-ring-opacity,1);animation:psf-ring-spin 3.2s linear infinite,psf-ring-hue 14s linear infinite}
 @keyframes psf-ring-spin{to{--psf-ring-angle:360deg}}
-@keyframes psf-ring-hue{from{filter:hue-rotate(0deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}to{filter:hue-rotate(360deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}}
+@keyframes psf-ring-hue{from{filter:hue-rotate(0deg) saturate(var(--psf-ring-sat,.92)) drop-shadow(0 0 var(--psf-ring-glow,5px) rgba(178,150,255,var(--psf-ring-glow-alpha,.38)))}to{filter:hue-rotate(360deg) saturate(var(--psf-ring-sat,.92)) drop-shadow(0 0 var(--psf-ring-glow,5px) rgba(178,150,255,var(--psf-ring-glow-alpha,.38)))}}
 @media (prefers-reduced-motion: reduce){.psf-rainbow-focus:focus-within::after,.psf-rainbow-focus:focus-visible::after{animation:none}}
 @media (forced-colors: active){.psf-rainbow-focus::after{display:none}.psf-rainbow-focus:focus-within{outline:2px solid Highlight;outline-offset:1px}}
 /* Current-session highlight: a full-pill rainbow "atmosphere" painted INSIDE the
@@ -7531,6 +7531,14 @@ function dwClearNativeAtmospheres() {
 .psp-search-row{display:flex;align-items:center;gap:6px}
 .psp-search-field{position:relative;display:flex;flex:1;min-width:0;height:22px;align-items:center;border-radius:var(--dsw-radius-sm,8px)}
 .psf-rainbow-focus.psp-search-field::after{inset:-3px;border-radius:calc(var(--dsw-radius-sm,8px) + 3px)}
+/* Calmer rainbow for the prompt-history search field only (user request): the
+   same conic track, but quieter -- lower focus opacity, a thinner ring, less
+   saturation and a much softer outer glow, with a slower spin/hue drift. The
+   shared class keeps its original stronger defaults for the settings choice
+   pills and the annotation surfaces. */
+.psf-rainbow-focus.psp-search-field{--psf-ring-sat:.8;--psf-ring-glow:2.5px;--psf-ring-glow-alpha:.2;--psf-ring-opacity:.58;--psf-ring-thickness:1.5px}
+.psf-rainbow-focus.psp-search-field:focus-within::after,.psf-rainbow-focus.psp-search-field:focus-visible::after{opacity:var(--psf-ring-opacity,.58);animation:psf-ring-spin 4.6s linear infinite,psf-ring-hue 20s linear infinite}
+@media (prefers-reduced-motion: reduce){.psf-rainbow-focus.psp-search-field:focus-within::after,.psf-rainbow-focus.psp-search-field:focus-visible::after{animation:none}}
 .psp-search-icon{flex:none;color:var(--dsw-static-neutral-bluish-400,#adb2b8)}
 .psp-search-input{flex:1;min-width:0;height:22px;margin:0;padding:0;border:0;background:transparent;color:var(--dsw-static-neutral-bluish-00,#fff);font:inherit;font-size:12px;line-height:18px;outline:none}
 .psp-search-input::placeholder{color:var(--dsw-static-neutral-bluish-400,#adb2b8)}
@@ -8457,6 +8465,9 @@ function dwClearNativeAtmospheres() {
     /** A3/T24: estimated batch popover size used for placement clamping. */
     const ANNOTATION_BATCH_POPOVER_SIZE = { width: 320, height: 240 }
 
+    /** A3/T26: launcher dock/undock flight duration (ms); CSS matches this. */
+    const ANNOTATION_LAUNCHER_FLIGHT_MS = 220
+
     /** A3/T9: the composer trigger source that owns annotation reference chips. */
     const ANNOTATION_CHIP_SOURCE = 'ui-annotation'
 
@@ -8640,6 +8651,7 @@ function dwClearNativeAtmospheres() {
       'insert.itemsCountLabel': 'items',
       'sidebar.title': 'Annotations',
       'sidebar.subtitle': 'Manage single annotations and batch groups together.',
+      'sidebar.hint': 'Click an element to annotate it · {passThrough}-click keeps the page usable · {multi}-click adds to the selection.',
       'sidebar.filter.all': 'All',
       'sidebar.filter.single': 'Singles',
       'sidebar.type.single': 'Single',
@@ -8829,6 +8841,7 @@ function dwClearNativeAtmospheres() {
       'insert.itemsCountLabel': '项',
       'sidebar.title': '标注',
       'sidebar.subtitle': '单条标注与批量分组在同一列表中管理。',
+      'sidebar.hint': '点击页面元素开始标注 · {passThrough}-点击可正常使用页面 · {multi}-点击可加选。',
       'sidebar.filter.all': '全部',
       'sidebar.filter.single': '单条',
       'sidebar.type.single': '单条',
@@ -10831,7 +10844,7 @@ function dwClearNativeAtmospheres() {
     function createAnnotationState() {
       return {
         phase: 'off',
-        view: 'status',
+        view: 'collection',
         hoverId: null,
         selection: [],
         note: '',
@@ -10874,7 +10887,7 @@ function dwClearNativeAtmospheres() {
       return {
         ...state,
         phase: 'off',
-        view: 'status',
+        view: 'collection',
         hoverId: null,
         selection: [],
         note: '',
@@ -10909,7 +10922,9 @@ function dwClearNativeAtmospheres() {
       switch (payload.type) {
         case 'activate': {
           if (current.phase !== 'off') return current
-          return { ...current, phase: 'idle', view: 'status', hoverId: null, selection: [], note: '', editing: false, box: null, feedback: null }
+          // A3/T26: the managed annotation list is the default rail body; there is
+          // no intermediate status/Collection navigation layer.
+          return { ...current, phase: 'idle', view: 'collection', hoverId: null, selection: [], note: '', editing: false, filter: 'all', box: null, feedback: null }
         }
         case 'deactivate':
           return annotationDeactivateState(current)
@@ -10987,10 +11002,9 @@ function dwClearNativeAtmospheres() {
         case 'endEdit':
           return { ...current, editing: false }
         case 'openView': {
-          const view = payload.view === 'collection' || payload.view === 'settings' ? payload.view : 'status'
-          const phase = view === 'collection' ? 'collection' : 'idle'
-          if (current.view === view && current.phase === phase && current.selection.length === 0) return current
-          return { ...current, view, phase, selection: [], note: '', editing: false, hoverId: null }
+          const view = payload.view === 'settings' ? 'settings' : 'collection'
+          if (current.view === view && current.selection.length === 0 && current.view === 'collection') return current
+          return { ...current, view, phase: 'idle', selection: [], note: '', editing: false, hoverId: null }
         }
         case 'collectionAdd': {
           const result = collectionAdd(current.collection, payload.entry)
@@ -11143,15 +11157,16 @@ function dwClearNativeAtmospheres() {
             selection: [],
             note: '',
             editing: false,
+            filter: 'all',
             box: null,
-            view: 'status',
+            view: 'collection',
             phase: current.phase === 'off' ? 'off' : 'idle'
           }
         }
         case 'exitOne': {
           if (current.editing) return { ...current, editing: false }
+          if (current.view === 'settings') return { ...current, view: 'collection' }
           if (current.selection.length > 0) return { ...current, selection: [], note: '', editing: false, phase: 'idle', hoverId: null }
-          if (current.view !== 'status') return { ...current, view: 'status', phase: 'idle' }
           if (current.phase !== 'off') return annotationDeactivateState(current)
           return current
         }
@@ -11584,7 +11599,7 @@ function dwClearNativeAtmospheres() {
       const width = typeof viewportWidth === 'number' && Number.isFinite(viewportWidth) ? viewportWidth : 0
       // A3/T25: the redesigned collection sidebar needs room for readable rows and
       // group cards; status/settings keep the compact rail.
-      if (view === 'collection') return Math.min(420, Math.max(320, Math.round(width * 0.24)))
+      if (view === 'collection' || view === 'settings') return Math.min(420, Math.max(320, Math.round(width * 0.24)))
       return Math.min(236, Math.max(188, Math.round(width * 0.116)))
     }
 
@@ -12674,6 +12689,8 @@ function dwClearNativeAtmospheres() {
         chipPreview: null,
         // A3/T22: the × affordance shown over a hovered annotation reference chip.
         chipAction: null,
+        // A3/T26: transient launcher dock/undock flight (never persisted).
+        launcherFlight: null,
         // A3 Phase 2-A transient UI state (never persisted): page marks derived per
         // geometry frame, the record under the pointer, the floating detail card,
         // and the single-slot undo payload.
@@ -14362,8 +14379,10 @@ function dwClearNativeAtmospheres() {
           dispatch({ type: 'exitOne' })
           return
         }
-        if (state.view !== 'status') {
-          dispatch({ type: 'openView', view: 'status' })
+        // A3/T26: the managed list is the root body; only settings has a rung above
+        // it, and the next Esc from the list leaves the mode.
+        if (state.view === 'settings') {
+          dispatch({ type: 'exitOne' })
           return
         }
         deactivate()
@@ -14543,6 +14562,38 @@ function dwClearNativeAtmospheres() {
         }, 180)
       }
 
+      /** Monotonic id for the current launcher flight (0 = none). */
+      let launcherFlightSeq = 0
+      /** Pending clear timer for the launcher flight. */
+      let launcherFlightTimer = null
+
+      /**
+       * Start the transient launcher flight between the remembered floating slot
+       * and the docked rail-header slot (A3/T26). The flight element is
+       * pointer-transparent and purely visual; the resting launcher is unchanged.
+       * @param {'dock' | 'undock'} mode - direction.
+       * @param {{ x: number, y: number }} from - start top-left (viewport px).
+       * @param {{ x: number, y: number }} to - end top-left (viewport px).
+       * @returns {void}
+       */
+      function startLauncherFlight(mode, from, to) {
+        try {
+          if (typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+            && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+        } catch {
+          // A throwing matchMedia keeps the instant path.
+        }
+        if (launcherFlightTimer !== null) window.clearTimeout(launcherFlightTimer)
+        launcherFlightSeq += 1
+        const id = launcherFlightSeq
+        publish({ launcherFlight: { id, mode, from, to, size: ANNOTATION_LAUNCHER_SIZE } })
+        launcherFlightTimer = window.setTimeout(() => {
+          launcherFlightTimer = null
+          const current = snapshot().launcherFlight
+          if (current !== null && current.id === id) publish({ launcherFlight: null })
+        }, ANNOTATION_LAUNCHER_FLIGHT_MS + 40)
+      }
+
       /**
        * Turn annotation mode on: markers, layout, listeners.
        *
@@ -14568,6 +14619,22 @@ function dwClearNativeAtmospheres() {
           // leaves the shell chrome raised.
           capturePaintLayer()
           scheduleGeometry()
+          // A3/T26: the floating launcher is gone; fly a transient copy from its
+          // remembered slot into the docked header control once the rail painted.
+          const flightFrom = idleLauncherPosition !== null
+            ? { x: idleLauncherPosition.x, y: idleLauncherPosition.y }
+            : null
+          if (flightFrom !== null) {
+            window.requestAnimationFrame(() => {
+              window.requestAnimationFrame(() => {
+                if (!isActive()) return
+                const docked = document.querySelector('[data-psa-launcher]')
+                if (docked === null) return
+                const rect = docked.getBoundingClientRect()
+                startLauncherFlight('dock', flightFrom, { x: Math.round(rect.left), y: Math.round(rect.top) })
+              })
+            })
+          }
         } catch (error) {
           try {
             dispatch({ type: 'deactivate' })
@@ -14605,6 +14672,8 @@ function dwClearNativeAtmospheres() {
           flushAnnotationRecords()
           return
         }
+        const dockedBefore = document.querySelector('[data-psa-launcher]')
+        const dockedRect = dockedBefore === null ? null : dockedBefore.getBoundingClientRect()
         try {
           dispatch({ type: 'deactivate' })
         } finally {
@@ -14620,11 +14689,22 @@ function dwClearNativeAtmospheres() {
           cancelMarkerHoverTimer()
           cancelDetailClose()
           closeDetailCard()
-          publish({ markRects: [], markerHoverId: null, markUndo: null, chipPreview: null })
+          publish({ markRects: [], markerHoverId: null, markUndo: null, chipPreview: null, launcherFlight: null })
           uninstallPageListeners()
           disconnectFrameObserver()
           restoreAnnotationLayout()
           flushAnnotationRecords()
+          // A3/T26: reverse flight from the docked slot to the restored floating one.
+          if (dockedRect !== null) {
+            window.requestAnimationFrame(() => {
+              window.requestAnimationFrame(() => {
+                const floating = document.querySelector('[data-psa-launcher]')
+                if (floating === null) return
+                const rect = floating.getBoundingClientRect()
+                startLauncherFlight('undock', { x: Math.round(dockedRect.left), y: Math.round(dockedRect.top) }, { x: Math.round(rect.left), y: Math.round(rect.top) })
+              })
+            })
+          }
           if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
           feedbackTimer = null
           try {
@@ -14782,7 +14862,7 @@ function dwClearNativeAtmospheres() {
 
       /** Return the rail to its status view. @returns {void} */
       function backView() {
-        dispatch({ type: 'openView', view: 'status' })
+        dispatch({ type: 'openView', view: 'collection' })
       }
 
       /** Clear the current selection and close the popover. @returns {void} */
@@ -16079,6 +16159,16 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-sb-rail-title{font-weight:600;font-size:13px;letter-spacing:.01em}
 .psa-sb-total{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 6px;border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);color:var(--dsw-alias-label-secondary);font-size:11px;font-weight:600;flex:none}
 .psa-sb-head{display:flex;flex-direction:column;gap:2px;padding:2px 2px 0}
+.psa-launcher-flight{position:fixed;z-index:151;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border-radius:50%;border:1px solid var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-state-business-primary);box-shadow:var(--dsw-elevation-panel,0 6px 18px rgb(0 0 0 / 20%));pointer-events:none;transition:left 220ms cubic-bezier(.18,.8,.24,1),top 220ms cubic-bezier(.18,.8,.24,1),transform 220ms ease-out}
+.psa-launcher-docked{animation:psa-launcher-dock-in 220ms cubic-bezier(.18,.8,.24,1)}
+.psa-launcher:not([data-psa-active=true]){animation:psa-launcher-float-in 220ms cubic-bezier(.18,.8,.24,1)}
+@keyframes psa-launcher-dock-in{from{opacity:0;transform:scale(.72)}to{opacity:1;transform:scale(1)}}
+@keyframes psa-launcher-float-in{from{opacity:.4;transform:scale(.86)}to{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){
+.psa-launcher-flight{transition:none}
+.psa-launcher-docked,.psa-launcher:not([data-psa-active=true]){animation:none}
+}
+.psa-sb-hint{color:var(--dsw-alias-label-tertiary);font-size:10.5px;line-height:14px}
 .psa-sb-head-row{display:flex;align-items:center;gap:6px}
 .psa-sb-back{appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;padding:2px 4px;border-radius:var(--dsw-radius-sm,4px);cursor:pointer}
 .psa-sb-back:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
@@ -16288,6 +16378,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       if (!active) {
         node.push(React.createElement(AnnotationLauncher, { key: 'launcher', t, controller, snapshot }))
       }
+      if (snapshot.launcherFlight !== null) {
+        node.push(React.createElement(AnnotationLauncherFlight, { key: `launcher-flight-${snapshot.launcherFlight.id}`, snapshot }))
+      }
       if (active) {
         node.push(React.createElement(AnnotationHighlights, { key: 'layer', snapshot, t }))
         node.push(React.createElement(AnnotationRail, { key: 'rail', t, controller, snapshot }))
@@ -16404,6 +16497,40 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
+     * A3/T26: transient flying launcher used for the dock/undock animation. It is
+     * pointer-transparent, paints above the rail, and is removed from the state
+     * when the flight ends; the resting launcher/docked control stay exactly as
+     * before (one `[data-psa-launcher]` control at rest).
+     * @param {{ snapshot: object }} props - surface props.
+     * @returns {object | null} the flying launcher.
+     */
+    function AnnotationLauncherFlight(props) {
+      const flight = props.snapshot.launcherFlight
+      const [flying, setFlying] = React.useState(false)
+      React.useEffect(() => {
+        if (flight === null) return undefined
+        setFlying(false)
+        const frame = window.requestAnimationFrame(() => setFlying(true))
+        return () => window.cancelAnimationFrame(frame)
+      }, [flight === null ? 0 : flight.id])
+      if (flight === null) return null
+      const position = flying ? flight.to : flight.from
+      return React.createElement('div', {
+        className: 'psa-launcher-flight',
+        'data-psa-launcher-flight': '',
+        'data-psa-flight-mode': flight.mode,
+        'data-psa-own': '',
+        'aria-hidden': 'true',
+        style: {
+          left: `${position.x}px`,
+          top: `${position.y}px`,
+          width: `${flight.size}px`,
+          height: `${flight.size}px`
+        }
+      }, RemixGlyph(REMIX_FOCUS_3_LINE, 20, 'psa-launcher-icon'))
+    }
+
+    /**
      * The page mark badges for the current Session's resolved annotations (A3/T6).
      *
      * Marks are decorative overlay children only: `aria-hidden`, pointer-events
@@ -16510,9 +16637,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       const state = snapshot.state
       const collapsed = snapshot.railCollapsed
       const count = state.collection.length
-      const title = state.view === 'collection'
-        ? t('sidebar.title')
-        : (state.view === 'settings' ? t('settings.title') : t('rail.title'))
+      const title = state.view === 'settings' ? t('settings.title') : t('sidebar.title')
       const collapseButton = React.createElement('button', {
         type: 'button',
         className: 'psa-icon-btn',
@@ -16522,6 +16647,16 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         title: collapsed ? t('rail.expand') : t('rail.collapse'),
         onClick: () => controller.toggleRailCollapsed()
       }, AnnotationChevron(collapsed ? 'right' : 'left'))
+      const settingsButton = React.createElement('button', {
+        type: 'button',
+        className: 'psa-icon-btn',
+        'data-psa-open-settings': '',
+        'data-psa-own': '',
+        'aria-label': state.view === 'settings' ? t('rail.back') : t('settings.title'),
+        'aria-pressed': state.view === 'settings' ? 'true' : 'false',
+        title: state.view === 'settings' ? t('rail.back') : t('settings.title'),
+        onClick: () => controller.openView(state.view === 'settings' ? 'collection' : 'settings')
+      }, RemixGlyph(REMIX_SETTINGS_3_LINE, 14))
       const exitButton = React.createElement('button', {
         type: 'button',
         className: 'psa-icon-btn',
@@ -16545,6 +16680,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         React.createElement('div', { className: 'psa-rail-header' },
           collapseButton,
           AnnotationDockedLauncher({ t, controller, snapshot }),
+          settingsButton,
           count > 0
             ? React.createElement('button', {
               type: 'button',
@@ -16562,7 +16698,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
             : null,
           exitButton))
       }
-      const footer = state.view === 'collection' ? annotationCollectionFooter(t, controller, snapshot) : null
+      const footer = state.view === 'settings' ? null : annotationCollectionFooter(t, controller, snapshot)
       return React.createElement('aside', {
         className: 'psa-rail',
         'data-psa-rail': '',
@@ -16584,14 +16720,13 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           }, String(annotationSidebarCounts(state.collection, controller.currentSessionId()).items))
           : null,
         AnnotationDockedLauncher({ t, controller, snapshot }),
+        settingsButton,
         collapseButton,
         exitButton),
       React.createElement('div', { className: 'psa-rail-body', 'data-psa-rail-panel': state.view, 'data-psa-own': '' },
-        state.view === 'collection'
-          ? AnnotationCollectionView({ t, controller, snapshot })
-          : (state.view === 'settings'
-            ? AnnotationSettingsView({ t, controller, snapshot })
-            : AnnotationStatusView({ t, controller, snapshot }))),
+        state.view === 'settings'
+          ? AnnotationSettingsView({ t, controller, snapshot })
+          : AnnotationCollectionView({ t, controller, snapshot })),
       footer)
     }
 
@@ -16696,16 +16831,19 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       React.createElement('span', { className: 'psa-sb-filter-count' }, String(counts[key])))
       const nodes = [
         React.createElement('div', { key: 'head', className: 'psa-sb-head' },
-          React.createElement('div', { className: 'psa-sb-head-row' },
-            React.createElement('button', {
-              type: 'button',
-              className: 'psa-sb-back',
-              'data-psa-back': '',
-              'data-psa-own': '',
-              title: t('rail.back'),
-              onClick: () => controller.backView()
-            }, t('rail.back'))),
-          React.createElement('div', { className: 'psa-sb-subtitle' }, t('sidebar.subtitle'))),
+          React.createElement('div', { className: 'psa-sb-subtitle' }, t('sidebar.subtitle')),
+          React.createElement('div', {
+            key: 'hint',
+            className: 'psa-sb-hint',
+            'data-psa-selection-hint': '',
+            'data-psa-own': ''
+          },
+          state.selection.length > 0
+            ? `${t('rail.status.multi', { count: state.selection.length })} · ${t('sidebar.addHint')}`
+            : t('sidebar.hint', {
+              passThrough: t(`modifier.${snapshot.settings.passThroughModifier}`),
+              multi: t(`modifier.${snapshot.settings.multiModifier}`)
+            }))),
         React.createElement('div', { key: 'filters', className: 'psa-sb-filters', 'data-psa-filters': '', 'data-psa-own': '' },
           filterLabel('all', counts.all), filterLabel('single', counts.single), filterLabel('group', counts.group)),
         React.createElement('div', {
@@ -17207,6 +17345,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           React.createElement('button', {
             type: 'button',
             className: 'psa-icon-btn',
+            'data-psa-rail-back': '',
             'data-psa-own': '',
             'aria-label': t('rail.back'),
             title: t('rail.back'),
