@@ -434,7 +434,9 @@
 - **Weak-identity records fail closed.** Icon-only/tag-only targets with no real
   text digest, no real accessible name and no verified unique locator cannot be
   resolved through XPath/text-position structural fallbacks; they report
-  Content changed and get no mark/copy rather than guessing. A residual route
+  Content changed and get no mark rather than guessing (copy uses saved
+  anchors when the target is not live; a live look-alike copy path remains a
+  documented follow-up). A residual route
   remains: a *unique structural CSS candidate* (e.g. `section > button`) can
   still match a replacement, which is the trade-off against the P0
   duplicate-label CSS behaviour; treat such records as position-sensitive. A
