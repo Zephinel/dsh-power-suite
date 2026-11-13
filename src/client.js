@@ -4695,11 +4695,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
    used by the prompt-history search field and the settings choice pills, and
    available to the annotation note editors once that surface is rewritten. */
 @property --psf-ring-angle{syntax:'<angle>';inherits:false;initial-value:0deg}
-.psf-rainbow-focus{position:relative}
-.psf-rainbow-focus::after{content:'';position:absolute;inset:-2px;border-radius:calc(var(--dsw-radius-sm,8px) + 2px);padding:2px;background:conic-gradient(from var(--psf-ring-angle,0deg),#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:0;transition:opacity 140ms var(--ds-ease-in-out,ease);filter:saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38));z-index:2}
-.psf-rainbow-focus:focus-within::after,.psf-rainbow-focus:focus-visible::after{opacity:1;animation:psf-ring-spin 3.2s linear infinite,psf-ring-hue 14s linear infinite}
+.psf-rainbow-focus{--psf-ring-sat:.92;--psf-ring-glow:5px;--psf-ring-glow-alpha:.38;--psf-ring-opacity:1;--psf-ring-thickness:2px;position:relative}
+.psf-rainbow-focus::after{content:'';position:absolute;inset:-2px;border-radius:calc(var(--dsw-radius-sm,8px) + 2px);padding:var(--psf-ring-thickness,2px);background:conic-gradient(from var(--psf-ring-angle,0deg),#ff6b6b,#ffc46b,#e8e86b,#6bffab,#6bd9ff,#a78bff,#ff6bd4,#ff6b6b);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:0;transition:opacity 140ms var(--ds-ease-in-out,ease);filter:saturate(var(--psf-ring-sat,.92)) drop-shadow(0 0 var(--psf-ring-glow,5px) rgba(178,150,255,var(--psf-ring-glow-alpha,.38)));z-index:2}
+.psf-rainbow-focus:focus-within::after,.psf-rainbow-focus:focus-visible::after{opacity:var(--psf-ring-opacity,1);animation:psf-ring-spin 3.2s linear infinite,psf-ring-hue 14s linear infinite}
 @keyframes psf-ring-spin{to{--psf-ring-angle:360deg}}
-@keyframes psf-ring-hue{from{filter:hue-rotate(0deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}to{filter:hue-rotate(360deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}}
+@keyframes psf-ring-hue{from{filter:hue-rotate(0deg) saturate(var(--psf-ring-sat,.92)) drop-shadow(0 0 var(--psf-ring-glow,5px) rgba(178,150,255,var(--psf-ring-glow-alpha,.38)))}to{filter:hue-rotate(360deg) saturate(var(--psf-ring-sat,.92)) drop-shadow(0 0 var(--psf-ring-glow,5px) rgba(178,150,255,var(--psf-ring-glow-alpha,.38)))}}
 @media (prefers-reduced-motion: reduce){.psf-rainbow-focus:focus-within::after,.psf-rainbow-focus:focus-visible::after{animation:none}}
 @media (forced-colors: active){.psf-rainbow-focus::after{display:none}.psf-rainbow-focus:focus-within{outline:2px solid Highlight;outline-offset:1px}}
 /* Current-session highlight: a full-pill rainbow "atmosphere" painted INSIDE the
@@ -7531,6 +7531,14 @@ function dwClearNativeAtmospheres() {
 .psp-search-row{display:flex;align-items:center;gap:6px}
 .psp-search-field{position:relative;display:flex;flex:1;min-width:0;height:22px;align-items:center;border-radius:var(--dsw-radius-sm,8px)}
 .psf-rainbow-focus.psp-search-field::after{inset:-3px;border-radius:calc(var(--dsw-radius-sm,8px) + 3px)}
+/* Calmer rainbow for the prompt-history search field only (user request): the
+   same conic track, but quieter -- lower focus opacity, a thinner ring, less
+   saturation and a much softer outer glow, with a slower spin/hue drift. The
+   shared class keeps its original stronger defaults for the settings choice
+   pills and the annotation surfaces. */
+.psf-rainbow-focus.psp-search-field{--psf-ring-sat:.8;--psf-ring-glow:2.5px;--psf-ring-glow-alpha:.2;--psf-ring-opacity:.58;--psf-ring-thickness:1.5px}
+.psf-rainbow-focus.psp-search-field:focus-within::after,.psf-rainbow-focus.psp-search-field:focus-visible::after{opacity:var(--psf-ring-opacity,.58);animation:psf-ring-spin 4.6s linear infinite,psf-ring-hue 20s linear infinite}
+@media (prefers-reduced-motion: reduce){.psf-rainbow-focus.psp-search-field:focus-within::after,.psf-rainbow-focus.psp-search-field:focus-visible::after{animation:none}}
 .psp-search-icon{flex:none;color:var(--dsw-static-neutral-bluish-400,#adb2b8)}
 .psp-search-input{flex:1;min-width:0;height:22px;margin:0;padding:0;border:0;background:transparent;color:var(--dsw-static-neutral-bluish-00,#fff);font:inherit;font-size:12px;line-height:18px;outline:none}
 .psp-search-input::placeholder{color:var(--dsw-static-neutral-bluish-400,#adb2b8)}
