@@ -7509,7 +7509,9 @@ async function runPinChecks({ page, results, state }) {
     assert(trunkCentres.length > 0, 'no main row with nested child rows was rendered; cannot verify the trunk/child-dot alignment')
     // Expanded measurements: the alignment oracles are measured with the pin revealed
     // (the slot is collapsed at rest by the two-phase design).
-    const withChildren = restRows.find((row) => row.trunkCentre !== null)
+    const withChildren = restRows.find((row) => row.trunkCentre !== null && row.childGlyph !== null
+      && row.childGlyph.isBrand === false && row.childGlyph.width === 10)
+      ?? restRows.find((row) => row.trunkCentre !== null)
     assert(withChildren !== undefined, 'no main row with nested child rows is available for the expanded alignment check')
     const expandedTitle = withChildren.title
     await hoverMainRowByTitle(page, expandedTitle)
@@ -7533,12 +7535,21 @@ async function runPinChecks({ page, results, state }) {
     assertNear(hoveredRow.gapRight, 9, 0.5, `the gap right of the pin slot must be 9 px when revealed (got ${hoveredRow.gapRight})`)
     assertNear(hoveredRow.gapLeft, hoveredRow.gapRight, 0.5, 'the revealed pin slot must be symmetrically spaced on both sides')
     let childDots = []
-    if (hoveredRow.childGlyph !== null && hoveredRow.childGlyph.isBrand === false && hoveredRow.childGlyph.width === 10) {
-      assertNear(hoveredRow.childGlyph.centre, hoveredRow.pin.centre, 0.5,
-        `the child status-dot centre must align with the revealed pin centre (dot ${hoveredRow.childGlyph.centre}, pin ${hoveredRow.pin.centre})`)
-      childDots = [`${hoveredRow.childGlyph.centre}@pin${hoveredRow.pin.centre}`]
+    const childGlyph = hoveredRow.childGlyph
+    assert(childGlyph !== null, "no child glyph was rendered in the expanded row's nested children; the child/pin column alignment could not be verified")
+    if (childGlyph.isBrand === false && childGlyph.width === 10) {
+      assertNear(childGlyph.centre, hoveredRow.pin.centre, 0.5,
+        `the child status-dot centre must align with the revealed pin centre (dot ${childGlyph.centre}, pin ${hoveredRow.pin.centre})`)
+      childDots = [`${childGlyph.centre}@pin${hoveredRow.pin.centre}`]
+    } else {
+      // A read child row paints the 12 px sparkle instead of the 10 px state dot; its
+      // wrapper is centred in the same child-glyph column, so allow the 1 px size delta
+      // while still catching a column misalignment.
+      const delta = Math.abs(childGlyph.centre - hoveredRow.pin.centre)
+      assert(delta <= 1.5,
+        `the child glyph column must stay within 1.5 px of the revealed pin column (glyph ${childGlyph.width}px centre ${childGlyph.centre}, pin ${hoveredRow.pin.centre}, Δ${delta.toFixed(2)}px)`)
+      childDots = [`${childGlyph.centre}@pin${hoveredRow.pin.centre} (glyph ${childGlyph.width}px, Δ${delta.toFixed(2)})`]
     }
-    assert(childDots.length > 0, 'no child status dot was rendered in a nested child row; the child-dot/pin alignment could not be verified')
     state.glyphBrandObserved = brandObserved
     const uniqueJoins = (values) => [...new Set(values)].join('/')
     const cellCentreList = uniqueJoins(measuredCells.map((row) => Math.round(row.cell.centre)))

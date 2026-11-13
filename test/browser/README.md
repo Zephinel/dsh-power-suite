@@ -862,6 +862,32 @@ were merged cleanly at `03d2167`; the injected and served client are now the sam
   `.psd-run-toggle` clicks before its explicit environment SKIP, making the cold-subagent
   check deterministic (it passed on the merged build) and mirroring what a user does.
 
+### Annotation usability + font, merged build `85d1289` (client md5 `0e2d6aa8…`)
+
+Merged client-only build: worktree + linked checkout `85d1289`, injected and served
+`src/client.js` md5 `0e2d6aa8bb80ab3eb457078240cfa50f` (21320 lines), no service restart,
+Host pin route live, unit tests **253/253**. The change keeps the composer natively
+interactive in annotation mode (capture blocking exempts
+`[data-conversation-region="composer"]`; it never resolves as a target or gets a hover
+outline), makes the sidebar footer primary **Insert all into composer** when the collection
+is non-empty but no page selection is pending, makes the batch popover draggable with
+measured-size clamping, and matches the Active/Inactive Projects headings to the native
+Workspaces heading (14 px / 400 / 20 px / tertiary). Targeted annotation acceptance on the
+merged client: **scenario 5 PASS 7/0/0** (8.5 s, 0 page errors, `/tmp/t48-ann-s5.log`),
+**scenario 8 PASS 7/0/0** (12.2 s, incl. the updated `footer.primary` oracle,
+`/tmp/t48-ann-s8.log`), and **scenario 2 FAIL 6/1** (`/tmp/t48-ann-s2.log`) which is a
+**stale oracle, not a product regression**: the old S2 right-click point (chat centre
+`797,470`) now lands inside the composer seat, so the new intentional composer exemption
+correctly leaves the native contextmenu unprevented; a non-composer chat point (`797,120`)
+still yields `plainPrevented = 1` (`/tmp/t48-ann-s2-diag2.log`) and the pre-fix client
+`d816e64d…` passes S2 7/7 in the same environment (`/tmp/t48-ann-s2-prefix.log`). Fix: point
+the blocked-contextmenu probe outside the composer seat and/or assert the composer exemption
+explicitly. The batch-popover drag is not covered by scenarios 2/8 (S8 is the launcher drag),
+so it remains Lead-probe evidence only. Sidebar suite on the same md5: `--pin` 28/0/0
+(82.4 s, `/tmp/t48-pin-2.log`), `--live` 4/4 (6.3 s), `--smoke` 4/4 (2.2 s), full mode 43/43
+on the third attempt (`/tmp/t48-full-3.log`; two earlier attempts 42/43 with only the known
+pre-existing `b4-1` canvas-saturation flake 0.377/0.374 vs 0.38).
+
 ### Known limitations (`--pin` / `--live`)
 
 - Host sharing and cross-device visibility require the DSH Web service restart that loads
@@ -874,6 +900,10 @@ were merged cleanly at `03d2167`; the injected and served client are now the sam
   row yet (and may open a native sidebar Session as a last resort), so those Sessions are
   touched but never edited. If every visible card row is running, the read-row sparkle
   sub-check is an explicit SKIP (`r3-14b`), never a fake PASS.
+- `r3-14` prefers a row with a 10 px state-dot child for the exact child-dot/pin centre
+  assertion; when only read child rows are rendered (12 px sparkle wrapper) it allows the
+  known ≤1.5 px wrapper delta and records the measured centres, so mixed read/running child
+  states stay deterministic without hiding a real column misalignment.
 - The two-phase reveal checks need the row to stay hovered while sampling; the card can
   re-sort under the pointer during live activity, so they sample in-page and use the
   documented tolerances instead of exact frame timing.

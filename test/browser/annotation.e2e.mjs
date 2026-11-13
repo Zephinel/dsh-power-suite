@@ -1889,6 +1889,52 @@ const probes = {
 
   readContextProbe: () => window.__psaContextProbe || null,
 
+  /**
+   * A point inside the chat region but outside the composer seat. The composer is
+   * intentionally interactive in the mode, so a blocked-event probe must not land
+   * inside it (the seat's height grows with the composer).
+   * @returns {{ x: number, y: number } | null} probe point.
+   */
+  chatProbePoint: () => {
+    const chat = document.querySelector('[data-conversation-region="chat"]')
+    if (chat === null) return null
+    const rect = chat.getBoundingClientRect()
+    const composer = document.querySelector('[data-conversation-region="composer"]')
+    const composerRect = composer === null ? null : composer.getBoundingClientRect()
+    for (const fraction of [0.15, 0.2, 0.25, 0.3, 0.35]) {
+      const x = Math.round(rect.left + rect.width / 2)
+      const y = Math.round(rect.top + rect.height * fraction)
+      if (composerRect !== null && y >= composerRect.top - 8) continue
+      return { x, y }
+    }
+    return null
+  },
+
+  /**
+   * Synthetic contextmenu dispatch proving the interaction-isolation boundary:
+   * the composer stays native, the page stays blocked. Synthetic events avoid
+   * opening a native menu while still exercising the mode's capture listeners.
+   * @returns {{ composer: object, chat: object } | null} dispatch results.
+   */
+  composerExemptionProbe: () => {
+    const composer = document.querySelector('[data-conversation-region="composer"]')
+    const chat = document.querySelector('[data-conversation-region="chat"]')
+    if (composer === null || chat === null) return null
+    const dispatch = (target) => {
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, view: window, button: 2 })
+      let reachedBubble = false
+      const observer = () => { reachedBubble = true }
+      window.addEventListener('contextmenu', observer, false)
+      try {
+        target.dispatchEvent(event)
+      } finally {
+        window.removeEventListener('contextmenu', observer, false)
+      }
+      return { prevented: event.defaultPrevented, reachedBubble }
+    }
+    return { composer: dispatch(composer), chat: dispatch(chat) }
+  },
+
   installKeyRecorder: () => {
     if (window.__psaKeyRecorderInstalled === true) return true
     window.__psaKeyRecorderInstalled = true
@@ -3624,9 +3670,11 @@ function buildScenarios(harness) {
       h.track(sessionAfterNative, 'native-new-session-under-pass-through')
       // Native context menu: defaultPrevented true while blocked, false under the modifier.
       const chat = (await h.frame()).chat
-      const point = {
+      // The composer is intentionally interactive in the mode, so the blocked-event
+      // probe must sit in the chat area above it.
+      const point = await h.page.eval(probes.chatProbePoint) ?? {
         x: chat !== null ? chat.x + Math.round(chat.width / 2) : 900,
-        y: chat !== null ? chat.y + Math.round(chat.height / 2) : 400,
+        y: chat !== null ? chat.y + Math.round(chat.height * 0.2) : 200,
       }
       await h.page.eval(probes.installContextProbe, '[data-conversation-region="chat"]')
       await h.page.eval(probes.clearPreventedLog)
@@ -3658,6 +3706,14 @@ function buildScenarios(harness) {
       assert(plainPrevented >= 1, 'plain right click did not defaultPrevent the contextmenu event')
       assertEqual(plainProbe.hits, 0, 'plain right click reached the native contextmenu target (it must stay blocked)')
       assertEqual(plainBubble.length, 0, 'plain right click escaped to the bubble phase (blocked event must stop propagation)')
+      // The composer is the one intentional exemption: its events stay native so an
+      // inserted reference chip can be edited and sent (synthetic events, no menu).
+      const exemption = await h.page.eval(probes.composerExemptionProbe)
+      assert(exemption !== null, 'composer exemption probe could not find the chat/composer regions')
+      assertEqual(exemption.composer.prevented, false, 'a contextmenu on the composer was blocked (the composer must stay native)')
+      assertEqual(exemption.composer.reachedBubble, true, 'a contextmenu on the composer did not reach the bubble phase')
+      assertEqual(exemption.chat.prevented, true, 'a contextmenu on the chat was not blocked by the mode')
+      assertEqual(exemption.chat.reachedBubble, false, 'a blocked contextmenu on the chat escaped to the bubble phase')
       assertEqual(altPrevented, 0, 'Alt+right click still defaultPrevented the contextmenu event')
       assertEqual(altProbe.hits, 1, 'Alt+right click did not reach the native contextmenu target')
       assert(

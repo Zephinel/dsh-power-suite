@@ -1404,3 +1404,50 @@ Host pin document started empty.
 - **Remedy:** one DSH Web service restart with the merged checkout, then an optional
   full-mode re-run; the pin/two-phase features are already verified green and do not depend
   on it.
+
+## ANNOTATION USABILITY + FONT (merged build `85d1289`, client md5 `0e2d6aa8…`)
+
+Merged client-only build: worktree and linked checkout at `85d1289` (`fix(ui-annotation)` on
+top of the annotation merges), injected **and** served `src/client.js` md5
+`0e2d6aa8bb80ab3eb457078240cfa50f` (21320 lines). No service restart; Host pin route live;
+`npm test` **253/253**, `npm run check` exit 0. The change: (1) annotation mode's capture
+blocking exempts `[data-conversation-region="composer"]` (composer editor/controls stay
+native, never resolve as targets or get a hover outline); (2) the sidebar footer primary
+becomes **Insert all into composer** when no page selection is pending but the collection is
+non-empty; (3) the multi-selection batch popover is draggable by its header and both
+popovers clamp with their measured size; (4) the Active/Inactive Projects headings match the
+native Workspaces heading (14 px / 400 / 20 px line-height / tertiary colour). Probe
+measurements from the Lead: composer editor click and enabled composer control click reach
+the page (`defaultPrevented=false`) while page targets stay blocked; footer "Mark
+requirement" → commit → primary becomes "Insert all into composer" → click inserts chip
+`UI annotations × 1` and enables Send (without sending); drag moves exactly +80/+60 and stays
+fully on-screen.
+
+Targeted annotation acceptance on the merged client (`node test/browser/annotation.e2e.mjs
+--<scenario> --no-shots`):
+
+| Scenario | Result | Notes |
+|----------|--------|-------|
+| 5 — batch insert order, draft preserved, composer focused | **PASS 7 / SKIP 0 / FAIL 0**, 8.5 s, 0 page errors, 0 real network failures (`/tmp/t48-ann-s5.log`) | Ordered numbered blocks per entry, draft intact, never sent |
+| 8 — sidebar/T25 (incl. updated `footer.primary` = "Insert all into composer") | **PASS 7 / SKIP 0 / FAIL 0**, 12.2 s, 0 page errors, 0 real network failures (`/tmp/t48-ann-s8.log`) | The updated T25 footer oracle passes on the merged client |
+| 2 — Alt pass-through / native context menu | **FAIL 6 / 1** (`/tmp/t48-ann-s2.log`) — *stale oracle, not a product regression* | The old S2 probe point (chat centre `797,470`) now falls inside the composer seat (238 px tall; target is `…_input` inside `[data-conversation-region="composer"]`), so the new intentional composer exemption correctly leaves the native contextmenu unprevented. A **non-composer** chat point (`797,120`) still yields `plainPrevented = 1` (`/tmp/t48-ann-s2-diag2.log`), and the **pre-fix client** `d816e64d…` scores S2 PASS 7/7 in the same environment (`/tmp/t48-ann-s2-prefix.log`). Fix: move the blocked-contextmenu point outside the composer seat (chat top area) and/or add a separate composer-exemption assertion; no product change needed |
+
+Coverage note: scenarios 2/8 do **not** exercise the batch-popover drag (S8 covers the
+launcher drag), so the new draggable batch popover + measured-size clamping is verified by
+the Lead's probe only, not by the annotation E2E yet.
+
+Sidebar suite on the same merged md5: `--pin` **28 PASS / 0 SKIP / 0 FAIL**, 82.4 s, page
+errors 0, real network failures 0 (`/tmp/t48-pin-2.log`; r3-host + cross-device r3-8 PASS on
+the live Host route, Host document cleaned to `pinned: []`); `--live` **4/4**, 6.3 s
+(`/tmp/t48-live.log`); `--smoke` **4/4**, 2.2 s (`/tmp/t48-smoke.log`); full mode **43/43**
+on the third attempt, 52.0 s, 0 page errors (`/tmp/t48-full-3.log`) — the two earlier attempts
+were **42/43 with only the pre-existing `b4-1` live-canvas saturation flake** (0.377/0.374 vs
+the 0.38 threshold; `/tmp/t48-full-1.log`, `/tmp/t48-full-2.log`), no annotation-side
+failures, `b6-5` clear. The one earlier user ask about the running-panel title first
+character vs the child-dot column is intentionally **not** part of this change (awaiting the
+user's exact alignment target).
+
+Harness note: `r3-14` now tolerates a read-child sparkle (12 px wrapper) vs a 10 px state-dot
+in the child-glyph column (≤1.5 px delta) when no dot child is rendered, while still
+asserting the exact dot/pin centre alignment when a 10 px dot child exists; this keeps the
+mixed read/running child states deterministic without weakening a dot-row assertion.
