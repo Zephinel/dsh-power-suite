@@ -418,19 +418,25 @@
   a clear failure message.
 - **Reference-conformance follow-ups.** The feasible reference-alignment subset
   landed (matchQuote recall bounds/hint fading, role+name composite candidate,
-  selector length penalty); deferred items remain documented in
-  `.tmp-design/reference-conformance-root-cause.md`: Apache-style word-boundary
-  quote expansion, code-point TextPosition semantics (ours uses rendered UTF-16
-  offsets), a capture-shaped scope E2E, and identity-key verified-only fallback.
-  Non-blocking NITs: the ephemeral helper keeps text-quote Changed/Resolved even
-  when the captured surface is gone (docs say Missing for surface-gone), the
-  weak "Unverifiable" label lost its dedicated E2E fixture, role+name currently
-  sits in the same tier as data/id, and the new matchQuote/selector alignment
-  lacks dedicated unit tests.
+  selector length penalty, ephemeral surface-gone ⇒ Missing for all outcomes,
+  weak-label E2E restored, role+name own tier, alignment unit tests). Deferred
+  items remain documented in `.tmp-design/reference-conformance-root-cause.md`
+  and the user docs: Apache-style word-boundary quote expansion, code-point
+  TextPosition semantics (ours uses rendered UTF-16 offsets), a capture-shaped
+  scope E2E, and identity-key verified-only fallback. Remaining NITs: the
+  conservative controller policy reports a still-present transient Changed as
+  Missing (presence is a container+stable-area heuristic); rail Copy XPath can
+  still use a live document look-alike for a Missing ephemeral record (status
+  and marks are honest; copy path follow-up); the matchQuote hint-fade is only
+  observable for approximate/partial-context matches and its recall unit test is
+  weaker than the implementation bound; role+name sits below data/id/aria but
+  Playwright's strict order puts it above css id (product choice).
 - **Weak-identity records fail closed.** Icon-only/tag-only targets with no real
   text digest, no real accessible name and no verified unique locator cannot be
   resolved through XPath/text-position structural fallbacks; they report
-  Content changed and get no mark/copy rather than guessing. A residual route
+  Content changed and get no mark rather than guessing (copy uses saved
+  anchors when the target is not live; a live look-alike copy path remains a
+  documented follow-up). A residual route
   remains: a *unique structural CSS candidate* (e.g. `section > button`) can
   still match a replacement, which is the trade-off against the P0
   duplicate-label CSS behaviour; treat such records as position-sensitive. A
