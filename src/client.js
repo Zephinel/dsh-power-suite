@@ -11685,6 +11685,67 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
+     * Choose the level a pointer hit should preview/select inside one floating
+     * surface (A3 follow-up: inner elements are hoverable again).
+     *
+     * The hover/click target is the DEEPEST meaningful level under the pointer:
+     * the nearest level element on the hit's ancestor chain (levels already mix
+     * semantic candidates and text-block rows), then a containment fallback for
+     * wrapper-only hits, and finally the surface root itself for background or
+     * padding hits. The root keeps index 0 so Parent/Child drilling from an inner
+     * level still walks the same level table.
+     * @param {Array<{ element: Element, insideComposer: boolean }>} chain - candidate chain, nearest first.
+     * @param {Array<{ element: Element, insideComposer: boolean }>} levels - surface levels, root first.
+     * @param {(element: Element) => boolean} [isFloating] - injectable surface predicate for unit tests.
+     * @param {(element: Element) => boolean} [isSemantic] - injectable semantic-candidate predicate for unit tests.
+     * @returns {{ surface: { root: Element, index: number } | null, index: number }} chosen surface and level index (-1 without a surface).
+     */
+    function annotationSurfacePickLevel(chain, levels, isFloating, isSemantic) {
+      const entries = Array.isArray(chain) ? chain : []
+      const surface = annotationSurfaceRoot(entries, isFloating)
+      if (surface === null) return { surface: null, index: -1 }
+      const list = Array.isArray(levels) ? levels : []
+      if (list.length === 0) return { surface, index: 0 }
+      const semantic = typeof isSemantic === 'function' ? isSemantic : (element) => annotationIsCandidate(element)
+      const levelIndexByElement = new Map()
+      for (let index = 0; index < list.length; index += 1) {
+        const level = list[index]
+        const element = level !== null && typeof level === 'object' ? level.element : null
+        if (element !== null && element !== undefined) levelIndexByElement.set(element, index)
+      }
+      // Prefer the nearest SEMANTIC candidate (button/role/row/aria...): a dropdown
+      // row that is itself a control must win over the leaf text inside it.
+      let textLevelIndex = null
+      for (let index = 0; index < surface.index; index += 1) {
+        const element = entries[index] !== null && typeof entries[index] === 'object' ? entries[index].element : null
+        const levelIndex = levelIndexByElement.get(element)
+        if (levelIndex === undefined) continue
+        if (semantic(element) === true) return { surface, index: levelIndex }
+        if (textLevelIndex === null) textLevelIndex = levelIndex
+      }
+      // No semantic candidate under the pointer: fall back to the nearest
+      // text-block level (the Phase 1 drill rule) before the containment fallback.
+      if (textLevelIndex !== null) return { surface, index: textLevelIndex }
+      // Wrapper-only hit: levels are in document order (parents before children),
+      // so the LAST level containing the hit element is the deepest one.
+      const hit = entries[0] !== null && typeof entries[0] === 'object' ? entries[0].element : null
+      if (hit !== null && hit !== undefined) {
+        let deepest = 0
+        for (let index = 1; index < list.length; index += 1) {
+          const element = list[index] !== null && typeof list[index] === 'object' ? list[index].element : null
+          if (element === null || element === undefined || typeof element.contains !== 'function') continue
+          try {
+            if (element.contains(hit)) deepest = index
+          } catch {
+            // A throwing contains() cannot identify the hit; keep the previous level.
+          }
+        }
+        return { surface, index: deepest }
+      }
+      return { surface, index: 0 }
+    }
+
+    /**
      * Resolve one unique element-like object from ordered locator candidates.
      *
      * Mirrors `resolveRefStatus`'s walk: a STABLE kind (`data`/`id`/`label`)
@@ -12181,9 +12242,15 @@ function dwClearNativeAtmospheres() {
         const surface = annotationSurfaceRoot(chain)
         if (surface !== null) {
           const levels = annotationSurfaceLevels(surface.root)
+          const entries = levels.length > 0 ? levels : [{ element: surface.root, insideComposer: false }]
+          // Inner-first (A3 follow-up): the hover/click target is the deepest
+          // meaningful element under the pointer, so hovering a dropdown row
+          // previews that row; background/padding hits keep the whole surface.
+          const pick = annotationSurfacePickLevel(chain, entries)
+          const index = pick.index >= 0 && pick.index < entries.length ? pick.index : 0
           return {
-            entries: levels.length > 0 ? levels : [{ element: surface.root, insideComposer: false }],
-            index: 0,
+            entries,
+            index,
             parentStep: -1,
             surface: 'floating'
           }
@@ -13168,12 +13235,15 @@ function dwClearNativeAtmospheres() {
           return
         }
         const chain = annotationCandidateChain(element)
-        const index = annotationPickChainIndex(chain)
-        if (index < 0) {
+        // Hover shares the click pick table: inside a floating surface that means
+        // the deepest meaningful inner element under the pointer (A3/T16), while a
+        // background/padding hit keeps the whole surface.
+        const levels = pickLevels(chain)
+        if (levels.index < 0 || levels.index >= levels.entries.length) {
           clearHover()
           return
         }
-        const candidate = chain[index].element
+        const candidate = levels.entries[levels.index].element
         const token = tokenOf(candidate)
         const rect = annotationRectOf(candidate)
         if (snapshot().state.hoverId !== token) dispatch({ type: 'hover', targetId: token })
@@ -16291,6 +16361,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         serializeAnnotationStore,
         annotationSurfaceRoot,
         annotationSurfaceLevels,
+        annotationSurfacePickLevel,
         upsertAnnotationRecord,
         removeAnnotationRecord,
         restoreAnnotationRecord,

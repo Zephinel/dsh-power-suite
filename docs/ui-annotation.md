@@ -220,8 +220,10 @@ opens the note popover.
 ### Floating surfaces
 
 Hover-triggered cards and menus are body-level portals; they are ordinary DOM and
-are annotatable. The mode scopes the pick to the floating surface so the result
-is the whole card rather than an unreadable 16 px text row inside it.
+are annotatable. The mode resolves the pick from the pointer's own chain, so
+**inner elements are hoverable and selectable first** (the row under the pointer),
+while the whole card stays reachable through its background/padding and through
+the popover's Parent control.
 
 - **Surface detection uses computed style, not class names.** From the hit
   element the mode walks up to the first box whose computed `position` is
@@ -230,17 +232,25 @@ is the whole card rather than an unreadable 16 px text row inside it.
   outermost box is the **surface root**. Hashed DSH class names are never
   consulted, so a DSH rebuild cannot silently disable the behavior; SVG boxes,
   zero-size boxes, and the plugin's own UI are excluded.
-- **The whole surface is the default target.** Clicking anywhere in the surface
-  selects the surface root, and the hover outline is the same `.psa-hover`
-  rule used everywhere else — the computed border style, width, and colour of a
-  floating-surface outline are identical to an ordinary button's (a live E2E
-  check asserts this).
-- **Child / Parent drills inside the surface.** Child steps go to the surface's
-  inner candidates and text rows (an element with no element children, non-empty
-  text, and a box of at least 8×8 is a text row); Parent returns to the whole
-  surface. Inner levels are capped at 12. A surface record is marked
-  `surface: "floating"` and `ephemeral: true`, and the popover says the element
-  can disappear when its card closes.
+- **Inner-first hover/click.** A pointer hit inside the surface resolves to the
+  deepest meaningful level under the pointer: the nearest semantic candidate on
+  the hit's ancestor chain (button/link/input/`[role=…]`/`[data-row-key]`/
+  `[aria-label]`/…), or the nearest text-block row (no element children,
+  non-empty text, box ≥ 8×8), so hovering a row in a dropdown previews that row
+  and clicking it opens that row's own popover/locator. The same `.psa-hover` /
+  `.psa-selection` rules are used, so the outline style is identical to an
+  ordinary button's (live E2E asserts this). A hit on the surface background or
+  padding (no inner level under the pointer) still previews the whole surface.
+- **The whole surface stays selectable.** Hover/click the background or padding
+  to get the surface root, or press **Parent** from an inner row. **Child** steps
+  back down the same level table. Inner levels are capped at 12. A surface record
+  is marked `surface: "floating"` and `ephemeral: true`, and the popover says the
+  element can disappear when its card closes.
+- **Measured live (scenario 10).** On a native session-row hover card, an inner
+  row hovers at 212×16 px inside the 244×92 px card; on the deterministic
+  synthetic panel an inner row hovers at 298×16 px inside the 320×150 px panel;
+  card/panel padding keeps the whole-surface outline; clicking an inner row opens
+  that row's popover; Parent returns to the card and Child returns to the row.
 - **Paint layer.** While the mode is active the shell overlay's inline
   `z-index` is raised to **150** (above native hover cards at 100, below native
   modals at 1000 and menus at 1100) and restored exactly on exit — value and
@@ -257,8 +267,12 @@ is the whole card rather than an unreadable 16 px text row inside it.
 
 Limits of the surface rule: a native tooltip bubble that is
 `pointer-events: none` cannot receive the pointer and cannot be selected — annotate
-its anchor control instead. Native modals and context menus stack above the
-annotation layer (z-index 1000/1100); close them before annotating, as before.
+its anchor control instead. Inner-first resolution can only pick levels the DOM
+exposes: a row built entirely from non-text, non-candidate wrappers (for example a
+canvas or an image-only row) has no inner level, so the nearest meaningful
+ancestor / the whole surface is selected; in that case hover the surrounding text
+or use Child/Parent from the surface. Native modals and context menus stack above
+the annotation layer (z-index 1000/1100); close them before annotating, as before.
 Cross-origin iframes, Shadow DOM internals, and canvas pixels remain
 unselectable.
 
@@ -974,13 +988,13 @@ page, and runs the acceptance scenarios with real CDP mouse and keyboard input a
 a 1728 x 900 viewport. The installed plugin, the user profile, and the launchd
 service are never modified.
 
-> **Pre-merge branch evidence.** All numbers in this section (seam 48/57/66,
-> `npm test` 193/204/214, the scenario runs and screenshots) were recorded on the
-> `feat/annotation-ux` branch **before the final merge**, against the live GUI at
-> that time. They are branch-build evidence, not the merged-build verdict. The
-> merged-build acceptance record — including verifier round 2 — is maintained by
-> the Lead in [verification.md](verification.md) after the final merge; consult
-> that file for the release record.
+> **Pre-merge branch evidence.** All numbers in this section (seam 48/57/66/67,
+> `npm test` 193/204/214/217, the scenario runs and screenshots) were recorded on
+> the `feat/annotation-ux` branch, mostly **before the final merge**, against the
+> live GUI at that time. They are branch-build evidence, not the merged-build
+> verdict. The merged-build acceptance record — including verifier round 2 — is
+> maintained by the Lead in [verification.md](verification.md) after the final
+> merge; consult that file for the release record.
 
 The Phase 1 build (`feat/annotation-ux`, `src/client.js` md5 `151e0380…`)
 recorded these live results against the running GUI:
@@ -1077,6 +1091,22 @@ against the running GUI:
   this build (`--shots-only --assets`, exit 0, ~36 s) with the harness privacy
   guard asserted before every capture.
 
+Post-merge follow-up (inner-first surface hover, working-tree commit before the
+Lead's merge):
+
+- `npm test`: **217/217** pass (new unit cases for `annotationSurfacePickLevel`:
+  deepest inner level, wrapper containment fallback, background → surface root,
+  page chains untouched, pickLevels wiring); `npm run check` exit 0.
+- `--smoke`: **6/6** with the **67-key** seam (66 + `annotationSurfacePickLevel`),
+  0 page errors.
+- Scenario 10 (`--scenario 10 --no-shots`) **PASS**: native hover-card row hover
+  `212×16` inside the `244×92` card; synthetic panel row `298×16` inside the
+  `320×150` panel; background/padding hover → whole card; click inner row →
+  that row's popover; Parent → whole card; Child → back; style/ordinary-page/F3/
+  F4 regressions unchanged. Close-up clips (`.tmp-work/surface-after/`):
+  `native-card-inner-hover.png`, `native-card-whole-hover.png`,
+  `synthetic-panel-inner-hover.png`, `synthetic-panel-whole-hover.png`.
+
 Historical round-1/round-2 acceptance evidence (pre-merge branches, 31/32/35-key
 seams) remains recorded in [verification.md](verification.md) and the harness
 README; it is not evidence for the Phase 1 build. The checked-in
@@ -1110,7 +1140,8 @@ Phase 2 UX pass along with the new detail card and marks.
   2-A 57 keys adding the record commit/remove/restore/move/include helpers, the
   single-slot undo, the mark-badge excerpt, and the detail-card clamp; Phase 2-B
   66 keys adding multi-delete undo, rail scope/selection helpers and the chip ref/
-  candidates/serialization helpers), or does not mount the
+  candidates/serialization helpers; the inner-first surface pick adds
+  `annotationSurfacePickLevel` for 67 keys), or does not mount the
   annotation surface. `full` and `--shots-only` with a feature-absent client
   record a **FAIL** row and exit non-zero; every requested scenario must produce
   a result row.
