@@ -4811,7 +4811,9 @@ function buildScenarios(harness) {
       const triggerRect = await h.page.findRect('[data-psa-setting-passthrough]')
       assert(triggerRect, 'modifier trigger rect missing')
       // Open by mouse: listbox semantics, 4 options, exactly one selected option with check.
-      await h.page.evaluate(`document.querySelector('[data-psa-setting-passthrough]')?.click()`)
+      const triggerHit = await h.page.evaluate(`(() => { const el = document.elementFromPoint(${triggerRect.x}, ${triggerRect.y}); return { insideTrigger: !!el?.closest('[data-psa-setting-passthrough]') } })()`)
+      assert(triggerHit.insideTrigger === true, `A3/T53: the trigger is not hit-testable (got ${JSON.stringify(triggerHit)})`)
+      await h.page.clickAt(triggerRect.x, triggerRect.y)
       await h.page.waitFor(`!!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'custom modifier menu' })
       const menuProbe = await h.page.evaluate(`(() => {
         const menu = document.querySelector('[role="listbox"][data-psa-modifier-menu]')
@@ -4839,6 +4841,31 @@ function buildScenarios(harness) {
         }
       })()`)
       assert(menuProbe !== null, 'custom modifier menu did not open')
+      const hitProbe = await h.page.evaluate(`(() => {
+        const info = (x, y) => {
+          const el = document.elementFromPoint(x, y)
+          return { tag: el?.tagName ?? null, insidePopover: !!el?.closest('[data-psa-settings-popover]'), insideTrigger: !!el?.closest('[data-psa-setting-passthrough]'), insideMenu: !!el?.closest('[role="listbox"][data-psa-modifier-menu]') }
+        }
+        const popover = document.querySelector('[data-psa-settings-popover]')
+        const menu = document.querySelector('[role="listbox"][data-psa-modifier-menu]')
+        const pr = popover.getBoundingClientRect()
+        const mr = menu.getBoundingClientRect()
+        return {
+          popover: info(Math.round(pr.left + pr.width / 2), Math.round(pr.top + 8)),
+          trigger: info(${triggerRect.x}, ${triggerRect.y}),
+          menu: info(Math.round(mr.left + mr.width / 2), Math.round(mr.top + mr.height / 2))
+        }
+      })()`)
+      assert(hitProbe.popover.insidePopover === true, `A3/T53: popover center is not hit-testable: ${JSON.stringify(hitProbe.popover)}`)
+      assert(hitProbe.trigger.insideTrigger === true, `A3/T53: trigger is covered: ${JSON.stringify(hitProbe.trigger)}`)
+      assert(hitProbe.menu.insideMenu === true, `A3/T53: menu center is not hit-testable: ${JSON.stringify(hitProbe.menu)}`)
+      // A3/T53: mouse-open then Escape closes the menu first (document-level handler
+      // runs in addition to the trigger handler), then the second Escape closes popover.
+      await h.page.pressKey('escape')
+      await h.page.waitFor(`!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'document Esc closes the mouse-open menu' })
+      assertEqual(await h.page.count('[data-psa-settings-popover]'), 1, 'first Esc must keep the popover open')
+      await h.page.clickAt(triggerRect.x, triggerRect.y)
+      await h.page.waitFor(`!!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'modifier menu reopened after Esc' })
       const initialModifier = menuProbe.selectedValue
       assert(typeof initialModifier === 'string' && initialModifier.length > 0, 'current modifier not selected in the menu')
       assertEqual(menuProbe.listboxCount, 1, 'exactly one modifier menu may be open')
@@ -4858,8 +4885,17 @@ function buildScenarios(harness) {
       if (process.env.PSA_MODIFIER_EVIDENCE_DIR) {
         const dir = process.env.PSA_MODIFIER_EVIDENCE_DIR
         await mkdir(dir, { recursive: true })
+        const shotClip = await h.page.evaluate(`(() => {
+          const popover = document.querySelector('[data-psa-settings-popover]')?.getBoundingClientRect()
+          const menu = document.querySelector('[role="listbox"][data-psa-modifier-menu]')?.getBoundingClientRect()
+          const left = Math.max(0, Math.min(popover?.left ?? 0, menu?.left ?? 0) - 16)
+          const top = Math.max(0, Math.min(popover?.top ?? 0, menu?.top ?? 0) - 16)
+          const right = Math.min(window.innerWidth, Math.max(popover?.right ?? 0, menu?.right ?? 0) + 16)
+          const bottom = Math.min(window.innerHeight, Math.max(popover?.bottom ?? 0, menu?.bottom ?? 0) + 16)
+          return { x: Math.round(left), y: Math.round(top), width: Math.max(120, Math.round(right - left)), height: Math.max(120, Math.round(bottom - top)), scale: 1 }
+        })()`)
         const capture = async (name) => {
-          const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: menuProbe.viewport.width, height: menuProbe.viewport.height, scale: 1 } })
+          const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip: shotClip })
           await writeFile(path.join(dir, name), Buffer.from(data.data, 'base64'))
         }
         await capture('modifier-menu-light.png')
@@ -4873,7 +4909,11 @@ function buildScenarios(harness) {
       }
       // Mouse selection updates the trigger label and persists the setting.
       const otherModifier = ['alt', 'ctrl', 'meta', 'shift'].find((choice) => choice !== initialModifier)
-      await h.page.evaluate(`document.querySelector('[data-psa-modifier-option="${otherModifier}"]')?.click()`)
+      const optionRect = await h.page.findRect(`[data-psa-modifier-option="${otherModifier}"]`)
+      assert(optionRect, `A3/T53: option ${otherModifier} is not clickable`)
+      const optionHit = await h.page.evaluate(`(() => { const el = document.elementFromPoint(${optionRect.x}, ${optionRect.y}); return !!el?.closest('[data-psa-modifier-option="${otherModifier}"]') })()`)
+      assert(optionHit === true, 'A3/T53: option is covered by the rail/overlay')
+      await h.page.clickAt(optionRect.x, optionRect.y)
       await h.page.waitFor(`!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'modifier menu closed after selection' })
       const afterMouse = await h.page.evaluate(`(() => ({ label: (document.querySelector('[data-psa-setting-passthrough]')?.innerText || '').trim(), expanded: document.querySelector('[data-psa-setting-passthrough]')?.getAttribute('aria-expanded'), feedback: (document.querySelector('[data-psa-settings-feedback]')?.innerText || '').trim() }))()`)
       const persistedModifier = (await readModifierSettings()).passThroughModifier
@@ -4917,9 +4957,11 @@ function buildScenarios(harness) {
       // Restore the original modifier through the same custom menu.
       if ((await readModifierSettings()).passThroughModifier !== initialModifier) {
         const triggerRect2 = await h.page.findRect('[data-psa-setting-passthrough]')
-        await h.page.evaluate(`document.querySelector('[data-psa-setting-passthrough]')?.click()`)
+        await h.page.clickAt(triggerRect2.x, triggerRect2.y)
         await h.page.waitFor(`!!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'modifier menu for restore' })
-        await h.page.evaluate(`document.querySelector('[data-psa-modifier-option="${initialModifier}"]')?.click()`)
+        const restoreOption = await h.page.findRect(`[data-psa-modifier-option="${initialModifier}"]`)
+        assert(restoreOption, 'restore option is not clickable')
+        await h.page.clickAt(restoreOption.x, restoreOption.y)
         await sleep(200)
       }
       // Popover-level Esc closes the popover and keeps the mode + list.
@@ -4931,7 +4973,9 @@ function buildScenarios(harness) {
       // Outside click closes the popover too.
       await h.click('[data-psa-open-modifier-settings]')
       await h.page.waitFor(`!!document.querySelector('[data-psa-settings-popover]')`, { timeout: 4000, label: 'settings popover before outside click' })
-      await h.page.evaluate(`document.querySelector('.psa-sb-rail-title')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }))`)
+      const titleRect = await h.page.findRect('.psa-sb-rail-title')
+      assert(titleRect, 'rail title missing for the outside-click check')
+      await h.page.clickAt(titleRect.x, titleRect.y)
       await h.page.waitFor(`!document.querySelector('[data-psa-settings-popover]')`, { timeout: 4000, label: 'settings popover closed by outside click' })
       // ---- Structure: header, badges, subtitle, filters, list, footer ----      // ---- Structure: header, badges, subtitle, filters, list, footer ----
       // A3/T25: seed a deterministic v3 document in an init script so the page's own

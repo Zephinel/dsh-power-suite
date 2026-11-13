@@ -9349,9 +9349,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'rail.status.selected': '1 element selected',
       'rail.status.multi': '{count} elements selected',
       'rail.openCollection': 'Collection',
-      'rail.openSettings': 'Settings',
       'settings.open': 'Modifier settings',
-      'rail.back': 'Back',
       'rail.addMulti': 'Add {count} to collection',
       'rail.clearSelection': 'Clear selection',
       'rail.selectedName': 'Selected element',
@@ -9561,9 +9559,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'rail.status.selected': '已选择 1 个元素',
       'rail.status.multi': '已选择 {count} 个元素',
       'rail.openCollection': '标注集',
-      'rail.openSettings': '设置',
       'settings.open': '修饰键设置',
-      'rail.back': '返回',
       'rail.addMulti': '将 {count} 个加入标注集',
       'rail.clearSelection': '取消选择',
       'rail.selectedName': '已选元素',
@@ -9791,8 +9787,6 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     // https://remixicon.com/icon/settings-line — inlined so the rail needs no
     // icon package at runtime.
     const REMIX_INFORMATION_LINE = 'M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM11 7H13V9H11V7ZM11 11H13V17H11V11Z'
-    const REMIX_SETTINGS_LINE = 'M12 1L21.5 6.5V17.5L12 23L2.5 17.5V6.5L12 1ZM12 3.311L4.5 7.65311V16.3469L12 20.689L19.5 16.3469V7.65311L12 3.311ZM12 16C9.79086 16 8 14.2091 8 12C8 9.79086 9.79086 8 12 8C14.2091 8 16 9.79086 16 12C16 14.2091 14.2091 16 12 16ZM12 14C13.1046 14 14 13.1046 14 12C14 10.8954 13.1046 10 12 10C10.8954 10 10 10.8954 10 12C10 13.1046 10.8954 14 12 14Z'
-    const REMIX_SETTINGS_3_LINE = 'M8.68637 4.0001L10.293 2.39348C11.6835 1.00295 13.9379 1.00295 15.3284 2.39348L16.935 4.0001H19.2427C20.8995 4.0001 22.2427 5.34325 22.2427 7.0001V9.30772L23.8492 10.9143C25.2398 12.3048 25.2398 14.5592 23.8492 15.9497L22.2427 17.5564V19.864C22.2427 21.5208 20.8995 22.864 19.2427 22.864H16.935L15.3284 24.4706C13.9379 25.8611 11.6835 25.8611 10.293 24.4706L8.68637 22.864H6.37874C4.72189 22.864 3.37874 21.5208 3.37874 19.864V17.5564L1.77212 15.9497C0.381596 14.5592 0.381596 12.3048 1.77212 10.9143L3.37874 9.30772V7.0001C3.37874 5.34325 4.72189 4.0001 6.37874 4.0001H8.68637ZM13.9143 4.41431C13.1332 3.63326 11.8669 3.63326 11.0858 4.41431L8.9431 6.55701H6.37874C5.82645 6.55701 5.37874 7.00472 5.37874 7.55701V10.1214L3.23603 12.2641C2.45498 13.0451 2.45498 14.3114 3.23603 15.0925L5.37874 17.2352V19.864C5.37874 20.4163 5.82645 20.864 6.37874 20.864H9.00754L11.0858 22.9423C11.8669 23.7234 13.1332 23.7234 13.9143 22.9423L15.9925 20.864H18.6213C19.1736 20.864 19.6213 20.4163 19.6213 19.864V17.2352L21.764 15.0925C22.5451 14.3114 22.5451 13.0451 21.764 12.2641L19.6213 10.1214V7.55701C19.6213 7.00472 19.1736 6.55701 18.6213 6.55701H16.0569L13.9143 4.41431ZM12.6213 13.864C13.7259 13.864 14.6213 12.9686 14.6213 11.864C14.6213 10.7595 13.7259 9.86402 12.6213 9.86402C11.5167 9.86402 10.6213 10.7595 10.6213 11.864C10.6213 12.9686 11.5167 13.864 12.6213 13.864Z'
 
     const REMIX_ANNOTATION_COPY_LINE = 'M6.9998 6V3C6.9998 2.44772 7.44752 2 7.9998 2H19.9998C20.5521 2 20.9998 2.44772 20.9998 3V17C20.9998 17.5523 20.5521 18 19.9998 18H16.9998V20.9991C16.9998 21.5519 16.5499 22 15.993 22H4.00666C3.45059 22 3 21.5554 3 20.9991L3.0026 7.00087C3.0027 6.44811 3.45264 6 4.00942 6H6.9998ZM5.00242 8L5.00019 20H14.9998V8H5.00242ZM8.9998 6H16.9998V16H18.9998V4H8.9998V6Z'
     /** Control and zero-width characters stripped from every captured string. */
@@ -19149,7 +19143,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-select-trigger{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .psa-select-trigger > span{overflow:hidden;text-overflow:ellipsis}
 .psa-select-trigger[aria-expanded=true]{border-color:var(--dsw-alias-state-business-primary,var(--dsw-alias-border-l2,transparent))}
-.psa-modifier-menu{position:fixed;box-sizing:border-box;padding:5px;border:0;border-radius:14px;background:var(--dsw-hovercard-bg,#2C2C2E);color:var(--dsw-static-neutral-bluish-00,#f5f6f8);box-shadow:var(--dsw-elevation-lv3,var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,.35)));font-family:inherit;font-size:12px;line-height:18px;outline:none;pointer-events:auto;z-index:46;animation:psa-modifier-in 120ms var(--ds-ease-out,ease-out)}
+.psa-modifier-menu{position:fixed;box-sizing:border-box;padding:5px;border:0;border-radius:14px;background:var(--dsw-hovercard-bg,#2C2C2E);color:var(--dsw-static-neutral-bluish-00,#f5f6f8);box-shadow:var(--dsw-elevation-lv3,var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,.35)));font-family:inherit;font-size:12px;line-height:18px;outline:none;pointer-events:auto;z-index:47;animation:psa-modifier-in 120ms var(--ds-ease-out,ease-out)}
 .psa-modifier-option{display:flex;align-items:center;gap:8px;height:30px;padding:0 9px;border-radius:9px;cursor:pointer;user-select:none;color:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .psa-modifier-option:hover,.psa-modifier-option[data-psa-active=true]{background:rgba(255,255,255,.08)}
 .psa-modifier-option[aria-selected=true]{background:rgba(255,255,255,.12);font-weight:500}
@@ -19633,6 +19627,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         'aria-label': t('settings.open'),
         'aria-expanded': snapshot.settingsOpen === true ? 'true' : 'false',
         'aria-haspopup': 'dialog',
+        'aria-controls': 'psa-modifier-settings-popover',
         title: t('settings.open'),
         onClick: () => controller.toggleSettingsOpen()
       }, RemixGlyph(REMIX_INFORMATION_LINE, 15))
@@ -20346,14 +20341,10 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
-     * Rail settings view: the two configurable modifiers.
-     * @param {{ t: Function, controller: object, snapshot: object }} props - rail props.
-     * @returns {object} the settings view.
-     */
-    /**
      * A3/T51: custom-styled modifier dropdown (replaces the native <select>).
      * Trigger is a combobox button inside `.psa-rainbow-field`; the menu is a fixed
-     * portal to body (never clipped by the rail), with listbox/option semantics and
+     * inline layer inside the same rail/overlay stacking context (so real pointer
+     * events reach it above the raised overlay), with listbox/option semantics and
      * full keyboard control. Only one menu is open at a time; focus stays on the
      * trigger (no focus trap).
      * @param {{ t: Function, controller: object, fieldName: string, value: string, dataAttribute: string, labelId: string }} props - dropdown props.
@@ -20418,6 +20409,15 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       }
       React.useEffect(() => {
         if (!open) return undefined
+        // A3/T53: document-level Escape so mouse-open (or unfocused) menus close
+        // reliably; the annotation shortcut stand-down otherwise swallows it.
+        const onDocumentKeyDown = (event) => {
+          if (event.key !== 'Escape') return
+          event.preventDefault()
+          event.stopPropagation()
+          if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation()
+          close(true)
+        }
         const onPointerDown = (event) => {
           const target = event.target
           if (triggerRef.current !== null && triggerRef.current.contains(target)) return
@@ -20427,11 +20427,13 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         const onOtherOpen = () => { close(false) }
         const onResize = () => { close(false) }
         const onScroll = () => { close(false) }
+        document.addEventListener('keydown', onDocumentKeyDown, true)
         document.addEventListener('pointerdown', onPointerDown, true)
         document.addEventListener('psa-modifier-close', onOtherOpen)
         window.addEventListener('resize', onResize)
         window.addEventListener('scroll', onScroll, true)
         return () => {
+          document.removeEventListener('keydown', onDocumentKeyDown, true)
           document.removeEventListener('pointerdown', onPointerDown, true)
           document.removeEventListener('psa-modifier-close', onOtherOpen)
           window.removeEventListener('resize', onResize)
@@ -20491,7 +20493,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           close(false)
         }
       }, React.createElement('span', null, t(`modifier.${value}`)), RemixGlyph(REMIX_ARROW_DOWN_LINE, 12))
-      const menu = open && position !== null ? ReactDOM.createPortal(React.createElement('div', {
+      const menu = open && position !== null ? React.createElement('div', {
         className: 'psa-modifier-menu',
         role: 'listbox',
         id: menuId,
@@ -20520,7 +20522,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       },
       React.createElement('span', { className: 'psa-modifier-check', 'aria-hidden': 'true' },
         choice === value ? RemixGlyph(REMIX_CHECK_LINE, 12) : null),
-      React.createElement('span', null, t(`modifier.${choice}`))))), document.body) : null
+      React.createElement('span', null, t(`modifier.${choice}`))))) : null
       return React.createElement(React.Fragment, null, trigger, menu)
     }
 
@@ -20554,11 +20556,22 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           if (trigger !== null && trigger.contains(target)) return
           controller.closeSettingsOpen()
         }
+        // A3/T53: document-level Escape; when a dropdown menu is open it owns the
+        // first Escape (its own handler runs after this one), then the popover.
+        const onDocumentKeyDown = (event) => {
+          if (event.key !== 'Escape') return
+          if (document.querySelector('[role="listbox"][data-psa-modifier-menu]') !== null) return
+          event.preventDefault()
+          event.stopPropagation()
+          controller.closeSettingsOpen()
+        }
         const close = () => controller.closeSettingsOpen()
+        document.addEventListener('keydown', onDocumentKeyDown, true)
         document.addEventListener('pointerdown', onPointerDown, true)
         window.addEventListener('resize', close)
         window.addEventListener('scroll', close, true)
         return () => {
+          document.removeEventListener('keydown', onDocumentKeyDown, true)
           document.removeEventListener('pointerdown', onPointerDown, true)
           window.removeEventListener('resize', close)
           window.removeEventListener('scroll', close, true)
@@ -20582,8 +20595,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       if (position === null) return null
       const settings = snapshot.settings
       const feedback = snapshot.state.feedback === null ? '' : snapshot.state.feedback.text
-      return ReactDOM.createPortal(React.createElement('div', {
+      return React.createElement('div', {
         ref: popoverRef,
+        id: 'psa-modifier-settings-popover',
         className: 'psa-settings-popover',
         'data-psa-settings-popover': '',
         'data-psa-own': '',
@@ -20600,7 +20614,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         role: 'status',
         'aria-live': 'polite'
       }, feedback),
-      React.createElement('div', { className: 'psa-settings-note' }, t('settings.hint'))), document.body)
+      React.createElement('div', { className: 'psa-settings-note' }, t('settings.hint')))
     }
 
     /**

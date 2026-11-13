@@ -1303,7 +1303,8 @@ package manifest.
   sending. This is the shell's semantic API, not a DOM setter or a synthetic
   `input` event. The composer is focused afterwards.
 - **Explicit state machine** — one pure reducer with the phases
-  `off | idle | inspect | selected | multi | collection`, a settings view flag,
+  `off | idle | inspect | selected | multi | collection`, a legacy `settings` view value
+  (kept only for state compatibility; unreachable in the UI),
   and transient `passThrough`, `boxing`, `draggingLauncher`, and
   `draggingPopover` states. Every transition is an action
   (`activate`, `deactivate`, `hover`, `selectSingle`, `toggleMulti`, `setMulti`,
@@ -1697,7 +1698,7 @@ acceptance `test/browser/`.
   the rail, and the collection still work.
 - **Modifier conflicts are moved, not hidden.** Setting one modifier to the
   other's current key keeps the pair valid by moving the other modifier, and the
-  settings view says what changed; an equal pair is never stored.
+  popover status line says what changed; an equal pair is never stored.
 - **Annotation mode is not accessible by keyboard alone.** The mode is entered
   and driven with the pointer (the launcher, hover, selection, and popover are
   mouse-oriented); keyboard users can use native keyboard shortcuts while it is
@@ -1768,9 +1769,9 @@ opens the note popover.
   2. the current selection clears and its popover closes;
   3. the mode turns off and the original layout returns.
 
-  When the collection or settings view is open, Esc returns to the status view
-  before the mode can be exited; an expanded note editor or an in-progress
-  marquee also closes on Esc.
+  When the modifier-settings popover or one of its dropdowns is open, Esc closes
+  those first (dropdown, then popover) and the mode stays on; an expanded note
+  editor or an in-progress marquee also closes on Esc.
 - **Interaction isolation** — while the mode is active and not passed through,
   the pointer events that could drive the page are consumed in the capture phase:
   `pointerdown`, `mousedown`, `pointerup`, `mouseup`, `click`, `auxclick`,
@@ -2397,7 +2398,7 @@ immediately, and the key handlers always read the current values.
 
 The two modifiers must never be equal. Setting one to the other's current value
 applies the new value and moves the other modifier to a different choice; the
-settings view names the moved field and its new value, and an equal pair is never
+popover status line names the moved field and its new value, and an equal pair is never
 stored. Missing or unreadable stored values fall back to the defaults.
 
 Storage is browser-local and has four separate keys under the
@@ -2589,7 +2590,8 @@ package manifest.
   sending. This is the shell's semantic API, not a DOM setter or a synthetic
   `input` event. The composer is focused afterwards.
 - **Explicit state machine** — one pure reducer with the phases
-  `off | idle | inspect | selected | multi | collection`, a settings view flag,
+  `off | idle | inspect | selected | multi | collection`, a legacy `settings` view value
+  (kept only for state compatibility; unreachable in the UI),
   and transient `passThrough`, `boxing`, `draggingLauncher`, and
   `draggingPopover` states. Every transition is an action
   (`activate`, `deactivate`, `hover`, `selectSingle`, `toggleMulti`, `setMulti`,
@@ -2983,7 +2985,7 @@ acceptance `test/browser/`.
   the rail, and the collection still work.
 - **Modifier conflicts are moved, not hidden.** Setting one modifier to the
   other's current key keeps the pair valid by moving the other modifier, and the
-  settings view says what changed; an equal pair is never stored.
+  popover status line says what changed; an equal pair is never stored.
 - **Annotation mode is not accessible by keyboard alone.** The mode is entered
   and driven with the pointer (the launcher, hover, selection, and popover are
   mouse-oriented); keyboard users can use native keyboard shortcuts while it is
