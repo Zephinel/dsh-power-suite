@@ -74,11 +74,10 @@ sidebar's panel tabs. It starts expanded.
   with an expanding ring on a 2 s loop (static under reduced motion); when every
   task is complete it is the white 14 px RemixIcon **deepseek-fill** brand glyph.
   Both states are horizontally centred on the same **leading-glyph column** as
-  the top-level rows (the pulse/brand glyph, the green unread-completion dots,
-  and the white read-row identity icons share one centre; header pulse/brand
-  centre x = 43 and row glyph centre x = 43), and the header title starts on the
-  same column as the row titles (x = 58), followed by the **Running & recent**
-  title. The text block (indicator, title) is content-sized, so its hover
+  the top-level rows (the header pulse/brand glyph and every row's leading-glyph
+  cell share one centre; the sidebar E2E measures the two centres and asserts
+  they are equal), and the header title starts on the same column as the row
+  titles, followed by the **Running & recent** title. The text block (indicator, title) is content-sized, so its hover
   highlight hugs the label instead of stretching across the header; a flexible
   spacer then pushes the trailing controls to the right. Those controls share
   the row grid: the **View all** link keeps its 30 px hover block, an empty
@@ -119,8 +118,13 @@ sidebar's panel tabs. It starts expanded.
   shell's green `StateDot state: "done"` (the green marker means *only* this
   unread completion), while a **finished and acknowledged** row swaps the green
   dot for the white identity icon — the RemixIcon `sparkling-line` glyph on main
-  rows and `robot-2-line` on subagent rows, drawn at 14 px / 12 px in the primary
-  label colour. The panel header's all-complete glyph is the DeepSeek brand mark
+  rows and `robot-2-line` on subagent rows, drawn at 16 px / 12 px in the primary
+  label colour. Every main row's leading glyph sits in one fixed 16 px cell (the
+  14 px state dots are centred inside it, the read-row sparkle fills it), the
+  nested-child tree trunk is centred under that cell, and the pin control's
+  column is centred on the child status-dot column with equal gaps on both
+  sides, so the sparkle, the tree line, the pin and the child dots share one
+  vertical centre line. The panel header's all-complete glyph is the DeepSeek brand mark
   (`deepseek-fill`) in the same 14 px indicator slot; the swap changes only which
   static glyph each slot paints, never the pulse dot, the green dot, the glyph
   column, or any state branch. Opening a Session from this card or anywhere else

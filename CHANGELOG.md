@@ -174,6 +174,13 @@ heading is added until the release is cut.
 
 ### Changed
 
+- Running & recent leading glyphs and pin column aligned: every main row's
+  leading glyph now sits in a fixed 16 px cell (14 px state dots centred, the
+  read-row sparkle enlarged from 14 px to 16 px), the nested-child tree trunk is
+  centred under that cell, and the pin control is centred on the child
+  status-dot column with equal 9 px gaps on both sides instead of the previous
+  asymmetric spacing.
+
 - Running & recent row height follows the native Workspace list: every card row
   (main and nested child, ordinary and current) is now 34 px tall, the measured
   height of the native Workspace project rows, so the card and the Workspace

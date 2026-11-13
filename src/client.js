@@ -4668,7 +4668,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-panel-empty strong{color:var(--dsw-alias-label-secondary);font-weight:500}
 .psd-item{display:flex;flex-direction:column;min-width:0}
 .psd-run{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:var(--psd-row-h,34px);padding:0 0 0 7px;border-radius:var(--dsw-radius-md,8px);cursor:pointer}
-.psd-run-main{appearance:none;display:flex;flex:0 1 auto;box-sizing:border-box;min-width:0;min-height:var(--psd-row-h,34px);max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:8px;padding:4px 10px 4px 14px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-run-main{appearance:none;display:flex;flex:0 1 auto;box-sizing:border-box;min-width:0;min-height:var(--psd-row-h,34px);max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:9px;padding:4px 10px 4px 14px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-run:hover:not(:has(.psd-run-toggle:hover)) .psd-run-main{background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-run-open{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:100%;align-items:center;padding:0;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-run-open:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px;border-radius:var(--dsw-radius-sm,6px)}
@@ -4676,6 +4676,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
 .psd-run-head{display:flex;align-items:center;gap:8px;min-width:0;flex:none}
+/* One fixed 16 px leading-glyph cell for every main-row state, so the 14 px state
+   dots and the slightly larger sparkle share one centre column; the child-tree
+   trunk and the pin column are aligned to that same geometry. */
+.psd-run-glyph-cell{flex:none;display:inline-flex;align-items:center;justify-content:center;width:16px;height:20px}
 .psd-run-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
 .psd-run-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
 .psd-run-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap;color:var(--dsw-alias-label-primary);font-size:14px;line-height:20px}
@@ -4687,7 +4691,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
    non-interactive until the row is hovered or focused; the row itself gets a
    faint violet tint so "why is this at the top" stays readable after the
    pointer leaves. */
-.psd-run-pin-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:16px;height:20px;margin-inline-end:-4px}
+.psd-run-pin-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:16px;height:20px}
 .psd-run-pin{appearance:none;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:16px;height:16px;padding:0;border:0;border-radius:var(--dsw-radius-xs,4px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;opacity:0;visibility:hidden;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease),background-color 120ms var(--ds-ease-in-out,ease)}
 .psd-run:hover .psd-run-pin,.psd-run:focus-within .psd-run-pin{opacity:1;visibility:visible;pointer-events:auto}
 .psd-run-pin:hover{background-color:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
@@ -4704,9 +4708,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run-toggle .psd-chevron{transition:transform 160ms var(--ds-ease-in-out,ease)}
 .psd-run-toggle[aria-expanded='false'] .psd-chevron{transform:rotate(-90deg)}
 .psd-run-toggle-spacer{flex:none;width:var(--psd-chevron-col,24px)}
-.psd-children{position:relative;display:flex;flex-direction:column;gap:5px;margin:4px 0 6px 22px;padding-left:9px;border-left:1px solid var(--dsw-alias-border-l2)}
+.psd-children{position:relative;display:flex;flex-direction:column;gap:5px;margin:4px 0 6px 28.5px;padding-left:9px;border-left:1px solid var(--dsw-alias-border-l2)}
 .psd-child{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:var(--psd-row-h,34px);padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:18px;text-align:left;cursor:pointer}
-.psd-child-main{appearance:none;display:flex;flex:0 1 auto;box-sizing:border-box;min-width:0;min-height:var(--psd-row-h,34px);max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:7px;padding:3px 8px 3px 10px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-child-main{appearance:none;display:flex;flex:0 1 auto;box-sizing:border-box;min-width:0;min-height:var(--psd-row-h,34px);max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:7px;padding:3px 8px 3px 10.5px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-child:hover .psd-child-main{background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-child::before{content:'';position:absolute;left:-10px;top:50%;width:14px;height:1px;background:var(--dsw-alias-border-l2);pointer-events:none}
 .psd-child:last-child::after{content:'';position:absolute;left:-10px;top:calc(50% + 1px);bottom:-1px;width:2px;background:var(--dsw-alias-bg-layer-1);pointer-events:none}
@@ -6963,12 +6967,13 @@ function dwClearNativeAtmospheres() {
               isCurrent(row.id) ? React.createElement(DwAtmosphere, { key: 'atmos' }) : null,
               React.createElement('div', { className: 'psd-run-main' },
               React.createElement('span', { className: 'psd-run-head' },
-                running
-                  ? React.createElement(StateDot, { state: 'ongoing', size: 14, className: 'psd-run-glyph' })
-                  : !isRead(row.id, row.updatedAt)
-                    ? React.createElement(StateDot, { state: 'done', size: 14, className: 'psd-run-glyph' })
-                    : React.createElement('span', { className: 'psd-run-brand', 'aria-hidden': true },
-                      RemixGlyph(DW_SPARKLING_LINE, 14, undefined, 0.82)),
+                React.createElement('span', { className: 'psd-run-glyph-cell' },
+                  running
+                    ? React.createElement(StateDot, { state: 'ongoing', size: 14, className: 'psd-run-glyph' })
+                    : !isRead(row.id, row.updatedAt)
+                      ? React.createElement(StateDot, { state: 'done', size: 14, className: 'psd-run-glyph' })
+                      : React.createElement('span', { className: 'psd-run-brand', 'aria-hidden': true },
+                        RemixGlyph(DW_SPARKLING_LINE, 16, undefined, 0.82))),
                 interrupted
                   ? React.createElement('span', {
                     className: 'psd-interrupted',
