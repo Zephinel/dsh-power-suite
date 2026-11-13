@@ -1090,7 +1090,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1102,7 +1102,7 @@ async function runSmoke({ page, results, state }) {
     // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
     // rail selection and chip-ref serialization helpers (66). Pin a documented count and
     // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80]
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1161,6 +1161,11 @@ async function runSmoke({ page, results, state }) {
     if (keyCount === 80) {
       for (const key of ['annotationEntryOrdinals', 'annotationGroupSummary', 'annotationSidebarCounts']) {
         assert(probe.keys.includes(key), `task-29 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
+      }
+    }
+    if (keyCount === 82) {
+      for (const key of ['annotationSurfacePinEligible', 'annotationSurfacePinEventMatches', 'annotationEntryOrdinals']) {
+        assert(probe.keys.includes(key), `task-30 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
       }
     }
     state.hooks = probe.keys
@@ -2413,6 +2418,73 @@ const probes = {
       visible: rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden',
     }
   },
+
+  /** A3/T30: synthetic hover-triggered floating menu (opens on trigger hover, closes on menu leave). */
+  createHoverMenuFixture: () => {
+    document.getElementById('psa-hover-menu-fixture')?.remove()
+    const trigger = document.createElement('button')
+    trigger.id = 'psa-hover-trigger'
+    trigger.textContent = 'Open subagents'
+    Object.assign(trigger.style, {
+      position: 'fixed', left: '320px', top: '240px', width: '160px', height: '32px',
+      zIndex: '400', background: 'rgb(60, 64, 72)', color: 'rgb(235, 238, 245)',
+      border: '1px solid rgb(110, 116, 130)', borderRadius: '8px', cursor: 'pointer'
+    })
+    const menu = document.createElement('div')
+    menu.id = 'psa-hover-menu-fixture'
+    Object.assign(menu.style, {
+      position: 'fixed', left: '320px', top: '280px', width: '320px',
+      zIndex: '500', display: 'none', padding: '6px',
+      background: 'rgb(44, 46, 52)', color: 'rgb(235, 238, 245)',
+      border: '1px solid rgb(110, 116, 130)', borderRadius: '8px',
+      fontSize: '12px', boxShadow: '0 8px 24px rgb(0 0 0 / 30%)'
+    })
+    const title = document.createElement('div')
+    title.textContent = 'Subagent sessions'
+    Object.assign(title.style, { fontWeight: '600', marginBottom: '4px' })
+    const list = document.createElement('ul')
+    Object.assign(list.style, { listStyle: 'none', margin: '0', padding: '0' })
+    for (let index = 1; index <= 3; index += 1) {
+      const item = document.createElement('li')
+      item.setAttribute('role', 'listitem')
+      Object.assign(item.style, { padding: '3px 4px', borderRadius: '4px' })
+      const leaf = document.createElement('span')
+      leaf.setAttribute('data-hover-leaf', String(index))
+      leaf.textContent = `Subagent session ${index}`
+      Object.assign(leaf.style, { display: 'block', height: '16px', lineHeight: '16px' })
+      item.append(leaf)
+      list.append(item)
+    }
+    menu.append(title, list)
+    document.body.append(trigger, menu)
+    const state = { open: false }
+    const open = () => { state.open = true; menu.style.display = 'block' }
+    const close = () => { state.open = false; menu.style.display = 'none' }
+    trigger.addEventListener('mouseenter', open)
+    menu.addEventListener('mouseleave', close)
+    window.__psaHoverFixture = { open, close, isOpen: () => state.open }
+    const rectOf = (element) => {
+      const rect = element.getBoundingClientRect()
+      return { centerX: Math.round(rect.left + rect.width / 2), centerY: Math.round(rect.top + rect.height / 2), width: Math.round(rect.width), height: Math.round(rect.height), left: Math.round(rect.left), top: Math.round(rect.top) }
+    }
+    return { trigger: rectOf(trigger), leaf: rectOf(list.querySelector('[data-hover-leaf="1"]')), menu: rectOf(menu) }
+  },
+  hoverMenuFixtureState: () => {
+    const menu = document.getElementById('psa-hover-menu-fixture')
+    if (menu === null) return null
+    const leaf = menu.querySelector('[data-hover-leaf="1"]')
+    const menuRect = menu.getBoundingClientRect()
+    const leafRect = leaf === null ? null : leaf.getBoundingClientRect()
+    return {
+      open: window.__psaHoverFixture?.isOpen?.() === true,
+      display: getComputedStyle(menu).display,
+      menu: { left: Math.round(menuRect.left), top: Math.round(menuRect.top), width: Math.round(menuRect.width), height: Math.round(menuRect.height) },
+      leaf: leafRect === null ? null : { centerX: Math.round(leafRect.left + leafRect.width / 2), centerY: Math.round(leafRect.top + leafRect.height / 2), width: Math.round(leafRect.width), height: Math.round(leafRect.height) }
+    }
+  },
+  closeHoverMenuFixture: () => { window.__psaHoverFixture?.close?.(); return true },
+  vanishHoverMenuFixture: () => { document.getElementById('psa-hover-menu-fixture')?.remove(); return true },
+  removeHoverMenuFixture: () => { document.getElementById('psa-hover-menu-fixture')?.remove(); document.getElementById('psa-hover-trigger')?.remove(); return true },
 
   /** A3/T25: seed a deterministic singles+groups document for the sidebar states. */
   seedAnnotationSidebarFixture: (sessionId) => {
@@ -5273,7 +5345,92 @@ function buildScenarios(harness) {
       const leafSummary = measuredLeaves.map((leaf) => `${leaf.name} ${leaf.rect.width}x${leaf.rect.height}`).join(', ')
       const surfaceEvidence = `leaf-first: native card leaf ${innerCardHover.rect.width}x${innerCardHover.rect.height} of ${nativeCard.rect.width}x${nativeCard.rect.height}; dropdown leaves ${leafSummary} (distinct); click leaf -> leaf popover; Parent ${panelWalk.length} step(s) via row -> whole surface; Child back to leaf; background -> whole surface (Child clamped); ordinary-page/F3/F4 regressions intact`
 
-      // ---- A2: verified unique locator resolves the duplicate-label control ----
+      // ---- A3/T30: pin a hover-triggered floating surface while editing its annotation ----
+      const hoverMenu = await h.page.eval(probes.createHoverMenuFixture)
+      assert(hoverMenu, 'hover-menu fixture missing')
+      const readHoverMenu = () => h.page.eval(probes.hoverMenuFixtureState)
+      const readNotePopover = () => h.page.evaluate(`(() => {
+        const popover = document.querySelector('[data-psa-popover]')
+        if (popover === null) return null
+        const locator = popover.querySelector('[data-psa-popover-ref] .psa-truncate')?.textContent ?? ''
+        return { status: popover.querySelector('[data-psa-popover-status]')?.getAttribute('data-psa-status') ?? null, locator: locator.trim(), title: popover.querySelector('[data-psa-popover-title]')?.innerText ?? '' }
+      })()`)
+      await h.page.moveTo(900, 160)
+      await sleep(120)
+      await h.page.moveTo(hoverMenu.trigger.centerX, hoverMenu.trigger.centerY)
+      let menuState = null
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        await sleep(80)
+        menuState = await readHoverMenu()
+        if (menuState !== null && menuState.open) break
+      }
+      assert(menuState !== null && menuState.open, 'the synthetic hover menu did not open on trigger hover')
+      await h.page.moveTo(menuState.leaf.centerX, menuState.leaf.centerY)
+      await sleep(250)
+      await h.page.clickAt(menuState.leaf.centerX, menuState.leaf.centerY)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the hover-menu leaf' })
+      await sleep(250)
+      const pinnedBefore = await readNotePopover()
+      assert(pinnedBefore !== null, 'hover-menu leaf popover missing')
+      assertEqual(pinnedBefore.status, 'resolved', `hover-menu leaf did not start Resolved: ${JSON.stringify(pinnedBefore)}`)
+      // Move the pointer into our requirement textarea — without the pin the native
+      // hover menu would close here.
+      const pinnedNoteRect = await h.page.findRect('[data-psa-note]')
+      assert(pinnedNoteRect, 'requirement textarea missing for the pin assertion')
+      await h.page.moveTo(pinnedNoteRect.x, pinnedNoteRect.y)
+      await h.page.clickAt(pinnedNoteRect.x, pinnedNoteRect.y)
+      await sleep(450)
+      const pinnedMenu = await readHoverMenu()
+      const pinnedDuring = await readNotePopover()
+      assert(pinnedMenu !== null && pinnedMenu.open, 'A3/T30: the hover surface closed while editing the annotation (pin failed)')
+      assertEqual(pinnedDuring.status, 'resolved', 'A3/T30: the target stopped resolving while the surface stayed pinned')
+      assertEqual(pinnedDuring.locator, pinnedBefore.locator, 'A3/T30: the displayed locator changed while editing')
+      if (process.env.PSA_PIN_EVIDENCE_DIR) {
+        await mkdir(process.env.PSA_PIN_EVIDENCE_DIR, { recursive: true })
+        const clip = { x: 280, y: 200, width: 640, height: 380, scale: 1 }
+        const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip })
+        await writeFile(path.join(process.env.PSA_PIN_EVIDENCE_DIR, 'pinned-surface-while-editing.png'), Buffer.from(data.data, 'base64'))
+      }
+      // Closing the popover releases the pin; the surface closes and the hand-off is honest.
+      await h.click('[data-psa-popover-close]')
+      await sleep(500)
+      const unpinnedMenu = await readHoverMenu()
+      assert(unpinnedMenu !== null && unpinnedMenu.open === false, 'A3/T30: releasing the pin did not let the surface close')
+      // Re-open, select the leaf again, then close the surface directly (simulating a
+      // genuine disappearance): status may change, but the captured locator stays.
+      await h.page.moveTo(900, 160)
+      await sleep(150)
+      await h.page.moveTo(hoverMenu.trigger.centerX, hoverMenu.trigger.centerY)
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        await sleep(80)
+        menuState = await readHoverMenu()
+        if (menuState !== null && menuState.open) break
+      }
+      assert(menuState !== null && menuState.open, 'hover menu did not reopen')
+      await h.page.moveTo(menuState.leaf.centerX, menuState.leaf.centerY)
+      await sleep(220)
+      await h.page.clickAt(menuState.leaf.centerX, menuState.leaf.centerY)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the second hover-menu selection' })
+      await sleep(250)
+      const honestBefore = await readNotePopover()
+      await h.page.eval(probes.vanishHoverMenuFixture)
+      await sleep(300)
+      const honestNoteRect = await h.page.findRect('[data-psa-note]')
+      if (honestNoteRect !== null) {
+        await h.page.clickAt(honestNoteRect.x, honestNoteRect.y)
+        await sleep(250)
+      }
+      const honestAfter = await readNotePopover()
+      assert(honestAfter !== null, 'popover disappeared after the surface vanished')
+      assert(honestAfter.status !== 'resolved', `A3/T30: status must change honestly after the surface disappeared: ${JSON.stringify(honestAfter)}`)
+      assertEqual(honestAfter.locator, honestBefore.locator, 'A3/T30: locator display must stay the captured one after disappearance')
+      await h.page.pressKey('escape')
+      await sleep(250)
+      await h.page.eval(probes.removeHoverMenuFixture)
+      await h.page.moveTo(900, 160)
+      await sleep(200)
+
+      // ---- A2: verified unique locator resolves the duplicate-label control ----      // ---- A2: verified unique locator resolves the duplicate-label control ----
       const newSession = await h.page.eval(pageProbe.newSessionButton)
       assert(newSession, 'native New session button not found for the A2 probe')
       await h.page.moveTo(newSession.x, newSession.y)
@@ -5365,7 +5522,8 @@ function buildScenarios(harness) {
       assert(routePath.startsWith('/') && !routePath.includes('?') && !routePath.includes('#'), `D11: route is not a query-free pathname (${short(routePath)})`)
 
       // ---- D1: records and their statuses survive a reload ----
-      await h.exit()
+      // A3/T29: do not exit the mode here (a confirmed exit clears records by spec);
+      // reload the page directly so the persisted v3 document is restored.
       await h.page.reload()
       await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after the persistence reload' })
       await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the persistence reload' })
@@ -5409,12 +5567,28 @@ function buildScenarios(harness) {
       await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover before the cap seed' })
       await h.click('[data-psa-add]')
       await sleep(400)
-      // Exit first: deactivate flushes the in-memory collection, which would
-      // otherwise overwrite the seeded document.
-      await h.exit()
-      await sleep(250)
-      const seeded = await h.page.eval(probes.seedAnnotationStorage, 100)
-      assert(seeded.ok, 'D15: could not seed the 100-record document')
+      // A3/T29: exiting with records now clears them, and the page's unload flush
+      // would overwrite a seeded doc. Seed the 100-record document from an init
+      // script (runs before the plugin boots on the next load) instead.
+      await h.page.addInitScript(`(() => {
+        try {
+          if (localStorage.getItem('psa-cap-seed') !== 'pending') return
+          const key = 'power-suite.ui-annotation.annotations'
+          const doc = JSON.parse(localStorage.getItem(key) || 'null')
+          const base = doc !== null && Array.isArray(doc.records) && doc.records.length > 0 ? doc.records[0] : null
+          if (base === null) return
+          const records = []
+          for (let index = 0; index < 100; index += 1) {
+            const clone = JSON.parse(JSON.stringify(base))
+            clone.id = 'psa-seed-' + index
+            clone.order = index
+            records.push(clone)
+          }
+          localStorage.setItem(key, JSON.stringify({ version: 3, updatedAt: Date.now(), records, groups: [] }))
+          localStorage.setItem('psa-cap-seed', 'done')
+        } catch {}
+      })()`)
+      await h.page.evaluate(`localStorage.setItem('psa-cap-seed', 'pending')`)
       await h.page.reload()
       await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after the cap seed' })
       await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the cap seed' })
@@ -5443,16 +5617,13 @@ function buildScenarios(harness) {
       assertEqual(stillCapped.count, 100, 'D15: a refused add changed the persisted record count')
 
       // ---- cleanup: leave a clean page for the remaining scenarios/screenshots ----
-      // Empty the collection through the UI: the controller flushes its in-memory
-      // store on exit/dispose, so deleting localStorage alone would be overwritten
-      // by the seeded records on the next unload.
+      // Cancel Annotation confirms, clears the seeded records and exits the mode.
       await h.openCollection()
-      await h.page.waitFor(`!!document.querySelector('[data-psa-clear]')`, { timeout: 6000, label: 'collection clear action' })
-      const clearRect = await h.page.findRect('[data-psa-clear]')
-      assert(clearRect, 'the collection clear action is not clickable')
-      await h.page.clickAt(clearRect.x, clearRect.y)
-      await sleep(700)
-      await h.exit()
+      await h.page.waitFor(`!!document.querySelector('[data-psa-cancel-annotation]')`, { timeout: 6000, label: 'cancel annotation action' })
+      await h.click('[data-psa-cancel-annotation]')
+      await h.page.waitFor(`!!document.querySelector('[data-psa-exit-clear]')`, { timeout: 4000, label: 'clear-and-exit confirmation' })
+      await h.click('[data-psa-exit-clear]')
+      await h.page.waitFor(`document.documentElement.getAttribute('data-psa-active') === null`, { timeout: 8000, label: 'mode off after cleanup clear' })
       await sleep(300)
       await h.page.eval(probes.clearAnnotationStorage)
       await h.page.reload()
@@ -5721,11 +5892,28 @@ function buildScenarios(harness) {
       assertEqual((await h.page.eval(probes.undoToast)).present, false, 'the undo toast did not disappear after undo')
 
       // Other-Session records are never drawn on the page (survives a reload).
-      // Exit first: deactivate flushes the in-memory collection, so seeding before it
-      // would be overwritten by that flush.
-      await h.exit()
-      const appended = await h.page.eval(probes.appendOtherSessionRecord, SESSION_ID_OTHER)
-      assert(appended.ok, 'could not seed the other-Session record')
+      // A3/T29: exiting would clear the records, and the unload flush would overwrite
+      // a direct localStorage seed — seed from an init script before the next boot.
+      const otherRecordId = 'psa-other-seed-1'
+      await h.page.addInitScript(`(() => {
+        try {
+          if (localStorage.getItem('psa-other-seed') !== 'pending') return
+          const key = 'power-suite.ui-annotation.annotations'
+          const doc = JSON.parse(localStorage.getItem(key) || 'null')
+          const base = doc !== null && Array.isArray(doc.records) && doc.records.length > 0 ? doc.records[0] : null
+          if (base === null) return
+          const clone = JSON.parse(JSON.stringify(base))
+          clone.id = ${JSON.stringify(otherRecordId)}
+          clone.order = 999
+          clone.session = { sessionId: ${JSON.stringify(SESSION_ID_OTHER)}, cwd: '/tmp/other-session', workspaceLabel: 'other-session' }
+          doc.records.push(clone)
+          doc.updatedAt = Date.now()
+          localStorage.setItem(key, JSON.stringify(doc))
+          localStorage.setItem('psa-other-seed', 'done')
+        } catch {}
+      })()`)
+      await h.page.evaluate(`localStorage.setItem('psa-other-seed', 'pending')`)
+      const appended = { id: otherRecordId }
       await h.page.reload()
       await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after the marks reload' })
       await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the marks reload' })

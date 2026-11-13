@@ -282,6 +282,16 @@ through its background/padding and through the popover's Parent control.
   outermost box is the **surface root**. Hashed DSH class names are never
   consulted, so a DSH rebuild cannot silently disable the behavior; SVG boxes,
   zero-size boxes, and the plugin's own UI are excluded.
+- **Pinned while editing.** When the current selection comes from a detected
+  floating surface, the mode pins that surface open while the annotation popover
+  is active: capture-phase suppression of `mouseout`/`mouseleave`/`pointerout`/
+  `pointerleave` events scoped to the surface's subtree and ancestor wrappers
+  stops hover-triggered menus (the subagent dropdown, hover cards) from closing
+  when the pointer moves into the requirement textarea. Closing the popover /
+  clearing the selection releases the pin, emits a natural leave, and the surface
+  closes; while pinned the target keeps its Resolved status and the captured
+  locator text does not change. The transient-surface hint says the surface is
+  kept open while editing and may disappear afterwards (the locator is kept).
 - **Leaf-first hover/click.** A pointer hit inside the surface resolves to the
   deepest eligible element under the pointer (span/title/subtitle/time/counter/
   SVG path/icon/row/button all count), walking up only when that element is
@@ -316,6 +326,11 @@ through its background/padding and through the popover's Parent control.
   close) belongs to that feature; only when that behavior is present can the card
   itself be hovered and annotated. This document does not claim that behavior
   here.
+
+If a pinned surface still disappears (scroll, page navigation, a menu that closes
+from a non-pointer code path), the status may honestly become ambiguous/missing/
+changed, but the **displayed locator stays the captured one** — only the status
+line changes; a look-alike element never rewrites the summary.
 
 Limits of leaf-first picking: only real DOM elements can be selected — bare text
 nodes resolve to their parent element, and CSS `::before`/`::after` decorations
