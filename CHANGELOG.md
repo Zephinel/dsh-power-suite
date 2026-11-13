@@ -136,8 +136,10 @@ heading is added until the release is cut.
 
 - Running & recent pinning, shared native hover figures, and a circular status
   dot: **main Session rows** in the Running & recent card now carry a
-  hover-revealed **Pin** control (a fixed 16 px slot between the leading state
-  glyph and the title, so the title never shifts) that keeps that main Session
+  hover-revealed **Pin** control (hidden in a collapsed slot so the title sits
+  next to the leading glyph; hovering expands the slot first and then fades the
+  button in, and leaving fades it out before the slot collapses) that keeps that
+  main Session
   on top of **Running & recent** past the finished-retention window. The pin is
   the card's **own** state, deliberately independent of the native sidebar's
   project-organisation pin (never read, written, or surfaced here — the live
@@ -173,6 +175,12 @@ heading is added until the release is cut.
   `border-radius: 50%` dot as a squircle, so it sets `corner-shape: round`.
 
 ### Changed
+
+- The pin control's reveal is two-phase and space-saving: the slot collapses
+  when the button is hidden (the title sits next to the leading glyph), hover or
+  keyboard focus expands the slot before the button fades in, and leaving fades
+  the button out before the title expands back; pinned rows keep the marker and
+  its space permanently.
 
 - Pinned-row highlight is a single layer: the pinned row keeps its subtle violet
   row tint but the body pill inside it no longer paints a second tint (the two

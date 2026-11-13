@@ -351,11 +351,15 @@ restarted with the merged linked checkout. Until then the card is local-only.
   no marker, and no tint. Blank, archived, `origin: "subagent"`, and unknown
   Session ids are ignored even when a pinned id in the cache/Host set has no
   usable summary.
-- **No layout jump**: every main row reserves a fixed 16 px pin slot **between
-  the leading state glyph and the title**. The slot is always in the DOM; only
-  `opacity` / `visibility` / `pointer-events` change, so revealing the control
-  on hover moves neither the title nor the time, New session, or disclosure
-  columns.
+- **Animated pin reveal (space-saving)**: the pin slot is **collapsed** while
+  the control is hidden, so the title sits next to the leading glyph exactly
+  like the pre-pin layout. Hovering or keyboard-focusing the row runs a
+  **two-phase reveal**: the slot first expands 0 → 16 px (the title's start
+  slides right while the time, New session, and disclosure columns stay put),
+  and only after it has opened does the button fade in. Leaving reverses it —
+  the button fades out first, then the slot collapses and the title expands
+  back. Pinned rows keep the filled marker and its 16 px space permanently.
+  Reduced motion turns both phases into an instant state.
 - **Three button states**: unpinned and neither hovered nor keyboard-focused —
   hidden (`opacity: 0`, `visibility: hidden`, `pointer-events: none`); unpinned
   with the row hovered or `focus-within` — the outline pin glyph, interactive;

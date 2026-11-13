@@ -4668,14 +4668,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-panel-empty strong{color:var(--dsw-alias-label-secondary);font-weight:500}
 .psd-item{display:flex;flex-direction:column;min-width:0}
 .psd-run{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:var(--psd-row-h,34px);padding:0 0 0 7px;border-radius:var(--dsw-radius-md,8px);cursor:pointer}
-.psd-run-main{appearance:none;display:flex;flex:0 1 auto;box-sizing:border-box;min-width:0;min-height:var(--psd-row-h,34px);max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:9px;padding:4px 10px 4px 14px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-run-main{appearance:none;display:flex;flex:0 1 auto;box-sizing:border-box;min-width:0;min-height:var(--psd-row-h,34px);max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:0;padding:4px 10px 4px 14px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-run:hover:not(:has(.psd-run-toggle:hover)) .psd-run-main{background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-run-open{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:100%;align-items:center;padding:0;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-run-open:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px;border-radius:var(--dsw-radius-sm,6px)}
 .psd-run-spacer,.psd-child-spacer{flex:1 1 auto;min-width:0}
 .psd-run-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
-.psd-run-head{display:flex;align-items:center;gap:8px;min-width:0;flex:none}
+.psd-run-head{display:flex;align-items:center;gap:8px;min-width:0;flex:none;margin-right:9px}
 /* One fixed 16 px leading-glyph cell for every main-row state, so the 14 px state
    dots and the slightly larger sparkle share one centre column; the child-tree
    trunk and the pin column are aligned to that same geometry. */
@@ -4684,23 +4684,25 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
 .psd-run-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap;color:var(--dsw-alias-label-primary);font-size:14px;line-height:20px}
 [data-clipped='true'].psd-run-title,[data-clipped='true'].psd-child-title{mask-image:linear-gradient(to right,#000 calc(100% - var(--psd-title-fade,28px)),#0000)}
-/* Pin slot: a fixed 16 px cell between the leading state glyph and the title.
-   It is always in the DOM (only opacity/visibility change), so revealing the
-   button on hover never shifts the title or any trailing column. The pinned
-   state keeps the filled violet marker visible without hover but leaves it
-   non-interactive until the row is hovered or focused; the row itself gets a
-   faint violet tint so "why is this at the top" stays readable after the
-   pointer leaves. */
-.psd-run-pin-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:16px;height:20px}
-.psd-run-pin{appearance:none;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:16px;height:16px;padding:0;border:0;border-radius:var(--dsw-radius-xs,4px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;opacity:0;visibility:hidden;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease),background-color 120ms var(--ds-ease-in-out,ease)}
-.psd-run:hover .psd-run-pin,.psd-run:focus-within .psd-run-pin{opacity:1;visibility:visible;pointer-events:auto}
+/* Pin slot: collapsed to 0 px (with no trailing gap) while the control is
+   hidden, so the title sits next to the leading glyph exactly like the pre-pin
+   layout. Hovering or focusing the row runs a two-phase reveal: first the slot
+   expands (the title's start slides right while every trailing column stays
+   put), then the button fades in. Leaving reverses it: the button fades out
+   first, then the slot collapses and the title expands back. Pinned rows keep
+   the filled marker and its space permanently; the row tint marks the state. */
+.psd-run-pin-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:0;height:20px;margin-right:0;overflow:hidden;transition:width 150ms var(--ds-ease-in-out,ease) 120ms,margin-right 150ms var(--ds-ease-in-out,ease) 120ms}
+.psd-run:hover .psd-run-pin-slot,.psd-run:focus-within .psd-run-pin-slot{width:16px;margin-right:9px;transition:width 150ms var(--ds-ease-in-out,ease) 0ms,margin-right 150ms var(--ds-ease-in-out,ease) 0ms}
+.psd-run[data-pinned='true'] .psd-run-pin-slot{width:16px;margin-right:9px;transition:none}
+.psd-run-pin{appearance:none;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:16px;height:16px;padding:0;border:0;border-radius:var(--dsw-radius-xs,4px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;opacity:0;visibility:hidden;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease) 0ms,visibility 0s linear 120ms,background-color 120ms var(--ds-ease-in-out,ease)}
+.psd-run:hover .psd-run-pin,.psd-run:focus-within .psd-run-pin{opacity:1;visibility:visible;pointer-events:auto;transition:opacity 120ms var(--ds-ease-in-out,ease) 150ms,visibility 0s linear 150ms,background-color 120ms var(--ds-ease-in-out,ease)}
 .psd-run-pin:hover{background-color:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-run-pin:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-run[data-pinned='true']{background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,transparent)}
-.psd-run[data-pinned='true'] .psd-run-pin{opacity:1;visibility:visible;pointer-events:none;color:var(--dsw-alias-state-business-primary)}
+.psd-run[data-pinned='true'] .psd-run-pin{opacity:1;visibility:visible;pointer-events:none;color:var(--dsw-alias-state-business-primary);transition:background-color 120ms var(--ds-ease-in-out,ease)}
 .psd-run[data-pinned='true']:hover .psd-run-pin,.psd-run[data-pinned='true']:focus-within .psd-run-pin{pointer-events:auto}
 .psd-run[data-pinned='true']:hover .psd-run-main{background-color:var(--dsw-alias-interactive-bg-hover)}
-@media (prefers-reduced-motion: reduce){.psd-run-pin{transition:none}}
+@media (prefers-reduced-motion: reduce){.psd-run-pin,.psd-run-pin-slot{transition:none}}
 .psd-run-toggle{appearance:none;position:relative;z-index:1;flex:none;width:var(--psd-chevron-col,24px);height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .psd-run-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-run-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
