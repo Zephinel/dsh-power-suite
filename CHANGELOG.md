@@ -60,13 +60,17 @@ heading is added until the release is cut.
   group cards (count badge, collapse/expand, shared-requirement editing,
   always-visible edit/delete/insert actions), per-item metadata (Selector,
   Page/Area, Session/Workspace, updated time), empty/filter-empty states, and a
-  footer with **Add annotation** plus dynamic **Clear selection / Clear
-  collection** (undoable). The list is the rail's default body on activation
-  (the intermediate status/Collection/Settings rows are gone; a compact
-  **settings gear** in the header opens settings, Back/Esc returns), with the
-  selection hint in the header, and the launcher animates a ~220 ms ease-out
-  flight between its remembered floating slot and the rail header on
-  activation/exit (reduced-motion instant). Page
+  footer with **Add annotation** and **Cancel Annotation** at equal widths (the
+  danger action confirms and clears all annotations on exit). The list is the
+  rail's default body on activation (the intermediate status/Collection/Settings
+  rows are gone; a compact **settings-line** icon in the header opens settings,
+  Back/Esc returns), with the selection hint in the header. The floating
+  launcher is hidden while the mode is active (no docked/flight copy) and only
+  fades/scales back in at its remembered position after a full exit
+  (reduced-motion instant). Leaving the mode (header X, Cancel Annotation or the
+  final Esc step) asks for confirmation and then clears all annotation records,
+  so a re-entry starts empty; a group keeps ONE ordinal shared by all of its
+  items (page marks show the group's number, never an incrementing sequence). Page
   pointer events are consumed in the capture phase so native controls cannot
   act while annotating; the configurable multi-select modifier toggles selection
   or starts a marquee, and the configurable pass-through modifier restores real
@@ -130,13 +134,12 @@ heading is added until the release is cut.
 
 ### Changed
 
-- UI element annotation launcher placement: the round launcher now floats only
-  while the mode is off. Activating the mode docks the same control inside the
-  right rail header (next to collapse/exit, with its collection badge and
-  `aria-pressed` state) so it never covers page content; exiting returns it to
-  the remembered floating position (drag and position persistence are idle-only,
-  and a mode cycle through the narrow overlay layout restores the same
-  coordinates, clamped to the viewport).
+- UI element annotation launcher placement: the round launcher floats only while
+  the mode is off; activating the mode fades/scales it out in place (no docked
+  or flying copy in the rail header), and a full exit (header X, Cancel
+  Annotation, or the final Esc step) restores it with a fade/scale animation at
+  the remembered floating position (drag and position persistence are
+  idle-only; reduced-motion users get the instant state).
 
 - Running & recent identity glyphs swapped: the panel header's all-complete
   indicator now paints the DeepSeek brand glyph (`deepseek-fill`) and an
@@ -201,10 +204,11 @@ heading is added until the release is cut.
   note fields, prompt-history search field, settings choice pills); it fades in
   in 140 ms, rotates and hue-drifts, keeps a static ring under reduced motion,
   and falls back to the system `Highlight` outline under forced colors. The ring
-  is parameterised and the prompt-history **search field** uses a deliberately
-  calmer variant (opacity 0.58, desaturated 2.5 px glow, 1.5 px track, slower
-  4.6 s/20 s drift) so it reads as a soft accent; the other inputs keep the
-  shared stronger defaults.
+  is parameterised and the prompt-history **search card** paints a deliberately
+  calmer variant around the whole floating card when its input is focused
+  (opacity 0.58, desaturated 2.5 px glow, 1.5 px track, slower 4.6 s/20 s
+  drift; the inner input itself is ringless) so it reads as a soft accent; the
+  other inputs keep the shared stronger defaults.
 - Interrupted-session detection now covers **every unfinished turn ending**, not
   only Host restarts/crashes: any `turn/end` reason `error` (quota/usage limit,
   request timeout, transport/network failure, rate limit, malformed response,

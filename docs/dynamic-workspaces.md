@@ -684,14 +684,18 @@ Plugin surfaces follow the shell's own recipes instead of bespoke chrome:
   original stronger look (saturate .92, 5 px glow at .38 alpha, opacity 1,
   2 px track), so the **settings choice pills** (`.dps-choice-option` — whose
   old solid outline rule is removed) and any annotation surface using the class
-  are unchanged. The **prompt-history search field**
-  (`span.psp-search-field.psf-rainbow-focus` around the borderless input) uses
-  the deliberately calmer variant: focus opacity `.58`, a 1.5 px track,
-  `saturate(.8)`, a 2.5 px glow at .2 alpha, and a slower 4.6 s spin / 20 s hue
-  drift — the same rainbow, just a soft accent instead of a bright border. The
-  ring keeps its `inset: -3px` hug on every edge (including under the input's
-  baseline descender), opacity transitions in at 140 ms and nothing shifts
-  layout. `prefers-reduced-motion: reduce` leaves a static rainbow ring (the
+  are unchanged. The **prompt-history search card** carries the ring instead of
+  its inner input: the card element itself gets `.psf-rainbow-focus`, so when the
+  input inside it has focus the ring wraps the **whole floating card**
+  (`focus-within` → card `::after`). It uses the deliberately calmer variant:
+  focus opacity `.58`, a 1.5 px track, `saturate(.8)`, a 2.5 px glow at .2
+  alpha, and a slower 4.6 s spin / 20 s hue drift — the same rainbow, just a
+  soft accent instead of a bright border. The ring keeps its `inset: -3px` hug
+  on every card edge with the matching radius (`card radius + 3 px`), which is
+  why the card's `overflow` is `visible` (otherwise the outside pseudo-element
+  would be clipped); the inner `span.psp-search-field` / input are now
+  **ringless** and keep a clean focus state while retaining keyboard focus.
+  Opacity transitions in at 140 ms and nothing shifts layout or card geometry. `prefers-reduced-motion: reduce` leaves a static rainbow ring (the
   calm search variant stays static too), and `forced-colors` mode replaces it
   with a system `Highlight` outline so focus stays visible in high-contrast mode.
 

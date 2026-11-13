@@ -423,9 +423,11 @@ renderless `conversation.input.overlay` seat, injects one
 `<style data-power-suite-css="ui-annotation">`, creates the controller singleton,
 and returns a disposer. An install guard keeps reconnects/HMR idempotent: one
 launcher and one listener set. The launcher floats only while the mode is off;
-while active the same control is docked in the rail header, so nothing floats
-over page content, and exiting restores the remembered floating position. The
-overlay seat renders the launcher, rail,
+activating the mode fades/scales it out in place (there is no docked or flying
+copy in the rail header), and a full exit restores it at the remembered floating
+position. Leaving the mode with records asks for confirmation and clears the
+annotation records, so a re-entry starts empty. The overlay seat renders the
+launcher, rail,
 highlight layer, note popover, and feedback toast with React; the conversation
 seat keeps the module bridge (`sessionId`, `inputActions`; the slot contract
 passes **no `draft` prop**) current because the root overlay does not receive the
@@ -515,19 +517,21 @@ delete actions, and the requirement popover commits or updates the record,
 deletes it with a 5 s undo slot, and auto-dismisses after either action. The
 right rail's **default body** is the managed annotation sidebar (no status or
 Collection entry to click through): the header carries the title, total badge,
-selection hint, docked launcher, a settings gear (opens the settings view;
-Back/Esc returns), collapse and exit, and the launcher animates a ~220 ms
-ease-out flight between its remembered floating slot and the rail header on
-activation/exit (a transient pointer-transparent flight element; exactly one
-resting launcher; reduced motion instant). It widens
-to `clamp(320px, 24vw, 420px)` (the frame padding and canvas follow; the compact
-~200 px width returns for the status/settings views) and renders an
-**Annotations** header with a total badge, **All / Singles / Groups** filters
-with live counts, a unified list of single rows and collapsible group cards
+selection hint, a settings-line icon (opens the settings view; Back/Esc
+returns), collapse and exit. It widens to `clamp(320px, 24vw, 420px)` (the frame
+padding and canvas follow; settings keeps the same wide width to avoid a jump)
+and renders an **Annotations** header with a total badge, **All / Singles /
+Groups** filters with live counts, a unified list of single rows and collapsible
+group cards
 (shared requirement, item count, always-visible edit/delete/insert actions,
 Selector/Page/Session metadata and updated time), empty/filter-empty states, and
 a footer with **Add annotation** plus dynamic **Clear selection / Clear
-collection** (undoable). Groups insert as one grouped batch chip.
+collection** (undoable). Groups insert as one grouped batch chip; a group keeps ONE ordinal shared by
+all of its items (page marks show the group number, never an incrementing
+sequence). The footer's **Add annotation** and **Cancel Annotation** actions
+share equal width; the danger action, the header exit and the final Esc step
+open a confirmation and, on confirm, clear every single/group record (marks and
+persisted v3 document) before exiting — a re-entry starts empty.
 
 Annotation reference chips also carry a hover preview: the browser watches the
 shell's `[data-composer-chip="ui-annotation"]` markup, looks the record up in the
