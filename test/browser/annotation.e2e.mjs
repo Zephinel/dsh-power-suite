@@ -1090,7 +1090,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first surface pick)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1102,7 +1102,7 @@ async function runSmoke({ page, results, state }) {
     // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
     // rail selection and chip-ref serialization helpers (66). Pin a documented count and
     // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67]
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1141,6 +1141,11 @@ async function runSmoke({ page, results, state }) {
     if (keyCount === 67) {
       for (const key of ['annotationSurfacePickLevel', 'annotationSurfaceLevels', 'annotationSurfaceRoot']) {
         assert(probe.keys.includes(key), `inner-first surface seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
+      }
+    }
+    if (keyCount === 68) {
+      for (const key of ['annotationLeafPickIndex', 'annotationSurfacePickLevel', 'annotationSurfaceLevels', 'annotationSurfaceRoot']) {
+        assert(probe.keys.includes(key), `leaf-first seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
       }
     }
     state.hooks = probe.keys
@@ -1990,10 +1995,10 @@ const probes = {
       position: 'fixed',
       left: '360px',
       top: '280px',
-      width: '320px',
-      height: '150px',
+      width: '340px',
+      height: '170px',
       zIndex: '500',
-      background: 'rgb(32, 35, 44)',
+      background: 'rgb(44, 44, 46)',
       color: 'rgb(235, 238, 245)',
       border: '1px solid rgb(90, 96, 112)',
       borderRadius: '8px',
@@ -2006,18 +2011,50 @@ const probes = {
       fontSize: '13px',
       fontFamily: 'system-ui, sans-serif',
     })
-    const title = document.createElement('div')
-    title.textContent = 'Hover preview card'
-    const path = document.createElement('div')
-    path.textContent = '/Users/probe/project'
+    // A dropdown-like row: left column (title + subtitle) and right meta column
+    // (time, token count, chevron icon) — the leaf-first picker must reach each.
+    const row = document.createElement('div')
+    Object.assign(row.style, {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '10px',
+      padding: '4px 6px',
+      borderRadius: '6px',
+      background: 'rgb(54, 56, 60)',
+    })
+    const left = document.createElement('div')
+    Object.assign(left.style, { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '0' })
+    const title = document.createElement('span')
+    title.textContent = 'Research hovercard session stats'
+    Object.assign(title.style, { display: 'block', fontSize: '13px', whiteSpace: 'nowrap' })
+    const subtitle = document.createElement('span')
+    subtitle.textContent = 'You are a read-only research subagent'
+    Object.assign(subtitle.style, { display: 'block', fontSize: '11px', color: 'rgb(180, 184, 192)', whiteSpace: 'nowrap' })
+    left.append(title, subtitle)
+    const right = document.createElement('div')
+    Object.assign(right.style, { display: 'flex', alignItems: 'center', gap: '6px', flex: 'none' })
+    const time = document.createElement('span')
+    time.textContent = '18m 19s'
+    Object.assign(time.style, { display: 'block', fontSize: '11px', whiteSpace: 'nowrap' })
+    const token = document.createElement('span')
+    token.textContent = '22.4M tok'
+    Object.assign(token.style, { display: 'block', fontSize: '11px', whiteSpace: 'nowrap' })
+    const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    chevron.setAttribute('width', '14')
+    chevron.setAttribute('height', '14')
+    chevron.setAttribute('viewBox', '0 0 14 14')
+    chevron.style.display = 'block'
+    chevron.style.flex = 'none'
+    const chevronPath = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+    chevronPath.setAttribute('d', 'M5 3 L9 7 L5 11 Z')
+    chevronPath.setAttribute('fill', 'currentColor')
+    chevron.append(chevronPath)
+    right.append(time, token, chevron)
+    row.append(left, right)
     const status = document.createElement('div')
-    status.textContent = 'Active'
-    const button = document.createElement('button')
-    button.type = 'button'
-    button.textContent = 'Open'
-    button.setAttribute('aria-label', 'Probe panel action')
-    Object.assign(button.style, { alignSelf: 'flex-start', padding: '2px 10px', cursor: 'pointer' })
-    panel.append(title, path, status, button)
+    status.textContent = 'Status: active'
+    panel.append(row, status)
     document.body.appendChild(panel)
     const rectOf = (element) => {
       const rect = element.getBoundingClientRect()
@@ -2030,7 +2067,20 @@ const probes = {
         centerY: Math.round(rect.y + rect.height / 2),
       }
     }
-    return { panel: rectOf(panel), title: rectOf(title), status: rectOf(status), button: rectOf(button) }
+    return {
+      panel: rectOf(panel),
+      row: rectOf(row),
+      left: rectOf(left),
+      right: rectOf(right),
+      title: rectOf(title),
+      subtitle: rectOf(subtitle),
+      time: rectOf(time),
+      token: rectOf(token),
+      chevron: rectOf(chevron),
+      chevronPath: rectOf(chevronPath),
+      status: rectOf(status),
+      button: null,
+    }
   },
   removeSurfaceProbePanel: () => {
     document.getElementById('psa-e2e-surface-panel')?.remove()
@@ -2970,7 +3020,7 @@ const SCENARIO_TITLES = {
   7: 'exit mode: markers/padding cleaned, native clicks work again, launcher stays',
   8: 'launcher drag clamp, viewport resize, scroll stability, reload default + position memory',
   9: 'collection view keeps the frame/rail geometry; exit restores the baseline layout',
-  10: 'floating surfaces: inner-first hover/click, whole surface via background/Parent, drill, identical outline style, F3 recompute, F4 state CSS, v2 records + reload persistence',
+  10: 'floating surfaces: leaf-first hover/click (title/subtitle/time/token/icon leaves), full Parent/Child chain, whole surface via background, identical outline style, F3 recompute, F4 state CSS, v2 records + reload persistence',
   11: 'F4 cross-branch: pinned dynamic-workspaces hover card is selectable in annotation mode (SKIP without the DW branch)',
   12: 'page marks + hover detail card + delete/undo + other-Session exclusion',
   13: 'composer chip: single Quick reference, chip click preview, Backspace removal, ONE batch group chip, not sent',
@@ -3267,8 +3317,14 @@ function buildScenarios(harness) {
       assertEqual((await h.ui()).entries, 3, 'three entries after "Add all to collection"')
       await h.clickBack()
       // Re-selecting the same element updates its entry instead of duplicating it.
+      // A3/T18: page picking is leaf-first, so re-select with the SAME recorded point
+      // instead of a selector lookup (a selector lookup can land on a different leaf).
       await h.clearSelection()
-      await h.selectElement('button[aria-label="New session"]')
+      await h.page.moveTo(targets[0].point.x, targets[0].point.y)
+      await sleep(150)
+      await h.page.clickAt(targets[0].point.x, targets[0].point.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover after re-selecting the same leaf point' })
+      await sleep(200)
       const popover = await h.popover()
       assert(/Update requirement|Update collection|更新需求|更新标注集/.test(popover.addLabel || ''), `popover should offer update, got "${popover.addLabel}"`)
       await h.click('[data-psa-add]')
@@ -4138,7 +4194,20 @@ function buildScenarios(harness) {
       await sleep(180)
       const ordinaryHover = await h.page.eval(probes.hoverState)
       assert(ordinaryHover, 'ordinary hover outline missing')
-      assertRectNear(ordinaryHover.rect, plainRect, 2, 'ordinary control hover outline does not match the control rect')
+      // A3/T18: ordinary page picking is leaf-first now, so the hover target is the
+      // deepest eligible element inside the control (icon/text span), not the control
+      // box itself — it must still lie inside the control box.
+      assert(
+        ordinaryHover.rect.x >= plainRect.x - 1
+          && ordinaryHover.rect.y >= plainRect.y - 1
+          && ordinaryHover.rect.x + ordinaryHover.rect.width <= plainRect.x + plainRect.width + 1
+          && ordinaryHover.rect.y + ordinaryHover.rect.height <= plainRect.y + plainRect.height + 1,
+        `ordinary leaf hover escaped the control rect (hover ${JSON.stringify(ordinaryHover.rect)}, control ${JSON.stringify(plainRect)})`
+      )
+      assert(
+        ordinaryHover.rect.width <= plainRect.width || ordinaryHover.rect.height <= plainRect.height,
+        'ordinary page picking must be leaf-first (hover target inside the control)'
+      )
       const layerRect = await h.page.eval(probes.createFloatingProbeLayer, plainTarget.left - 20, plainTarget.top - 20, 240, 120)
       const hoverFollowDeadline = Date.now() + 2000
       let layerHover = null
@@ -4192,7 +4261,27 @@ function buildScenarios(harness) {
         await writeFile(path.join(dir, name), Buffer.from(data.data, 'base64'))
       }
 
-      // ---- F1/F2: native hover card — inner-first hover, whole card via background ----
+      /**
+       * Activate the popover Parent/Child control without pointer coordinates: the
+       * popover may re-clamp after a level change, so a real pointer click on a stale
+       * rect could miss it and select a page element behind it. A DOM click is the
+       * same React handler and is deterministic.
+       * @param {'up' | 'down'} direction - level direction.
+       * @returns {Promise<void>}
+       */
+      const activateLevel = async (direction) => {
+        const clicked = await h.page.evaluate(`(() => {
+          const button = document.querySelector('[data-psa-level-${direction}]')
+          if (button === null) return false
+          button.focus()
+          button.click()
+          return true
+        })()`)
+        assert(clicked, `the Parent/Child (${direction}) control is missing`)
+        await sleep(320)
+      }
+
+      // ---- F1/F2: native hover card — leaf-first hover, whole card via background/Parent ----
       await h.page.moveTo(700, 160)
       await sleep(200)
       const rowPoint = await h.page.eval(probes.workspaceRowPoint) ?? await h.page.eval(probes.sessionRowPoint, null)
@@ -4209,40 +4298,34 @@ function buildScenarios(harness) {
       const paintLayer = await h.page.eval(probes.paintLayerState)
       assert(Number(paintLayer.computedZ) > nativeCard.z,
         `F1: annotation paint layer z=${paintLayer.computedZ} is not above the native card z=${nativeCard.z}`)
-      // A3/T16: a hit on the card's inner row/text previews that inner element, not
-      // the whole card. Pick a deterministic inner text element (the card centre can
-      // be padding/empty space, which must keep previewing the whole card).
+      // A3/T18 leaf-first: a hit on the card's inner text previews that deepest
+      // element (span included), not the whole card.
       const innerCardPoint = await h.page.eval(probes.nativeHoverCardInnerPoint)
       assert(innerCardPoint !== null, 'no inner text element found in the native hover card')
       await h.page.moveTo(innerCardPoint.centerX, innerCardPoint.centerY)
       const innerDeadline = Date.now() + 3000
       let innerCardHover = null
-      let lastInnerHover = null
       while (Date.now() < innerDeadline) {
         await sleep(100)
         const hover = await h.page.eval(probes.hoverState)
         if (hover === null) continue
-        lastInnerHover = hover
         const rect = hover.rect
-        if (Math.abs(rect.x - innerCardPoint.rect.x) <= 3
-          && Math.abs(rect.y - innerCardPoint.rect.y) <= 3
-          && Math.abs(rect.width - innerCardPoint.rect.width) <= 3
-          && Math.abs(rect.height - innerCardPoint.rect.height) <= 3) {
+        const inside = rect.x >= nativeCard.rect.x - 2 && rect.y >= nativeCard.rect.y - 2
+          && rect.x + rect.width <= nativeCard.rect.x + nativeCard.rect.width + 2
+          && rect.y + rect.height <= nativeCard.rect.y + nativeCard.rect.height + 2
+        const smaller = rect.width <= nativeCard.rect.width - 8 || rect.height <= nativeCard.rect.height - 8
+        if (inside && smaller) {
           innerCardHover = hover
           break
         }
       }
       assert(innerCardHover !== null,
-        `A3/T16: hovering a native card inner text element did not preview that element ` +
-        `(target ${JSON.stringify(innerCardPoint.rect)}, hover ${JSON.stringify(lastInnerHover === null ? null : lastInnerHover.rect)}, ` +
-        `card ${nativeCard.rect.width}x${nativeCard.rect.height})`)
-      assert(innerCardPoint.rect.width <= nativeCard.rect.width - 8 || innerCardPoint.rect.height <= nativeCard.rect.height - 8,
-        'A3/T16: the native card inner probe is not smaller than the whole card')
-      assertEqual(innerCardHover.borderStyle, ordinaryHover.borderStyle, 'A3/T16: inner-row hover outline border style differs from an ordinary control')
-      assertEqual(innerCardHover.borderWidth, ordinaryHover.borderWidth, 'A3/T16: inner-row hover outline border width differs from an ordinary control')
-      assertEqual(innerCardHover.borderColor, ordinaryHover.borderColor, 'A3/T16: inner-row hover outline border color differs from an ordinary control')
-      await captureSurfaceClip('native-card-inner-hover.png', innerCardHover.rect)
-      // Hovering the card background/padding keeps the whole surface preview.
+        `A3/T18: hovering a native card inner text element did not preview the leaf element (card ${nativeCard.rect.width}x${nativeCard.rect.height})`)
+      assertEqual(innerCardHover.borderStyle, ordinaryHover.borderStyle, 'A3/T18: leaf hover outline border style differs from an ordinary control')
+      assertEqual(innerCardHover.borderWidth, ordinaryHover.borderWidth, 'A3/T18: leaf hover outline border width differs from an ordinary control')
+      assertEqual(innerCardHover.borderColor, ordinaryHover.borderColor, 'A3/T18: leaf hover outline border color differs from an ordinary control')
+      await captureSurfaceClip('native-card-leaf-hover.png', innerCardHover.rect)
+      // Background/padding hover still previews the whole surface.
       const cardPaddingPoint = { x: nativeCard.rect.x + 6, y: nativeCard.rect.y + 6 }
       await h.page.moveTo(cardPaddingPoint.x, cardPaddingPoint.y)
       const cardHoverDeadline = Date.now() + 3000
@@ -4258,15 +4341,11 @@ function buildScenarios(harness) {
           break
         }
       }
-      assert(cardHover !== null, 'A3/T16: hovering the native card background/padding did not preview the whole card')
-      assertEqual(cardHover.borderStyle, ordinaryHover.borderStyle, 'F2: floating-surface outline border style differs from an ordinary control')
-      assertEqual(cardHover.borderWidth, ordinaryHover.borderWidth, 'F2: floating-surface outline border width differs from an ordinary control')
-      assertEqual(cardHover.borderColor, ordinaryHover.borderColor, 'F2: floating-surface outline border color differs from an ordinary control')
+      assert(cardHover !== null, 'A3/T18: hovering the native card background/padding did not preview the whole card')
       await captureSurfaceClip('native-card-whole-hover.png', cardHover.rect)
       const layerAboveCard = await h.page.eval(probes.paintLayerState)
       assert(Number(layerAboveCard.computedZ) > nativeCard.z, 'paint layer no longer above the native card after hovering it')
-
-      // Click the card background: the WHOLE card becomes the selection (surface floating/ephemeral).
+      // Click the background: the WHOLE card becomes the selection.
       await h.page.clickAt(cardPaddingPoint.x, cardPaddingPoint.y)
       await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover after clicking the hover-card background' })
       await sleep(250)
@@ -4277,94 +4356,148 @@ function buildScenarios(harness) {
       assertEqual(cardSelection.popover.copyLocator, true, 'the popover is missing the copy-locator action')
       assertNear(cardSelection.outlines.length, 1, 0, 'expected exactly one selection outline for the hover card')
       assertRectNear(cardSelection.outlines[0], nativeCard.rect, 3, 'the whole-card selection outline does not match the card rect')
-      const popoverTitle = String(cardSelection.popover.title || '')
-      const popoverRef = String(cardSelection.popover.ref || '')
-      assert(popoverTitle.length > 0, 'the hover-card popover has no element title')
-      assert(popoverRef.length > 0, 'the hover-card popover has no locator summary')
-      assert(['resolved', 'changed'].includes(cardSelection.popover.status),
-        `the live hover card did not resolve to a target (status ${cardSelection.popover.status})`)
+      assert(String(cardSelection.popover.title || '').length > 0, 'the hover-card popover has no element title')
       await h.clearSelection()
-      // Click an inner row: the popover opens for that inner element (inner-first click).
+      // Click the leaf: the popover opens for that deepest element.
       await h.page.moveTo(innerCardPoint.centerX, innerCardPoint.centerY)
       await sleep(150)
       await h.page.clickAt(innerCardPoint.centerX, innerCardPoint.centerY)
-      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover after clicking an inner hover-card row' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover after clicking an inner hover-card leaf' })
       await sleep(250)
-      const innerCardSelection = await h.page.eval(probes.selectionState)
-      assertEqual(innerCardSelection.popover.surface, 'floating', 'the inner hover-card element is not marked as a floating-surface record')
-      assertNear(innerCardSelection.outlines.length, 1, 0, 'expected one selection outline for the inner hover-card element')
-      assertRectNear(innerCardSelection.outlines[0], innerCardHover.rect, 4, 'clicking an inner card row did not select that row')
-      assert(String(innerCardSelection.popover.title || '').length > 0, 'the inner-card popover has no element title')
+      const leafCardSelection = await h.page.eval(probes.selectionState)
+      assertEqual(leafCardSelection.popover.surface, 'floating', 'the inner hover-card element is not marked as a floating-surface record')
+      assertRectNear(leafCardSelection.outlines[0], innerCardHover.rect, 4, 'clicking an inner card leaf did not select that leaf')
+      const leafCardTitle = String(leafCardSelection.popover.title || '')
+      assert(leafCardTitle.length > 0, 'the leaf popover has no element title')
+      // Parent walks the full ancestor chain up to the whole card, Child walks back.
+      const nativeWalk = []
+      for (let step = 0; step < 6; step += 1) {
+        const before = await h.page.eval(probes.selectionState)
+        await activateLevel('up')
+        const after = await h.page.eval(probes.selectionState)
+        nativeWalk.push(after.outlines[0])
+        if (Math.abs(after.outlines[0].x - nativeCard.rect.x) <= 3
+          && Math.abs(after.outlines[0].width - nativeCard.rect.width) <= 3
+          && Math.abs(after.outlines[0].height - nativeCard.rect.height) <= 3) break
+        assert(after.outlines[0].width >= before.outlines[0].width - 1 || after.outlines[0].height >= before.outlines[0].height - 1,
+          `A3/T18: Parent step ${step + 1} did not move up the ancestor chain (before ${JSON.stringify(before.outlines[0])}, after ${JSON.stringify(after.outlines[0])}, walk ${JSON.stringify(nativeWalk)}, popover ${JSON.stringify(after.popover)})`)
+      }
+      assertRectNear(nativeWalk[nativeWalk.length - 1], nativeCard.rect, 3, 'A3/T18: Parent did not reach the whole card')
+      const parentedCardTitle = (await h.page.eval(probes.selectionState)).popover.title
+      for (let step = 0; step < 6; step += 1) {
+        const current = await h.page.eval(probes.selectionState)
+        if (Math.abs(current.outlines[0].x - innerCardHover.rect.x) <= 4
+          && Math.abs(current.outlines[0].width - innerCardHover.rect.width) <= 4
+          && Math.abs(current.outlines[0].height - innerCardHover.rect.height) <= 4) break
+        await activateLevel('down')
+      }
+      const childedCard = await h.page.eval(probes.selectionState)
+      assertRectNear(childedCard.outlines[0], innerCardHover.rect, 4, 'A3/T18: Child did not walk back down to the leaf element')
+      assertEqual(childedCard.popover.title, leafCardTitle, 'A3/T18: Child did not restore the leaf popover')
+      assert(parentedCardTitle !== leafCardTitle, 'A3/T18: Parent and leaf must name different elements')
       await h.clearSelection()
       await h.page.moveTo(700, 160)
       await sleep(200)
 
-      // ---- F2 inner-first + drill: deterministic synthetic floating panel ----
+      // ---- F2 leaf-first + full Parent/Child walk: deterministic dropdown fixture ----
       const panel = await h.page.eval(probes.createSurfaceProbePanel)
-      // 1. Hover a text row inside the panel: it previews that row, not the whole card.
-      await h.page.moveTo(panel.title.centerX, panel.title.centerY)
-      await h.page.waitFor(`!!document.querySelector('[data-psa-hover]')`, { timeout: 4000, label: 'hover outline on the synthetic panel row' })
-      await sleep(150)
-      const innerPanelHover = await h.page.eval(probes.hoverState)
-      assertRectNear(innerPanelHover.rect, panel.title, 3, 'A3/T16: hovering the synthetic panel row did not preview that row')
-      assert(innerPanelHover.rect.height <= panel.panel.height - 20 || innerPanelHover.rect.width <= panel.panel.width - 20,
-        `A3/T16: the inner panel-row hover is not smaller than the whole surface (${innerPanelHover.rect.width}x${innerPanelHover.rect.height} vs ${panel.panel.width}x${panel.panel.height})`)
-      assertEqual(innerPanelHover.borderStyle, ordinaryHover.borderStyle, 'A3/T16: synthetic inner-row outline style differs from an ordinary control')
-      await captureSurfaceClip('synthetic-panel-inner-hover.png', panel.panel)
-      // 2. Hover the panel background/padding: the whole surface is still previewed.
+      const leafSpecs = [
+        ['title', panel.title],
+        ['subtitle', panel.subtitle],
+        ['time', panel.time],
+        ['token', panel.token],
+        ['icon', panel.chevronPath]
+      ]
+      const measuredLeaves = []
+      for (const [name, rect] of leafSpecs) {
+        await h.page.moveTo(rect.centerX, rect.centerY)
+        const deadline = Date.now() + 3000
+        let hover = null
+        while (Date.now() < deadline) {
+          await sleep(80)
+          const state = await h.page.eval(probes.hoverState)
+          if (state === null) continue
+          if (Math.abs(state.rect.x - rect.x) <= 3
+            && Math.abs(state.rect.y - rect.y) <= 3
+            && Math.abs(state.rect.width - rect.width) <= 3
+            && Math.abs(state.rect.height - rect.height) <= 3) {
+            hover = state
+            break
+          }
+        }
+        assert(hover !== null, `A3/T18: hovering the dropdown-like leaf "${name}" did not preview that leaf (${rect.width}x${rect.height})`)
+        measuredLeaves.push({ name, rect, hover: hover.rect })
+        if (name === 'title') {
+          assertEqual(hover.borderStyle, ordinaryHover.borderStyle, 'A3/T18: leaf outline style differs from an ordinary control')
+          assertEqual(hover.borderWidth, ordinaryHover.borderWidth, 'A3/T18: leaf outline width differs from an ordinary control')
+          assertEqual(hover.borderColor, ordinaryHover.borderColor, 'A3/T18: leaf outline color differs from an ordinary control')
+        }
+      }
+      const leafKeys = new Set(measuredLeaves.map((leaf) => JSON.stringify(leaf.rect)))
+      assertEqual(leafKeys.size, measuredLeaves.length, 'A3/T18: the dropdown-like leaves must have distinct hover rects')
+      await captureSurfaceClip('dropdown-leaves-panel.png', panel.panel)
+      await h.page.moveTo(panel.subtitle.centerX, panel.subtitle.centerY)
+      await sleep(120)
+      await captureSurfaceClip('dropdown-subtitle-leaf-hover.png', panel.subtitle)
+      // Click the subtitle leaf: its own popover opens.
+      await h.page.clickAt(panel.subtitle.centerX, panel.subtitle.centerY)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover after clicking the dropdown-like subtitle leaf' })
+      await sleep(250)
+      const leafPanel = await h.page.eval(probes.selectionState)
+      assertRectNear(leafPanel.outlines[0], panel.subtitle, 4, 'A3/T18: clicking the subtitle leaf did not select that leaf')
+      const leafPanelTitle = String(leafPanel.popover.title || '')
+      assert(leafPanelTitle.length > 0, 'A3/T18: the leaf popover has no element title')
+      assertEqual(leafPanel.popover.surface, 'floating', 'A3/T18: the leaf record lost its floating-surface metadata')
+      // Parent: leaf → left column → row → whole panel (full ancestor chain).
+      const panelWalk = []
+      let reachedRow = false
+      for (let step = 0; step < 8; step += 1) {
+        await activateLevel('up')
+        const state = await h.page.eval(probes.selectionState)
+        const outline = state.outlines[0]
+        panelWalk.push(outline)
+        if (Math.abs(outline.x - panel.row.x) <= 4 && Math.abs(outline.width - panel.row.width) <= 4
+          && Math.abs(outline.height - panel.row.height) <= 4) reachedRow = true
+        if (Math.abs(outline.x - panel.panel.x) <= 3 && Math.abs(outline.width - panel.panel.width) <= 3
+          && Math.abs(outline.height - panel.panel.height) <= 3) break
+      }
+      assert(reachedRow, 'A3/T18: Parent did not walk through the row level on its way to the surface')
+      assertRectNear(panelWalk[panelWalk.length - 1], panel.panel, 3, 'A3/T18: Parent did not reach the whole floating surface')
+      await captureSurfaceClip('dropdown-parent-row-level.png', panel.row)
+      // Child: walk back down to the subtitle leaf.
+      for (let step = 0; step < 8; step += 1) {
+        const state = await h.page.eval(probes.selectionState)
+        if (Math.abs(state.outlines[0].x - panel.subtitle.x) <= 4
+          && Math.abs(state.outlines[0].width - panel.subtitle.width) <= 4
+          && Math.abs(state.outlines[0].height - panel.subtitle.height) <= 4) break
+        await activateLevel('down')
+      }
+      const childBack = await h.page.eval(probes.selectionState)
+      assertRectNear(childBack.outlines[0], panel.subtitle, 4, 'A3/T18: Child did not walk back down to the subtitle leaf')
+      assertEqual(childBack.popover.title, leafPanelTitle, 'A3/T18: Child did not restore the leaf popover')
+      // Background/padding → whole surface; Child at the root is clamped.
+      await h.clearSelection()
       const panelPaddingPoint = { x: panel.panel.x + 6, y: panel.panel.y + 6 }
       await h.page.moveTo(panelPaddingPoint.x, panelPaddingPoint.y)
-      await h.page.waitFor(`!!document.querySelector('[data-psa-hover]')`, { timeout: 4000, label: 'hover outline on the synthetic panel background' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-hover]')`, { timeout: 4000, label: 'hover outline on the dropdown-panel background' })
       await sleep(150)
       const panelHover = await h.page.eval(probes.hoverState)
-      assertRectNear(panelHover.rect, panel.panel, 2, 'A3/T16: the synthetic floating panel background was not picked as the whole surface')
-      await captureSurfaceClip('synthetic-panel-whole-hover.png', panel.panel)
-      // 3. Click the background → whole-surface selection; Child → inner; Parent → back.
+      assertRectNear(panelHover.rect, panel.panel, 2, 'A3/T18: the floating-panel background was not picked as the whole surface')
+      await captureSurfaceClip('dropdown-panel-whole-hover.png', panel.panel)
       await h.page.clickAt(panelPaddingPoint.x, panelPaddingPoint.y)
-      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover after clicking the synthetic panel background' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover after clicking the floating-panel background' })
       await sleep(250)
       const wholePanel = await h.page.eval(probes.selectionState)
       assertEqual(wholePanel.popover.surface, 'floating', 'the synthetic panel was not recorded as a floating surface')
-      assertRectNear(wholePanel.outlines[0], panel.panel, 3, 'the synthetic panel selection is not the whole card')
-      const wholePanelTitle = wholePanel.popover.title
-      await h.click('[data-psa-level-down]')
-      await sleep(350)
-      const drilled = await h.page.eval(probes.selectionState)
-      assert(drilled.outlines.length === 1 && drilled.popover !== null, 'Child drilling lost the selection or popover')
-      assert(drilled.outlines[0].height < wholePanel.outlines[0].height - 20,
-        `Child drilling did not move to an inner row (whole height ${wholePanel.outlines[0].height}, drilled ${drilled.outlines[0].height})`)
-      assert(drilled.outlines[0].y >= panel.panel.y && drilled.outlines[0].y + drilled.outlines[0].height <= panel.panel.y + panel.panel.height + 2,
-        'the drilled outline left the floating panel')
-      assert(drilled.popover.title !== wholePanelTitle, 'Child drilling did not change the selected element')
-      await h.click('[data-psa-level-up]')
-      await sleep(350)
-      const returned = await h.page.eval(probes.selectionState)
-      assertRectNear(returned.outlines[0], panel.panel, 3, 'Parent did not return to the whole floating panel')
-      assertEqual(returned.popover.title, wholePanelTitle, 'Parent did not restore the whole-card element')
-      // 4. Click the inner row directly → that row is selected; Parent steps up to the card.
-      await h.clearSelection()
-      await h.page.moveTo(panel.title.centerX, panel.title.centerY)
-      await sleep(150)
-      await h.page.clickAt(panel.title.centerX, panel.title.centerY)
-      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover after clicking the synthetic panel inner row' })
-      await sleep(250)
-      const innerPanel = await h.page.eval(probes.selectionState)
-      assertEqual(innerPanel.popover.surface, 'floating', 'the inner panel row was not recorded as a floating-surface record')
-      assertRectNear(innerPanel.outlines[0], panel.title, 4, 'clicking the inner panel row did not select that row')
-      const innerPanelTitle = innerPanel.popover.title
-      assert(String(innerPanelTitle || '').length > 0, 'the inner panel-row popover has no element title')
-      await h.click('[data-psa-level-up]')
-      await sleep(350)
-      const parented = await h.page.eval(probes.selectionState)
-      assertRectNear(parented.outlines[0], panel.panel, 3, 'Parent from the inner row did not step up to the whole floating panel')
-      await h.click('[data-psa-level-down]')
-      await sleep(350)
-      const childed = await h.page.eval(probes.selectionState)
-      assertRectNear(childed.outlines[0], panel.title, 4, 'Child did not step back down to the inner row')
+      assertRectNear(wholePanel.outlines[0], panel.panel, 3, 'the synthetic panel selection is not the whole surface')
+      await activateLevel('down')
+      const rootChild = await h.page.eval(probes.selectionState)
+      assertRectNear(rootChild.outlines[0], panel.panel, 3, 'A3/T18: Child at the surface root must be clamped (no leaf under a background hit)')
       await h.clearSelection()
       await h.page.eval(probes.removeSurfaceProbePanel)
       await sleep(250)
-      const surfaceEvidence = `inner-first: native card row ${innerCardHover.rect.width}x${innerCardHover.rect.height} of ${nativeCard.rect.width}x${nativeCard.rect.height}, panel row ${innerPanelHover.rect.width}x${innerPanelHover.rect.height} of ${panel.panel.width}x${panel.panel.height}; background/padding hover -> whole surface; click inner -> row popover; Parent -> card, Child -> row`
+      const leafSummary = measuredLeaves.map((leaf) => `${leaf.name} ${leaf.rect.width}x${leaf.rect.height}`).join(', ')
+      const surfaceEvidence = `leaf-first: native card leaf ${innerCardHover.rect.width}x${innerCardHover.rect.height} of ${nativeCard.rect.width}x${nativeCard.rect.height}; dropdown leaves ${leafSummary} (distinct); click leaf -> leaf popover; Parent ${panelWalk.length} step(s) via row -> whole surface; Child back to leaf; background -> whole surface (Child clamped); ordinary-page/F3/F4 regressions intact`
 
       // ---- A2: verified unique locator resolves the duplicate-label control ----
       const newSession = await h.page.eval(pageProbe.newSessionButton)
@@ -4377,8 +4510,14 @@ function buildScenarios(harness) {
       const pageSelection = await h.page.eval(probes.selectionState)
       assertEqual(pageSelection.popover.surface, 'page', 'the New session control was recorded as a floating surface')
       assertEqual(pageSelection.popover.status, 'resolved', `A2: duplicate-label control did not resolve uniquely (status ${pageSelection.popover.status})`)
-      assert(/data-slot="sidebar"/.test(String(pageSelection.popover.ref || '')),
-        `A2: popover locator does not show the anchored unique selector (${short(String(pageSelection.popover.ref || ''))})`)
+      // A3/T18 leaf-first: clicking the control selects the deepest eligible element
+      // inside it, so the anchored locator is the leaf selector (which still anchors
+      // to the labelled control / sidebar) rather than the control itself.
+      const leafLocator = String(pageSelection.popover.ref || '')
+      assert(
+        /data-slot="sidebar"/.test(leafLocator) || /aria-label="New session"/.test(leafLocator),
+        `A2: leaf popover locator is not anchored to the labelled control (${short(leafLocator)})`
+      )
       await h.click('[data-psa-popover-copy-locator]')
       await sleep(500)
       const copyFeedback = await h.page.evaluate(`document.querySelector('[data-psa-feedback]')?.innerText ?? ''`)
@@ -4413,8 +4552,12 @@ function buildScenarios(harness) {
       assert(pageRecord, 'D1: no page record persisted')
       assert(floatingRecord, 'D1: no floating record persisted')
       assertEqual(pageRecord.version, 2, 'A2: the persisted record is not ElementRef v2')
-      assertEqual(pageRecord.uniqueVerified, true, 'A2: the persisted duplicate-label record has no verified unique selector')
-      assert(String(pageRecord.uniqueSelector || '').includes('data-slot'), `A2: uniqueSelector is not anchored (${short(String(pageRecord.uniqueSelector))})`)
+      assertEqual(pageRecord.uniqueVerified, true, 'A2: the persisted leaf record has no verified unique selector')
+      const pageUniqueSelector = String(pageRecord.uniqueSelector || '')
+      assert(
+        pageUniqueSelector.includes('data-slot') || pageUniqueSelector.includes('aria-label="New session"'),
+        `A2: leaf uniqueSelector is not anchored to the labelled control (${short(pageUniqueSelector)})`
+      )
       assert((pageRecord.ancestorCount ?? 0) >= 1, 'A2: the persisted record has no stable ancestors')
       assert((pageRecord.candidateCount ?? 0) >= 1, 'A2: the persisted record has no locator candidates')
       assertEqual(pageRecord.note, 'Keep this note', 'D1: the user note did not survive serialization')

@@ -163,17 +163,21 @@ Hovering the page in mode draws an outline around the element a click would
 select. The first click selects that element, keeps a persistent highlight, and
 opens the note popover.
 
-- **Candidate choice** walks the pointer target's ancestor chain and prefers the
-  nearest meaningful control or container — buttons, links, inputs, rows, menu
-  items, tooltips, dialogs, regions, headings, list and table cells, and other
-  semantic surfaces — over a bare text leaf or an anonymous wrapper. Our own UI
-  nodes, the root elements, zero-size or hidden elements, and the composer's
-  editable internals are skipped; a hit inside the composer resolves to the
-  composer region, never to the typed text. When no semantic candidate matches,
-  the nearest element with a real box is used.
+- **Leaf-first target (DevTools-inspect-like)** — the hover/click target is the
+  **deepest eligible element under the pointer**, not a pre-filtered semantic
+  control. Spans, inline SVGs and `<path>` shapes, icons, titles, subtitles,
+  timestamps, counters, rows and buttons are all individually selectable when
+  they are real visible boxes. The mode walks up the ancestor chain only when the
+  target itself is ineligible: our own `[data-psa-own]` UI, `html`/`body`/
+  `script`/`style` and other structural tags, and zero-size or hidden elements are
+  skipped. A click inside the composer's **editable internals** resolves to the
+  composer region, never to the typed text; normal text-input values are never
+  read. If nothing in the chain is eligible, no target is selected.
 - **Floating surfaces** — a hit inside a floating surface is scoped to that
-  surface: the whole card, menu, or dialog is the default target, and selection
-  never crosses the surface root to the page elements behind it. See
+  surface: leaf-first resolution still happens inside it, but selection never
+  crosses the surface root to the page elements behind it. The whole card, menu,
+  or dialog is selected by hovering/clicking its background or padding, or by
+  pressing **Parent** from an inner leaf. See
   [floating surfaces](#floating-surfaces) for the exact rule and limits.
 - **Hover hot path** — the pointer chain collects **elements only** (up to 16
   ancestors). Element descriptors are built lazily only for the chosen element
@@ -190,10 +194,12 @@ opens the note popover.
   after a 60 ms debounce, so the outline follows the DOM instead of staying on
   the old target. This is covered by a live E2E check that inserts a fixed
   z-index layer under a stationary pointer and requires the outline to follow.
-- **Ancestor adjustment** — the popover's up/down control moves along the
-  candidate's ancestor chain, clamped at both ends, and re-derives the reference
-  at each level. This is for choosing the right granularity: an icon instead of
-  its button, or a card instead of one row.
+- **Ancestor adjustment** — the popover's up/down control walks the **full
+  hovered ancestor chain**, clamped at both ends, and re-derives the reference at
+  each level: **Parent** moves one element up (leaf → row → card/menu → page
+  container), **Child** moves back down toward the deepest hovered element. This
+  is for choosing the right granularity: an icon instead of its button, a title
+  instead of the row, or the whole card instead of one row.
 - **Selection highlight** follows the page on scroll and resize. It is
   recomputed in one animation frame, and no animation loop runs while nothing is
   selected.
@@ -220,10 +226,10 @@ opens the note popover.
 ### Floating surfaces
 
 Hover-triggered cards and menus are body-level portals; they are ordinary DOM and
-are annotatable. The mode resolves the pick from the pointer's own chain, so
-**inner elements are hoverable and selectable first** (the row under the pointer),
-while the whole card stays reachable through its background/padding and through
-the popover's Parent control.
+are annotatable. The mode resolves the pick leaf-first from the pointer's own
+chain, so **every inner item is hoverable/selectable first** (title, subtitle,
+time, counters, inline icons, rows…), while the whole card stays reachable
+through its background/padding and through the popover's Parent control.
 
 - **Surface detection uses computed style, not class names.** From the hit
   element the mode walks up to the first box whose computed `position` is
@@ -232,25 +238,27 @@ the popover's Parent control.
   outermost box is the **surface root**. Hashed DSH class names are never
   consulted, so a DSH rebuild cannot silently disable the behavior; SVG boxes,
   zero-size boxes, and the plugin's own UI are excluded.
-- **Inner-first hover/click.** A pointer hit inside the surface resolves to the
-  deepest meaningful level under the pointer: the nearest semantic candidate on
-  the hit's ancestor chain (button/link/input/`[role=…]`/`[data-row-key]`/
-  `[aria-label]`/…), or the nearest text-block row (no element children,
-  non-empty text, box ≥ 8×8), so hovering a row in a dropdown previews that row
-  and clicking it opens that row's own popover/locator. The same `.psa-hover` /
-  `.psa-selection` rules are used, so the outline style is identical to an
-  ordinary button's (live E2E asserts this). A hit on the surface background or
-  padding (no inner level under the pointer) still previews the whole surface.
+- **Leaf-first hover/click.** A pointer hit inside the surface resolves to the
+  deepest eligible element under the pointer (span/title/subtitle/time/counter/
+  SVG path/icon/row/button all count), walking up only when that element is
+  own-UI, structural, or zero-size. For example a subagent-dropdown row's title,
+  subtitle, elapsed time, token count and chevron icon are each previewed and
+  selectable individually; clicking one opens its own popover/locator. The same
+  `.psa-hover` / `.psa-selection` rules are used, so the outline style is
+  identical to an ordinary element's (live E2E asserts this). A hit on the
+  surface background or padding stays on the whole surface.
 - **The whole surface stays selectable.** Hover/click the background or padding
-  to get the surface root, or press **Parent** from an inner row. **Child** steps
-  back down the same level table. Inner levels are capped at 12. A surface record
-  is marked `surface: "floating"` and `ephemeral: true`, and the popover says the
-  element can disappear when its card closes.
-- **Measured live (scenario 10).** On a native session-row hover card, an inner
-  row hovers at 212×16 px inside the 244×92 px card; on the deterministic
-  synthetic panel an inner row hovers at 298×16 px inside the 320×150 px panel;
-  card/panel padding keeps the whole-surface outline; clicking an inner row opens
-  that row's popover; Parent returns to the card and Child returns to the row.
+  to get the surface root, or press **Parent** from an inner leaf. **Child** steps
+  back down the full ancestor chain toward the deepest hovered element. A surface
+  record is marked `surface: "floating"` and `ephemeral: true`, and the popover
+  says the element can disappear when its card closes.
+- **Measured live (scenario 10).** On a native session-row hover card, a leaf
+  hovers at 212×16 px inside the 244×92 px card. On the deterministic
+  dropdown-like panel, the leaves hover at distinct rects — title 174×16,
+  subtitle 174×13, time 43×13, token 53×13, chevron icon 4×8 — inside the
+  340×170 px panel; clicking the subtitle selects exactly that leaf; Parent walks
+  leaf → column → row → whole panel (3 steps) and Child walks back; card/panel
+  padding keeps the whole-surface outline.
 - **Paint layer.** While the mode is active the shell overlay's inline
   `z-index` is raised to **150** (above native hover cards at 100, below native
   modals at 1000 and menus at 1100) and restored exactly on exit — value and
@@ -265,14 +273,17 @@ the popover's Parent control.
   itself be hovered and annotated. This document does not claim that behavior
   here.
 
-Limits of the surface rule: a native tooltip bubble that is
-`pointer-events: none` cannot receive the pointer and cannot be selected — annotate
-its anchor control instead. Inner-first resolution can only pick levels the DOM
-exposes: a row built entirely from non-text, non-candidate wrappers (for example a
-canvas or an image-only row) has no inner level, so the nearest meaningful
-ancestor / the whole surface is selected; in that case hover the surrounding text
-or use Child/Parent from the surface. Native modals and context menus stack above
-the annotation layer (z-index 1000/1100); close them before annotating, as before.
+Limits of leaf-first picking: only real DOM elements can be selected — bare text
+nodes resolve to their parent element, and CSS `::before`/`::after` decorations
+are not elements, so the owning element is selected instead (for example a chevron
+drawn with a pseudo-element is annotated as its row/owner). Elements with
+`pointer-events: none` (many native tooltips, disabled overlays) never receive the
+pointer, so the nearest eligible ancestor is selected; the same fallback applies
+to zero-size or `display: contents` wrappers. An inline SVG `<path>` is selectable
+but its locator is structural/tag-based and its resolution status can honestly be
+*ambiguous* or *changed* — the popover shows that status instead of pretending to
+be unique. Native modals and context menus stack above the annotation layer
+(z-index 1000/1100); close them before annotating, as before.
 Cross-origin iframes, Shadow DOM internals, and canvas pixels remain
 unselectable.
 
@@ -988,8 +999,8 @@ page, and runs the acceptance scenarios with real CDP mouse and keyboard input a
 a 1728 x 900 viewport. The installed plugin, the user profile, and the launchd
 service are never modified.
 
-> **Pre-merge branch evidence.** All numbers in this section (seam 48/57/66/67,
-> `npm test` 193/204/214/217, the scenario runs and screenshots) were recorded on
+> **Pre-merge branch evidence.** All numbers in this section (seam 48/57/66/67/68,
+> `npm test` 193/204/214/217/219, the scenario runs and screenshots) were recorded on
 > the `feat/annotation-ux` branch, mostly **before the final merge**, against the
 > live GUI at that time. They are branch-build evidence, not the merged-build
 > verdict. The merged-build acceptance record — including verifier round 2 — is
@@ -1091,21 +1102,29 @@ against the running GUI:
   this build (`--shots-only --assets`, exit 0, ~36 s) with the harness privacy
   guard asserted before every capture.
 
-Post-merge follow-up (inner-first surface hover, working-tree commit before the
+Post-merge follow-up (leaf-first precise picking, working-tree commit before the
 Lead's merge):
 
-- `npm test`: **217/217** pass (new unit cases for `annotationSurfacePickLevel`:
-  deepest inner level, wrapper containment fallback, background → surface root,
-  page chains untouched, pickLevels wiring); `npm run check` exit 0.
-- `--smoke`: **6/6** with the **67-key** seam (66 + `annotationSurfacePickLevel`),
+- `npm test`: **219/219** pass (new unit cases for `annotationLeafPickIndex`:
+  deepest span/svg/path leaf, ineligible own/zero fallthrough, surface-boundary
+  restriction, nothing-eligible → -1, full-chain pickLevels wiring, composer
+  exception); `npm run check` exit 0.
+- `--smoke`: **6/6** with the **68-key** seam (67 + `annotationLeafPickIndex`),
   0 page errors.
-- Scenario 10 (`--scenario 10 --no-shots`) **PASS**: native hover-card row hover
-  `212×16` inside the `244×92` card; synthetic panel row `298×16` inside the
-  `320×150` panel; background/padding hover → whole card; click inner row →
-  that row's popover; Parent → whole card; Child → back; style/ordinary-page/F3/
-  F4 regressions unchanged. Close-up clips (`.tmp-work/surface-after/`):
-  `native-card-inner-hover.png`, `native-card-whole-hover.png`,
-  `synthetic-panel-inner-hover.png`, `synthetic-panel-whole-hover.png`.
+- Scenario 10 (`--scenario 10 --no-shots`) **PASS**: native hover-card leaf
+  `212×16` inside the `244×92` card; deterministic dropdown-like panel leaves are
+  distinct — title `174×16`, subtitle `174×13`, time `43×13`, token `53×13`,
+  chevron path `4×8` — inside the `340×170` panel; click leaf → leaf popover;
+  Parent walks leaf → column → row → whole panel (3 steps), Child walks back;
+  background/padding → whole surface; ordinary-page picking (leaf-first), F1/F3/
+  F4, style consistency and the following scenarios unchanged.
+- Sequence `--from 4 --no-shots`: **17 PASS / 3 SKIP / 0 FAIL**, 0 page errors
+  (S4-S15 with the leaf-first picking change; the SKIPs are the known
+  cross-branch/env rows 10b/11/13f).
+- Close-up clips (`.tmp-work/leaf-after/`): `native-card-leaf-hover.png`,
+  `native-card-whole-hover.png`, `dropdown-leaves-panel.png`,
+  `dropdown-subtitle-leaf-hover.png`, `dropdown-parent-row-level.png`,
+  `dropdown-panel-whole-hover.png`.
 
 Historical round-1/round-2 acceptance evidence (pre-merge branches, 31/32/35-key
 seams) remains recorded in [verification.md](verification.md) and the harness
@@ -1141,7 +1160,8 @@ Phase 2 UX pass along with the new detail card and marks.
   single-slot undo, the mark-badge excerpt, and the detail-card clamp; Phase 2-B
   66 keys adding multi-delete undo, rail scope/selection helpers and the chip ref/
   candidates/serialization helpers; the inner-first surface pick adds
-  `annotationSurfacePickLevel` for 67 keys), or does not mount the
+  `annotationSurfacePickLevel` for 67 keys; leaf-first picking adds
+  `annotationLeafPickIndex` for 68 keys), or does not mount the
   annotation surface. `full` and `--shots-only` with a feature-absent client
   record a **FAIL** row and exit non-zero; every requested scenario must produce
   a result row.

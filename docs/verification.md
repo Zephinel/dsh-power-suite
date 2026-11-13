@@ -22,15 +22,15 @@ npm run pack:check
 
 Current evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round):
 
-- `npm test`: **204 tests, 204 passed, 0 failed, 0 skipped** after the 0.3.0
+- `npm test`: **206 tests, 206 passed, 0 failed, 0 skipped** after the 0.3.0
   Project-view removal (the 24 project-view tests were deleted with the page),
   including **14** read-acks, **22** session-activity Host tests, **7** extra
   interrupted-session tests (error/max-tokens/aborted-cause cases and SSE stream
-  frames), **11** Dynamic-Workspaces hover-card figure tests, and **94**
+  frames), **11** Dynamic-Workspaces hover-card figure tests, and **96**
   UI-element-annotation tests through the browser-factory test seam; per-file:
   dynamic-workspaces-stats 11, interrupted-host 20, interrupted-sessions 7,
   prompt-history 6, read-acks 14, session-activity 22, session-artifacts 16,
-  settings 6, ui-annotation 94, workspace-presets 8.
+  settings 6, ui-annotation 96, workspace-presets 8.
 - `npm run check`: passed (`16 modules, 10 test files`).
 - Interrupted-state SSE transport was verified with cookie auth: 200,
   `content-type: text/event-stream; charset=utf-8`, no-store/no-buffering, first
@@ -182,7 +182,7 @@ API/plugin network failures in every run below):
   first paint, the browser borderless/typography recipe, and both cross-branch
   annotation-mode hover-card pin states.
 - Annotation harness `test/browser/annotation.e2e.mjs`: `--smoke` **6/6 PASS**
-  with the **67-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
+  with the **68-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
   FAIL 0** (including `10b`, the real pinned-cross-branch-card check),
   scenario 11 **PASS 7 / 0 / 0**, scenario 12 **PASS 7 / 0 / 0** (marks, detail
   card, requirement edit with `updatedAt`, delete → 5 s undo),
@@ -235,10 +235,11 @@ B6 figure totals, and the project-page removal.
   restore), 60 ms pointer-stationary hover recompute, ElementRef v2 capture
   (verified unique selector, ancestors, surface/ephemeral, Session/Workspace
   identity via the seat bridge, query-free route, bounds/viewport; no
-  outerHTML/input values), inner-element hover/click inside floating surfaces
-  (the deepest semantic row/text under the pointer is previewed and selected;
-  the whole surface stays reachable via its background/padding and the Parent
-  control), v2 record persistence (localStorage, cap 100, reload
+  outerHTML/input values), **leaf-first** hover/click precision on ordinary
+  pages and inside floating surfaces (titles, subtitles, timestamps, token
+  counters, inline SVG icons/paths individually previewable/selectable; the
+  full hovered ancestor chain is navigable via Parent/Child; whole surface stays
+  reachable via background/padding or Parent), v2 record persistence (localStorage, cap 100, reload
   restore + status re-resolution), page marks with numbered requirement badges,
   hover detail card with edit/relocate/copy-locator/delete, requirement popover
   commit/update/delete + 5 s undo + auto-dismiss, right-rail batch view
@@ -290,7 +291,7 @@ batch removed-member serialization are unit-tested only.
 > [0.3.0 polish round acceptance](#030-polish-round-acceptance-2026-11-13-merged-build)
 > above**; the annotation model has since grown to the v2 record/persistence,
 > floating-surface, marks/detail and composer-chip implementation with the
-> 67-key seam generation.
+> 68-key seam generation.
 
 Date: 2026-11-12 (round-2 fix build, `fix/ui-annotation-review-fixes`). The
 feature is browser-only ([ui-annotation.md](ui-annotation.md)), so its acceptance

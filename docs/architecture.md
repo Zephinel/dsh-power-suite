@@ -459,14 +459,21 @@ a `[data-psa-own]` ancestor, so a native control under the pointer (for example
 **New session**) cannot act; every feature UI node is inside such an ancestor
 (the attribute is a guarantee on the ancestor, not on every nested node). Hover and marquee pause while the pass-through modifier is
 held; the native events then reach the page unchanged and no click is
-synthesized. Hover uses a **lazy** candidate chain: pointer moves collect elements only (up
-to 16 ancestors) with 0 `textContent` reads; expensive descriptors are built
-lazily for the chosen element plus at most 2 context ancestors. Candidates prefer
-interactive/semantic elements over text leaves, skip the composer's editable
-internals (the composer region is the candidate), and produce a plain-JSON
+synthesized. Hover and click are **leaf-first**: pointer moves collect the
+element ancestor chain (≤16 ancestors) with 0 `textContent` reads, and the
+target is the deepest eligible element under the pointer (spans, inline SVG
+paths, icons, timestamps, counters, then rows/buttons), walking up only for the
+plugin's own UI, structural tags (html/body/script/style), or zero-size/hidden
+nodes; the composer's editable internals still resolve to the composer region
+and the chain is cut at a floating surface's root. Parent/Child walk the full
+hovered chain (Child returns toward the deepest hovered element, Parent climbs
+to the surface root/page container), and hovering a surface's background/padding
+selects the whole surface. Expensive descriptors are built lazily for the
+chosen element plus at most 2 context ancestors. The result is a plain-JSON
 `ElementRef` with reliability-ordered selector candidates, a stable identity key,
 sanitized text, and a small deterministic text digest used for change detection
-(derived data only; no raw page text is kept in it). Selector candidates use
+(derived data only; no raw page text is kept in it); SVG/text-leaf targets keep
+an honest locator/status even when it can only be structural. Selector candidates use
 `globalThis.CSS` when available; the fallback hex-escapes a leading digit
 (`#123abc` → `#\31 23abc`). A DOM-revision-aware
 resolver re-finds the live node from the ordered candidates so scroll-frame

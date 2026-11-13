@@ -112,8 +112,8 @@ reviewed files) to publish `docs/assets/annotation-idle.png`, `annotation-mode.p
 ## Evidence scope (pre-merge branch builds)
 
 > The Phase 1, Phase 2-A and Phase 2-B tables below are **pre-merge branch
-> evidence** for `feat/annotation-ux`: seam 48/57/66/67 and `npm test`
-> 193/204/214/217 counts were recorded on those branch builds. The merged-build acceptance record
+> evidence** for `feat/annotation-ux`: seam 48/57/66/67/68 and `npm test`
+> 193/204/214/217/219 counts were recorded on those branch builds. The merged-build acceptance record
 > (Lead, after the final merge + verifier round 2) lives in
 > [`docs/verification.md`](../../docs/verification.md); use that for the release
 > verdict instead of these branch numbers.
@@ -210,22 +210,32 @@ pin/select/no-mode-close check fails, scenario 11 retries once and then **FAILS*
 it is never masked as SKIP. `13f` (plain-text chip fallback) is SKIP because the
 live GUI always installs the chip services; the fallback path is unit-tested.
 
-## Post-merge follow-up evidence: inner-first surface hover
+## Post-merge follow-up evidence: leaf-first precise picking
 
 | Check | Command | Result |
 |-------|---------|--------|
-| Unit model | `npm test` | **217/217** pass (new `annotationSurfacePickLevel` cases + pickLevels wiring) |
+| Unit model | `npm test` | **219/219** pass (new `annotationLeafPickIndex` cases: span/svg/path leaves, ineligible fallthrough, surface boundary, full-chain pickLevels wiring, composer exception) |
 | Repository gate | `npm run check` | exit 0 |
-| Smoke | `node test/browser/annotation.e2e.mjs --smoke` | **6/6**, seam **67** keys, 0 page errors |
-| Floating-surface inner-first hover/click | `--scenario 10 --no-shots` | **PASS**: native card row hover 212×16 inside 244×92 card; synthetic panel row 298×16 inside 320×150 panel; background/padding hover → whole surface; click inner row → that row's popover; Parent → whole card, Child → row; F3/F4/style/ordinary-page regressions unchanged |
+| Smoke | `node test/browser/annotation.e2e.mjs --smoke` | **6/6**, seam **68** keys, 0 page errors |
+| Leaf-first floating surface | `--scenario 10 --no-shots` | **PASS** — native card leaf 212×16 inside 244×92 card; dropdown-like panel leaves distinct: title 174×16, subtitle 174×13, time 43×13, token 53×13, chevron path 4×8 inside 340×170 panel; click leaf → leaf popover; Parent leaf→column→row→panel (3 steps), Child back; background/padding → whole surface |
+| Regression sequence | `--from 4 --no-shots` | **17 PASS / 3 SKIP / 0 FAIL**, 0 page errors (S4-S15; SKIPs are the known cross-branch/env rows 10b/11/13f) |
 
-Semantics: a pointer hit inside a floating surface now resolves to the deepest
-meaningful level under the pointer (nearest semantic candidate or text-block row);
-background/padding hits keep the whole surface; Parent/Child walk the same capped
-level table. Close-up clips can be captured with
-`PSA_SURFACE_EVIDENCE_DIR=<dir> --scenario 10 --no-shots`
-(`native-card-inner-hover.png`, `native-card-whole-hover.png`,
-`synthetic-panel-inner-hover.png`, `synthetic-panel-whole-hover.png`).
+Semantics: hover and click both target the DEEPEST eligible element under the
+pointer (DevTools-inspect-like) — spans, inline SVG/path, titles, subtitles,
+timestamps, counters and icons included; the walk only moves up for own UI,
+structural tags, and zero-size/hidden nodes, and inside a floating surface it
+never escapes the surface root. Parent/Child walk the full hovered ancestor chain
+(Parent up to the surface root/page container, Child back to the deepest hovered
+element); the whole surface is reachable via its background/padding or Parent.
+Ordinary page picking is leaf-first too. Pseudo-element decorations and bare text
+nodes fall back to their owning element; `pointer-events:none` targets fall back
+to the nearest eligible ancestor; SVG path locators are structural and can report
+an honest ambiguous/changed status.
+
+Evidence clips: `PSA_SURFACE_EVIDENCE_DIR=<dir> --scenario 10 --no-shots` writes
+`native-card-leaf-hover.png`, `native-card-whole-hover.png`,
+`dropdown-leaves-panel.png`, `dropdown-subtitle-leaf-hover.png`,
+`dropdown-parent-row-level.png`, `dropdown-panel-whole-hover.png`.
 
 ## Current evidence (round 2, pre-merge annotation build)
 
