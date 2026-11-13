@@ -132,6 +132,36 @@ heading is added until the release is cut.
   tab, no event replay, and the existing poll/focus/visibility/reconnect cues
   remain the fallback when EventSource or the stream is unavailable.
 
+### Added
+
+- Running & recent pinning, shared native hover figures, and a circular status
+  dot: **main Session rows** in the Running & recent card now carry a
+  hover-revealed **Pin** control (a fixed 16 px slot between the leading state
+  glyph and the title, so the title never shifts) that writes the card's own
+  fixed state — a versioned browser `localStorage` document
+  (`power-suite.dynamic-workspaces.pinned`, schema 1, sanitized and deduplicated,
+  at most 200 ids with the oldest pin dropped), like the bucket-fold document.
+  It never reads or writes the native sidebar pin
+  (`WorkspaceSnapshot.pinnedSessionIds` is deliberately not consulted: the live
+  Host's pre-existing project-organisation pins would otherwise become permanent
+  top rows here, and card pins would reorder the user's native project lists),
+  so the pin persists across reloads for that browser/profile instead of being
+  Host-shared or cross-device synced. Pinned main Sessions sort first,
+  newest activity first, and never retire with time: a pinned finished Session
+  stays listed with its original title/Workspace/path and last-activity time (no
+  re-timing), unpin immediately returns the row to the ordinary queue under the
+  normal retention rules, and pinned rows show a filled violet pin glyph plus a
+  subtle violet tint; subagent child rows keep no pin control, and blank,
+  archived, or unknown Session ids cannot be pinned. The **native sidebar
+  session hover card** now renders the same **Session statistics**, **Token
+  usage**, and **context** sections as the card's hover card through the
+  shell's `sidebar.session.row.hover` slot, reusing the same strings, formatter
+  recipes, live projections, and one-shot cold projection read, and contributing
+  no nodes for a Session without figures (the native card is not restyled,
+  widened, or reordered). The running-card hover status dot is now a **perfect
+  circle**: the shell's global `corner-shape: superellipse(1.5)` painted the
+  `border-radius: 50%` dot as a squircle, so it sets `corner-shape: round`.
+
 ### Changed
 
 - UI element annotation launcher placement: the round launcher floats only while

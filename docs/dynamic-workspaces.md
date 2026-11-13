@@ -182,7 +182,11 @@ sidebar's panel tabs. It starts expanded.
   (`#2C2C2E`) with its static title/secondary/tertiary text colours,
   `--dsw-shadow-lv3` elevation, 12 x 16 px padding, 14/20 px title, 12/16 px
   path/time, and a 12/20 px status line with a 10 px dot — all inherited from
-  the shell font. That surface is deliberately **theme-invariant**, exactly like
+  the shell font. The dot is a true circle: it sets `corner-shape: round`
+  explicitly, because the shell theme applies
+  `*, :before, :after { corner-shape: var(--dsw-corner-shape) }`
+  (`superellipse(1.5)`), which paints a plain `border-radius: 50%` dot as a
+  squircle. That surface is deliberately **theme-invariant**, exactly like
   the native session hover card: the shell pins its own hover-card background to
   #2C2C2E in both light and dark (the theme-dependent
   `--dsw-alias-tooltip-bg` token is *not* used for this card). The card is 320 px
@@ -192,9 +196,12 @@ sidebar's panel tabs. It starts expanded.
   pointer in normal mode (same show/hide delays as before, dismissed by Escape,
   scroll, or resize), and clicking the row still opens the Session. Below the
   plain detail rows it appends the three **native session figures** (see
-  *Session figures in the hover card* below). While the UI annotation mode is
-  active the same card becomes **pinned/annotatable** (see *Plugin chrome and
-  annotation mode* below).
+  *Session figures in the hover card* below). The shell's own **native sidebar
+  session hover card** now renders those same three sections through the
+  `sidebar.session.row.hover` slot, so hovering a native sidebar Session row
+  shows the same Session statistics / Token usage / context blocks as this
+  card. While the UI annotation mode is active the same card becomes
+  **pinned/annotatable** (see *Plugin chrome and annotation mode* below).
 - **Disclosure column**: the header chevron and every row's disclosure arrow
   share one 24 px right-edge column (not merely right-aligned), and rows without
   children — including every nested subagent row — reserve the same column with a
@@ -253,7 +260,79 @@ sidebar's panel tabs. It starts expanded.
 
 Finished rows deliberately linger: a stop moves the Session below the running
 rows, it stays for the retention window, and then it leaves the card. This is the
-"find it again" behavior the card exists for.
+"find it again" behavior the card exists for; **pinned rows are the exception**
+(see *Pinned Sessions* below) — a pinned main Session stays first and never
+retires with time.
+
+## Pinned Sessions
+
+Main Sessions can be pinned from their row in the Running & recent card. The pin
+is the **card's own fixed state**, not the native sidebar Session pin: it keeps
+one main Session at the top of **Running & recent** instead of letting time
+retire it. Reusing the shell's sidebar pin was rejected on measured evidence —
+the live DSH Host already carried six pre-existing sidebar pins (on Sessions
+2–19 days old, kept for project organisation), which would have surfaced here as
+permanent top rows, and pinning from this card would have reordered the user's
+native project lists. The card therefore never reads or writes
+`WorkspaceSnapshot.pinnedSessionIds`, and the native sidebar pin is untouched.
+
+The pinned set is a versioned browser `localStorage` document, in the same class
+of storage as the bucket-fold document `power-suite.dynamic-workspaces.folds`:
+
+```text
+power-suite.dynamic-workspaces.pinned
+{ "version": 1, "pinned": ["<sessionId>", ...] }
+```
+
+It survives a page reload for that browser/profile, is not synced across devices
+or profiles, and is not Host-shared (the read-acknowledgement document remains
+this feature's only Host-shared state). Ids are read as non-empty strings only —
+junk entries and duplicates are dropped — and the list keeps at most **200**
+ids, dropping the oldest pin first; a corrupt, missing, or storage-denied
+document reads as empty, and on a storage-denied browser the toggles still work
+in memory for the current page. Pin appends the id to the document and unpin
+removes it.
+
+- **Pinned first, newest activity first**: pinned rows sort before every
+  unpinned row, newest activity first — a pinned running row and a pinned
+  recently finished row sort by the same effective activity time the card
+  already uses. The unpinned running rows keep their existing order after them,
+  and the unpinned recently finished rows keep theirs last, so pinning never
+  reshuffles the ordinary list. The card's five-row **View all** default still
+  applies to the combined list.
+- **Never retires**: a pinned main Session is listed regardless of its running
+  status or the finished-Session retention window. A pinned running row keeps
+  its live state and its running subagent count; a pinned finished row is
+  rendered from its Session summary exactly like a recent row — summary title,
+  owning Workspace label/path, directory, `done` state, zero subagents — but
+  with **no retention cutoff**. Its last-activity/`updatedAt` time stays the
+  original value: pinning never re-times or resets the row's end time, so
+  **unpin** re-derives the row immediately under the ordinary rules — the card
+  recomputes from the same facts on the click itself, with no Host round-trip,
+  no reload, and no re-timing: an ended Session already outside the retention
+  window leaves the card at once, and a still-running one returns to the running
+  group in activity order.
+- **Scope: main Sessions only**: nested subagent child rows carry no pin slot,
+  no marker, and no tint. Blank, archived, `origin: "subagent"`, and unknown
+  Session ids are ignored even when a stale id sits in the pinned document.
+- **No layout jump**: every main row reserves a fixed 16 px pin slot **between
+  the leading state glyph and the title**. The slot is always in the DOM; only
+  `opacity` / `visibility` / `pointer-events` change, so revealing the control
+  on hover moves neither the title nor the time, New session, or disclosure
+  columns.
+- **Three button states**: unpinned and neither hovered nor keyboard-focused —
+  hidden (`opacity: 0`, `visibility: hidden`, `pointer-events: none`); unpinned
+  with the row hovered or `focus-within` — the outline pin glyph, interactive;
+  pinned — the filled violet pin glyph (the shell's business-primary colour)
+  always visible, and non-interactive until the row is hovered/focused, at
+  which point a click unpins. Every state carries `aria-pressed` and a
+  localized label (`Pin session` / `Unpin session`), so the toggle is announced
+  correctly.
+- **Pinned row tint**: the row gets a subtle violet tint —
+  `color-mix(in srgb, var(--dsw-alias-state-business-primary) 7%, transparent)`
+  on the row, 6% on its body pill — plus the filled glyph, so "why is this at
+  the top" stays readable after the pointer leaves. Columns, indentation, child
+  rows, and the card width are untouched.
 
 ## Session figures in the hover card
 
@@ -280,6 +359,28 @@ or nested subagent row alike:
   heuristic composition `System prompt`, `Tool definitions`, `Messages`, each
   compact and prefixed `~`. The section is hidden unless the provider reported
   both a used count and a context-window size.
+
+The same three sections now render in the **native sidebar session hover card** —
+the shell's own Session-row tooltip with title, path, relative time, and status.
+The plugin contributes one registration to the shell's
+`sidebar.session.row.hover` slot (`id: power-suite.session-hover-figures`,
+`order: 100`): the occupant receives the hovered `{ sessionId }`, is mounted
+only while that native card is open, and renders the **Session statistics /
+Token usage / context** blocks between the native relative-time line and the
+trailing status lines — three figure blocks at 12 px type that fit the native
+card's own content row without widening it (the native card stays 244 px). The
+wrapper carries the stable `data-psd-native-figures` DOM anchor used by the
+sidebar E2E harness; when the Session has no figures it renders empty and the
+`.psd-native-hover-figures:empty` rule hides it, so a blank card keeps the
+shipped spacing. The occupant reuses the same `dwProjectionSections`
+normalization, native formatter recipes, and `DW_EN` / `DW_ZH` strings as the
+card's own hover card, subscribes to the same live `projectionsBySession`
+snapshot (so pushed values re-render the open native card), and performs the
+same one-shot deduplicated `refreshProjections` read for a cold/persisted
+Session on mount (never polled, never retried after an error or a
+`migration-required` result). The plugin does not restyle, widen, or reorder the
+native card, and the blocks reuse the existing `.psd-hovercard-section*` classes
+that already match its surface and 12 px type.
 
 Data seam: these are **Host projections**, not a re-fold of the event log. The
 plugin already receives the Session list store through its existing `sessions`

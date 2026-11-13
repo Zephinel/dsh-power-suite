@@ -888,3 +888,47 @@ The live surfaces are captured in
 [assets/annotation-collection.png](assets/annotation-collection.png), and
 [assets/annotation-inserted.png](assets/annotation-inserted.png), embedded in
 their feature references.
+
+## Session dot, native hover figures and running-panel pin (2026-11-13)
+
+Independent live verification of the three `session-pin-stats` requirements against the
+**real running DSH Web GUI** (`https://192.168.5.210:3080`, launchd `com.rexxin.dsh-web`).
+The committed harness injects this worktree's `src/client.js` into the live page with a
+loader swap (the installed checkout, the user profile and the service are never touched),
+drives it with real CDP input, runs in a throwaway headless Chrome profile and always
+redacts the token. Build verified: worktree `session-pin-stats` (`HEAD b91161b` plus the
+branch changes; final injected `src/client.js` md5
+`fb154900d5be0aa64fcad93aab9e3684`, 18876 lines, after the lead's `flex:none` head-cell
+fix), Node v24.22.2, Chrome 157.0.8103.78, viewport 1728x900. Logs are external
+evidence under `/tmp`; the screenshots are gitignored `.tmp-work/sidebar-e2e/` evidence
+PNGs.
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Static gates | `node --check src/client.js`; `npm test` | exit 0; **230/230** tests pass, 0 fail |
+| Pipeline smoke | `node test/browser/sidebar.e2e.mjs --smoke` | **4/4 PASS**, 0 page errors, exit 0, 2.7 s on the final build (`/tmp/pin-smoke-headfix.log`) |
+| R1 hover dot | `node test/browser/sidebar.e2e.mjs --pin` (`r1-1`, `r1-2`) | **PASS**: dot computed `corner-shape` equals a synthetic `corner-shape:round` control and differs from the shell's inherited squircle (`superellipse(1)` vs `superellipse(1.5)`; Chrome normalizes the round keyword), `border-radius:50%`, 10x10 css and rendered box; dot close-up + hover-card PNGs (`pin-r1-dot.png`, `pin-r1-hovercard.png`) |
+| R2 native hover figures | same run (`r2-1`..`r2-4`) | **PASS**: native sidebar hover card contains `[data-psd-native-figures]` with 3 non-empty `.psd-hovercard-section` blocks (recorded on the final build: `Session statistics = 19 turns 683 steps`, `Token usage = 314,752,138 tok`, `33% of context used = ~331K / 1M`; an earlier run recorded `18 turns 671 steps` / `310,890,630 tok` / `32%`), wrapper between `[class*="_hoverTime"]` and the first `[class*="_hoverStatus"]`; same-Session plugin card rendered **identical titles and values/rows**; native frame 244 px outer / 212 px content / `12px 16px` padding with native child order intact; blank Session showed no wrapper, 0 sections, 244 px frame (`pin-r2-native-hover.png`, `pin-r2-card-hover.png`, `pin-r2-native-layout.png`, `pin-r2-blank.png`) |
+| R3 running-panel pin | same run (`r3-1`..`r3-7`) | **PASS**: 16 px reserved slot on every main row (head > slot > title), unpinned resting pin `opacity:0/visibility:hidden/pointer-events:none` and pinned resting marker visible with `pointer-events:none` + `aria-pressed=true`; hover reveals the pin with `.psd-run-title` x unchanged (84 px in the final run, 75.03 px in an earlier run, before/during/after); click → `data-pinned="true"` on row/slot/button, localized Unpin label, filled `dsw-icon-pin-fill-regular` glyph in the violet/blue accent, non-transparent row tint, card pin document `{"version":1,"pinned":[id]}`; **native sidebar pin marker count 0 → 0 and native order unchanged** (negative assertion); pinned rows form a contiguous first prefix, a second pin keeps newest-activity-first order, reload restores both pinned-first from the same-profile document, unpin returns the row to the head of the normal queue immediately with tint/marker/document gone; 5 subagent child rows expose no pin DOM (`pin-r3-pinned-row.png`, `pin-r3-two-pinned.png`, `pin-r3-reloaded.png`) |
+| `--pin` aggregate | `node test/browser/sidebar.e2e.mjs --pin` | **18/18 PASS / 0 FAIL** on the final build, 27.0 s, page errors **0**, network domain ENABLED, **real network failures 0**, ignored network noise 14, exit 0 (`/tmp/pin-final-headfix.log`); the same 18/18 was green on the earlier pre-fix CSS build (25.9 s, `/tmp/pin-final-18-18.log`) |
+| `--pin --no-shots` | `node test/browser/sidebar.e2e.mjs --pin --no-shots` | **18/18 PASS**, 0 page errors, 0 real network failures, exit 0 (`/tmp/pin-noshots.log`); the screenshot row reports an explicit `SKIP (--no-shots)` instead of writing evidence |
+| Cleanup / residual side effects | same runs, run summary | `finally` unpinned both run-pinned Sessions through the UI: card pin document `{"version":1,"pinned":[]}`, residual run ids in card snapshot `[]` and document `[]`, native sidebar pin markers 0 → 0, native session order unchanged. The pin state is the card-owned localStorage document in the throwaway Chrome profile only; the six pre-existing native sidebar pins on the live Host were neither read nor modified |
+| Existing full-mode regression | `node test/browser/sidebar.e2e.mjs --no-shots` | **43/43 PASS**, page errors 0, exit 0, twice in a row on the final build, 52.8 s / 52.5 s (`/tmp/sidebar-full-branch-5.log`, `/tmp/sidebar-full-branch-6.log`); b1/b2/b3/b4/b5/b6/c2/c3/c4/f4 all green, including the unchanged B4 `+30` row-body click oracle |
+| Flake attribution | `node test/browser/sidebar.e2e.mjs --no-shots --client /tmp/baseline-client-b91161b.js` (HEAD client without the branch changes) | 43/43; 42/43 (`c4-4`); 43/43 across three runs — the same first-paint `c4-4` flake exists on the untouched baseline. The branch's four earlier full-mode attempts (42/43 each, always 0 page errors: `c4-4` twice, `b6-3` once, `b4-2` once) are therefore pre-existing live-GUI timing flakes; no single-check failure repeated on the same code |
+
+Remaining gaps for this verification: the run is headless on one display/zoom level and in
+the GUI's current UI language (English labels observed; ZH copy is covered by unit tests);
+the R2 case requires readable Host projections for at least one recent Session (the harness
+retries up to five native rows and waits up to 9 s per row for the cold read); the blank
+Session row must be rendered by the native tree (the harness expands the workspace groups
+first and fails explicitly otherwise); pin persistence is deliberately per browser profile
+(not Host-shared), so only same-profile reload persistence is proven; and the pin-order
+oracle uses the pre-pin newest-first card order (no live activity re-sort occurred in the
+recorded runs). Full-mode single-run stability is a known live-GUI timing characteristic of
+this harness (see the baseline comparison above), not a branch regression; the first
+full-mode run on the branch did surface a real product bug: the new `.psd-run-head` glyph
+cell flex-shrank on clipped-title rows and moved the fixed pin slot under the row-body
+click point, so a row-body click toggled a pin instead of opening the Session. The lead
+fixed it with `flex:none`; following runs pass B4 unchanged, and the additive `r3-1` guard
+(`.psd-run-head` width == its glyph width, pin slot one 8 px gap after the head) now
+watches for that squeeze.
