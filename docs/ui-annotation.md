@@ -772,7 +772,7 @@ or node the action shows an honest unavailable toast.
 
 - **Surface-gone contract:** for transient/floating records, the captured surface
   presence is the single authority — if the captured surface is gone, every outcome
-  (CSS and text/anchor) resolves as **Missing**; no mark/copy uses a look-alike.
+  (CSS and text/anchor) resolves as **Missing**; no mark is drawn on a look-alike (copy uses saved anchors when the target is not live; a live look-alike copy path remains a documented follow-up).
   (The runtime resolver is deliberately conservative: because surface-presence
   detection is heuristic, a transient record's Changed is also reported Missing;
   the pure helper models the still-present Changed branch for future refinement.)

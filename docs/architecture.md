@@ -521,8 +521,8 @@ a weak-identity gate keeps icon-only/tag-only records from resolving through
 structural fallbacks: a verified unique selector only counts as identity while
 it still resolves to one connected/visible element, structural hits pass a
 Hypothesis-style quote assertion and captured-ancestor corroboration, and
-weak-identity records without a quote are Missing (no mark/copy on a
-look-alike). Removed floating/ephemeral surfaces report Missing for every
+weak-identity records without a quote are Missing (no mark on a look-alike;
+copy uses saved anchors when the target is not live). Removed floating/ephemeral surfaces report Missing for every
 outcome through one `annotationEphemeralOutcome` gate (a still-present surface
 keeps honest outcomes; the conservative transient-Changed policy is
 documented). For descendant text anchors the captured scope is authoritative: the recorded
