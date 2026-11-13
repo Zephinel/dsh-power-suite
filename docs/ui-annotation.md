@@ -759,6 +759,28 @@ or node the action shows an honest unavailable toast.
   mutation re-resolves once and then reuses the cache. Own overlay re-renders do
   not invalidate page-resolution caches.
 
+### Reference-conformance limitations
+
+- **Surface-gone contract:** for transient/floating records, the captured surface
+  presence is the single authority — if the captured surface is gone, every outcome
+  (CSS and text/anchor) resolves as **Missing**; no mark/copy uses a look-alike.
+  (The runtime resolver is deliberately conservative: because surface-presence
+  detection is heuristic, a transient record's Changed is also reported Missing;
+  the pure helper models the still-present Changed branch for future refinement.)
+- **Apache word-boundary capture:** quote context expands in fixed 4-character
+  steps (≤60/60, total ≤200) and drops non-unique quotes; Apache-style word-boundary
+  alignment/minimum-length capture is not implemented (bounded deviation).
+- **TextPosition semantics:** stored `textPosition` offsets are rendered-text
+  UTF-16 offsets into a container selector, not W3C code-point offsets against a
+  scope — self-consistent but not interoperable with the reference TextPosition.
+- **Scope E2E shape:** the S12 scope-authority fixture seeds a record shape (a
+  section-level container) that real capture does not produce (capture stores the
+  leaf's immediate parent); a capture-shaped scope E2E is not yet present.
+- **Identity-key fallback:** when no verified unique selector exists, the record
+  identity key may fall back to an unverified data/id candidate (the reference
+  verifies uniqueness at generation); duplicate unverified identities can therefore
+  collapse in rare cases.
+
 ### Anchor hardening (P1/P2)
 
 - **Capture disambiguation:** quote context is occurrence-aware — the target text run
