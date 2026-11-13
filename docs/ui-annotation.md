@@ -730,7 +730,9 @@ or node the action shows an honest unavailable toast.
   text-position) only return **Resolved** when the record carries a real identity
   signal — non-empty captured text (not the constant empty-FNV digest), a real
   accessible name that is not the tag/role fallback, or a verified unique stable
-  locator that *still resolves to this element*. Icon-only/tag-only records
+  locator that is marked unique-verified (the gate checks the stored
+  `uniqueVerified` flag and a non-empty selector; it does not re-prove that the
+  selector currently points at the same element). Icon-only/tag-only records
   degrade honestly to **Content changed** and are never marked/copied through a
   weak structural hit. This is one gate at the fallback boundary
   (`annotationHasStrongIdentity` → `annotationStructuralFallbackStatus`), not

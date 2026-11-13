@@ -396,6 +396,17 @@
   the false-ambiguous fix. Generic tag/role matches still corroborate by text,
   so a genuinely removed target can report Changed rather than Missing when a
   same-tag DOM node remains.
+- **Weak-identity records fail closed.** Icon-only/tag-only targets with no real
+  text digest, no real accessible name and no verified unique locator cannot be
+  resolved through XPath/text-position structural fallbacks; they report
+  Content changed and get no mark/copy rather than guessing. A residual route
+  remains: a *unique structural CSS candidate* (e.g. `section > button`) can
+  still match a replacement, which is the trade-off against the P0
+  duplicate-label CSS behaviour; treat such records as position-sensitive. A
+  fresh icon-only selection also reads "Content changed" by design (honest
+  fail-closed wording). Descendant text anchors for non-leaf targets are
+  deliberately deferred; weak-ambiguity-continuation and cache reuse have
+  code/unit coverage but no dedicated E2E instrumentation.
 - **Fallback anchors are additive and partial.** Only text-bearing leaf
   elements capture `textQuote`/`textPosition`; absolute XPath is
   structure-sensitive (an id short-circuit helps, but reparenting can break it),

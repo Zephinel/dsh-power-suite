@@ -508,8 +508,17 @@ order CSS candidates → XPath → text quote → text position; candidate resol
 is two-phase (collect hit sets, prefer the first unique candidate by stability
 tier; Ambiguous only when all identifying candidates are genuinely non-unique;
 weak-strategy ambiguity continues down the chain), generated/hashed classes are
-filtered out, and identity uses the verified unique selector. The four statuses
-stay honest (unique text match resolves, duplicates stay ambiguous, changed
+filtered out, and identity uses the verified unique selector. Capture
+disambiguates quotes against occurrence-aware context and drops quotes it cannot
+make unique; one rendered-text pipeline (`<br>`/block boundaries → space with a
+rendered→raw offset map) feeds quote and position; fallback resolution is
+**CSS → text quote (position hint) → text position → XPath last**, validated in
+one boundary (tag/digest/accessible name/proximity) with scored approximate
+matching (approximate hits cap below Resolved; ties stay ambiguous). Fallback
+status/nodes are cached per `(record id, DOM revision)` with bounded scans, and
+a weak-identity gate keeps icon-only/tag-only records from resolving through
+structural fallbacks (they report Changed honestly). The four statuses stay
+honest (unique text match resolves, duplicates stay ambiguous, changed
 text is content-changed) and the UI shows which strategy resolved the target.
 Records persist in a browser-owned **v3** document
 (`power-suite.ui-annotation.annotations`, 250 ms debounced writes, flush on mode

@@ -311,6 +311,23 @@ heading is added until the release is cut.
   word-like/generated-pattern heuristic, and record identity uses the verified
   unique selector.
 
+- UI element annotation anchor hardening (P1/P2, reference-coding round):
+  capture-time text-quote disambiguation (occurrence-aware context, bounded,
+  uniqueness-verified, misleading quotes dropped), one rendered-text pipeline
+  (`<br>`/block boundaries → space + rendered→raw offset map), fallback order
+  **CSS → text quote (position hint) → text position → XPath last** with a
+  single validation boundary (tag/digest/accessible name/proximity), scored
+  approximate matching (0.7/0.15/0.15; exact unique context resolves, small
+  edits report Content changed, ties Matches several, approximate hits capped
+  below Resolved), fallback status/node cache keyed by `(record id, DOM
+  revision)` with bounded scans (400 elements / 32 candidates) and a 400-entry
+  node cache, whitespace-only text separators preserved, and a **weak-identity
+  gate** so icon-only/tag-only records cannot falsely resolve via structural
+  fallbacks (no wrong marks/copies; they report Changed honestly). Copy
+  locator/XPath/JS path is now available in the popover, detail card and rail
+  row with live-node-first → saved-anchor → honest-unavailable semantics and
+  optimized vs full XPath (full only with a live node, never fabricated).
+
 ### Removed
 
 - Standalone Project detail page: the `project-view` feature is removed —
