@@ -187,7 +187,10 @@ API/plugin network failures in every run below):
   with the **68-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
   FAIL 0** (including `10b`, the real pinned-cross-branch-card check),
   scenario 11 **PASS 7 / 0 / 0**, scenario 12 **PASS 7 / 0 / 0** (marks, detail
-  card, requirement edit with `updatedAt`, delete → 5 s undo),
+  card, requirement edit with `updatedAt`, delete → 5 s undo, popover layout:
+  delete in the Requirement caption row (marked state only), footer exactly two
+  primary buttons on one non-wrapping row, caption→textarea gap 9 px, rainbow
+  ring exact on all edges),
   scenario 13 **PASS 7 / SKIP 1 (`13f`) / 0** (single native chip, hover preview
   tooltip with requirement/locator/position/Session/workspace/status, grouped
   chip hover summary, chip click preview, chip × removal (only that chip

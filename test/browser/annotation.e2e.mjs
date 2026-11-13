@@ -2384,6 +2384,68 @@ const probes = {
     }
   },
 
+  /** A3/T23: requirement-popover layout (caption row, trash, footer row, ring hug). */
+  popoverLayout: () => {
+    const popover = document.querySelector('[data-psa-popover]')
+    if (popover === null) return null
+    const rectOf = (element) => {
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      return {
+        left: Math.round(rect.left), top: Math.round(rect.top),
+        right: Math.round(rect.right), bottom: Math.round(rect.bottom),
+        width: Math.round(rect.width), height: Math.round(rect.height),
+        centerY: Math.round(rect.top + rect.height / 2)
+      }
+    }
+    const note = popover.querySelector('[data-psa-note]')
+    const wrapper = note !== null ? note.closest('.psa-rainbow-field') : null
+    const head = popover.querySelector('[data-psa-popover-note-head]')
+    const caption = popover.querySelector('[data-psa-popover-note-label]')
+      ?? popover.querySelector('.psa-popover-note > .psa-muted')
+    const trash = popover.querySelector('[data-psa-popover-delete]')
+    const actions = popover.querySelector('[data-psa-popover-actions]') ?? popover.querySelector('.psa-popover-actions')
+    const actionButtons = actions === null ? [] : [...actions.querySelectorAll('button')].map((button) => ({
+      text: (button.innerText || '').replace(/\s+/g, ' ').trim(),
+      ...rectOf(button),
+      clientWidth: Math.round(button.clientWidth),
+      scrollWidth: Math.round(button.scrollWidth),
+      wrap: getComputedStyle(button).whiteSpace
+    }))
+    const noteRect = rectOf(note)
+    const captionRect = rectOf(caption)
+    const headRect = rectOf(head)
+    const trashRect = rectOf(trash)
+    const popoverRect = rectOf(popover)
+    const ring = noteRect === null || rectOf(wrapper) === null ? null : {
+      wrapper: rectOf(wrapper),
+      exact: Math.abs(rectOf(wrapper).left - noteRect.left) <= 1
+        && Math.abs(rectOf(wrapper).top - noteRect.top) <= 1
+        && Math.abs(rectOf(wrapper).right - noteRect.right) <= 1
+        && Math.abs(rectOf(wrapper).bottom - noteRect.bottom) <= 1
+    }
+    return {
+      popover: popoverRect,
+      caption: captionRect,
+      head: headRect,
+      textarea: noteRect,
+      ring,
+      trash: trashRect === null ? null : {
+        ...trashRect,
+        title: trash.getAttribute('title'),
+        ariaLabel: trash.getAttribute('aria-label'),
+        inHead: head !== null && head.contains(trash),
+        rightAligned: headRect !== null && Math.abs(headRect.right - trashRect.right) <= 10
+      },
+      footer: {
+        flexWrap: actions === null ? null : getComputedStyle(actions).flexWrap,
+        buttons: actionButtons
+      },
+      gap: captionRect === null || noteRect === null ? null : Math.round(noteRect.top - captionRect.bottom),
+      headGap: headRect === null || noteRect === null ? null : Math.round(noteRect.top - headRect.bottom)
+    }
+  },
+
   /** A3/T22: the × affordance over an annotation chip, plus the chip count. */
   chipDelete: () => {
     const button = document.querySelector('[data-psa-chip-delete]')
@@ -4898,17 +4960,91 @@ function buildScenarios(harness) {
       await h.ensureStatusPanel()
       await h.clearSelection()
 
+      const popoverMetricsDir = process.env.PSA_POPOVER_METRICS_DIR
+      const popoverOldLayout = process.env.PSA_POPOVER_OLD_LAYOUT === '1'
+      /**
+       * Persist one popover layout sample for the before/after comparison.
+       * @param {string} name - sample name.
+       * @param {object | null} layout - probe result.
+       * @returns {Promise<void>}
+       */
+      const recordPopoverLayout = async (name, layout) => {
+        if (!popoverMetricsDir) return
+        await mkdir(popoverMetricsDir, { recursive: true })
+        await writeFile(path.join(popoverMetricsDir, `${name}.json`), JSON.stringify(layout, null, 2))
+      }
+      /**
+       * Capture one evidence clip around a viewport rect (gated).
+       * @param {string} name - file name.
+       * @param {{ x: number, y: number, width: number, height: number }} rect - clip.
+       * @returns {Promise<void>}
+       */
+      const capturePopoverClip = async (name, rect) => {
+        const dir = process.env.PSA_POPOVER_EVIDENCE_DIR
+        if (!dir || rect === null) return
+        await mkdir(dir, { recursive: true })
+        const clip = {
+          x: Math.max(0, Math.floor(rect.x)),
+          y: Math.max(0, Math.floor(rect.y)),
+          width: Math.max(1, Math.ceil(rect.width)),
+          height: Math.max(1, Math.ceil(rect.height)),
+          scale: 1
+        }
+        const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip })
+        await writeFile(path.join(dir, name), Buffer.from(data.data, 'base64'))
+      }
+      /**
+       * A3/T23: the footer keeps exactly the two primary buttons on one row and the
+       * rainbow ring still hugs the textarea.
+       * @param {object} layout - popoverLayout probe result.
+       * @returns {void}
+       */
+      const assertFooterAndRing = (layout) => {
+        assert(layout !== null, 'the requirement popover layout probe returned nothing')
+        assertEqual(layout.footer.buttons.length, 2, `the footer must keep exactly two buttons, got ${JSON.stringify(layout.footer.buttons.map((button) => button.text))}`)
+        const tops = layout.footer.buttons.map((button) => button.top)
+        assert(Math.max(...tops) - Math.min(...tops) <= 1, `the footer buttons are not on one row: tops ${JSON.stringify(tops)}`)
+        assertEqual(layout.footer.flexWrap, 'nowrap', 'the footer must not wrap')
+        for (const button of layout.footer.buttons) {
+          assert(button.scrollWidth <= button.clientWidth + 1, `footer button "${button.text}" wraps its label (${button.scrollWidth} > ${button.clientWidth})`)
+        }
+        assert(layout.ring !== null && layout.ring.exact === true, 'the rainbow ring no longer hugs the requirement textarea exactly')
+        assert(layout.gap !== null && layout.gap >= 7 && layout.gap <= 16, `the caption-to-textarea gap ${layout.gap}px is outside the widened 7..16px range`)
+      }
+      /**
+       * A3/T23: assert the new popover layout (trash in the caption row, two-button footer).
+       * @param {object} layout - popoverLayout probe result.
+       * @param {boolean} marked - whether the selection is already marked.
+       * @returns {void}
+       */
+      const assertPopoverLayout = (layout, marked) => {
+        assertFooterAndRing(layout)
+        if (marked) {
+          assert(layout.trash !== null, 'a marked selection is missing the trash button')
+          assertEqual(layout.trash.inHead, true, 'the trash is not inside the Requirement caption row')
+          assertEqual(layout.trash.rightAligned, true, 'the trash is not right-aligned in the caption row')
+          assert(Math.abs(layout.trash.centerY - layout.caption.centerY) <= 4,
+            `the trash is not on the caption line (trash centerY ${layout.trash.centerY}, caption centerY ${layout.caption.centerY})`)
+          assert(/Delete|删除/.test(String(layout.trash.title || '')), `the trash lost its delete tooltip: ${layout.trash.title}`)
+          assert(layout.head !== null && layout.head.height >= 14 && layout.head.height <= 32, `the caption row height is off: ${JSON.stringify(layout.head)}`)
+        } else {
+          assertEqual(layout.trash, null, 'an unmarked selection must not show the trash')
+        }
+      }
+
       /**
        * Select one page element, type its requirement, and commit it.
        * @param {{ x: number, y: number }} point - element centre.
        * @param {string} note - requirement text.
+       * @param {Function} [observe] - optional observer run while the popover is open.
        * @returns {Promise<void>}
        */
-      const annotateAt = async (point, note) => {
+      const annotateAt = async (point, note, observe) => {
         await h.page.moveTo(point.x, point.y)
         await sleep(140)
         await h.page.clickAt(point.x, point.y)
         await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: `popover before "${note}"` })
+        if (typeof observe === 'function') await observe()
         const noteRect = await h.page.findRect('[data-psa-note]')
         assert(noteRect, 'popover requirement textarea missing')
         await h.page.clickAt(noteRect.x, noteRect.y)
@@ -4924,7 +5060,11 @@ function buildScenarios(harness) {
 
       const targetA = await h.page.eval(pageProbe.newSessionButton)
       assert(targetA, 'native New session button not found for the marks scenario')
-      await annotateAt(targetA, 'Req one')
+      await annotateAt(targetA, 'Req one', async () => {
+        const unmarkedLayout = await h.page.eval(probes.popoverLayout)
+        await recordPopoverLayout('unmarked', unmarkedLayout)
+        if (!popoverOldLayout) assertPopoverLayout(unmarkedLayout, false)
+      })
       await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 1`, { timeout: 6000, label: 'first page mark' })
       const targetB = await h.page.eval(probes.pluginNavRect)
       assert(targetB, 'native Plugins navigation button not found for the marks scenario')
@@ -5042,9 +5182,58 @@ function buildScenarios(harness) {
       // CARD recipe in BOTH themes (fixed #2C2C2E + --dsw-shadow-lv3) — computed-style
       // assertion (task-13 correction).
       const tooltipRecipe = await checkAnnotationHovercardRecipe(h)
+      // A3/T23: marked popover layout: trash lives in the Requirement caption row,
+      // the footer keeps two buttons on one row, and delete still deletes + undoes.
+      const popoverTarget = await h.page.eval(pageProbe.newSessionButton)
+      assert(popoverTarget, 'native New Session button not found for the popover layout check')
+      await h.page.moveTo(popoverTarget.x, popoverTarget.y)
+      await sleep(150)
+      await h.page.clickAt(popoverTarget.x, popoverTarget.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the layout check' })
+      await sleep(250)
+      const markedLayout = await h.page.eval(probes.popoverLayout)
+      await recordPopoverLayout('marked', markedLayout)
+      if (!popoverOldLayout) assertPopoverLayout(markedLayout, true)
+      if (process.env.PSA_POPOVER_EVIDENCE_DIR && markedLayout !== null) {
+        const clipOf = (layout) => ({
+          x: layout.popover.left - 10,
+          y: layout.popover.top - 10,
+          width: layout.popover.width + 20,
+          height: layout.popover.height + 20
+        })
+        const originalDark = await h.page.evaluate(`document.body.getAttribute('data-ds-dark-theme')`)
+        await h.page.evaluate(`document.body.removeAttribute('data-ds-dark-theme')`)
+        await sleep(650)
+        const lightLayout = await h.page.eval(probes.popoverLayout)
+        await recordPopoverLayout('marked-light', lightLayout)
+        if (lightLayout !== null) await capturePopoverClip('popover-marked-light.png', clipOf(lightLayout))
+        await h.page.evaluate(`document.body.setAttribute('data-ds-dark-theme', 'true')`)
+        await sleep(650)
+        const darkLayout = await h.page.eval(probes.popoverLayout)
+        await recordPopoverLayout('marked-dark', darkLayout)
+        if (darkLayout !== null) await capturePopoverClip('popover-marked-dark.png', clipOf(darkLayout))
+        if (originalDark === null) {
+          await h.page.evaluate(`document.body.removeAttribute('data-ds-dark-theme')`)
+        } else {
+          await h.page.evaluate(`document.body.setAttribute('data-ds-dark-theme', ${JSON.stringify(originalDark)})`)
+        }
+        await sleep(400)
+      }
+      assertEqual(await h.page.evaluate(`document.querySelectorAll('[data-psa-mark]').length`), 2,
+        'the popover layout check needs both page marks')
+      await h.click('[data-psa-popover-delete]')
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 1`, { timeout: 5000, label: 'mark removal after popover delete' })
+      const popoverDeleteToast = await h.page.eval(probes.undoToast)
+      assertEqual(popoverDeleteToast.present, true, 'no undo toast after the popover delete')
+      assertEqual(popoverDeleteToast.role, 'status', 'the popover-delete toast is not a status region')
+      assert(/deleted|已删除/.test(popoverDeleteToast.text || ''), `unexpected popover-delete toast text: ${popoverDeleteToast.text}`)
+      await h.click('[data-psa-undo]')
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 2`, { timeout: 5000, label: 'mark restore after popover undo' })
+      await sleep(200)
+      await h.clearSelection()
       await h.ensureStatusPanel()
       await h.exit()
-      return `2 marks (#index + requirement excerpt), hover detail card (requirement/session/workspace/position/actions, keep-open, no focus steal), edit saved (updatedAt bumped), delete -> role=status undo toast -> restored, other-Session record not drawn after reload, reduced-motion static, native hover-card recipe matched in light+dark (bg ${tooltipRecipe.light.native.backgroundColor} / ${tooltipRecipe.dark.native.backgroundColor}, fixed #2C2C2E)`
+      return `2 marks (#index + requirement excerpt), popover trash in the Requirement caption row + two-button one-row footer (gap ${markedLayout && markedLayout.gap}px), popover delete -> undo toast -> restored, hover detail card (requirement/session/workspace/position/actions, keep-open, no focus steal), edit saved (updatedAt bumped), delete -> role=status undo toast -> restored, other-Session record not drawn after reload, reduced-motion static, native hover-card recipe matched in light+dark (bg ${tooltipRecipe.light.native.backgroundColor} / ${tooltipRecipe.dark.native.backgroundColor}, fixed #2C2C2E)`
     },
 
     13: async () => {
