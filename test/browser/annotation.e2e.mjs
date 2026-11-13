@@ -1090,7 +1090,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 / 97 anchor / 100 review / 106 descendant / 107 scan-probe)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 / 97 anchor / 100 review / 106 descendant / 107 scan-probe / 108 scope-authority)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1102,7 +1102,7 @@ async function runSmoke({ page, results, state }) {
     // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
     // rail selection and chip-ref serialization helpers (66). Pin a documented count and
     // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97, 100, 106, 107]
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97, 100, 106, 107, 108]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1195,6 +1195,9 @@ async function runSmoke({ page, results, state }) {
     }
     if (keyCount === 107) {
       assert(probe.keys.includes('debugFallbackScanProbe'), 'task-38 seam must expose debugFallbackScanProbe')
+    }
+    if (keyCount === 108) {
+      assert(probe.keys.includes('annotationScopeAuthorityOutcome'), 'task-42 seam must expose annotationScopeAuthorityOutcome')
     }
     state.hooks = probe.keys
     return `uiAnnotation seam: ${keyCount} keys`
@@ -6601,6 +6604,126 @@ function buildScenarios(harness) {
       }
       assertEqual(decoyMark, null, 'A3/T38: ambiguous descendant anchor must not draw a mark')
       await h.page.evaluate(`(() => { window.__psaT40.host?.remove(); window.__psaT40.host2?.remove(); window.__psaT40.decoyHost?.remove(); window.__psaT40.card?.remove(); window.__psaT40.decoy?.remove(); return true })()`)
+      // ---- A3/T42: captured scope is authoritative for descendant text anchors ----
+      const scopeSessionId = await h.refreshSession()
+      await h.page.addInitScript(`(() => {
+        try {
+          if (localStorage.getItem('psa-scope-seed') !== 'pending') return
+          localStorage.setItem('psa-scope-seed', 'done')
+          const install = () => {
+            if (document.getElementById('psa-scope-a') !== null) return
+            const root = document.createElement('div')
+            root.style.cssText = 'position:relative;z-index:auto;margin:12px 0;padding:8px;background:rgb(40,42,48);color:rgb(235,238,245);border-radius:8px'
+            const a = document.createElement('div')
+            a.id = 'psa-scope-a'
+            a.style.cssText = 'position:relative;z-index:auto;padding:6px;margin:4px 0;background:rgb(50,52,60);border-radius:6px'
+            const rowA = document.createElement('div')
+            rowA.setAttribute('aria-expanded', 'true')
+            rowA.style.cssText = 'position:relative;z-index:auto;padding:4px 6px'
+            const leafA = document.createElement('span')
+            leafA.textContent = 'Scope authority text UNIQUE-T42'
+            rowA.append(leafA)
+            a.append(rowA)
+            const b = document.createElement('div')
+            b.id = 'psa-scope-b'
+            b.style.cssText = 'position:relative;z-index:auto;padding:6px;margin:4px 0;background:rgb(50,52,60);border-radius:6px'
+            const rowB = document.createElement('div')
+            rowB.setAttribute('aria-expanded', 'true')
+            rowB.style.cssText = 'position:relative;z-index:auto;padding:4px 6px'
+            const leafB = document.createElement('span')
+            leafB.textContent = 'Scope authority text UNIQUE-T42'
+            rowB.append(leafB)
+            b.append(rowB)
+            root.append(a, b)
+            document.body.append(root)
+            const key = 'power-suite.ui-annotation.annotations'
+            const doc = JSON.parse(localStorage.getItem(key) || 'null')
+            const records = doc !== null && Array.isArray(doc.records) ? doc.records : []
+            const record = {
+              version: 2, id: 'psa-scope-authority-1', at: Date.now(), updatedAt: Date.now(), order: 0,
+              session: { sessionId: ${JSON.stringify(scopeSessionId)}, cwd: '/Users/rexxin/Development/dsh-power-suite', workspaceLabel: 'dsh-power-suite' },
+              route: '/', locator: {
+                tag: 'div', role: '', name: '', candidates: [{ kind: 'data', value: '[data-psa-scope-dead]', reliability: 0.9 }],
+                key: 'data:[data-psa-scope-dead]', path: '', uniqueSelector: null, uniqueVerified: false, ancestors: [], surface: 'page', ephemeral: false,
+                xpath: '/html[1]/body[1]/div[99]/div[1]', jsPath: '',
+                textQuote: { exact: 'Scope authority text UNIQUE-T42', prefix: '', suffix: '' },
+                textPosition: { container: '#psa-scope-a', start: 0, end: 'Scope authority text UNIQUE-T42'.length },
+                anchorTarget: 'descendant', anchorLeafTag: 'span', anchorAncestorChain: ['span', 'div'],
+                anchorSignature: { tag: 'div', attrs: [{ name: 'aria-expanded', value: 'true' }] }
+              },
+              component: 'other', text: 'Scope authority text UNIQUE-T42', textDigest: '', context: '',
+              bounds: { x: 800, y: 400, width: 200, height: 40 }, viewport: { width: window.innerWidth, height: window.innerHeight },
+              note: '', included: true, lastStatus: 'resolved'
+            }
+            records.push(record)
+            localStorage.setItem(key, JSON.stringify({ version: 3, updatedAt: Date.now(), records, groups: [] }))
+          }
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true })
+          else install()
+        } catch {}
+      })()`)
+      await h.page.evaluate(`localStorage.setItem('psa-scope-seed', 'pending')`)
+      await h.page.reload()
+      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after the scope-authority seed' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the scope-authority seed' })
+      await sleep(700)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      await h.ensureActivatedStable()
+      await h.openCollection()
+      await sleep(400)
+      const scopeEntry = await h.page.evaluate(`(() => {
+        const entry = document.querySelector('[data-psa-entry][data-psa-ref="psa-scope-authority-1"]')
+        const scopeA = document.getElementById('psa-scope-a')
+        return entry === null || scopeA === null ? null : {
+          status: entry.getAttribute('data-psa-status'),
+          containerResolves: document.querySelectorAll('#psa-scope-a').length,
+          deadCssHits: document.querySelectorAll('[data-psa-scope-dead]').length
+        }
+      })()`)
+      assert(scopeEntry !== null, 'A3/T42: seeded scope-authority record row missing')
+      assertEqual(scopeEntry.containerResolves, 1, 'captured scope selector must resolve')
+      assertEqual(scopeEntry.deadCssHits, 0, 'captured CSS candidates must be dead for the scope-authority fixture')
+      if (scopeEntry.status !== 'resolved') {
+        const scopeDebug = await h.page.evaluate(`(() => {
+          const key = 'power-suite.ui-annotation.annotations'
+          const doc = JSON.parse(localStorage.getItem(key) || '{}')
+          const record = (doc.records ?? []).find((item) => item.id === 'psa-scope-authority-1') ?? null
+          const scopeA = document.getElementById('psa-scope-a')
+          return {
+            record: record === null ? null : { locator: record.locator, text: record.text, digest: record.textDigest, bounds: record.bounds, session: record.session?.sessionId },
+            scopeText: scopeA === null ? null : scopeA.textContent,
+            rowRects: scopeA === null ? [] : [...scopeA.children].map((row) => { const r = row.getBoundingClientRect(); return { y: Math.round(r.top), h: Math.round(r.height) } })
+          }
+        })()`)
+        assertEqual(scopeEntry.status, 'resolved', `A3/T42: unique in-scope descendant target must beat the out-of-scope duplicate: ${JSON.stringify({ scopeEntry, scopeDebug })}`)
+      }
+      // Same-scope duplicate → genuine ambiguity inside the captured scope.
+      await h.page.evaluate(`(() => {
+        const scopeA = document.getElementById('psa-scope-a')
+        const row = document.createElement('div')
+        row.setAttribute('aria-expanded', 'true')
+        row.style.cssText = 'position:relative;z-index:auto;padding:4px 6px'
+        const leaf = document.createElement('span')
+        leaf.textContent = 'Scope authority text UNIQUE-T42'
+        row.append(leaf)
+        scopeA.append(row)
+        return true
+      })()`)
+      await sleep(300)
+      await h.page.moveTo(800, 200)
+      await sleep(200)
+      await h.click('[data-psa-open-settings]')
+      await sleep(200)
+      await h.click('[data-psa-rail-back]')
+      await sleep(300)
+      const scopeDecoy = await h.page.evaluate(`(() => {
+        const entry = document.querySelector('[data-psa-entry][data-psa-ref="psa-scope-authority-1"]')
+        return entry === null ? null : { status: entry.getAttribute('data-psa-status') }
+      })()`)
+      assert(scopeDecoy !== null, 'scope decoy row missing')
+      assertEqual(scopeDecoy.status, 'ambiguous', `A3/T42: a duplicate INSIDE the captured scope must be honestly ambiguous: ${JSON.stringify(scopeDecoy)}`)
+      await h.page.evaluate(`(() => { document.getElementById('psa-scope-a')?.parentElement?.remove(); localStorage.setItem('psa-scope-seed', 'done'); return true })()`)
       await h.ensureStatusPanel()
       await h.exit()
       return `2 marks (#index + requirement excerpt), popover trash in the Requirement caption row + two-button one-row footer (gap ${markedLayout && markedLayout.gap}px), popover delete -> undo toast -> restored, hover detail card (requirement/session/workspace/position/actions, keep-open, no focus steal), edit saved (updatedAt bumped), delete -> role=status undo toast -> restored, other-Session record not drawn after reload, reduced-motion static, native hover-card recipe matched in light+dark (bg ${tooltipRecipe.light.native.backgroundColor} / ${tooltipRecipe.dark.native.backgroundColor}, fixed #2C2C2E)`
