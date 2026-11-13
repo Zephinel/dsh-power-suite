@@ -104,7 +104,8 @@ sidebar's panel tabs. It starts expanded.
   2 px gaps), no matter whether a title is short or clipped. The title control
   keeps its content-paced width (so the hover pill still hugs the label) and its
   `max-width: calc(100% − 100 px)` cap, and the right-edge gradient mask fades a
-  clipped title exactly at the content-column boundary, never under the trailing
+  clipped title inside the pill's right padding (parent rows end 10 px before
+  the content-column boundary, child rows 8 px), never under the trailing
   columns. The 14 px/20 px title size matches the native sidebar rows, and the
   time is drawn at 11 px in the tabular-numeric tertiary label colour. Running Sessions are always listed,
   then recently finished Sessions inside
@@ -201,8 +202,13 @@ sidebar's panel tabs. It starts expanded.
   time, action, and disclosure columns: the header's empty time column and its
   count badge (right-anchored on the action column) complete the same grid.
 - **Hover highlights**: the row-body highlight is a rounded pill paced by its
-  **content** — the leading glyph plus the (possibly faded) title — with 8 px
-  inner left padding, so it never stretches across empty space. Non-text
+  **content** — the leading glyph plus the (possibly faded) title — with roomy
+  horizontal insets so the text never touches the pill edge: parent rows use
+  `padding: 4px 10px 4px 14px` (left 14 px, right 10 px) and child rows
+  `padding: 3px 8px 3px 10px` (left 10 px, right 8 px), so the title's right
+  edge always sits at least 8 px inside the pill's right edge (measured by the
+  sidebar E2E alongside the unchanged right-anchored grid). The pill still
+  never stretches across empty space. Non-text
   controls keep fixed highlight blocks that line up across all rows: 22 x 22 px
   for each action button and 24 x 26 px for the disclosure arrow. Hovering the
   disclosure arrow highlights only the arrow (the body pill is suppressed), so

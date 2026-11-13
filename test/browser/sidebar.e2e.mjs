@@ -1722,6 +1722,57 @@ async function runLayoutChecks({ page, results, state }) {
     return `${count} top-level rows, ${state.rows.rows.length} rows incl. subagents`
   })
 
+  await results.check('b1-7', 'row highlight pills keep comfortable horizontal text insets', async () => {
+    const rows = await page.eval(() => {
+      const box = (el) => {
+        const r = el.getBoundingClientRect()
+        return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), width: Math.round(r.width), height: Math.round(r.height) }
+      }
+      return [...document.querySelectorAll('.psd-run, .psd-child')].map((el) => {
+        const kind = el.classList.contains('psd-run') ? 'parent' : 'child'
+        const main = el.querySelector('.psd-run-main, .psd-child-main')
+        const title = el.querySelector('.psd-run-title, .psd-child-title')
+        const time = el.querySelector('.psd-run-time, .psd-child-time')
+        const toggle = el.querySelector('.psd-run-toggle, .psd-run-toggle-spacer')
+        const style = getComputedStyle(main)
+        const pill = box(main)
+        const titleBox = box(title)
+        return {
+          kind,
+          paddingLeft: style.paddingLeft,
+          paddingRight: style.paddingRight,
+          pill,
+          title: titleBox,
+          textRightInset: pill.right - titleBox.right,
+          leftInset: parseFloat(style.paddingLeft),
+          clipped: title.getAttribute('data-clipped') === 'true',
+          row: box(el),
+          timeRight: time ? box(time).right : null,
+          toggleRight: toggle ? box(toggle).right : null,
+        }
+      })
+    })
+    assert(rows.length >= 3, 'need parent and child rows to measure the pill insets')
+    const parents = rows.filter((row) => row.kind === 'parent')
+    const children = rows.filter((row) => row.kind === 'child')
+    assert(parents.length >= 1 && children.length >= 1, 'need at least one parent and one child row')
+    const report = []
+    for (const row of rows) {
+      const expectedLeft = row.kind === 'parent' ? 14 : 10
+      const expectedRight = row.kind === 'parent' ? 10 : 8
+      assert(parseFloat(row.paddingLeft) >= expectedLeft, `${row.kind} pill left padding must be >= ${expectedLeft}px (today was parent 8 / child 4), got ${row.paddingLeft}`)
+      assert(parseFloat(row.paddingRight) >= expectedRight, `${row.kind} pill right padding must be >= ${expectedRight}px (today was 0), got ${row.paddingRight}`)
+      assert(row.textRightInset >= 8, `${row.kind} title text must sit >= 8px inside the pill's right edge, got ${row.textRightInset}px (pill right ${row.pill.right}, text right ${row.title.right})`)
+      assertEqual(row.toggleRight, row.row.right, `${row.kind} disclosure column must stay right-anchored on the row edge`)
+      assertNear(row.timeRight, row.row.right - 50, 1, `${row.kind} time column must stay right-anchored`)
+      report.push(`${row.kind} ${row.pill.width}px pad ${row.paddingLeft}/${row.paddingRight} text-right-inset ${row.textRightInset}px`)
+    }
+    const parentHeights = parents.map((row) => row.row.height)
+    const childHeights = children.map((row) => row.row.height)
+    assert(parentHeights.every((height) => height === parentHeights[0]) && childHeights.every((height) => height === childHeights[0]), 'row heights must stay uniform')
+    return report.join('; ')
+  })
+
   await results.check('b1-5', 'trailing grid stays right-anchored at every card width (parent + child)', async () => {
     const widths = [null, 320, 400]
     const samples = []
@@ -1772,7 +1823,8 @@ async function runLayoutChecks({ page, results, state }) {
         assertEqual(row.toggle.right, row.row.right, `at width ${sample.width} a ${row.kind} row's disclosure column must sit on the row's right edge (toggle ${row.toggle.right}, row ${row.row.right})`)
         assertNear(row.time.right, row.row.right - 50, 1, `at width ${sample.width} a ${row.kind} row's time must be right-anchored (time ${row.time.right}, row right ${row.row.right}, expected ${row.row.right - 50})`)
         if (row.title.clipped) {
-          assert(row.title.rect.right <= row.time.left - 3, `at width ${sample.width} a clipped ${row.kind} title must never run under the trailing columns (title ${row.title.rect.right}, time left ${row.time.left})`)
+          const pillRightPad = row.kind === 'parent' ? 10 : 8
+          assert(row.title.rect.right <= row.time.left - 4 - pillRightPad + 1, `at width ${sample.width} a clipped ${row.kind} title must fade before the pill's ${pillRightPad}px right padding and never run under the trailing columns (title ${row.title.rect.right}, time left ${row.time.left})`)
         }
       }
       details.push(`${sample.width}: row ${sample.rows[0].row.width}px, time right ${timeRights[0]}`)
@@ -1958,7 +2010,8 @@ async function runLayoutChecks({ page, results, state }) {
     // its row's time column, in parent and child rows alike.
     for (const row of geometry.rows) {
       if (!row.title || !row.title.clipped || !row.time) continue
-      assertNear(row.title.rect.right, row.time.rect.left - 4, 1, `clipped ${row.kind} title must end at the content column (title ${row.title.rect.right}, time left ${row.time.rect.left}; the flexible spacer adds its own 2 px gap)`)
+      const pillRightPad = row.kind === 'parent' ? 10 : 8
+      assertNear(row.title.rect.right, row.time.rect.left - 4 - pillRightPad, 1, `clipped ${row.kind} title must fade inside the pill's ${pillRightPad}px right padding (title ${row.title.rect.right}, time left ${row.time.rect.left})`)
     }
     const sample = clipped[0]
     assert(sample.scrollWidth > sample.clientWidth, 'clipped flag disagrees with the measured overflow')
@@ -3434,10 +3487,12 @@ async function captureScreenshots(page, state) {
   // row, in both themes.
   await captureAtmosphereEvidence(page, shot, 'light')
   await captureLayoutEvidence(page, shot, 'light')
+  await capturePillEvidence(page, shot, 'light')
   await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
   await sleep(800)
   await captureAtmosphereEvidence(page, shot, 'dark')
   await captureLayoutEvidence(page, shot, 'dark')
+  await capturePillEvidence(page, shot, 'dark')
   await page.emulateMedia([])
   await sleep(300)
   return shots
@@ -3531,6 +3586,45 @@ async function captureLayoutEvidence(page, shot, theme) {
   } finally {
     await sleep(150)
   }
+}
+
+/**
+ * Photograph the hover-highlight pill of a parent and a child row so the new
+ * horizontal text padding is visible in light and dark.
+ * @param {object} page - Page wrapper.
+ * @param {Function} shot - screenshot(name, clip) helper.
+ * @param {'light' | 'dark'} theme - theme label used in the file name.
+ * @returns {Promise<void>}
+ */
+async function capturePillEvidence(page, shot, theme) {
+  const capture = async (name, index) => {
+    try {
+      await page.moveTo(900, 500)
+      await sleep(250)
+      const target = await hoverRow(page, index)
+      if (!target) return
+      await sleep(450)
+      const rect = await page.eval(() => {
+        const row = document.querySelector('.psd-run:hover, .psd-child:hover')
+        if (!row) return null
+        const r = row.getBoundingClientRect()
+        return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }
+      })
+      if (rect === null) return
+      const clip = clipAroundRect(rect)
+      if (clip !== null) await shot(name, clip)
+    } catch {
+      // best-effort evidence
+    }
+  }
+  const childIndex = await page.eval(() => {
+    const rows = [...document.querySelectorAll('.psd-run, .psd-child')]
+    return rows.findIndex((row) => row.classList.contains('psd-child'))
+  })
+  await capture(`15-pill-parent-${theme}`, 0)
+  if (childIndex > 0) await capture(`15-pill-child-${theme}`, childIndex)
+  await page.moveTo(900, 500)
+  await sleep(300)
 }
 
 /** Viewport-clamped clip around a floating card rect for evidence close-ups. */

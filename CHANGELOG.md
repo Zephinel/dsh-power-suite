@@ -113,6 +113,14 @@ heading is added until the release is cut.
 
 ### Changed
 
+- UI element annotation launcher placement: the round launcher now floats only
+  while the mode is off. Activating the mode docks the same control inside the
+  right rail header (next to collapse/exit, with its collection badge and
+  `aria-pressed` state) so it never covers page content; exiting returns it to
+  the remembered floating position (drag and position persistence are idle-only,
+  and a mode cycle through the narrow overlay layout restores the same
+  coordinates, clamped to the viewport).
+
 - Running & recent identity glyphs swapped: the panel header's all-complete
   indicator now paints the DeepSeek brand glyph (`deepseek-fill`) and an
   acknowledged finished parent row paints the sparkling-line glyph. Sizes,
@@ -132,8 +140,11 @@ heading is added until the release is cut.
   between items, 4 px parent→first child, 5 px child↔child) so the current-row
   atmosphere never touches its neighbours while the 1 px subagent trunk and its
   last-child end mask stay coherent and hover actions remain reachable across
-  the gaps. The row-body hover pill stays content-paced while the action/chevron
-  highlights keep fixed 22×22 / 24×26 geometry on one column.
+  the gaps. The row-body highlight pill stays content-paced with roomy text
+  insets (parent `4px 10px 4px 14px`, child `3px 8px 3px 10px`; the title text
+  sits ≥8 px inside the pill's right edge and the fade mask clips inside that
+  padding) while the action/chevron highlights keep fixed 22×22 / 24×26
+  geometry on one column.
 - Running & recent current-highlight: the animated conic rainbow ring is replaced
   by a vivid animated rainbow **atmosphere painted inside the row's own
   rounded-rectangle highlight**, with the row's real content (title, time,

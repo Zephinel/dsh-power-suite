@@ -422,7 +422,10 @@ profile change. One `//#region feature: ui element annotation` in
 renderless `conversation.input.overlay` seat, injects one
 `<style data-power-suite-css="ui-annotation">`, creates the controller singleton,
 and returns a disposer. An install guard keeps reconnects/HMR idempotent: one
-launcher and one listener set. The overlay seat renders the launcher, rail,
+launcher and one listener set. The launcher floats only while the mode is off;
+while active the same control is docked in the rail header, so nothing floats
+over page content, and exiting restores the remembered floating position. The
+overlay seat renders the launcher, rail,
 highlight layer, note popover, and feedback toast with React; the conversation
 seat keeps the module bridge (`sessionId`, `inputActions`; the slot contract
 passes **no `draft` prop**) current because the root overlay does not receive the

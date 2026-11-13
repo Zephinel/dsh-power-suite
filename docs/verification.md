@@ -22,15 +22,15 @@ npm run pack:check
 
 Current evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round):
 
-- `npm test`: **206 tests, 206 passed, 0 failed, 0 skipped** after the 0.3.0
+- `npm test`: **207 tests, 207 passed, 0 failed, 0 skipped** after the 0.3.0
   Project-view removal (the 24 project-view tests were deleted with the page),
   including **14** read-acks, **22** session-activity Host tests, **7** extra
   interrupted-session tests (error/max-tokens/aborted-cause cases and SSE stream
-  frames), **11** Dynamic-Workspaces hover-card figure tests, and **96**
+  frames), **11** Dynamic-Workspaces hover-card figure tests, and **97**
   UI-element-annotation tests through the browser-factory test seam; per-file:
   dynamic-workspaces-stats 11, interrupted-host 20, interrupted-sessions 7,
   prompt-history 6, read-acks 14, session-activity 22, session-artifacts 16,
-  settings 6, ui-annotation 96, workspace-presets 8.
+  settings 6, ui-annotation 97, workspace-presets 8.
 - `npm run check`: passed (`16 modules, 10 test files`).
 - Interrupted-state SSE transport was verified with cookie auth: 200,
   `content-type: text/event-stream; charset=utf-8`, no-store/no-buffering, first
@@ -158,7 +158,7 @@ figure model, and the existing Host suites.
 injected into the running GUI at 1728×900; 0 page errors and 0 real same-origin
 API/plugin network failures in every run below):
 
-- Sidebar harness `test/browser/sidebar.e2e.mjs`: **42/42 PASS**. It
+- Sidebar harness `test/browser/sidebar.e2e.mjs`: **43/43 PASS**. It
   asserts the trailing grid (time right **209 px** for parent *and* child rows,
   action slot 233, disclosure 259, no child New-session control, hover reveal
   without shift), the multi-width grid invariant (parent and child time right
@@ -179,8 +179,10 @@ API/plugin network failures in every run below):
   atmosphere baseline (saturate(1.5) filter, wrapper opacity >= .78, scrim alpha
   <= .24, blob-core saturation >= .38 animated / >= .28 static, per-theme
   multiply/screen blend), title-case buckets, fold persistence at
-  first paint, the browser borderless/typography recipe, and both cross-branch
-  annotation-mode hover-card pin states.
+  first paint, the browser borderless/typography recipe, the row-highlight text
+  insets (parent `4px 10px 4px 14px`, child `3px 8px 3px 10px`; title text
+  >= 8 px inside the pill's right edge, pill content-paced, mask boundary
+  recalculated), and both cross-branch annotation-mode hover-card pin states.
 - Annotation harness `test/browser/annotation.e2e.mjs`: `--smoke` **6/6 PASS**
   with the **68-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
   FAIL 0** (including `10b`, the real pinned-cross-branch-card check),
@@ -232,7 +234,10 @@ B6 figure totals, and the project-page removal.
 
 - Annotation: floating-surface picking (whole native hover card + drill into its
   inner rows, identical outline style, paint layer `z-index:150` with exact
-  restore), 60 ms pointer-stationary hover recompute, ElementRef v2 capture
+  restore), a launcher that docks inside the right rail header while the mode is
+  active and returns to its remembered floating position on exit (drag and
+  position persistence idle-only; narrow overlay layout keeps it inside the
+  rail), 60 ms pointer-stationary hover recompute, ElementRef v2 capture
   (verified unique selector, ancestors, surface/ephemeral, Session/Workspace
   identity via the seat bridge, query-free route, bounds/viewport; no
   outerHTML/input values), **leaf-first** hover/click precision on ordinary

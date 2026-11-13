@@ -3018,7 +3018,7 @@ const SCENARIO_TITLES = {
   5: 'batch insert: order, existing draft preserved, not sent, composer focused',
   6: 'session scope: stale target marked + cross-session entries skipped, no DOM mutation',
   7: 'exit mode: markers/padding cleaned, native clicks work again, launcher stays',
-  8: 'launcher drag clamp, viewport resize, scroll stability, reload default + position memory',
+  8: 'launcher docked in rail while active, idle drag clamp, overlay layout, fallback position across mode cycle/reload',
   9: 'collection view keeps the frame/rail geometry; exit restores the baseline layout',
   10: 'floating surfaces: leaf-first hover/click (title/subtitle/time/token/icon leaves), full Parent/Child chain, whole surface via background, identical outline style, F3 recompute, F4 state CSS, v2 records + reload persistence',
   11: 'F4 cross-branch: pinned dynamic-workspaces hover card is selectable in annotation mode (SKIP without the DW branch)',
@@ -3038,6 +3038,49 @@ function buildScenarios(harness) {
       await h.ensurePluginsView()
       const baseline = await h.frame()
       assertEqual(baseline.htmlActive, null, 'mode should be off before the scenario starts')
+      // A3/T19: the launcher floats only while idle. Drag it to a known place first;
+      // it must return to that exact place after a docked mode cycle.
+      const idleLauncherStart = await h.page.findRect('[data-psa-launcher]')
+      assert(idleLauncherStart, 'idle floating launcher not found')
+      await h.page.drag(
+        { x: idleLauncherStart.x, y: idleLauncherStart.y },
+        { x: 640, y: 320 },
+        { steps: 16, appliedWhen: async () => {
+          const rect = await h.launcherRect()
+          return rect !== null && (rect.left !== idleLauncherStart.left || rect.top !== idleLauncherStart.top)
+        } }
+      )
+      await sleep(400)
+      const draggedIdleLauncher = await h.launcherRect()
+      assert(draggedIdleLauncher, 'launcher missing after the idle drag')
+      assert(
+        draggedIdleLauncher.left !== idleLauncherStart.left || draggedIdleLauncher.top !== idleLauncherStart.top,
+        'the idle launcher drag did not move the launcher'
+      )
+      const rememberedIdle = { left: draggedIdleLauncher.left, top: draggedIdleLauncher.top }
+      /**
+       * Capture one clipped evidence image (gated on PSA_LAUNCHER_EVIDENCE_DIR).
+       * @param {string} name - file name.
+       * @param {{ left: number, top: number, width: number, height: number }} rect - region.
+       * @returns {Promise<void>}
+       */
+      const captureLauncherClip = async (name, rect) => {
+        const dir = process.env.PSA_LAUNCHER_EVIDENCE_DIR
+        if (!dir || rect === null) return
+        await mkdir(dir, { recursive: true })
+        const pad = 18
+        const x = Math.max(0, Math.floor(rect.left - pad))
+        const y = Math.max(0, Math.floor(rect.top - pad))
+        const clip = {
+          x,
+          y,
+          width: Math.min(VIEWPORT.width - x, Math.ceil(rect.width + pad * 2)),
+          height: Math.min(VIEWPORT.height - y, Math.ceil(rect.height + pad * 2)),
+          scale: 1
+        }
+        const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip })
+        await writeFile(path.join(dir, name), Buffer.from(data.data, 'base64'))
+      }
       const activation = await h.activateAndVerifyStable()
       const frame = await h.frame()
       const railWidth = Number.parseFloat(frame.railWidthVar || '0')
@@ -3055,6 +3098,42 @@ function buildScenarios(harness) {
         frame.rail.x >= frame.viewport.width - railWidth - 3,
         `rail does not sit in the freed right strip (rail.x=${frame.rail.x}, viewport=${frame.viewport.width})`
       )
+      // A3/T19: while active the launcher is docked INSIDE the rail, not floating.
+      const readDockedLauncher = async () => h.page.evaluate(`(() => {
+        const launcher = document.querySelector('[data-psa-launcher]')
+        if (launcher === null) return null
+        const rail = launcher.closest('[data-psa-rail]')
+        const rect = launcher.getBoundingClientRect()
+        const railRect = rail === null ? null : rail.getBoundingClientRect()
+        return {
+          count: document.querySelectorAll('[data-psa-launcher]').length,
+          docked: launcher.getAttribute('data-psa-launcher-docked') === 'true',
+          inRail: rail !== null,
+          inLayer: launcher.closest('[data-psa-layer]') !== null,
+          ariaPressed: launcher.getAttribute('aria-pressed'),
+          rect: { left: Math.round(rect.x), top: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
+          railRect: railRect === null ? null : {
+            left: Math.round(railRect.x), top: Math.round(railRect.y),
+            width: Math.round(railRect.width), height: Math.round(railRect.height)
+          }
+        }
+      })()`)
+      const insideRail = (launcherRect, railRect) => launcherRect !== null && railRect !== null
+        && launcherRect.left >= railRect.left - 1 && launcherRect.top >= railRect.top - 1
+        && launcherRect.left + launcherRect.width <= railRect.left + railRect.width + 1
+        && launcherRect.top + launcherRect.height <= railRect.top + railRect.height + 1
+      const dockedActive = await readDockedLauncher()
+      assert(dockedActive !== null, 'no launcher control while active')
+      assertEqual(dockedActive.count, 1, 'there must be exactly one launcher control while active')
+      assertEqual(dockedActive.docked, true, 'the active launcher is not the docked rail control')
+      assertEqual(dockedActive.inRail, true, 'the active launcher is not inside the annotation rail')
+      assertEqual(dockedActive.inLayer, false, 'the launcher is still rendered in the floating layer while active')
+      assertEqual(dockedActive.ariaPressed, 'true', 'the docked launcher does not report aria-pressed=true')
+      assert(dockedActive.rect.width >= 24 && dockedActive.rect.height >= 24,
+        `docked launcher box too small: ${JSON.stringify(dockedActive.rect)}`)
+      assert(insideRail(dockedActive.rect, dockedActive.railRect),
+        `docked launcher is outside the rail bounds (docked ${JSON.stringify(dockedActive.rect)}, rail ${JSON.stringify(dockedActive.railRect)})`)
+      await captureLauncherClip('launcher-active-docked.png', dockedActive.railRect)
       // Blocked native New Session: real click must not reach the native handlers.
       const probeInfo = await h.page.eval(probes.installElementProbe, 'button[aria-label="New session"]')
       assert(probeInfo.targets > 0, 'native New Session button not found for the blocked-click probe')
@@ -3073,7 +3152,44 @@ function buildScenarios(harness) {
       const afterText = await h.mainText()
       assert(/^(Plugins|插件)/.test(afterText), `the blocked New Session click left the Plugins page: ${short(afterText, 180)}`)
       assertEqual(after.sessionId, null, 'the blocked New Session click opened a conversation')
-      return `rail ${railWidth}px, padding ${padding}px, post-activate rail stable${activation.retried ? ' (after one activation retry)' : ''}, blocked click: 0 native hits / ${preventedPointers + preventedClicks} prevented events, view stayed on Plugins`
+      // A3/T19: narrow overlay rail keeps the docked control inside the rail.
+      await h.page.setViewport(800, 700)
+      await sleep(700)
+      const narrowFrame = await h.frame()
+      assertEqual(narrowFrame.railMode, 'overlay', 'the narrow viewport did not switch the rail to overlay mode')
+      assert(narrowFrame.rail !== null, 'rail missing in the narrow overlay layout')
+      const narrowDocked = await readDockedLauncher()
+      assert(narrowDocked !== null && narrowDocked.inRail, 'docked launcher missing in the narrow overlay layout')
+      assert(insideRail(narrowDocked.rect, narrowDocked.railRect),
+        `narrow overlay docked launcher outside the rail bounds (docked ${JSON.stringify(narrowDocked.rect)}, rail ${JSON.stringify(narrowDocked.railRect)})`)
+      await captureLauncherClip('launcher-narrow-overlay-docked.png', narrowDocked.railRect)
+      await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
+      await sleep(700)
+      // Click the docked launcher: it exits the mode, and the floating launcher returns
+      // at the remembered idle position (drag persistence across a mode cycle).
+      await h.click('[data-psa-launcher-docked]')
+      await h.page.waitFor(
+        `document.documentElement.getAttribute('data-psa-active') === null`,
+        { timeout: 8000, label: 'mode off after clicking the docked launcher' }
+      )
+      await sleep(500)
+      const returnedFloating = await h.launcherRect()
+      assert(returnedFloating, 'floating launcher did not return after exiting the mode')
+      assertNear(returnedFloating.left, rememberedIdle.left, 3, 'floating launcher returned at the wrong remembered x')
+      assertNear(returnedFloating.top, rememberedIdle.top, 3, 'floating launcher returned at the wrong remembered y')
+      const returnedHit = await h.page.evaluate(`(() => {
+        const launcher = document.querySelector('[data-psa-launcher]')
+        if (launcher === null) return false
+        const rect = launcher.getBoundingClientRect()
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+        return hit === launcher || (hit !== null && launcher.contains(hit))
+      })()`)
+      assertEqual(returnedHit, true, 'the returned floating launcher is not hit-testable at its remembered position')
+      await captureLauncherClip('launcher-idle-returned.png', {
+        left: returnedFloating.left, top: returnedFloating.top,
+        width: returnedFloating.width, height: returnedFloating.height
+      })
+      return `rail ${railWidth}px, padding ${padding}px, docked launcher ${dockedActive.rect.width}x${dockedActive.rect.height} inside rail (${JSON.stringify(dockedActive.railRect)}), narrow overlay docked inside rail, exit returned floating at (${returnedFloating.left},${returnedFloating.top}) == remembered (${rememberedIdle.left},${rememberedIdle.top}), post-activate rail stable${activation.retried ? ' (after one activation retry)' : ''}, blocked click: 0 native hits / ${preventedPointers + preventedClicks} prevented events, view stayed on Plugins`
 
     },
 
@@ -3900,51 +4016,38 @@ function buildScenarios(harness) {
       const reloadedSessionId = await h.refreshSession()
       h.track(reloadedSessionId, 's8-reloaded-session')
       const viewport = await h.page.evaluate(`({ width: innerWidth, height: innerHeight })`)
-      // F5: aborting an in-flight launcher drag by leaving the mode must not toggle the mode,
-      // must not persist a position, and must leave no gesture nodes behind.
-      await h.activate()
-      const abortStart = await h.launcherRect()
-      assert(abortStart, 'launcher missing before the F5 drag-abort check')
-      const storedBefore = await h.page.evaluate(`localStorage.getItem('power-suite.ui-annotation.launcher')`)
-      await h.page.moveTo(abortStart.x, abortStart.y)
-      await h.page.mouse({ type: 'mousePressed', x: abortStart.x, y: abortStart.y, button: 'left', clickCount: 1 })
-      for (let step = 1; step <= 4; step++) {
-        await h.page.mouse({
-          type: 'mouseMoved',
-          x: abortStart.x - step * 40,
-          y: abortStart.y - step * 30,
-          button: 'left',
-          buttons: 1,
-        })
-        await sleep(25)
-      }
-      assertEqual(
-        await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-dragging') ?? null`),
-        'true',
-        'the launcher drag did not start (data-psa-dragging missing)'
-      )
-      await h.page.pressKey('escape')
-      await h.page.mouse({ type: 'mouseReleased', x: abortStart.x - 160, y: abortStart.y - 120, button: 'left', clickCount: 1 })
-      await sleep(420)
-      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), null, 'Esc during the drag must leave the mode')
-      assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-active')`), 'false', 'the aborted drag re-activated the mode')
-      assertEqual(await h.page.evaluate(`!!document.querySelector('[data-psa-box]')`), false, 'the aborted gesture left a marquee box node')
-      assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-dragging') ?? null`), null, 'the aborted gesture left data-psa-dragging set')
-      // F5's guarantee is that the aborted gesture does not *persist* the position (the
-      // in-memory position may stay where the pointer left it); the storage oracle is decisive.
-      assertEqual(
-        await h.page.evaluate(`localStorage.getItem('power-suite.ui-annotation.launcher')`),
-        storedBefore,
-        'the aborted drag persisted the launcher position'
-      )
+      /** Read the single launcher control and whether it is docked. @returns {Promise<object | null>} state. */
+      const readLauncher = async () => h.page.evaluate(`(() => {
+        const launcher = document.querySelector('[data-psa-launcher]')
+        if (launcher === null) return null
+        const rail = launcher.closest('[data-psa-rail]')
+        const layer = launcher.closest('[data-psa-layer]')
+        const rect = launcher.getBoundingClientRect()
+        const railRect = rail === null ? null : rail.getBoundingClientRect()
+        return {
+          count: document.querySelectorAll('[data-psa-launcher]').length,
+          docked: launcher.getAttribute('data-psa-launcher-docked') === 'true',
+          inRail: rail !== null,
+          inLayer: layer !== null,
+          activeAttr: launcher.getAttribute('data-psa-active'),
+          ariaPressed: launcher.getAttribute('aria-pressed'),
+          rect: { left: Math.round(rect.x), top: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
+          railRect: railRect === null ? null : {
+            left: Math.round(railRect.x), top: Math.round(railRect.y),
+            width: Math.round(railRect.width), height: Math.round(railRect.height)
+          }
+        }
+      })()`)
+      const insideRail = (launcherRect, railRect) => launcherRect !== null && railRect !== null
+        && launcherRect.left >= railRect.left - 1 && launcherRect.top >= railRect.top - 1
+        && launcherRect.left + launcherRect.width <= railRect.left + railRect.width + 1
+        && launcherRect.top + launcherRect.height <= railRect.top + railRect.height + 1
+      // ---- Idle drag: drag to a mid position, then to the bottom-right corner (clamped). ----
       const start = await h.launcherRect()
       assert(start, 'launcher missing before the drag scenario')
       assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-active')`), 'false', 'launcher must be inactive before the drag')
       const clickable = await h.ensureLauncherClickable()
       assert(clickable, `the launcher centre does not receive pointer input: ${short(JSON.stringify(await h.page.eval(probes.launcherCenterCover)))}`)
-      // Real mouse drag away from the default corner first (the default position is already
-      // bottom-right, so a corner-to-corner drag would not move anything). The retry predicate
-      // proves the launcher did not move before the gesture is repeated (N5).
       const launcherMovedFrom = (origin) => async () => {
         const rect = await h.launcherRect()
         return rect !== null && (rect.left !== origin.left || rect.top !== origin.top)
@@ -3974,7 +4077,6 @@ function buildScenarios(harness) {
           `cover=${short(JSON.stringify(await h.page.eval(probes.launcherCenterCover)))}, ` +
           `dragging=${await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-dragging') ?? null`)})`
       )
-      // Drag to the bottom-right corner; the position must be clamped with the margin.
       await h.page.drag(
         { x: moved.x, y: moved.y },
         { x: viewport.width - 5, y: viewport.height - 5 },
@@ -3989,78 +4091,79 @@ function buildScenarios(harness) {
       assert(dragged.top + dragged.height <= viewport.height - 6, 'launcher lost its 8px bottom margin after the drag')
       assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-active')`), 'false', 'dragging the launcher toggled the mode')
       assert(dragged.left !== moved.left || dragged.top !== moved.top, 'the corner drag never moved the launcher')
-      // Activate the mode; while it is active and the full viewport is available, assert that
-      // wheel-scrolling a native region does not move the fixed launcher (H6 makes a missing
-      // scrollable region a failure instead of a silently skipped sub-assertion).
+      // ---- Active: the launcher is docked in the rail; dragging it must do nothing. ----
       await h.activate()
+      const dockedBefore = await readLauncher()
+      assert(dockedBefore !== null, 'launcher missing after activation')
+      assertEqual(dockedBefore.count, 1, 'exactly one launcher control must exist while active')
+      assertEqual(dockedBefore.docked, true, 'the active launcher is not docked in the rail')
+      assertEqual(dockedBefore.inRail, true, 'the docked launcher is not inside the rail')
+      assertEqual(dockedBefore.inLayer, false, 'the launcher is still floating over content while active')
+      assertEqual(dockedBefore.ariaPressed, 'true', 'the docked launcher is not aria-pressed')
+      assert(insideRail(dockedBefore.rect, dockedBefore.railRect),
+        `docked launcher outside the rail bounds (docked ${JSON.stringify(dockedBefore.rect)}, rail ${JSON.stringify(dockedBefore.railRect)})`)
+      const storedWhileActive = await h.page.evaluate(`localStorage.getItem('power-suite.ui-annotation.launcher')`)
+      await h.page.moveTo(dockedBefore.rect.left + Math.round(dockedBefore.rect.width / 2), dockedBefore.rect.top + Math.round(dockedBefore.rect.height / 2))
+      await h.page.mouse({ type: 'mousePressed', x: dockedBefore.rect.left + 13, y: dockedBefore.rect.top + 13, button: 'left', clickCount: 1 })
+      for (let step = 1; step <= 4; step += 1) {
+        await h.page.mouse({ type: 'mouseMoved', x: dockedBefore.rect.left + 13 - step * 20, y: dockedBefore.rect.top + 13 - step * 15, button: 'left', buttons: 1 })
+        await sleep(25)
+      }
+      await h.page.mouse({ type: 'mouseReleased', x: dockedBefore.rect.left - 67, y: dockedBefore.rect.top - 47, button: 'left', clickCount: 1 })
+      await sleep(450)
+      const dockedAfterDrag = await readLauncher()
+      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), 'true', 'dragging the docked launcher exited the mode')
+      assertEqual(dockedAfterDrag.docked, true, 'the docked launcher changed state after a drag attempt')
+      assertEqual(dockedAfterDrag.rect.left, dockedBefore.rect.left, 'the docked launcher moved horizontally after a drag attempt (drag must be idle-only)')
+      assertEqual(dockedAfterDrag.rect.top, dockedBefore.rect.top, 'the docked launcher moved vertically after a drag attempt (drag must be idle-only)')
+      assertEqual(
+        await h.page.evaluate(`localStorage.getItem('power-suite.ui-annotation.launcher')`),
+        storedWhileActive,
+        'a drag attempt on the docked launcher persisted a position'
+      )
+      // ---- Wheel scrolling does not move the docked control. ----
       const scrollable = await h.page.eval(probes.installScrollProbe)
       assert(scrollable, 'no native scrollable region available for the scroll-stability assertion')
-      const beforeScroll = await h.launcherRect()
+      const scrolledBefore = await h.launcherRect()
       await h.page.wheel(scrollable.x, scrollable.y, -260)
       await sleep(320)
-      const afterScroll = await h.launcherRect()
-      assertEqual(afterScroll.left, beforeScroll.left, 'launcher moved horizontally when the page scrolled')
-      assertEqual(afterScroll.top, beforeScroll.top, 'launcher moved vertically when the page scrolled')
-      const scrollEvidence = `scroll over the ${scrollable.kind} region did not move the launcher`
-      // Then shrink the viewport: the launcher must be clamped in. The Emulation override should
-      // fire a native resize; poll the clamped geometry because the resize handler is debounced
-      // (120 ms) and geometry updates run on frames.
-      const insideSmall = async () => {
-        const rect = await h.launcherRect()
-        if (rect === null) return null
-        if (rect.left < 0 || rect.top < 0 || rect.left + rect.width > 1000 || rect.top + rect.height > 700) return null
-        return rect
-      }
-      const pollSmall = async (timeout) => {
-        const deadline = Date.now() + timeout
-        let result = await insideSmall()
-        while (result === null && Date.now() < deadline) {
-          await sleep(150)
-          result = await insideSmall()
-        }
-        return result
-      }
-      await h.page.setViewport(1000, 700)
-      let small = await pollSmall(1500)
-      let resizeEvents = await h.page.evaluate(`window.__psaResizeCount ?? -1`)
-      if (small === null && resizeEvents === 0) {
-        // Headless Chrome occasionally swallows the resize event for the Emulation override.
-        // Force a second real viewport change first; if even that delivers no native resize,
-        // dispatch a single resize event as a documented fallback so the product's resize
-        // path is still exercised (the native path is covered when the event does arrive).
-        await h.page.setViewport(1001, 701)
-        await sleep(300)
-        await h.page.setViewport(1000, 700)
-        small = await pollSmall(1500)
-        resizeEvents = await h.page.evaluate(`window.__psaResizeCount ?? -1`)
-        if (small === null && resizeEvents === 0) {
-          await h.page.evaluate(`window.dispatchEvent(new Event('resize'))`)
-          small = await pollSmall(1500)
-        }
-      }
-      const smallViewport = await h.page.evaluate(`({ width: innerWidth, height: innerHeight })`)
-      assertEqual(smallViewport.width, 1000, 'viewport width after the Emulation override')
-      assertEqual(smallViewport.height, 700, 'viewport height after the Emulation override')
-      assert(
-        small !== null,
-        `launcher not clamped into the 1000x700 viewport after retrying ` +
-          `(rect=${short(JSON.stringify(await h.launcherRect()))}, viewport=${short(JSON.stringify(smallViewport))}, ` +
-          `layout=${short(JSON.stringify(await h.frame()))}, ` +
-          `resizes=${await h.page.evaluate(`window.__psaResizeCount ?? -1`)})`
+      const scrolledAfter = await h.launcherRect()
+      assertEqual(scrolledAfter.left, scrolledBefore.left, 'docked launcher moved horizontally when the page scrolled')
+      assertEqual(scrolledAfter.top, scrolledBefore.top, 'docked launcher moved vertically when the page scrolled')
+      // ---- Narrow overlay layout keeps the docked control inside the rail. ----
+      await h.page.setViewport(800, 700)
+      await sleep(700)
+      const narrowFrame = await h.frame()
+      assertEqual(narrowFrame.railMode, 'overlay', 'the narrow viewport did not switch the rail to overlay mode')
+      const narrowDocked = await readLauncher()
+      assert(narrowDocked !== null && narrowDocked.inRail, 'docked launcher missing in the narrow overlay layout')
+      assert(insideRail(narrowDocked.rect, narrowDocked.railRect),
+        `narrow overlay docked launcher outside the rail bounds (docked ${JSON.stringify(narrowDocked.rect)}, rail ${JSON.stringify(narrowDocked.railRect)})`)
+      await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
+      await sleep(700)
+      // ---- Exit via the docked control: the floating launcher returns at the dragged corner. ----
+      await h.click('[data-psa-launcher-docked]')
+      await h.page.waitFor(
+        `document.documentElement.getAttribute('data-psa-active') === null`,
+        { timeout: 8000, label: 'mode off after clicking the docked launcher' }
       )
-      const remembered = small
-      // Reload: mode is off by default, remembered position survives.
+      await sleep(450)
+      const returned = await h.launcherRect()
+      assert(returned, 'floating launcher missing after exiting the mode')
+      assertNear(returned.left, dragged.left, 3, 'the floating launcher did not return to the dragged x')
+      assertNear(returned.top, dragged.top, 3, 'the floating launcher did not return to the dragged y')
+      // ---- Reload: mode off by default; the remembered floating position survives. ----
       await h.page.reload()
       await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after reload' })
       await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after reload' })
       await sleep(500)
       assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), null, 'annotation mode must be off by default after reload')
-      assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-active')`), 'false', 'launcher must be inactive after reload')
-      const reloaded = await h.launcherRect()
-      assert(reloaded, 'launcher missing after reload')
-      assertNear(reloaded.left, remembered.left, 2, 'remembered launcher x after reload')
-      assertNear(reloaded.top, remembered.top, 2, 'remembered launcher y after reload')
-      return `F5 aborted drag left no state; drag clamped (${dragged.left},${dragged.top}); ${scrollEvidence}; 1000x700 clamp (${small.left},${small.top}); reload keeps ${reloaded.left},${reloaded.top} with the mode off`
+      const reloadedLauncher = await readLauncher()
+      assertEqual(reloadedLauncher.docked, false, 'the launcher must float after a reload (mode off)')
+      assertEqual(reloadedLauncher.activeAttr, 'false', 'the floating launcher is marked active after reload')
+      assertNear(reloadedLauncher.rect.left, dragged.left, 2, 'remembered launcher x after reload')
+      assertNear(reloadedLauncher.rect.top, dragged.top, 2, 'remembered launcher y after reload')
+      return `idle drag clamp (${dragged.left},${dragged.top}); active docked ${dockedBefore.rect.width}x${dockedBefore.rect.height} inside rail; docked drag ignored; wheel stable; 800x700 overlay docked inside rail; exit returned floating at (${returned.left},${returned.top}) == dragged; reload kept it`
     },
 
     9: async () => {
@@ -5882,9 +5985,18 @@ async function captureScreenshots(harness) {
       assert(frame.rail !== null, `[${name}] rail missing while the mode is active`)
       assertNear(frame.rail.x + frame.rail.width, viewport.width, 2, `[${name}] rail must be right-anchored`)
       assertNear(frame.rail.x, viewport.width - railWidth, 2, `[${name}] rail must sit at viewportWidth - railWidth`)
+      // A3/T19: while active the launcher is docked INSIDE the rail (it must not float
+      // over page content and must not overlap the rail footer actions).
       const footerState = await h.page.eval(probes.railFooterState)
-      assert(!footerState.overlapsFooter, `[${name}] launcher overlaps the rail footer: ${JSON.stringify(footerState)}`)
-      assert(!footerState.overlapsRail, `[${name}] launcher overlaps the rail: ${JSON.stringify(footerState)}`)
+      assert(footerState.launcher !== null && footerState.rail !== null, `[${name}] launcher/rail missing for the docked check`)
+      assert(
+        footerState.launcher.left >= footerState.rail.left - 1
+          && footerState.launcher.top >= footerState.rail.top - 1
+          && footerState.launcher.right <= footerState.rail.right + 1
+          && footerState.launcher.bottom <= footerState.rail.bottom + 1,
+        `[${name}] active launcher is not docked inside the rail: ${JSON.stringify(footerState)}`
+      )
+      assert(!footerState.overlapsFooter, `[${name}] docked launcher overlaps the rail footer: ${JSON.stringify(footerState)}`)
     } else {
       assertNear(launcher.left + launcher.width, viewport.width - 8, 3, `[${name}] launcher must use the default bottom-right position`)
       assertNear(launcher.top + launcher.height, viewport.height - 8, 3, `[${name}] launcher must use the default bottom-right position`)

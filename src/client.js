@@ -4619,7 +4619,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-panel-empty strong{color:var(--dsw-alias-label-secondary);font-weight:500}
 .psd-item{display:flex;flex-direction:column;min-width:0}
 .psd-run{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:28px;padding:0 0 0 7px;border-radius:var(--dsw-radius-md,8px);cursor:pointer}
-.psd-run-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;padding:4px 0 4px 8px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-run-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;padding:4px 10px 4px 14px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-run:hover:not(:has(.psd-run-toggle:hover)) .psd-run-main{background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-run-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-run-spacer,.psd-child-spacer{flex:1 1 auto;min-width:0}
@@ -4638,7 +4638,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run-toggle-spacer{flex:none;width:var(--psd-chevron-col,24px)}
 .psd-children{position:relative;display:flex;flex-direction:column;gap:5px;margin:4px 0 6px 22px;padding-left:9px;border-left:1px solid var(--dsw-alias-border-l2)}
 .psd-child{position:relative;display:flex;align-items:center;gap:2px;min-width:0;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:18px;text-align:left;cursor:pointer}
-.psd-child-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:7px;padding:3px 0 3px 4px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-child-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:7px;padding:3px 8px 3px 10px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-child:hover .psd-child-main{background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-child::before{content:'';position:absolute;left:-10px;top:50%;width:14px;height:1px;background:var(--dsw-alias-border-l2);pointer-events:none}
 .psd-child:last-child::after{content:'';position:absolute;left:-10px;top:calc(50% + 1px);bottom:-1px;width:2px;background:var(--dsw-alias-bg-layer-1);pointer-events:none}
@@ -11025,27 +11025,6 @@ function dwClearNativeAtmospheres() {
     const ANNOTATION_LAUNCHER_SIZE = 44
 
     /**
-     * Clamp the launcher for the current layout. While a rail is visible the
-     * launcher must stay in the main area and never sit under the rail strip (it
-     * would cover the rail footer actions); when the mode is off the whole
-     * viewport is available again.
-     * @param {{ x: number, y: number } | null} pos - desired position.
-     * @param {{ width: number, height: number }} viewport - viewport size.
-     * @param {number} [reservedRight] - visible rail strip width, default 0.
-     * @returns {{ x: number, y: number }} clamped position.
-     */
-    function clampLauncherForLayout(pos, viewport, reservedRight) {
-      const clamped = clampLauncherPosition(pos, viewport, ANNOTATION_LAUNCHER_SIZE)
-      const reserved = typeof reservedRight === 'number' && Number.isFinite(reservedRight) && reservedRight > 0
-        ? reservedRight
-        : 0
-      if (reserved === 0) return clamped
-      const width = viewport !== null && typeof viewport === 'object' && typeof viewport.width === 'number' ? viewport.width : 0
-      const maxX = Math.max(8, Math.round(width - reserved - ANNOTATION_LAUNCHER_SIZE - 8))
-      return { x: Math.min(clamped.x, maxX), y: clamped.y }
-    }
-
-    /**
      * Resolve one event target (or node) to an Element.
      * @param {unknown} target - event target or node.
      * @returns {Element | null} the element, when available.
@@ -12127,8 +12106,9 @@ function dwClearNativeAtmospheres() {
       const elementTokens = new WeakMap()
       /** Chain and index of the last picked selection, for level up/down. */
       let lastPick = null
-      /**
-       * Live element identity per selected ref id (A3/T18 leaf-first): the picked
+      /** Idle floating-launcher position captured when the mode activates (A3/T19). */
+      let idleLauncherPosition = null
+      /** Live element identity per selected ref id (A3/T18 leaf-first): the picked
        * chain element itself, so a selected span/svg row and its Parent/Child walk
        * paint their real rects even when an arbitrary ancestor's locator is weak
        * and re-resolution could land on a same-tag lookalike.
@@ -13212,7 +13192,12 @@ function dwClearNativeAtmospheres() {
           if (frame.style.getPropertyValue('--psa-rail-width') !== railProperty) frame.style.setProperty('--psa-rail-width', railProperty)
           observeFrame(frame)
         }
-        const launcherPosition = clampLauncherForLayout(current.launcherPosition, size, isActive() ? railWidth : 0)
+        // The floating launcher only exists while idle; the active mode shows the
+        // docked copy inside the rail, so the idle position is left untouched (and
+        // persisted only by idle drags).
+        const launcherPosition = isActive()
+          ? current.launcherPosition
+          : clampLauncherPosition(current.launcherPosition, size, ANNOTATION_LAUNCHER_SIZE)
         const patch = { railWidth, layoutMode: mode, launcherPosition }
         if (current.state.phase === 'selected' && current.selectionRects.length > 0 && current.popoverPosition !== null) {
           if (current.popoverPinned) {
@@ -13623,10 +13608,12 @@ function dwClearNativeAtmospheres() {
         resizeTimer = window.setTimeout(() => {
           resizeTimer = null
           const current = snapshot()
-          const launcherPosition = clampLauncherForLayout(current.launcherPosition, annotationViewport(), isActive() ? current.railWidth : 0)
-          if (launcherPosition.x !== current.launcherPosition.x || launcherPosition.y !== current.launcherPosition.y) {
-            publish({ launcherPosition })
-            persistLauncherPosition(launcherPosition)
+          if (!isActive()) {
+            const launcherPosition = clampLauncherPosition(current.launcherPosition, annotationViewport(), ANNOTATION_LAUNCHER_SIZE)
+            if (launcherPosition.x !== current.launcherPosition.x || launcherPosition.y !== current.launcherPosition.y) {
+              publish({ launcherPosition })
+              persistLauncherPosition(launcherPosition)
+            }
           }
           if (!isActive()) return
           updateLayout()
@@ -13925,6 +13912,7 @@ function dwClearNativeAtmospheres() {
        */
       function activate() {
         if (isActive()) return
+        idleLauncherPosition = snapshot().launcherPosition
         document.documentElement.setAttribute('data-psa-active', 'true')
         try {
           installPageListeners()
@@ -14003,13 +13991,15 @@ function dwClearNativeAtmospheres() {
             // A throwing subscriber must not keep page markers alive.
           }
           try {
+            const restoreLauncher = idleLauncherPosition ?? snapshot().launcherPosition
+            idleLauncherPosition = null
             publish({
               boxRect: null,
               popoverPosition: null,
               popoverPinned: false,
               hoverRect: null,
               noteEditor: null,
-              launcherPosition: clampLauncherPosition(snapshot().launcherPosition, annotationViewport(), ANNOTATION_LAUNCHER_SIZE)
+              launcherPosition: clampLauncherPosition(restoreLauncher, annotationViewport(), ANNOTATION_LAUNCHER_SIZE)
             })
             dispatch({ type: 'feedback', feedback: null })
           } catch {
@@ -14045,10 +14035,10 @@ function dwClearNativeAtmospheres() {
           moved = true
           publish({ launcherDragging: true })
           publish({
-            launcherPosition: clampLauncherForLayout(
+            launcherPosition: clampLauncherPosition(
               { x: start.x + dx, y: start.y + dy },
               annotationViewport(),
-              isActive() ? snapshot().railWidth : 0
+              ANNOTATION_LAUNCHER_SIZE
             )
           })
         }
@@ -14939,6 +14929,10 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-launcher[data-psa-dragging=true]{cursor:grabbing}
 .psa-launcher:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px}
 .psa-launcher-icon{display:block}
+.psa-launcher-docked{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:none;box-sizing:border-box;width:26px;height:26px;padding:0;border:1px solid var(--dsw-alias-state-business-primary);border-radius:50%;background:transparent;color:var(--dsw-alias-state-business-primary);cursor:pointer}
+.psa-launcher-docked:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.psa-launcher-docked:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px}
+.psa-launcher-docked .psa-launcher-count{top:-5px;right:-5px}
 .psa-launcher-count{position:absolute;top:-4px;right:-4px;box-sizing:border-box;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));font-size:10.5px;line-height:15px;text-align:center;font-variant-numeric:tabular-nums}
 .psa-layer{position:fixed;inset:0;pointer-events:none;z-index:39}
 .psa-hover{position:fixed;box-sizing:border-box;border:1px dashed var(--dsw-alias-state-business-primary);border-radius:3px}
@@ -15160,7 +15154,12 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       const state = snapshot.state
       const active = state.phase !== 'off'
       const node = []
-      node.push(React.createElement(AnnotationLauncher, { key: 'launcher', t, controller, snapshot }))
+      // A3/T19: exactly one launcher control at any time. While active it lives
+      // docked inside the rail (rendered by AnnotationRail); while idle it floats at
+      // its remembered position over the page.
+      if (!active) {
+        node.push(React.createElement(AnnotationLauncher, { key: 'launcher', t, controller, snapshot }))
+      }
       if (active) {
         node.push(React.createElement(AnnotationHighlights, { key: 'layer', snapshot, t }))
         node.push(React.createElement(AnnotationRail, { key: 'rail', t, controller, snapshot }))
@@ -15233,6 +15232,35 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         }
       },
       RemixGlyph(REMIX_FOCUS_3_LINE, 20, 'psa-launcher-icon'),
+      count > 0
+        ? React.createElement('span', { className: 'psa-launcher-count', 'data-psa-own': '' }, String(count))
+        : null)
+    }
+
+    /**
+     * The same round launcher control, docked inside the right rail while the mode
+     * is active (A3/T19): it never floats over page content, keeps the glyph and
+     * the collection count badge, reports `aria-pressed="true"`, and clicking it
+     * exits the mode exactly like the floating launcher.
+     * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
+     * @returns {object} the docked launcher button.
+     */
+    function AnnotationDockedLauncher(props) {
+      const { t, controller, snapshot } = props
+      const count = snapshot.state.collection.length
+      return React.createElement('button', {
+        type: 'button',
+        className: 'psa-launcher-docked',
+        'data-psa-launcher': '',
+        'data-psa-launcher-docked': 'true',
+        'data-psa-own': '',
+        'data-psa-active': 'true',
+        'aria-pressed': 'true',
+        'aria-label': t('launcher.exit'),
+        title: t('launcher.exit'),
+        onClick: () => controller.deactivate()
+      },
+      RemixGlyph(REMIX_FOCUS_3_LINE, 15, 'psa-launcher-icon'),
       count > 0
         ? React.createElement('span', { className: 'psa-launcher-count', 'data-psa-own': '' }, String(count))
         : null)
@@ -15378,6 +15406,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         },
         React.createElement('div', { className: 'psa-rail-header' },
           collapseButton,
+          AnnotationDockedLauncher({ t, controller, snapshot }),
           count > 0
             ? React.createElement('button', {
               type: 'button',
@@ -15407,6 +15436,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       React.createElement('div', { className: 'psa-rail-header' },
         React.createElement('span', { className: 'psa-dot', 'aria-hidden': true }),
         React.createElement('span', { className: 'psa-rail-title', title }, title),
+        AnnotationDockedLauncher({ t, controller, snapshot }),
         collapseButton,
         exitButton),
       React.createElement('div', { className: 'psa-rail-body', 'data-psa-rail-panel': state.view, 'data-psa-own': '' },
