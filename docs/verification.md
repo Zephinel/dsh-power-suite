@@ -22,15 +22,15 @@ npm run pack:check
 
 Current evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round):
 
-- `npm test`: **225 tests, 225 passed, 0 failed, 0 skipped** after the 0.3.0
+- `npm test`: **226 tests, 226 passed, 0 failed, 0 skipped** after the 0.3.0
   Project-view removal (the 24 project-view tests were deleted with the page),
   including **14** read-acks, **22** session-activity Host tests, **7** extra
   interrupted-session tests (error/max-tokens/aborted-cause cases and SSE stream
-  frames), **11** Dynamic-Workspaces hover-card figure tests, and **115**
+  frames), **11** Dynamic-Workspaces hover-card figure tests, and **116**
   UI-element-annotation tests through the browser-factory test seam; per-file:
   dynamic-workspaces-stats 11, interrupted-host 20, interrupted-sessions 7,
   prompt-history 6, read-acks 14, session-activity 22, session-artifacts 16,
-  settings 6, ui-annotation 115, workspace-presets 8.
+  settings 6, ui-annotation 116, workspace-presets 8.
 - `npm run check`: passed (`16 modules, 10 test files`).
 - Interrupted-state SSE transport was verified with cookie auth: 200,
   `content-type: text/event-stream; charset=utf-8`, no-store/no-buffering, first
@@ -213,13 +213,30 @@ API/plugin network failures in every run below):
   >= 8 px inside the pill's right edge, pill content-paced, mask boundary
   recalculated), and both cross-branch annotation-mode hover-card pin states.
 - Annotation harness `test/browser/annotation.e2e.mjs`: `--smoke` **6/6 PASS**
-  with the **108-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
+  with the **109-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
   FAIL 0** (including `10b`, the real pinned-cross-branch-card check),
   scenario 11 **PASS 7 / 0 / 0**, scenario 12 **PASS 7 / 0 / 0** (marks, detail
   card, requirement edit with `updatedAt`, delete → 5 s undo, popover layout:
   delete in the Requirement caption row (marked state only), footer exactly two
   primary buttons on one non-wrapping row, caption→textarea gap 9 px, rainbow
   ring exact on all edges),
+  A comprehensive reference-first review then re-ran every annotation scenario
+  individually and found two product honesty gaps plus one test bug: (a) a truly
+  unmounted weak-identity element (stale `uniqueVerified` selector, generic path
+  candidate matching a same-tag look-alike, constant empty-text digest) still
+  reported Resolved and could draw no mark; (b) a removed floating/ephemeral
+  target reported Changed after reload instead of Missing; (c) S14's persistence
+  test exited the mode (which clears records by spec) before asserting restore.
+  Fixed reference-aligned: the verified selector must still resolve to a single
+  connected/visible element (`identityStillStrong`), structural hits get a
+  Hypothesis-style `maybeAssertQuote` assertion plus captured-ancestor
+  corroboration, weak identity without a quote is Missing (no mark/copy on a
+  look-alike); floating/ephemeral surface gone ⇒ Missing (never
+  Changed/Resolved); S14 reloads without a confirmed exit. Scenario 6/10/14 are
+  now green and the reference-alignment subset (matchQuote recall bounds/hint
+  fading, role+name composite candidate, selector length penalty, docs
+  corrections) landed; delta re-review **PASS-WITH-NITS** with no required
+  changes.
   scenario 12 additionally proves captured-scope authority: with a live recorded
   scope and dead CSS, a unique in-scope target resolves via text anchor despite
   an out-of-scope duplicate row (the user's Workspaces vs Running & recent
@@ -403,7 +420,7 @@ batch removed-member serialization are unit-tested only.
 > [0.3.0 polish round acceptance](#030-polish-round-acceptance-2026-11-13-merged-build)
 > above**; the annotation model has since grown to the v2 record/persistence,
 > floating-surface, marks/detail and composer-chip implementation with the
-> 108-key seam generation.
+> 109-key seam generation.
 
 Date: 2026-11-12 (round-2 fix build, `fix/ui-annotation-review-fixes`). The
 feature is browser-only ([ui-annotation.md](ui-annotation.md)), so its acceptance

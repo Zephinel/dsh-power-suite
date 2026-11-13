@@ -1090,7 +1090,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 / 97 anchor / 100 review / 106 descendant / 107 scan-probe / 108 scope-authority)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 / 97 anchor / 100 review / 106 descendant / 107 scan / 108 scope / 109 reference-conformance)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1102,7 +1102,7 @@ async function runSmoke({ page, results, state }) {
     // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
     // rail selection and chip-ref serialization helpers (66). Pin a documented count and
     // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97, 100, 106, 107, 108]
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97, 100, 106, 107, 108, 109]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1198,6 +1198,9 @@ async function runSmoke({ page, results, state }) {
     }
     if (keyCount === 108) {
       assert(probe.keys.includes('annotationScopeAuthorityOutcome'), 'task-42 seam must expose annotationScopeAuthorityOutcome')
+    }
+    if (keyCount === 109) {
+      assert(probe.keys.includes('annotationEphemeralOutcome'), 'task-47 seam must expose annotationEphemeralOutcome')
     }
     state.hooks = probe.keys
     return `uiAnnotation seam: ${keyCount} keys`
@@ -4254,7 +4257,14 @@ function buildScenarios(harness) {
         assert(entry.name.length > 0, `S6 collection entry name must not be empty (ref ${entry.ref})`)
       }
       await h.clickBack()
-      await h.ensureModeOff()
+      // A3/T47 (R3-adjacent): exiting would clear records by spec; reload instead so
+      // the persisted collection survives the blank-session switch (S10 D1 pattern).
+      await h.page.reload()
+      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after the S6 persistence reload' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the S6 persistence reload' })
+      await sleep(700)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
       const blankB = await h.createBlankSessionViaHover()
       const sessionB = blankB.sessionId
       assert(sessionB !== null && sessionB !== sessionA, `the second blank session must differ from the first (${sessionA} -> ${sessionB})`)
@@ -6188,7 +6198,7 @@ function buildScenarios(harness) {
         document.getElementById('psa-duplicate-fixture')?.remove()
         const fixture = document.createElement('div')
         fixture.id = 'psa-duplicate-fixture'
-        fixture.style.cssText = 'position:fixed;left:360px;top:340px;width:360px;padding:10px;z-index:400;background:rgb(44,46,52);color:rgb(235,238,245);border-radius:8px'
+        fixture.style.cssText = 'position:relative;z-index:auto;display:block;margin:12px 0;width:360px;padding:10px;background:rgb(44,46,52);color:rgb(235,238,245);border-radius:8px'
         const makeRow = (tag) => {
           const row = document.createElement('div')
           row.className = 'row ' + tag
@@ -6202,7 +6212,15 @@ function buildScenarios(harness) {
         const first = makeRow('first')
         const second = makeRow('second')
         fixture.append(first, second)
-        document.body.append(fixture)
+        // A3/T47: keep the fixture in NORMAL FLOW so it is not classified as a
+        // transient floating surface (the duplicate-label record needs page identity).
+        const host = document.createElement('div')
+        host.style.cssText = 'position:relative;z-index:auto;display:block;margin:8px 0'
+        host.setAttribute('data-psa-duplicate-host', '')
+        host.append(fixture)
+        const chat = document.querySelector('[data-conversation-region="chat"]') || document.querySelector('[data-slot="main"]') || document.body
+        chat.append(host)
+        if (typeof fixture.scrollIntoView === 'function') fixture.scrollIntoView({ block: 'center' })
         return true
       })()`)
       const duplicateButtons = await h.page.evaluate(`[...document.querySelectorAll('#psa-duplicate-fixture button')].map((button) => { const rect = button.getBoundingClientRect(); return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) } })`)
@@ -6299,20 +6317,9 @@ function buildScenarios(harness) {
         return entry === null ? null : { status: entry.getAttribute('data-psa-status'), text: entry.innerText }
       })()`)
       assert(iconEntryStatus !== null, 'icon-only record row missing')
-      assert(iconEntryStatus.status !== 'resolved', `A3/T36: icon-only replacement must not be Resolved via XPath: ${JSON.stringify(iconEntryStatus)}`)
-      const weakLabel = await h.page.evaluate(`(() => {
-        const entry = document.querySelector('[data-psa-entry][data-psa-ref="${iconRecord.id}"]')
-        if (entry === null) return null
-        const dot = entry.querySelector('.psa-status-dot')
-        return {
-          confidence: entry.getAttribute('data-psa-confidence'),
-          label: dot?.getAttribute('aria-label') ?? '',
-          title: dot?.getAttribute('title') ?? ''
-        }
-      })()`)
-      assert(weakLabel !== null, 'weak-identity label probe missing')
-      assertEqual(weakLabel.confidence, 'weak', `A3/T38: weak identity must expose confidence=weak: ${JSON.stringify(weakLabel)}`)
-      assert(/Unverifiable|无法验证/.test(weakLabel.label + weakLabel.title), `A3/T38: weak identity wording missing: ${JSON.stringify(weakLabel)}`)
+      // A3/T47 (R1): a truly removed weak-identity target is Missing (reference: no
+      // same-tag look-alike promotion), not a weak Changed/strong Resolved.
+      assertEqual(iconEntryStatus.status, 'missing', `A3/T47: icon-only replacement must be Missing: ${JSON.stringify(iconEntryStatus)}`)
       const iconMarks = await h.page.eval(probes.marksState)
       assertEqual(iconMarks.find((mark) => mark.id === iconRecord.id) ?? null, null, 'A3/T36: no mark may be drawn on the replacement icon-only button')
       await h.clickBack()
@@ -7228,7 +7235,8 @@ function buildScenarios(harness) {
       assert(typeof persistentMarkId === 'string', 'the persistent mark was not recorded')
 
       // Reload: the synthetic element disappears with the page, the real one stays.
-      await h.exit()
+      // A3/T47 (R3): reload WITHOUT a confirmed exit — the documented clear-on-exit
+      // contract clears records on exit, so persistence tests must not call h.exit().
       await h.page.eval(probes.removeSyntheticTarget)
       await h.page.reload()
       await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after the persistence-marks reload' })
