@@ -1090,7 +1090,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 / 97 anchor / 100 review fixes)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 / 97 anchor / 100 review / 106 descendant / 107 scan-probe)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1102,7 +1102,7 @@ async function runSmoke({ page, results, state }) {
     // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
     // rail selection and chip-ref serialization helpers (66). Pin a documented count and
     // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97, 100]
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97, 100, 106, 107]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1187,6 +1187,14 @@ async function runSmoke({ page, results, state }) {
       for (const key of ['annotationHasStrongIdentity', 'annotationStructuralFallbackStatus', 'annotationCopyAnchorDecision']) {
         assert(probe.keys.includes(key), `task-36 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
       }
+    }
+    if (keyCount === 106) {
+      for (const key of ['annotationRenderedTextRepeatCount', 'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey']) {
+        assert(probe.keys.includes(key), `task-38 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
+      }
+    }
+    if (keyCount === 107) {
+      assert(probe.keys.includes('debugFallbackScanProbe'), 'task-38 seam must expose debugFallbackScanProbe')
     }
     state.hooks = probe.keys
     return `uiAnnotation seam: ${keyCount} keys`
@@ -5572,7 +5580,10 @@ function buildScenarios(harness) {
         }
         throw new Error(`D1: the page record did not re-resolve after reload (statuses ${short(JSON.stringify(statuses))}) | diagnostics=${short(JSON.stringify(sessionDiagnostics), 800)}`)
       }
-      assert(statuses.includes('missing'), `D1: the removed floating target is not reported missing after reload (statuses ${short(JSON.stringify(statuses))})`)
+      // R2 (task-40 review): a removed hover card must be honestly Missing; the
+    // earlier relaxation to missing||changed was a test-only workaround for the
+    // wrong (fixed-position) S12 fixture and is not an acceptable product contract.
+    assert(statuses.includes('missing'), `D1: the removed floating target is not reported missing after reload (statuses ${short(JSON.stringify(statuses))})`)
       await h.clickBack()
       await sleep(200)
 
@@ -6285,6 +6296,19 @@ function buildScenarios(harness) {
       })()`)
       assert(iconEntryStatus !== null, 'icon-only record row missing')
       assert(iconEntryStatus.status !== 'resolved', `A3/T36: icon-only replacement must not be Resolved via XPath: ${JSON.stringify(iconEntryStatus)}`)
+      const weakLabel = await h.page.evaluate(`(() => {
+        const entry = document.querySelector('[data-psa-entry][data-psa-ref="${iconRecord.id}"]')
+        if (entry === null) return null
+        const dot = entry.querySelector('.psa-status-dot')
+        return {
+          confidence: entry.getAttribute('data-psa-confidence'),
+          label: dot?.getAttribute('aria-label') ?? '',
+          title: dot?.getAttribute('title') ?? ''
+        }
+      })()`)
+      assert(weakLabel !== null, 'weak-identity label probe missing')
+      assertEqual(weakLabel.confidence, 'weak', `A3/T38: weak identity must expose confidence=weak: ${JSON.stringify(weakLabel)}`)
+      assert(/Unverifiable|无法验证/.test(weakLabel.label + weakLabel.title), `A3/T38: weak identity wording missing: ${JSON.stringify(weakLabel)}`)
       const iconMarks = await h.page.eval(probes.marksState)
       assertEqual(iconMarks.find((mark) => mark.id === iconRecord.id) ?? null, null, 'A3/T36: no mark may be drawn on the replacement icon-only button')
       await h.clickBack()
@@ -6361,6 +6385,222 @@ function buildScenarios(harness) {
       await h.clickBack()
       await sleep(150)
       await h.page.evaluate(`document.querySelectorAll('[data-psa-dup-fixture]').forEach((node) => node.remove())`)
+      // ---- A3/T38: non-leaf descendant anchors + decoy ambiguity + scan cache probe ----
+      // Reworked for review R1: the target must be NORMAL FLOW (fixed+z-index gets
+      // classified as a floating surface, which deliberately has no descendant
+      // anchors) and the signature attribute must not itself be a CSS candidate.
+      const descFixture = await h.page.evaluate(`(() => {
+        window.__psaT40 = window.__psaT40 || {}
+        const cleanup = () => {
+          window.__psaT40.host?.remove()
+          window.__psaT40.host2?.remove()
+          window.__psaT40.decoyHost?.remove()
+          window.__psaT40.card?.remove()
+          window.__psaT40.decoy?.remove()
+        }
+        cleanup()
+        const makeCard = () => {
+          const card = document.createElement('div')
+          card.style.cssText = 'position:relative;z-index:auto;display:block;margin:12px;padding:10px;width:240px;box-sizing:border-box;background:rgb(40,42,48);color:rgb(235,238,245);border-radius:8px'
+          // A signature attribute that is NOT a selector candidate (aria-expanded).
+          card.setAttribute('aria-expanded', 'true')
+          const leaf = document.createElement('span')
+          leaf.textContent = 'Descendant card text UNIQUE-T38'
+          leaf.style.cssText = 'font-size:12px'
+          card.append(leaf)
+          return card
+        }
+        const hosts = [
+          document.querySelector('[data-conversation-region="chat"]'),
+          document.querySelector('[data-slot="main"]'),
+          document.body
+        ]
+        // Throwaway plain host appended as the LAST child of the scroller: removing
+        // it later makes the captured nth-based unique selector out of range.
+        const host = document.createElement('div')
+        host.style.cssText = 'position:relative;z-index:auto;display:block;margin:8px 0'
+        const card = makeCard()
+        for (const target of hosts) {
+          if (target === null || target === undefined) continue
+          host.append(card)
+          target.append(host)
+          if (typeof card.scrollIntoView === 'function') card.scrollIntoView({ block: 'center' })
+          const leaf = card.querySelector('span')
+          const rect = leaf.getBoundingClientRect()
+          const hit = document.elementFromPoint(Math.round(rect.left + rect.width / 2), Math.round(rect.top + rect.height / 2))
+          if (hit !== null && (hit === leaf || card.contains(hit))) {
+            window.__psaT40.host = host
+            window.__psaT40.card = card
+            const cardRect = card.getBoundingClientRect()
+            return {
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2),
+              position: getComputedStyle(card).position,
+              zIndex: getComputedStyle(card).zIndex,
+              host: host.getAttribute?.('data-conversation-region') || host.tagName,
+              cardRect: { left: Math.round(cardRect.left), top: Math.round(cardRect.top), width: Math.round(cardRect.width), height: Math.round(cardRect.height) }
+            }
+          }
+          host.remove()
+        }
+        host.remove()
+        return null
+      })()`)
+      assert(descFixture, 'A3/T38: could not place the normal-flow descendant fixture')
+      assertEqual(descFixture.position, 'relative', `A3/T38: descendant fixture must be normal flow: ${JSON.stringify(descFixture)}`)
+      assert(descFixture.zIndex === 'auto', `A3/T38: descendant fixture must not be a floating surface: ${JSON.stringify(descFixture)}`)
+      await h.page.moveTo(descFixture.x, descFixture.y)
+      await sleep(150)
+      await h.page.clickAt(descFixture.x, descFixture.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the descendant card leaf' })
+      await sleep(200)
+      // Deterministic non-leaf selection: one Parent step from the text leaf.
+      await h.click('[data-psa-level-up]')
+      await sleep(250)
+      await h.click('[data-psa-add]')
+      await sleep(450)
+      const descRecord = await h.page.evaluate(`(() => {
+        const doc = JSON.parse(localStorage.getItem('power-suite.ui-annotation.annotations') || '{}')
+        const record = (doc.records ?? []).find((item) => item.locator?.anchorTarget === 'descendant' && String(item.locator?.textQuote?.exact ?? '').includes('Descendant card text'))
+        if (record === undefined) return { missing: true, all: (doc.records ?? []).map((item) => ({ name: item.locator?.name, surface: item.locator?.surface, target: item.locator?.anchorTarget, quote: item.locator?.textQuote?.exact ?? null, text: item.text })) }
+        return {
+          id: record.id,
+          surface: record.locator.surface,
+          anchorTarget: record.locator.anchorTarget,
+          leafTag: record.locator.anchorLeafTag,
+          chain: record.locator.anchorAncestorChain,
+          signature: record.locator.anchorSignature,
+          quote: record.locator.textQuote,
+          uniqueSelector: record.locator.uniqueSelector ?? null,
+          uniqueVerified: record.locator.uniqueVerified === true,
+          candidates: (record.locator.candidates ?? []).map((candidate) => candidate.value)
+        }
+      })()`)
+      assert(descRecord && descRecord.missing !== true, `A3/T38: the non-leaf card did not capture a descendant anchor: ${JSON.stringify(descRecord)}`)
+      assertEqual(descRecord.surface, 'page', `A3/T38: descendant fixture must be a page record (not a floating surface): ${JSON.stringify(descRecord)}`)
+      assertEqual(descRecord.anchorTarget, 'descendant')
+      assertEqual(descRecord.leafTag, 'span')
+      assert(Array.isArray(descRecord.chain) && descRecord.chain.includes('div'), `A3/T38: descendant ancestor chain missing the card tag: ${JSON.stringify(descRecord.chain)}`)
+      assert(descRecord.quote !== null && String(descRecord.quote.exact).includes('Descendant card text'), `A3/T38: descendant quote missing: ${JSON.stringify(descRecord.quote)}`)
+      assert(JSON.stringify(descRecord.signature).includes('aria-expanded'), `A3/T38: descendant signature lost aria-expanded: ${JSON.stringify(descRecord.signature)}`)
+      // R1b: rebuild the card at a different normal-flow position with the same
+      // signature/text but NO stable CSS candidate. The old CSS candidates must all
+      // die; the descendant text quote must be the resolution path.
+      const rebuilt = await h.page.evaluate(`(() => {
+        window.__psaT40.host?.remove()
+        const host = document.createElement('div')
+        host.style.cssText = 'position:relative;z-index:auto;display:block;margin:18px 0'
+        const card = document.createElement('div')
+        card.style.cssText = 'position:relative;z-index:auto;display:block;margin:18px;padding:10px;width:250px;box-sizing:border-box;background:rgb(40,42,48);color:rgb(235,238,245);border-radius:8px'
+        card.setAttribute('aria-expanded', 'true')
+        const leaf = document.createElement('span')
+        leaf.textContent = 'Descendant card text UNIQUE-T38'
+        leaf.style.cssText = 'font-size:12px'
+        card.append(leaf)
+        host.append(card)
+        // Rebuild OUTSIDE the chat scroller so the captured chat nth-selector is out
+        // of range (0 hits) and every captured CSS candidate is genuinely dead.
+        const target = document.querySelector('[data-slot="main"]') || document.body
+        target.append(host)
+        window.__psaT40.host2 = host
+        window.__psaT40.card = card
+        const rect = card.getBoundingClientRect()
+        return { position: getComputedStyle(card).position, zIndex: getComputedStyle(card).zIndex, rect: { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) } }
+      })()`)
+      assertEqual(rebuilt.position, 'relative')
+      assertEqual(rebuilt.zIndex, 'auto')
+      // The old card node is gone, so every captured CSS candidate is dead.
+      const survivingCss = await h.page.evaluate(`(() => {
+        const doc = JSON.parse(localStorage.getItem('power-suite.ui-annotation.annotations') || '{}')
+        const record = (doc.records ?? []).find((item) => item.id === ${JSON.stringify(descRecord.id)})
+        if (!record) return null
+        const rows = (record.locator?.candidates ?? []).map((candidate) => {
+          try { return { kind: candidate.kind, value: candidate.value, hits: document.querySelectorAll(candidate.value).length } } catch { return { kind: candidate.kind, value: candidate.value, hits: -1 } }
+        })
+        const selector = record.locator?.uniqueSelector
+        if (typeof selector === 'string' && selector.length > 0) {
+          try { rows.push({ kind: 'uniqueSelector', value: selector, hits: document.querySelectorAll(selector).length }) } catch { rows.push({ kind: 'uniqueSelector', value: selector, hits: -1 }) }
+        }
+        return rows
+      })()`)
+      assert(survivingCss !== null, 'descendant CSS-candidate probe failed')
+      assert((survivingCss.find((candidate) => candidate.hits === 1) ?? null) === null, `A3/T38: a stable CSS candidate survived the rewrap; the fixture must break CSS: ${JSON.stringify(survivingCss)}`)
+      await h.page.moveTo(800, 200)
+      await sleep(250)
+      await h.openCollection()
+      await sleep(350)
+      const descEntry = await h.page.evaluate(`(() => {
+        const entry = document.querySelector('[data-psa-entry][data-psa-ref="${descRecord.id}"]')
+        return entry === null ? null : { status: entry.getAttribute('data-psa-status'), confidence: entry.getAttribute('data-psa-confidence') }
+      })()`)
+      assert(descEntry !== null, 'descendant-anchor record row missing')
+      assertEqual(descEntry.status, 'resolved', `A3/T38: descendant anchor did not resolve the correct ancestor: ${JSON.stringify(descEntry)}`)
+      // R1b evidence: the resolution path is the descendant text quote, not CSS.
+      await h.page.evaluate(`(() => { const row = document.querySelector('[data-psa-entry][data-psa-ref="${descRecord.id}"]'); row?.querySelector('[data-psa-entry-preview]')?.click(); return true })()`)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-detail]')`, { timeout: 8000, label: 'descendant detail card' })
+      await sleep(250)
+      const descStatusText = await h.page.evaluate(`document.querySelector('[data-psa-detail-status]')?.innerText ?? ''`)
+      assert(/text anchor|文本锚点|text position|文本位置/.test(descStatusText), `A3/T38: descendant resolution did not report a text via: ${short(descStatusText)}`)
+      await h.click('[data-psa-detail-close]')
+      await sleep(150)
+      await h.clickBack()
+      await sleep(200)
+      // ④ scan/cache probe (deterministic test hook): the first resolution may scan,
+      // the second on the same DOM revision must add 0 scans; a host mutation must
+      // force re-resolution.
+      const scanProbe = () => h.page.evaluate(`window.__POWER_SUITE_TEST_HOOKS__.uiAnnotation.debugFallbackScanProbe()`)
+      const warmProbe = await scanProbe()
+      assert(warmProbe.ok === true, `A3/T38: scan probe unavailable: ${JSON.stringify(warmProbe)}`)
+      assertEqual(warmProbe.secondDelta, 0, `A3/T38: repeated status resolution rescanned the DOM (${JSON.stringify(warmProbe)})`)
+      assertEqual(warmProbe.resolutionSecondDelta, 0, `A3/T38: repeated status read bypassed the cache (${JSON.stringify(warmProbe)})`)
+      await h.page.evaluate(`(() => { const noise = document.createElement('div'); noise.id = 'psa-scan-noise'; noise.style.cssText = 'position:relative;width:4px;height:4px'; document.body.append(noise); return true })()`)
+      await sleep(200)
+      const mutatedProbe = await scanProbe()
+      assert(mutatedProbe.ok === true && mutatedProbe.resolutionFirstDelta > 0, `A3/T38: page mutation did not trigger re-resolution (${JSON.stringify(mutatedProbe)})`)
+      assertEqual(mutatedProbe.secondDelta, 0, `A3/T38: post-mutation fallback cache reuse failed (${JSON.stringify(mutatedProbe)})`)
+      assertEqual(mutatedProbe.resolutionSecondDelta, 0, `A3/T38: post-mutation resolution cache reuse failed (${JSON.stringify(mutatedProbe)})`)
+      await h.page.evaluate(`document.getElementById('psa-scan-noise')?.remove()`)
+      // Decoy: same text + same signature, normal flow → Matches several, no mark.
+      await h.page.evaluate(`(() => {
+        const card = document.createElement('div')
+        card.style.cssText = 'position:relative;z-index:auto;display:block;margin:18px;padding:10px;width:250px;box-sizing:border-box;background:rgb(40,42,48);color:rgb(235,238,245);border-radius:8px'
+        card.setAttribute('aria-expanded', 'true')
+        const leaf = document.createElement('span')
+        leaf.textContent = 'Descendant card text UNIQUE-T38'
+        leaf.style.cssText = 'font-size:12px'
+        card.append(leaf)
+        const host = document.createElement('div')
+        host.style.cssText = 'position:relative;z-index:auto;display:block;margin:18px 0'
+        host.append(card)
+        const target = document.querySelector('[data-slot="main"]') || document.body
+        target.append(host)
+        window.__psaT40.decoyHost = host
+        window.__psaT40.decoy = card
+        return true
+      })()`)
+      await sleep(400)
+      await h.page.moveTo(800, 200)
+      await sleep(250)
+      await h.click('[data-psa-open-settings]')
+      await sleep(200)
+      await h.click('[data-psa-rail-back]')
+      await sleep(300)
+      const decoyEntry = await h.page.evaluate(`(() => {
+        const entry = document.querySelector('[data-psa-entry][data-psa-ref="${descRecord.id}"]')
+        return entry === null ? null : { status: entry.getAttribute('data-psa-status') }
+      })()`)
+      assert(decoyEntry !== null, 'decoy descendant row missing')
+      assertEqual(decoyEntry.status, 'ambiguous', `A3/T38: same-text decoy must report Matches several: ${JSON.stringify(decoyEntry)}`)
+      let decoyMark = 'pending'
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        await h.page.moveTo(800, 200)
+        await sleep(100)
+        const marks = await h.page.eval(probes.marksState)
+        decoyMark = marks.find((mark) => mark.id === descRecord.id) ?? null
+        if (decoyMark === null) break
+      }
+      assertEqual(decoyMark, null, 'A3/T38: ambiguous descendant anchor must not draw a mark')
+      await h.page.evaluate(`(() => { window.__psaT40.host?.remove(); window.__psaT40.host2?.remove(); window.__psaT40.decoyHost?.remove(); window.__psaT40.card?.remove(); window.__psaT40.decoy?.remove(); return true })()`)
       await h.ensureStatusPanel()
       await h.exit()
       return `2 marks (#index + requirement excerpt), popover trash in the Requirement caption row + two-button one-row footer (gap ${markedLayout && markedLayout.gap}px), popover delete -> undo toast -> restored, hover detail card (requirement/session/workspace/position/actions, keep-open, no focus steal), edit saved (updatedAt bumped), delete -> role=status undo toast -> restored, other-Session record not drawn after reload, reduced-motion static, native hover-card recipe matched in light+dark (bg ${tooltipRecipe.light.native.backgroundColor} / ${tooltipRecipe.dark.native.backgroundColor}, fixed #2C2C2E)`
