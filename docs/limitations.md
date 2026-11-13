@@ -371,6 +371,18 @@
   Session has annotation records; it is an addition to that menu, not a separate
   picker.
 
+- **Chip × removal uses the shell's editor handle.** The × overlay removes the
+  reference chip through the Lexical editor instance exposed by the session input
+  facade (with a keyboard fallback); it is only attached to
+  `data-composer-chip="ui-annotation"` chips whose label maps to a local record,
+  so native chips get no ×. The chip hover tooltip is read-only (no delete there).
+- **Chat anchors follow the node/turn keys, not positions.** A new chat-flow
+  annotation anchors to `data-chat-node-key`/`data-chat-anchor-key`/
+  `data-chat-group-key`/`data-chat-turn`/`data-chat-flow-key`, so it survives a
+  streaming re-render as long as the node exists; a node unmounted by
+  virtualization reports the honest missing status, and annotations captured
+  before this change keep their older positional locator (re-annotate to get the
+  stable anchor).
 - **Chip hover preview matches records by element label.** Two annotations with
   the same element label resolve to the first matching record for the preview
   (the record itself is correct); native composer chips are ignored. Annotations

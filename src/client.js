@@ -8561,6 +8561,8 @@ function dwClearNativeAtmospheres() {
       'detail.close': 'Close',
       'detail.marks': 'Marks are shown on the page while the mode is on',
       'chip.batchLabel': 'UI annotations × {count}',
+      'chip.remove': 'Remove reference',
+      'chip.removeHint': 'Remove this reference chip (one undo step)',
       'chip.candidateLabel': 'UI annotation · {name}',
       'collection.countScope': '{current} current · {other} other',
       'collection.include': 'Include in batch insert',
@@ -8617,6 +8619,7 @@ function dwClearNativeAtmospheres() {
       'feedback.locatorCopied': 'Locator copied',
       'feedback.locatorCopyFailed': 'Could not copy the locator',
       'feedback.chipInserted': 'Inserted as a reference chip (not sent)',
+      'feedback.chipRemoveFailed': 'Could not remove that reference chip',
       'feedback.chipBatchInserted': 'Inserted one batch reference chip (not sent)',
       'feedback.chipFallback': 'Reference chips unavailable here; inserted as plain text',
       'feedback.chipMissing': 'This reference\'s annotation is no longer available',
@@ -8704,6 +8707,8 @@ function dwClearNativeAtmospheres() {
       'detail.close': '关闭',
       'detail.marks': '模式开启时页面会持续显示标注遮罩',
       'chip.batchLabel': 'UI 标注 × {count}',
+      'chip.remove': '移除引用',
+      'chip.removeHint': '移除这个引用控件（可撤销一步）',
       'chip.candidateLabel': 'UI 标注 · {name}',
       'collection.countScope': '当前会话 {current} · 其他会话 {other}',
       'collection.include': '加入批量插入',
@@ -8760,6 +8765,7 @@ function dwClearNativeAtmospheres() {
       'feedback.locatorCopied': '已复制定位器',
       'feedback.locatorCopyFailed': '复制定位器失败',
       'feedback.chipInserted': '已插入引用控件（未发送）',
+      'feedback.chipRemoveFailed': '无法移除该引用控件',
       'feedback.chipBatchInserted': '已插入批量引用控件（未发送）',
       'feedback.chipFallback': '此处不支持引用控件，已插入纯文本',
       'feedback.chipMissing': '该引用对应的标注已不存在',
@@ -8875,8 +8881,11 @@ function dwClearNativeAtmospheres() {
     /** Attributes that make a stable locator, most reliable first. */
     const LOCATOR_DATA_ATTRIBUTES = [
       ['data-row-key', 0.98],
-      ['data-message-id', 0.97],
-      ['data-turn-id', 0.96],
+      ['data-chat-node-key', 0.97],
+      ['data-chat-anchor-key', 0.96],
+      ['data-chat-group-key', 0.95],
+      ['data-chat-turn', 0.94],
+      ['data-chat-flow-key', 0.93],
       ['data-conversation-region', 0.95],
       ['data-conversation-session', 0.86],
       ['data-testid', 0.92],
@@ -9317,8 +9326,11 @@ function dwClearNativeAtmospheres() {
     /** Attribute names that may anchor a verified unique selector, most reliable first. */
     const UNIQUE_SELECTOR_ATTRIBUTES = [
       'data-row-key',
-      'data-message-id',
-      'data-turn-id',
+      'data-chat-node-key',
+      'data-chat-anchor-key',
+      'data-chat-group-key',
+      'data-chat-turn',
+      'data-chat-flow-key',
       'data-conversation-region',
       'data-testid',
       'data-slot',
@@ -9328,8 +9340,11 @@ function dwClearNativeAtmospheres() {
     /** Attribute names kept on one persisted stable-ancestor entry. */
     const STABLE_ANCESTOR_ATTRIBUTES = new Set([
       'data-row-key',
-      'data-message-id',
-      'data-turn-id',
+      'data-chat-node-key',
+      'data-chat-anchor-key',
+      'data-chat-group-key',
+      'data-chat-turn',
+      'data-chat-flow-key',
       'data-conversation-region',
       'data-conversation-session',
       'data-testid',
@@ -12091,6 +12106,8 @@ function dwClearNativeAtmospheres() {
         noteEditor: null,
         // A3/T21: composer reference-chip hover preview (transient, never persisted).
         chipPreview: null,
+        // A3/T22: the × affordance shown over a hovered annotation reference chip.
+        chipAction: null,
         // A3 Phase 2-A transient UI state (never persisted): page marks derived per
         // geometry frame, the record under the pointer, the floating detail card,
         // and the single-slot undo payload.
@@ -13646,6 +13663,7 @@ function dwClearNativeAtmospheres() {
           event.preventDefault()
           event.stopPropagation()
           hideChipPreview()
+          hideChipAction()
           return
         }
         const wantPassThrough = modifierMatches(event, settings.passThroughModifier)
@@ -14364,6 +14382,156 @@ function dwClearNativeAtmospheres() {
 
       /** The chip element currently showing the hover preview (or null). */
       let chipPreviewElement = null
+      /** The chip element the × affordance currently targets (or null). */
+      let chipActionElement = null
+      /** Pending delayed hide for the × affordance (keeps it alive while the pointer moves onto it). */
+      let chipActionHideTimer = null
+
+      /** Cancel a pending × affordance hide. @returns {void} */
+      function cancelChipActionHide() {
+        if (chipActionHideTimer !== null) {
+          clearTimeout(chipActionHideTimer)
+          chipActionHideTimer = null
+        }
+      }
+
+      /** Hide the × affordance immediately. @returns {void} */
+      function hideChipAction() {
+        cancelChipActionHide()
+        chipActionElement = null
+        if (snapshot().chipAction !== null) publish({ chipAction: null })
+      }
+
+      /**
+       * Delay the × affordance hide so the pointer can travel from the chip onto
+       * the button; entering the button cancels the pending hide.
+       * @returns {void}
+       */
+      function scheduleChipActionHide() {
+        if (chipActionElement === null) return
+        cancelChipActionHide()
+        chipActionHideTimer = setTimeout(() => {
+          chipActionHideTimer = null
+          chipActionElement = null
+          publish({ chipAction: null })
+        }, 180)
+      }
+
+      /** Keep the × affordance visible (pointer entered it). @returns {void} */
+      function keepChipAction() {
+        cancelChipActionHide()
+      }
+
+      /**
+       * Show the × affordance over one annotation chip.
+       * @param {Element} chip - `[data-composer-chip="ui-annotation"]` element.
+       * @returns {void}
+       */
+      function showChipAction(chip) {
+        cancelChipActionHide()
+        chipActionElement = chip
+        const rect = chip.getBoundingClientRect()
+        publish({
+          chipAction: {
+            x: Math.round(rect.right - 7),
+            y: Math.round(rect.top - 7),
+            width: 16,
+            height: 16
+          }
+        })
+      }
+
+      /**
+       * Remove the chip the × affordance targets THROUGH the shell's own editor
+       * (Lexical node removal, the same mutation Backspace performs), so other
+       * chips stay real chips, surrounding text/caret stay put, and the edit is one
+       * undo step. Never rewrites the whole draft and never sends.
+       * @returns {boolean} whether the chip was removed.
+       */
+      function removeChipAtAction() {
+        const chip = chipActionElement
+        if (chip === null || chip === undefined || chip.isConnected === false) {
+          hideChipAction()
+          return false
+        }
+        const sessionId = annotationBridge.sessionId ?? snapshot().state.sessionId
+        const input = composerInputFor(sessionId)
+        const editor = input !== null && typeof input === 'object' ? input.editor : null
+        let removed = false
+        if (editor !== null && typeof editor === 'object'
+          && typeof editor.update === 'function' && typeof editor.getElementByKey === 'function') {
+          try {
+            const editorState = editor.getEditorState()
+            const nodeMap = editorState !== null && typeof editorState === 'object' && editorState._nodeMap instanceof Map
+              ? editorState._nodeMap
+              : null
+            let nodeKey = null
+            if (nodeMap !== null) {
+              for (const key of nodeMap.keys()) {
+                if (editor.getElementByKey(key) === chip) {
+                  nodeKey = key
+                  break
+                }
+              }
+            }
+            if (nodeKey !== null) {
+              editor.update(() => {
+                const liveState = editor.getEditorState()
+                const liveMap = liveState !== null && typeof liveState === 'object' && liveState._nodeMap instanceof Map
+                  ? liveState._nodeMap
+                  : null
+                const node = liveMap === null ? null : liveMap.get(nodeKey)
+                if (node !== null && node !== undefined && typeof node.remove === 'function') node.remove()
+              })
+              removed = chip.isConnected === false || (() => {
+                try {
+                  const next = editor.getEditorState()
+                  const nextMap = next !== null && typeof next === 'object' && next._nodeMap instanceof Map ? next._nodeMap : null
+                  return nextMap !== null && !nextMap.has(nodeKey)
+                } catch {
+                  return false
+                }
+              })()
+            }
+          } catch {
+            removed = false
+          }
+        }
+        if (!removed) {
+          // Fallback: focus the editor, move the caret right after the chip through
+          // the DOM selection, and let Lexical's own Backspace handler delete it.
+          try {
+            const editorRoot = document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')
+            if (editorRoot !== null) {
+              editorRoot.focus()
+              const range = document.createRange()
+              range.setStartAfter(chip)
+              range.collapse(true)
+              const selection = window.getSelection()
+              if (selection !== null) {
+                selection.removeAllRanges()
+                selection.addRange(range)
+              }
+              editorRoot.dispatchEvent(new KeyboardEvent('keydown', {
+                key: 'Backspace',
+                code: 'Backspace',
+                keyCode: 8,
+                which: 8,
+                bubbles: true,
+                cancelable: true
+              }))
+              removed = true
+            }
+          } catch {
+            removed = false
+          }
+        }
+        hideChipPreview()
+        hideChipAction()
+        if (!removed) feedback(t('feedback.chipRemoveFailed'), 'error')
+        else annotationFocusComposer()
+        return removed
+      }
 
       /**
        * Hide the composer-chip hover preview.
@@ -14450,6 +14618,7 @@ function dwClearNativeAtmospheres() {
         )
         chipPreviewElement = chip
         publish({ chipPreview: { ...model, x: position.x, y: position.y, placement: position.placement } })
+        showChipAction(chip)
       }
 
       /**
@@ -14465,7 +14634,10 @@ function dwClearNativeAtmospheres() {
         const isAncestorScroll = target === document
           || target === window
           || (target instanceof Element && (target === chipPreviewElement || target.contains(chipPreviewElement)))
-        if (isAncestorScroll) hideChipPreview()
+        if (isAncestorScroll) {
+          hideChipPreview()
+          hideChipAction()
+        }
       }
 
       /**
@@ -14486,6 +14658,7 @@ function dwClearNativeAtmospheres() {
           // A throwing matches() must not keep a stale preview on screen.
         }
         hideChipPreview()
+        scheduleChipActionHide()
       }
 
       /**
@@ -15025,6 +15198,10 @@ function dwClearNativeAtmospheres() {
         onChipPointerOut,
         onChipScroll,
         hideChipPreview,
+        hideChipAction,
+        removeChipAtAction,
+        keepChipAction,
+        scheduleChipActionHide,
         chipClipboardText,
         serializeChip,
         openChipReference,
@@ -15215,6 +15392,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-popover .psa-detail-danger,.psa-detail-card .psa-detail-danger{color:var(--dsw-alias-state-error-secondary,var(--dsw-alias-state-error-primary))}
 /* A3/T21: composer reference-chip hover preview. Same native hover-card recipe as
    the detail card, pointer-transparent so it never traps the pointer. */
+.psa-chip-delete{position:fixed;z-index:48;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:0;border:0;border-radius:50%;background:var(--dsw-alias-bg-layer-2,var(--dsw-hovercard-bg,#2C2C2E));color:var(--dsw-alias-label-secondary);box-shadow:var(--dsw-shadow-lv2,none);cursor:pointer;pointer-events:auto}
+.psa-chip-delete:hover{background:var(--dsw-alias-bg-layer-3,var(--dsw-hovercard-bg,#2C2C2E));color:var(--dsw-alias-label-primary)}
+.psa-chip-delete:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}
 .psa-chip-preview{position:fixed;box-sizing:border-box;width:320px;max-height:min(52vh,380px);overflow:auto;display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-hovercard-bg,#2C2C2E);box-shadow:var(--dsw-shadow-lv3,none);color:var(--dsw-static-neutral-bluish-00);font-family:inherit;font-size:12px;line-height:17px;pointer-events:none;z-index:47}
 .psa-chip-preview-head{display:flex;align-items:center;gap:6px}
 .psa-chip-preview-title{flex:1;min-width:0;font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -15344,6 +15524,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       }
       if (snapshot.chipPreview !== null) {
         node.push(React.createElement(AnnotationChipPreview, { key: 'chip-preview', t, controller, snapshot }))
+      }
+      if (snapshot.chipAction !== null) {
+        node.push(React.createElement(AnnotationChipDelete, { key: 'chip-delete', t, controller, snapshot }))
       }
       if (snapshot.noteEditor !== null) node.push(React.createElement(AnnotationNoteEditor, { key: 'note-editor', t, controller, snapshot }))
       if (snapshot.markUndo !== null) {
@@ -16277,6 +16460,43 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
+     * The × affordance over one annotation reference chip (A3/T22).
+     *
+     * Our own overlay button (the shell chip DOM is never mutated). Clicking it
+     * deletes exactly that chip through the composer's Lexical editor: other chips
+     * stay real chips, surrounding text/caret are preserved, the edit is one undo
+     * step, and nothing is sent. It does not forward the click to the chip's own
+     * openReference handler.
+     * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
+     * @returns {object} the × button.
+     */
+    function AnnotationChipDelete(props) {
+      const { t, controller, snapshot } = props
+      const action = snapshot.chipAction
+      if (action === null) return null
+      return React.createElement('button', {
+        type: 'button',
+        className: 'psa-chip-delete',
+        'data-psa-chip-delete': '',
+        'data-psa-own': '',
+        'aria-label': t('chip.remove'),
+        title: t('chip.removeHint'),
+        style: { left: `${action.x}px`, top: `${action.y}px`, width: `${action.width}px`, height: `${action.height}px` },
+        onPointerEnter: () => controller.keepChipAction(),
+        onPointerLeave: () => controller.scheduleChipActionHide(),
+        onPointerDown: (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+        },
+        onClick: (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          controller.removeChipAtAction()
+        }
+      }, RemixGlyph(REMIX_CLOSE_LINE, 9))
+    }
+
+    /**
      * The draggable element popover with the note editor and the two actions.
      * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
      * @returns {object | null} the popover.
@@ -16650,9 +16870,11 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         }
         const onKeyDown = (event) => {
           if (event.key !== 'Escape' || annotationController === null) return
-          // Esc first closes the transient chip tooltip and must not also clear a
+          // Esc first closes the transient chip tooltip/× and must not also clear a
           // selection or leave the mode in the same keypress.
-          if (annotationController.hideChipPreview()) {
+          const hadPreview = annotationController.hideChipPreview()
+          annotationController.hideChipAction()
+          if (hadPreview) {
             event.preventDefault()
             event.stopPropagation()
             if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation()

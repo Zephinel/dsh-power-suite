@@ -2384,6 +2384,24 @@ const probes = {
     }
   },
 
+  /** A3/T22: the × affordance over an annotation chip, plus the chip count. */
+  chipDelete: () => {
+    const button = document.querySelector('[data-psa-chip-delete]')
+    if (button === null) return null
+    const rect = button.getBoundingClientRect()
+    return {
+      ariaLabel: button.getAttribute('aria-label'),
+      title: button.getAttribute('title'),
+      pointerEvents: getComputedStyle(button).pointerEvents,
+      chips: document.querySelectorAll('[data-composer-chip="ui-annotation"]').length,
+      rect: {
+        x: Math.round(rect.x), y: Math.round(rect.y),
+        width: Math.round(rect.width), height: Math.round(rect.height),
+        viewport: { width: innerWidth, height: innerHeight }
+      }
+    }
+  },
+
   /** A3/T21: composer-chip hover preview state (content + geometry). */
   chipPreview: () => {
     const preview = document.querySelector('[data-psa-chip-preview]')
@@ -3045,7 +3063,7 @@ const SCENARIO_TITLES = {
   10: 'floating surfaces: leaf-first hover/click (title/subtitle/time/token/icon leaves), full Parent/Child chain, whole surface via background, identical outline style, F3 recompute, F4 state CSS, v2 records + reload persistence',
   11: 'F4 cross-branch: pinned dynamic-workspaces hover card is selectable in annotation mode (SKIP without the DW branch)',
   12: 'page marks + hover detail card + delete/undo + other-Session exclusion',
-  13: 'composer chip: single Quick reference, chip click preview, Backspace removal, ONE batch group chip, not sent',
+  13: 'composer chip: Quick reference, hover preview, chip × removal (single+group, one undo step), Backspace removal, real chat-anchor capture, ONE batch group chip, not sent',
   14: 'persistence: reload restores records/marks; removed target is missing and not drawn',
   15: 'rainbow input focus ring: wrapper ring, no solid outline, reduced motion, no layout shift',
 }
@@ -5079,6 +5097,14 @@ function buildScenarios(harness) {
       const targetA = await h.page.eval(pageProbe.newSessionButton)
       assert(targetA, 'native New session button not found for the chip scenario')
       await selectAndType(targetA, 'Chip requirement one')
+      const unmarkedActions = await h.page.evaluate(`({
+        add: document.querySelector('[data-psa-add]')?.innerText ?? '',
+        hasDelete: document.querySelector('[data-psa-popover-delete]') !== null
+      })`)
+      assert(/Mark requirement|标记需求/.test(unmarkedActions.add),
+        `A3/T22: an unmarked selection must offer Mark requirement, got "${unmarkedActions.add}"`)
+      assertEqual(unmarkedActions.hasDelete, false,
+        'A3/T22: an unmarked selection must not show a delete button (nothing to delete yet)')
       await h.click('[data-psa-add]')
       await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 1`, { timeout: 6000, label: 'first page mark for the chip scenario' })
 
@@ -5196,7 +5222,96 @@ function buildScenarios(harness) {
       await h.page.pressKey('escape')
       await sleep(250)
 
-      // Backspace removes the chip atomically (one or two presses; never the draft text).
+      // A3/T22: add a SECOND annotation chip so the × can be proven to remove exactly
+      // one chip and leave the other one a real chip.
+      await h.page.moveTo(targetA.x, targetA.y)
+      await sleep(150)
+      await h.page.clickAt(targetA.x, targetA.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover before the second chip' })
+      const markedActions = await h.page.evaluate(`({
+        add: document.querySelector('[data-psa-add]')?.innerText ?? '',
+        hasDelete: document.querySelector('[data-psa-popover-delete]') !== null
+      })`)
+      assert(/Update requirement|更新需求/.test(markedActions.add),
+        `A3/T22: an already-marked selection must offer Update requirement, got "${markedActions.add}"`)
+      assertEqual(markedActions.hasDelete, true,
+        'A3/T22: an already-marked selection must show the delete (trash) button')
+      await h.click('[data-psa-quick-ref]')
+      await h.page.waitFor(
+        `document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-editor="true"] [data-lexical-decorator="true"]').length === 2`,
+        { timeout: 8000, label: 'two reference chips' }
+      )
+      await sleep(350)
+      const twoChips = await h.page.eval(probes.chipState)
+      assertEqual(twoChips.chips.length, 2, 'the second quick reference did not insert a second chip')
+      const keptChipText = String(twoChips.chips[0].text || '')
+      const removedChipText = String(twoChips.chips[1].text || '')
+      const transcriptBeforeChipRemove = await h.transcript()
+      // Hover the second chip: the × affordance appears over it.
+      await h.page.moveTo(twoChips.chips[1].x, twoChips.chips[1].y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-chip-delete]')`, { timeout: 4000, label: 'chip remove affordance' })
+      await sleep(120)
+      const chipDelete = await h.page.eval(probes.chipDelete)
+      assert(chipDelete !== null, 'the chip × affordance did not render')
+      assertEqual(chipDelete.ariaLabel, 'Remove reference', 'the chip × affordance has the wrong accessible name')
+      assertEqual(chipDelete.pointerEvents, 'auto', 'the chip × affordance must receive pointer input')
+      assert(chipDelete.rect.width >= 12 && chipDelete.rect.height >= 12, `the chip × box is too small: ${JSON.stringify(chipDelete.rect)}`)
+      await h.click('[data-psa-chip-delete]')
+      try {
+        await h.page.waitFor(
+          `document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-editor="true"] [data-lexical-decorator="true"]').length === 1`,
+          { timeout: 5000, label: 'exactly one chip after × removal' }
+        )
+      } catch (error) {
+        const debug = await h.page.evaluate(`(() => ({
+          remove: window.__psaChipRemoveDebug ?? null,
+          chips: [...document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-editor="true"] [data-lexical-decorator="true"]')].map((node) => node.outerHTML.slice(0, 160)),
+          feedback: document.querySelector('[data-psa-feedback]')?.innerText ?? null,
+          popover: !!document.querySelector('[data-psa-popover]'),
+          action: !!document.querySelector('[data-psa-chip-delete]')
+        }))()`)
+        throw new Error(`${error.message} | debug=${JSON.stringify(debug)}`)
+      }
+      await sleep(300)
+      const afterChipDelete = await h.page.eval(probes.chipState)
+      assertEqual(afterChipDelete.chips.length, 1, 'the × did not remove exactly one chip')
+      assertEqual(String(afterChipDelete.chips[0].text || ''), keptChipText, 'the × removed the wrong chip (the kept chip changed)')
+      assert(!String(afterChipDelete.text || '').includes(removedChipText.replace(/^@/, '')) || removedChipText === keptChipText,
+        `the removed chip text still appears in the draft: ${short(afterChipDelete.text)}`)
+      assertEqual((await h.transcript()).messages, transcriptBeforeChipRemove.messages,
+        'chip removal sent a message')
+      assertEqual(await h.page.eval(probes.chipDelete), null, 'the × affordance stayed visible after removal')
+      // The editor mutation is one undo step (Lexical history): Ctrl+Z restores it.
+      await h.page.evaluate(`(() => { const editor = document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]'); if (editor !== null) editor.focus(); return true })()`)
+      await h.page.dispatchKey('z', 'KeyZ', 90, MOD.meta)
+      await sleep(450)
+      const afterUndo = await h.page.eval(probes.chipState)
+      assertEqual(afterUndo.chips.length, 2, 'undo did not restore the chip removed by the × (not one undo step)')
+      // Remove it again so the rest of the scenario keeps its expected chip count.
+      await h.page.moveTo(afterUndo.chips[1].x, afterUndo.chips[1].y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-chip-delete]')`, { timeout: 4000, label: 'chip remove affordance after undo' })
+      await sleep(120)
+      if (process.env.PSA_CHIP_EVIDENCE_DIR) {
+        await mkdir(process.env.PSA_CHIP_EVIDENCE_DIR, { recursive: true })
+        const pad = 20
+        const chipRect = twoChips.chips[1]
+        const clip = {
+          x: Math.max(0, Math.floor(chipRect.x - 90 - pad)),
+          y: Math.max(0, Math.floor(chipRect.y - 30 - pad)),
+          width: 320,
+          height: 110,
+          scale: 1
+        }
+        const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip })
+        await writeFile(path.join(process.env.PSA_CHIP_EVIDENCE_DIR, 'chip-x-remove-hover.png'), Buffer.from(data.data, 'base64'))
+      }
+      await h.click('[data-psa-chip-delete]')
+      await h.page.waitFor(
+        `document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-editor="true"] [data-lexical-decorator="true"]').length === 1`,
+        { timeout: 5000, label: 'one chip after the second × removal' }
+      )
+      await sleep(250)
+      // Backspace removes the remaining chip atomically (one or two presses; never the draft text).
       const editorRect = await h.page.findRect('[data-conversation-region="composer"] [data-lexical-editor="true"]')
       assert(editorRect, 'composer editor not found for chip removal')
       await h.page.keyDown('alt')
@@ -5209,7 +5324,7 @@ function buildScenarios(harness) {
       await h.page.pressKey('end')
       await sleep(100)
       let removed = false
-      for (let attempt = 0; attempt < 3; attempt += 1) {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
         await h.page.pressKey('backspace')
         await sleep(150)
         const state = await h.page.eval(probes.chipState)
@@ -5288,6 +5403,62 @@ function buildScenarios(harness) {
       }
       await sleep(300)
       assertEqual((await h.ui()).panel, 'collection', 'the group chip click did not keep/open the collection view')
+      // A3/T22: the group chip's × removes the whole group chip in one step.
+      await h.page.moveTo(batchChip.chips[0].x, batchChip.chips[0].y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-chip-delete]')`, { timeout: 4000, label: 'group chip remove affordance' })
+      await sleep(120)
+      await h.click('[data-psa-chip-delete]')
+      await h.page.waitFor(
+        `document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-editor="true"] [data-lexical-decorator="true"]').length === 0`,
+        { timeout: 5000, label: 'group chip removed by its ×' }
+      )
+      await sleep(250)
+      assertEqual((await h.ui()).panel, 'collection', 'removing the group chip closed the collection view')
+      assertEqual((await h.transcript()).messages, 0, 'removing the group chip sent a message')
+      // A3/T22: a markdown list leaf inside a wrapper carrying the REAL chat stable
+      // attributes captures a chat-node-anchored selector (not a chat-region nth path).
+      const fixtureRect = await h.page.evaluate(`(() => {
+        const wrapper = document.createElement('div')
+        wrapper.id = 'psa-e2e-chat-fixture'
+        wrapper.setAttribute('data-chat-flow', 'assistant')
+        wrapper.setAttribute('data-chat-flow-key', 'flow-fixture')
+        wrapper.setAttribute('data-chat-node-key', 'node-fixture')
+        Object.assign(wrapper.style, {
+          position: 'fixed', left: '360px', top: '300px', width: '320px',
+          padding: '8px', background: 'rgb(54, 56, 60)', color: 'rgb(235, 238, 245)',
+          zIndex: '400', borderRadius: '8px', fontSize: '13px'
+        })
+        const list = document.createElement('ul')
+        list.style.margin = '0'
+        list.style.paddingLeft = '18px'
+        const item = document.createElement('li')
+        item.setAttribute('role', 'listitem')
+        item.textContent = 'Fixture markdown list item'
+        list.append(item)
+        wrapper.append(list)
+        document.body.append(wrapper)
+        const rect = item.getBoundingClientRect()
+        return {
+          centerX: Math.round(rect.left + rect.width / 2),
+          centerY: Math.round(rect.top + rect.height / 2)
+        }
+      })()`)
+      await h.page.clickAt(fixtureRect.centerX, fixtureRect.centerY)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover for the synthetic chat leaf' })
+      const fixtureNoteRect = await h.page.findRect('[data-psa-note]')
+      assert(fixtureNoteRect, 'the synthetic chat leaf popover has no requirement textarea')
+      await h.page.clickAt(fixtureNoteRect.x, fixtureNoteRect.y)
+      await sleep(120)
+      await h.page.insertText('Chat anchor fixture')
+      await sleep(200)
+      await h.click('[data-psa-add]')
+      await sleep(500)
+      const chatFixtureRecord = (await h.page.eval(probes.annotationStorage)).records.find((record) => record.note === 'Chat anchor fixture')
+      assert(chatFixtureRecord, 'the synthetic chat leaf was not persisted')
+      assert(String(chatFixtureRecord.uniqueSelector || '').includes('data-chat-node-key="node-fixture"'),
+        `the chat leaf locator did not anchor to the real chat node key: ${short(String(chatFixtureRecord.uniqueSelector))}`)
+      await h.page.evaluate(`document.getElementById('psa-e2e-chat-fixture')?.remove()`)
+      await sleep(300)
 
       // Cleanup: clear the draft, leave the rail on the collection view for the next
       // scenario's own reset, and exit the mode.

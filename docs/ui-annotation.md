@@ -36,7 +36,11 @@ page's content elements, never reads form values, and never sends the message.
   commit surface: **Mark requirement** / **Update requirement** (primary),
   **Quick reference**, and **Delete annotation**. Committing a requirement closes
   the popover and clears the selection automatically; floating surfaces are
-  marked as transient in the popover.
+  marked as transient in the popover. Delete annotation appears only when the
+  element is **already marked** (then the primary action reads **Update
+  requirement** and the trash sits beside it): an unmarked selection has nothing
+  to delete yet, so it shows **Mark requirement** only, and the popover's close X
+  discards the selection.
 - **Composer reference chip** — Quick reference (from the popover, the detail
   card, or a rail row) inserts one native inline reference chip into the current
   composer; the batch footer inserts **one group chip** (`UI annotations × N`).
@@ -564,11 +568,18 @@ Red **Missing** / **No longer resolves** means the captured element is not in th
 DOM any more (or, for a floating record, its transient surface is gone); that is
 a truthful report, not an error: the chat flow streams and virtualizes, so a
 leaf inside a message can be unmounted or replaced after it was annotated. The
-capture now anchors chat leaves to the stable **message/turn wrappers**
-(`data-message-id` / `data-turn-id`) instead of a positional path through the
-message list, so a leaf inside a re-rendered message resolves (green) as long as
-the message/turn itself survives; sibling inserts, list virtualization around
-that message and streaming re-renders no longer break it. Only genuinely
+capture now anchors chat leaves to the **real DSH chat-flow wrappers**
+(`data-chat-node-key`, `data-chat-anchor-key`, `data-chat-group-key`,
+`data-chat-turn`, `data-chat-flow-key`), which the shell actually renders around
+chat nodes — instead of a positional `nth-of-type` path through the
+`data-conversation-region="chat"` list. So a leaf inside a re-rendered assistant
+answer resolves (green) as long as its chat node/turn still exists; sibling
+inserts, streaming re-renders of other messages and list virtualization around
+that node no longer break it. The user's two red picks were an `li` inside
+assistant Markdown that the chat flow re-rendered, while the green picks were
+controls anchored on sidebar/data-slot attributes — hence the mixed colors. A
+chat node that is genuinely unmounted (virtualized away or deleted) still
+reports missing, exactly as it should. Only genuinely
 replaced/removed targets stay red/amber, and the resolver never fakes
 **Resolved**. Annotations captured before this locator fix keep their old
 positional locator and can still show red — re-annotate them; there is no
@@ -599,6 +610,14 @@ afterwards, and is never sent automatically.
   `batch:<id>|<id>…` over the included current-Session records in collection
   order. D2 explicitly rejects per-item chips. Clicking it opens the collection
   view.
+- **Chip × removal** — hovering (or keyboard-focusing) a single or group
+  annotation chip shows our own small × affordance over its top-right corner.
+  Clicking it removes exactly that chip from the draft through the composer's
+  Lexical editor (the same node mutation Backspace performs): the other chips
+  stay real chips, surrounding text and the caret are preserved, the edit is one
+  undo step, and nothing is sent. The shell's chip DOM is never mutated, and the
+  × does not trigger the chip's openReference click; Backspace still removes a
+  selected chip atomically.
 - **Hover preview** — resting the pointer on a single or grouped annotation chip
   opens a read-only custom tooltip anchored to the chip (native hover-card
   recipe, `role="tooltip"`, pointer-transparent, no focus steal) with the
