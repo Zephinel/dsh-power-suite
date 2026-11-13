@@ -888,6 +888,20 @@ so it remains Lead-probe evidence only. Sidebar suite on the same md5: `--pin` 2
 on the third attempt (`/tmp/t48-full-3.log`; two earlier attempts 42/43 with only the known
 pre-existing `b4-1` canvas-saturation flake 0.377/0.374 vs 0.38).
 
+**Final merged build `54e4cba` / client md5 `d5aa7a114128cd5809d15db52d8e714b`:** the
+last annotation merge (`17be49a`) was confirmed on the merged client (worktree = linked, no
+restart, unit tests 254/254, check exit 0). Annotation scenarios **2/5/8 all PASS 7/0/0**
+(9.3 s / 7.8 s / 11.5 s, 0 page errors, 0 network failures; S2 now passes with the merged
+`chatProbePoint` + `composerExemptionProbe` oracle, S5 batch insert and S8 sidebar/T25 stay
+green). Sidebar suite: `--pin` **28/0/0** (81.7 s, r3-host + cross-device r3-8 PASS, Host
+cleaned, `/tmp/t49-pin.log`), `--live` **4/4**, `--smoke` **4/4**, full mode **43/43** on the
+fourth attempt (`/tmp/t49-full-4.log`) — the first three attempts were each 42/43 with a
+different non-reproducible hover/animation flake (`f4-1`, known `b4-1` saturation 0.376 vs
+0.38, `b5-2` dark tooltip delay), each passing on another attempt, and no pin/two-phase/
+annotation-usability row failed. Lead probe on this md5 confirms the usability fixes
+survived (composer clicks `prevented=false`, drag +80/+60 on-screen, footer primary → chip,
+heading 14 px/400).
+
 ### Known limitations (`--pin` / `--live`)
 
 - Host sharing and cross-device visibility require the DSH Web service restart that loads

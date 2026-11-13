@@ -1463,3 +1463,33 @@ Harness note: `r3-14` now tolerates a read-child sparkle (12 px wrapper) vs a 10
 in the child-glyph column (≤1.5 px delta) when no dot child is rendered, while still
 asserting the exact dot/pin centre alignment when a 10 px dot child exists; this keeps the
 mixed read/running child states deterministic without weakening a dot-row assertion.
+
+### Final merged build note — `54e4cba` / client md5 `d5aa7a11…`
+
+Final confirmation on the last merged build (`54e4cba`, newest annotation work `17be49a`
+merged; worktree = linked checkout; injected **and** served `src/client.js` md5
+`d5aa7a114128cd5809d15db52d8e714b`, 21353 lines; no service restart; `npm test` **254/254**,
+`npm run check` exit 0):
+
+- **Annotation scenarios 2, 5, 8 all PASS 7 / SKIP 0 / FAIL 0**, 0 page errors, 0 real
+  network failures each (`/tmp/t49-ann-s2.log` 9.3 s, `/tmp/t49-ann-s5.log` 7.8 s,
+  `/tmp/t49-ann-s8.log` 11.5 s). **S2 now passes with the merged `chatProbePoint` /
+  `composerExemptionProbe` oracle** — the previously stale point is fixed and the intentional
+  composer exemption is asserted explicitly; S5 batch insert and S8 sidebar/T25
+  (`footer.primary` = "Insert all into composer") stay green.
+- **Sidebar suite:** `--pin` **28 PASS / 0 SKIP / 0 FAIL**, 81.7 s, page errors 0, real
+  network failures 0 (`/tmp/t49-pin.log`; r3-host + cross-device r3-8 PASS on the live Host
+  route, Host document cleaned to `pinned: []`); `--live` **4/4**, 7.3 s
+  (`/tmp/t49-live.log`); `--smoke` **4/4**, 2.4 s (`/tmp/t49-smoke.log`); full mode
+  **43/43 PASS**, 51.4 s, 0 page errors (`/tmp/t49-full-4.log`). The first three full-mode
+  attempts were each 42/43 with a **different, non-reproducible live-hover/animation flake**
+  (`f4-1` hover card closed in annotation mode; known pre-existing `b4-1` canvas saturation
+  clamp, 0.376 vs 0.38; `b5-2` dark-theme tooltip did not appear after the hover delay) —
+  every one of those checks passed on another attempt, and **no pin/two-phase/annotation
+  usability assertion failed**. The newest annotation delta is resolution/selector-tier
+  logic only (no hover-card change), consistent with the flakes being environment timing.
+- The Lead's live probe on this md5 confirms the usability fixes survived: composer editor
+  and an enabled composer control click reach the page (`defaultPrevented=false`) while page
+  targets stay blocked; batch popover drags exactly +80/+60 and stays fully on-screen;
+  footer primary → "Insert all into composer" → chip `UI annotations × 1` inserted and Send
+  enabled; Active/Inactive Projects headings match native Workspaces (14 px / 400).
