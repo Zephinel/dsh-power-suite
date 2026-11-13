@@ -65,6 +65,7 @@ if (ui === undefined) {
     'buildStableAncestors', 'buildUniqueSelector', 'annotationLocatorText',
     'normalizeAnnotationRecord', 'parseAnnotationStore', 'serializeAnnotationStore',
     'annotationSurfaceRoot', 'annotationSurfaceLevels', 'annotationSurfacePickLevel',
+    'annotationLeafPickIndex',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -79,8 +80,9 @@ if (ui === undefined) {
    * move/include helpers, mark badge excerpt, detail-card clamp), 66 = A3 Phase
    * 2-B (multi-delete undo, rail scope/selection helpers, chip ref round-trip,
    * candidates and model serialization), 67 = inner-first floating-surface pick
-   * level (hover an inner dropdown row, background keeps the whole surface). The
-   * E2E `ACCEPTED_SEAM_GENERATIONS` must accept exactly these counts.
+   * level, 68 = leaf-first picking (deepest eligible element, full ancestor
+   * Parent/Child chain). The E2E `ACCEPTED_SEAM_GENERATIONS` must accept exactly
+   * these counts.
    */
   const SEAM_GENERATION = SEAM_EXPORTS.length
   /** Accepted `Function.length` ranges from the frozen signatures (defaults reduce length). */
@@ -129,6 +131,7 @@ if (ui === undefined) {
     annotationSurfaceRoot: [1, 2],
     annotationSurfaceLevels: [1, 2],
     annotationSurfacePickLevel: [2, 4],
+    annotationLeafPickIndex: [1, 3],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
     annotationSelectedEntries: [2, 2],
@@ -151,7 +154,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 67, 'the frozen inner-first surface-pick generation is pinned')
+    assert.equal(SEAM_GENERATION, 68, 'the frozen leaf-first picking generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -1104,21 +1107,80 @@ if (ui === undefined) {
     )
   })
 
-  test('A3 inner-first: pickLevels wires the deepest hover/click level and keeps Parent/Child legal', () => {
+  test('A3 leaf-first: pickLevels uses the full ancestor chain and the deepest eligible element', () => {
     const source = client.source
     const start = source.indexOf('function pickLevels')
     assert.ok(start >= 0, 'the controller pickLevels exists')
     const nextFunction = source.indexOf('\\n      function ', start + 'function pickLevels'.length)
     const pickBody = source.slice(start, nextFunction > 0 ? nextFunction : source.length)
-    assert.ok(pickBody.includes('annotationSurfacePickLevel(chain, entries)'), 'pickLevels uses the inner-first helper')
+    assert.ok(pickBody.includes('annotationLeafPickIndex(boundary)'), 'floating picks use the leaf helper over the surface boundary')
+    assert.ok(pickBody.includes('annotationLeafPickIndex(entries)'), 'page picks use the leaf helper over the full ancestor chain')
+    assert.ok(pickBody.includes('entries.slice(0, Math.min(surface.index + 1, entries.length))'), 'the surface boundary is kept (never escapes the root)')
     assert.ok(pickBody.includes("surface: 'floating'"), 'surface metadata is preserved')
-    assert.ok(pickBody.includes('parentStep: -1'), 'surface Parent/Child direction is unchanged')
-    assert.ok(pickBody.includes('const index = pick.index'), 'the resolved index is used for hover/click')
+    assert.ok(pickBody.includes('parentStep: 1'), 'Parent walks up the full chain (deepest first)')
     assert.ok(source.includes('function shiftChain(delta)'), 'the Parent/Child control still exists')
     const shiftStart = source.indexOf('function shiftChain(delta)')
     const shiftEnd = source.indexOf('\\n      function ', shiftStart + 'function shiftChain'.length)
     const shiftBody = source.slice(shiftStart, shiftEnd > 0 ? shiftEnd : source.length)
-    assert.ok(shiftBody.includes('lastPick.index + delta * lastPick.parentStep'), 'Parent/Child walks the same level table')
+    assert.ok(shiftBody.includes('lastPick.index + delta * lastPick.parentStep'), 'Parent/Child walks the same chain table')
+    const hoverStart = source.indexOf('function resolveHover()')
+    const hoverEnd = source.indexOf('\\n      function ', hoverStart + 'function resolveHover'.length)
+    const hoverBody = source.slice(hoverStart, hoverEnd > 0 ? hoverEnd : source.length)
+    assert.ok(hoverBody.includes('pickLevels(chain)'), 'hover shares the leaf-first pick table with click')
+  })
+
+  test('A3 leaf-first: annotationLeafPickIndex targets the deepest eligible element and skips ineligible nodes', () => {
+    const root = { id: 'page-container' }
+    const section = { id: 'section' }
+    const button = { id: 'button' }
+    const span = { id: 'span' }
+    const svg = { id: 'svg' }
+    const path = { id: 'path' }
+    const hidden = { id: 'hidden' }
+    const own = { id: 'own' }
+    const chainOf = (...elements) => elements.map((element) => ({ element, insideComposer: false }))
+    const none = () => false
+    // The pointer chain starts at the deepest element: span/svg/path are all eligible.
+    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(span, button, section, root), none, () => true)), 0)
+    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(svg, button, section, root), none, () => true)), 0)
+    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(path, svg, button, section, root), none, () => true)), 0)
+    // An ineligible leaf (own UI / zero box / hidden) falls through to its ancestor.
+    const eligibleExcept = (ids) => (element) => !ids.includes(element.id)
+    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(own, span, section), none, eligibleExcept(['own']))), 1)
+    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(hidden, button, section), none, eligibleExcept(['hidden']))), 1)
+    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(hidden, own, section), none, eligibleExcept(['hidden', 'own']))), 2)
+    // Nothing eligible at all → -1 (hover clears, click does not select).
+    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(hidden, own), none, none)), -1)
+    assert.equal(plain(ui.annotationLeafPickIndex([], none, none)), -1)
+    // Inside a floating surface the walk never escapes the surface root.
+    const card = { id: 'card' }
+    const portal = { id: 'portal' }
+    const floating = (element) => element.id === 'card' || element.id === 'portal'
+    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(span, card, portal, root), floating, () => true)), 0)
+    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(hidden, card, portal, root), floating, eligibleExcept(['hidden']))), 1, 'falls through to the surface root')
+    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(hidden, own, card, portal), floating, eligibleExcept(['hidden', 'own']))), 2, 'surface root is the boundary; the portal above it is never picked')
+  })
+
+  test('A3 leaf-first: annotationLeafEligible excludes own UI, structural tags and zero-box elements', () => {
+    const source = client.source
+    const start = source.indexOf('function annotationLeafEligible')
+    assert.ok(start >= 0, 'the eligibility helper exists')
+    const nextFunction = source.indexOf('\\n    function ', start + 'function annotationLeafEligible'.length)
+    const body = source.slice(start, nextFunction > 0 ? nextFunction : source.length)
+    assert.ok(body.includes("element.closest('[data-psa-own]')"), 'own annotation UI is excluded from leaf picks')
+    assert.ok(body.includes('ANNOTATION_INELIGIBLE_TAGS.has(tag)'), 'structural tags are excluded')
+    assert.ok(body.includes('annotationElementVisible(element)'), 'invisible/zero-box elements are excluded')
+    const tagsStart = source.indexOf('const ANNOTATION_INELIGIBLE_TAGS')
+    const tagsEnd = source.indexOf('])', tagsStart)
+    const tags = source.slice(tagsStart, tagsEnd)
+    for (const tag of ['html', 'body', 'script', 'style', 'head', 'title']) {
+      assert.ok(tags.includes(`'${tag}'`), `${tag} must be ineligible as a leaf pick`)
+    }
+    const startNodeStart = source.indexOf('function annotationStartNode')
+    const startNodeEnd = source.indexOf('\\n    function ', startNodeStart + 'function annotationStartNode'.length)
+    const startNode = source.slice(startNodeStart, startNodeEnd > 0 ? startNodeEnd : source.length)
+    assert.ok(startNode.includes('data-lexical-editor'), 'the composer exception (editable contents resolve to the composer region) is kept')
+    assert.ok(startNode.includes('data-conversation-region="composer"'), 'composer internals resolve to the composer region')
   })
 
   //#endregion
