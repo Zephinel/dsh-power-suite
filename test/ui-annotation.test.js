@@ -2889,6 +2889,39 @@ if (ui === undefined) {
     assert.equal(leafRef.locator.anchorTarget, null, 'leaf anchors carry no descendant metadata')
   })
 
+  test('A3/T44: authoritative (terminal) descendant ambiguity cannot be overridden by later fallbacks', () => {
+    const base = { candidates: [], expectedTag: 'div', queryAll: () => [] }
+    const liveInfo = () => ({ isConnected: true, textContent: '', actualDigest: '', expectedName: '', actualName: '' })
+    const terminal = ui.annotationResolveStatus({
+      ...base,
+      liveInfo,
+      resolveTextQuote: () => ({ status: 'ambiguous', terminal: true }),
+      resolveTextPosition: () => 'resolved',
+      resolveXPath: () => 'resolved'
+    })
+    assert.deepEqual(plain(terminal), { status: 'ambiguous', via: 'text-quote' },
+      'in-scope descendant ambiguity must be terminal; text-position/xpath cannot override it')
+    // Self-anchor semantics preserved: a plain weak ambiguity still lets a later
+    // strategy resolve (A3/T33/T34 behavior).
+    const weak = ui.annotationResolveStatus({
+      ...base,
+      liveInfo,
+      resolveTextQuote: () => 'ambiguous',
+      resolveTextPosition: () => 'resolved'
+    })
+    assert.deepEqual(plain(weak), { status: 'resolved', via: 'text-position' })
+    // Empty scope -> the resolver returns terminal only when the scope itself is
+    // ambiguous; a normal fallback target still resolves.
+    const fallback = ui.annotationResolveStatus({
+      ...base,
+      liveInfo,
+      resolveTextQuote: () => 'resolved',
+      resolveTextPosition: () => null,
+      resolveXPath: () => null
+    })
+    assert.deepEqual(plain(fallback), { status: 'resolved', via: 'text-quote' })
+  })
+
   test('A3/T42: captured scope is authoritative for descendant text anchors', () => {
     const a = { id: 'scope-a-target' }
     const b = { id: 'doc-b-target' }

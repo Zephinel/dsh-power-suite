@@ -6651,7 +6651,15 @@ function buildScenarios(harness) {
                 anchorTarget: 'descendant', anchorLeafTag: 'span', anchorAncestorChain: ['span', 'div'],
                 anchorSignature: { tag: 'div', attrs: [{ name: 'aria-expanded', value: 'true' }] }
               },
-              component: 'other', text: 'Scope authority text UNIQUE-T42', textDigest: '', context: '',
+              component: 'other', text: 'Scope authority text UNIQUE-T42', textDigest: (() => {
+                const text = 'Scope authority text UNIQUE-T42'
+                let hash = 0x811c9dc5
+                for (let index = 0; index < text.length; index += 1) {
+                  hash ^= text.charCodeAt(index)
+                  hash = Math.imul(hash, 0x01000193)
+                }
+                return (hash >>> 0).toString(16).padStart(8, '0')
+              })(), context: '',
               bounds: { x: 800, y: 400, width: 200, height: 40 }, viewport: { width: window.innerWidth, height: window.innerHeight },
               note: '', included: true, lastStatus: 'resolved'
             }
