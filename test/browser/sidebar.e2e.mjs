@@ -3234,11 +3234,27 @@ async function runStatsChecks({ page, results, state }) {
 
   // A cold subagent row needs an unseeded projection; a long verification session warms
   // every visible subagent, so the check becomes an explicit SKIP (never a fake pass).
-  const b62Bridge = await page.eval(probe.projectionBridge).catch(() => null)
-  const b62Visible = new Set(((b62Bridge && b62Bridge.domRows) ?? []).filter((row) => row.kind === 'child').map((row) => row.title))
-  const b62Cold = b62Bridge !== null && b62Bridge.ok === true
-    ? ((b62Bridge.children ?? []).find((child) => child.needsRead && b62Visible.has(child.title)) ?? null)
-    : null
+  let b62Bridge = await page.eval(probe.projectionBridge).catch(() => null)
+  const pickCold = (bridge) => {
+    if (bridge === null || bridge.ok !== true) return null
+    const visible = new Set(((bridge.domRows) ?? []).filter((row) => row.kind === 'child').map((row) => row.title))
+    return (bridge.children ?? []).find((child) => child.needsRead && visible.has(child.title)) ?? null
+  }
+  let b62Cold = pickCold(b62Bridge)
+  if (b62Cold === null && b62Bridge !== null && b62Bridge.ok === true) {
+    // A collapsed parent row may hide cold children: expand the card rows like a user and
+    // re-check, so a warm-but-collapsed card is not misreported as "no cold subagent".
+    const expanded = await page.eval(() => {
+      const collapsed = [...document.querySelectorAll('.psd-run-toggle[aria-expanded="false"]')]
+      for (const toggle of collapsed) toggle.click()
+      return collapsed.length
+    }).catch(() => 0)
+    if (expanded > 0) {
+      await sleep(700)
+      b62Bridge = await page.eval(probe.projectionBridge).catch(() => null)
+      b62Cold = pickCold(b62Bridge)
+    }
+  }
   if (b62Bridge === null || b62Bridge.ok !== true) {
     await results.check('b6-2', 'a cold subagent row triggers exactly one projection read, then fills its figures', async () => {
       throw new Error(`projection bridge unavailable: ${short((b62Bridge && b62Bridge.reason) || 'unknown')}`)

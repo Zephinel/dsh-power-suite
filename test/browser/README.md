@@ -778,7 +778,12 @@ Remaining for the final green table (unchanged): after the user restarts the DSH
 service, re-run `--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS and
 full-mode `b6-5` no longer sees the 404 console line.
 
-### FINAL recorded evidence (follow-up 8: Host-shared pin acceptance + two-phase slowed reveal + single highlight layer, build `436a81c`)
+### FINAL recorded evidence (follow-up 8: Host-shared pin acceptance + two-phase slowed reveal + single highlight layer, pre-merge build `436a81c`)
+
+> **Pre-merge build:** the table in this section records the pre-merge build
+> (`436a81c`, injected client md5 `113e1365…`). The merged-build confirmation
+> (`03d2167`, injected + served client md5 `d816e64d…`) is appended at the end of this
+> section.
 
 Build: worktree at `436a81c` ("style(dynamic-workspaces): slow the pin reveal animation"),
 injected `src/client.js` md5 `113e1365272ef7769868a31e19310faa` (20881 lines). **The DSH Web
@@ -827,6 +832,36 @@ Honest notes / environment observations:
 Remaining: none for the pin/atmosphere/two-phase feature on md5 `113e1365…`; the final
 commit + linked-checkout ff is the Lead's step.
 
+### Merged-build confirmation (HEAD `03d2167`, injected + served client md5 `d816e64d3aef5b108a6989a392d2f5b8`)
+
+The final evidence commit `3cc1165` and the newer linked-checkout annotation merge `9513b71`
+were merged cleanly at `03d2167`; the injected and served client are now the same
+`d816e64d…` file (21000 lines), Host pin route live, Host pin document starting empty.
+
+- **`--pin` → 28 PASS / 0 SKIP / 0 FAIL**, 85.1 s, page errors **0**, real network failures
+  **0**, exit 0 (`/tmp/f10-pin.log`): `r3-host` PASS (Host document rev 99 contains the card
+  pin), cross-device `r3-8` PASS (second fresh profile sees both Host pins in the
+  newest-activity-first prefix), two-phase/single-tint/alignment/height/atmosphere rows green;
+  cleanup restored the Host document to `pinned: []` (rev 98 → 106, no residual pins, native
+  pin untouched).
+- **Full mode is not green on the merged client**, attributed to a **client/Host version
+  mismatch** (the annotation merge landed after the service restart, so the running Host half
+  predates it). Four attempts: **39/43** (`/tmp/f10-full-2.log` — `b3-1` prompt-history search
+  card missing, `c4-2`/`c4-3`/`c4-4` bucket-cache checks), **42/43** (`/tmp/f10-full-3.log`,
+  only the known `b4-1` live-canvas saturation flake), **42/43** (`/tmp/f10-full-4.log`, same
+  flake), **41/43** (`/tmp/f10-full-5.log` — `b4-1` flake, `c4-4`, one `Sidebar Session
+  opening failed: … Session reference … is released` page error). `b6-5` stays clear
+  (0 network failures) in every run and no pin/two-phase/tint/alignment row failed.
+- **Control:** the same harness and environment with the pre-merge control client
+  `113e1365…` scores **43/43**, 0 page errors (`/tmp/f10-full-oldclient.log`), isolating the
+  delta to the merged annotation client, not the pin/two-phase/atmosphere changes.
+- **Remedy:** one DSH Web service restart with the merged checkout, then an optional
+  full-mode re-run; the pin/two-phase features are already verified green and do not depend
+  on it.
+- **Harness prerequisite kept:** `b6-2` now expands collapsed card rows with real
+  `.psd-run-toggle` clicks before its explicit environment SKIP, making the cold-subagent
+  check deterministic (it passed on the merged build) and mirroring what a user does.
+
 ### Known limitations (`--pin` / `--live`)
 
 - Host sharing and cross-device visibility require the DSH Web service restart that loads
@@ -842,6 +877,9 @@ commit + linked-checkout ff is the Lead's step.
 - The two-phase reveal checks need the row to stay hovered while sampling; the card can
   re-sort under the pointer during live activity, so they sample in-page and use the
   documented tolerances instead of exact frame timing.
+- `b6-2` needs a visible cold subagent row; when none is visible it first expands collapsed
+  card rows with real `.psd-run-toggle` clicks (a normal user action) and only then reports
+  the explicit environment SKIP, so a warmed/collapsed card does not make the check flaky.
 - The live pin-order oracles read the Host activity ledger (`$DSH_HOME/dsh-power-suite/session-activity.json`)
   as the same source the card sorts by; this is read-only evidence. The client's own
   activity poll can be up to 30 s stale, so after an unpin the relative order inside the

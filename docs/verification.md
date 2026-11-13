@@ -1312,7 +1312,7 @@ Remaining work is the same post-restart step: after the user restarts DSH Web, r
 `--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS (pre-restart local pins
 migrate on first Host contact) and full-mode `b6-5` no longer sees the 404 console line.
 
-## FOLLOW-UP 8 (FINAL): Host-shared pin acceptance with the restarted service, two-phase slowed reveal and single highlight layer (build `436a81c`)
+## FOLLOW-UP 8 (FINAL): Host-shared pin acceptance with the restarted service, two-phase slowed reveal and single highlight layer (pre-merge build `436a81c`; merged-build confirmation at the end)
 
 This is the final acceptance round. Two user-requested changes landed after follow-up 7:
 (1) the pin reveal became a **two-phase, space-saving animation** (replacing the old fixed
@@ -1353,5 +1353,37 @@ injected suites should be re-run on the merged md5. `api/changes.summary` 404s (
 deliverables probe whose route this Host build does not serve) are classified separately
 from real network failures and are not feature failures (one intermediate run saw 6, the
 final runs 0). The known `b4-1` live-canvas flake passed in the final run; `b6-2` is
-environment-aware (explicit SKIP when no cold subagent row exists) and found a cold child in
-the final run.
+environment-aware (when no cold subagent row is visible it first expands collapsed card rows
+with real `.psd-run-toggle` clicks, then reports an explicit SKIP) and found a cold child in
+the final run; the toggle-expansion prerequisite is kept and documented.
+
+### Merged-build confirmation (HEAD `03d2167`, injected + served client md5 `d816e64d…`)
+
+The final evidence commit `3cc1165` and the newer linked-checkout annotation merge `9513b71`
+were merged cleanly at `03d2167`; the injected and served client are now the same
+`d816e64d3aef5b108a6989a392d2f5b8` file (21000 lines), the Host pin route is live, and the
+Host pin document started empty.
+
+- **`--pin` → 28 PASS / 0 SKIP / 0 FAIL**, 85.1 s, page errors **0**, real network failures
+  **0**, exit 0 (`/tmp/f10-pin.log`): `r3-host` PASS (Host document rev 99 contains the card
+  pin), cross-device `r3-8` PASS (second fresh profile sees both Host pins in the
+  newest-activity-first prefix), two-phase/single-tint/alignment/height/atmosphere rows green;
+  cleanup restored the Host document to `pinned: []` (rev 98 → 106, no residual pins, native
+  sidebar pin untouched).
+- **Full mode is not green on the merged client** and is attributed to a **client/Host
+  version mismatch**: the annotation merge landed after the DSH Web service restart, so the
+  running Host half predates it. Four attempts: **39/43** (`/tmp/f10-full-2.log` — `b3-1`
+  prompt-history search card missing; `c4-2`/`c4-3`/`c4-4` bucket-cache checks), **42/43**
+  (`/tmp/f10-full-3.log` — only the known `b4-1` live-canvas saturation flake),
+  **42/43** (`/tmp/f10-full-4.log` — same flake), **41/43** (`/tmp/f10-full-5.log` — `b4-1`
+  flake, `c4-4`, one `Sidebar Session opening failed: … Session reference … is released` page
+  error). `b6-5` cleared in every run (0 network failures) and no pin/two-phase/tint/alignment
+  row failed.
+- **Control:** the same harness and environment with the pre-merge control client
+  `113e1365…` scores **43/43**, 0 page errors (`/tmp/f10-full-oldclient.log`), isolating the
+  delta to the merged annotation client rather than the pin/two-phase/atmosphere changes or
+  the harness. The known `b4-1` canvas-saturation flake (0.370–0.373 vs the 0.38 threshold)
+  is pre-existing and unrelated.
+- **Remedy:** one DSH Web service restart with the merged checkout, then an optional
+  full-mode re-run; the pin/two-phase features are already verified green and do not depend
+  on it.
