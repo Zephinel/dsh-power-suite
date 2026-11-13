@@ -367,6 +367,16 @@ heading is added until the release is cut.
   broader scan), selector candidates add a role+name composite and a length
   penalty, and the docs correct the identity/transient/order claims.
 
+- UI element annotation NIT follow-ups: ephemeral/floating surface-gone now
+  reports **Missing** for every outcome through a single
+  `annotationEphemeralOutcome` gate (still-present surfaces keep honest
+  outcomes; the conservative transient-Changed policy is documented), the weak
+  "Unverifiable · weak identity" label regained E2E coverage, role+name got its
+  own selector-stability tier (data/id/aria > role+name > label/role > class >
+  tag/nth), and the matchQuote recall / role+name / length-penalty behavior is
+  pinned by unit tests. Deferred reference-conformance limitations moved into
+  the user docs.
+
 ### Removed
 
 - Standalone Project detail page: the `project-view` feature is removed —
