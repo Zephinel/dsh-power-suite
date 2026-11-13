@@ -221,6 +221,12 @@ sidebar's panel tabs. It starts expanded.
   disclosure arrow highlights only the arrow (the body pill is suppressed), so
   the two highlights stay independent and never compose into a nested two-layer
   highlight.
+- **Row height**: every card row — main and nested child, ordinary and
+  current/atmosphere — uses the native Workspace project-row height (34 px,
+  `--psd-row-h` on the card), so the card and the Workspace list below it share
+  one row rhythm instead of the card looking cramped. The body pill and the
+  content columns fill that height, while the title/time typography is
+  unchanged.
 - **Row spacing**: rows are separated so the internal rainbow-atmosphere fills
   never touch — the card body uses a 5 px column gap between top-level items,
   a 4 px gap between a parent row and its child list, and a 5 px gap between

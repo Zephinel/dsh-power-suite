@@ -174,6 +174,12 @@ heading is added until the release is cut.
 
 ### Changed
 
+- Running & recent row height follows the native Workspace list: every card row
+  (main and nested child, ordinary and current) is now 34 px tall, the measured
+  height of the native Workspace project rows, so the card and the Workspace
+  list below share one row rhythm; the body pill fills the row and typography /
+  columns are unchanged.
+
 - Current-Session rainbow atmosphere rows no longer receive the ordinary
   row-body hover pill (card parent and child rows) or the native sidebar row's
   own hover/selected background while the atmosphere is painted: the extra
