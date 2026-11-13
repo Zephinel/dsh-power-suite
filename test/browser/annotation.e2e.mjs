@@ -1090,7 +1090,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1102,7 +1102,7 @@ async function runSmoke({ page, results, state }) {
     // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
     // rail selection and chip-ref serialization helpers (66). Pin a documented count and
     // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76]
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1151,6 +1151,11 @@ async function runSmoke({ page, results, state }) {
     if (keyCount === 76) {
       for (const key of ['annotationLeafPickIndex', 'annotationGroupFromSelection', 'collectionAddGroup', 'serializeBatchEntries']) {
         assert(probe.keys.includes(key), `batch-group seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
+      }
+    }
+    if (keyCount === 79) {
+      for (const key of ['annotationGroupFromSelection', 'annotationSidebarCounts', 'annotationFilterEntries', 'annotationGroupSummary']) {
+        assert(probe.keys.includes(key), `redesigned-sidebar seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
       }
     }
     state.hooks = probe.keys
@@ -2402,6 +2407,126 @@ const probes = {
       zIndex: style.zIndex,
       visible: rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden',
     }
+  },
+
+  /** A3/T25: seed a deterministic singles+groups document for the sidebar states. */
+  seedAnnotationSidebarFixture: (sessionId) => {
+    const key = 'power-suite.ui-annotation.annotations'
+    const now = Date.now()
+    const record = (index, note) => ({
+      version: 2,
+      id: `psa-sidebar-${index}-000000`,
+      at: now - index * 60000,
+      updatedAt: now - index * 60000,
+      order: index,
+      session: { sessionId, cwd: '/tmp/annotation-fixture', workspaceLabel: 'annotation-fixture' },
+      route: '/conversation/fixture',
+      locator: {
+        tag: 'button',
+        role: 'button',
+        name: `Button ${index}`,
+        candidates: [{ kind: 'tag', value: 'button', reliability: 0.4 }],
+        key: `tag:button:${index}`,
+        path: 'button',
+        uniqueSelector: null,
+        uniqueVerified: false,
+        ancestors: [],
+        surface: 'page',
+        ephemeral: false
+      },
+      component: 'button',
+      text: `Button ${index}`,
+      textDigest: '',
+      context: '',
+      bounds: { x: 20 + index * 8, y: 20 + index * 8, width: 120, height: 32 },
+      viewport: { width: 1728, height: 900 },
+      note,
+      included: true,
+      lastStatus: null
+    })
+    const singleA = record(1, '保存更改按钮的层级不够突出，建议加强视觉层级。')
+    const singleB = record(2, '列表项选中态的高亮范围偏小，建议与行高一致。')
+    const groupOneItems = [record(3, ''), record(4, ''), record(5, ''), record(6, '')]
+    const groupTwoItems = [record(7, ''), record(8, '')]
+    const group = (id, requirement, items, order, collapsed) => ({
+      kind: 'group',
+      id,
+      at: now - 300000,
+      createdAt: now - 300000,
+      updatedAt: now - 120000,
+      order,
+      session: { sessionId, cwd: '/tmp/annotation-fixture', workspaceLabel: 'annotation-fixture' },
+      requirement,
+      items,
+      collapsed,
+      included: true
+    })
+    const doc = {
+      version: 3,
+      updatedAt: now,
+      records: [singleA, singleB],
+      groups: [
+        group('psa-group-sidebar-01', '表单字段间距问题\n表单区域的多个控件存在间距不一致、对齐不整齐的问题。', groupOneItems, 2, false),
+        group('psa-group-sidebar-02', '按钮样式统一', groupTwoItems, 3, true)
+      ]
+    }
+    localStorage.setItem(key, JSON.stringify(doc))
+    return { records: doc.records.length, groups: doc.groups.length, items: 2 + groupOneItems.length + groupTwoItems.length }
+  },
+
+  /** A3/T25: redesigned sidebar structure probe. */
+  sidebarState: () => {
+    const rail = document.querySelector('[data-psa-rail]')
+    if (rail === null) return null
+    const view = rail.getAttribute('data-psa-view')
+    const rectOf = (element) => {
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      return {
+        left: Math.round(rect.left), top: Math.round(rect.top),
+        width: Math.round(rect.width), height: Math.round(rect.height),
+        right: Math.round(rect.right), bottom: Math.round(rect.bottom)
+      }
+    }
+    const rows = [...rail.querySelectorAll('[data-psa-entry]')]
+    const visible = (element) => {
+      if (element === null) return false
+      const style = getComputedStyle(element)
+      return style.display !== 'none' && style.visibility !== 'hidden' && element.getBoundingClientRect().height > 0
+    }
+    const actions = [...rail.querySelectorAll('[data-psa-entry-expand],[data-psa-entry-remove],[data-psa-group-edit],[data-psa-group-remove],[data-psa-group-item-edit],[data-psa-group-item-remove]')]
+    return {
+      view,
+      title: (rail.querySelector('.psa-sb-rail-title')?.innerText || '').trim(),
+      badge: (rail.querySelector('[data-psa-total-badge]')?.innerText || '').trim(),
+      subtitle: (rail.querySelector('.psa-sb-subtitle')?.innerText || '').trim(),
+      filters: [...rail.querySelectorAll('[data-psa-filter]')].map((button) => ({
+        key: button.getAttribute('data-psa-filter'),
+        pressed: button.getAttribute('aria-pressed'),
+        text: (button.innerText || '').replace(/\s+/g, ' ').trim()
+      })),
+      rows: rows.length,
+      singles: rail.querySelectorAll('[data-psa-entry]:not([data-psa-group])').length,
+      groups: rail.querySelectorAll('[data-psa-group]').length,
+      groupItems: rail.querySelectorAll('[data-psa-group-item]').length,
+      typeBadges: [...rail.querySelectorAll('[data-psa-type-badge]')].map((badge) => badge.getAttribute('data-psa-type-badge')),
+      groupBadges: [...rail.querySelectorAll('[data-psa-group] [data-psa-type-badge]')].map((badge) => (badge.innerText || '').trim()),
+      expandedGroups: [...rail.querySelectorAll('[data-psa-group-toggle]')].map((button) => button.getAttribute('aria-expanded')),
+      actions: actions.map((button) => ({ visible: visible(button), rect: rectOf(button) })),
+      footer: {
+        primary: (rail.querySelector('[data-psa-add-annotation]')?.innerText || '').trim(),
+        secondary: (rail.querySelector('[data-psa-clear-selection]')?.innerText || '').trim(),
+        primaryHeight: ract(rail.querySelector('[data-psa-add-annotation]')),
+        secondaryHeight: ract(rail.querySelector('[data-psa-clear-selection]'))
+      },
+      empty: rail.querySelector('[data-psa-empty]') !== null,
+      list: {
+        scrollable: (() => { const element = rail.querySelector('[data-psa-sidebar-list]'); return element !== null ? { clientHeight: element.clientHeight, scrollHeight: element.scrollHeight } : null })(),
+        overflowX: rail.scrollWidth > rail.clientWidth + 1
+      },
+      rail: rectOf(rail)
+    }
+    function ract(element) { return element === null || element === undefined ? null : Math.round(element.getBoundingClientRect().height) }
   },
 
   /** A3/T23: requirement-popover layout (caption row, trash, footer row, ring hug). */
@@ -4395,51 +4520,255 @@ function buildScenarios(harness) {
       await h.ensureConversation()
       await h.ensureStatusPanel()
       const baseline = await h.frame()
-      assertEqual(baseline.htmlActive, null, 'mode must be off before the collection geometry scenario')
+      assertEqual(baseline.htmlActive, null, 'mode must be off before the sidebar scenario')
       assert(baseline.canvas, 'conversation canvas missing')
       const canvasWidthBaseline = baseline.canvas.width
       await h.activate()
       const active = await h.frame()
-      const railWidth = Number.parseFloat(active.railWidthVar || '0')
+      const statusRailWidth = Number.parseFloat(active.railWidthVar || '0')
       assert(active.rail !== null, 'rail missing after activation')
-      assertNear(active.canvas.width, canvasWidthBaseline - railWidth, 3, 'conversation canvas width after the shrink')
-      assertEqual(active.railPanelCount, 1, `rail body missing right after activation (railChildCount=${active.railChildCount})`)
-      const paddingBefore = active.paddingRight
-      // Opening the collection must not change the frame geometry or draw a wide drawer.
+      assertNear(statusRailWidth, 200, 8, `status-view rail width lost its compact width: ${statusRailWidth}`)
+      assertNear(active.canvas.width, canvasWidthBaseline - statusRailWidth, 3, 'conversation canvas width after activation')
       await h.openCollection()
-      await sleep(250)
+      await sleep(450)
       const collectionFrame = await h.frame()
-      assertEqual(
-        collectionFrame.panel,
-        'collection',
-        `collection panel not visible (rail=${JSON.stringify(collectionFrame.rail)}, ` +
-          `collapsed=${JSON.stringify(collectionFrame.railCollapsed)}, mode=${JSON.stringify(collectionFrame.railMode)}, ` +
-          `children=${collectionFrame.railChildCount}, panels=${collectionFrame.railPanelCount}, ` +
-          `padding=${JSON.stringify(collectionFrame.paddingRight)}, active=${JSON.stringify(collectionFrame.htmlActive)}, ` +
-          `html=${JSON.stringify(collectionFrame.railHtml)})`
-      )
-      assertEqual(collectionFrame.paddingRight, paddingBefore, 'frame padding changed when the collection opened')
-      assertNear(collectionFrame.canvas.width, active.canvas.width, 1, 'conversation canvas width changed when the collection opened')
-      assert(
-        collectionFrame.rail.x >= collectionFrame.viewport.width - railWidth - 3,
-        `collection view extends beyond the rail strip (rail.x=${collectionFrame.rail.x}, viewport=${collectionFrame.viewport.width}, rail=${railWidth})`
-      )
-      assert(collectionFrame.rail.x + collectionFrame.rail.width <= collectionFrame.viewport.width + 1, 'rail overflows the viewport')
-      assert(collectionFrame.rail.width <= railWidth + 2, `rail width grew from ${railWidth}px to ${collectionFrame.rail.width}px when the collection opened`)
-      // Close the collection: status view restored with the same geometry.
-      await h.clickBack()
+      const collectionRailWidth = Number.parseFloat(collectionFrame.railWidthVar || '0')
+      // A3/T25: opening the collection expands the annotation sidebar to
+      // clamp(320, 24vw, 420) and the frame padding follows it.
+      assertEqual(collectionFrame.panel, 'collection', `collection panel not visible (rail=${JSON.stringify(collectionFrame.rail)})`)
+      assertNear(collectionRailWidth, 415, 2, `collection sidebar width is not the wide clamp(320,24vw,420): ${collectionRailWidth}`)
+      assertNear(Number.parseFloat(collectionFrame.paddingRight || '0'), collectionRailWidth, 2, 'frame padding does not follow the wide sidebar')
+      assertNear(collectionFrame.rail.x + collectionFrame.rail.width, collectionFrame.viewport.width, 2, 'wide sidebar must stay right-anchored')
+      assert(collectionFrame.rail.width <= collectionRailWidth + 2, `wide sidebar overflows its reserved strip: ${collectionFrame.rail.width}`)
+      assertNear(collectionFrame.canvas.width, active.canvas.width - (collectionRailWidth - statusRailWidth), 3,
+        'conversation canvas width did not shrink by the sidebar width delta')
+      assertEqual(collectionFrame.grid, active.grid, 'inline grid style changed when the collection opened')
+      // ---- Structure: header, badges, subtitle, filters, list, footer ----
+      // A3/T25: seed a deterministic v3 document in an init script so the page's own
+      // unload flush cannot overwrite it, then reload into the seeded state.
+      const fixtureSessionId = await h.refreshSession()
+      const fixtureNow = Date.now()
+      const makeRecord = (index, note) => ({
+        version: 2,
+        id: `psa-sidebar-${index}-000000`,
+        at: fixtureNow - index * 60000,
+        updatedAt: fixtureNow - index * 60000,
+        order: index,
+        session: { sessionId: fixtureSessionId, cwd: '/tmp/annotation-fixture', workspaceLabel: 'annotation-fixture' },
+        route: '/conversation/fixture',
+        locator: {
+          tag: 'button', role: 'button', name: `Button ${index}`,
+          candidates: [{ kind: 'tag', value: 'button', reliability: 0.4 }],
+          key: `tag:button:${index}`, path: 'button', uniqueSelector: null, uniqueVerified: false,
+          ancestors: [], surface: 'page', ephemeral: false
+        },
+        component: 'button', text: `Button ${index}`, textDigest: '', context: '',
+        bounds: { x: 20 + index * 8, y: 20 + index * 8, width: 120, height: 32 },
+        viewport: { width: VIEWPORT.width, height: VIEWPORT.height },
+        note, included: true, lastStatus: null
+      })
+      const makeGroup = (id, requirement, items, order, collapsed) => ({
+        kind: 'group', id, at: fixtureNow - 300000, createdAt: fixtureNow - 300000, updatedAt: fixtureNow - 120000, order,
+        session: { sessionId: fixtureSessionId, cwd: '/tmp/annotation-fixture', workspaceLabel: 'annotation-fixture' },
+        requirement, items, collapsed, included: true
+      })
+      const fixtureDoc = {
+        version: 3,
+        updatedAt: fixtureNow,
+        records: [makeRecord(1, '保存更改按钮的层级不够突出，建议加强视觉层级。'), makeRecord(2, '列表项选中态的高亮范围偏小，建议与行高一致。')],
+        groups: [
+          makeGroup('psa-group-sidebar-01', '表单字段间距问题\n表单区域的多个控件存在间距不一致、对齐不整齐的问题。', [makeRecord(3, ''), makeRecord(4, ''), makeRecord(5, ''), makeRecord(6, '')], 2, false),
+          makeGroup('psa-group-sidebar-02', '按钮样式统一', [makeRecord(7, ''), makeRecord(8, '')], 3, true)
+        ]
+      }
+      // the record ids inside groups must stay unique across groups
+      for (let index = 0; index < fixtureDoc.groups.length; index += 1) {
+        fixtureDoc.groups[index].items = fixtureDoc.groups[index].items.map((item, itemIndex) => ({
+          ...item,
+          id: `psa-sidebar-${10 + index * 10 + itemIndex}-000000`
+        }))
+      }
+      const fixtureSource = `(() => {
+        try {
+          const mode = localStorage.getItem('psa-t25-fixture')
+          if (mode === 'pending') {
+            localStorage.setItem('power-suite.ui-annotation.annotations', ${JSON.stringify(JSON.stringify(fixtureDoc))})
+            localStorage.setItem('psa-t25-fixture', 'loaded')
+          } else if (mode === 'clear') {
+            localStorage.setItem('power-suite.ui-annotation.annotations', '')
+            localStorage.setItem('psa-t25-fixture', 'cleared')
+          }
+        } catch {}
+      })()`
+      await h.page.addInitScript(fixtureSource)
+      await h.page.evaluate(`localStorage.setItem('psa-t25-fixture', 'pending')`)
+      await h.page.reload()
+      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after the sidebar fixture reload' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the sidebar fixture reload' })
+      await sleep(700)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      await h.activate()
+      await h.openCollection()
+      await sleep(350)
+      const sidebar = await h.page.eval(probes.sidebarState)
+      assert(sidebar !== null, 'redesigned sidebar did not render')
+      assertEqual(sidebar.view, 'collection', 'rail data-view is not collection')
+      assertEqual(sidebar.title, 'Annotations', `sidebar title is wrong: ${sidebar.title}`)
+      assertEqual(sidebar.badge, '8', `sidebar total badge must count singles+group items (8): ${sidebar.badge} storage=${JSON.stringify(await h.page.eval(probes.annotationStorage))}`)
+      assert(sidebar.subtitle.length > 0, 'sidebar subtitle missing')
+      assertEqual(sidebar.filters.length, 3, `expected three filters: ${JSON.stringify(sidebar.filters)}`)
+      assertEqual(sidebar.filters.map((filter) => filter.key).join(','), 'all,single,group', 'filter order/keys wrong')
+      assert(/^All\s*4$/.test(sidebar.filters[0].text), `all-filter count wrong: ${sidebar.filters[0].text}`)
+      assert(/^Singles\s*2$/.test(sidebar.filters[1].text), `single-filter count wrong: ${sidebar.filters[1].text}`)
+      assert(/^Groups\s*2$/.test(sidebar.filters[2].text), `group-filter count wrong: ${sidebar.filters[2].text}`)
+      assertEqual(sidebar.filters[0].pressed, 'true', 'the all filter must start pressed')
+      assertEqual(sidebar.rows, 4, `mixed list must show 2 singles + 2 groups: ${sidebar.rows}`)
+      assertEqual(sidebar.singles, 2, 'single rows missing')
+      assertEqual(sidebar.groups, 2, 'group cards missing')
+      assertEqual(sidebar.groupItems, 4, `expanded group must show 4 child rows: ${sidebar.groupItems}`)
+      assert(sidebar.typeBadges.includes('single') && sidebar.typeBadges.includes('group'), `type badges missing: ${JSON.stringify(sidebar.typeBadges)}`)
+      assert(sidebar.groupBadges.some((label) => /Group · 4 items/.test(label)), `group item-count badge wrong: ${JSON.stringify(sidebar.groupBadges)}`)
+      assertEqual(JSON.stringify(sidebar.expandedGroups), JSON.stringify(['true', 'false']), 'group aria-expanded states wrong (one expanded, one collapsed)')
+      // Always-visible edit/delete affordances (no hover-only actions).
+      assert(sidebar.actions.length >= 8, `expected edit/delete actions for rows+groups+children: ${sidebar.actions.length}`)
+      for (const action of sidebar.actions) {
+        assert(action.visible, 'an edit/delete action is not visible without hover')
+        assert(action.rect !== null && action.rect.height >= 18 && action.rect.width >= 18, `action hit target too small: ${JSON.stringify(action.rect)}`)
+      }
+      assertEqual(sidebar.footer.primary, 'Add annotation', `footer primary label wrong: ${sidebar.footer.primary}`)
+      assertEqual(sidebar.footer.secondary, 'Clear collection', `footer danger label wrong when nothing is selected: ${sidebar.footer.secondary}`)
+      assert(sidebar.footer.primaryHeight >= 30 && sidebar.footer.secondaryHeight >= 30, 'footer actions are under the 30px height target')
+      assertEqual(sidebar.empty, false, 'empty state rendered with a populated collection')
+      assertEqual(sidebar.list.overflowX, false, 'sidebar content overflows horizontally at the wide width')
+      assert(sidebar.list.scrollable !== null, 'sidebar list element missing')
+      // ---- Filters are client-side and keep counts/aria state ----
+      await h.click('[data-psa-filter="single"]')
       await sleep(250)
-      const closed = await h.frame()
-      assertEqual(closed.panel, 'status', 'status panel not restored after closing the collection')
-      assertEqual(closed.paddingRight, paddingBefore, 'frame padding changed when the collection closed')
-      assertNear(closed.canvas.width, active.canvas.width, 1, 'conversation canvas width changed when the collection closed')
-      // Exit: full layout restoration.
+      const singlesOnly = await h.page.eval(probes.sidebarState)
+      assertEqual(singlesOnly.singles, 2, 'single filter must show the two singles')
+      assertEqual(singlesOnly.groups, 0, 'single filter must hide groups')
+      assertEqual(singlesOnly.filters[1].pressed, 'true', 'single filter did not report aria-pressed')
+      await h.click('[data-psa-filter="group"]')
+      await sleep(250)
+      const groupsOnly = await h.page.eval(probes.sidebarState)
+      assertEqual(groupsOnly.groups, 2, 'group filter must show the two groups')
+      assertEqual(groupsOnly.singles, 0, 'group filter must hide singles')
+      await h.click('[data-psa-filter="all"]')
+      await sleep(250)
+      // ---- Group card collapse/expand ----
+      const firstToggle = await h.page.findRect('[data-psa-group-toggle]')
+      assert(firstToggle, 'group expand/collapse control missing')
+      await h.page.clickAt(firstToggle.x, firstToggle.y)
+      await sleep(300)
+      const collapsed = await h.page.eval(probes.sidebarState)
+      assertEqual(collapsed.groupItems, 0, 'collapsing the expanded group did not hide its children')
+      assertEqual(JSON.stringify(collapsed.expandedGroups), JSON.stringify(['false', 'false']), 'collapse did not update aria-expanded')
+      await h.page.clickAt(firstToggle.x, firstToggle.y)
+      await sleep(300)
+      const expanded = await h.page.eval(probes.sidebarState)
+      assertEqual(expanded.groupItems, 4, 'expanding the group did not restore its children')
+      assertEqual(JSON.stringify(expanded.expandedGroups), JSON.stringify(['true', 'false']), 'expand did not update aria-expanded')
+      // ---- Footer secondary switches to Clear selection when a page element is selected ----
+      const editorRect = await h.page.findRect('[data-psa-entry]')
+      assert(editorRect, 'no sidebar row to focus for the selection state')
+      const navPoint = await h.page.eval(probes.pluginNavRect)
+      if (navPoint !== null) {
+        await h.page.moveTo(navPoint.x, navPoint.y)
+        await sleep(120)
+        await h.page.clickAt(navPoint.x, navPoint.y)
+        await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'single selection from the page' })
+        await sleep(200)
+        const selectedFooter = await h.page.eval(probes.sidebarState)
+        assertEqual(selectedFooter.footer.secondary, 'Clear selection', `footer danger must switch to Clear selection: ${selectedFooter.footer.secondary}`)
+        await h.page.pressKey('escape')
+        await sleep(200)
+      }
+      // ---- Light/dark high-fidelity captures of the required states ----
+      if (process.env.PSA_SIDEBAR_EVIDENCE_DIR) {
+        const dir = process.env.PSA_SIDEBAR_EVIDENCE_DIR
+        await mkdir(dir, { recursive: true })
+        const capture = async (name) => {
+          const frame = await h.frame()
+          const rail = frame.rail
+          if (rail === null) return
+          const pad = 10
+          const clip = { x: Math.max(0, rail.x - pad), y: Math.max(0, rail.y - pad), width: rail.width + pad * 2, height: Math.min(VIEWPORT.height - 2, rail.height + pad * 2), scale: 1 }
+          const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip })
+          await writeFile(path.join(dir, name), Buffer.from(data.data, 'base64'))
+        }
+        await capture('sidebar-mixed-light.png')
+        const firstRowRect = await h.page.findRect('.psa-entry-name')
+        if (firstRowRect !== null) {
+          await h.page.moveTo(firstRowRect.x, firstRowRect.y)
+          await sleep(200)
+          await capture('sidebar-hover-light.png')
+        }
+        await h.page.evaluate(`document.querySelector('[data-psa-filter="group"]')?.focus()`)
+        await sleep(150)
+        await capture('sidebar-focus-light.png')
+        await h.page.evaluate(`document.activeElement?.blur()`)
+        await sleep(120)
+        const originalDark = await h.page.evaluate(`document.body.getAttribute('data-ds-dark-theme')`)
+        await h.page.evaluate(`document.body.setAttribute('data-ds-dark-theme', 'true')`)
+        await sleep(650)
+        await capture('sidebar-mixed-dark.png')
+        await h.click('[data-psa-filter="single"]')
+        await sleep(250)
+        await capture('sidebar-singles-dark.png')
+        await h.click('[data-psa-filter="group"]')
+        await sleep(250)
+        await capture('sidebar-groups-dark.png')
+        if (originalDark === null) await h.page.evaluate(`document.body.removeAttribute('data-ds-dark-theme')`)
+        else await h.page.evaluate(`document.body.setAttribute('data-ds-dark-theme', ${JSON.stringify(originalDark)})`)
+        await sleep(350)
+        await h.click('[data-psa-filter="all"]')
+        await sleep(200)
+      }
+      // ---- Narrow viewport: overlay mode keeps the wide sidebar usable ----
+      await h.page.setViewport(800, 700)
+      await sleep(700)
+      const narrowFrame = await h.frame()
+      assertEqual(narrowFrame.railMode, 'overlay', 'narrow viewport did not switch the rail to overlay mode')
+      const narrowRailWidth = Number.parseFloat(narrowFrame.railWidthVar || '0')
+      assertEqual(narrowRailWidth, 320, `narrow overlay sidebar width is not the 320px clamp floor: ${narrowRailWidth}`)
+      assert(narrowFrame.rail !== null, 'narrow overlay sidebar missing')
+      assert(narrowFrame.rail.x + narrowFrame.rail.width <= narrowFrame.viewport.width + 1, 'narrow overlay sidebar overflows the viewport')
+      const narrowSidebar = await h.page.eval(probes.sidebarState)
+      assert(narrowSidebar !== null && narrowSidebar.list.overflowX === false, 'narrow overlay sidebar overflows horizontally')
+      await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
+      await sleep(700)
+      // ---- Empty state ----
+      await h.page.evaluate(`localStorage.setItem('psa-t25-fixture', 'clear')`)
+      await h.page.reload()
+      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after clearing the sidebar' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after clearing the sidebar' })
+      await sleep(600)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      await h.activate()
+      await h.openCollection()
+      await sleep(300)
+      const emptySidebar = await h.page.eval(probes.sidebarState)
+      assertEqual(emptySidebar.empty, true, 'empty state did not render for an empty collection')
+      assertEqual(emptySidebar.rows, 0, 'empty collection still rendered rows')
+      if (process.env.PSA_SIDEBAR_EVIDENCE_DIR) {
+        const frame = await h.frame()
+        const rail = frame.rail
+        const pad = 10
+        const dir = process.env.PSA_SIDEBAR_EVIDENCE_DIR
+        await mkdir(dir, { recursive: true })
+        const clip = { x: Math.max(0, rail.x - pad), y: Math.max(0, rail.y - pad), width: rail.width + pad * 2, height: Math.min(VIEWPORT.height - 2, rail.height + pad * 2), scale: 1 }
+        const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip })
+        await writeFile(path.join(dir, 'sidebar-empty-light.png'), Buffer.from(data.data, 'base64'))
+      }
+      // Exit: full layout restoration from the wide sidebar.
       await h.exit()
       const restored = await h.frame()
       assertEqual(restored.paddingRight, '', 'frame padding not removed after exit')
       assertNear(restored.canvas.width, canvasWidthBaseline, 2, 'conversation canvas width not restored after exit')
       assertEqual(restored.grid, baseline.grid, 'inline grid style changed after exit')
-      return `padding ${paddingBefore} stable across collection open/close; canvas ${active.canvas.width}px -> restored ${restored.canvas.width}px (baseline ${canvasWidthBaseline}px)`
+      return `status rail ${statusRailWidth}px -> collection sidebar ${collectionRailWidth}px (clamp 320..420; frame padding follows, canvas shrinks); header/badge/subtitle/filters (2 singles, 2 groups, 8 items) + always-visible edit/delete; client-side filters; group collapse/expand aria; footer Add annotation / Clear collection; narrow overlay 320px no overflow; empty state; exit restores baseline`
     },
 
     10: async () => {
