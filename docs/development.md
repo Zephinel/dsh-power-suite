@@ -65,4 +65,5 @@ runs it on push and pull request.
 - [Feature inventory and addition recipe](overview.md)
 - [Verification](verification.md)
 - [Reference implementations for UI annotation](reference-libraries.md) —
-  local XERJ corpus + DevTools/Playwright/Annotator sources for annotation work
+  local XERJ corpus (`ui-annotation-refs`) + filtered source tree + full
+  checkouts of DevTools/Playwright/Annotator for annotation work
