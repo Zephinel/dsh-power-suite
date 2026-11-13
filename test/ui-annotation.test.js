@@ -70,6 +70,7 @@ if (ui === undefined) {
     'annotationTotalItemCount', 'annotationFindRecord', 'annotationGroupFromSelection',
     'collectionAddGroup', 'serializeBatchEntries',
     'annotationSidebarCounts', 'annotationFilterEntries', 'annotationGroupSummary',
+    'annotationEntryOrdinals',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -87,8 +88,8 @@ if (ui === undefined) {
    * level, 68 = leaf-first picking (deepest eligible element, full ancestor
    * Parent/Child chain), 69 = batch groups (group model helpers, flatten/cap,
    * group serializer), 79 = redesigned sidebar (derived counts, client-side
-   * filter, group auto-summary). The E2E `ACCEPTED_SEAM_GENERATIONS` must accept
-   * exactly these counts.
+   * filter, group auto-summary), 80 = shared group ordinals (A3/T29 numbering).
+   * The E2E `ACCEPTED_SEAM_GENERATIONS` must accept exactly these counts.
    */
   const SEAM_GENERATION = SEAM_EXPORTS.length
   /** Accepted `Function.length` ranges from the frozen signatures (defaults reduce length). */
@@ -149,6 +150,7 @@ if (ui === undefined) {
     annotationSidebarCounts: [2, 2],
     annotationFilterEntries: [2, 2],
     annotationGroupSummary: [1, 1],
+    annotationEntryOrdinals: [1, 1],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
     annotationSelectedEntries: [2, 2],
@@ -171,7 +173,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 79, 'the frozen sidebar-redesign generation is pinned')
+    assert.equal(SEAM_GENERATION, 80, 'the frozen task-29 generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -2301,37 +2303,38 @@ if (ui === undefined) {
     assert.equal(source.serialize('psa-gone-one').text, null)
   })
 
-  test('A3/T19: the launcher is docked only while active and the idle position survives a mode cycle', () => {
+  test('A3/T29: the launcher hides while active (no dock/flight) and exits are confirmed', () => {
     const source = client.source
     assert.equal(typeof source, 'string')
-    const overlayStart = source.indexOf('A3/T19: exactly one launcher control at any time')
-    assert.ok(overlayStart >= 0, 'the overlay documents the one-launcher rule')
-    const launcherRender = source.indexOf("React.createElement(AnnotationLauncher", overlayStart)
-    assert.ok(launcherRender > overlayStart, 'the floating launcher render exists')
-    const guard = source.slice(overlayStart, launcherRender)
-    assert.ok(guard.includes('if (!active)'), 'the floating launcher must be rendered only while idle')
-    assert.ok(source.includes('function AnnotationDockedLauncher'), 'the docked launcher component exists')
-    const dockedStart = source.indexOf('function AnnotationDockedLauncher')
-    const dockedEnd = source.indexOf("\\n    /**", dockedStart)
-    const docked = source.slice(dockedStart, dockedEnd > 0 ? dockedEnd : source.length)
-    for (const marker of ["'data-psa-launcher': ''", "'data-psa-launcher-docked': 'true'", "'aria-pressed': 'true'", 'controller.deactivate()']) {
-      assert.ok(docked.includes(marker), `the docked launcher must include ${marker}`)
-    }
-    const railStart = source.indexOf('function AnnotationRail')
-    const railEnd = source.indexOf('\\n    /**', railStart)
-    const rail = source.slice(railStart, railEnd > 0 ? railEnd : source.length)
-    assert.ok(rail.includes('AnnotationDockedLauncher({ t, controller, snapshot })'), 'the rail header must render the docked launcher')
-    assert.equal((rail.match(/AnnotationDockedLauncher\(/g) ?? []).length, 2, 'the docked launcher is rendered in both rail header layouts')
+    assert.equal(source.includes('AnnotationDockedLauncher'), false, 'the docked launcher component/usage must be gone')
+    assert.equal(source.includes('data-psa-launcher-docked'), false, 'the docked launcher marker must be gone')
+    assert.equal(source.includes('.psa-launcher-docked'), false, 'the docked launcher CSS must be gone')
+    assert.equal(source.includes('AnnotationLauncherFlight'), false, 'the flight element component must be gone')
+    assert.equal(source.includes('launcherFlight'), false, 'the flight state/helper must be gone')
+    assert.ok(source.includes("'data-psa-launcher-hidden': active ? 'true' : 'false'"), 'the launcher exposes its hidden state')
+    assert.ok(source.includes("'aria-hidden': active ? 'true' : undefined"), 'the hidden launcher is aria-hidden while active')
+    assert.ok(source.includes('.psa-launcher[data-psa-launcher-hidden=true]{'), 'the hidden launcher CSS exists')
+    assert.ok(source.includes('transition:opacity 180ms ease,transform 180ms ease'), 'the hide/show transition exists')
+    assert.ok(source.includes('.psa-launcher{transition:none}'), 'reduced motion disables the launcher hide/show transition')
     assert.ok(source.includes('idleLauncherPosition = snapshot().launcherPosition'), 'activation remembers the idle floating position')
     assert.ok(source.includes('clampLauncherPosition(restoreLauncher, annotationViewport(), ANNOTATION_LAUNCHER_SIZE)'),
       'deactivation restores the remembered idle position')
-    const layoutStart = source.indexOf('function updateLayout')
-    const layoutEnd = source.indexOf('\\n      function ', layoutStart)
-    const layout = source.slice(layoutStart, layoutEnd > 0 ? layoutEnd : source.length)
-    assert.ok(layout.includes('isActive()'), 'updateLayout keeps the idle position untouched while active')
-    assert.ok(!layout.includes('clampLauncherForLayout'), 'the old rail-reserving launcher clamp is gone')
-    assert.ok(source.includes('function clampLauncherForLayout') === false, 'the obsolete launcher-layout clamp helper is removed')
-    assert.ok(source.includes('.psa-launcher-docked{'), 'the docked launcher CSS exists')
+    for (const marker of ['function requestExit()', 'function confirmExitClear()', 'function cancelExitConfirm()', 'function AnnotationExitConfirm', "'data-psa-exit-clear': '',", "'data-psa-exit-cancel': '',", 'data-psa-exit-confirm']) {
+      assert.ok(source.includes(marker), `exit confirmation must include ${marker}`)
+    }
+    const confirmStart = source.indexOf('function confirmExitClear()')
+    const confirmEnd = source.indexOf('\n      /**', confirmStart)
+    const confirm = source.slice(confirmStart, confirmEnd > 0 ? confirmEnd : source.length)
+    assert.ok(confirm.includes("dispatch({ type: 'collectionClear' })"), 'confirming must clear all records')
+    assert.ok(confirm.includes('flushAnnotationRecords()'), 'confirming must flush the empty persisted document')
+    assert.ok(confirm.includes('deactivate()'), 'confirming must exit the mode')
+    const footerStart = source.indexOf('function annotationCollectionFooter')
+    const footerEnd = source.indexOf('\n    /**', footerStart)
+    const footer = source.slice(footerStart, footerEnd > 0 ? footerEnd : source.length)
+    assert.ok(footer.includes("t('sidebar.cancelAnnotation')"), 'footer danger label is Cancel Annotation')
+    assert.ok(footer.includes('controller.requestExit()'), 'footer danger uses the confirmed exit path')
+    assert.ok(source.includes('REMIX_SETTINGS_LINE'), 'settings-line glyph constant exists')
+    assert.ok(source.includes('RemixGlyph(REMIX_SETTINGS_LINE'), 'rail header uses the settings-line glyph')
     assert.ok(source.includes('pointer-events:none') && source.includes('.psa-layer{position:fixed'), 'marks layer remains pointer-transparent')
   })
 
