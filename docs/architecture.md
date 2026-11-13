@@ -504,7 +504,8 @@ never outerHTML, input values, JS paths, XPath, or computed styles.
 For text-bearing leaf targets the ref additionally carries fallback anchors —
 a bounded absolute XPath, a normalized text quote (exact + prefix/suffix), a
 container-relative text position, and a JS-path expression — resolved in the
-order CSS candidates → XPath → text quote → text position; candidate resolution
+order CSS candidates → text quote (position hint) → text position → XPath last;
+candidate resolution
 is two-phase (collect hit sets, prefer the first unique candidate by stability
 tier; Ambiguous only when all identifying candidates are genuinely non-unique;
 weak-strategy ambiguity continues down the chain), generated/hashed classes are
@@ -517,7 +518,12 @@ one boundary (tag/digest/accessible name/proximity) with scored approximate
 matching (approximate hits cap below Resolved; ties stay ambiguous). Fallback
 status/nodes are cached per `(record id, DOM revision)` with bounded scans, and
 a weak-identity gate keeps icon-only/tag-only records from resolving through
-structural fallbacks (they report Changed honestly). For descendant text anchors the captured scope is authoritative: the recorded
+structural fallbacks: a verified unique selector only counts as identity while
+it still resolves to one connected/visible element, structural hits pass a
+Hypothesis-style quote assertion and captured-ancestor corroboration, and
+weak-identity records without a quote are Missing (no mark/copy on a
+look-alike). Removed floating/ephemeral surfaces report Missing rather than
+Changed. For descendant text anchors the captured scope is authoritative: the recorded
 `textPosition.container` is searched first and a unique in-scope target wins
 even when identical text exists elsewhere; multiple distinct in-scope targets
 are terminal ambiguous (later text-position/XPath fallbacks cannot override),

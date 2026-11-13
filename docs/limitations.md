@@ -416,6 +416,17 @@
   client), so scenario-10-dependent assertions (strict D1) are code-verified but
   not observable here; the descendant fixture's body fallback is acceptable with
   a clear failure message.
+- **Reference-conformance follow-ups.** The feasible reference-alignment subset
+  landed (matchQuote recall bounds/hint fading, role+name composite candidate,
+  selector length penalty); deferred items remain documented in
+  `.tmp-design/reference-conformance-root-cause.md`: Apache-style word-boundary
+  quote expansion, code-point TextPosition semantics (ours uses rendered UTF-16
+  offsets), a capture-shaped scope E2E, and identity-key verified-only fallback.
+  Non-blocking NITs: the ephemeral helper keeps text-quote Changed/Resolved even
+  when the captured surface is gone (docs say Missing for surface-gone), the
+  weak "Unverifiable" label lost its dedicated E2E fixture, role+name currently
+  sits in the same tier as data/id, and the new matchQuote/selector alignment
+  lacks dedicated unit tests.
 - **Weak-identity records fail closed.** Icon-only/tag-only targets with no real
   text digest, no real accessible name and no verified unique locator cannot be
   resolved through XPath/text-position structural fallbacks; they report
