@@ -27,7 +27,9 @@ page's content elements, never reads form values, and never sends the message.
   candidate is too small or too large. A hit inside a floating surface selects
   the whole surface first and drills into its rows from there.
 - **Multi-select** — the multi-select modifier toggles membership on click, or a
-  modifier-held drag draws a box that selects everything inside it.
+  modifier-held drag draws a box that selects everything inside it. When the
+  selection settles the **batch popover** opens with ONE shared requirement, and
+  the commit saves the whole selection as **one batch group** (not N records).
 - **Pass-through** — holding the pass-through modifier gives the page its real
   native mouse behavior back, for the left and right buttons, without leaving the
   mode.
@@ -53,7 +55,9 @@ page's content elements, never reads form values, and never sends the message.
   checkbox (other-Session rows are disabled and explained), select-all-current /
   clear-selection, inline requirement editing, insert-reference, preview (scroll +
   flash + detail card), move up/down, delete X, delete-selected, clear, and a
-  batch footer that reports exactly what will be inserted.
+  batch footer that reports exactly what will be inserted. Batch groups appear as
+  cards with their shared requirement, item count, expand/collapse and child rows
+  (phase 1 minimal collection rendering; the full redesigned sidebar follows).
 - **Page marks** — every current-Session annotation whose target still resolves
   stays visible on the page as a pointer-transparent overlay mask with a numbered
   badge (`#3` plus a one-line requirement excerpt). Missing, ambiguous, and
@@ -318,8 +322,14 @@ The multi-select modifier (Shift by default) switches clicks from "select one" t
 "toggle membership". A click with the modifier adds or removes that element
 without opening the note popover while more than one remains selected; when the
 toggle leaves exactly one element, that element becomes the single selection and
-its popover may open. With more than one selected, the rail's status view shows
-the count with **Add {count} to collection** and **Clear selection**.
+its popover may open. With more than one selected, the rail's status view shows the count with
+**Save as group** and **Clear selection**, and about 0.8 s after the last
+selection change the **batch popover** opens beside the newest selected element.
+It lists the selected elements, keeps updating its count while the selection
+grows, and contains ONE requirement textarea for the whole batch (the draft is
+preserved while more elements are added). Its primary action **Save as group**
+creates ONE group entry; Esc / the close X / **Clear selection** dismiss the
+selection. There is no per-item requirement writing in the batch flow.
 
 A drag with the modifier held starts a **marquee** once it moves about 4 px: a
 selection rectangle is drawn over the page, the pointer events under it stay
@@ -328,6 +338,34 @@ element identity, with nested duplicates collapsed. The marquee is bounded to
 the **24 most specific** intersecting candidates (not every intersecting
 element). A plain drag without the modifier does not start a marquee; it stays a
 click/selection interaction, and wheel scrolling keeps working normally.
+
+### Batch groups
+
+A batch is a first-class **group** with one shared requirement:
+
+- Saving a multi-selection stores **one group entry** — `{ kind: "group", id,
+  requirement, items: [record…], session, createdAt, updatedAt }` — where every
+  item keeps its own locator, bounds, status, Session/Workspace and route
+  metadata. The group belongs to the Session the selection was captured in;
+  groups from another Session are visible in the collection but excluded from
+  batch insert exactly like other-session singles (same skip semantics).
+- The collection view renders a group as a card with its shared requirement and
+  item count; it expands to one child row per element (locator + live status +
+  preview + remove). Editing the group's requirement is one shared edit; deleting
+  the group deletes it with all children as one undo step; child removal is also
+  undoable through the same slot.
+- Insertion produces **ONE group chip** (`UI annotations × N`, N = total child
+  elements). Its send-time serialization is one request: the batch header, then
+  the group block — the shared `Requirement:` line followed by the numbered
+  element references (`Element:` + `Reference:` + honest status line per item).
+  Group items do not carry per-item `Note:` lines. Singles in the same batch keep
+  their normal single-item block with the Note line.
+- The **100-element cap** counts singles + group items together; saving a group
+  that would exceed it is refused with the visible limit message instead of a
+  partial commit.
+- Page marks, chips, detail cards and status resolution flatten group items with
+  the group's shared requirement as their display note, so each child is still
+  individually hoverable/relocatable while its requirement is the group's.
 
 ### Pass-through
 
@@ -485,7 +523,8 @@ collection is empty the view shows **No annotated elements** with the hint
   is shown in the footer and the button label.
 - **Clear** empties the list in one click with no confirmation dialog and enters
   the same 5 s undo slot.
-- **Cap** — the collection and its persisted document hold at most **100**
+- **Cap** — the collection and its persisted document hold at most **100 elements**
+  (single records plus every group item)
   annotations. Adding the 101st record is refused before it is committed, with a
   visible message (**The collection is full (100 annotations)…**); the collection
   view also states the cap once it is reached. Nothing is silently dropped and no
@@ -516,11 +555,13 @@ created in.
   Nothing is deleted on a switch.
 - Records are validated and persisted in **browser-local `localStorage`** under
   `power-suite.ui-annotation.annotations` as a versioned document
-  `{ "version": 2, "updatedAt": <epoch ms>, "records": [ … ] }`. Writes are
-  debounced by 250 ms after any collection change, and flushed when the mode is
-  deactivated, when the plugin is disposed, and when the tab becomes hidden. On
-  load, invalid JSON, malformed records, unknown document versions, duplicate ids,
-  and records beyond the 100 cap are dropped; a v1 record is upgraded in place.
+  `{ "version": 3, "updatedAt": <epoch ms>, "records": [ …singles… ],
+  "groups": [ …batch groups… ] }`. Writes are debounced by 250 ms after any
+  collection change, and flushed when the mode is deactivated, when the plugin is
+  disposed, and when the tab becomes hidden. On load, invalid JSON, malformed
+  records/groups, unknown document versions, duplicate ids, and items beyond the
+  100-element cap are dropped; v1/v2 documents migrate their `records` to singles
+  in place, so older annotations keep working.
   Restored records re-resolve their statuses live, so a target that is gone reads
   Missing while a still-present target reads Resolved.
 - Each record also carries the Session id, the full `cwd` plus its basename as
@@ -648,7 +689,9 @@ afterwards, and is never sent automatically.
 - **Send-time serialization** — the shell calls the source codec when the draft
   is submitted; nothing is sent by the annotation feature itself. A single chip
   serializes exactly like the quick-reference block below; the batch chip
-  serializes exactly like the ordered batch request below. A single chip whose
+  serializes exactly like the ordered batch request below, where a batch group
+  contributes its shared `Requirement:` header followed by its numbered element
+  references and a single item keeps its Note line. A single chip whose
   record no longer exists fails serialization (the shell blocks the send and the
   chip renders its failure treatment) instead of silently downgrading; a batch
   chip skips deleted members and adds an explicit

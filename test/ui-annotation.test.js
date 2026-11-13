@@ -66,6 +66,9 @@ if (ui === undefined) {
     'normalizeAnnotationRecord', 'parseAnnotationStore', 'serializeAnnotationStore',
     'annotationSurfaceRoot', 'annotationSurfaceLevels', 'annotationSurfacePickLevel',
     'annotationLeafPickIndex',
+    'annotationIsGroup', 'annotationGroupItems', 'annotationFlattenRecords',
+    'annotationTotalItemCount', 'annotationFindRecord', 'annotationGroupFromSelection',
+    'collectionAddGroup', 'serializeBatchEntries',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -81,7 +84,8 @@ if (ui === undefined) {
    * 2-B (multi-delete undo, rail scope/selection helpers, chip ref round-trip,
    * candidates and model serialization), 67 = inner-first floating-surface pick
    * level, 68 = leaf-first picking (deepest eligible element, full ancestor
-   * Parent/Child chain). The E2E `ACCEPTED_SEAM_GENERATIONS` must accept exactly
+   * Parent/Child chain), 69 = batch groups (group model helpers, flatten/cap,
+   * group serializer). The E2E `ACCEPTED_SEAM_GENERATIONS` must accept exactly
    * these counts.
    */
   const SEAM_GENERATION = SEAM_EXPORTS.length
@@ -132,6 +136,14 @@ if (ui === undefined) {
     annotationSurfaceLevels: [1, 2],
     annotationSurfacePickLevel: [2, 4],
     annotationLeafPickIndex: [1, 3],
+    annotationIsGroup: [1, 1],
+    annotationGroupItems: [1, 1],
+    annotationFlattenRecords: [1, 1],
+    annotationTotalItemCount: [1, 1],
+    annotationFindRecord: [2, 2],
+    annotationGroupFromSelection: [5, 5],
+    collectionAddGroup: [3, 3],
+    serializeBatchEntries: [3, 3],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
     annotationSelectedEntries: [2, 2],
@@ -154,7 +166,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 68, 'the frozen leaf-first picking generation is pinned')
+    assert.equal(SEAM_GENERATION, 76, 'the frozen batch-group generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -730,7 +742,7 @@ if (ui === undefined) {
   //#region state machine
 
   /** Sorted keys of the frozen reducer state. */
-  const STATE_KEYS = ['box', 'collection', 'editing', 'feedback', 'hoverId', 'note', 'passThrough', 'phase', 'selection', 'sessionId', 'view']
+  const STATE_KEYS = ['batchOpen', 'box', 'collection', 'editing', 'feedback', 'hoverId', 'note', 'passThrough', 'phase', 'selection', 'sessionId', 'view']
 
   test('reducer starts from the frozen off state and activates to idle', () => {
     const initial = ui.createAnnotationState()
@@ -742,6 +754,7 @@ if (ui === undefined) {
     assert.equal(initial.note, '')
     assert.equal(initial.editing, false)
     assert.deepEqual(plain(initial.collection), [])
+    assert.equal(initial.batchOpen, false)
     assert.equal(initial.passThrough, false)
     assert.equal(initial.box, null)
     assert.equal(initial.feedback, null)
@@ -1429,7 +1442,7 @@ if (ui === undefined) {
   })
 
   test('D1: parseAnnotationStore tolerates bad documents and serializeAnnotationStore round-trips', () => {
-    const empty = { version: 2, updatedAt: 0, records: [] }
+    const empty = { version: 3, updatedAt: 0, records: [], groups: [], entries: [] }
     for (const bad of [null, undefined, '', 'not json', 'null', '42', '"text"', JSON.stringify({ version: 9, records: [recordAt(1)] })]) {
       assert.deepEqual(plain(ui.parseAnnotationStore(bad)), empty, `empty store for ${String(bad).slice(0, 24)}`)
     }
@@ -1437,13 +1450,13 @@ if (ui === undefined) {
     const first = recordAt(1)
     const serialized = ui.serializeAnnotationStore([second, first, second], 1_800_000_000_000)
     const parsed = ui.parseAnnotationStore(serialized)
-    assert.equal(parsed.version, 2)
+    assert.equal(parsed.version, 3)
     assert.equal(parsed.updatedAt, 1_800_000_000_000)
     assert.deepEqual(plain(parsed.records).map((record) => record.order), [1, 2], 'ordered by order, duplicate ids removed')
-    assert.equal(ui.serializeAnnotationStore(parsed.records, 1_800_000_000_000), serialized, 'serialization is deterministic')
+    assert.equal(ui.serializeAnnotationStore(parsed.entries, 1_800_000_000_000), serialized, 'serialization is deterministic')
     const many = Array.from({ length: 130 }, (_, index) => recordAt(index))
     const capped = ui.parseAnnotationStore(ui.serializeAnnotationStore(many, 1))
-    assert.equal(capped.records.length, 100, 'the store is capped at the record limit')
+    assert.equal(capped.records.length, 100, 'the store is capped at the total item limit')
     assert.equal(ui.RECORD_LIMIT, 100)
     assert.equal(ui.RECORDS_STORAGE_KEY, 'power-suite.ui-annotation.annotations')
     // A bare legacy array is tolerated but every record is still validated.
@@ -2432,6 +2445,92 @@ if (ui === undefined) {
     // Chat node unmounted/virtualized away → honest Missing.
     elements = []
     assert.equal(resolve(), 'missing', 'a genuinely unmounted chat leaf must report missing')
+  })
+
+  test('A3/T24: a multi-selection becomes ONE group with a shared requirement and full item identity', () => {
+    const first = recordAt(1)
+    const second = recordAt(2)
+    const group = ui.annotationGroupFromSelection(
+      [{ ...first, session: { sessionId: SESSION_A, cwd: '/repo', workspaceLabel: 'repo' } },
+        { ...second, session: { sessionId: SESSION_A, cwd: '/repo', workspaceLabel: 'repo' } }],
+      '  Batch requirement  ',
+      SESSION_A,
+      1_800_000_000_000,
+      'psa-group-test'
+    )
+    assert.equal(group.kind, 'group')
+    assert.equal(group.id, 'psa-group-test')
+    assert.equal(group.requirement, '  Batch requirement  ', 'the shared requirement is stored verbatim')
+    assert.equal(group.items.length, 2)
+    assert.deepEqual(group.items.map((item) => item.id), [first.id, second.id], 'each selected element keeps its identity')
+    assert.equal(group.items[0].session.sessionId, SESSION_A, 'items keep their session metadata')
+    assert(group.items.every((item) => (item.note ?? '') === ''), 'group items have no per-item requirement')
+    const collection = ui.collectionAddGroup([], group, 100).list
+    assert.equal(collection.length, 1)
+    assert.equal(ui.annotationTotalItemCount(collection), 2, 'the cap counts group items, not just entries')
+    const flat = ui.annotationFlattenRecords(collection)
+    assert.equal(flat.length, 2)
+    assert(flat.every((record) => record.note === '  Batch requirement  '), 'marks/chips read the group requirement')
+    const found = ui.annotationFindRecord(collection, second.id)
+    assert.equal(found.id, second.id, 'group items are resolvable by their record id')
+    assert.equal(found.note, '  Batch requirement  ')
+    assert.equal(ui.annotationIsGroup(collection[0]), true)
+    assert.equal(ui.annotationGroupItems(collection[0]).length, 2)
+    // The total cap rejects a group that would exceed 100 elements.
+    let full = []
+    for (let index = 0; index < 99; index += 1) full = ui.collectionAdd(full, entryOf(recordAt(index), `note ${index}`), 100).list
+    const overflowGroup = ui.annotationGroupFromSelection([recordAt(500), recordAt(501)], 'too much', SESSION_A, 1, 'psa-group-overflow')
+    const rejected = ui.collectionAddGroup(full, overflowGroup, 100)
+    assert.equal(rejected.rejected, true, 'a group over the total item cap is refused')
+    assert.equal(rejected.added, false)
+  })
+
+  test('A3/T24: the v3 document persists singles+groups and migrates v2 records to singles', () => {
+    const single = { ...recordAt(1), note: 'single note' }
+    const group = ui.annotationGroupFromSelection([recordAt(2), recordAt(3)], 'group note', SESSION_A, 1_800_000_000_000, 'psa-group-persist')
+    const serialized = ui.serializeAnnotationStore([single, group], 1_800_000_000_000)
+    const doc = JSON.parse(serialized)
+    assert.equal(doc.version, 3, 'the document schema is v3')
+    assert.equal(doc.records.length, 1)
+    assert.equal(doc.groups.length, 1)
+    assert.equal(doc.groups[0].requirement, 'group note')
+    assert.equal(doc.groups[0].items.length, 2)
+    const parsed = ui.parseAnnotationStore(serialized)
+    assert.equal(parsed.version, 3)
+    assert.equal(parsed.records.length, 1)
+    assert.equal(parsed.groups.length, 1)
+    assert.equal(parsed.entries.length, 2, 'entries merge singles and groups')
+    assert.equal(parsed.entries.find((entry) => entry.kind === 'group').items.length, 2)
+    // v2 documents (and bare arrays) migrate to singles without loss.
+    const legacyA = recordAt(7)
+    const legacyB = recordAt(8)
+    const legacy = ui.parseAnnotationStore(JSON.stringify({ version: 2, records: [legacyA, legacyB] }))
+    assert.equal(legacy.version, 3)
+    assert.equal(legacy.groups.length, 0)
+    assert.deepEqual(plain(legacy.entries.map((entry) => entry.id)), [legacyA.id, legacyB.id])
+    // Unknown versions remain tolerated (empty, never throwing).
+    assert.deepEqual(plain(ui.parseAnnotationStore(JSON.stringify({ version: 99, records: [recordAt(9)] }))), plain({ version: 3, updatedAt: 0, records: [], groups: [], entries: [] }))
+  })
+
+  test('A3/T24: a group batch serializes the shared requirement + numbered element references', () => {
+    const group = ui.annotationGroupFromSelection([recordAt(2), recordAt(3)], 'Shared batch requirement', SESSION_A, 1, 'psa-group-serialize')
+    const text = ui.serializeBatchEntries([group], {
+      groupHeader: 'Group',
+      groupRequirement: 'Requirement:',
+      groupReference: 'Element:',
+      reference: 'Reference:',
+      note: 'Note:',
+      itemsCountLabel: 'items'
+    }, () => 'resolved')
+    assert(/Group · 2 items/.test(text), `group header missing: ${text}`)
+    assert(/Requirement: Shared batch requirement/.test(text), `shared requirement missing: ${text}`)
+    assert(/1\. Element:/.test(text) && /2\. Element:/.test(text), `numbered element references missing: ${text}`)
+    assert(/Reference:/.test(text), 'each element keeps its locator reference line')
+    assert(!/Note:/.test(text), 'group items must not use per-item Note lines')
+    // A single in the same batch keeps its Note line.
+    const mixed = ui.serializeBatchEntries([recordAt(1), group], { reference: 'Reference:', note: 'Note:', batchHeader: 'Batch' }, () => 'resolved')
+    assert(/1\. /.test(mixed) && /Note:/.test(mixed), `single item block missing: ${mixed}`)
+    assert(/Group · 2 items/.test(mixed), 'group block still present in a mixed batch')
   })
 
   //#region geometry and layout
