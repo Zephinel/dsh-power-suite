@@ -4498,6 +4498,87 @@ const probePin = {
     }
   },
 
+  /** Leading-glyph cell / child-tree trunk / pin column alignment facts for main rows. */
+  glyphAlignment: () => {
+    const rectOf = (element) => {
+      const r = element.getBoundingClientRect()
+      return { left: Number(r.left.toFixed(2)), right: Number(r.right.toFixed(2)), top: Number(r.top.toFixed(2)), bottom: Number(r.bottom.toFixed(2)), width: Number(r.width.toFixed(2)), height: Number(r.height.toFixed(2)) }
+    }
+    const centreX = (element) => {
+      const r = element.getBoundingClientRect()
+      return Number(((r.left + r.right) / 2).toFixed(2))
+    }
+    const rows = [...document.querySelectorAll('.psd-run')].map((row) => {
+      const cell = row.querySelector('.psd-run-glyph-cell')
+      const glyph = cell === null ? null : cell.firstElementChild
+      const glyphKind = glyph === null ? null : glyph.classList.contains('psd-run-brand') ? 'brand' : 'dot'
+      const svg = glyph === null ? null : glyph.querySelector('svg')
+      const pinSlot = row.querySelector('.psd-run-pin-slot')
+      const pin = row.querySelector('.psd-run-pin')
+      const titleButton = row.querySelector('.psd-run-open')
+      const parent = row.parentElement
+      const children = parent === null
+        ? null
+        : (parent.querySelector(':scope > .psd-children') ?? parent.querySelector('.psd-children'))
+      let trunkCentre = null
+      if (children !== null) {
+        const childrenRect = children.getBoundingClientRect()
+        const borderLeft = parseFloat(getComputedStyle(children).borderLeftWidth) || 0
+        trunkCentre = Number((childrenRect.left + borderLeft / 2).toFixed(2))
+      }
+      let childGlyph = null
+      if (children !== null) {
+        const child = [...children.querySelectorAll('.psd-child')].find((element) => element.querySelector('.psd-child-glyph') !== null)
+        if (child !== undefined) {
+          const glyphElement = child.querySelector('.psd-child-glyph')
+          const glyphRect = rectOf(glyphElement)
+          childGlyph = {
+            centre: centreX(glyphElement),
+            width: glyphRect.width,
+            height: glyphRect.height,
+            isBrand: glyphElement.querySelector('.psd-child-brand') !== null
+          }
+        }
+      }
+      return {
+        title: (row.querySelector('.psd-run-title')?.innerText || '').trim(),
+        state: row.getAttribute('data-state'),
+        rowLeft: Number(row.getBoundingClientRect().left.toFixed(2)),
+        cell: cell === null ? null : { ...rectOf(cell), centre: centreX(cell) },
+        glyphKind,
+        glyph: glyph === null
+          ? null
+          : {
+              ...rectOf(glyph),
+              centre: centreX(glyph),
+              className: String(glyph.className || ''),
+              svg: svg === null
+                ? null
+                : {
+                    width: Number(svg.getBoundingClientRect().width.toFixed(2)),
+                    height: Number(svg.getBoundingClientRect().height.toFixed(2)),
+                    centre: centreX(svg)
+                  }
+            },
+        pinSlot: pinSlot === null
+          ? null
+          : {
+              ...rectOf(pinSlot),
+              centre: centreX(pinSlot),
+              marginLeft: getComputedStyle(pinSlot).marginLeft,
+              marginRight: getComputedStyle(pinSlot).marginRight
+            },
+        pin: pin === null ? null : { ...rectOf(pin), centre: centreX(pin) },
+        titleLeft: titleButton === null ? null : rectOf(titleButton).left,
+        gapLeft: cell === null || pinSlot === null ? null : Number((pinSlot.getBoundingClientRect().left - cell.getBoundingClientRect().right).toFixed(2)),
+        gapRight: pinSlot === null || titleButton === null ? null : Number((titleButton.getBoundingClientRect().left - pinSlot.getBoundingClientRect().right).toFixed(2)),
+        trunkCentre,
+        childGlyph
+      }
+    })
+    return { rows }
+  },
+
   /** Small read of the dynamic-Workspaces live test seam (id/title/state + pin state). */
   liveSnapshot: () => {
     const seam = globalThis.__POWER_SUITE_TEST_HOOKS__?.dynamicWorkspacesLive
@@ -6784,6 +6865,90 @@ async function runPinChecks({ page, results, state }) {
       scrollNote += ' (rows fit without overflow; the five-row/View-all behavior is covered by the expansion log and full-mode checks)'
     }
     return `reference native Workspace project row ${reference}px; ${parentRows.length} main + ${childRows.length} child rows all ${reference}px, border-box pills fill the row and titles/times stay centred ±1 with no wrapping; native session rows ${sessionHeights.join('/')}px (shell 32 untouched); ${scrollNote}`
+  })
+
+  await results.check('r3-14', 'leading glyph cell, child-tree trunk and pin column share their centres; sparkle is enlarged', async () => {
+    await ensurePanelRows(page)
+    await ensureNativeSessionRowsVisible(page, 2).catch(() => [])
+    await resetPointer(page)
+    // The read-row sparkle only exists on an acknowledged row: open a finished row like a
+    // user when the live card has none yet (this is the documented side effect).
+    let facts = await page.eval(probePin.glyphAlignment)
+    if (!facts.rows.some((row) => row.glyphKind === 'brand')) {
+      await arrangeReadDoneRow(page)
+      await resetPointer(page)
+      await sleep(400)
+      facts = await page.eval(probePin.glyphAlignment)
+    }
+    const rows = facts.rows
+    assert(Array.isArray(rows) && rows.length > 0, 'the card has no main rows to measure')
+    const measuredCells = rows.filter((row) => row.cell !== null)
+    assertEqual(measuredCells.length, rows.length, 'every main row must render the fixed .psd-run-glyph-cell')
+    const referenceCentre = measuredCells[0].cell.centre
+    const kinds = new Set()
+    const gapValues = []
+    const pinCentres = []
+    const trunkCentres = []
+    const childDotCentres = []
+    const brandSizes = []
+    const dotSizes = []
+    for (const row of rows) {
+      assert(row.cell.width === 16, `row "${short(row.title, 30)}" glyph cell width must be 16 px (got ${row.cell.width})`)
+      assert(row.cell.height === 20, `row "${short(row.title, 30)}" glyph cell height must be 20 px (got ${row.cell.height})`)
+      assertNear(row.cell.centre, referenceCentre, 0.5,
+        `every main-row glyph cell must share one centre column (row "${short(row.title, 30)}" centre ${row.cell.centre}, reference ${referenceCentre})`)
+      assert(row.glyph !== null, `row "${short(row.title, 30)}" has no leading glyph`)
+      kinds.add(row.glyphKind)
+      if (row.glyphKind === 'brand') {
+        assert(row.glyph.svg !== null, `read row "${short(row.title, 30)}" must render the sparkling svg`)
+        assertEqual(row.glyph.svg.width, 16, `read-row sparkle svg width must be enlarged to 16 px (got ${row.glyph.svg.width})`)
+        assertEqual(row.glyph.svg.height, 16, `read-row sparkle svg height must be 16 px (got ${row.glyph.svg.height})`)
+        assertNear(row.glyph.svg.centre, row.cell.centre, 0.5, `the sparkle must stay visually centred in the glyph cell (svg ${row.glyph.svg.centre}, cell ${row.cell.centre})`)
+        brandSizes.push(`${row.glyph.svg.width}x${row.glyph.svg.height}`)
+      } else {
+        assertEqual(row.glyph.width, 14, `state dot width must stay 14 px (row "${short(row.title, 30)}" got ${row.glyph.width})`)
+        assertEqual(row.glyph.height, 14, `state dot height must stay 14 px (row "${short(row.title, 30)}" got ${row.glyph.height})`)
+        assertNear(row.glyph.centre, row.cell.centre, 0.5, `the state dot must be centred in the glyph cell (dot ${row.glyph.centre}, cell ${row.cell.centre})`)
+        dotSizes.push(`${row.glyph.width}x${row.glyph.height}`)
+      }
+      assert(row.pinSlot !== null && row.pin !== null, `row "${short(row.title, 30)}" must render the pin slot and button`)
+      assertNear(row.pinSlot.centre, row.pin.centre, 0.5,
+        `the pin button must be centred in its slot (slot ${row.pinSlot.centre}, button ${row.pin.centre})`)
+      assertEqual(row.pinSlot.marginLeft, '0px', `pin slot margin-left must be 0 (got ${row.pinSlot.marginLeft})`)
+      assertEqual(row.pinSlot.marginRight, '0px', `pin slot margin-right must be 0 (got ${row.pinSlot.marginRight})`)
+      assertNear(row.gapLeft, 9, 0.5, `the gap left of the pin slot must be 9 px (row "${short(row.title, 30)}" got ${row.gapLeft})`)
+      assertNear(row.gapRight, 9, 0.5, `the gap right of the pin slot must be 9 px (row "${short(row.title, 30)}" got ${row.gapRight})`)
+      assertNear(row.gapLeft, row.gapRight, 0.5, 'the pin slot must be symmetrically spaced on both sides')
+      gapValues.push(`${row.gapLeft}/${row.gapRight}`)
+      pinCentres.push(row.pin.centre)
+      if (row.trunkCentre !== null) {
+        assertNear(row.trunkCentre, row.cell.centre, 0.5,
+          `the child-tree trunk must be centred under the glyph cell (trunk ${row.trunkCentre}, cell ${row.cell.centre})`)
+        trunkCentres.push(row.trunkCentre)
+        if (row.childGlyph !== null && row.childGlyph.isBrand === false && row.childGlyph.width === 10) {
+          assertNear(row.childGlyph.centre, row.pin.centre, 0.5,
+            `the child status-dot centre must align with the pin centre (dot ${row.childGlyph.centre}, pin ${row.pin.centre})`)
+          childDotCentres.push(`${row.childGlyph.centre}@pin${row.pin.centre}`)
+        }
+      }
+    }
+    assert(kinds.has('brand'), 'no read-row sparkle was observable to verify the enlarged 16 px glyph')
+    assert(trunkCentres.length > 0, 'no main row with nested child rows was rendered; cannot verify the trunk/child-dot alignment')
+    assert(childDotCentres.length > 0, 'no child status dot was rendered in a nested child row; the child-dot/pin alignment could not be verified')
+    const pinColumn = Number(((pinCentres.reduce((sum, value) => sum + value, 0)) / pinCentres.length).toFixed(2))
+    const uniqueJoins = (values) => [...new Set(values)].join('/')
+    const cellCentreList = uniqueJoins(measuredCells.map((row) => Math.round(row.cell.centre)))
+    const gapList = uniqueJoins(gapValues)
+    const trunkList = uniqueJoins(trunkCentres)
+    const sparkleList = uniqueJoins(brandSizes)
+    const dotList = uniqueJoins(dotSizes)
+    log('r3-14: glyph cell centres ' + cellCentreList + ' px (reference ' + referenceCentre + '); pin column ' + pinColumn +
+      '; gaps ' + gapList + '; trunk ' + trunkList + '; child dots ' + childDotCentres.join(', ') +
+      '; sparkle ' + sparkleList + '; state dots ' + dotList)
+    return 'glyph cell 16x20 centred at ' + referenceCentre + 'px (' + cellCentreList + ' px) across ' + rows.length +
+      ' main rows; sparkle ' + sparkleList + ' + state dots ' + dotList + ' centred in the cell; pin column ' +
+      pinColumn + 'px with symmetric gaps ' + gapList + ' and zero slot margins; tree trunk ' + trunkList +
+      ' = cell centre; child status dot ' + childDotCentres.join(', ') + ' = pin centre'
   })
 
 }

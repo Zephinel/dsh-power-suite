@@ -1218,7 +1218,12 @@ Remaining work is the same post-restart step: after the user restarts DSH Web, r
 `--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS (pre-restart local pins
 migrate on first Host contact) and full-mode `b6-5` no longer sees the 404 console line.
 
-## FOLLOW-UP 6: running-card row heights unified with the native Workspace project rows (build `a5d56fd`)
+## FOLLOW-UP 6: running-card row heights unified with the native Workspace project rows (build `a5d56fd` — previous build)
+
+> **Build note:** the evidence in this section is for the previous build `a5d56fd`. The
+> current served build `53f159e` centres the leading glyph cell, child-tree trunk and pin
+> column and enlarges the read-row sparkle; its evidence is under "FOLLOW-UP 7" at the end
+> of this file.
 
 User request: unify the running-card ("Running & recent") row heights with the native
 Workspace project rows — "以 Workspace 的为准", for **all** row types, not just the rainbow
@@ -1251,6 +1256,42 @@ row-height change is reported as an equality failure instead of being silently a
 Side effects are unchanged (the `--pin` checks may open existing main/subagent Sessions to
 create current atmosphere rows; no typing/edits; final effective card pins `[]`, native
 sidebar pin state untouched).
+
+Remaining work is the same post-restart step: after the user restarts DSH Web, re-run
+`--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS (pre-restart local pins
+migrate on first Host contact) and full-mode `b6-5` no longer sees the 404 console line.
+
+## FOLLOW-UP 7: leading glyph cell, child-tree trunk and pin column share one centre; sparkle enlarged (build `53f159e`)
+
+User screenshot feedback: enlarge the read-row sparkle slightly; the child-tree indicator
+line was not horizontally centred with the glyph; and the pin button was not centred over
+the child-dot column (asymmetric left/right spacing). Commit `53f159e` puts every main-row
+state's leading glyph in a fixed `.psd-run-glyph-cell` (16×20, centred — 14 px state dots
+stay centred and the read-row sparkle grew 14→16 px), sets `.psd-run-main` gap 9 px with
+zero pin-slot margins (equal gaps), moves `.psd-children` to a 28.5 px margin so the 1 px
+trunk centres under the glyph cell, and nudges `.psd-child-main` padding to 10.5 px so the
+child status-dot centre equals the pin centre.
+
+Independent E2E verification on the merged build with the worktree-injected client:
+worktree and linked checkout at `53f159e`, injected/loaded `src/client.js` md5
+`8717e63139791aba0d2c96e78f92f931` (20880 lines). No service restart (Host pin route still
+absent → `pinShared=false`). Node v24.22.2, Chrome 157.0.8103.78, 1728x900; logs under
+`/tmp`, screenshots under `.tmp-work/sidebar-e2e/` (gitignored).
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Glyph/trunk/pin alignment + sizes (`r3-14`, new) | `node test/browser/sidebar.e2e.mjs --pin` | **PASS**: on every main row the `.psd-run-glyph-cell` is **16×20 px** and all cells share one centre column (measured **50 px** absolute = 29 px from the row's left edge, ±0.5 across the running-dot and read-sparkle rows); the read-row **sparkle svg is 16×16 px** and visually centred in the cell, while running/unread **state dots stay 14×14 px** centred in the same cell (cross-state cell centres equal); the pin button is centred in its 16 px slot, the slot has **zero horizontal margins** and **symmetric 9 px / 9 px** gaps (`pinSlot.left − glyphCell.right == title.left − pinSlot.right`); the child-tree **trunk centre 50 px** equals the glyph-cell centre and the **child status-dot centre 75 px equals the pin centre** |
+| `--pin` aggregate | `node test/browser/sidebar.e2e.mjs --pin` | **24 PASS / 2 SKIP / 0 FAIL**, 57.3 s, page errors **0**, real network failures **0**, expected pre-restart pin-route probes classified separately, exit 0 (`/tmp/f7-pin-1.log`); the two SKIPs remain the documented pre-restart `r3-host`/`r3-8` Host rows |
+| Shipped install (no injection) | `node test/browser/sidebar.e2e.mjs --live` | **4/4 PASS**, 6.6 s, exit 0 (`/tmp/f7-live.log`): both fresh profiles served the corrected client with 2 main rows, 4 subagent child rows, 2 pin buttons, 0 pinned rows/nodes, no injected factory, empty local pin cache, 0 page errors |
+| Smoke | `node test/browser/sidebar.e2e.mjs --smoke` | **4/4 PASS**, 0 page errors, 2.1 s, exit 0 (`/tmp/f7-smoke.log`) |
+| Full mode | `node test/browser/sidebar.e2e.mjs --no-shots` | **42/43 PASS**, 50.5 s, page errors 0 (`/tmp/f7-full-1.log`); the only failure is the untouched `b6-5` check counting Chrome's console log of the expected pre-restart pin-route 404. **No existing geometry/targeting assertion needed to move for the new glyph cell/pin alignment**; no oracle was changed |
+
+Measured values match the lead's independent probe (glyph cell centre = trunk centre = 29 px
+from row left; pin centre = child-dot centre = 54 px from row left; pin gaps 9/9; sparkle
+16 px, state dots 14 px centred in the same cell). The check opens a finished row like a
+user when the live card has no read-row sparkle yet (documented side effect; no typing or
+edits). Side effects otherwise unchanged: final effective card pins `[]`, 0 pinned rows,
+native sidebar pin state untouched.
 
 Remaining work is the same post-restart step: after the user restarts DSH Web, re-run
 `--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS (pre-restart local pins

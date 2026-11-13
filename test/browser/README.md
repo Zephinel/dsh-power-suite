@@ -534,6 +534,7 @@ HTTP failure predicate) and adds:
 | `r3-11` | Native current Session/Workspace rows keep only the rainbow and brighten content + action buttons | the native sidebar current Session row (revealed like a user) and `[data-psd-current-workspace="true"]` row at rest: non-atmosphere content children `filter: brightness(1.15)` with the filter transition; hovered with a real pointer: `brightness(1.5)`, computed background `rgba(0,0,0,0)` each, atmosphere wrapper + canvas present, and their hover-revealed action buttons keep a `rgba(0,0,0,0)` background with `filter: brightness(1.2)`; an ordinary native session row still shows its native hover background with `filter:none` (control also unfiltered). If the open Session is a subagent (no native sidebar row), the check first switches back to a main card row like a user |
 | `r3-12` | Atmosphere brightness respects reduced motion | with `prefers-reduced-motion: reduce`, the current card row's content children keep the static `brightness(1.15)` lift while the filter transition is disabled (`transition-property:none` / `0s`); media emulation is reset afterwards |
 | `r3-13` | Card rows match the native Workspace project row height | measured in the same page like a user: the native `[data-row-key^="workspace:"]` project-row height is the reference (asserted equality, not hardcoded); every `.psd-run` and `.psd-child` height equals it; `.psd-run-main`/`.psd-child-main` height equals their row height with `box-sizing:border-box` and pill top/bottom matching the row (±1) so the highlight fills the row; titles/times stay vertically centred (±1), titles stay single-line (`white-space:nowrap`, no vertical wrap/clip); native session rows explicitly keep the shell's own 32 px height; the taller rows still scroll inside the clamped card body when it overflows (else the five-row/View-all behavior is covered by the expansion log + full-mode checks) |
+| `r3-14` | Leading glyph / tree trunk / pin column share their centres; sparkle enlarged | real GUI measurements on every main row: `.psd-run-glyph-cell` is 16×20 px and all cells share one centre column (±0.5 px); the read-row sparkle svg is **16×16** and visually centred in the cell, while running/unread state dots stay **14×14** centred in the same cell (cross-state cell centres equal); the child-tree trunk centre equals the glyph-cell centre (±0.5) and the child status-dot centre equals the pin centre (±0.5); the pin button is centred in its slot, the slot has zero horizontal margins and equal **9 px** gaps on both sides (`pinSlot.left - glyphCell.right == title.left - pinSlot.right`, ±0.5) |
 
 R1/R2 checks are unchanged from the original delivery (`r1-1`/`r1-2` perfect-circle dot;
 `r2-1`..`r2-4` native hover figures, same-Session label alignment, 244 px native frame,
@@ -705,7 +706,12 @@ Remaining for the final green table (unchanged): after the user restarts the DSH
 service, re-run `--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS and
 full-mode `b6-5` no longer sees the 404 console line.
 
-### Recorded evidence (follow-up 6: card row height unified with Workspace project rows, build `a5d56fd`)
+### Recorded evidence (follow-up 6: card row height unified with Workspace project rows, build `a5d56fd` — previous build)
+
+> **Build note:** the results below are for the previous build `a5d56fd` (md5
+> `68ec7946…`); the current served build `53f159e` centres the glyph cell, tree trunk and
+> pin column and enlarges the read-row sparkle — its evidence is recorded under
+> "follow-up 7" below.
 
 Build: worktree and linked checkout at `a5d56fd` (merge including the newer annotation
 work, on top of "style(dynamic-workspaces): unify card row heights with the Workspace
@@ -735,6 +741,35 @@ Remaining for the final green table (unchanged): after the user restarts the DSH
 service, re-run `--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS and
 full-mode `b6-5` no longer sees the 404 console line.
 
+### Recorded evidence (follow-up 7: glyph / trunk / pin column alignment + sparkle size, build `53f159e`)
+
+Build: worktree and linked checkout at `53f159e` ("fix(dynamic-workspaces): centre the
+leading glyph cell, tree trunk and pin column"), injected/loaded `src/client.js` md5
+`8717e63139791aba0d2c96e78f92f931` (20880 lines). No service restart (Host pin route still
+absent → `pinShared=false`). This section is the current build's evidence; the
+`a5d56fd`/`68ec7946…` and earlier tables above are historical for those builds. Node
+v24.22.2, Chrome 157.0.8103.78, 1728x900; logs under `/tmp`, screenshots under
+`.tmp-work/sidebar-e2e/` (gitignored).
+
+| Run | Command | Result |
+|-----|---------|--------|
+| Static gates | `node --check src/client.js`; `npm test`; `npm run check` | exit 0; **250/250** unit tests pass, 0 fail; repository check exit 0 (pack entryCount 73) |
+| Glyph/trunk/pin alignment (`r3-14`, new) + pin acceptance | `node test/browser/sidebar.e2e.mjs --pin` | **24 PASS / 2 SKIP / 0 FAIL**, 57.3 s, page errors **0**, real network failures **0**, expected pre-restart pin-route probes classified separately, exit 0 (`/tmp/f7-pin-1.log`). Measurements (absolute page coords; the card row starts at 21 px): glyph cell **16×20 px**, all main-row cell centres **50 px** (29 px from the row left) — equal across the running-dot row and the read-sparkle row; read-row **sparkle svg 16×16 px**, running/unread **state dots 14×14 px**, both centred in the cell; **pin column 75 px** with the pin button centred in its 16 px slot, zero slot margins and symmetric **9 px / 9 px** gaps; child-tree **trunk 50 px** = glyph cell centre; **child status dot 75 px = pin centre** |
+| Shipped install, no injection | `node test/browser/sidebar.e2e.mjs --live` | **4/4 PASS**, 6.6 s, exit 0 (`/tmp/f7-live.log`): both fresh profiles served the corrected client with 2 main rows, 4 subagent child rows, 2 pin buttons, 0 pinned rows/nodes, no injected factory, empty local pin cache, 0 page errors |
+| Smoke | `node test/browser/sidebar.e2e.mjs --smoke` | **4/4 PASS**, 0 page errors, 2.1 s, exit 0 (`/tmp/f7-smoke.log`) |
+| Full mode | `node test/browser/sidebar.e2e.mjs --no-shots` | **42/43 PASS**, 50.5 s, page errors 0 (`/tmp/f7-full-1.log`); the only failure is the untouched `b6-5` check counting Chrome's console log of the expected pre-restart pin-route 404. No existing geometry/targeting assertion needed to move for the new glyph cell/pin alignment (no oracle changed) |
+
+The follow-up-7 check lives in `--pin` as `r3-14` (additive). It opens a finished row like a
+user when the live card has no read-row sparkle yet (documented side effect), then measures
+the live DOM. Comparison values are derived from the live row geometry (16 px cell, ±0.5 px
+centres, 9 px gaps), so a shell/plugin-side alignment regression is reported as an explicit
+failure. Side effects are unchanged (the checks may open existing main/subagent Sessions; no
+typing/edits; final effective card pins `[]`, native sidebar pin state untouched).
+
+Remaining for the final green table (unchanged): after the user restarts the DSH Web
+service, re-run `--pin` so `r3-host` and the second-profile `r3-8` turn SKIP → PASS and
+full-mode `b6-5` no longer sees the 404 console line.
+
 ### Known limitations (`--pin` / `--live`)
 
 - Host sharing and cross-device visibility require the DSH Web service restart that loads
@@ -742,6 +777,9 @@ full-mode `b6-5` no longer sees the 404 console line.
   SKIPs (the UI works local-only with the cache/queue, which the reload check covers).
 - After the service restart, the untouched full-mode `b6-5` console-cleanliness check is
   expected to clear; until then it reports the expected pre-restart 404 log line.
+- The glyph-alignment check (`r3-14`) needs a read-row sparkle and a main row with nested
+  child rows; it opens a finished row like a user when the live card has no acknowledged
+  row yet, so that Session is touched but never edited.
 - The row-height check measures the live native Workspace project row as the reference and
   requires at least one rendered nested subagent row plus visible native session rows (it
   reveals/expands them like a user first); a shell-side row-height change shows up as an
