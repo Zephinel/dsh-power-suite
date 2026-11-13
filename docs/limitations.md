@@ -383,6 +383,12 @@
   virtualization reports the honest missing status, and annotations captured
   before this change keep their older positional locator (re-annotate to get the
   stable anchor).
+- **Batch groups are a v3 document.** Groups hold one shared requirement and N
+  element items; the 100-element cap counts singles plus group items (an
+  over-limit group commit is refused visibly). The batch popover is not
+  draggable yet and opens automatically ~0.8 s after the last selection change
+  (so it never steals a click mid-gesture); Esc/X/clear dismisses it without
+  saving. Old v2 records migrate as singles.
 - **Chip hover preview matches records by element label.** Two annotations with
   the same element label resolve to the first matching record for the preview
   (the record itself is correct); native composer chips are ignored. Annotations

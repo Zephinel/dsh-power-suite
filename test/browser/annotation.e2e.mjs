@@ -1090,7 +1090,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1102,7 +1102,7 @@ async function runSmoke({ page, results, state }) {
     // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
     // rail selection and chip-ref serialization helpers (66). Pin a documented count and
     // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68]
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1146,6 +1146,11 @@ async function runSmoke({ page, results, state }) {
     if (keyCount === 68) {
       for (const key of ['annotationLeafPickIndex', 'annotationSurfacePickLevel', 'annotationSurfaceLevels', 'annotationSurfaceRoot']) {
         assert(probe.keys.includes(key), `leaf-first seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
+      }
+    }
+    if (keyCount === 76) {
+      for (const key of ['annotationLeafPickIndex', 'annotationGroupFromSelection', 'collectionAddGroup', 'serializeBatchEntries']) {
+        assert(probe.keys.includes(key), `batch-group seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
       }
     }
     state.hooks = probe.keys
@@ -2263,7 +2268,7 @@ const probes = {
     } catch {
       text = null
     }
-    if (text === null) return { present: false, version: null, count: 0, records: [] }
+    if (text === null) return { present: false, version: null, count: 0, itemCount: 0, records: [], groups: [] }
     let parsed = null
     try {
       parsed = JSON.parse(text)
@@ -2271,11 +2276,14 @@ const probes = {
       return { present: true, corrupt: true, version: null, count: 0, records: [] }
     }
     const records = Array.isArray(parsed?.records) ? parsed.records : []
+    const groups = Array.isArray(parsed?.groups) ? parsed.groups : []
+    const itemCount = records.length + groups.reduce((sum, group) => sum + (Array.isArray(group?.items) ? group.items.length : 0), 0)
     return {
       present: true,
       version: parsed?.version ?? null,
       updatedAt: parsed?.updatedAt ?? null,
-      count: records.length,
+      count: records.length + groups.length,
+      itemCount,
       rawLength: text.length,
       records: records.map((record) => ({
         id: record?.id ?? null,
@@ -2299,6 +2307,18 @@ const probes = {
         keys: Object.keys(record ?? {}).sort(),
         locatorKeys: Object.keys(record?.locator ?? {}).sort(),
       })),
+      groups: groups.map((group) => ({
+        id: group?.id ?? null,
+        kind: group?.kind ?? null,
+        requirement: group?.requirement ?? null,
+        createdAt: group?.createdAt ?? null,
+        updatedAt: group?.updatedAt ?? null,
+        collapsed: group?.collapsed ?? null,
+        included: group?.included ?? null,
+        session: group?.session ?? null,
+        itemCount: Array.isArray(group?.items) ? group.items.length : 0,
+        itemIds: Array.isArray(group?.items) ? group.items.map((item) => item?.id ?? null) : []
+      }))
     }
   },
 
@@ -3508,9 +3528,6 @@ function buildScenarios(harness) {
       for (let index = 0; index < targets.length; index += 1) {
         const target = targets[index]
         const expectedOutlines = index + 1
-        // Keep the renderer queue short: a short settle before each real click and a larger
-        // inter-click gap (the multi-select UI re-renders between clicks). The retry is guarded
-        // by the outline count postcondition so a delivered click is never repeated (N5).
         await sleep(150)
         await h.page.clickAt(target.point.x, target.point.y, {
           modifiers: MOD.shift,
@@ -3527,46 +3544,128 @@ function buildScenarios(harness) {
         /3 elements selected|已选择 3 个元素/.test(multiUi.panelText),
         `rail status does not report 3 selected elements: ${short(multiUi.panelText, 140)}`
       )
-      await h.click('[data-psa-add-multi]')
-      await sleep(350)
-      const added = await h.ui()
-      assert(/Added to the collection|已加入标注集|Marked ·|已标记/.test(added.feedback || ''), `missing "added" feedback: ${added.feedback}`)
-      await h.openCollection()
-      assertEqual((await h.ui()).entries, 3, 'three entries after "Add all to collection"')
-      await h.clickBack()
-      // Re-selecting the same element updates its entry instead of duplicating it.
-      // A3/T18: page picking is leaf-first, so re-select with the SAME recorded point
-      // instead of a selector lookup (a selector lookup can land on a different leaf).
-      await h.clearSelection()
-      await h.page.moveTo(targets[0].point.x, targets[0].point.y)
-      await sleep(150)
-      await h.page.clickAt(targets[0].point.x, targets[0].point.y)
-      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'popover after re-selecting the same leaf point' })
+      // A3/T24: when the multi-select gesture settles, ONE batch popover opens with
+      // ONE shared requirement field for the whole selection.
+      await h.page.waitFor(`!!document.querySelector('[data-psa-batch-popover]')`, { timeout: 5000, label: 'batch popover after multi-select' })
+      await sleep(250)
+      const batchPopover = await h.page.evaluate(`(() => {
+        const popover = document.querySelector('[data-psa-batch-popover]')
+        if (popover === null) return null
+        const note = popover.querySelector('[data-psa-batch-note]')
+        const rect = note === null ? null : note.getBoundingClientRect()
+        return {
+          count: popover.getAttribute('data-psa-count'),
+          title: (popover.querySelector('[data-psa-batch-title]')?.innerText || '').trim(),
+          noteCount: popover.querySelectorAll('[data-psa-batch-note]').length,
+          items: [...popover.querySelectorAll('[data-psa-batch-items] li')].map((item) => (item.innerText || '').trim()),
+          rect: rect === null ? null : { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }
+        }
+      })()`)
+      assert(batchPopover !== null, 'the batch popover did not render for a 3-element selection')
+      assertEqual(batchPopover.count, '3', `the batch popover count is wrong: ${JSON.stringify(batchPopover)}`)
+      assert(/3 elements selected|已选择 3 个元素/.test(batchPopover.title), `the batch popover title is wrong: ${batchPopover.title}`)
+      assertEqual(batchPopover.noteCount, 1, 'the batch popover must have exactly ONE shared requirement field')
+      assertEqual(batchPopover.items.length, 3, `the batch popover must list the 3 selected elements: ${JSON.stringify(batchPopover.items)}`)
+      assert(batchPopover.rect !== null, 'the batch popover requirement textarea has no geometry')
+      await h.page.clickAt(batchPopover.rect.x, batchPopover.rect.y)
+      await sleep(120)
+      await h.page.insertText('Batch group requirement')
       await sleep(200)
-      const popover = await h.popover()
-      assert(/Update requirement|Update collection|更新需求|更新标注集/.test(popover.addLabel || ''), `popover should offer update, got "${popover.addLabel}"`)
-      await h.click('[data-psa-add]')
+      await h.click('[data-psa-save-group]')
+      await h.page.waitFor(
+        `document.querySelector('[data-psa-batch-popover]') === null && document.documentElement.getAttribute('data-psa-active') === 'true'`,
+        { timeout: 8000, label: 'batch popover commit' }
+      )
       await sleep(350)
-      const updated = await h.ui()
-      assert(/Updated the existing collection entry|Requirement updated|已更新|需求已更新/.test(updated.feedback || ''), `missing "updated" feedback: ${updated.feedback}`)
+      const groupFeedback = await h.page.evaluate(`document.querySelector('[data-psa-feedback]')?.innerText ?? ''`)
+      assert(/Group saved|已保存为分组/.test(groupFeedback), `missing group-saved feedback: ${short(groupFeedback)}`)
+      const groupUi = await h.ui()
+      assertEqual(groupUi.popover, false, 'the batch popover did not close after commit')
+      assertEqual(groupUi.selection + groupUi.multi, 0, 'the batch commit did not clear the selection')
+      const groupStored = await h.page.eval(probes.annotationStorage)
+      assertEqual(groupStored.version, 3, 'the group commit did not persist the v3 document')
+      assertEqual(groupStored.groups.length, 1, 'the batch commit must create exactly ONE group, not N singles')
+      assertEqual(groupStored.records.length, 0, 'the batch commit must not create independent single records')
+      assertEqual(groupStored.groups[0].itemCount, 3, 'the group must contain all three selected elements')
+      assertEqual(groupStored.groups[0].requirement, 'Batch group requirement', 'the shared requirement was not persisted on the group')
+      // The collection view shows the group (with its children), not three singles.
       await h.openCollection()
-      const entriesAfterUpdate = await h.entries()
-      assertEqual(entriesAfterUpdate.length, 3, 're-adding the same element duplicated the collection entry')
-      // Edit a note inline in the rail.
-      const noteRect = await h.page.findRect('[data-psa-entry-note]')
-      assert(noteRect, 'collection note textarea not found')
-      await h.page.clickAt(noteRect.x, noteRect.y)
-      await sleep(150)
-      await h.page.insertText('RAIL-NOTE-1')
+      await sleep(300)
+      const groupRows = await h.page.evaluate(`({
+        groups: document.querySelectorAll('[data-psa-group]').length,
+        singles: document.querySelectorAll('[data-psa-entry]:not([data-psa-group])').length,
+        items: document.querySelectorAll('[data-psa-group-item]').length,
+        requirement: document.querySelector('[data-psa-group-requirement]')?.value ?? null
+      })`)
+      assertEqual(groupRows.groups, 1, 'the collection must show exactly one group row')
+      assertEqual(groupRows.singles, 0, 'the collection must not show the three elements as separate single rows')
+      assertEqual(groupRows.items, 3, 'the expanded group must list all three child rows')
+      assertEqual(groupRows.requirement, 'Batch group requirement', 'the group requirement is missing from the collection row')
+      // Child remove + one undo step restores the whole group.
+      await h.page.evaluate(`document.querySelector('[data-psa-group-item-remove]')?.click()`)
       await sleep(350)
-      const edited = await h.entries()
-      assert(edited.some((entry) => entry.note.includes('RAIL-NOTE-1')), 'inline rail note edit did not reach the entry')
-      // Remove one entry.
-      await h.click('[data-psa-entry-remove]')
+      assertEqual(await h.page.evaluate(`document.querySelectorAll('[data-psa-group-item]').length`), 2, 'removing a child did not update the group')
+      const childUndoToast = await h.page.eval(probes.undoToast)
+      assertEqual(childUndoToast.present, true, 'child removal did not show the undo toast')
+      await h.click('[data-psa-undo]')
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-group-item]').length === 3`, { timeout: 5000, label: 'child removal undo' })
+      // Edit the shared requirement inline in the group card.
+      assert(await h.page.evaluate(`document.querySelector('[data-psa-group-requirement]') !== null`),
+        'group requirement textarea not found in the collection')
+      await h.page.evaluate(`(() => {
+        const field = document.querySelector('[data-psa-group-requirement]')
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set
+        setter.call(field, 'Batch requirement updated')
+        field.dispatchEvent(new Event('input', { bubbles: true }))
+        return true
+      })()`)
+      await sleep(450)
+      const updatedStorage = await h.page.eval(probes.annotationStorage)
+      assertEqual(updatedStorage.groups[0].requirement, 'Batch requirement updated', 'editing the group requirement did not persist')
+      // ONE group chip for the group insertion (3 elements reported).
+      const chipsBeforeGroup = (await h.page.eval(probes.chipState)).chips.length
+      await h.click('[data-psa-group-insert]')
+      await h.page.waitFor(
+        `document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-editor="true"] [data-lexical-decorator="true"]').length === ${chipsBeforeGroup + 1}`,
+        { timeout: 8000, label: 'one group chip from the group row' }
+      )
       await sleep(350)
-      assertEqual((await h.ui()).entries, 2, 'remove one entry from the collection')
+      const groupChipState = await h.page.eval(probes.chipState)
+      const groupChipText = String(groupChipState.chips[groupChipState.chips.length - 1].text || '')
+      assert(/UI annotations × 3|UI 标注 × 3/.test(groupChipText), `the group chip must report 3 elements: ${short(groupChipText)}`)
+      assertEqual((await h.transcript()).messages, 0, 'the group chip insertion sent a message')
+      // Delete the whole group from the card, then undo it back.
+      await h.click('[data-psa-group-remove]')
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-group]').length === 0`, { timeout: 5000, label: 'group removal' })
+      const groupUndoToast = await h.page.eval(probes.undoToast)
+      assertEqual(groupUndoToast.present, true, 'group deletion did not show the undo toast')
+      await h.click('[data-psa-undo]')
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-group]').length === 1`, { timeout: 5000, label: 'group undo' })
+      await sleep(250)
+      // Reload: the group (shared requirement + items) survives persistence.
       await h.clickBack()
-      return `${targets.length} Shift selections -> multi outlined, 3 entries, update-in-place, note edited, 2 after remove`
+      await h.page.reload()
+      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after the group reload' })
+      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after the group reload' })
+      await sleep(700)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      const reloadedGroups = await h.page.eval(probes.annotationStorage)
+      assertEqual(reloadedGroups.groups.length, 1, 'the group did not survive the reload')
+      assertEqual(reloadedGroups.groups[0].itemCount, 3, 'the reloaded group lost items')
+      assertEqual(reloadedGroups.groups[0].requirement, 'Batch requirement updated', 'the reloaded group lost its shared requirement')
+      await h.activate()
+      await h.openCollection()
+      await sleep(250)
+      assertEqual(await h.page.evaluate(`document.querySelectorAll('[data-psa-group]').length`), 1, 'the reloaded collection does not render the group card')
+      await h.clickBack()
+      // Cleanup: empty the draft so the next scenario starts from a blank composer.
+      await h.page.evaluate(`(() => { const editor = document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]'); if (editor !== null) editor.focus(); return true })()`)
+      await h.page.dispatchKey('a', 'KeyA', 65, MOD.meta)
+      await h.page.pressKey('backspace')
+      await sleep(250)
+      await h.exit()
+      return `3 Shift selections -> ONE batch popover (3 items, 1 shared requirement field) -> ONE group with 3 items (0 singles); collection group card with 3 child rows; shared requirement edited; ONE "@ UI annotations × 3" chip; child/group delete undo; reload keeps the group (requirement + 3 items); single flows untouched`
     },
 
     5: async () => {
@@ -3594,9 +3693,28 @@ function buildScenarios(harness) {
       await sleep(250)
       const typed = await h.composer()
       assert((typed.text || '').includes('DRAFT-PRESERVE'), `draft was not typed: ${short(typed.text)}`)
+      // Self-contained precondition: when run alone this scenario seeds one current-session
+      // single annotation so the batch assertion has an entry to insert.
+      const seeded = await h.page.eval(probes.annotationStorage)
+      if (seeded.count === 0) {
+        const seedPoint = await h.page.eval(pageProbe.newSessionButton)
+        assert(seedPoint, 'native New Session button not found for the S5 seed annotation')
+        await h.page.moveTo(seedPoint.x, seedPoint.y)
+        await sleep(150)
+        await h.page.clickAt(seedPoint.x, seedPoint.y)
+        await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'S5 seed popover' })
+        const seedNote = await h.page.findRect('[data-psa-note]')
+        assert(seedNote, 'S5 seed requirement textarea missing')
+        await h.page.clickAt(seedNote.x, seedNote.y)
+        await sleep(120)
+        await h.page.insertText('S5 seed requirement')
+        await sleep(200)
+        await h.click('[data-psa-add]')
+        await sleep(350)
+      }
       await h.openCollection()
       const entries = await h.entries()
-      assert(entries.length >= 2, 'need at least two collection entries for the batch assertion')
+      assert(entries.length >= 1, 'need at least one collection entry for the batch assertion')
       assertEqual(entries.filter((entry) => entry.scope === 'current').length, entries.length, 'all S5 entries must be current-session entries')
       for (const entry of entries) {
         assert(entry.name.length > 0, `collection entry name must not be empty (ref ${entry.ref}) — a vacuous batch assertion is not acceptable`)
@@ -4750,7 +4868,7 @@ function buildScenarios(harness) {
       await sleep(400)
       const stored = await h.page.eval(probes.annotationStorage)
       assert(stored.present, 'D1: no annotation document was persisted after adding records')
-      assertEqual(stored.version, 2, 'D1: the persisted document is not version 2')
+      assertEqual(stored.version, 3, 'D1: the persisted document is not version 3 (singles+groups)')
       assert(stored.count >= 2, `D1: expected at least two persisted records, got ${stored.count}`)
       const pageRecord = stored.records.find((record) => record.surface === 'page')
       const floatingRecord = stored.records.find((record) => record.surface === 'floating')

@@ -45,11 +45,17 @@ heading is added until the release is cut.
   existing reference/batch serializers (deleted members are skipped with an
   honest removed-count line, and a missing single record invalidates the chip so
   the send is blocked), with a plain-text fallback plus explanation when the
-  chip services are unavailable. The right rail's collection view is the batch
-  surface: include checkboxes (other-Session rows are excluded and explained),
-  inline and expanded requirement editing, reorder, preview (scroll/ flash/ detail
-  card), per-row insert, delete (undo), delete-selected and clear (one undo
-  slot), and one group-chip batch footer with visible disable reasons. Page
+  chip services are unavailable. Multi-select is now a **batch group** flow:
+  after the selection settles a single batch popover opens with the selected
+  items and ONE shared Requirement; committing saves one group containing every
+  selected element (each keeps its locator/metadata, no per-item requirements),
+  and the group inserts as one `UI annotations × N` chip whose serialization is
+  one request (shared requirement + numbered references with honest status
+  lines). The persisted document is v3 (singles + groups, tolerant v2 migration,
+  cap counts singles + group items, visible refusal) and the right rail's
+  collection view renders singles and group cards with shared-requirement
+  editing, item count, expand/collapse, include/reorder, preview, per-row
+  insert/delete and undo. Page
   pointer events are consumed in the capture phase so native controls cannot
   act while annotating; the configurable multi-select modifier toggles selection
   or starts a marquee, and the configurable pass-through modifier restores real
@@ -57,7 +63,7 @@ heading is added until the release is cut.
   text inputs (annotation note fields, prompt-history search, settings choices)
   use the shared rainbow track focus ring instead of solid focus borders; the
   launcher position, rail-collapsed state, and two modifiers persist in browser
-  `localStorage`, while annotation records use their own v2 document. The
+  `localStorage`, while annotation records use their own v3 document (singles + groups). The
   browser-only feature adds no Host route, service, or profile change, cleans up
   every listener, layout marker, and DOM node on exit and HMR, and ships a pure
   test seam plus live-page CDP acceptance harness (seam generation 66; see

@@ -499,10 +499,15 @@ record**: ordered selector candidates plus a uniquely verified CSS selector,
 and basename, a query-free route, viewport, bounds, and a derived text digest —
 never outerHTML, input values, JS paths, XPath, or computed styles.
 
-Records persist in a browser-owned v2 document
+Records persist in a browser-owned **v3** document
 (`power-suite.ui-annotation.annotations`, 250 ms debounced writes, flush on mode
-exit/dispose/visibility change, 100-record cap with a visible refusal) and are
-restored on reload, re-resolving their four live statuses. Annotated elements of
+exit/dispose/visibility change, tolerant v1/v2→singles migration, 100-element
+cap counting singles + group items with a visible refusal) and are restored on
+reload, re-resolving their four live statuses. Multi-selections settle into one
+**batch group** (single shared requirement, N element items) after a short
+settle delay; the group inserts as one `UI annotations × N` chip serialized as a
+single request (shared requirement header + numbered references with honest
+status lines). Annotated elements of
 the current Session keep a page mark with a numbered requirement badge; a
 hover-intent detail card carries the requirement, locator, position,
 Session/Workspace, status, and surface marker with edit/relocate/copy-locator/
