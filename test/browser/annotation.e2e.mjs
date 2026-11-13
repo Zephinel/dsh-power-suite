@@ -4824,7 +4824,8 @@ function buildScenarios(harness) {
         assert(action.visible, 'an edit/delete action is not visible without hover')
         assert(action.rect !== null && action.rect.height >= 18 && action.rect.width >= 18, `action hit target too small: ${JSON.stringify(action.rect)}`)
       }
-      assertEqual(sidebar.footer.primary, 'Add annotation', `footer primary label wrong: ${sidebar.footer.primary}`)
+      // A populated collection with no page selection: the primary action now inserts it.
+      assertEqual(sidebar.footer.primary, 'Insert all into composer', `footer primary label wrong: ${sidebar.footer.primary}`)
       assertEqual(sidebar.footer.secondary, 'Cancel Annotation', `footer danger label wrong: ${sidebar.footer.secondary}`)
       assert(sidebar.footer.primaryHeight >= 30 && sidebar.footer.secondaryHeight >= 30, 'footer actions are under the 30px height target')
       const footerWidths = await h.page.evaluate(`(() => {

@@ -176,6 +176,16 @@ heading is added until the release is cut.
 
 ### Changed
 
+- Annotation mode no longer swallows composer interaction: the current Session's
+  composer stays natively clickable/typable while the mode is active (it is also
+  no longer an annotation target), so an inserted reference chip can be edited
+  and sent; the sidebar footer primary becomes **Insert all into composer** when
+  the collection is non-empty and no page selection is pending (previously it
+  only repeated the "select elements" hint); the multi-selection batch popover is
+  draggable by its header and both popovers clamp with their measured size so
+  their buttons stay inside the window; Active/Inactive Projects headings now
+  match the native Workspaces heading (14 px / 400).
+
 - The pin control's reveal is two-phase and space-saving: the slot collapses
   when the button is hidden (the title sits next to the leading glyph), hover or
   keyboard focus expands the slot before the button fades in, and leaving fades

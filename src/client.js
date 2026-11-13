@@ -4763,7 +4763,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 @media (prefers-reduced-motion: reduce){.psd-run-actions,.psd-row-continue{transition:none}}
 .psd-group-header{flex:none;display:block;margin:3px 0 0}
 .psd-group-header[data-group='inactive']{margin-top:10px;padding-top:3px;border-top:0.5px solid var(--dsw-alias-border-l1)}
-.psd-group-toggle{appearance:none;display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;padding:4px 8px 4px 10px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:20px;font-weight:500;text-align:left;cursor:pointer}
+.psd-group-toggle{appearance:none;display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;padding:4px 8px 4px 10px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:14px;line-height:20px;font-weight:400;text-align:left;cursor:pointer}
 .psd-group-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}
 .psd-group-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-group-toggle[aria-expanded='false'] .psd-chevron{transform:rotate(-90deg)}
@@ -14469,6 +14469,7 @@ function dwClearNativeAtmospheres() {
         popoverPosition: null,
         popoverPinned: false,
         batchPosition: null,
+        batchPinned: false,
         flashRefId: null,
         flashRect: null,
         noteEditor: null,
@@ -14543,6 +14544,11 @@ function dwClearNativeAtmospheres() {
       let popoverRefId = null
       /** Real mounted popover size used for clamping; the constant is only the fallback (F14). */
       let popoverMeasuredSize = { width: ANNOTATION_POPOVER_SIZE.width, height: ANNOTATION_POPOVER_SIZE.height }
+      /** Measured batch popover size (updated on mount/resize) for viewport clamping. */
+      let batchMeasuredSize = { width: ANNOTATION_BATCH_POPOVER_SIZE.width, height: ANNOTATION_BATCH_POPOVER_SIZE.height }
+      /** Mounted batch popover root and its pending measurement frame. */
+      let batchElement = null
+      let batchMeasureFrame = null
       /** Mounted popover element, only used for measurement. */
       let popoverElement = null
       /** Pending popover measurement frame. */
@@ -14616,6 +14622,20 @@ function dwClearNativeAtmospheres() {
       }
 
       /**
+       * Whether an event target sits inside the composer region. The composer is
+       * the destination of every insertion, so it stays natively interactive in
+       * the mode: clicking the draft or Send must not be swallowed (otherwise an
+       * inserted chip could never be sent).
+       * @param {object} event - DOM event.
+       * @returns {boolean} whether the target belongs to the composer.
+       */
+      function eventInsideComposer(event) {
+        const element = annotationEventElement(event)
+        if (element === null || typeof element.closest !== 'function') return false
+        return element.closest('[data-conversation-region="composer"]') !== null
+      }
+
+      /**
        * Whether the pass-through modifier is held for one event.
        * @param {object} event - DOM event.
        * @returns {boolean} whether the page keeps native semantics.
@@ -14650,6 +14670,7 @@ function dwClearNativeAtmospheres() {
       function blockEvent(event) {
         if (!isActive()) return false
         if (eventInsideOwn(event)) return false
+        if (eventInsideComposer(event)) return false
         if (passThroughEvent(event)) return false
         event.preventDefault()
         event.stopImmediatePropagation()
@@ -16261,11 +16282,20 @@ function dwClearNativeAtmospheres() {
         // A3/T24: the multi-selection batch popover anchors beside the newest
         // selected element and follows the selection while items are added.
         let batchPosition = null
+        let batchPinned = false
         if (state.phase === 'multi' && state.selection.length > 1 && selectionRects.length > 0) {
-          const anchor = selectionRects[selectionRects.length - 1].rect
-          batchPosition = clampPopoverPosition(anchor, ANNOTATION_BATCH_POPOVER_SIZE, annotationViewport(), previous.railWidth)
+          const previousSelection = previous.state !== null && typeof previous.state === 'object' && Array.isArray(previous.state.selection)
+            ? previous.state.selection
+            : []
+          if (previous.batchPinned === true && previous.batchPosition !== null && previousSelection.length === state.selection.length) {
+            batchPinned = true
+            batchPosition = clampPopoverPositionToViewport(previous.batchPosition, batchMeasuredSize, annotationViewport(), previous.railWidth)
+          } else {
+            const anchor = selectionRects[selectionRects.length - 1].rect
+            batchPosition = clampPopoverPosition(anchor, batchMeasuredSize, annotationViewport(), previous.railWidth)
+          }
         }
-        return { selectionRects, popoverPosition, popoverPinned, batchPosition, boxRect: state.box }
+        return { selectionRects, popoverPosition, popoverPinned, batchPosition, batchPinned, boxRect: state.box }
       }
 
       /**
@@ -16327,6 +16357,50 @@ function dwClearNativeAtmospheres() {
         if (popoverMeasureFrame !== null) {
           window.cancelAnimationFrame(popoverMeasureFrame)
           popoverMeasureFrame = null
+        }
+      }
+
+      /** Measure the mounted batch popover so clamping uses its real height. @returns {void} */
+      function measureBatchPopover() {
+        if (batchElement === null || typeof batchElement.getBoundingClientRect !== 'function') return
+        const rect = batchElement.getBoundingClientRect()
+        if (rect.width <= 0 || rect.height <= 0) return
+        const size = { width: Math.round(rect.width), height: Math.round(rect.height) }
+        const changed = size.width !== batchMeasuredSize.width || size.height !== batchMeasuredSize.height
+        batchMeasuredSize = size
+        if (!changed) return
+        const current = snapshot()
+        if (current.batchPinned && current.batchPosition !== null) {
+          publish({ batchPosition: clampPopoverPositionToViewport(current.batchPosition, batchMeasuredSize, annotationViewport(), current.railWidth) })
+        }
+      }
+
+      /** Schedule one coalesced batch-popover measurement. @returns {void} */
+      function scheduleBatchMeasure() {
+        if (batchMeasureFrame !== null) return
+        batchMeasureFrame = window.requestAnimationFrame(() => {
+          batchMeasureFrame = null
+          measureBatchPopover()
+        })
+      }
+
+      /**
+       * Track the mounted batch popover for measurement.
+       * @param {Element | null} node - mounted batch popover root.
+       * @returns {void}
+       */
+      function attachBatchNode(node) {
+        if (!(node instanceof HTMLElement) || node === batchElement) return
+        batchElement = node
+        scheduleBatchMeasure()
+      }
+
+      /** Forget the mounted batch popover element. @returns {void} */
+      function detachBatchNode() {
+        batchElement = null
+        if (batchMeasureFrame !== null) {
+          window.cancelAnimationFrame(batchMeasureFrame)
+          batchMeasureFrame = null
         }
       }
 
@@ -16464,6 +16538,14 @@ function dwClearNativeAtmospheres() {
           ? current.launcherPosition
           : clampLauncherPosition(current.launcherPosition, size, ANNOTATION_LAUNCHER_SIZE)
         const patch = { railWidth, layoutMode: mode, launcherPosition }
+        if (current.state.phase === 'multi' && current.batchPosition !== null && current.selectionRects.length > 0) {
+          if (current.batchPinned) {
+            patch.batchPosition = clampPopoverPositionToViewport(current.batchPosition, batchMeasuredSize, size, railWidth)
+          } else {
+            const anchor = current.selectionRects[current.selectionRects.length - 1].rect
+            patch.batchPosition = clampPopoverPosition(anchor, batchMeasuredSize, size, railWidth)
+          }
+        }
         if (current.state.phase === 'selected' && current.selectionRects.length > 0 && current.popoverPosition !== null) {
           if (current.popoverPinned) {
             // A dragged/pinned popover keeps its offset but must stay on-screen.
@@ -16739,6 +16821,11 @@ function dwClearNativeAtmospheres() {
           // The pointer may sit on our own detail card: that keeps it open. Any
           // other own-surface hit (rail/popover) dismisses it via the no-hit path.
           updateMarkerHover({ x: event.clientX, y: event.clientY })
+          clearHover()
+          return
+        }
+        if (eventInsideComposer(event)) {
+          // The composer is interactive, not a page target: no hover outline.
           clearHover()
           return
         }
@@ -17387,6 +17474,49 @@ function dwClearNativeAtmospheres() {
           const x = Math.min(Math.max(start.x + moveEvent.clientX - originX, 8), maxX)
           const y = Math.min(Math.max(start.y + moveEvent.clientY - originY, 8), maxY)
           publish({ popoverPosition: { x: Math.round(x), y: Math.round(y) }, popoverPinned: true })
+        }
+        /** @param {boolean} aborted - whether a teardown is aborting the gesture. @returns {void} */
+        const settle = (aborted) => {
+          if (settled === true) return
+          settled = true
+          unregister()
+          window.removeEventListener('pointermove', onMove, true)
+          window.removeEventListener('pointerup', onUp, true)
+          window.removeEventListener('pointercancel', onCancel, true)
+          if (aborted) return
+        }
+        const onUp = () => settle(false)
+        const onCancel = () => settle(true)
+        let settled = false
+        const unregister = trackGesture(settle)
+        window.addEventListener('pointermove', onMove, true)
+        window.addEventListener('pointerup', onUp, true)
+        window.addEventListener('pointercancel', onCancel, true)
+      }
+
+      /**
+       * Start dragging the multi-selection batch popover by its header, so a
+       * popover anchored near a window edge can be moved fully on-screen.
+       * @param {PointerEvent} event - pointerdown on the batch popover header.
+       * @returns {void}
+       */
+      function beginBatchDrag(event) {
+        if (event.button !== 0) return
+        const start = snapshot().batchPosition
+        if (start === null) return
+        event.preventDefault()
+        measureBatchPopover()
+        const originX = event.clientX
+        const originY = event.clientY
+        /** @param {PointerEvent} moveEvent - pointermove. @returns {void} */
+        const onMove = (moveEvent) => {
+          const size = annotationViewport()
+          const railWidth = snapshot().railWidth
+          const maxX = Math.max(8, size.width - railWidth - batchMeasuredSize.width - 8)
+          const maxY = Math.max(8, size.height - batchMeasuredSize.height - 8)
+          const x = Math.min(Math.max(start.x + moveEvent.clientX - originX, 8), maxX)
+          const y = Math.min(Math.max(start.y + moveEvent.clientY - originY, 8), maxY)
+          publish({ batchPosition: { x: Math.round(x), y: Math.round(y) }, batchPinned: true })
         }
         /** @param {boolean} aborted - whether a teardown is aborting the gesture. @returns {void} */
         const settle = (aborted) => {
@@ -18144,11 +18274,18 @@ function dwClearNativeAtmospheres() {
        * @returns {void}
        */
       function primaryAddAnnotation() {
-        if (snapshot().state.selection.length > 0) {
+        const state = snapshot().state
+        if (state.selection.length > 0) {
           commitSelection()
           return
         }
-        if (snapshot().state.view !== 'status') dispatch({ type: 'openView', view: 'status' })
+        // No page selection pending: the primary action now carries the collected
+        // annotations to the composer instead of telling the user to select more.
+        if (state.collection.length > 0) {
+          insertBatch()
+          return
+        }
+        if (state.view !== 'status') dispatch({ type: 'openView', view: 'status' })
         feedback(t('sidebar.addHint'))
       }
 
@@ -18554,8 +18691,11 @@ function dwClearNativeAtmospheres() {
         beginLauncherDrag,
         consumeLauncherClickSuppressed,
         beginPopoverDrag,
+        beginBatchDrag,
         attachPopoverNode,
         detachPopoverNode,
+        attachBatchNode,
+        detachBatchNode,
         toggleRailCollapsed,
         openView,
         backView,
@@ -19879,17 +20019,20 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     function annotationCollectionFooter(t, controller, snapshot) {
       const state = snapshot.state
       const hasSelection = state.selection.length > 0
+      const insertBatchPrimary = !hasSelection && state.collection.length > 0
       return React.createElement('div', { className: 'psa-sb-footer', 'data-psa-sidebar-footer': '', 'data-psa-own': '' },
         React.createElement('button', {
           type: 'button',
           className: 'psa-sb-primary',
           'data-psa-add-annotation': '',
           'data-psa-own': '',
-          title: hasSelection ? t('batch.saveGroup') : t('sidebar.addAnnotation'),
+          title: hasSelection
+            ? t('batch.saveGroup')
+            : (insertBatchPrimary ? t('collection.insertBatch') : t('sidebar.addAnnotation')),
           onClick: () => controller.primaryAddAnnotation()
         }, hasSelection
           ? (state.selection.length > 1 ? t('batch.saveGroup') : t('popover.commit'))
-          : t('sidebar.addAnnotation')),
+          : (insertBatchPrimary ? t('collection.insertBatch') : t('sidebar.addAnnotation'))),
         React.createElement('button', {
           type: 'button',
           className: 'psa-sb-danger',
@@ -20276,6 +20419,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       const labels = state.selection.map((ref) => elementLabel(ref))
       const shown = labels.slice(0, 4)
       return React.createElement('div', {
+        ref: (node) => controller.attachBatchNode(node),
         className: 'psa-popover psa-batch-popover',
         'data-psa-batch-popover': '',
         'data-psa-own': '',
@@ -20284,7 +20428,12 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         'aria-label': t('batch.title', { count: state.selection.length }),
         style: { left: `${position.x}px`, top: `${position.y}px` }
       },
-      React.createElement('div', { className: 'psa-popover-head', 'data-psa-own': '' },
+      React.createElement('div', {
+        className: 'psa-popover-head',
+        'data-psa-own': '',
+        title: t('popover.drag'),
+        onPointerDown: (event) => controller.beginBatchDrag(event)
+      },
         React.createElement('span', { className: 'psa-popover-title', 'data-psa-batch-title': '' },
           t('batch.title', { count: state.selection.length })),
         React.createElement('button', {

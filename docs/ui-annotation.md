@@ -262,6 +262,10 @@ opens the note popover.
   therefore cannot react; for example, clicking **New session** selects the button
   and does not create a Session. Wheel/touch scrolling, typing, IME composition,
   and browser keyboard shortcuts are untouched, and the page stays readable.
+  The current Session's **composer region is the one exception**: its pointer
+  events stay native (and it never resolves as an annotation target, with its
+  hover outline suppressed), because every insertion lands there — without that
+  exemption an inserted reference chip could be neither edited nor sent.
 - **Page content is never modified** by selection, annotation, or insertion. The
   feature reads layout and labels and inserts text; it does not edit the page's
   content elements, files, or Session logs. Its own UI, the prompt-rail style,
@@ -355,6 +359,9 @@ toggle leaves exactly one element, that element becomes the single selection and
 its popover may open. With more than one selected, the rail's status view shows the count with
 **Save as group** and **Clear selection**, and about 0.8 s after the last
 selection change the **batch popover** opens beside the newest selected element.
+Like the single-element popover it is **draggable by its header** (8 px viewport
+margin, clamped with its measured size, so a popover anchored near a window edge
+can always be moved fully on-screen with its buttons visible).
 It lists the selected elements, keeps updating its count while the selection
 grows, and contains ONE requirement textarea for the whole batch (the draft is
 preserved while more elements are added). Its primary action **Save as group**
@@ -430,9 +437,11 @@ The collection view is the redesigned management surface for singles and groups
   inherited from phases 1–2, kept out of the two-action footer).
 - **Footer** — two **equal-width (50/50)** actions: primary **Add annotation**
   saves the current page selection (one group for a multi-selection, one single
-  record otherwise) or returns to the page when nothing is selected; the danger
-  action is **Cancel Annotation** (`取消标注`), which asks for confirmation when
-  records exist and otherwise exits directly.
+  record otherwise); with no page selection but a non-empty collection it becomes
+  **Insert all into composer** and inserts the collection as one group chip; with
+  nothing at all it returns to the page. The danger action is **Cancel
+  Annotation** (`取消标注`), which asks for confirmation when records exist and
+  otherwise exits directly.
 - **Exit confirmation / clear-on-exit** — clicking the header X, **Cancel
   Annotation**, or the final Esc step while records exist opens a secondary
   `alertdialog`: "Exit annotation mode and clear N annotations? These will not be
@@ -1731,6 +1740,10 @@ opens the note popover.
   therefore cannot react; for example, clicking **New session** selects the button
   and does not create a Session. Wheel/touch scrolling, typing, IME composition,
   and browser keyboard shortcuts are untouched, and the page stays readable.
+  The current Session's **composer region is the one exception**: its pointer
+  events stay native (and it never resolves as an annotation target, with its
+  hover outline suppressed), because every insertion lands there — without that
+  exemption an inserted reference chip could be neither edited nor sent.
 - **Page content is never modified** by selection, annotation, or insertion. The
   feature reads layout and labels and inserts text; it does not edit the page's
   content elements, files, or Session logs. Its own UI, the prompt-rail style,
@@ -1809,6 +1822,9 @@ toggle leaves exactly one element, that element becomes the single selection and
 its popover may open. With more than one selected, the rail's status view shows the count with
 **Save as group** and **Clear selection**, and about 0.8 s after the last
 selection change the **batch popover** opens beside the newest selected element.
+Like the single-element popover it is **draggable by its header** (8 px viewport
+margin, clamped with its measured size, so a popover anchored near a window edge
+can always be moved fully on-screen with its buttons visible).
 It lists the selected elements, keeps updating its count while the selection
 grows, and contains ONE requirement textarea for the whole batch (the draft is
 preserved while more elements are added). Its primary action **Save as group**
