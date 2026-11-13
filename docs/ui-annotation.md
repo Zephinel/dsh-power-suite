@@ -23,7 +23,10 @@ page's content elements, never reads form values, and never sends the message.
   the launcher and its count badge, the annotation rail (docked or overlay), the
   requirement/batch popovers, the hover detail card, the note editor, the
   exit-confirmation dialog, and the feedback/undo toasts rely on their
-  background and shadow alone; only inner controls keep their own borders.
+  background and shadow alone; only inner controls keep their own borders. The
+  launcher is a **perfect circle** (`corner-shape: round`, which opts out of the
+  shell's superellipse corner shape) and its shadow is ring-free, so no hairline
+  elevation ring can read as a border in either theme.
 - **Mode layout** — the page shrinks by a responsive right rail; on narrow
   viewports the rail overlaps the right edge instead of squeezing the page, and
   can collapse to a narrow strip.

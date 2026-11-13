@@ -125,8 +125,9 @@ sidebar's panel tabs. It starts expanded.
   column is centred on the child status-dot column with equal gaps on both
   sides, so the sparkle, the tree line, the pin and the child dots share one
   vertical centre line. In the default state the title's **first character is
-  centred on that same column** as well: a 1–3 px per-row offset (measured from
-  the first glyph's advance width) keeps the character centre on the dot line,
+  centred on that same column** as well: a 1–5 px per-row offset (measured from
+  the first glyph's advance width plus a 2 px right bias, so the glyph ink reads
+  visually centred on the dot line) keeps the character centre on the dot line,
   while hover/focus/pinned states slide the title back to the expanded 71 px
   column. The panel header's all-complete glyph is the DeepSeek brand mark
   (`deepseek-fill`) in the same 14 px indicator slot; the swap changes only which
