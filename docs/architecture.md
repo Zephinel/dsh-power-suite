@@ -517,7 +517,12 @@ one boundary (tag/digest/accessible name/proximity) with scored approximate
 matching (approximate hits cap below Resolved; ties stay ambiguous). Fallback
 status/nodes are cached per `(record id, DOM revision)` with bounded scans, and
 a weak-identity gate keeps icon-only/tag-only records from resolving through
-structural fallbacks (they report Changed honestly). Non-leaf targets with text descendants additionally capture a descendant
+structural fallbacks (they report Changed honestly). For descendant text anchors the captured scope is authoritative: the recorded
+`textPosition.container` is searched first and a unique in-scope target wins
+even when identical text exists elsewhere; multiple distinct in-scope targets
+are terminal ambiguous (later text-position/XPath fallbacks cannot override),
+and only an empty/missing scope falls through to the bounded document scan.
+Non-leaf targets with text descendants additionally capture a descendant
 text anchor (first text leaf quote/position + leaf tag, ancestor chain and a
 stable-attribute signature); the resolver climbs a text hit to the closest
 ancestor matching tag+signature, and same-text decoys stay ambiguous. Weak

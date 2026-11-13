@@ -425,6 +425,16 @@ heading is added until the release is cut.
   mutation re-resolves once), and docs recommend host apps expose stable
   `data-testid`/`data-*`/accessible names for position-sensitive elements.
 
+- UI element annotation captured-scope authority: for descendant text anchors
+  the recorded scope (`textPosition.container`) is now authoritative — a unique
+  in-scope target resolves even when an identical out-of-scope duplicate exists
+  (the Workspaces-row vs Running & recent-title case no longer reports a false
+  "Matches several"); multiple distinct in-scope targets are **terminal
+  ambiguous** and later text-position/XPath fallbacks cannot override them,
+  while an empty/missing scope still re-anchors through the bounded document
+  fallback. The fallback-node resolver mirrors the same decision so ambiguous
+  records do not expose a non-authoritative live node for copy.
+
 ### Removed
 
 - Standalone Project detail page: the `project-view` feature is removed —
