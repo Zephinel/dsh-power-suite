@@ -22,15 +22,15 @@ npm run pack:check
 
 Current evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round):
 
-- `npm test`: **207 tests, 207 passed, 0 failed, 0 skipped** after the 0.3.0
+- `npm test`: **210 tests, 210 passed, 0 failed, 0 skipped** after the 0.3.0
   Project-view removal (the 24 project-view tests were deleted with the page),
   including **14** read-acks, **22** session-activity Host tests, **7** extra
   interrupted-session tests (error/max-tokens/aborted-cause cases and SSE stream
-  frames), **11** Dynamic-Workspaces hover-card figure tests, and **97**
+  frames), **11** Dynamic-Workspaces hover-card figure tests, and **100**
   UI-element-annotation tests through the browser-factory test seam; per-file:
   dynamic-workspaces-stats 11, interrupted-host 20, interrupted-sessions 7,
   prompt-history 6, read-acks 14, session-activity 22, session-artifacts 16,
-  settings 6, ui-annotation 97, workspace-presets 8.
+  settings 6, ui-annotation 100, workspace-presets 8.
 - `npm run check`: passed (`16 modules, 10 test files`).
 - Interrupted-state SSE transport was verified with cookie auth: 200,
   `content-type: text/event-stream; charset=utf-8`, no-store/no-buffering, first
@@ -188,12 +188,16 @@ API/plugin network failures in every run below):
   FAIL 0** (including `10b`, the real pinned-cross-branch-card check),
   scenario 11 **PASS 7 / 0 / 0**, scenario 12 **PASS 7 / 0 / 0** (marks, detail
   card, requirement edit with `updatedAt`, delete → 5 s undo),
-  scenario 13 **PASS 7 / SKIP 1 (`13f`) / 0** (single native chip, chip preview,
-  Backspace removal, one grouped batch chip, transcript 0, never sent),
+  scenario 13 **PASS 7 / SKIP 1 (`13f`) / 0** (single native chip, hover preview
+  tooltip with requirement/locator/position/Session/workspace/status, grouped
+  chip hover summary, chip click preview, Backspace removal, one grouped batch
+  chip, transcript 0, never sent),
   scenario 14 **PASS 7 / 0 / 0** (reload restores records/marks, removed target
   is honestly missing), scenario 15 **PASS 7 / 0 / 0** (rainbow focus ring on
   popover/collection/editor/settings inputs, no solid outline, no layout shift,
-  reduced-motion static, mode-exit restore). A clean `--from 6 --no-shots`
+  ring geometry hugs the control's border box on all four edges (the wrapped
+  control is block-level, so no baseline descender gap), reduced-motion static,
+  mode-exit restore). A clean `--from 6 --no-shots`
   sequence on the final build = **PASS 17 / SKIP 1 (`13f`) / FAIL 0**, exit 0,
   164 s.
 - One full `--no-shots` attempt observed smoke 6/6 + S1–S7 PASS, then stalled at
@@ -251,7 +255,12 @@ B6 figure totals, and the project-page removal.
   (include checkboxes, other-Session exclusion, inline editing, reorder,
   preview, delete-selected/clear with undo, one grouped batch chip), native
   composer reference chips (single + grouped, send-time serialization, missing
-  record blocks the send, plain-text fallback), and the rainbow input focus ring.
+  record blocks the send, plain-text fallback, and a hover preview tooltip on
+  annotation chips showing requirement/locator/position/Session/workspace/status
+  or the group summary), stable `data-message-id`/`data-turn-id` anchors for
+  chat-flow picks (positional chat paths no longer go stale on streaming
+  re-renders; genuinely replaced nodes still report missing/ambiguous/changed),
+  and the rainbow input focus ring.
 - Dynamic Workspaces: fixed trailing grid with child rows lacking New session,
   right-aligned times, the internal rainbow atmosphere on the current card row,
   its owning Workspace row and the native Session row, the native-aligned 320 px

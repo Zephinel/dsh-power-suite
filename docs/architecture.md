@@ -512,6 +512,14 @@ right rail's collection view is the batch surface (include checkboxes with
 other-Session exclusion, inline/expanded note editing, reorder, preview, delete
 with undo, and one grouped batch chip).
 
+Annotation reference chips also carry a hover preview: the browser watches the
+shell's `[data-composer-chip="ui-annotation"]` markup, looks the record up in the
+local store, and shows the custom detail tooltip anchored to the chip (pointer
+transparent, no focus steal, dismissed on leave/Esc/scroll). Chat-flow picks
+capture `data-message-id`/`data-turn-id` as stable selector anchors so a leaf in
+a streaming/virtualized message resolves across re-renders; the resolution
+statuses stay honest and pre-fix records are not auto-remapped.
+
 Insertion uses the shell's **native composer inline reference chips**:
 `installUiAnnotation` dynamically injects `conversation` and `inputTriggers`
 (so a composition without the chat surface still loads and falls back), a
