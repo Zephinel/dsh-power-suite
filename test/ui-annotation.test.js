@@ -71,6 +71,9 @@ if (ui === undefined) {
     'collectionAddGroup', 'serializeBatchEntries',
     'annotationSidebarCounts', 'annotationFilterEntries', 'annotationGroupSummary',
     'annotationEntryOrdinals', 'annotationSurfacePinEligible', 'annotationSurfacePinEventMatches',
+    'annotationNormalizeQuoteText', 'annotationXPathOf', 'annotationJsPathFor', 'annotationTextQuoteOf',
+    'annotationTextPositionOf', 'annotationTextQuoteMatches', 'annotationSelectorScore', 'annotationResolveStatus',
+    'annotationIsGeneratedClass',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -89,7 +92,9 @@ if (ui === undefined) {
    * Parent/Child chain), 69 = batch groups (group model helpers, flatten/cap,
    * group serializer), 79 = redesigned sidebar (derived counts, client-side
    * filter, group auto-summary), 80 = shared group ordinals (A3/T29 numbering),
-   * 82 = transient-surface pinning (eligible selection + capture-phase match).
+   * 82 = transient-surface pinning (eligible selection + capture-phase match),
+   * 90 = multi-strategy anchors (quote/xpath/js path/scoring/resolution),
+   * 91 = P0 selector stability (generated-class filter).
    * The E2E `ACCEPTED_SEAM_GENERATIONS` must accept exactly these counts.
    */
   const SEAM_GENERATION = SEAM_EXPORTS.length
@@ -154,6 +159,15 @@ if (ui === undefined) {
     annotationEntryOrdinals: [1, 1],
     annotationSurfacePinEligible: [2, 2],
     annotationSurfacePinEventMatches: [3, 3],
+    annotationNormalizeQuoteText: [1, 2],
+    annotationXPathOf: [1, 1],
+    annotationJsPathFor: [1, 1],
+    annotationTextQuoteOf: [1, 1],
+    annotationTextPositionOf: [1, 1],
+    annotationTextQuoteMatches: [2, 2],
+    annotationSelectorScore: [1, 1],
+    annotationResolveStatus: [1, 1],
+    annotationIsGeneratedClass: [1, 1],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
     annotationSelectedEntries: [2, 2],
@@ -176,7 +190,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 82, 'the frozen task-30 generation is pinned')
+    assert.equal(SEAM_GENERATION, 91, 'the frozen task-33 generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -678,7 +692,7 @@ if (ui === undefined) {
     assert.equal(input.component, 'input')
     assert.equal(input.locator.tag, 'input')
     assert.deepEqual(Object.keys(input).sort(), ['at', 'bounds', 'component', 'context', 'id', 'included', 'lastStatus', 'locator', 'note', 'order', 'route', 'session', 'text', 'textDigest', 'updatedAt', 'version', 'viewport'])
-    assert.deepEqual(Object.keys(input.locator).sort(), ['ancestors', 'candidates', 'ephemeral', 'key', 'name', 'path', 'role', 'surface', 'tag', 'uniqueSelector', 'uniqueVerified'])
+    assert.deepEqual(Object.keys(input.locator).sort(), ['ancestors', 'candidates', 'ephemeral', 'jsPath', 'key', 'name', 'path', 'role', 'surface', 'tag', 'textPosition', 'textQuote', 'uniqueSelector', 'uniqueVerified', 'xpath'])
     assert.equal(input.locator.name, 'Search sessions', 'the accessible name survives')
     assert.equal(input.text, '', 'an input contributes no value text')
 
@@ -1300,7 +1314,7 @@ if (ui === undefined) {
     assert.equal(ref.included, true)
     assert.equal(ref.lastStatus, 'resolved')
     const serialized = JSON.stringify(ref)
-    for (const forbidden of ['outerHTML', 'innerHTML', 'querySelector', 'xpath', 'XPath', '<div', 'getComputedStyle']) {
+    for (const forbidden of ['outerHTML', 'innerHTML', 'querySelector', '<div', 'getComputedStyle']) {
       assert.ok(!serialized.includes(forbidden), `record must not contain ${forbidden}`)
     }
     const pageRef = refOf()
@@ -2587,6 +2601,123 @@ if (ui === undefined) {
     assert.equal(ui.annotationSurfacePinEventMatches(pinned, wrapper, null), true, 'events on an ancestor wrapper are suppressed')
     assert.equal(ui.annotationSurfacePinEventMatches(pinned, outside, null), false, 'unrelated page events pass through')
     assert.equal(ui.annotationSurfacePinEventMatches(null, leaf, null), false, 'without a pin nothing is suppressed')
+  })
+
+  test('A3/T32: quote normalization, XPath/JS path generation, quote matching and scoring', () => {
+    assert.equal(ui.annotationNormalizeQuoteText('  a \n  b  '), 'a b')
+    assert.equal(ui.annotationNormalizeQuoteText('abcdef', 3), 'abc')
+    assert.equal(ui.annotationNormalizeQuoteText(null), '')
+    // Fake DOM tree: body > div (id-less) with two spans; the second span's XPath.
+    const makeElement = (tag, parent) => {
+      const element = {
+        tagName: tag.toUpperCase(),
+        parentElement: parent ?? null,
+        previousElementSibling: null,
+        getAttribute: () => null
+      }
+      return element
+    }
+    const html = makeElement('html')
+    const body = makeElement('body', html)
+    const div = makeElement('div', body)
+    const spanFirst = makeElement('span', div)
+    const spanSecond = makeElement('span', div)
+    spanFirst.previousElementSibling = null
+    spanSecond.previousElementSibling = spanFirst
+    const xpath = ui.annotationXPathOf(spanSecond)
+    assert.equal(xpath, '/html[1]/body[1]/div[1]/span[2]', `xpath generation wrong: ${xpath}`)
+    const jsSelector = ui.annotationJsPathFor({ selector: '#target' })
+    assert.equal(jsSelector, 'document.querySelector("#target")')
+    const jsXPath = ui.annotationJsPathFor({ xpath })
+    assert(jsXPath.startsWith('document.evaluate(') && jsXPath.includes('XPathResult.FIRST_ORDERED_NODE_TYPE'), `js path fallback wrong: ${jsXPath}`)
+    const quote = { exact: 'unique phrase', prefix: 'start ', suffix: ' end' }
+    assert.equal(ui.annotationTextQuoteMatches('start unique phrase end', quote), true)
+    assert.equal(ui.annotationTextQuoteMatches('start unique phrase end and start unique phrase end', quote), false, 'two matches must not resolve')
+    assert.equal(ui.annotationTextQuoteMatches('other unique phrase end', quote), false, 'prefix mismatch must not resolve')
+    const score = (kind, value, reliability) => ui.annotationSelectorScore({ kind, value, reliability })
+    assert(score('data', '[data-slot="x"]', 0.9) > score('role', '[role="button"]', 0.9), 'stable data beats semantic roles')
+    assert(score('label', '[aria-label="X"]', 0.9) > score('role', '[role="button"]', 0.9), 'aria labels beat semantic roles')
+    assert(score('role', '[role="button"]', 0.5) > score('tag', 'button', 0.9), 'semantic role beats positional tag')
+    assert(score('class', '.stable-class', 0.55) > score('path', 'div > button', 0.9), 'stable classes beat pure positional paths')
+    assert(score('tag', 'button', 0.2) > score('path', 'div > button', 0.9), 'tag beats pure positional path')
+    // Resolution order: CSS wins when resolved; otherwise XPath, then text quote, then position.
+    const base = { candidates: [], expectedTag: 'span', queryAll: () => [] }
+    const cssResolved = ui.annotationResolveStatus({ ...base, candidates: [{ kind: 'data', value: '[data-x="1"]', reliability: 0.9 }], queryAll: (selector) => [{ tagName: 'SPAN', isConnected: true }] })
+    assert.deepEqual(plain(cssResolved), { status: 'resolved', via: 'css' })
+    const viaXPath = ui.annotationResolveStatus({ ...base, resolveXPath: () => 'resolved', resolveTextQuote: () => 'resolved' })
+    assert.deepEqual(plain(viaXPath), { status: 'resolved', via: 'xpath' }, 'XPath comes before text quote')
+    const viaQuote = ui.annotationResolveStatus({ ...base, resolveXPath: () => null, resolveTextQuote: () => 'changed', resolveTextPosition: () => 'resolved' })
+    assert.deepEqual(plain(viaQuote), { status: 'changed', via: 'text-quote' })
+    const viaPosition = ui.annotationResolveStatus({ ...base, resolveXPath: () => null, resolveTextQuote: () => null, resolveTextPosition: () => 'ambiguous' })
+    assert.deepEqual(plain(viaPosition), { status: 'ambiguous', via: 'text-position' })
+    const allFail = ui.annotationResolveStatus({ ...base, resolveXPath: () => null, resolveTextQuote: () => null, resolveTextPosition: () => null })
+    assert.deepEqual(plain(allFail), { status: 'missing', via: 'css' }, 'no fallback leaves the honest CSS result')
+  })
+
+  test('A3/T33: two-phase resolution prefers a unique candidate over a non-unique high-tier one', () => {
+    const queryAll = (selector) => {
+      if (selector === '[aria-label="New session"]') return [
+        { tagName: 'BUTTON', isConnected: true, textContent: 'New session' },
+        { tagName: 'BUTTON', isConnected: true, textContent: 'New session' }
+      ]
+      if (selector === '[data-slot="sidebar"] button:nth-of-type(1)') return [
+        { tagName: 'BUTTON', isConnected: true, textContent: 'New session' }
+      ]
+      return []
+    }
+    const liveInfo = (element) => ({
+      isConnected: element.isConnected,
+      textContent: element.textContent,
+      expectedText: 'New session',
+      expectedDigest: '',
+      actualDigest: '',
+      expectedName: '',
+      actualName: ''
+    })
+    const candidates = [
+      { kind: 'label', value: '[aria-label="New session"]', reliability: 0.9 },
+      { kind: 'path', value: '[data-slot="sidebar"] button:nth-of-type(1)', reliability: 0.5 }
+    ]
+    assert.equal(ui.resolveRefStatus({ candidates, expectedTag: 'button', queryAll, liveInfo }), 'resolved',
+      'a unique lower-tier candidate must win over a non-unique aria-label')
+    const ambiguousQuery = () => [
+      { tagName: 'BUTTON', isConnected: true, textContent: 'A' },
+      { tagName: 'BUTTON', isConnected: true, textContent: 'B' }
+    ]
+    const ambiguousCandidates = [
+      { kind: 'label', value: '[aria-label="X"]', reliability: 0.9 },
+      { kind: 'role', value: '[role="button"]', reliability: 0.5 }
+    ]
+    assert.equal(ui.resolveRefStatus({ candidates: ambiguousCandidates, expectedTag: 'button', queryAll: ambiguousQuery, liveInfo }), 'ambiguous',
+      'all-non-unique candidates must be honestly Ambiguous')
+    const outcome = ui.annotationResolveStatus({
+      candidates: ambiguousCandidates,
+      expectedTag: 'button',
+      queryAll: ambiguousQuery,
+      liveInfo,
+      resolveXPath: () => 'ambiguous',
+      resolveTextQuote: () => 'resolved',
+      resolveTextPosition: () => null
+    })
+    assert.deepEqual(plain(outcome), { status: 'resolved', via: 'text-quote' }, 'weak XPath ambiguity must not terminate the fallback chain')
+  })
+
+  test('A3/T33: generated/hashed classes are rejected while authored classes are kept', () => {
+    for (const className of ['_card_bgejw_9', '_portal_bgejw_96', 'YDXeBa_sessionRow', 'hHd-Xa_brand', 'wSkVaW_body', 'psd-hoverPath']) {
+      assert.equal(ui.annotationIsGeneratedClass(className), true, `generated class not rejected: ${className}`)
+    }
+    for (const className of ['annotation-row', 'is-active', 'card', 'workspace-row', 'block__element--modifier']) {
+      assert.equal(ui.annotationIsGeneratedClass(className), false, `stable class wrongly rejected: ${className}`)
+    }
+    const ref = refOf({
+      tag: 'button',
+      attrs: [{ name: 'data-slot', value: 'sidebar' }],
+      uniqueSelector: '[data-testid="unique-anchor"] button:nth-of-type(1)',
+      uniqueVerified: true
+    })
+    assert.equal(ref.locator.key, 'unique:[data-testid="unique-anchor"] button:nth-of-type(1)')
+    const nonUnique = refOf({ tag: 'button', attrs: [{ name: 'data-slot', value: 'sidebar' }] })
+    assert(nonUnique.locator.key.startsWith('data:'), `non-unique identity should keep the data fallback: ${nonUnique.locator.key}`)
   })
 
   //#region geometry and layout
