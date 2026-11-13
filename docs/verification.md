@@ -943,3 +943,47 @@ click point, so a row-body click toggled a pin instead of opening the Session. T
 fixed it with `flex:none`; following runs pass B4 unchanged, and the additive `r3-1` guard
 (`.psd-run-head` width == its glyph width, pin slot one 8 px gap after the head) now
 watches for that squeeze.
+
+## Follow-up: Host-shared cross-device pin + shipped-install proof (2026-11-13)
+
+> **Supersedes the pin-storage design recorded in the section above.** After the first
+> delivery the user asked for shared/cross-device pins, so the running-card pin was
+> re-pointed at the DSH shell's Host-persisted Session pin (`WorkspaceSnapshot.
+> pinnedSessionIds`, toggled through `uiWorkspace.pinSession` / `unpinSession`); the
+> card-local `power-suite.dynamic-workspaces.pinned` localStorage document was removed and
+> the user's pre-existing native sidebar pins are now listed as pinned card rows. The R1
+> dot and R2 native-hover-figures evidence above still applies; all pin evidence below
+> replaces the earlier localStorage-pin evidence.
+
+Independent live verification of the follow-up on the merged/served build. Worktree
+`session-pin-stats` at `2a1bb5d`; injected/loaded `src/client.js` md5
+`0e7e12c93555c2d8ffabf0795cb06303` (19440 lines). The linked checkout
+`/Users/rexxin/Development/dsh-power-suite` is at the same commit/md5 and the running
+launchd service serves it without a restart (proved by a non-injected page). Node
+v24.22.2, Chrome 157.0.8103.78, 1728x900. Logs under `/tmp`; screenshots under
+`.tmp-work/sidebar-e2e/` (gitignored). Tokens are redacted; every Chrome profile is
+throwaway and terminated.
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Static gates | `node --check src/client.js`; `npm test` | exit 0; **229/229** unit tests pass, 0 fail |
+| Pipeline smoke | `node test/browser/sidebar.e2e.mjs --smoke` | **4/4 PASS**, 0 page errors, exit 0, 2.2 s (`/tmp/followup-smoke.log`) |
+| R1/R2 (unchanged) | `node test/browser/sidebar.e2e.mjs --pin` (`r1-1`, `r1-2`, `r2-1`..`r2-4`) | **PASS**: perfect-circle dot (corner-shape equals the round control, 50%, 10x10, screenshots); native hover card shows the three `.psd-hovercard-section` blocks with non-empty titles/values, same-Session exact title+value match against the plugin card, 244/212 px native frame and child order intact, blank Session shows none |
+| R3 Host write path | same run (`r3-1`..`r3-3`) | **PASS**: 8 main rows each with the 16 px pin slot (6 subagent child rows expose none, clipped-title glyph-squeeze guard green); hover reveal with `.psd-run-title` x unchanged (84 px) and no layout jump; pin click on a stable finished row → row/slot/button `data-pinned=true`, `aria-pressed`, localized Unpin label, filled `dsw-icon-pin-fill-regular` glyph, violet/blue accent and tint; `dynamicWorkspacesLive.snapshot().pinnedIds` grew **6 → 7** and the native sidebar row gained its pin marker (0 → 1) and was fronted into its group's pinned partition; **no `power-suite.dynamic-workspaces.pinned` localStorage document** exists |
+| R3 multi-pin + reload | same run (`r3-4`, `r3-5`, `r3-6`) | **PASS**: both run pins lead the card as a contiguous pinned prefix with newest-activity-first order preserved and the six pre-existing Host pins untouched; after a full reload the Host set still contains both ids plus every baseline pin, both rows restore pinned-first, their native markers survive, and still no local pin document |
+| R3 cross-device | same run (`r3-8`) | **PASS**: a second fresh throwaway Chrome profile (`--user-data-dir`, separate CDP, same injected client) saw the Host set as **exactly baseline + both run ids by id set (8 pins)**, its card pinned prefix began with the same two run Sessions in the same A<B order, no local pin document and 0 page errors; the second profile was closed |
+| R3 cleanup + side effects | same run (`r3-7` + `finally`) | **PASS**: unpin clicks removed both ids from the Host set, which returned **exactly to the 6-pin run baseline** (`baseline restored true`, residual `[]`), the card pinned count/titles returned to baseline, native pin markers reverted, and no local pin document ever appeared. Honest side effect measured and logged: the shell can front a pinned Session's saved native order and unpin does not necessarily restore it (final run group index A 0 → 1, B 1 → 1 after unpin, i.e. no persistent change observed for those finished targets) |
+| `--pin` aggregate | `node test/browser/sidebar.e2e.mjs --pin` | **19/19 PASS / 0 FAIL**, 41.8 s, page errors **0**, network domain ENABLED, **real network failures 0**, ignored network noise 14, exit 0 (`/tmp/followup-pin-final.log`) |
+| Shipped install (no injection) | `node test/browser/sidebar.e2e.mjs --live` | **4/4 PASS**, 7.3 s, exit 0 (`/tmp/followup-live.log`): two fresh profiles loaded the served linked checkout with no injected factory; the card had 8 main rows / 8 `.psd-run-pin` controls and the **six user's Host pins as pinned rows** (`DSH 内嵌 UI 实验性富文本开关`, `帮我去调查一下：有哪些用于`, `熄灭当前 mac 的屏幕，但是像`, `同一个帖子，在 Windows 上的进`, `自定义模板生成与问答式创建菜单`, `DSH 扩展发布与国际化-上架第三方市场`); both profiles agreed on the identical pinned prefix; no local pin document; 0 page errors |
+| Existing full mode | `node test/browser/sidebar.e2e.mjs --no-shots` | **43/43 PASS**, page errors 0, exit 0 on two runs (`/tmp/atmos-new-run.log` 54.4 s, `/tmp/followup-greenfull-2.log` 52.9 s); the approved "View all" expansion logged `5 -> 8 rows` and the B4 `+30` row-body click oracle is unchanged. Four other attempts on the same build each failed one existing live-animation check (`b4-1` canvas saturation 0.373-0.378 vs the 0.38 threshold, and `b6-7`/`b6-2` under the actively-running current session), always with 0 page errors; no pin-path assertion failed |
+
+The card's five-row "View all" limit over the combined pinned+ordinary list is intended
+product behavior; with the six pre-existing Host pins the default view is pinned-only and
+the harness expands like a user before checking rows. Gaps: the cross-device proof uses two
+fresh browser profiles in one harness process on this machine (not a second device); the
+harness's own active session makes the live card re-sort, which `--pin` works around
+(finished targets, never the current Session, stable-geometry clicks) but which still makes
+the full-mode live-row animation/refresh probes occasionally flaky; `--live` proves the
+served linked-checkout client and is read-only; headless runs cover one viewport and the
+current UI language only (ZH copy is unit-tested); and native pinning's saved-order
+fronting side effect is disclosed rather than undone.

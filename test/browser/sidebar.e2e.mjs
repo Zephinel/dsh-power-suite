@@ -51,16 +51,23 @@
  * (folds/bucket cache). No other session, setting or file is touched, and the token is
  * never printed. The harness exits 0 only when every check passed and the page reported
  * no errors; 1 on any failure; 2 on usage errors. The `--pin` mode additionally pins two
- * live Sessions through the card's real pin button, which writes the card-local
- * `power-suite.dynamic-workspaces.pinned` localStorage document (the throwaway Chrome
- * profile means it never reaches the user's real profile, and the native Host pin state is
- * never touched). The run unpins its rows again through the UI in a `finally` block and
- * reports any residual card pin document entries instead of hiding them.
+ * live Sessions through the card's real pin button. Pin state is the DSH shell's own
+ * Host-persisted Session pin (`WorkspaceSnapshot.pinnedSessionIds`, toggled through
+ * `uiWorkspace.pinSession` / `unpinSession`), so it is shared with every paired
+ * browser/device — the run asserts the Host set, the native sidebar marker and the
+ * second-profile visibility, never a local document. The run unpins its own ids again
+ * through the UI in a `finally` block, verifies the Host set is back to the run baseline
+ * (the user's pre-existing pins are never unpinned) and reports the honest side effect
+ * that native pinning fronts the Session's saved sidebar order and unpinning does not
+ * restore it. The `--live` mode is read-only: it loads the shipped GUI in two fresh
+ * throwaway profiles WITHOUT injecting this worktree's client, to prove the merged
+ * install serves the new card.
  *
  * Usage:
  *   node test/browser/sidebar.e2e.mjs                 # full run (screenshots into .tmp-work/)
  *   node test/browser/sidebar.e2e.mjs --smoke         # pipeline smoke only
  *   node test/browser/sidebar.e2e.mjs --pin           # pin / hover-dot / native-figure acceptance
+ *   node test/browser/sidebar.e2e.mjs --live          # shipped-install check, no client injection
  *   node test/browser/sidebar.e2e.mjs --no-shots      # skip screenshots
  *   node test/browser/sidebar.e2e.mjs --client path/to/client.js
  *   node test/browser/sidebar.e2e.mjs --keep-open     # leave Chrome running for inspection
@@ -113,6 +120,11 @@ function log(msg) {
   process.stdout.write(redact(msg) + '\n')
 }
 
+/** Extra diagnostics for the --pin targeting helpers (set PSD_E2E_DEBUG=1). */
+function debugLog(msg) {
+  if (process.env.PSD_E2E_DEBUG === '1') log(`DEBUG ${msg}`)
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
@@ -147,6 +159,7 @@ function parseArgs(argv) {
     const arg = argv[i]
     if (arg === '--smoke') opts.mode = 'smoke'
     else if (arg === '--pin') opts.mode = 'pin'
+    else if (arg === '--live') opts.mode = 'live'
     else if (arg === '--no-shots') opts.shots = false
     else if (arg === '--keep-open') opts.keepOpen = true
     else if (arg === '--headful') opts.headful = true
@@ -155,7 +168,7 @@ function parseArgs(argv) {
     else if (arg === '--url') opts.url = argv[++i]
     else if (arg.startsWith('--url=')) opts.url = arg.slice('--url='.length)
     else if (arg === '--help' || arg === '-h') {
-      console.log('usage: node test/browser/sidebar.e2e.mjs [--smoke] [--pin] [--no-shots] [--client path] [--keep-open] [--headful] [--url TOKEN_URL]')
+      console.log('usage: node test/browser/sidebar.e2e.mjs [--smoke] [--pin] [--live] [--no-shots] [--client path] [--keep-open] [--headful] [--url TOKEN_URL]')
       process.exit(0)
     } else {
       throw new Error(`unknown argument: ${arg}`)
@@ -1516,6 +1529,45 @@ async function ensureBlankSession(page) {
 }
 
 /** Wait for at least one running/recent row and return the card row count. */
+/**
+ * Expand the card's five-row default through its own "View all" control.
+ *
+ * The product intentionally keeps the five-row limit over the combined list, and with
+ * the Host-shared pin the user's pre-existing pins can fill that entire default view
+ * (pinned rows count as rows). The harness must expand like a user would so row-level
+ * checks see the live/subagent rows too; this is a prerequisite, not an oracle change.
+ * @param {object} page - Page wrapper.
+ * @returns {Promise<boolean>} whether the card was expanded (or was already fully shown).
+ */
+async function expandPanelRows(page) {
+  const link = await page.eval(() => {
+    const element = document.querySelector('.psd-panel-link')
+    if (element === null) return null
+    const text = (element.innerText || '').trim()
+    if (!/^(View all|查看全部)/.test(text)) return null
+    const rect = element.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return null
+    return { text, x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+  })
+  if (link === null) return false
+  const before = await page.count('.psd-run')
+  await page.clickAt(link.x, link.y)
+  const deadline = Date.now() + 5000
+  let after = before
+  while (Date.now() < deadline) {
+    await sleep(120)
+    after = await page.count('.psd-run')
+    if (after > before) break
+  }
+  if (after > before) log(`expanded card via "${link.text}": ${before} -> ${after} rows`)
+  else log(`card expansion via "${link.text}" produced no new rows (${before})`)
+  return after > before
+}
+
+/**
+ * @returns {Promise<number>} the number of running/recent card rows, with the
+ *   five-row default expanded through "View all" when the control is present.
+ */
 async function ensurePanelRows(page) {
   try {
     await page.waitForFn(() => document.querySelectorAll('.psd-run').length > 0, [], { timeout: 12000, label: 'running/recent card rows' })
@@ -1527,6 +1579,7 @@ async function ensurePanelRows(page) {
         (empty ? ' The card is showing its empty state.' : '')
     )
   }
+  await expandPanelRows(page)
   return page.count('.psd-run')
 }
 
@@ -2362,6 +2415,7 @@ function assertAtmosphereRow(label, row, atmos, content, options = {}) {
   assert(atmos.canvas.filter.includes('blur'), `${label}: atmosphere canvas must keep the gas blur (${atmos.canvas.filter})`)
   assert(atmos.canvas.filter.includes('saturate(1.5)'), `${label}: atmosphere canvas must keep the vivid saturate(1.5) baseline (${atmos.canvas.filter})`)
   const saturationMin = options.saturationMin ?? 0.38
+  debugLog(`atmosphere ${label}: canvas ${atmos.canvas.width}x${atmos.canvas.height} painted=${atmos.canvas.painted} strong=${atmos.canvas.avgSaturationStrong} all=${atmos.canvas.avgSaturation} motion=${atmos.motion} blend=${atmos.canvas.mixBlendMode}`)
   assert(atmos.canvas.avgSaturationStrong >= saturationMin, `${label}: atmosphere colours must stay vivid, not grey (blob-core saturation ${atmos.canvas.avgSaturationStrong}, all-pixel ${atmos.canvas.avgSaturation}, minimum ${saturationMin}; grey baseline was ~0.25)`)
   assert(['multiply', 'screen'].includes(atmos.canvas.mixBlendMode), `${label}: atmosphere canvas must keep a vivid blend mode (${atmos.canvas.mixBlendMode})`)
   assertEqual(atmos.canvas.pointerEvents, 'none', `${label}: atmosphere canvas must not capture the pointer`)
@@ -3974,21 +4028,69 @@ const probePin = {
     const pin = indicators.filter((entry) =>
       /pinn|置顶/i.test(`${entry.label ?? ''} ${entry.title ?? ''}`) || /pinIndicator/i.test(entry.className))
     const sessionRows = [...document.querySelectorAll('[data-row-key^="session:"]')]
+    // Position inside its own Workspace group (the shell fronts a pinned Session's
+    // saved order, which shows up as the row leading its group's pinned partition).
+    let groupContainer = row.parentElement
+    let groupRows = null
+    while (groupContainer !== null && groupContainer !== document.body) {
+      const siblings = [...groupContainer.querySelectorAll('[data-row-key^="session:"]')]
+      if (siblings.length > 1) {
+        groupRows = siblings
+        break
+      }
+      groupContainer = groupContainer.parentElement
+    }
     return {
       found: true,
       key: row.getAttribute('data-row-key'),
       rect: rect(row),
       text: text(row).slice(0, 120),
       order: sessionRows.indexOf(row),
+      groupIndex: groupRows === null ? -1 : groupRows.indexOf(row),
+      groupSize: groupRows === null ? -1 : groupRows.length,
       indicators,
       pin,
       pinVisible: pin.some((entry) => entry.rect.width > 0 && entry.rect.height > 0),
     }
   },
 
+  /**
+   * The Session's native Workspace-group siblings and their pin markers, so the
+   * pin-to-native saved-order fronting can be verified positively (the pinned row
+   * must lead its group's pinned partition).
+   */
+  nativeGroupFacts: (sessionId) => {
+    const row = document.querySelector(`[data-row-key="session:${sessionId}"]`)
+    if (row === null) return null
+    let container = row.parentElement
+    let groupRows = null
+    while (container !== null && container !== document.body) {
+      const siblings = [...container.querySelectorAll('[data-row-key^="session:"]')]
+      if (siblings.length > 1) {
+        groupRows = siblings
+        break
+      }
+      container = container.parentElement
+    }
+    if (groupRows === null) return null
+    const hasPinMarker = (candidate) => [...candidate.querySelectorAll('[role="img"], [class*="pinIndicator"]')]
+      .some((element) => /pinn|置顶/i.test(`${element.getAttribute('aria-label') ?? ''} ${element.getAttribute('title') ?? ''}`)
+        || /pinIndicator/i.test(String(element.className || '')))
+    const entries = groupRows.map((candidate) => ({
+      key: candidate.getAttribute('data-row-key'),
+      pinned: hasPinMarker(candidate),
+    }))
+    const index = groupRows.indexOf(row)
+    return {
+      entries,
+      index,
+      size: groupRows.length,
+      leadingPinned: index >= 0 && entries.slice(0, index + 1).every((entry) => entry.pinned),
+    }
+  },
+
   /** Every currently rendered native sidebar session row. */
-  nativeRows: () => {
-    const tree = document.querySelector('[role="tree"]')
+  nativeRows: () => {    const tree = document.querySelector('[role="tree"]')
     const treeRect = tree ? tree.getBoundingClientRect() : null
     return [...document.querySelectorAll('[data-row-key^="session:"]')]
       .map((row) => {
@@ -4048,6 +4150,7 @@ const probePin = {
       const titleRect = rect(titleElement)
       return {
         title: text(titleElement),
+        state: row.getAttribute('data-state'),
         titleLeft: titleRect === null ? null : titleRect.left,
         titleTop: titleRect === null ? null : titleRect.top,
         titleClipped: titleElement !== null && titleElement.getAttribute('data-clipped') === 'true',
@@ -4419,22 +4522,6 @@ async function readPinDocument(page) {
 }
 
 /**
- * Parse the card's pin document, tolerating a missing/corrupt value.
- * @param {string | null} raw - localStorage value.
- * @returns {{ version: number, pinned: string[] } | null} the parsed document.
- */
-function parsePinDocument(raw) {
-  if (typeof raw !== 'string' || raw.length === 0) return null
-  try {
-    const parsed = JSON.parse(raw)
-    if (parsed === null || typeof parsed !== 'object' || !Array.isArray(parsed.pinned)) return null
-    return parsed
-  } catch {
-    return null
-  }
-}
-
-/**
  * Read the native sidebar row's pin-marker state for one Session (expanding/scrolling as needed).
  * @param {string} sessionId - target Session id.
  * @returns {Promise<object | null>} the native row state, or null when not reachable.
@@ -4447,6 +4534,54 @@ async function readNativePinState(page, sessionId) {
     return state !== null && state.found === true ? state : null
   } catch {
     return null
+  }
+}
+
+/**
+ * Poll the live seat seam until the Host `pinnedSessionIds` set satisfies a predicate.
+ * The pin write goes Host → WorkspaceSnapshot push → client store, so the card cannot
+ * be expected to flip synchronously with the click.
+ * @param {object} page - Page wrapper.
+ * @param {Function} predicate - receives `(pinnedIds, snapshot)`.
+ * @param {object} [options] - timeout/interval/label.
+ * @returns {Promise<object>} the matching live snapshot.
+ */
+async function waitForHostPins(page, predicate, { timeout = 12000, interval = 200, label = 'Host pinnedSessionIds' } = {}) {
+  const deadline = Date.now() + timeout
+  let last = null
+  while (Date.now() < deadline) {
+    const snapshot = await readLiveSnapshot(page)
+    if (snapshot.ok && Array.isArray(snapshot.pinnedIds)) {
+      last = snapshot
+      if (predicate(snapshot.pinnedIds, snapshot)) return snapshot
+    }
+    await sleep(interval)
+  }
+  throw new Error(`timed out after ${timeout}ms waiting for ${label} (last Host pinnedIds ${short(JSON.stringify(last === null ? null : last.pinnedIds), 240)})`)
+}
+
+/**
+ * Open the GUI in a SECOND fresh throwaway Chrome profile and run `fn` against it, then
+ * always terminate that browser and delete its profile. Used for the cross-device proof:
+ * the second profile shares only the Host, so any pin seen there is Host-shared state.
+ * @param {string} url - token GUI URL (redacted in logs).
+ * @param {string} clientSource - this worktree's client source to inject.
+ * @param {Function} fn - receives the second page wrapper.
+ * @returns {Promise<*>} the callback result.
+ */
+async function withSecondProfile(url, clientSource, fn) {
+  let chrome = null
+  let page = null
+  try {
+    chrome = await launchChrome({ headful: false })
+    log(`cross-device: second fresh Chrome profile pid ${chrome.proc.pid}, CDP port ${chrome.port}`)
+    const cdp = await CdpConnection.connect(chrome.wsUrl)
+    page = await Page.open(cdp, url, injectorSource(clientSource))
+    await ensureAppReady(page)
+    return await fn(page)
+  } finally {
+    if (page !== null) page.dispose()
+    if (chrome !== null) await chrome.close()
   }
 }
 
@@ -4493,29 +4628,52 @@ async function resetPointer(page) {
 async function hoverMainRowByTitle(page, title) {
   for (let attempt = 0; attempt < PIN_ROW_ATTEMPTS; attempt += 1) {
     await resetPointer(page)
+    // The expanded card scrolls internally (the panel has a 560 px clamp), so the row y
+    // can be inside the viewport while the row itself is clipped by the panel body.
+    // Always scroll it to the panel's centre first, then measure the real pointer point.
+    const scrolled = await page.eval((rowTitle) => {
+      const row = [...document.querySelectorAll('.psd-run')]
+        .find((element) => ((element.querySelector('.psd-run-title')?.innerText ?? '').trim()) === rowTitle)
+      if (row === undefined) return false
+      row.scrollIntoView({ block: 'center', behavior: 'instant' })
+      return true
+    }, title).catch(() => false)
+    if (!scrolled) {
+      await sleep(250)
+      continue
+    }
+    await sleep(160)
     const target = await page.eval((rowTitle) => {
       const row = [...document.querySelectorAll('.psd-run')]
         .find((element) => ((element.querySelector('.psd-run-title')?.innerText ?? '').trim()) === rowTitle)
       if (row === undefined) return null
       const rect = row.getBoundingClientRect()
       const titleRect = row.querySelector('.psd-run-title')?.getBoundingClientRect() ?? rect
+      // The clickable body: prefer a point inside the title button, fall back to the pill.
+      const title = row.querySelector('.psd-run-open')?.getBoundingClientRect() ?? titleRect
       return {
-        x: Math.round(titleRect.left + Math.min(30, Math.max(8, titleRect.width / 2))),
+        x: Math.round(title.left + Math.min(30, Math.max(8, title.width / 2))),
         y: Math.round(rect.top + rect.height / 2),
         rowTop: Math.round(rect.top),
+        rowBottom: Math.round(rect.bottom),
+        rowLeft: Math.round(rect.left),
       }
     }, title).catch(() => null)
     if (target === null) {
       await sleep(250)
       continue
     }
-    if (target.y <= 4 || target.y >= VIEWPORT.height - 4) {
-      await page.eval((rowTitle) => {
-        const row = [...document.querySelectorAll('.psd-run')]
-          .find((element) => ((element.querySelector('.psd-run-title')?.innerText ?? '').trim()) === rowTitle)
-        if (row !== undefined) row.scrollIntoView({ block: 'center' })
-      }, title)
-      await sleep(260)
+    const visible = await page.eval(() => {
+      const panel = document.querySelector('.psd-panel')
+      if (panel === null) return null
+      const body = panel.querySelector('.psd-panel-body') ?? panel
+      const rect = body.getBoundingClientRect()
+      return { top: Math.round(rect.top), bottom: Math.round(rect.bottom), left: Math.round(rect.left), right: Math.round(rect.right) }
+    })
+    const outsidePanel = visible !== null &&
+      (target.y < visible.top || target.y > visible.bottom || target.x < visible.left || target.x > visible.right)
+    if (outsidePanel || target.y <= 4 || target.y >= VIEWPORT.height - 4) {
+      await sleep(250)
       continue
     }
     await page.moveTo(target.x, target.y)
@@ -4526,8 +4684,9 @@ async function hoverMainRowByTitle(page, title) {
       return row === undefined ? false : row.matches(':hover')
     }, title).catch(() => false)
     if (hovered) return target
+    debugLog(`hoverMainRowByTitle "${short(title, 40)}" pointer at ${target.x},${target.y} did not hover (panel ${short(JSON.stringify(visible), 100)})`)
   }
-  throw new Error(`could not hover the card main row "${short(title, 60)}" (the live list kept re-sorting)`)
+  throw new Error(`could not hover the card main row "${short(title, 60)}" (the live list kept re-sorting or the row is clipped)`)
 }
 
 /**
@@ -4573,10 +4732,18 @@ async function waitForRowPinState(page, title, predicate, { timeout = 2500, labe
  * @returns {Promise<{ state: object, row: object }>} the read after the click.
  */
 async function clickRowPin(page, title, expected) {
-  for (let attempt = 0; attempt < PIN_ROW_ATTEMPTS; attempt += 1) {
+  const wantPinned = expected === 'pin'
+  const isExpected = (row) => (row.pinned === 'true') === wantPinned
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    // Idempotent start: if the Host round-trip from a previous attempt already landed,
+    // do not click again (a second click would toggle the pin straight back).
+    const before = await readRowPinState(page, title).catch(() => null)
+    debugLog(`clickRowPin attempt ${attempt} "${short(title, 40)}" expected=${expected} before=${before === null ? 'row-missing' : `pinned=${before.row.pinned} hovered=${before.row.hovered} op=${before.row.opacity} pe=${before.row.pointerEvents}`}`)
+    if (before !== null && isExpected(before.row)) return before
     try {
       await hoverMainRowByTitle(page, title)
-    } catch {
+    } catch (error) {
+      debugLog(`clickRowPin hover failed: ${short((error && error.message) || String(error), 160)}`)
       await sleep(300)
       continue
     }
@@ -4584,8 +4751,9 @@ async function clickRowPin(page, title, expected) {
       await waitForRowPinState(page, title,
         (row) => row.hovered && row.opacity === '1' && row.visibility === 'visible' && row.pointerEvents === 'auto',
         { timeout: 2500, label: 'interactive pin button on hover' })
-    } catch {
-      await sleep(200)
+    } catch (error) {
+      debugLog(`clickRowPin interactive wait failed: ${short((error && error.message) || String(error), 300)}`)
+      await sleep(250)
       continue
     }
     const point = await page.eval((rowTitle) => {
@@ -4600,16 +4768,49 @@ async function clickRowPin(page, title, expected) {
       await sleep(250)
       continue
     }
-    await page.clickAt(point.x, point.y)
-    await sleep(340)
-    const after = await readRowPinState(page, title).catch(() => null)
-    if (after === null) {
-      await sleep(320)
+    // Stable-geometry precondition: two consecutive identical rects immediately before
+    // the real click (the live card can re-sort under the pointer between measure/click).
+    const geometry = () => page.eval((rowTitle) => {
+      const row = [...document.querySelectorAll('.psd-run')]
+        .find((element) => ((element.querySelector('.psd-run-title')?.innerText ?? '').trim()) === rowTitle)
+      if (row === undefined) return null
+      const rowRect = row.getBoundingClientRect()
+      const button = row.querySelector('.psd-run-pin')
+      if (button === null) return null
+      const rect = button.getBoundingClientRect()
+      return {
+        rowTop: Math.round(rowRect.top),
+        rowLeft: Math.round(rowRect.left),
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      }
+    }, title).catch(() => null)
+    const firstSample = await geometry()
+    await sleep(160)
+    const secondSample = await geometry()
+    if (firstSample === null || secondSample === null ||
+      firstSample.rowTop !== secondSample.rowTop || firstSample.rowLeft !== secondSample.rowLeft) {
+      debugLog(`clickRowPin geometry not stable for "${short(title, 40)}": ${short(JSON.stringify(firstSample), 120)} -> ${short(JSON.stringify(secondSample), 120)}`)
+      await sleep(200)
       continue
     }
-    const isPinned = after.row.pinned === 'true'
-    if (expected === 'pin' ? isPinned : !isPinned) return after
-    await sleep(360)
+    debugLog(`clickRowPin clicking at ${secondSample.x},${secondSample.y} (button ${secondSample.width}x${secondSample.height}, row ${secondSample.rowLeft},${secondSample.rowTop}) for "${short(title, 40)}"`)
+    await page.clickAt(secondSample.x, secondSample.y)
+    // The card pin writes the Host snapshot; the DOM flips only after the pushed
+    // WorkspaceSnapshot arrives. Poll for the expected state instead of re-clicking, so
+    // a slow Host round-trip cannot turn the retry into an accidental toggle-back.
+    const deadline = Date.now() + 5000
+    let after = null
+    while (Date.now() < deadline) {
+      await sleep(150)
+      after = await readRowPinState(page, title).catch(() => null)
+      if (after !== null && isExpected(after.row)) return after
+    }
+    const snapshotNow = await readLiveSnapshot(page)
+    debugLog(`clickRowPin post-click state "${short(title, 40)}": ${after === null ? 'row-missing' : `pinned=${after.row.pinned} hovered=${after.row.hovered}`}; hostPins=${snapshotNow.ok ? short(JSON.stringify(snapshotNow.pinnedIds), 200) : 'n/a'}`)
+    await sleep(200)
   }
   throw new Error(`could not ${expected} the card row "${short(title, 60)}" through its pin button (the click did not land or the live list re-sorted)`)
 }
@@ -4632,6 +4833,43 @@ async function sessionIdByTitle(page, title) {
     }
   }
   return { id: null, source: 'unresolved' }
+}
+
+/**
+ * Pick a pin target from the live card: prefer finished (`data-state="done"`) rows whose
+ * activity is stable, never the current Session (the harness itself runs inside it and its
+ * row keeps re-sorting), and skip titles already used by the run.
+ * @param {object} page - Page wrapper.
+ * @param {object} [options] - `excludeTitles` already-pinned target titles.
+ * @returns {Promise<object>} `{ ordered, currentTitle }` (done rows first).
+ */
+async function choosePinTargets(page, { excludeTitles = [] } = {}) {
+  const pin = await readCardPinState(page)
+  const live = await readLiveSnapshot(page)
+  const currentId = live.ok ? live.currentSessionId : null
+  const currentTitle = live.ok && currentId !== null
+    ? (live.rows ?? []).find((row) => row.id === currentId)?.title ?? null
+    : null
+  const excluded = new Set([...excludeTitles, ...(currentTitle === null ? [] : [currentTitle])])
+  const unpinned = pin.rows.filter((row) => row.pinned !== 'true' && row.title.length > 0 && !excluded.has(row.title))
+  const done = unpinned.filter((row) => row.state === 'done')
+  const running = unpinned.filter((row) => row.state !== 'done')
+  debugLog(`choosePinTargets: ${pin.rows.length} rows, ${done.length} done, ${running.length} running/other, current="${short(currentTitle ?? 'n/a', 40)}", excluded=${short(JSON.stringify([...excluded]), 120)}`)
+  return { ordered: [...done, ...running], currentTitle, doneCount: done.length, runningCount: running.length }
+}
+
+/**
+ * Resolve the live title of a tracked Session id (the card may re-sort across reloads).
+ * @param {string} sessionId - tracked Session id.
+ * @returns {Promise<string | null>} the current display title, or null.
+ */
+async function titleForRunId(page, sessionId) {
+  const live = await readLiveSnapshot(page)
+  if (live.ok) {
+    const row = (live.rows ?? []).find((candidate) => candidate.id === sessionId)
+    if (row !== undefined && typeof row.title === 'string' && row.title.length > 0) return row.title
+  }
+  return null
 }
 
 /**
@@ -4662,57 +4900,59 @@ async function cleanupPinnedSessions(page, state) {
   if (state.mode !== 'pin') return
   const issues = []
   try {
+    // Expand the card first: the run's pinned rows may sit outside the five-row window.
+    await ensurePanelRows(page).catch(() => 0)
     for (const entry of [...(state.pinned ?? [])].reverse()) {
       try {
-        const present = await page.eval((title) => [...document.querySelectorAll('.psd-run')]
-          .some((row) => ((row.querySelector('.psd-run-title')?.innerText ?? '').trim()) === title), entry.title).catch(() => false)
-        if (!present) {
-          issues.push(`"${short(entry.title, 40)}" is not a rendered card row; cannot unpin it through the UI`)
+        // Resolve the row from the tracked Session id (the card can re-sort/re-render).
+        let title = (await titleForRunId(page, entry.id)) ?? entry.title
+        const pinnedNow = () => page.eval((rowTitle) => [...document.querySelectorAll('.psd-run')]
+          .some((row) => ((row.querySelector('.psd-run-title')?.innerText ?? '').trim()) === rowTitle && row.getAttribute('data-pinned') === 'true'), rowTitle).catch(() => false)
+        if (!(await pinnedNow())) {
+          log(`cleanup: id ${entry.id} ("${short(title, 48)}") is not a pinned card row any more; skipping UI unpin`)
+          state.pinned = state.pinned.filter((item) => item.id !== entry.id)
           continue
         }
-        await clickRowPin(page, entry.title, 'unpin')
-        state.pinned = state.pinned.filter((item) => item.title !== entry.title)
-        log(`cleanup: unpinned "${short(entry.title, 48)}"`)
+        await clickRowPin(page, title, 'unpin')
+        state.pinned = state.pinned.filter((item) => item.id !== entry.id)
+        log(`cleanup: unpinned id ${entry.id} ("${short(title, 48)}")`)
       } catch (error) {
-        issues.push(`"${short(entry.title, 40)}": ${(error && error.message) || String(error)}`)
+        issues.push(`id ${entry.id} ("${short(entry.title, 40)}"): ${(error && error.message) || String(error)}`)
       }
     }
     const runIds = [state.pinTargetA?.id, state.pinTargetB?.id].filter((id) => typeof id === 'string')
-    const snapshot = await readLiveSnapshot(page)
-    const pinnedIds = snapshot.ok && Array.isArray(snapshot.pinnedIds) ? snapshot.pinnedIds : null
-    const oursRemainingInCard = pinnedIds === null ? null : runIds.filter((id) => pinnedIds.includes(id))
-    const pinDocument = await readPinDocument(page)
-    const parsedDocument = parsePinDocument(pinDocument.raw)
-    const oursRemainingInDocument = parsedDocument === null ? null : runIds.filter((id) => parsedDocument.pinned.includes(id))
-    const nativePinChecks = []
-    for (const [label, entry] of [['A', state.pinTargetA], ['B', state.pinTargetB]]) {
-      if (entry === undefined || typeof entry.nativePinCount !== 'number') continue
-      const native = await readNativePinState(page, entry.id)
-      nativePinChecks.push({ label, id: entry.id, before: entry.nativePinCount, after: native === null ? null : native.pin.length })
+    const baselineSorted = state.pinBaseline?.hostPinnedSorted ?? null
+    let snapshot = await readLiveSnapshot(page)
+    let pinnedIds = snapshot.ok && Array.isArray(snapshot.pinnedIds) ? snapshot.pinnedIds : null
+    if (pinnedIds !== null && baselineSorted !== null) {
+      const deadline = Date.now() + 10000
+      while (Date.now() < deadline && JSON.stringify([...pinnedIds].sort()) !== JSON.stringify(baselineSorted)) {
+        await sleep(300)
+        snapshot = await readLiveSnapshot(page)
+        pinnedIds = snapshot.ok && Array.isArray(snapshot.pinnedIds) ? snapshot.pinnedIds : null
+      }
     }
+    const residual = pinnedIds === null ? null : runIds.filter((id) => pinnedIds.includes(id))
+    const baselineRestored = pinnedIds !== null && baselineSorted !== null &&
+      JSON.stringify([...pinnedIds].sort()) === JSON.stringify(baselineSorted)
+    const pinDocument = await readPinDocument(page)
     const nativeRows = await page.eval(probePin.nativeRows).catch(() => [])
     state.pinCleanup = {
       unpinned: (state.pinned ?? []).length === 0,
       issues,
       runIds,
-      cardPinnedIds: pinnedIds,
-      oursRemainingInCard,
+      hostPinnedIds: pinnedIds,
+      baselinePinnedIds: baselineSorted,
+      residual,
+      baselineRestored,
       pinDocumentRaw: pinDocument.raw,
-      pinDocumentIds: parsedDocument === null ? null : parsedDocument.pinned,
-      oursRemainingInDocument,
-      nativePinChecks,
       nativeOrderBefore: state.nativeOrderBefore ?? null,
       nativeOrderAfter: nativeRows.map((row) => row.key),
+      pinSideEffects: state.pinSideEffects ?? null,
     }
-    log(`cleanup: card pinnedIds ${short(JSON.stringify(pinnedIds), 240)}; pin document ${short(pinDocument.raw, 240)}; residual run pins in card ${short(JSON.stringify(oursRemainingInCard), 120)} / in document ${short(JSON.stringify(oursRemainingInDocument), 120)}`)
-    for (const check of nativePinChecks) {
-      log(`cleanup: native sidebar pin markers for Session ${check.label} ${check.before === check.after ? `unchanged (${check.before})` : `CHANGED (${check.before} -> ${check.after})`}`)
-    }
-    if (state.pinCleanup.nativeOrderBefore !== null) {
-      const before = JSON.stringify(state.pinCleanup.nativeOrderBefore)
-      const after = JSON.stringify(state.pinCleanup.nativeOrderAfter)
-      log(`cleanup: native sidebar session order ${before === after ? 'unchanged by the run' : 'changed (live session list moved during the run)'}`)
-    }
+    log(`cleanup: Host pinnedIds ${short(JSON.stringify(pinnedIds), 280)}; run baseline ${short(JSON.stringify(baselineSorted), 280)}; baseline restored ${baselineRestored}; residual run pins ${short(JSON.stringify(residual), 120)}; pin document ${JSON.stringify(pinDocument.raw)}`)
+    log(`cleanup: native saved-order fronting side effect ${short(JSON.stringify(state.pinSideEffects ?? null), 500)} ` +
+      '(native pinning fronts the Session saved order; unpin does not restore it)')
     if (issues.length > 0) log(`cleanup: ${issues.length} issue(s): ${short(issues.join('; '), 500)}`)
   } catch (error) {
     log(`cleanup error: ${short((error && error.message) || String(error), 400)}`)
@@ -4734,21 +4974,33 @@ async function runPinChecks({ page, results, state }) {
     return 'Network domain enabled; same-origin API/document failures are counted'
   })
 
+  // `ensurePanelRows` also expands the five-row default through "View all": with the
+  // Host-shared pin the user's pre-existing pins can fill the whole default view.
   await ensurePanelRows(page)
   await resetPointer(page)
   const baseline = await readCardPinState(page)
   const snapshot = await readLiveSnapshot(page)
+  assertEqual(snapshot.ok, true, `the dynamic-Workspaces live seat is unavailable: ${short(snapshot.reason || 'unknown')}`)
+  assertEqual(snapshot.pinSupported, true, 'the shell must expose uiWorkspace.pinSession/unpinSession for the Host-shared pin')
+  const hostPinnedIds = Array.isArray(snapshot.pinnedIds) ? snapshot.pinnedIds : []
+  assert(hostPinnedIds.length > 0, 'the live Host has no pinned Sessions, so the shared-pin baseline context is missing')
   const pinDocument = await readPinDocument(page)
+  assertEqual(pinDocument.raw, null, `no card-local pin document may exist in the Host-shared design (found ${short(pinDocument.raw, 160)})`)
   state.pinBaseline = {
+    hostPinnedIds: [...hostPinnedIds],
+    hostPinnedSorted: [...hostPinnedIds].sort(),
     pinnedTitles: baseline.rows.filter((row) => row.pinned === 'true').map((row) => row.title),
-    pinnedIds: snapshot.ok && Array.isArray(snapshot.pinnedIds) ? snapshot.pinnedIds : null,
+    pinnedCount: baseline.rows.filter((row) => row.pinned === 'true').length,
     pinDocumentRaw: pinDocument.raw,
+    pinSupported: snapshot.pinSupported,
     unpinnedOrder: baseline.rows.filter((row) => row.pinned !== 'true').map((row) => row.title),
   }
-  log(`pin: baseline pinned main rows ${state.pinBaseline.pinnedTitles.length}` +
-    (state.pinBaseline.pinnedTitles.length > 0 ? ` (${short(state.pinBaseline.pinnedTitles.join(' | '), 180)})` : '') +
-    `; hook pinnedIds ${short(JSON.stringify(state.pinBaseline.pinnedIds), 200)}; pin document ${short(pinDocument.raw, 200)}`)
-  state.nativeRows = await ensureNativeSessionRowsVisible(page, 3)
+  assert(state.pinBaseline.pinnedTitles.length > 0,
+    `the Host pinned Sessions are not listed as pinned card rows (Host ids ${short(JSON.stringify(hostPinnedIds), 200)})`)
+  log(`pin: baseline Host pinnedIds (${hostPinnedIds.length}) ${short(JSON.stringify(hostPinnedIds), 260)}; ` +
+    `card pinned rows ${state.pinBaseline.pinnedCount} of ${baseline.rows.length} (${short(state.pinBaseline.pinnedTitles.join(' | '), 180)}); ` +
+    `unpinned rows ${state.pinBaseline.unpinnedOrder.length}; pin document ${JSON.stringify(pinDocument.raw)}; pinSupported ${snapshot.pinSupported}`)
+  state.nativeRows = await ensureNativeSessionRowsVisible(page, 6)
   state.nativeOrderBefore = state.nativeRows.map((row) => row.key)
 
   // ---- R1: running-card hover-card status dot ----------------------------------------------
@@ -4818,12 +5070,21 @@ async function runPinChecks({ page, results, state }) {
     const live = await readLiveSnapshot(page)
     assert(live.ok, `the dynamic-Workspaces live seat is unavailable: ${short(live.reason || 'unknown')}`)
     const cardTitles = await mainRowTitles(page)
+    // With a non-empty Host pinned prefix the default card view is pinned-only; prefer
+    // unpinned (running/recent) rows as the native-hover candidates, then fall back to
+    // pinned rows. Everything is probed with a cold-read wait anyway.
+    const pinNow = await readCardPinState(page)
+    const unpinnedTitles = new Set(pinNow.rows.filter((row) => row.pinned !== 'true').map((row) => row.title))
+    const orderedTitles = [
+      ...cardTitles.filter((title) => unpinnedTitles.has(title)),
+      ...cardTitles.filter((title) => !unpinnedTitles.has(title)),
+    ]
     const idByTitle = new Map()
     for (const row of live.rows ?? []) {
       if (typeof row.id === 'string' && typeof row.title === 'string' && row.title.length > 0) idByTitle.set(row.title, row.id)
     }
     const candidates = []
-    for (const title of cardTitles) {
+    for (const title of orderedTitles) {
       const id = idByTitle.get(title)
       if (id === undefined || id === state.sessionId || candidates.some((candidate) => candidate.id === id)) continue
       candidates.push({ id, title })
@@ -5060,10 +5321,11 @@ async function runPinChecks({ page, results, state }) {
 
   await results.check('r3-2', 'hover reveals the pin with no title layout jump; leaving hides it again', async () => {
     await resetPointer(page)
-    const before = await readCardPinState(page)
-    const candidates = before.rows.filter((row) => row.pinned !== 'true' && row.title.length > 0)
-    assert(candidates.length > 0, 'no unpinned main row is available to exercise the pin hover (the live card is all pinned)')
-    const target = candidates[0]
+    const selection = await choosePinTargets(page)
+    assert(selection.ordered.length > 0,
+      'no unpinned, non-current card row is available to exercise the pin hover (the live card is all pinned/current)')
+    const target = selection.ordered[0]
+    debugLog(`r3-2 target "${short(target.title, 40)}" state=${target.state} (done ${selection.doneCount}, running ${selection.runningCount}, current "${short(selection.currentTitle ?? 'n/a', 40)}")`)
     const resolved = await sessionIdByTitle(page, target.title)
     assert(resolved.id !== null, `could not resolve the Session id of the card row "${short(target.title, 50)}" (${resolved.source})`)
     state.pinTargetA = {
@@ -5097,11 +5359,17 @@ async function runPinChecks({ page, results, state }) {
     return `title x ${target.titleLeft} before/during/after hover; pin opacity 0 -> 1 (interactive) -> 0 with visibility hidden`
   })
 
-  await results.check('r3-3', 'clicking the pin pins the Session in the card: filled violet marker, local pin document, native sidebar untouched', async () => {
+  await results.check('r3-3', 'clicking the pin writes the Host pin set, couples the native sidebar (marker + fronting) and uses no local document', async () => {
     const target = state.pinTargetA
     assert(target !== undefined, 'no pin target was prepared (r3-2 failed first)')
     const nativeBefore = await readNativePinState(page, target.id)
+    assert(nativeBefore !== null, `the native sidebar row for ${target.id} is not visible before pinning`)
+    target.nativePinCount = nativeBefore.pin.length
+    target.nativeOrderBefore = nativeBefore.order
+    target.nativeGroupIndexBefore = nativeBefore.groupIndex
+    const groupBefore = await page.eval(probePin.nativeGroupFacts, target.id).catch(() => null)
     const documentBefore = await readPinDocument(page)
+    assertEqual(documentBefore.raw, null, `the throwaway profile must not start with a card-local pin document (found ${short(documentBefore.raw, 160)})`)
     const after = await clickRowPin(page, target.title, 'pin')
     assertEqual(after.row.pinned, 'true', 'the row must expose data-pinned="true" after the pin click')
     assertEqual(after.row.slotPinned, 'true', 'the pin slot must mirror data-pinned')
@@ -5132,27 +5400,30 @@ async function runPinChecks({ page, results, state }) {
       `the pinned marker must read as the violet/blue fixed accent (fill ${calm.row.pathFill}, colour ${calm.row.color}, business token ${calm.state.businessColor})`)
     assert(calm.row.rowBackground !== 'rgba(0, 0, 0, 0)' && calm.row.rowBackground !== 'transparent',
       `the pinned row must carry a subtle tint (row background ${calm.row.rowBackground})`)
-    // The card-owned pin document is the only state that may change (no Host/native pin call).
+    // The Host pin set is the single source of truth: it must gain exactly this id.
+    const expectedHost = [...new Set([...state.pinBaseline.hostPinnedSorted, target.id])].sort()
+    const host = await waitForHostPins(page,
+      (ids) => JSON.stringify([...ids].sort()) === JSON.stringify(expectedHost),
+      { timeout: 15000, label: `Host pinnedSessionIds == baseline + ${target.id.slice(0, 8)}…` })
+    target.hostPinnedAfter = [...host.pinnedIds]
+    // No local pin document may explain the pin (the old design's document must be gone).
     const documentAfter = await readPinDocument(page)
-    assertEqual(documentAfter.ok, true, `the card pin document cannot be read: ${short(documentAfter.reason || 'unknown')}`)
-    const parsed = parsePinDocument(documentAfter.raw)
-    assert(parsed !== null, `the card pin document must be the versioned JSON document, got ${short(documentAfter.raw, 160)}`)
-    assertEqual(parsed.version, 1, `the pin document version must be 1 (got ${parsed.version})`)
-    assert(parsed.pinned.includes(target.id), `the pin document must list the pinned Session id (pinned ${short(JSON.stringify(parsed.pinned), 200)})`)
-    assertEqual(JSON.stringify(parsed.pinned), JSON.stringify([...new Set(parsed.pinned)]), 'the pin document must not contain duplicate ids')
-    target.pinDocumentRaw = documentAfter.raw
-    target.pinDocumentBefore = documentBefore.raw
-    // Negative assertion: the native sidebar pin state must not change for this Session.
+    assertEqual(documentAfter.raw, null, `the Host-shared pin must not create a card-local pin document (found ${short(documentAfter.raw, 160)})`)
+    // Native coupling is positive now: the same Session gains the native pin marker and
+    // is fronted into its native group's pinned partition.
     const nativeAfter = await readNativePinState(page, target.id)
-    if (nativeBefore !== null && nativeAfter !== null) {
-      assertEqual(nativeAfter.pin.length, nativeBefore.pin.length,
-        `pinning in the running card must not touch the native sidebar pin state (native pin markers ${nativeBefore.pin.length} -> ${nativeAfter.pin.length})`)
-      assertEqual(nativeAfter.pinVisible, nativeBefore.pinVisible,
-        'pinning in the running card must not change the native pin marker visibility')
-      target.nativePinCount = nativeBefore.pin.length
-    } else {
-      target.nativePinCount = null
-    }
+    assert(nativeAfter !== null, `the native sidebar row for ${target.id} disappeared after pinning`)
+    assert(nativeAfter.pin.length > target.nativePinCount,
+      `the native sidebar row must show its pin marker after the card pin (native markers ${target.nativePinCount} -> ${nativeAfter.pin.length})`)
+    assertEqual(nativeAfter.pinVisible, true, 'the native sidebar pin marker must be visible')
+    const groupAfter = await page.eval(probePin.nativeGroupFacts, target.id).catch(() => null)
+    assert(groupAfter !== null, `the native group facts for ${target.id} could not be read`)
+    assertEqual(groupAfter.leadingPinned, true,
+      `the pinned Session must be fronted into its native group's pinned partition (entries ${short(JSON.stringify(groupAfter.entries), 240)})`)
+    target.nativeOrderAfter = nativeAfter.order
+    target.nativeGroupIndexAfter = nativeAfter.groupIndex
+    target.nativeGroupIndexBeforeFacts = groupBefore === null ? null : groupBefore.index
+    target.hostPinnedBefore = [...state.pinBaseline.hostPinnedSorted]
     target.rowBackground = calm.row.rowBackground
     state.pinned.push({ id: target.id, title: target.title })
     if (state.shotsEnabled) {
@@ -5164,7 +5435,7 @@ async function runPinChecks({ page, results, state }) {
       })
       if (rowFile !== null) state.screenshots.push(rowFile)
     }
-    return `"${short(target.title, 36)}" pinned: ${calm.row.svgIcon ?? 'inline'} glyph in ${calm.row.color}, ${calm.row.rowBackground} tint, pin document ${short(documentAfter.raw, 160)}, native pin markers unchanged (${target.nativePinCount ?? 'not observable'})`
+    return `"${short(target.title, 36)}" pinned: Host pinnedSessionIds +1 (now ${host.pinnedIds.length}), native marker ${target.nativePinCount} -> ${nativeAfter.pin.length} and fronted into the native pinned partition (group #${target.nativeGroupIndexBefore} -> #${nativeAfter.groupIndex}), no localStorage pin document, filled ${calm.row.svgIcon ?? 'inline'} glyph in ${calm.row.color}, ${calm.row.rowBackground} tint`
   })
 
   await results.check('r3-4', 'the pinned row leads the card (pinned prefix)', async () => {
@@ -5192,9 +5463,11 @@ async function runPinChecks({ page, results, state }) {
     await resetPointer(page)
     const targetA = state.pinTargetA
     assert(targetA !== undefined, 'no first pin target (r3-2 failed first)')
+    const selection = await choosePinTargets(page, { excludeTitles: [targetA.title] })
+    assert(selection.ordered.length > 0, 'no second unpinned, non-current main row is available for the second pin')
+    const second = selection.ordered[0]
+    debugLog(`r3-5 target "${short(second.title, 40)}" state=${second.state} (done ${selection.doneCount}, running ${selection.runningCount})`)
     const before = await readCardPinState(page)
-    const second = before.rows.find((row) => row.pinned !== 'true' && row.title.length > 0 && row.title !== targetA.title)
-    assert(second !== undefined, 'no second unpinned main row is available for the second pin')
     const orderBefore = before.rows.map((row) => row.title)
     const aIndex = orderBefore.indexOf(targetA.title)
     const bIndex = orderBefore.indexOf(second.title)
@@ -5202,6 +5475,10 @@ async function runPinChecks({ page, results, state }) {
     const resolved = await sessionIdByTitle(page, second.title)
     assert(resolved.id !== null, `could not resolve the Session id of "${short(second.title, 50)}" (${resolved.source})`)
     state.pinTargetB = { title: second.title, id: resolved.id, preIndex: bIndex, outlinePathD: second.pathD }
+    const nativeBBefore = await readNativePinState(page, resolved.id)
+    state.pinTargetB.nativePinCount = nativeBBefore === null ? null : nativeBBefore.pin.length
+    state.pinTargetB.nativeOrderBefore = nativeBBefore === null ? null : nativeBBefore.order
+    state.pinTargetB.nativeGroupIndexBefore = nativeBBefore === null ? null : nativeBBefore.groupIndex
     await clickRowPin(page, second.title, 'pin')
     state.pinned.push({ id: resolved.id, title: second.title })
     await resetPointer(page)
@@ -5219,6 +5496,25 @@ async function runPinChecks({ page, results, state }) {
     assert(prefix.every((row) => row.pinned === 'true'), 'pinned rows must stay a contiguous prefix')
     assert(rows.findIndex((row) => row.title === second.title) < (firstUnpinned === -1 ? rows.length : firstUnpinned),
       'the second pinned row must be inside the pinned prefix')
+    // Both run pins must be present in the Host set (single source of truth), on top of
+    // the untouched baseline pins, and the native sidebar must show the second marker and
+    // its saved-order fronting too.
+    const expectedHost = [...new Set([...state.pinBaseline.hostPinnedSorted, targetA.id, resolved.id])].sort()
+    const host = await waitForHostPins(page,
+      (ids) => JSON.stringify([...ids].sort()) === JSON.stringify(expectedHost),
+      { timeout: 15000, label: 'Host pinnedSessionIds contains both run pins' })
+    state.pinTargetB.hostPinnedAfter = [...host.pinnedIds]
+    const documentAfter = await readPinDocument(page)
+    assertEqual(documentAfter.raw, null, `the second Host pin must not create a card-local pin document (found ${short(documentAfter.raw, 160)})`)
+    const nativeBAfter = await readNativePinState(page, resolved.id)
+    assert(nativeBAfter !== null, `the native sidebar row for ${resolved.id} is not visible after the second pin`)
+    assert(nativeBAfter.pin.length > (state.pinTargetB.nativePinCount ?? 0),
+      `the second pinned Session must show its native sidebar pin marker (markers ${state.pinTargetB.nativePinCount} -> ${nativeBAfter.pin.length})`)
+    const groupB = await page.eval(probePin.nativeGroupFacts, resolved.id).catch(() => null)
+    assert(groupB !== null && groupB.leadingPinned === true,
+      `the second pinned Session must be fronted into its native group's pinned partition (${short(JSON.stringify(groupB === null ? null : groupB.entries), 240)})`)
+    state.pinTargetB.nativeOrderAfter = nativeBAfter.order
+    state.pinTargetB.nativeGroupIndexAfter = nativeBAfter.groupIndex
     const summaries = await page.eval(probePin.sessionSummaries).catch(() => null)
     let activityNote = ''
     if (summaries !== null && summaries.ok) {
@@ -5248,12 +5544,21 @@ async function runPinChecks({ page, results, state }) {
     return `pinned order ${aPinnedIndex + 1} < ${bPinnedIndex + 1}: "${short(targetA.title, 30)}" before "${short(second.title, 30)}"${activityNote}`
   })
 
-  await results.check('r3-6', 'pinned rows stay pinned-first after a full reload (same-profile pin document persistence)', async () => {
+  await results.check('r3-6', 'pinned rows stay pinned-first after a full reload (Host state persistence)', async () => {
     const ours = [...state.pinned]
     assertEqual(ours.length, 2, 'the reload-persistence check needs both pins from r3-3/r3-5')
     await reloadFresh(page)
     await ensureAppReady(page)
     await ensurePanelRows(page)
+    // The shell pushes the Host WorkspaceSnapshot after the reload; wait for both ids.
+    const host = await waitForHostPins(page, (ids) => ours.every((entry) => ids.includes(entry.id)),
+      { timeout: 25000, label: 'Host pinnedSessionIds restored after the reload' })
+    for (const entry of state.pinBaseline.hostPinnedSorted ?? []) {
+      assert(host.pinnedIds.includes(entry), 'the reload lost a pre-existing Host pin')
+    }
+    // No local document may explain the persistence: only the Host state survives.
+    const pinDocument = await readPinDocument(page)
+    assertEqual(pinDocument.raw, null, `no card-local pin document may exist after the reload (found ${short(pinDocument.raw, 160)})`)
     const deadline = Date.now() + 15000
     let pin = null
     let settled = false
@@ -5272,32 +5577,21 @@ async function runPinChecks({ page, results, state }) {
       await sleep(300)
     }
     assert(pin !== null, 'the card did not render after the reload')
-    assert(settled, `the reloaded page did not restore both pins pinned-first within 15 s (rows ${short(JSON.stringify((pin?.rows ?? []).map((row) => `${row.title}${row.pinned === 'true' ? '*' : ''}`)), 280)})`)
+    assert(settled, `the reloaded page did not restore both Host pins pinned-first within 15 s (rows ${short(JSON.stringify((pin?.rows ?? []).map((row) => `${row.title}${row.pinned === 'true' ? '*' : ''}`)), 280)})`)
     const rows = pin.rows
     const pinnedRows = rows.filter((row) => row.pinned === 'true')
+    state.pinTargetA.title = (await titleForRunId(page, state.pinTargetA.id)) ?? state.pinTargetA.title
+    state.pinTargetB.title = (await titleForRunId(page, state.pinTargetB.id)) ?? state.pinTargetB.title
     const aPinnedIndex = pinnedRows.findIndex((row) => row.title === state.pinTargetA.title)
     const bPinnedIndex = pinnedRows.findIndex((row) => row.title === state.pinTargetB.title)
-    assert(aPinnedIndex >= 0 && bPinnedIndex >= 0, 'a pinned row lost its pin across the reload')
+    assert(aPinnedIndex >= 0 && bPinnedIndex >= 0, 'a pinned row lost its Host pin across the reload')
     assert(aPinnedIndex < bPinnedIndex,
       `the restored pinned order must keep newest activity first (pinned ${short(JSON.stringify(pinnedRows.map((row) => row.title)), 240)})`)
-    const live = await readLiveSnapshot(page)
-    if (live.ok && Array.isArray(live.pinnedIds)) {
-      for (const entry of ours) assert(live.pinnedIds.includes(entry.id), `the live card pin snapshot lost the pinned id ${entry.id} across the reload`)
-    }
-    // The reload can only survive through the card's own localStorage document.
-    const pinDocument = await readPinDocument(page)
-    assertEqual(pinDocument.ok, true, `the pin document cannot be read after the reload: ${short(pinDocument.reason || 'unknown')}`)
-    const parsed = parsePinDocument(pinDocument.raw)
-    assert(parsed !== null, `the pin document must survive the reload as the versioned JSON document, got ${short(pinDocument.raw, 160)}`)
-    for (const entry of ours) assert(parsed.pinned.includes(entry.id), `the pin document lost the pinned id ${entry.id} across the reload (pinned ${short(JSON.stringify(parsed.pinned), 200)})`)
-    // And the native sidebar pin state must still be untouched for both Sessions.
+    // The native sidebar markers must survive the reload too (same Host set).
     for (const [label, entry] of [['A', state.pinTargetA], ['B', state.pinTargetB]]) {
-      if (typeof entry.nativePinCount !== 'number') continue
       const native = await readNativePinState(page, entry.id)
-      if (native !== null) {
-        assertEqual(native.pin.length, entry.nativePinCount,
-          `the reload must not change the native sidebar pin state for Session ${label} (${entry.nativePinCount} -> ${native.pin.length})`)
-      }
+      assert(native !== null, `the native sidebar row for Session ${label} is not visible after the reload`)
+      assert(native.pin.length > 0, `the native sidebar pin marker for Session ${label} did not survive the reload`)
     }
     if (state.shotsEnabled) {
       const cardRect = await page.eval(() => {
@@ -5317,13 +5611,81 @@ async function runPinChecks({ page, results, state }) {
       }
     }
     await resetPointer(page)
-    return `reloaded: pinned prefix ${short(JSON.stringify(pinnedRows.map((row) => row.title)), 180)}; A<B order preserved; pin document kept both ids`
+    return `reloaded: Host set kept both ids (${short(JSON.stringify(host.pinnedIds), 200)}); pinned prefix ${short(JSON.stringify(pinnedRows.map((row) => row.title)), 180)}; A<B preserved; no local pin document`
   })
 
-  await results.check('r3-7', 'unpinning removes the tint/marker and returns the row to the normal queue immediately', async () => {
+  await results.check('r3-8', 'the Host pins appear pinned-first in a second fresh browser profile (cross-device proof)', async () => {
+    const ours = [...state.pinned]
+    assertEqual(ours.length, 2, 'the cross-device check needs both run pins')
+    const url = state.guiUrl
+    const clientSource = state.clientSource
+    assert(typeof url === 'string' && /[?&]token=/.test(url), 'the GUI token URL is not available for the second profile')
+    assert(typeof clientSource === 'string' && clientSource.length > 0, 'the worktree client source is not available for the second profile')
+    const facts = await withSecondProfile(url, clientSource, async (secondPage) => {
+      await ensurePanelRows(secondPage)
+      await resetPointer(secondPage)
+      // A fresh profile shares only the Host; the WorkspaceSnapshot push delivers the pins.
+      const host = await waitForHostPins(secondPage, (ids) => ours.every((entry) => ids.includes(entry.id)),
+        { timeout: 30000, label: 'second profile: Host pinnedSessionIds contains both run pins' })
+      // Cross-device oracle is the Host id set: baseline + both run pins, by id.
+      const expectedSecond = [...new Set([...state.pinBaseline.hostPinnedSorted, ...ours.map((entry) => entry.id)])].sort()
+      assertEqual(JSON.stringify([...host.pinnedIds].sort()), JSON.stringify(expectedSecond),
+        `the second profile must see exactly the Host baseline + both run pins by id (got ${short(JSON.stringify(host.pinnedIds), 260)})`)
+      const pinDocument = await readPinDocument(secondPage)
+      assertEqual(pinDocument.raw, null, `the second profile must not need a card-local pin document (found ${short(pinDocument.raw, 160)})`)
+      const pin = await readCardPinState(secondPage)
+      const pinnedRows = pin.rows.filter((row) => row.pinned === 'true')
+      for (const entry of ours) {
+        const resolvedTitle = (host.rows ?? []).find((row) => row.id === entry.id)?.title ?? entry.title
+        const row = pin.rows.find((candidate) => candidate.title === resolvedTitle)
+        assert(row !== undefined, `the second profile's card does not list the id ${entry.id} ("${short(resolvedTitle, 40)}")`)
+        assertEqual(row.pinned, 'true', `the second profile must show id ${entry.id} pinned ("${short(resolvedTitle, 40)}")`)
+      }
+      const aIndex = pinnedRows.findIndex((row) => row.title === state.pinTargetA.title)
+      const bIndex = pinnedRows.findIndex((row) => row.title === state.pinTargetB.title)
+      assert(aIndex >= 0 && bIndex >= 0 && aIndex < bIndex,
+        `the second profile must show the same newest-activity-first pinned order (pinned ${short(JSON.stringify(pinnedRows.map((row) => row.title)), 260)})`)
+      const firstUnpinned = pin.rows.findIndex((row) => row.pinned !== 'true')
+      const prefix = firstUnpinned === -1 ? pin.rows : pin.rows.slice(0, firstUnpinned)
+      assert(prefix.every((row) => row.pinned === 'true'), 'the second profile must show a contiguous pinned prefix')
+      if (state.shotsEnabled) {
+        const cardRect = await secondPage.eval(() => {
+          const panel = document.querySelector('.psd-panel')
+          if (panel === null) return null
+          const rect = panel.getBoundingClientRect()
+          return { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.min(Math.round(rect.height), 380) }
+        })
+        if (cardRect !== null) {
+          const file = await writeClipShot(secondPage, 'pin-r3-cross-device', {
+            x: cardRect.left - 6,
+            y: cardRect.top - 6,
+            width: cardRect.width + 12,
+            height: cardRect.height + 12,
+          })
+          if (file !== null) state.screenshots.push(file)
+        }
+      }
+      return {
+        hostPinnedIds: [...host.pinnedIds],
+        pinnedTitles: pinnedRows.map((row) => row.title),
+        firstPrefixTitle: pin.rows[0]?.title ?? null,
+      }
+    })
+    state.crossDevice = facts
+    log(`cross-device: second fresh profile Host pins ${short(JSON.stringify(facts.hostPinnedIds), 240)}; card pinned prefix ${short(JSON.stringify(facts.pinnedTitles), 260)}`)
+    return `second fresh profile: Host set (${facts.hostPinnedIds.length}) includes both run pins; card pinned prefix ${short(JSON.stringify(facts.pinnedTitles), 220)} with A<B order; no local document`
+  })
+
+  await results.check('r3-7', 'unpinning restores the Host baseline and the normal queue immediately', async () => {
     const targetA = state.pinTargetA
     const targetB = state.pinTargetB
     assert(targetA !== undefined && targetB !== undefined, 'the two pin targets are not available (earlier checks failed)')
+    const baselineSorted = state.pinBaseline.hostPinnedSorted
+    await ensurePanelRows(page)
+    await resetPointer(page)
+    // Resolve the row title from the tracked id (the card may have re-sorted on reload).
+    targetA.title = (await titleForRunId(page, targetA.id)) ?? targetA.title
+    targetB.title = (await titleForRunId(page, targetB.id)) ?? targetB.title
     const unpinnedA = await clickRowPin(page, targetA.title, 'unpin')
     assertEqual(unpinnedA.row.pinned, null, 'data-pinned must be removed from the row after unpinning')
     assertEqual(unpinnedA.row.ariaPressed, 'false', 'aria-pressed must flip back to false after unpinning')
@@ -5335,6 +5697,12 @@ async function runPinChecks({ page, results, state }) {
     assertEqual(calmA.row.visibility, 'hidden', 'the unpinned pin must be visibility:hidden when the pointer is away')
     assertEqual(calmA.row.rowBackground, targetA.rowBackgroundBefore,
       `the violet row tint must be gone after unpinning (row background ${calmA.row.rowBackground}, normal ${targetA.rowBackgroundBefore})`)
+    // The first unpin must remove exactly this id from the Host set.
+    const expectedAfterA = [...new Set([...baselineSorted, targetB.id])].sort()
+    await waitForHostPins(page, (ids) => JSON.stringify([...ids].sort()) === JSON.stringify(expectedAfterA),
+      { timeout: 15000, label: 'Host pinnedSessionIds loses the first run pin' })
+    assertEqual((await readPinDocument(page)).raw, null, 'no card-local pin document may appear during unpin')
+    await ensurePanelRows(page)
     let pin = await readCardPinState(page)
     let rows = pin.rows
     const firstUnpinned = rows.findIndex((row) => row.pinned !== 'true')
@@ -5345,15 +5713,24 @@ async function runPinChecks({ page, results, state }) {
     const nativeA = await readNativePinState(page, targetA.id)
     if (nativeA !== null && typeof targetA.nativePinCount === 'number') {
       assertEqual(nativeA.pin.length, targetA.nativePinCount,
-        `unpinning in the card must not touch the native sidebar pin state (native markers ${targetA.nativePinCount} -> ${nativeA.pin.length})`)
+        `the native sidebar pin marker must be gone after unpinning (markers ${targetA.nativePinCount} -> ${nativeA.pin.length})`)
     }
+    targetA.nativeGroupIndexAfterUnpin = nativeA === null ? null : nativeA.groupIndex
     const unpinnedB = await clickRowPin(page, targetB.title, 'unpin')
     assertEqual(unpinnedB.row.pinned, null, 'the second row must be unpinned')
     await resetPointer(page)
+    // After both unpins the Host set must be exactly the run baseline again.
+    await waitForHostPins(page, (ids) => JSON.stringify([...ids].sort()) === JSON.stringify(baselineSorted),
+      { timeout: 15000, label: 'Host pinnedSessionIds back to the run baseline' })
+    assertEqual((await readPinDocument(page)).raw, null, 'no card-local pin document may be created by the Host-shared pin')
+    await ensurePanelRows(page)
     pin = await readCardPinState(page)
     rows = pin.rows
-    assertEqual(rows.filter((row) => row.pinned === 'true').length, state.pinBaseline.pinnedTitles.length,
-      `the pinned count must return to the baseline ${state.pinBaseline.pinnedTitles.length} (found ${rows.filter((row) => row.pinned === 'true').length})`)
+    const pinnedRows = rows.filter((row) => row.pinned === 'true')
+    assertEqual(pinnedRows.filter((row) => state.pinned.some((entry) => entry.title === row.title)).length, 0,
+      'no run-pinned row may remain pinned in the card')
+    assertEqual(pinnedRows.length, state.pinBaseline.pinnedTitles.length,
+      `the card pinned count must return to the baseline ${state.pinBaseline.pinnedTitles.length} (found ${pinnedRows.length})`)
     const normalRows = rows.filter((row) => row.pinned !== 'true')
     const indexA = normalRows.findIndex((row) => row.title === targetA.title)
     const indexB = normalRows.findIndex((row) => row.title === targetB.title)
@@ -5362,24 +5739,147 @@ async function runPinChecks({ page, results, state }) {
     const nativeB = await readNativePinState(page, targetB.id)
     if (nativeB !== null && typeof targetB.nativePinCount === 'number') {
       assertEqual(nativeB.pin.length, targetB.nativePinCount,
-        `the second unpin must not touch the native sidebar pin state (native markers ${targetB.nativePinCount} -> ${nativeB.pin.length})`)
+        `the second native pin marker must be gone after unpinning (markers ${targetB.nativePinCount} -> ${nativeB.pin.length})`)
     }
-    state.pinned = state.pinned.filter((entry) => entry.id !== targetA.id && entry.id !== targetB.id)
-    // The card's own pin document must no longer list the run's ids.
-    const pinDocument = await readPinDocument(page)
-    const parsed = parsePinDocument(pinDocument.raw)
-    if (parsed !== null) {
-      assert(!parsed.pinned.includes(targetA.id), `the card pin document still lists the unpinned id ${targetA.id} (${short(pinDocument.raw, 200)})`)
-      assert(!parsed.pinned.includes(targetB.id), `the card pin document still lists the unpinned id ${targetB.id} (${short(pinDocument.raw, 200)})`)
-      assertEqual(parsed.version, 1, 'the pin document version must stay 1')
-    }
-    const live = await readLiveSnapshot(page)
-    if (live.ok && Array.isArray(live.pinnedIds)) {
-      assert(!live.pinnedIds.includes(targetA.id), `the live card pin snapshot still lists the unpinned id ${targetA.id}`)
-      assert(!live.pinnedIds.includes(targetB.id), `the live card pin snapshot still lists the unpinned id ${targetB.id}`)
-    }
+    targetB.nativeGroupIndexAfterUnpin = nativeB === null ? null : nativeB.groupIndex
+    state.pinned = []
+    // Honest side effect: the shell fronts a pinned Session's saved order; unpinning does
+    // not restore that order, so a later normal view can keep the row earlier than before.
+    const sideEffects = [targetA, targetB].map((entry) => ({
+      title: entry.title,
+      nativeGroupIndexBefore: entry.nativeGroupIndexBefore,
+      nativeGroupIndexAfterUnpin: entry.nativeGroupIndexAfterUnpin,
+      frontingPersists: typeof entry.nativeGroupIndexBefore === 'number' && typeof entry.nativeGroupIndexAfterUnpin === 'number'
+        ? entry.nativeGroupIndexAfterUnpin < entry.nativeGroupIndexBefore
+        : null,
+    }))
+    state.pinSideEffects = sideEffects
+    log(`pin side effect: native saved-order fronting after unpin: ${short(JSON.stringify(sideEffects), 500)} (the shell does not restore the pre-pin saved order on unpin)`)
+    return `unpinned both: Host set back to the ${baselineSorted.length}-pin baseline; first normal-queue row "${short(targetA.title, 36)}"; native markers gone; saved-order fronting persists ${short(JSON.stringify(sideEffects.map((entry) => `${entry.nativeGroupIndexBefore}->${entry.nativeGroupIndexAfterUnpin}`)), 80)}; no local document`
+  })
+}
+
+// ---------------------------------------------------------------------------------------------
+// --live mode: shipped-install proof (no client injection, read-only, two fresh profiles)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Read the shipped Running & recent card in one plain (non-injected) Chrome profile.
+ * Read-only: the only interaction is the card's own "View all" control (local view state).
+ * @param {string} url - token GUI URL (redacted in logs).
+ * @param {string} label - profile label for logs.
+ * @returns {Promise<object>} shipped-client facts + page/log errors.
+ */
+async function collectLiveInstallFacts(url, label) {
+  let chrome = null
+  let page = null
+  try {
+    chrome = await launchChrome({ headful: false })
+    log(`live install [${label}]: fresh Chrome profile pid ${chrome.proc.pid}, CDP port ${chrome.port}`)
+    const cdp = await CdpConnection.connect(chrome.wsUrl)
+    page = await Page.open(cdp, url, null)
+    await page.waitForFn(
+      () => document.readyState === 'complete' && !!document.querySelector('[data-slot="main"]'),
+      [],
+      { timeout: 60000, label: `live install [${label}]: DSH shell` }
+    )
+    await page.waitForFn(() => !!document.querySelector('.psd-panel'), [], { timeout: 30000, label: `live install [${label}]: Running & recent card` })
+    await page.waitForFn(() => document.querySelectorAll('.psd-run').length > 0, [], { timeout: 20000, label: `live install [${label}]: card rows` })
+    await sleep(900)
+    const expanded = await expandPanelRows(page)
     await resetPointer(page)
-    return `unpinned both: tint/marker gone, first normal-queue row was "${short(targetA.title, 36)}", pinned count back to baseline ${state.pinBaseline.pinnedTitles.length}, pin document ${short(pinDocument.raw, 120)}`
+    const facts = await page.eval(() => {
+      const text = (node) => (node ? (node.innerText || node.textContent || '').trim() : '')
+      const rows = [...document.querySelectorAll('.psd-run')]
+      const pinnedRowTitles = rows.filter((row) => row.getAttribute('data-pinned') === 'true')
+        .map((row) => text(row.querySelector('.psd-run-title')))
+      const nativePinTitles = [...document.querySelectorAll('[data-row-key^="session:"]')]
+        .filter((row) => [...row.querySelectorAll('[role="img"], [class*="pinIndicator"]')]
+          .some((element) => /pinn|置顶/i.test(`${element.getAttribute('aria-label') ?? ''} ${element.getAttribute('title') ?? ''}`)
+            || /pinIndicator/i.test(String(element.className || ''))))
+        .map((row) => text(row.querySelector('[class*="_title"]')))
+      let pinDocument = null
+      try {
+        pinDocument = window.localStorage.getItem('power-suite.dynamic-workspaces.pinned')
+      } catch {
+        pinDocument = 'storage-denied'
+      }
+      return {
+        cardRows: rows.length,
+        pinButtons: document.querySelectorAll('.psd-run-pin').length,
+        pinSlots: document.querySelectorAll('.psd-run-pin-slot').length,
+        pinnedRows: pinnedRowTitles.length,
+        pinnedTitles: pinnedRowTitles,
+        nativePinTitles,
+        pinDocument,
+        hasInjectedFactory: window.__psInjectedFactoryRan === true,
+        panelPresent: document.querySelector('.psd-panel') !== null,
+      }
+    })
+    facts.viewAllExpanded = expanded
+    const pageErrors = [...page.pageErrors]
+    const logErrors = [...page.logEntries]
+    log(`live install [${label}]: cardRows ${facts.cardRows}, pinButtons ${facts.pinButtons}, pinnedRows ${facts.pinnedRows}, injected ${facts.hasInjectedFactory}, page errors ${pageErrors.length}, pinned ${short(JSON.stringify(facts.pinnedTitles), 260)}`)
+    return { label, facts, pageErrors, logErrors }
+  } finally {
+    if (page !== null) page.dispose()
+    if (chrome !== null) await chrome.close()
+  }
+}
+
+/**
+ * `--live`: prove the merged linked checkout serves the new client without injection.
+ * Read-only; two fresh profiles must agree on the Host-shared pinned prefix.
+ * @param {object} input - `{ url, results, state }`.
+ * @returns {Promise<void>}
+ */
+async function runLiveChecks({ url, results, state }) {
+  log('\n=== --live: shipped install (no client injection, read-only) ===')
+  const first = await collectLiveInstallFacts(url, 'profile A')
+  const second = await collectLiveInstallFacts(url, 'profile B')
+  state.live = true
+  state.livePageErrors = [
+    ...first.pageErrors.map((text) => `profile A: ${text}`),
+    ...second.pageErrors.map((text) => `profile B: ${text}`),
+  ]
+
+  await results.check('live-1', 'the shipped (non-injected) GUI serves the card with the pin control on every main row', async () => {
+    assertEqual(first.facts.hasInjectedFactory, false, 'the live-install check must not inject the worktree client')
+    assert(first.facts.panelPresent, 'the shipped GUI does not mount the Running & recent card')
+    assert(first.facts.cardRows > 0, 'the shipped card has no main rows')
+    assertEqual(first.facts.pinButtons, first.facts.cardRows,
+      `every shipped main row must render the .psd-run-pin control (${first.facts.pinButtons}/${first.facts.cardRows})`)
+    assertEqual(first.facts.pinSlots, first.facts.cardRows, 'every shipped main row must reserve the pin slot')
+    return `served client: ${first.facts.cardRows} rows, ${first.facts.pinButtons} pin buttons, no injection (profile A)`
+  })
+
+  await results.check('live-2', "the shipped card lists the user's pre-existing Host native pins as pinned rows", async () => {
+    assert(first.facts.pinnedRows > 0, 'the shipped card shows no pinned rows although the Host has native pins')
+    assertEqual(first.facts.pinDocument, null, 'the shipped card must not create a card-local pin document')
+    assert(first.facts.nativePinTitles.length > 0, 'the native sidebar shows no Host pin markers to correlate with the card')
+    const related = first.facts.pinnedTitles.filter((title) => first.facts.nativePinTitles.some((nativeTitle) => {
+      const head = title.slice(0, 12)
+      return head.length > 0 && (nativeTitle.includes(head) || (nativeTitle.length > 0 && title.includes(nativeTitle.slice(0, 12))))
+    }))
+    assert(related.length > 0,
+      `no pinned card row could be correlated with a native Host pin marker (card ${short(JSON.stringify(first.facts.pinnedTitles), 200)}; native ${short(JSON.stringify(first.facts.nativePinTitles), 200)})`)
+    return `${first.facts.pinnedRows} pinned rows ${short(JSON.stringify(first.facts.pinnedTitles), 240)}; correlated with ${related.length} native Host pin marker(s)`
+  })
+
+  await results.check('live-3', 'two fresh browser profiles see the same Host-shared pinned prefix (cross-device)', async () => {
+    const aTitles = [...first.facts.pinnedTitles].sort()
+    const bTitles = [...second.facts.pinnedTitles].sort()
+    assertEqual(JSON.stringify(aTitles), JSON.stringify(bTitles),
+      `the pinned prefix differs between two fresh profiles (A ${short(JSON.stringify(aTitles), 220)} vs B ${short(JSON.stringify(bTitles), 220)})`)
+    assertEqual(second.facts.pinDocument, null, 'the second shipped profile must not create a card-local pin document')
+    assertEqual(second.facts.pinButtons, second.facts.cardRows, 'the second shipped profile must render the pin control on every main row')
+    return `profiles agree on ${first.facts.pinnedRows} pinned row(s): ${short(JSON.stringify(first.facts.pinnedTitles), 240)}`
+  })
+
+  await results.check('live-4', 'the shipped-install pages report no page errors', async () => {
+    const errors = [...first.pageErrors, ...second.pageErrors]
+    assertEqual(errors.length, 0, `live-install page errors: ${short(JSON.stringify(errors), 300)}`)
+    return `0 page errors across both profiles (${first.logErrors.length + second.logErrors.length} non-JS console/log entries)`
   })
 }
 
@@ -5402,8 +5902,19 @@ async function run() {
   let page = null
   let fatal = null
   let exitCode = 0
-  const state = { screenshots: [], shotsEnabled: opts.shots }
+  const state = { screenshots: [], shotsEnabled: opts.shots, guiUrl: url, clientSource }
   const results = new Results()
+  if (opts.mode === 'live') {
+    // Read-only shipped-install proof: the page loads the merged linked checkout with
+    // NO client injection, in two fresh throwaway profiles.
+    try {
+      await runLiveChecks({ url, results, state })
+    } catch (error) {
+      fatal = error
+      log(`\nFATAL  ${error?.stack ? short(error.stack, 1800) : String(error)}`)
+      exitCode = error?.exitCode === 2 ? 2 : 1
+    }
+  } else {
   try {
     chrome = await launchChrome(opts)
     log(`chrome: headless pid ${chrome.proc.pid}, CDP port ${chrome.port}`)
@@ -5451,10 +5962,11 @@ async function run() {
       }
     }
   }
+  }
 
   const passed = results.rows.filter((row) => row.pass).length
   const failed = results.failures.length
-  const pageErrors = page !== null ? page.pageErrors : []
+  const pageErrors = page !== null ? page.pageErrors : (state.livePageErrors ?? [])
   log('\n=== Results ===')
   for (const row of results.rows) {
     log(`${row.pass ? 'PASS' : 'FAIL'}  ${row.id}  ${row.title}${row.pass ? '' : `\n        ↳ ${short(row.detail, 700)}`}`)
@@ -5473,8 +5985,12 @@ async function run() {
     if (page.networkFailures.length > 0) exitCode = exitCode || 1
   }
   if (state.mode === 'pin') {
-    log(`pin baseline: pinned main rows ${state.pinBaseline?.pinnedTitles?.length ?? 'n/a'}; card pinnedIds ${short(JSON.stringify(state.pinBaseline?.pinnedIds ?? null), 200)}; pin document ${short(state.pinBaseline?.pinDocumentRaw ?? null, 200)}`)
-    log(`pin cleanup: ${state.pinCleanup ? short(JSON.stringify(state.pinCleanup), 1200) : 'not run'}`)
+    log(`pin baseline: Host pinnedIds ${short(JSON.stringify(state.pinBaseline?.hostPinnedIds ?? null), 260)}; card pinned rows ${state.pinBaseline?.pinnedTitles?.length ?? 'n/a'}; pin document ${short(state.pinBaseline?.pinDocumentRaw ?? null, 120)}; pinSupported ${state.pinBaseline?.pinSupported ?? 'n/a'}`)
+    log(`pin cleanup: ${state.pinCleanup ? short(JSON.stringify(state.pinCleanup), 1400) : 'not run'}`)
+    log(`pin side effects: ${state.pinSideEffects ? short(JSON.stringify(state.pinSideEffects), 600) : 'not recorded'}`)
+  }
+  if (state.live === true) {
+    log(`live install: non-injected shipped GUI in two fresh profiles; page errors across profiles ${(state.livePageErrors ?? []).length}`)
   }
   if (state.screenshots.length > 0) log(`screenshots: ${state.screenshots.join(', ')}`)
   log(`elapsed: ${((Date.now() - started) / 1000).toFixed(1)}s`)
