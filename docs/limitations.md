@@ -389,6 +389,15 @@
   canvas shrink by the delta and restore on exit, and the narrow-viewport layout
   falls back to the 320 px overlay rail. On very narrow viewports the sidebar can
   feel large — collapse it to the 48 px strip or use the overlay mode.
+- **The settings view is a separate view reached through the header gear.** It
+  keeps the same wide rail width to avoid a jump; the old status-view component
+  remains in the code as an unreachable compatibility path (not rendered). The
+  launcher dock/undock animation is a transient visual copy — reduced-motion
+  users get the instant state, and the resting controls are the same as before.
+- **Prompt-history search ring is deliberately calmer than the shared ring.**
+  The parameterised rainbow ring's search-field variant is scoped to
+  `.psp-search-field`; annotation inputs and settings pills keep the shared
+  stronger defaults.
 - **Batch tooling lives in the list toolbar.** Include/insert/delete-selected
   stay in the sidebar toolbar rather than hover-only per-row affordances (the
   footer keeps exactly the two primary/danger actions); group child "edit"

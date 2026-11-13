@@ -513,7 +513,13 @@ hover-intent detail card carries the requirement, locator, position,
 Session/Workspace, status, and surface marker with edit/relocate/copy-locator/
 delete actions, and the requirement popover commits or updates the record,
 deletes it with a 5 s undo slot, and auto-dismisses after either action. The
-right rail's collection view is the managed **annotation sidebar**: it widens
+right rail's **default body** is the managed annotation sidebar (no status or
+Collection entry to click through): the header carries the title, total badge,
+selection hint, docked launcher, a settings gear (opens the settings view;
+Back/Esc returns), collapse and exit, and the launcher animates a ~220 ms
+ease-out flight between its remembered floating slot and the rail header on
+activation/exit (a transient pointer-transparent flight element; exactly one
+resting launcher; reduced motion instant). It widens
 to `clamp(320px, 24vw, 420px)` (the frame padding and canvas follow; the compact
 ~200 px width returns for the status/settings views) and renders an
 **Annotations** header with a total badge, **All / Singles / Groups** filters
