@@ -50,11 +50,17 @@
  * current-highlight marker; `localStorage` for the throwaway profile is modified
  * (folds/bucket cache). No other session, setting or file is touched, and the token is
  * never printed. The harness exits 0 only when every check passed and the page reported
- * no errors; 1 on any failure; 2 on usage errors.
+ * no errors; 1 on any failure; 2 on usage errors. The `--pin` mode additionally pins two
+ * live Sessions through the card's real pin button, which writes the card-local
+ * `power-suite.dynamic-workspaces.pinned` localStorage document (the throwaway Chrome
+ * profile means it never reaches the user's real profile, and the native Host pin state is
+ * never touched). The run unpins its rows again through the UI in a `finally` block and
+ * reports any residual card pin document entries instead of hiding them.
  *
  * Usage:
  *   node test/browser/sidebar.e2e.mjs                 # full run (screenshots into .tmp-work/)
  *   node test/browser/sidebar.e2e.mjs --smoke         # pipeline smoke only
+ *   node test/browser/sidebar.e2e.mjs --pin           # pin / hover-dot / native-figure acceptance
  *   node test/browser/sidebar.e2e.mjs --no-shots      # skip screenshots
  *   node test/browser/sidebar.e2e.mjs --client path/to/client.js
  *   node test/browser/sidebar.e2e.mjs --keep-open     # leave Chrome running for inspection
@@ -140,6 +146,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--smoke') opts.mode = 'smoke'
+    else if (arg === '--pin') opts.mode = 'pin'
     else if (arg === '--no-shots') opts.shots = false
     else if (arg === '--keep-open') opts.keepOpen = true
     else if (arg === '--headful') opts.headful = true
@@ -148,7 +155,7 @@ function parseArgs(argv) {
     else if (arg === '--url') opts.url = argv[++i]
     else if (arg.startsWith('--url=')) opts.url = arg.slice('--url='.length)
     else if (arg === '--help' || arg === '-h') {
-      console.log('usage: node test/browser/sidebar.e2e.mjs [--smoke] [--no-shots] [--client path] [--keep-open] [--headful] [--url TOKEN_URL]')
+      console.log('usage: node test/browser/sidebar.e2e.mjs [--smoke] [--pin] [--no-shots] [--client path] [--keep-open] [--headful] [--url TOKEN_URL]')
       process.exit(0)
     } else {
       throw new Error(`unknown argument: ${arg}`)
@@ -367,7 +374,7 @@ class CdpConnection {
 // ---------------------------------------------------------------------------------------------
 
 class Page {
-  static async open(cdp, url, initScript) {
+  static async open(cdp, url, initScript, options = {}) {
     const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' })
     const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true })
     const page = new Page(cdp, sessionId)
@@ -375,6 +382,7 @@ class Page {
     await page.send('Runtime.enable')
     await page.send('Log.enable').catch(() => {})
     page.origin = new URL(url).origin
+    if (options.trackNetwork === true) await page.enableNetworkTracking()
     await page.send('Emulation.setDeviceMetricsOverride', {
       width: VIEWPORT.width,
       height: VIEWPORT.height,
@@ -585,6 +593,91 @@ class Page {
       nativeVirtualKeyCode: 27,
     })
     await sleep(80)
+  }
+
+  // ---- optional Network-domain failure oracle (--pin mode) -----------------------------
+
+  /**
+   * Enable CDP `Network` and record real same-origin API/document failures with the
+   * same predicate the annotation harness documents (H10): a failure counts only for a
+   * same-origin http(s) URL, either an HTTP >= 400 for a Document/Fetch/XHR response or
+   * for any `/api/`/`/plugins/` path, or a non-canceled load failure for
+   * Document/Fetch/XHR/Script/Stylesheet. Third-party origins, favicon/data/blob URLs and
+   * same-origin static assets outside those types/routes are ignored noise.
+   * @returns {Promise<boolean>} whether the Network domain was enabled.
+   */
+  async enableNetworkTracking() {
+    this.networkEnabled = false
+    this.networkError = null
+    this.networkFailures = []
+    this.ignoredNetworkNoise = 0
+    this._networkRequests = new Map()
+    this._subscriptions.push(this.cdp.on('Network.requestWillBeSent', (params, eventSession) => {
+      if (eventSession !== this.sessionId || !params.request) return
+      this._networkRequests.set(params.requestId, { url: params.request.url, type: params.type })
+    }))
+    this._subscriptions.push(this.cdp.on('Network.responseReceived', (params, eventSession) => {
+      if (eventSession !== this.sessionId || !params.response) return
+      const response = params.response
+      if (!this._sameOriginHttp(response.url)) {
+        this.ignoredNetworkNoise += 1
+        return
+      }
+      let pathname = ''
+      try {
+        pathname = new URL(response.url).pathname
+      } catch {
+        /* leave empty */
+      }
+      const type = params.type
+      const meaningful = type === 'Document' || type === 'Fetch' || type === 'XHR' ||
+        pathname.startsWith('/api/') || pathname.startsWith('/plugins/')
+      if (!meaningful) {
+        this.ignoredNetworkNoise += 1
+        return
+      }
+      if (response.status >= 400) this.networkFailures.push(`HTTP ${response.status} ${type} ${redact(response.url)}`)
+    }))
+    this._subscriptions.push(this.cdp.on('Network.loadingFailed', (params, eventSession) => {
+      if (eventSession !== this.sessionId) return
+      if (params.canceled === true || params.errorText === 'net::ERR_ABORTED') {
+        this.ignoredNetworkNoise += 1
+        return
+      }
+      const request = this._networkRequests.get(params.requestId)
+      const type = params.type ?? request?.type
+      if (!['Document', 'Fetch', 'XHR', 'Script', 'Stylesheet'].includes(type)) {
+        this.ignoredNetworkNoise += 1
+        return
+      }
+      if (request !== undefined && !this._sameOriginHttp(request.url)) {
+        this.ignoredNetworkNoise += 1
+        return
+      }
+      this.networkFailures.push(`FAILED ${type} ${params.errorText ?? 'unknown'} ${redact(request?.url ?? '')}`)
+    }))
+    try {
+      await this.send('Network.enable', {}, 15000)
+      this.networkEnabled = true
+      return true
+    } catch (error) {
+      this.networkError = error?.message || String(error)
+      return false
+    }
+  }
+
+  /**
+   * @param {string} url - candidate URL.
+   * @returns {boolean} whether the URL is a same-origin http(s) URL.
+   */
+  _sameOriginHttp(url) {
+    if (!this.origin || typeof url !== 'string' || url.length === 0) return false
+    try {
+      const parsed = new URL(url)
+      return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.origin === this.origin
+    } catch {
+      return false
+    }
   }
 
   dispose() {
@@ -3734,6 +3827,1563 @@ async function writeEvidenceShot(page, name, rect) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// --pin mode: hover-card dot circle (R1), native hover figures (R2), running-panel pin (R3)
+//
+// These checks target the session-pin-stats contract (`.tmp-work/pin-stats-contract.md`) and
+// run against the same live scrape/injection pipeline as the rest of this harness. They are
+// append-only: the full-mode checks above are not modified, only their helpers are reused.
+// ---------------------------------------------------------------------------------------------
+
+/** How many card/native rows are probed before a check reports failure. */
+const PIN_ROW_ATTEMPTS = 5
+
+/** Shared page probes for the --pin checks (plain serializable functions). */
+const probePin = {
+  /** The plugin running-card hover card's status dot (R1). */
+  dotStyle: () => {
+    const card = document.querySelector('[data-psd-hovercard]')
+    if (card === null) return null
+    const dot = card.querySelector('.psd-hovercard-dot')
+    if (dot === null) return null
+    const style = getComputedStyle(dot)
+    const rect = dot.getBoundingClientRect()
+    // Chrome normalizes the `corner-shape: round` keyword to `superellipse(1)` in
+    // computed style; a synthetic control with the same declaration proves the
+    // normalized value the dot must match.
+    const control = document.createElement('span')
+    control.setAttribute('style', 'position:fixed;left:-9999px;top:0;width:10px;height:10px;border-radius:50%;corner-shape:round')
+    document.body.appendChild(control)
+    const roundComputed = String(getComputedStyle(control).cornerShape ?? getComputedStyle(control).getPropertyValue('corner-shape') ?? '').trim()
+    control.remove()
+    const shellDefault = getComputedStyle(document.documentElement).getPropertyValue('--dsw-corner-shape').trim()
+    return {
+      cornerShape: style.cornerShape ?? null,
+      cornerShapeRaw: style.getPropertyValue('corner-shape') || '',
+      roundComputed,
+      shellDefault,
+      borderRadius: style.borderTopLeftRadius,
+      width: style.width,
+      height: style.height,
+      backgroundColor: style.backgroundColor,
+      dataState: dot.getAttribute('data-state'),
+      rect: {
+        left: Math.round(rect.left),
+        top: Math.round(rect.top),
+        width: Number(rect.width.toFixed(2)),
+        height: Number(rect.height.toFixed(2)),
+      },
+      cardRect: (() => {
+        const r = card.getBoundingClientRect()
+        return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }
+      })(),
+    }
+  },
+
+  /**
+   * The **native** sidebar session hover card (the shell `HoverCard`), including the
+   * figure sections the plugin injects through `sidebar.session.row.hover` (R2).
+   */
+  nativeCard: () => {
+    const rect = (element) => {
+      const r = element.getBoundingClientRect()
+      return {
+        left: Math.round(r.left),
+        top: Math.round(r.top),
+        right: Math.round(r.right),
+        bottom: Math.round(r.bottom),
+        width: Math.round(r.width),
+        height: Math.round(r.height),
+      }
+    }
+    const text = (node) => (node ? (node.innerText || node.textContent || '').trim() : '')
+    const card = [...document.querySelectorAll('div[class*="_card_"]')].find((element) => {
+      const style = getComputedStyle(element)
+      const r = element.getBoundingClientRect()
+      return style.position === 'fixed' && r.width >= 200 && r.width <= 320 && r.height >= 40
+    })
+    if (card === undefined) return null
+    const sectionFacts = (section) => ({
+      title: text(section.querySelector('.psd-hovercard-section-title')),
+      value: text(section.querySelector('.psd-hovercard-section-value')),
+      rows: [...section.querySelectorAll('.psd-hovercard-row')].map((row) => ({
+        key: text(row.querySelector('.psd-hovercard-key')),
+        value: text(row.querySelector('.psd-hovercard-row-value')),
+      })),
+    })
+    const style = getComputedStyle(card)
+    const content = card.querySelector('[class*="hoverContent"]')
+    const wrapper = card.querySelector('[data-psd-native-figures]')
+    const timeLine = card.querySelector('[class*="hoverTime"]')
+    const firstStatus = card.querySelector('[class*="hoverStatus"]')
+    const wrapperSections = wrapper === null ? [] : [...wrapper.querySelectorAll('.psd-hovercard-section')].map(sectionFacts)
+    const allSections = [...card.querySelectorAll('.psd-hovercard-section')].map(sectionFacts)
+    return {
+      found: true,
+      rect: rect(card),
+      width: style.width,
+      padding: style.padding,
+      borderRadius: style.borderRadius,
+      position: style.position,
+      background: style.backgroundColor,
+      content: content === null
+        ? null
+        : { rect: rect(content), width: Math.round(content.getBoundingClientRect().width), gap: getComputedStyle(content).gap },
+      title: text(card.querySelector('[class*="hoverTitle"]')),
+      path: text(card.querySelector('[class*="hoverPath"]')),
+      time: text(timeLine),
+      statuses: [...card.querySelectorAll('[class*="hoverStatus"]')].map(text),
+      children: content === null ? [] : [...content.children].map((element) => ({
+        className: String(element.className || ''),
+        isFigures: element.matches('[data-psd-native-figures]'),
+        containsFigures: element.matches('[data-psd-native-figures]') || element.querySelector('[data-psd-native-figures]') !== null,
+      })),
+      figuresWrapper: wrapper === null
+        ? null
+        : {
+            rect: rect(wrapper),
+            sectionCount: wrapperSections.length,
+            width: Math.round(wrapper.getBoundingClientRect().width),
+            empty: wrapper.children.length === 0,
+            visible: wrapper.getBoundingClientRect().width > 0 && wrapper.getBoundingClientRect().height > 0 &&
+              getComputedStyle(wrapper).display !== 'none' && getComputedStyle(wrapper).visibility !== 'hidden',
+            afterTime: timeLine === null ? null : Boolean(timeLine.compareDocumentPosition(wrapper) & Node.DOCUMENT_POSITION_FOLLOWING),
+            beforeStatus: firstStatus === null ? null : Boolean(wrapper.compareDocumentPosition(firstStatus) & Node.DOCUMENT_POSITION_FOLLOWING),
+          },
+      wrapperSections,
+      sectionsOutsideWrapper: allSections.length - wrapperSections.length,
+      insideRunningCard: card.closest('[data-psd-hovercard]') !== null,
+    }
+  },
+
+  /** One native sidebar session row: geometery, text and its non-interactive pin marker. */
+  nativeRowState: (sessionId) => {
+    const row = document.querySelector(`[data-row-key="session:${sessionId}"]`)
+    if (row === null) return { found: false }
+    const rect = (element) => {
+      const r = element.getBoundingClientRect()
+      return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }
+    }
+    const text = (node) => (node ? (node.innerText || node.textContent || '').trim() : '')
+    const indicators = [...row.querySelectorAll('[role="img"], [class*="pinIndicator"], [aria-label], [title]')].map((element) => ({
+      className: String(element.className || ''),
+      role: element.getAttribute('role'),
+      label: element.getAttribute('aria-label'),
+      title: element.getAttribute('title'),
+      rect: rect(element),
+    }))
+    const pin = indicators.filter((entry) =>
+      /pinn|置顶/i.test(`${entry.label ?? ''} ${entry.title ?? ''}`) || /pinIndicator/i.test(entry.className))
+    const sessionRows = [...document.querySelectorAll('[data-row-key^="session:"]')]
+    return {
+      found: true,
+      key: row.getAttribute('data-row-key'),
+      rect: rect(row),
+      text: text(row).slice(0, 120),
+      order: sessionRows.indexOf(row),
+      indicators,
+      pin,
+      pinVisible: pin.some((entry) => entry.rect.width > 0 && entry.rect.height > 0),
+    }
+  },
+
+  /** Every currently rendered native sidebar session row. */
+  nativeRows: () => {
+    const tree = document.querySelector('[role="tree"]')
+    const treeRect = tree ? tree.getBoundingClientRect() : null
+    return [...document.querySelectorAll('[data-row-key^="session:"]')]
+      .map((row) => {
+        const r = row.getBoundingClientRect()
+        return {
+          key: row.getAttribute('data-row-key'),
+          text: (row.innerText || '').trim().slice(0, 90),
+          left: Math.round(r.left),
+          top: Math.round(r.top),
+          width: Math.round(r.width),
+          height: Math.round(r.height),
+          inTree: treeRect !== null && r.top >= treeRect.top && r.bottom <= Math.min(treeRect.bottom, innerHeight),
+        }
+      })
+      .filter((row) => row.width > 0 && row.height > 0 && row.inTree)
+  },
+
+  /**
+   * Running-card main-row pin facts (R3): the fixed pin slot, the pin button state and
+   * the title geometry, for every `.psd-run` row currently rendered.
+   */
+  cardPinState: () => {
+    const rect = (element) => {
+      if (element === null) return null
+      const r = element.getBoundingClientRect()
+      return {
+        left: Number(r.left.toFixed(2)),
+        top: Number(r.top.toFixed(2)),
+        right: Number(r.right.toFixed(2)),
+        bottom: Number(r.bottom.toFixed(2)),
+        width: Number(r.width.toFixed(2)),
+        height: Number(r.height.toFixed(2)),
+      }
+    }
+    const text = (node) => (node ? (node.innerText || node.textContent || '').trim() : '')
+    // Resolve the shell business-primary token to its used colour once per read.
+    const tokenProbe = document.createElement('span')
+    tokenProbe.setAttribute('style', 'position:fixed;left:-9999px;top:0;color:var(--dsw-alias-state-business-primary)')
+    document.body.appendChild(tokenProbe)
+    const businessColor = getComputedStyle(tokenProbe).color
+    tokenProbe.remove()
+    const childRows = [...document.querySelectorAll('.psd-child')]
+    const rows = [...document.querySelectorAll('.psd-run')].map((row) => {
+      const pinButton = row.querySelector('.psd-run-pin')
+      const slot = row.querySelector('.psd-run-pin-slot')
+      const titleElement = row.querySelector('.psd-run-title')
+      const openButton = row.querySelector('.psd-run-open')
+      const head = row.querySelector('.psd-run-head')
+      const buttonStyle = pinButton === null ? null : getComputedStyle(pinButton)
+      const svg = pinButton === null ? null : pinButton.querySelector('svg')
+      const path = svg === null ? null : svg.querySelector('path')
+      const order = [head, slot, openButton].filter((element) => element !== null)
+      let ordered = order.length === 3
+      for (let index = 1; index < order.length && ordered; index += 1) {
+        ordered = Boolean(order[index - 1].compareDocumentPosition(order[index]) & Node.DOCUMENT_POSITION_FOLLOWING)
+      }
+      const titleRect = rect(titleElement)
+      return {
+        title: text(titleElement),
+        titleLeft: titleRect === null ? null : titleRect.left,
+        titleTop: titleRect === null ? null : titleRect.top,
+        titleClipped: titleElement !== null && titleElement.getAttribute('data-clipped') === 'true',
+        rowRect: rect(row),
+        hovered: row.matches(':hover'),
+        focusWithin: row.matches(':focus-within'),
+        pinned: row.getAttribute('data-pinned'),
+        rowBackground: getComputedStyle(row).backgroundColor,
+        hasSlot: slot !== null,
+        slotPinned: slot === null ? null : slot.getAttribute('data-pinned'),
+        slotWidth: slot === null ? null : Number(slot.getBoundingClientRect().width.toFixed(2)),
+        slotRect: rect(slot),
+        headRect: rect(head),
+        headChildCount: head === null ? 0 : head.children.length,
+        headFirstChildWidth: head === null || head.firstElementChild === null
+          ? null
+          : Number(head.firstElementChild.getBoundingClientRect().width.toFixed(2)),
+        gapHeadToSlot: head === null || slot === null
+          ? null
+          : Number((slot.getBoundingClientRect().left - head.getBoundingClientRect().right).toFixed(2)),
+        orderHeadSlotTitle: ordered,
+        hasPinButton: pinButton !== null,
+        buttonPinned: pinButton === null ? null : pinButton.getAttribute('data-pinned'),
+        ariaPressed: pinButton === null ? null : pinButton.getAttribute('aria-pressed'),
+        ariaLabel: pinButton === null ? null : pinButton.getAttribute('aria-label'),
+        titleAttr: pinButton === null ? null : pinButton.getAttribute('title'),
+        opacity: buttonStyle === null ? null : buttonStyle.opacity,
+        visibility: buttonStyle === null ? null : buttonStyle.visibility,
+        pointerEvents: buttonStyle === null ? null : buttonStyle.pointerEvents,
+        color: buttonStyle === null ? null : buttonStyle.color,
+        buttonRect: rect(pinButton),
+        svgCount: pinButton === null ? 0 : pinButton.querySelectorAll('svg').length,
+        svgPathCount: pinButton === null ? 0 : pinButton.querySelectorAll('svg path').length,
+        svgIcon: svg === null ? null : svg.getAttribute('data-icon'),
+        svgUseHref: svg === null || svg.querySelector('use') === null
+          ? null
+          : (svg.querySelector('use').getAttribute('href') || svg.querySelector('use').getAttribute('xlink:href')),
+        buttonHtml: pinButton === null ? null : String(pinButton.innerHTML || '').slice(0, 260),
+        pathD: path === null ? null : String(path.getAttribute('d') || '').slice(0, 120),
+        pathFill: path === null ? null : getComputedStyle(path).fill,
+      }
+    })
+    const childPinCount = childRows.reduce((count, child) =>
+      count + child.querySelectorAll('.psd-run-pin, .psd-run-pin-slot, [data-pinned]').length, 0)
+    const childPinSamples = []
+    for (const child of childRows) {
+      for (const node of child.querySelectorAll('.psd-run-pin, .psd-run-pin-slot, [data-pinned]')) {
+        if (childPinSamples.length >= 8) break
+        childPinSamples.push(String(node.className || node.tagName))
+      }
+    }
+    const childRowsWithPinAttr = childRows.filter((child) => child.querySelector('[data-pinned]') !== null).length
+    return {
+      businessColor,
+      rows,
+      mainRows: rows.length,
+      childRows: childRows.length,
+      childPinCount,
+      childPinSamples,
+      childRowsWithPinAttr,
+      pinnedCount: rows.filter((row) => row.pinned === 'true').length,
+    }
+  },
+
+  /** Small read of the dynamic-Workspaces live test seam (id/title/state + pin state). */
+  liveSnapshot: () => {
+    const seam = globalThis.__POWER_SUITE_TEST_HOOKS__?.dynamicWorkspacesLive
+    if (seam === null || seam === undefined || typeof seam.snapshot !== 'function') {
+      return { ok: false, reason: 'dynamicWorkspacesLive.snapshot is unavailable' }
+    }
+    try {
+      const snapshot = seam.snapshot()
+      return {
+        ok: true,
+        currentSessionId: snapshot.currentSessionId ?? null,
+        rows: Array.isArray(snapshot.rows)
+          ? snapshot.rows.map((row) => ({ id: row.id, title: row.title ?? null, state: row.state ?? null }))
+          : [],
+        pinnedIds: Array.isArray(snapshot.pinnedIds) ? [...snapshot.pinnedIds] : null,
+        pinSupported: typeof snapshot.pinSupported === 'boolean' ? snapshot.pinSupported : null,
+      }
+    } catch (error) {
+      return { ok: false, reason: String((error && error.message) || error) }
+    }
+  },
+
+  /** The card's own client-side pin document (`DW_PIN_KEY` localStorage). */
+  pinDocument: () => {
+    try {
+      return { ok: true, raw: window.localStorage.getItem('power-suite.dynamic-workspaces.pinned') }
+    } catch (error) {
+      return { ok: false, raw: null, reason: String((error && error.message) || error) }
+    }
+  },
+
+  /** Session summaries from the live `ctx.sessions` list (title/updatedAt cross-check). */
+  sessionSummaries: () => {    const panel = document.querySelector('.psd-panel')
+    if (panel === null) return { ok: false, reason: 'no .psd-panel' }
+    const fiberKey = Object.keys(panel).find((key) => key.startsWith('__reactFiber$'))
+    if (fiberKey === undefined) return { ok: false, reason: 'no react fiber on .psd-panel' }
+    let fiber = panel[fiberKey]
+    let sessions = null
+    for (let index = 0; index < 80 && fiber !== null && fiber !== undefined; index += 1, fiber = fiber.return) {
+      const props = fiber.memoizedProps
+      if (props === null || typeof props !== 'object') continue
+      if (sessions === null && props.parentSessions !== null && typeof props.parentSessions === 'object'
+        && typeof props.parentSessions.refreshProjections === 'function') {
+        sessions = props.parentSessions
+      }
+    }
+    if (sessions === null) return { ok: false, reason: 'ctx.sessions not found on the fiber chain' }
+    const snapshot = sessions.list !== null && sessions.list !== undefined && typeof sessions.list.getSnapshot === 'function'
+      ? sessions.list.getSnapshot()
+      : null
+    if (snapshot === null) return { ok: false, reason: 'session list snapshot unavailable' }
+    const summaries = {}
+    for (const id of snapshot.ids ?? []) {
+      const summary = snapshot.byId?.[id]
+      summaries[id] = summary === undefined
+        ? null
+        : {
+            displayTitle: summary.displayTitle ?? null,
+            updatedAt: typeof summary.updatedAt === 'number' && Number.isFinite(summary.updatedAt) ? summary.updatedAt : null,
+            blank: summary.blank === true,
+            origin: summary.origin ?? null,
+          }
+    }
+    return { ok: true, ids: [...(snapshot.ids ?? [])], summaries }
+  },
+}
+
+/**
+ * Classify one hover-card figure section title into its contract category.
+ * @param {string} title - rendered section title.
+ * @returns {string} `stats` | `usage` | `context` | `other:<title>`.
+ */
+function sectionCategory(title) {
+  if (/^(Session statistics|会话统计)$/.test(title)) return 'stats'
+  if (/^(Token usage|Token 用量)$/.test(title)) return 'usage'
+  if (/^\d+% of context used$/.test(title) || /^上下文已用 \d+%$/.test(title)) return 'context'
+  return `other:${title}`
+}
+
+/**
+ * Assert a hover card renders the contract's three figure sections with non-empty
+ * titles and headline values.
+ * @param {Array<object>} sections - measured sections (title/value/rows).
+ * @param {string} label - assertion label.
+ * @returns {string[]} section categories in DOM order.
+ */
+function assertSectionTitlesAndValues(sections, label) {
+  assertEqual(sections.length, 3, `${label}: expected exactly three figure sections, got ${JSON.stringify(sections.map((section) => section.title))}`)
+  for (const section of sections) {
+    assert(section.title.length > 0, `${label}: a figure section has an empty title`)
+    assert(section.value.length > 0, `${label}: figure section "${section.title}" has an empty headline value`)
+    assertFigureRows(section, label)
+  }
+  const categories = sections.map((section) => sectionCategory(section.title))
+  for (const expected of ['stats', 'usage', 'context']) {
+    assert(categories.includes(expected), `${label}: missing the ${expected} figure section (titles ${JSON.stringify(sections.map((section) => section.title))})`)
+  }
+  assertEqual(new Set(categories).size, 3, `${label}: duplicate or unknown figure sections (${JSON.stringify(sections.map((section) => section.title))})`)
+  return categories
+}
+
+/**
+ * A figure section must expose at least its label/value rows (the native card shape).
+ * @param {object} section - measured section.
+ * @param {string} label - assertion label.
+ * @returns {void}
+ */
+function assertFigureRows(section, label) {
+  assert(Array.isArray(section.rows) && section.rows.length >= 1, `${label}: section "${section.title}" has no label/value rows`)
+  for (const row of section.rows) {
+    assert(row.key.length > 0, `${label}: section "${section.title}" has a row with an empty label`)
+    assert(row.value.length > 0, `${label}: section "${section.title}" has a row with an empty value`)
+  }
+}
+
+/**
+ * @param {string} colour - computed CSS colour (`rgb(...)`/`rgba(...)`).
+ * @returns {{ r: number, g: number, b: number } | null} parsed channels.
+ */
+function parseColour(colour) {
+  const match = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(String(colour || ''))
+  return match === null ? null : { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]) }
+}
+
+/**
+ * @param {string} colour - computed CSS colour.
+ * @returns {boolean} whether the colour reads as a violet/blue accent.
+ */
+function isVioletOrBlue(colour) {
+  const rgb = parseColour(colour)
+  if (rgb === null) return false
+  return rgb.b >= 80 && rgb.b >= rgb.g + 20 && rgb.b + 15 >= rgb.r
+}
+
+// ---- native-sidebar helpers ----------------------------------------------------------------
+
+/**
+ * Expand the first collapsed native Workspace row (the fresh profile starts collapsed).
+ * @returns {Promise<boolean>} whether one collapsed Workspace row was expanded.
+ */
+async function expandNativeWorkspaceRow(page) {
+  const scrolled = await page.eval(() => {
+    const tree = document.querySelector('[role="tree"]')
+    if (tree === null) return false
+    const collapsed = [...tree.querySelectorAll('[data-row-key^="workspace:"]')]
+      .filter((element) => element.getAttribute('aria-expanded') === 'false' && element.getBoundingClientRect().height > 0)
+    if (collapsed.length === 0) return false
+    collapsed[0].scrollIntoView({ block: 'center' })
+    return true
+  })
+  if (!scrolled) return false
+  await sleep(260)
+  const point = await page.eval(() => {
+    const tree = document.querySelector('[role="tree"]')
+    const collapsed = [...(tree === null ? [] : tree.querySelectorAll('[data-row-key^="workspace:"]'))]
+      .filter((element) => element.getAttribute('aria-expanded') === 'false' && element.getBoundingClientRect().height > 0)
+    const element = collapsed[0]
+    if (element === undefined) return null
+    const rect = element.getBoundingClientRect()
+    return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+  })
+  if (point === null || point.x <= 0 || point.y <= 0 || point.x >= VIEWPORT.width || point.y >= VIEWPORT.height) return false
+  await page.clickAt(point.x, point.y)
+  await sleep(450)
+  return true
+}
+
+/**
+ * Make at least `target` native sidebar session rows visible.
+ * @param {number} target - wanted visible session-row count.
+ * @returns {Promise<Array<object>>} visible native session rows.
+ */
+async function ensureNativeSessionRowsVisible(page, target = 4) {
+  const read = () => page.eval(probePin.nativeRows)
+  let rows = await read()
+  for (let pass = 0; pass < 9 && rows.length < target; pass += 1) {
+    if (!(await expandNativeWorkspaceRow(page))) break
+    rows = await read()
+  }
+  if (rows.length < target) {
+    await page.eval(() => {
+      const tree = document.querySelector('[role="tree"]')
+      if (tree !== null) tree.scrollTop = tree.scrollHeight
+    })
+    await sleep(400)
+    rows = await read()
+  }
+  return rows
+}
+
+/**
+ * Scroll one native session row into view, expanding collapsed Workspace rows as needed.
+ * @param {string} sessionId - target Session id.
+ * @param {object} [options] - probe options.
+ * @returns {Promise<object | null>} the visible row, or null.
+ */
+async function ensureNativeRowForSession(page, sessionId, { attempts = 10 } = {}) {
+  const selector = `[data-row-key="session:${sessionId}"]`
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const state = await page.eval((sel) => {
+      const row = document.querySelector(sel)
+      if (row === null) return { present: false }
+      row.scrollIntoView({ block: 'center' })
+      const rect = row.getBoundingClientRect()
+      return {
+        present: true,
+        key: row.getAttribute('data-row-key'),
+        rect: { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) },
+        visible: rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight,
+      }
+    }, selector)
+    if (state.present && state.visible) {
+      await page.moveTo(900, 500)
+      await sleep(220)
+      return state
+    }
+    if (state.present) {
+      await sleep(320)
+      continue
+    }
+    if (!(await expandNativeWorkspaceRow(page))) {
+      await page.eval(() => {
+        const tree = document.querySelector('[role="tree"]')
+        if (tree !== null) tree.scrollTop = tree.scrollHeight
+      })
+      await sleep(380)
+    }
+  }
+  return null
+}
+
+/**
+ * Move the real pointer onto one native sidebar session row.
+ * @param {object} row - row facts with `key`.
+ * @returns {Promise<object>} the hover point.
+ */
+async function hoverNativeSessionRow(page, row) {
+  await page.moveTo(900, 500)
+  await sleep(320)
+  const point = await page.eval((key) => {
+    const element = document.querySelector(`[data-row-key="${key}"]`)
+    if (element === null) return null
+    element.scrollIntoView({ block: 'center' })
+    const rect = element.getBoundingClientRect()
+    return {
+      x: Math.round(rect.left + Math.min(80, Math.max(24, rect.width * 0.4))),
+      y: Math.round(rect.top + rect.height / 2),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    }
+  }, row.key)
+  assert(point !== null, `native row ${row.key} disappeared before the hover`)
+  assert(point.y > 4 && point.y < VIEWPORT.height - 4, `native row ${row.key} is outside the viewport (y=${point.y})`)
+  await page.moveTo(point.x, point.y)
+  return point
+}
+
+/**
+ * Hover a native sidebar session row and wait for the shell's hover card.
+ * @param {object} row - row facts with `key`.
+ * @param {object} [options] - retry/timeout options.
+ * @returns {Promise<object | null>} the measured native card, or null.
+ */
+async function openNativeHoverCard(page, row, { attempts = 2, timeoutMs = 4000 } = {}) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      await hoverNativeSessionRow(page, row)
+    } catch {
+      await sleep(300)
+      continue
+    }
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      await sleep(140)
+      const card = await page.eval(probePin.nativeCard)
+      if (card !== null) return card
+    }
+    await page.moveTo(900, 500)
+    await sleep(250)
+  }
+  return null
+}
+
+// ---- running-card helpers ------------------------------------------------------------------
+
+/**
+ * @returns {Promise<Array<object>>} running-card main-row pin facts.
+ */
+async function readCardPinState(page) {
+  const state = await page.eval(probePin.cardPinState)
+  assert(state !== null && Array.isArray(state.rows), 'the card pin probe returned no rows')
+  return state
+}
+
+/**
+ * Read the card's own pin document from localStorage.
+ * @returns {Promise<{ ok: boolean, raw: string | null, reason?: string }>} the raw document.
+ */
+async function readPinDocument(page) {
+  try {
+    return await page.eval(probePin.pinDocument)
+  } catch (error) {
+    return { ok: false, raw: null, reason: (error && error.message) || String(error) }
+  }
+}
+
+/**
+ * Parse the card's pin document, tolerating a missing/corrupt value.
+ * @param {string | null} raw - localStorage value.
+ * @returns {{ version: number, pinned: string[] } | null} the parsed document.
+ */
+function parsePinDocument(raw) {
+  if (typeof raw !== 'string' || raw.length === 0) return null
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed === null || typeof parsed !== 'object' || !Array.isArray(parsed.pinned)) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Read the native sidebar row's pin-marker state for one Session (expanding/scrolling as needed).
+ * @param {string} sessionId - target Session id.
+ * @returns {Promise<object | null>} the native row state, or null when not reachable.
+ */
+async function readNativePinState(page, sessionId) {
+  try {
+    const row = await ensureNativeRowForSession(page, sessionId)
+    if (row === null) return null
+    const state = await page.eval(probePin.nativeRowState, sessionId)
+    return state !== null && state.found === true ? state : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * @returns {Promise<object>} the dynamic-Workspaces live seam snapshot (never throws).
+ */
+async function readLiveSnapshot(page) {
+  try {
+    return await page.eval(probePin.liveSnapshot)
+  } catch (error) {
+    return { ok: false, reason: (error && error.message) || String(error) }
+  }
+}
+
+/**
+ * @param {string} title - exact row title.
+ * @returns {Promise<Array<string>>} current running-card main-row titles in DOM order.
+ */
+async function mainRowTitles(page) {
+  return page.eval(() => [...document.querySelectorAll('.psd-run-title')]
+    .map((element) => (element.innerText || '').trim())
+    .filter((text) => text.length > 0))
+}
+
+/** Blur the focused element and park the pointer away from rows/cards. */
+async function resetPointer(page) {
+  try {
+    await page.eval(() => {
+      const active = document.activeElement
+      if (active !== null && typeof active.blur === 'function') active.blur()
+    })
+  } catch {
+    /* the page may be mid-reload */
+  }
+  await page.moveTo(900, 500)
+  await sleep(380)
+}
+
+/**
+ * Hover one running-card main row identified by its exact title (retries on live re-sorts).
+ * @param {string} title - exact row title.
+ * @returns {Promise<object>} the hover point.
+ */
+async function hoverMainRowByTitle(page, title) {
+  for (let attempt = 0; attempt < PIN_ROW_ATTEMPTS; attempt += 1) {
+    await resetPointer(page)
+    const target = await page.eval((rowTitle) => {
+      const row = [...document.querySelectorAll('.psd-run')]
+        .find((element) => ((element.querySelector('.psd-run-title')?.innerText ?? '').trim()) === rowTitle)
+      if (row === undefined) return null
+      const rect = row.getBoundingClientRect()
+      const titleRect = row.querySelector('.psd-run-title')?.getBoundingClientRect() ?? rect
+      return {
+        x: Math.round(titleRect.left + Math.min(30, Math.max(8, titleRect.width / 2))),
+        y: Math.round(rect.top + rect.height / 2),
+        rowTop: Math.round(rect.top),
+      }
+    }, title).catch(() => null)
+    if (target === null) {
+      await sleep(250)
+      continue
+    }
+    if (target.y <= 4 || target.y >= VIEWPORT.height - 4) {
+      await page.eval((rowTitle) => {
+        const row = [...document.querySelectorAll('.psd-run')]
+          .find((element) => ((element.querySelector('.psd-run-title')?.innerText ?? '').trim()) === rowTitle)
+        if (row !== undefined) row.scrollIntoView({ block: 'center' })
+      }, title)
+      await sleep(260)
+      continue
+    }
+    await page.moveTo(target.x, target.y)
+    await sleep(140)
+    const hovered = await page.eval((rowTitle) => {
+      const row = [...document.querySelectorAll('.psd-run')]
+        .find((element) => ((element.querySelector('.psd-run-title')?.innerText ?? '').trim()) === rowTitle)
+      return row === undefined ? false : row.matches(':hover')
+    }, title).catch(() => false)
+    if (hovered) return target
+  }
+  throw new Error(`could not hover the card main row "${short(title, 60)}" (the live list kept re-sorting)`)
+}
+
+/**
+ * Read one running-card row's pin facts; retries while the live list re-renders.
+ * @param {string} title - exact row title.
+ * @returns {Promise<{ state: object, row: object }>} the full probe and the matched row.
+ */
+async function readRowPinState(page, title) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const state = await readCardPinState(page)
+    const row = state.rows.find((candidate) => candidate.title === title)
+    if (row !== undefined) return { state, row }
+    await sleep(200)
+  }
+  throw new Error(`card main row "${short(title, 60)}" is not in the rendered card`)
+}
+
+/**
+ * Poll one row's pin facts until a predicate holds.
+ * @param {string} title - exact row title.
+ * @param {Function} predicate - receives `(row, state)`.
+ * @param {object} [options] - timeout/label.
+ * @returns {Promise<{ state: object, row: object }>} the matching read.
+ */
+async function waitForRowPinState(page, title, predicate, { timeout = 2500, label = 'pin state' } = {}) {
+  const deadline = Date.now() + timeout
+  let last = null
+  while (Date.now() < deadline) {
+    const read = await readRowPinState(page, title).catch(() => null)
+    if (read !== null) {
+      last = read
+      if (predicate(read.row, read.state)) return read
+    }
+    await sleep(90)
+  }
+  throw new Error(`timed out after ${timeout}ms waiting for ${label} on "${short(title, 50)}" (last: ${short(JSON.stringify(last === null ? null : last.row), 400)})`)
+}
+
+/**
+ * Pin or unpin one running-card row through its real hover-revealed pin button.
+ * @param {string} title - exact row title.
+ * @param {'pin' | 'unpin'} expected - required end state.
+ * @returns {Promise<{ state: object, row: object }>} the read after the click.
+ */
+async function clickRowPin(page, title, expected) {
+  for (let attempt = 0; attempt < PIN_ROW_ATTEMPTS; attempt += 1) {
+    try {
+      await hoverMainRowByTitle(page, title)
+    } catch {
+      await sleep(300)
+      continue
+    }
+    try {
+      await waitForRowPinState(page, title,
+        (row) => row.hovered && row.opacity === '1' && row.visibility === 'visible' && row.pointerEvents === 'auto',
+        { timeout: 2500, label: 'interactive pin button on hover' })
+    } catch {
+      await sleep(200)
+      continue
+    }
+    const point = await page.eval((rowTitle) => {
+      const row = [...document.querySelectorAll('.psd-run')]
+        .find((element) => ((element.querySelector('.psd-run-title')?.innerText ?? '').trim()) === rowTitle)
+      const button = row === undefined ? null : row.querySelector('.psd-run-pin')
+      if (button === null) return null
+      const rect = button.getBoundingClientRect()
+      return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2), width: Math.round(rect.width), height: Math.round(rect.height) }
+    }, title).catch(() => null)
+    if (point === null || point.width <= 0 || point.height <= 0) {
+      await sleep(250)
+      continue
+    }
+    await page.clickAt(point.x, point.y)
+    await sleep(340)
+    const after = await readRowPinState(page, title).catch(() => null)
+    if (after === null) {
+      await sleep(320)
+      continue
+    }
+    const isPinned = after.row.pinned === 'true'
+    if (expected === 'pin' ? isPinned : !isPinned) return after
+    await sleep(360)
+  }
+  throw new Error(`could not ${expected} the card row "${short(title, 60)}" through its pin button (the click did not land or the live list re-sorted)`)
+}
+
+/**
+ * Resolve one card row's Session id through the live seat seam (or the session list).
+ * @param {string} title - exact row title.
+ * @returns {Promise<{ id: string | null, source: string }>} resolved id.
+ */
+async function sessionIdByTitle(page, title) {
+  const snapshot = await readLiveSnapshot(page)
+  if (snapshot.ok) {
+    const match = (snapshot.rows ?? []).find((row) => row.title === title && typeof row.id === 'string')
+    if (match !== undefined) return { id: match.id, source: 'dynamicWorkspacesLive seam' }
+  }
+  const summaries = await page.eval(probePin.sessionSummaries).catch(() => null)
+  if (summaries !== null && summaries.ok) {
+    for (const [id, entry] of Object.entries(summaries.summaries)) {
+      if (entry !== null && entry.displayTitle === title) return { id, source: 'session list' }
+    }
+  }
+  return { id: null, source: 'unresolved' }
+}
+
+/**
+ * Capture a viewport-clamped close-up PNG for evidence.
+ * @param {string} name - file name without extension.
+ * @param {object} clip - raw clip box (may exceed the viewport).
+ * @returns {Promise<string | null>} the written path, or null when too small.
+ */
+async function writeClipShot(page, name, clip) {
+  const x = Math.max(0, Math.round(clip.x))
+  const y = Math.max(0, Math.round(clip.y))
+  const width = Math.min(Math.round(clip.width), VIEWPORT.width - x)
+  const height = Math.min(Math.round(clip.height), VIEWPORT.height - y)
+  if (width < 8 || height < 8) return null
+  await mkdir(SHOTS_DIR, { recursive: true })
+  const file = path.join(SHOTS_DIR, `${name}.png`)
+  await page.screenshot(file, { x, y, width, height })
+  log(`wrote ${file}`)
+  return file
+}
+
+/**
+ * Unpin every Session this run pinned, through the real UI, and record the residual
+ * card pin document / native sidebar state honestly.
+ * @returns {Promise<void>}
+ */
+async function cleanupPinnedSessions(page, state) {
+  if (state.mode !== 'pin') return
+  const issues = []
+  try {
+    for (const entry of [...(state.pinned ?? [])].reverse()) {
+      try {
+        const present = await page.eval((title) => [...document.querySelectorAll('.psd-run')]
+          .some((row) => ((row.querySelector('.psd-run-title')?.innerText ?? '').trim()) === title), entry.title).catch(() => false)
+        if (!present) {
+          issues.push(`"${short(entry.title, 40)}" is not a rendered card row; cannot unpin it through the UI`)
+          continue
+        }
+        await clickRowPin(page, entry.title, 'unpin')
+        state.pinned = state.pinned.filter((item) => item.title !== entry.title)
+        log(`cleanup: unpinned "${short(entry.title, 48)}"`)
+      } catch (error) {
+        issues.push(`"${short(entry.title, 40)}": ${(error && error.message) || String(error)}`)
+      }
+    }
+    const runIds = [state.pinTargetA?.id, state.pinTargetB?.id].filter((id) => typeof id === 'string')
+    const snapshot = await readLiveSnapshot(page)
+    const pinnedIds = snapshot.ok && Array.isArray(snapshot.pinnedIds) ? snapshot.pinnedIds : null
+    const oursRemainingInCard = pinnedIds === null ? null : runIds.filter((id) => pinnedIds.includes(id))
+    const pinDocument = await readPinDocument(page)
+    const parsedDocument = parsePinDocument(pinDocument.raw)
+    const oursRemainingInDocument = parsedDocument === null ? null : runIds.filter((id) => parsedDocument.pinned.includes(id))
+    const nativePinChecks = []
+    for (const [label, entry] of [['A', state.pinTargetA], ['B', state.pinTargetB]]) {
+      if (entry === undefined || typeof entry.nativePinCount !== 'number') continue
+      const native = await readNativePinState(page, entry.id)
+      nativePinChecks.push({ label, id: entry.id, before: entry.nativePinCount, after: native === null ? null : native.pin.length })
+    }
+    const nativeRows = await page.eval(probePin.nativeRows).catch(() => [])
+    state.pinCleanup = {
+      unpinned: (state.pinned ?? []).length === 0,
+      issues,
+      runIds,
+      cardPinnedIds: pinnedIds,
+      oursRemainingInCard,
+      pinDocumentRaw: pinDocument.raw,
+      pinDocumentIds: parsedDocument === null ? null : parsedDocument.pinned,
+      oursRemainingInDocument,
+      nativePinChecks,
+      nativeOrderBefore: state.nativeOrderBefore ?? null,
+      nativeOrderAfter: nativeRows.map((row) => row.key),
+    }
+    log(`cleanup: card pinnedIds ${short(JSON.stringify(pinnedIds), 240)}; pin document ${short(pinDocument.raw, 240)}; residual run pins in card ${short(JSON.stringify(oursRemainingInCard), 120)} / in document ${short(JSON.stringify(oursRemainingInDocument), 120)}`)
+    for (const check of nativePinChecks) {
+      log(`cleanup: native sidebar pin markers for Session ${check.label} ${check.before === check.after ? `unchanged (${check.before})` : `CHANGED (${check.before} -> ${check.after})`}`)
+    }
+    if (state.pinCleanup.nativeOrderBefore !== null) {
+      const before = JSON.stringify(state.pinCleanup.nativeOrderBefore)
+      const after = JSON.stringify(state.pinCleanup.nativeOrderAfter)
+      log(`cleanup: native sidebar session order ${before === after ? 'unchanged by the run' : 'changed (live session list moved during the run)'}`)
+    }
+    if (issues.length > 0) log(`cleanup: ${issues.length} issue(s): ${short(issues.join('; '), 500)}`)
+  } catch (error) {
+    log(`cleanup error: ${short((error && error.message) || String(error), 400)}`)
+    state.pinCleanup = { ...(state.pinCleanup ?? {}), cleanupError: (error && error.message) || String(error) }
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// --pin checks
+// ---------------------------------------------------------------------------------------------
+
+async function runPinChecks({ page, results, state }) {
+  log('\n=== --pin: hover dot / native figures / running-panel pin ===')
+  state.mode = 'pin'
+  state.pinned = []
+
+  await results.check('pin-net', 'CDP Network domain enabled (real network-failure oracle)', async () => {
+    assert(page.networkEnabled === true, `Network.enable failed: ${page.networkError || 'unknown error'}`)
+    return 'Network domain enabled; same-origin API/document failures are counted'
+  })
+
+  await ensurePanelRows(page)
+  await resetPointer(page)
+  const baseline = await readCardPinState(page)
+  const snapshot = await readLiveSnapshot(page)
+  const pinDocument = await readPinDocument(page)
+  state.pinBaseline = {
+    pinnedTitles: baseline.rows.filter((row) => row.pinned === 'true').map((row) => row.title),
+    pinnedIds: snapshot.ok && Array.isArray(snapshot.pinnedIds) ? snapshot.pinnedIds : null,
+    pinDocumentRaw: pinDocument.raw,
+    unpinnedOrder: baseline.rows.filter((row) => row.pinned !== 'true').map((row) => row.title),
+  }
+  log(`pin: baseline pinned main rows ${state.pinBaseline.pinnedTitles.length}` +
+    (state.pinBaseline.pinnedTitles.length > 0 ? ` (${short(state.pinBaseline.pinnedTitles.join(' | '), 180)})` : '') +
+    `; hook pinnedIds ${short(JSON.stringify(state.pinBaseline.pinnedIds), 200)}; pin document ${short(pinDocument.raw, 200)}`)
+  state.nativeRows = await ensureNativeSessionRowsVisible(page, 3)
+  state.nativeOrderBefore = state.nativeRows.map((row) => row.key)
+
+  // ---- R1: running-card hover-card status dot ----------------------------------------------
+
+  await results.check('r1-1', 'running-card hover status dot is a perfect circle (corner-shape round, 50%, square box)', async () => {
+    const titles = await mainRowTitles(page)
+    assert(titles.length > 0, 'the "Running & recent" card has no main row to hover (start a Session first)')
+    let opened = null
+    let openedTitle = null
+    for (const title of titles.slice(0, 3)) {
+      opened = await openHoverCard(page, 'parent', title)
+      if (opened !== null) {
+        openedTitle = title
+        break
+      }
+    }
+    assert(opened !== null, 'the plugin hover card did not open over any card main row')
+    const dot = await page.eval(probePin.dotStyle)
+    assert(dot !== null, 'the plugin hover card has no .psd-hovercard-dot status dot')
+    const cornerShape = String(dot.cornerShape ?? dot.cornerShapeRaw ?? '').trim()
+    // Chrome serializes `corner-shape: round` as `superellipse(1)`, so the oracle
+    // is the normalized computed value of a `corner-shape: round` control, and the
+    // dot must also differ from the shell's inherited squircle default.
+    assert(dot.roundComputed.length > 0, 'the synthetic corner-shape:round control produced no computed value')
+    assert(cornerShape === dot.roundComputed,
+      `dot corner-shape must be the round shape (dot computed ${JSON.stringify(cornerShape)}, round control ${JSON.stringify(dot.roundComputed)}, shell default ${JSON.stringify(dot.shellDefault)}; Chrome normalizes the round keyword to superellipse(1))`)
+    assert(dot.shellDefault.length === 0 || cornerShape !== dot.shellDefault,
+      `dot must not inherit the shell's squircle corner-shape (${JSON.stringify(dot.shellDefault)})`)
+    assertEqual(dot.borderRadius, '50%', `dot border-radius must stay 50% (got ${dot.borderRadius})`)
+    assertEqual(dot.width, dot.height, `dot computed box must be square (width ${dot.width}, height ${dot.height})`)
+    assertNear(dot.rect.width, dot.rect.height, 0.5, `dot rendered box must be square (${dot.rect.width}x${dot.rect.height})`)
+    assert(dot.rect.width >= 6 && dot.rect.width <= 14, `unexpected dot size ${dot.rect.width}px`)
+    state.dot = dot
+    state.r1Title = openedTitle
+    return `corner-shape ${cornerShape}, border-radius ${dot.borderRadius}, ${dot.width}x${dot.height} css / ${dot.rect.width}x${dot.rect.height} px, ${dot.dataState} dot on ${dot.backgroundColor}`
+  })
+
+  await results.check('r1-2', 'status-dot region screenshots captured as visual evidence', async () => {
+    assert(state.dot !== undefined, 'the dot was not measured (r1-1 failed first)')
+    if (!state.shotsEnabled) return 'SKIP (--no-shots): no screenshot written'
+    const dot = state.dot
+    const file = await writeClipShot(page, 'pin-r1-dot', {
+      x: dot.rect.left - 24,
+      y: dot.rect.top - 24,
+      width: dot.rect.width + 48,
+      height: dot.rect.height + 48,
+    })
+    assert(file !== null, 'could not capture the dot-region screenshot')
+    state.screenshots.push(file)
+    const card = await page.eval(probe.hoverCard)
+    if (card !== null) {
+      const cardFile = await writeClipShot(page, 'pin-r1-hovercard', {
+        x: card.rect.left - 8,
+        y: card.rect.top - 8,
+        width: card.rect.width + 16,
+        height: card.rect.height + 16,
+      })
+      if (cardFile !== null) state.screenshots.push(cardFile)
+    }
+    await resetPointer(page)
+    return file
+  })
+
+  // ---- R2: native sidebar session hover card shows the same figures -----------------------
+
+  await results.check('r2-1', 'native sidebar session hover card shows the three figure sections with non-empty titles and values', async () => {
+    const live = await readLiveSnapshot(page)
+    assert(live.ok, `the dynamic-Workspaces live seat is unavailable: ${short(live.reason || 'unknown')}`)
+    const cardTitles = await mainRowTitles(page)
+    const idByTitle = new Map()
+    for (const row of live.rows ?? []) {
+      if (typeof row.id === 'string' && typeof row.title === 'string' && row.title.length > 0) idByTitle.set(row.title, row.id)
+    }
+    const candidates = []
+    for (const title of cardTitles) {
+      const id = idByTitle.get(title)
+      if (id === undefined || id === state.sessionId || candidates.some((candidate) => candidate.id === id)) continue
+      candidates.push({ id, title })
+      if (candidates.length >= PIN_ROW_ATTEMPTS) break
+    }
+    assert(candidates.length > 0, 'no card main row maps to a live Session id through the test seam; cannot pick a native row with real activity')
+    const attempts = []
+    for (const candidate of candidates) {
+      const row = await ensureNativeRowForSession(page, candidate.id)
+      if (row === null) {
+        attempts.push(`${candidate.id.slice(0, 8)}… "${short(candidate.title, 26)}": native row not rendered/visible`)
+        continue
+      }
+      let card = await openNativeHoverCard(page, row, { attempts: 1, timeoutMs: 4200 })
+      if (card === null) {
+        attempts.push(`${candidate.id.slice(0, 8)}… "${short(candidate.title, 26)}": native hover card did not open`)
+        await page.moveTo(900, 500)
+        await sleep(300)
+        continue
+      }
+      // Cold projection values fill in asynchronously after the slot's one-shot read.
+      const deadline = Date.now() + 9000
+      while (Date.now() < deadline && (card.figuresWrapper === null || card.figuresWrapper.sectionCount < 3)) {
+        await sleep(250)
+        const next = await page.eval(probePin.nativeCard)
+        if (next === null) {
+          card = await openNativeHoverCard(page, row, { attempts: 1, timeoutMs: 3800 })
+          if (card === null) break
+        } else {
+          card = next
+        }
+        if (card !== null && card.figuresWrapper !== null && card.figuresWrapper.sectionCount >= 3) break
+      }
+      if (card === null) {
+        attempts.push(`${candidate.id.slice(0, 8)}… "${short(candidate.title, 26)}": native hover card closed while waiting for the figures`)
+        continue
+      }
+      if (card.figuresWrapper === null || card.figuresWrapper.sectionCount < 3) {
+        attempts.push(`${candidate.id.slice(0, 8)}… "${short(candidate.title, 26)}": ${card.figuresWrapper === null ? 'no [data-psd-native-figures] wrapper' : `${card.figuresWrapper.sectionCount} section(s)`}`)
+        await page.moveTo(900, 500)
+        await sleep(300)
+        continue
+      }
+      assertSectionTitlesAndValues(card.wrapperSections, 'native session hover card')
+      assertEqual(card.sectionsOutsideWrapper, 0, 'every native figure section must live inside [data-psd-native-figures]')
+      assertEqual(card.insideRunningCard, false, 'the native hover card must not be inside [data-psd-hovercard]')
+      assertEqual(card.figuresWrapper.afterTime, true, 'the figure wrapper must sit after the native relative-time line')
+      assertEqual(card.figuresWrapper.beforeStatus, true, 'the figure wrapper must sit before the first native status line')
+      assert(card.content !== null && card.content.width >= 200, `the native hover content could not be measured (${short(JSON.stringify(card.content), 120)})`)
+      state.r2Native = {
+        id: candidate.id,
+        title: candidate.title,
+        rowKey: row.key,
+        card,
+        sections: card.wrapperSections,
+        categories: card.wrapperSections.map((section) => sectionCategory(section.title)),
+      }
+      if (state.shotsEnabled) {
+        const file = await writeClipShot(page, 'pin-r2-native-hover', {
+          x: card.rect.left - 12,
+          y: card.rect.top - 12,
+          width: card.rect.width + 24,
+          height: card.rect.height + 24,
+        })
+        if (file !== null) state.screenshots.push(file)
+      }
+      await page.moveTo(900, 500)
+      await sleep(300)
+      return `${candidate.id.slice(0, 8)}… "${short(candidate.title, 34)}": ${card.wrapperSections.map((section) => `${section.title} = ${section.value}`).join(' | ')}`
+    }
+    throw new Error(`no native session hover card rendered the three figure sections; probes: ${attempts.join('; ')}`)
+  })
+
+  await results.check('r2-2', 'running-card hover card renders the same section label set (alignment oracle)', async () => {
+    assert(state.r2Native !== undefined, 'the native figure card was not measured (r2-1 failed first)')
+    const native = state.r2Native
+    const titles = await mainRowTitles(page)
+    let opened = null
+    let matchedTitle = null
+    const exactTitle = titles.find((title) => title === native.title)
+    if (exactTitle !== undefined) {
+      opened = await openHoverCard(page, 'parent', exactTitle)
+      if (opened !== null) matchedTitle = exactTitle
+    }
+    if (opened === null) {
+      for (const title of titles.slice(0, 4)) {
+        const attempt = await openHoverCard(page, 'parent', title)
+        if (attempt !== null && attempt.card.sections.length === 3) {
+          opened = attempt
+          matchedTitle = title
+          break
+        }
+      }
+    }
+    assert(opened !== null, 'the plugin hover card did not render three figure sections on any card main row')
+    const card = opened.card
+    const categories = assertSectionTitlesAndValues(card.sections, 'running-card hover card')
+    const nativeCategories = native.categories
+    assert(categories.slice().sort().join(',') === nativeCategories.slice().sort().join(','),
+      `figure section label categories differ (running card ${JSON.stringify(card.sections.map((section) => section.title))} vs native ${JSON.stringify(native.sections.map((section) => section.title))})`)
+    const sameSession = matchedTitle === native.title
+    if (sameSession) {
+      assertEqual(JSON.stringify(card.sections.map((section) => section.title)),
+        JSON.stringify(native.sections.map((section) => section.title)),
+        'the same Session must render identical section titles in both hover cards')
+      assertEqual(JSON.stringify(card.sections.map((section) => [section.value, section.rows])),
+        JSON.stringify(native.sections.map((section) => [section.value, section.rows])),
+        'the same Session must render identical section values and rows in both hover cards')
+    }
+    state.r2Card = { title: matchedTitle, sameSession, sections: card.sections }
+    if (state.shotsEnabled) {
+      const file = await writeClipShot(page, 'pin-r2-card-hover', {
+        x: card.rect.left - 8,
+        y: card.rect.top - 8,
+        width: card.rect.width + 16,
+        height: card.rect.height + 16,
+      })
+      if (file !== null) state.screenshots.push(file)
+    }
+    await resetPointer(page)
+    return `${sameSession ? 'same Session' : 'label-set fallback'}: running card ${JSON.stringify(card.sections.map((section) => section.title))} matches native ${JSON.stringify(native.sections.map((section) => section.title))}`
+  })
+
+  await results.check('r2-3', 'native hover card keeps its 244 px frame and native child order (no layout regression)', async () => {
+    assert(state.r2Native !== undefined, 'the native figure card was not measured (r2-1 failed first)')
+    const native = state.r2Native
+    const row = await ensureNativeRowForSession(page, native.id)
+    assert(row !== null, `the native row for ${native.id} is no longer visible`)
+    const card = await openNativeHoverCard(page, row, { attempts: 2, timeoutMs: 4400 })
+    assert(card !== null, 'the native hover card did not reopen for the layout check')
+    assertEqual(card.width, '244px', `native hover card width must stay 244 px, got ${card.width}`)
+    assertEqual(card.rect.width, 244, `native hover card rendered width must be 244 px, got ${card.rect.width}`)
+    assert(card.content !== null, 'the native hover content was not found')
+    assertNear(card.content.width, 212, 1, `native hover card content width must stay 212 px, got ${card.content.width}`)
+    assertEqual(card.padding, '12px 16px', `native hover card padding must stay 12px 16px, got ${card.padding}`)
+    assert(card.figuresWrapper !== null, 'the injected figure wrapper disappeared on reopen')
+    assertEqual(card.figuresWrapper.afterTime, true, 'the figure wrapper is not after the native hover time line')
+    assertEqual(card.figuresWrapper.beforeStatus, true, 'the figure wrapper is not before the native status line')
+    const figureIndex = card.children.findIndex((child) => child.containsFigures)
+    const timeIndex = card.children.findIndex((child) => /hoverTime/.test(child.className))
+    const statusIndex = card.children.findIndex((child) => /hoverStatus/.test(child.className))
+    assert(figureIndex >= 0 && timeIndex >= 0 && statusIndex >= 0,
+      `the native hover card lost its native children (${short(JSON.stringify(card.children), 260)})`)
+    assert(figureIndex > timeIndex && figureIndex < statusIndex,
+      `the figure wrapper must stay between the native time and status lines (children ${short(JSON.stringify(card.children.map((child) => child.containsFigures ? 'figures' : child.className)), 260)})`)
+    assertEqual(card.title, native.card.title, 'the native hover title changed when the figures were injected')
+    if (state.shotsEnabled) {
+      const file = await writeClipShot(page, 'pin-r2-native-layout', {
+        x: card.rect.left - 12,
+        y: card.rect.top - 12,
+        width: card.rect.width + 24,
+        height: card.rect.height + 24,
+      })
+      if (file !== null) state.screenshots.push(file)
+    }
+    await page.moveTo(900, 500)
+    await sleep(300)
+    return `244 px frame / ${card.content.width} px content, padding ${card.padding}, wrapper between native time and status (cards children: ${card.children.map((child) => child.containsFigures ? 'figures' : child.className.split('_').pop()).join(' > ')})`
+  })
+
+  await results.check('r2-4', 'a blank Session shows no figure sections in its native hover card', async () => {
+    assert(state.sessionId, 'the smoke pass did not record a blank Session id')
+    const row = await ensureNativeRowForSession(page, state.sessionId)
+    assert(row !== null, `the blank Session ${state.sessionId} has no visible native sidebar row; cannot hover it`)
+    let card = await openNativeHoverCard(page, row, { attempts: 2, timeoutMs: 4400 })
+    assert(card !== null, 'the native hover card did not open over the blank Session row')
+    // A blank Session has no projection values; a cold read must not grow a figure block.
+    await sleep(900)
+    const later = await page.eval(probePin.nativeCard)
+    if (later !== null) card = later
+    assertEqual(card.wrapperSections.length, 0, 'the blank Session must not show figure sections')
+    assert(card.figuresWrapper === null || card.figuresWrapper.visible === false,
+      `the blank Session must not show a visible figure wrapper (got ${short(JSON.stringify(card.figuresWrapper), 180)})`)
+    assertEqual(card.width, '244px', `the blank Session native hover card must keep its 244 px frame (got ${card.width})`)
+    if (state.shotsEnabled) {
+      const file = await writeClipShot(page, 'pin-r2-blank', {
+        x: card.rect.left - 12,
+        y: card.rect.top - 12,
+        width: card.rect.width + 24,
+        height: card.rect.height + 24,
+      })
+      if (file !== null) state.screenshots.push(file)
+    }
+    await page.moveTo(900, 500)
+    await sleep(300)
+    return `blank Session ${state.sessionId}: native hover card ${card.rect.width}x${card.rect.height}, no [data-psd-native-figures], ${card.wrapperSectionCount ?? card.wrapperSections.length} sections`
+  })
+
+  // ---- R3: running-panel pin --------------------------------------------------------------
+
+  await results.check('r3-1', 'main rows reserve the fixed 16 px pin slot; subagent child rows expose none', async () => {
+    await resetPointer(page)
+    const pin = await readCardPinState(page)
+    assert(pin.mainRows > 0, 'the "Running & recent" card has no main rows')
+    assertEqual(pin.rows.filter((row) => row.hasSlot).length, pin.mainRows, 'every main row must reserve the pin slot')
+    assertEqual(pin.rows.filter((row) => row.hasPinButton).length, pin.mainRows, 'every main row must render the pin button')
+    for (const row of pin.rows) {
+      assertNear(row.slotWidth, 16, 0.75, `row "${short(row.title, 40)}" pin slot must be 16 px wide (got ${row.slotWidth})`)
+      assertEqual(row.orderHeadSlotTitle, true, `row "${short(row.title, 40)}" must order the glyph, the pin slot, then the title`)
+      if (row.pinned === 'true') {
+        assertEqual(row.ariaPressed, 'true', `pinned row "${short(row.title, 30)}" must expose aria-pressed=true`)
+        assertEqual(row.opacity, '1', `pinned row "${short(row.title, 30)}" must keep its filled marker visible without hover (opacity ${row.opacity})`)
+        assertEqual(row.visibility, 'visible', `pinned row "${short(row.title, 30)}" marker must stay visibility:visible without hover (${row.visibility})`)
+        assertEqual(row.pointerEvents, 'none', `pinned+not-hovered row "${short(row.title, 30)}" marker must be pointer-events:none (${row.pointerEvents})`)
+      } else {
+        assertEqual(row.opacity, '0', `unpinned+not-hovered row "${short(row.title, 30)}" pin must be hidden (opacity ${row.opacity})`)
+        assertEqual(row.visibility, 'hidden', `unpinned+not-hovered row "${short(row.title, 30)}" pin must be visibility:hidden (${row.visibility})`)
+        assertEqual(row.pointerEvents, 'none', `unpinned+not-hovered row "${short(row.title, 30)}" pin must be pointer-events:none (${row.pointerEvents})`)
+        assertEqual(row.ariaPressed, 'false', `unpinned row "${short(row.title, 30)}" pin must expose aria-pressed=false`)
+      }
+    }
+    assertEqual(pin.childPinCount, 0, `subagent child rows must expose no pin slot/button/attribute (found ${pin.childPinCount} pin-ish nodes in ${pin.childRows} child row(s))`)
+    assertEqual(pin.childRowsWithPinAttr, 0, 'subagent child rows must not carry data-pinned')
+    // Regression guard for the clipped-title squeeze: `.psd-run-head` must keep its
+    // fixed glyph cell (flex:none). If it participates in flex shrink, the glyph cell
+    // narrows and the reserved pin slot slides left under the row-body click point,
+    // making a row-body click toggle the pin instead of opening the Session.
+    const squeezedCandidates = pin.rows.filter((row) => row.titleClipped && row.headChildCount === 1 && row.headRect !== null)
+    let glyphGuard = 'no clipped-title main row was available for the glyph-squeeze guard'
+    if (squeezedCandidates.length > 0) {
+      for (const row of squeezedCandidates) {
+        assert(row.headFirstChildWidth !== null, `clipped-title row "${short(row.title, 40)}" has no glyph child to measure`)
+        assertNear(row.headRect.width, row.headFirstChildWidth, 0.6,
+          `clipped-title row "${short(row.title, 40)}" glyph cell must not be flex-squeezed (head ${row.headRect.width} px vs glyph ${row.headFirstChildWidth} px)`)
+        assertNear(row.gapHeadToSlot, 8, 1,
+          `clipped-title row "${short(row.title, 40)}" pin slot must start one 8 px flex gap after the glyph cell (head.right ${row.headRect.right}, slot.left ${row.slotRect.left}, gap ${row.gapHeadToSlot})`)
+      }
+      const sample = squeezedCandidates[0]
+      glyphGuard = `${squeezedCandidates.length} clipped-title row(s): glyph cell ${sample.headRect.width} px = glyph ${sample.headFirstChildWidth} px, pin-slot gap ${sample.gapHeadToSlot} px`
+    }
+    state.pinStructure = { mainRows: pin.mainRows, childRows: pin.childRows, glyphSqueezeGuard: squeezedCandidates.length }
+    return `${pin.mainRows} main rows with a 16 px pin slot; ${pin.childRows} subagent child rows with no pin DOM; ${pin.pinnedCount} pre-existing pinned main row(s); ${glyphGuard}`
+  })
+
+  await results.check('r3-2', 'hover reveals the pin with no title layout jump; leaving hides it again', async () => {
+    await resetPointer(page)
+    const before = await readCardPinState(page)
+    const candidates = before.rows.filter((row) => row.pinned !== 'true' && row.title.length > 0)
+    assert(candidates.length > 0, 'no unpinned main row is available to exercise the pin hover (the live card is all pinned)')
+    const target = candidates[0]
+    const resolved = await sessionIdByTitle(page, target.title)
+    assert(resolved.id !== null, `could not resolve the Session id of the card row "${short(target.title, 50)}" (${resolved.source})`)
+    state.pinTargetA = {
+      title: target.title,
+      id: resolved.id,
+      idSource: resolved.source,
+      titleLeft: target.titleLeft,
+      slotLeft: target.slotRect === null ? null : target.slotRect.left,
+      rowBackgroundBefore: target.rowBackground,
+      outlinePathD: target.pathD,
+      outlinePathFill: target.pathFill,
+      outlineColor: target.color,
+      outlineIcon: target.svgIcon,
+      outlineUseHref: target.svgUseHref,
+    }
+    await hoverMainRowByTitle(page, target.title)
+    const during = await waitForRowPinState(page, target.title,
+      (row) => row.hovered && row.opacity === '1' && row.visibility === 'visible',
+      { timeout: 2500, label: 'pin visible on hover' })
+    assertEqual(during.row.pointerEvents, 'auto', `the revealed pin must be interactive on hover (pointer-events ${during.row.pointerEvents})`)
+    assertNear(during.row.titleLeft, target.titleLeft, 0.5,
+      `the title left edge must not move when the pin appears (before ${target.titleLeft}, during ${during.row.titleLeft})`)
+    await resetPointer(page)
+    const hidden = await readRowPinState(page, target.title)
+    assertEqual(hidden.row.hovered, false, 'the real pointer did not leave the row')
+    assertEqual(hidden.row.opacity, '0', `the pin must hide when the pointer leaves (opacity ${hidden.row.opacity})`)
+    assertEqual(hidden.row.visibility, 'hidden', `the pin must be visibility:hidden when the pointer leaves (${hidden.row.visibility})`)
+    assertEqual(hidden.row.pointerEvents, 'none', 'the hidden pin must not capture the pointer')
+    assertNear(hidden.row.titleLeft, target.titleLeft, 0.5,
+      `the title left edge must stay identical after the pin hides (before ${target.titleLeft}, after ${hidden.row.titleLeft})`)
+    return `title x ${target.titleLeft} before/during/after hover; pin opacity 0 -> 1 (interactive) -> 0 with visibility hidden`
+  })
+
+  await results.check('r3-3', 'clicking the pin pins the Session in the card: filled violet marker, local pin document, native sidebar untouched', async () => {
+    const target = state.pinTargetA
+    assert(target !== undefined, 'no pin target was prepared (r3-2 failed first)')
+    const nativeBefore = await readNativePinState(page, target.id)
+    const documentBefore = await readPinDocument(page)
+    const after = await clickRowPin(page, target.title, 'pin')
+    assertEqual(after.row.pinned, 'true', 'the row must expose data-pinned="true" after the pin click')
+    assertEqual(after.row.slotPinned, 'true', 'the pin slot must mirror data-pinned')
+    assertEqual(after.row.buttonPinned, 'true', 'the pin button must mirror data-pinned')
+    await resetPointer(page)
+    const calm = await readRowPinState(page, target.title)
+    assertEqual(calm.row.pinned, 'true', 'the row must stay pinned without hover')
+    assertEqual(calm.row.ariaPressed, 'true', 'the pin button must expose aria-pressed="true"')
+    assert(/^(Unpin session|取消固定)$/.test(calm.row.ariaLabel ?? ''),
+      `the pinned pin must offer the localised unpin label, got ${JSON.stringify(calm.row.ariaLabel)}`)
+    assertEqual(calm.row.titleAttr, calm.row.ariaLabel, 'the pin title must mirror its aria-label')
+    assertEqual(calm.row.opacity, '1', 'the filled pin must stay visible without hover')
+    assertEqual(calm.row.visibility, 'visible', 'the filled pin must stay visibility:visible without hover')
+    assertEqual(calm.row.pointerEvents, 'none', 'the calm filled marker must not be interactive until hover')
+    assert(calm.row.svgPathCount > 0 || calm.row.svgIcon !== null || calm.row.svgUseHref !== null,
+      `the pin button must render the shell pin glyph (svg ${calm.row.svgCount}, icon ${calm.row.svgIcon}, href ${calm.row.svgUseHref}, html ${short(calm.row.buttonHtml, 240)})`)
+    const glyphDescriptor = `${calm.row.svgIcon ?? ''} ${calm.row.svgUseHref ?? ''}`
+    assert(/pin[-_]fill|fill[-_]pin/i.test(glyphDescriptor),
+      `the pinned marker must use the filled shell pin glyph, got "${short(glyphDescriptor, 120)}" (outline was "${short(target.outlineIcon ?? target.outlineUseHref ?? 'n/a', 100)}")`)
+    assert(target.outlineIcon !== null || target.outlineUseHref !== null,
+      'the unpinned glyph was not captured before pinning')
+    assert(calm.row.svgIcon !== target.outlineIcon || calm.row.svgUseHref !== target.outlineUseHref,
+      `the pinned marker must switch from the outline glyph to the filled glyph (outline "${short(target.outlineIcon ?? target.outlineUseHref, 100)}")`)
+    assert(calm.row.pathFill === null || calm.row.pathFill !== 'none', `the pinned glyph must be painted (path fill ${calm.row.pathFill})`)
+    assert(calm.row.color !== target.outlineColor || calm.row.pathFill !== target.outlinePathFill,
+      `the pinned marker must switch from the outline colour to the filled accent (colour ${target.outlineColor} -> ${calm.row.color}, path fill ${target.outlinePathFill} -> ${calm.row.pathFill})`)
+    assert(isVioletOrBlue(calm.row.pathFill ?? calm.row.color) || isVioletOrBlue(calm.row.color),
+      `the pinned marker must read as the violet/blue fixed accent (fill ${calm.row.pathFill}, colour ${calm.row.color}, business token ${calm.state.businessColor})`)
+    assert(calm.row.rowBackground !== 'rgba(0, 0, 0, 0)' && calm.row.rowBackground !== 'transparent',
+      `the pinned row must carry a subtle tint (row background ${calm.row.rowBackground})`)
+    // The card-owned pin document is the only state that may change (no Host/native pin call).
+    const documentAfter = await readPinDocument(page)
+    assertEqual(documentAfter.ok, true, `the card pin document cannot be read: ${short(documentAfter.reason || 'unknown')}`)
+    const parsed = parsePinDocument(documentAfter.raw)
+    assert(parsed !== null, `the card pin document must be the versioned JSON document, got ${short(documentAfter.raw, 160)}`)
+    assertEqual(parsed.version, 1, `the pin document version must be 1 (got ${parsed.version})`)
+    assert(parsed.pinned.includes(target.id), `the pin document must list the pinned Session id (pinned ${short(JSON.stringify(parsed.pinned), 200)})`)
+    assertEqual(JSON.stringify(parsed.pinned), JSON.stringify([...new Set(parsed.pinned)]), 'the pin document must not contain duplicate ids')
+    target.pinDocumentRaw = documentAfter.raw
+    target.pinDocumentBefore = documentBefore.raw
+    // Negative assertion: the native sidebar pin state must not change for this Session.
+    const nativeAfter = await readNativePinState(page, target.id)
+    if (nativeBefore !== null && nativeAfter !== null) {
+      assertEqual(nativeAfter.pin.length, nativeBefore.pin.length,
+        `pinning in the running card must not touch the native sidebar pin state (native pin markers ${nativeBefore.pin.length} -> ${nativeAfter.pin.length})`)
+      assertEqual(nativeAfter.pinVisible, nativeBefore.pinVisible,
+        'pinning in the running card must not change the native pin marker visibility')
+      target.nativePinCount = nativeBefore.pin.length
+    } else {
+      target.nativePinCount = null
+    }
+    target.rowBackground = calm.row.rowBackground
+    state.pinned.push({ id: target.id, title: target.title })
+    if (state.shotsEnabled) {
+      const rowFile = await writeClipShot(page, 'pin-r3-pinned-row', {
+        x: calm.row.rowRect.left - 6,
+        y: calm.row.rowRect.top - 6,
+        width: calm.row.rowRect.width + 12,
+        height: calm.row.rowRect.height + 12,
+      })
+      if (rowFile !== null) state.screenshots.push(rowFile)
+    }
+    return `"${short(target.title, 36)}" pinned: ${calm.row.svgIcon ?? 'inline'} glyph in ${calm.row.color}, ${calm.row.rowBackground} tint, pin document ${short(documentAfter.raw, 160)}, native pin markers unchanged (${target.nativePinCount ?? 'not observable'})`
+  })
+
+  await results.check('r3-4', 'the pinned row leads the card (pinned prefix)', async () => {
+    await resetPointer(page)
+    const target = state.pinTargetA
+    assert(target !== undefined, 'no pin target was prepared (r3-2 failed first)')
+    const pin = await readCardPinState(page)
+    const rows = pin.rows
+    const row = rows.find((candidate) => candidate.title === target.title)
+    assert(row !== undefined, 'the pinned row disappeared from the card')
+    assertEqual(row.pinned, 'true', 'the row must stay pinned in the card')
+    const firstUnpinned = rows.findIndex((candidate) => candidate.pinned !== 'true')
+    const prefix = firstUnpinned === -1 ? rows : rows.slice(0, firstUnpinned)
+    assert(prefix.every((candidate) => candidate.pinned === 'true'),
+      `every pinned row must precede every unpinned row (order ${short(JSON.stringify(rows.map((candidate) => `${candidate.title}${candidate.pinned === 'true' ? '*' : ''}`)), 300)})`)
+    const index = rows.findIndex((candidate) => candidate.title === target.title)
+    assert(index >= 0 && index < (firstUnpinned === -1 ? rows.length : firstUnpinned), 'the pinned row must sit inside the pinned prefix')
+    if (state.pinBaseline.pinnedTitles.length === 0) {
+      assertEqual(index, 0, `with no pre-existing pins the freshly pinned row must be first in the card (index ${index})`)
+    }
+    return `pinned row index ${index} of ${rows.length}${state.pinBaseline.pinnedTitles.length === 0 ? ' (first)' : `; ${state.pinBaseline.pinnedTitles.length} pre-existing pin(s) kept`}`
+  })
+
+  await results.check('r3-5', 'a second pin keeps both rows pinned first, newest activity first', async () => {
+    await resetPointer(page)
+    const targetA = state.pinTargetA
+    assert(targetA !== undefined, 'no first pin target (r3-2 failed first)')
+    const before = await readCardPinState(page)
+    const second = before.rows.find((row) => row.pinned !== 'true' && row.title.length > 0 && row.title !== targetA.title)
+    assert(second !== undefined, 'no second unpinned main row is available for the second pin')
+    const orderBefore = before.rows.map((row) => row.title)
+    const aIndex = orderBefore.indexOf(targetA.title)
+    const bIndex = orderBefore.indexOf(second.title)
+    assert(aIndex >= 0 && bIndex > aIndex, `harness precondition: the first pin target must precede the second in the newest-first card order (a=${aIndex}, b=${bIndex})`)
+    const resolved = await sessionIdByTitle(page, second.title)
+    assert(resolved.id !== null, `could not resolve the Session id of "${short(second.title, 50)}" (${resolved.source})`)
+    state.pinTargetB = { title: second.title, id: resolved.id, preIndex: bIndex, outlinePathD: second.pathD }
+    await clickRowPin(page, second.title, 'pin')
+    state.pinned.push({ id: resolved.id, title: second.title })
+    await resetPointer(page)
+    const pin = await readCardPinState(page)
+    const rows = pin.rows
+    const pinnedRows = rows.filter((row) => row.pinned === 'true')
+    assert(pinnedRows.some((row) => row.title === targetA.title), 'the first pinned row lost its pin')
+    assert(pinnedRows.some((row) => row.title === second.title), 'the second row is not pinned')
+    const aPinnedIndex = pinnedRows.findIndex((row) => row.title === targetA.title)
+    const bPinnedIndex = pinnedRows.findIndex((row) => row.title === second.title)
+    assert(aPinnedIndex < bPinnedIndex,
+      `the two pinned rows must keep their newest-activity-first order (pinned ${short(JSON.stringify(pinnedRows.map((row) => row.title)), 240)})`)
+    const firstUnpinned = rows.findIndex((row) => row.pinned !== 'true')
+    const prefix = firstUnpinned === -1 ? rows : rows.slice(0, firstUnpinned)
+    assert(prefix.every((row) => row.pinned === 'true'), 'pinned rows must stay a contiguous prefix')
+    assert(rows.findIndex((row) => row.title === second.title) < (firstUnpinned === -1 ? rows.length : firstUnpinned),
+      'the second pinned row must be inside the pinned prefix')
+    const summaries = await page.eval(probePin.sessionSummaries).catch(() => null)
+    let activityNote = ''
+    if (summaries !== null && summaries.ok) {
+      const aAt = summaries.summaries[targetA.id]?.updatedAt
+      const bAt = summaries.summaries[second.id]?.updatedAt
+      if (typeof aAt === 'number' && typeof bAt === 'number') {
+        activityNote = `; session summaries updatedAt: A ${new Date(aAt).toISOString()}, B ${new Date(bAt).toISOString()} (card order is authoritative)`
+      }
+    }
+    if (state.shotsEnabled) {
+      const cardRect = await page.eval(() => {
+        const panel = document.querySelector('.psd-panel')
+        if (panel === null) return null
+        const rect = panel.getBoundingClientRect()
+        return { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.min(Math.round(rect.height), 380) }
+      })
+      if (cardRect !== null) {
+        const file = await writeClipShot(page, 'pin-r3-two-pinned', {
+          x: cardRect.left - 6,
+          y: cardRect.top - 6,
+          width: cardRect.width + 12,
+          height: cardRect.height + 12,
+        })
+        if (file !== null) state.screenshots.push(file)
+      }
+    }
+    return `pinned order ${aPinnedIndex + 1} < ${bPinnedIndex + 1}: "${short(targetA.title, 30)}" before "${short(second.title, 30)}"${activityNote}`
+  })
+
+  await results.check('r3-6', 'pinned rows stay pinned-first after a full reload (same-profile pin document persistence)', async () => {
+    const ours = [...state.pinned]
+    assertEqual(ours.length, 2, 'the reload-persistence check needs both pins from r3-3/r3-5')
+    await reloadFresh(page)
+    await ensureAppReady(page)
+    await ensurePanelRows(page)
+    const deadline = Date.now() + 15000
+    let pin = null
+    let settled = false
+    while (Date.now() < deadline) {
+      pin = await readCardPinState(page).catch(() => null)
+      if (pin !== null) {
+        const rows = pin.rows
+        const oursPinned = rows.filter((row) => row.pinned === 'true' && ours.some((entry) => entry.title === row.title))
+        const firstUnpinned = rows.findIndex((row) => row.pinned !== 'true')
+        const prefixOk = firstUnpinned === -1 ? true : rows.slice(0, firstUnpinned).every((row) => row.pinned === 'true')
+        if (oursPinned.length === ours.length && prefixOk) {
+          settled = true
+          break
+        }
+      }
+      await sleep(300)
+    }
+    assert(pin !== null, 'the card did not render after the reload')
+    assert(settled, `the reloaded page did not restore both pins pinned-first within 15 s (rows ${short(JSON.stringify((pin?.rows ?? []).map((row) => `${row.title}${row.pinned === 'true' ? '*' : ''}`)), 280)})`)
+    const rows = pin.rows
+    const pinnedRows = rows.filter((row) => row.pinned === 'true')
+    const aPinnedIndex = pinnedRows.findIndex((row) => row.title === state.pinTargetA.title)
+    const bPinnedIndex = pinnedRows.findIndex((row) => row.title === state.pinTargetB.title)
+    assert(aPinnedIndex >= 0 && bPinnedIndex >= 0, 'a pinned row lost its pin across the reload')
+    assert(aPinnedIndex < bPinnedIndex,
+      `the restored pinned order must keep newest activity first (pinned ${short(JSON.stringify(pinnedRows.map((row) => row.title)), 240)})`)
+    const live = await readLiveSnapshot(page)
+    if (live.ok && Array.isArray(live.pinnedIds)) {
+      for (const entry of ours) assert(live.pinnedIds.includes(entry.id), `the live card pin snapshot lost the pinned id ${entry.id} across the reload`)
+    }
+    // The reload can only survive through the card's own localStorage document.
+    const pinDocument = await readPinDocument(page)
+    assertEqual(pinDocument.ok, true, `the pin document cannot be read after the reload: ${short(pinDocument.reason || 'unknown')}`)
+    const parsed = parsePinDocument(pinDocument.raw)
+    assert(parsed !== null, `the pin document must survive the reload as the versioned JSON document, got ${short(pinDocument.raw, 160)}`)
+    for (const entry of ours) assert(parsed.pinned.includes(entry.id), `the pin document lost the pinned id ${entry.id} across the reload (pinned ${short(JSON.stringify(parsed.pinned), 200)})`)
+    // And the native sidebar pin state must still be untouched for both Sessions.
+    for (const [label, entry] of [['A', state.pinTargetA], ['B', state.pinTargetB]]) {
+      if (typeof entry.nativePinCount !== 'number') continue
+      const native = await readNativePinState(page, entry.id)
+      if (native !== null) {
+        assertEqual(native.pin.length, entry.nativePinCount,
+          `the reload must not change the native sidebar pin state for Session ${label} (${entry.nativePinCount} -> ${native.pin.length})`)
+      }
+    }
+    if (state.shotsEnabled) {
+      const cardRect = await page.eval(() => {
+        const panel = document.querySelector('.psd-panel')
+        if (panel === null) return null
+        const rect = panel.getBoundingClientRect()
+        return { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.min(Math.round(rect.height), 380) }
+      })
+      if (cardRect !== null) {
+        const file = await writeClipShot(page, 'pin-r3-reloaded', {
+          x: cardRect.left - 6,
+          y: cardRect.top - 6,
+          width: cardRect.width + 12,
+          height: cardRect.height + 12,
+        })
+        if (file !== null) state.screenshots.push(file)
+      }
+    }
+    await resetPointer(page)
+    return `reloaded: pinned prefix ${short(JSON.stringify(pinnedRows.map((row) => row.title)), 180)}; A<B order preserved; pin document kept both ids`
+  })
+
+  await results.check('r3-7', 'unpinning removes the tint/marker and returns the row to the normal queue immediately', async () => {
+    const targetA = state.pinTargetA
+    const targetB = state.pinTargetB
+    assert(targetA !== undefined && targetB !== undefined, 'the two pin targets are not available (earlier checks failed)')
+    const unpinnedA = await clickRowPin(page, targetA.title, 'unpin')
+    assertEqual(unpinnedA.row.pinned, null, 'data-pinned must be removed from the row after unpinning')
+    assertEqual(unpinnedA.row.ariaPressed, 'false', 'aria-pressed must flip back to false after unpinning')
+    assert(/^(Pin session|固定会话)$/.test(unpinnedA.row.ariaLabel ?? ''),
+      `the unpinned pin must offer the localised pin label, got ${JSON.stringify(unpinnedA.row.ariaLabel)}`)
+    await resetPointer(page)
+    const calmA = await readRowPinState(page, targetA.title)
+    assertEqual(calmA.row.opacity, '0', 'the unpinned pin must hide when the pointer is away')
+    assertEqual(calmA.row.visibility, 'hidden', 'the unpinned pin must be visibility:hidden when the pointer is away')
+    assertEqual(calmA.row.rowBackground, targetA.rowBackgroundBefore,
+      `the violet row tint must be gone after unpinning (row background ${calmA.row.rowBackground}, normal ${targetA.rowBackgroundBefore})`)
+    let pin = await readCardPinState(page)
+    let rows = pin.rows
+    const firstUnpinned = rows.findIndex((row) => row.pinned !== 'true')
+    assert(firstUnpinned >= 0, 'no unpinned row remains after the first unpin')
+    assertEqual(rows[firstUnpinned].title, targetA.title,
+      `the unpinned row must return to the head of the normal queue immediately (first unpinned is "${short(rows[firstUnpinned].title, 40)}")`)
+    assert(rows.some((row) => row.pinned === 'true' && row.title === targetB.title), 'the second pinned row must stay pinned')
+    const nativeA = await readNativePinState(page, targetA.id)
+    if (nativeA !== null && typeof targetA.nativePinCount === 'number') {
+      assertEqual(nativeA.pin.length, targetA.nativePinCount,
+        `unpinning in the card must not touch the native sidebar pin state (native markers ${targetA.nativePinCount} -> ${nativeA.pin.length})`)
+    }
+    const unpinnedB = await clickRowPin(page, targetB.title, 'unpin')
+    assertEqual(unpinnedB.row.pinned, null, 'the second row must be unpinned')
+    await resetPointer(page)
+    pin = await readCardPinState(page)
+    rows = pin.rows
+    assertEqual(rows.filter((row) => row.pinned === 'true').length, state.pinBaseline.pinnedTitles.length,
+      `the pinned count must return to the baseline ${state.pinBaseline.pinnedTitles.length} (found ${rows.filter((row) => row.pinned === 'true').length})`)
+    const normalRows = rows.filter((row) => row.pinned !== 'true')
+    const indexA = normalRows.findIndex((row) => row.title === targetA.title)
+    const indexB = normalRows.findIndex((row) => row.title === targetB.title)
+    assert(indexA >= 0 && indexB >= 0, 'both unpinned rows must be back in the normal queue')
+    assert(indexA < indexB, `the normal-queue order must keep newest activity first ("${short(targetA.title, 30)}" ${indexA} before "${short(targetB.title, 30)}" ${indexB})`)
+    const nativeB = await readNativePinState(page, targetB.id)
+    if (nativeB !== null && typeof targetB.nativePinCount === 'number') {
+      assertEqual(nativeB.pin.length, targetB.nativePinCount,
+        `the second unpin must not touch the native sidebar pin state (native markers ${targetB.nativePinCount} -> ${nativeB.pin.length})`)
+    }
+    state.pinned = state.pinned.filter((entry) => entry.id !== targetA.id && entry.id !== targetB.id)
+    // The card's own pin document must no longer list the run's ids.
+    const pinDocument = await readPinDocument(page)
+    const parsed = parsePinDocument(pinDocument.raw)
+    if (parsed !== null) {
+      assert(!parsed.pinned.includes(targetA.id), `the card pin document still lists the unpinned id ${targetA.id} (${short(pinDocument.raw, 200)})`)
+      assert(!parsed.pinned.includes(targetB.id), `the card pin document still lists the unpinned id ${targetB.id} (${short(pinDocument.raw, 200)})`)
+      assertEqual(parsed.version, 1, 'the pin document version must stay 1')
+    }
+    const live = await readLiveSnapshot(page)
+    if (live.ok && Array.isArray(live.pinnedIds)) {
+      assert(!live.pinnedIds.includes(targetA.id), `the live card pin snapshot still lists the unpinned id ${targetA.id}`)
+      assert(!live.pinnedIds.includes(targetB.id), `the live card pin snapshot still lists the unpinned id ${targetB.id}`)
+    }
+    await resetPointer(page)
+    return `unpinned both: tint/marker gone, first normal-queue row was "${short(targetA.title, 36)}", pinned count back to baseline ${state.pinBaseline.pinnedTitles.length}, pin document ${short(pinDocument.raw, 120)}`
+  })
+}
+
+// ---------------------------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------------------------
 
@@ -3758,7 +5408,7 @@ async function run() {
     chrome = await launchChrome(opts)
     log(`chrome: headless pid ${chrome.proc.pid}, CDP port ${chrome.port}`)
     const cdp = await CdpConnection.connect(chrome.wsUrl)
-    page = await Page.open(cdp, url, injectorSource(clientSource))
+    page = await Page.open(cdp, url, injectorSource(clientSource), { trackNetwork: opts.mode === 'pin' })
     log('page: opened, waiting for the DSH shell…')
 
     await runSmoke({ page, results, state })
@@ -3778,6 +5428,12 @@ async function run() {
         const shots = await captureScreenshots(page, state)
         state.screenshots = shots
         for (const file of shots) log(`wrote ${file}`)
+      }
+    } else if (opts.mode === 'pin') {
+      try {
+        await runPinChecks({ page, results, state })
+      } finally {
+        await cleanupPinnedSessions(page, state)
       }
     }
   } catch (error) {
@@ -3808,6 +5464,18 @@ async function run() {
   for (const error of pageErrors.slice(0, 8)) log(`  ! ${error}`)
   log(`non-JS console/log errors: ${page !== null ? page.logEntries.length : 0}`)
   for (const entry of (page !== null ? page.logEntries : []).slice(0, 8)) log(`  ! ${entry}`)
+  if (page !== null && page.networkFailures !== undefined) {
+    log(`network domain: ${page.networkEnabled === true ? 'ENABLED' : `NOT ENABLED — ${page.networkError || 'unknown error'}`}`)
+    log(`real network failures: ${page.networkFailures.length}`)
+    for (const failure of page.networkFailures.slice(0, 8)) log(`  ! ${failure}`)
+    log(`ignored network noise: ${page.ignoredNetworkNoise ?? 0}`)
+    if (page.networkEnabled !== true) exitCode = exitCode || 1
+    if (page.networkFailures.length > 0) exitCode = exitCode || 1
+  }
+  if (state.mode === 'pin') {
+    log(`pin baseline: pinned main rows ${state.pinBaseline?.pinnedTitles?.length ?? 'n/a'}; card pinnedIds ${short(JSON.stringify(state.pinBaseline?.pinnedIds ?? null), 200)}; pin document ${short(state.pinBaseline?.pinDocumentRaw ?? null, 200)}`)
+    log(`pin cleanup: ${state.pinCleanup ? short(JSON.stringify(state.pinCleanup), 1200) : 'not run'}`)
+  }
   if (state.screenshots.length > 0) log(`screenshots: ${state.screenshots.join(', ')}`)
   log(`elapsed: ${((Date.now() - started) / 1000).toFixed(1)}s`)
   if (fatal !== null) log(`fatal: ${short(fatal.message || String(fatal), 600)}`)

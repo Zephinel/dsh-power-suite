@@ -4420,6 +4420,24 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** localStorage key holding the two bucket fold states. */
     const DW_FOLD_KEY = 'power-suite.dynamic-workspaces.folds'
 
+    /**
+     * localStorage key holding the card's own pinned main-Session ids.
+     *
+     * The card pin is a state of this panel only: the user asked for "keep this
+     * Session at the top of Running & recent instead of letting time retire it",
+     * so it must not import the native sidebar's independent pin set (an old
+     * project-organisation pin would otherwise surface here forever). It is
+     * stored per browser like the fold states; the read-ack document stays the
+     * only Host-shared session state of this feature.
+     */
+    const DW_PIN_KEY = 'power-suite.dynamic-workspaces.pinned'
+
+    /** Schema version of the persisted pin document. */
+    const DW_PIN_VERSION = 1
+
+    /** Most pinned Session ids one document keeps; the oldest pin drops first. */
+    const DW_PIN_LIMIT = 200
+
     /** Highest number of rows the summary card lists before "view all". */
     const DW_PANEL_LIMIT = 5
 
@@ -4465,6 +4483,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     const DW_ROBOT_2_LINE = 'M13.5 2C13.5 2.44425 13.3069 2.84339 13 3.11805V5H18C19.6569 5 21 6.34315 21 8V18C21 19.6569 19.6569 21 18 21H6C4.34315 21 3 19.6569 3 18V8C3 6.34315 4.34315 5 6 5H11V3.11805C10.6931 2.84339 10.5 2.44425 10.5 2C10.5 1.17157 11.1716 0.5 12 0.5C12.8284 0.5 13.5 1.17157 13.5 2ZM6 7C5.44772 7 5 7.44772 5 8V18C5 18.5523 5.44772 19 6 19H18C18.5523 19 19 18.5523 19 18V8C19 7.44772 18.5523 7 18 7H13H11H6ZM2 10H0V16H2V10ZM22 10H24V16H22V10ZM9 14.5C9.82843 14.5 10.5 13.8284 10.5 13C10.5 12.1716 9.82843 11.5 9 11.5C8.17157 11.5 7.5 12.1716 7.5 13C7.5 13.8284 8.17157 14.5 9 14.5ZM15 14.5C15.8284 14.5 16.5 13.8284 16.5 13C16.5 12.1716 15.8284 11.5 15 11.5C14.1716 11.5 13.5 12.1716 13.5 13C13.5 13.8284 14.1716 14.5 15 14.5Z'
     const DW_NEW_CHAT_LINE = 'M6.455 19L2 22.5V4C2 2.89543 2.89543 2 4 2H20C21.1046 2 22 2.89543 22 4V18C22 19.1046 21.1046 20 20 20H6.455ZM4 4V18.385L5.763 17H20V4H4ZM11 10V7H13V10H16V12H13V15H11V12H8V10H11Z'
     const DW_SPARKLING_LINE = 'M14 4.4375C15.3462 4.4375 16.4375 3.34619 16.4375 2H17.5625C17.5625 3.34619 18.6538 4.4375 20 4.4375V5.5625C18.6538 5.5625 17.5625 6.65381 17.5625 8H16.4375C16.4375 6.65381 15.3462 5.5625 14 5.5625V4.4375ZM1 11C4.31371 11 7 8.31371 7 5H9C9 8.31371 11.6863 11 15 11V13C11.6863 13 9 15.6863 9 19H7C7 15.6863 4.31371 13 1 13V11ZM4.87601 12C6.18717 12.7276 7.27243 13.8128 8 15.124 8.72757 13.8128 9.81283 12.7276 11.124 12 9.81283 11.2724 8.72757 10.1872 8 8.87601 7.27243 10.1872 6.18717 11.2724 4.87601 12ZM17.25 14C17.25 15.7949 15.7949 17.25 14 17.25V18.75C15.7949 18.75 17.25 20.2051 17.25 22H18.75C18.75 20.2051 20.2051 18.75 22 18.75V17.25C20.2051 17.25 18.75 15.7949 18.75 14H17.25Z'
+    // Pin glyph pair for the running card's rows: the shell's own Pin components
+    // when the seeded primitives expose them (the native Session-row pin button
+    // uses the same pair, so the marker matches the sidebar exactly), with an
+    // inline fallback for an older shell. The fallback paths are copied from the
+    // shell icon set (16 viewBox): `pin-fill` and `pin-outline`.
+    const DW_PIN_FILL = typeof uiPrimitives.IconPinFillRegular === 'function' ? uiPrimitives.IconPinFillRegular : null
+    const DW_PIN_OUTLINE = typeof uiPrimitives.IconPinOutlineRegular === 'function' ? uiPrimitives.IconPinOutlineRegular : null
+    const DW_PIN_PATH = 'M9.96976 1.70572L13.1554 3.93629L10.9019 8.12317L11.5158 11.605L10.7192 12.7427L2.52767 7.00693L3.3243 5.86922L6.80612 5.25528L9.96976 1.70572Z'
+    const DW_PIN_NEEDLE_PATH = 'M6.05285 9.47511C6.27284 9.16094 6.70586 9.08458 7.02003 9.30457C7.3342 9.52455 7.41055 9.95757 7.19057 10.2717L3.98587 14.4708L3.21223 13.9291L6.05285 9.47511Z'
 
     const DW_EN = {
       'panel.title': 'Running & recent',
@@ -4488,6 +4515,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'hover.subagentsOne': '1 subagent',
       'hover.open': 'Click to open',
       'hover.newSession': 'New session in this directory',
+      'pin.pin': 'Pin session',
+      'pin.unpin': 'Unpin session',
       'stats.title': 'Session statistics',
       'stats.counts': '{turns} turns {steps} steps',
       'stats.llmTime': 'LLM time',
@@ -4548,6 +4577,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'hover.subagentsOne': '1 个子代理',
       'hover.open': '点击打开',
       'hover.newSession': '在相同目录新建 Session',
+      'pin.pin': '固定会话',
+      'pin.unpin': '取消固定',
       'stats.title': '会话统计',
       'stats.counts': '{turns} 轮 {steps} 步',
       'stats.llmTime': '模型用时',
@@ -4619,17 +4650,36 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-panel-empty strong{color:var(--dsw-alias-label-secondary);font-weight:500}
 .psd-item{display:flex;flex-direction:column;min-width:0}
 .psd-run{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:28px;padding:0 0 0 7px;border-radius:var(--dsw-radius-md,8px);cursor:pointer}
-.psd-run-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;padding:4px 10px 4px 14px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-run-main{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:8px;padding:4px 10px 4px 14px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-run:hover:not(:has(.psd-run-toggle:hover)) .psd-run-main{background-color:var(--dsw-alias-interactive-bg-hover)}
-.psd-run-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psd-run-open{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:100%;align-items:center;padding:0;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-run-open:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px;border-radius:var(--dsw-radius-sm,6px)}
 .psd-run-spacer,.psd-child-spacer{flex:1 1 auto;min-width:0}
 .psd-run-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
-.psd-run-head{display:flex;align-items:center;gap:8px;min-width:0;flex:0 1 auto}
+.psd-run-head{display:flex;align-items:center;gap:8px;min-width:0;flex:none}
 .psd-run-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
 .psd-run-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
 .psd-run-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap;color:var(--dsw-alias-label-primary);font-size:14px;line-height:20px}
 [data-clipped='true'].psd-run-title,[data-clipped='true'].psd-child-title{mask-image:linear-gradient(to right,#000 calc(100% - var(--psd-title-fade,28px)),#0000)}
+/* Pin slot: a fixed 16 px cell between the leading state glyph and the title.
+   It is always in the DOM (only opacity/visibility change), so revealing the
+   button on hover never shifts the title or any trailing column. The pinned
+   state keeps the filled violet marker visible without hover but leaves it
+   non-interactive until the row is hovered or focused; the row itself gets a
+   faint violet tint so "why is this at the top" stays readable after the
+   pointer leaves. */
+.psd-run-pin-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:16px;height:20px;margin-inline-end:-4px}
+.psd-run-pin{appearance:none;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:16px;height:16px;padding:0;border:0;border-radius:var(--dsw-radius-xs,4px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;opacity:0;visibility:hidden;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease),background-color 120ms var(--ds-ease-in-out,ease)}
+.psd-run:hover .psd-run-pin,.psd-run:focus-within .psd-run-pin{opacity:1;visibility:visible;pointer-events:auto}
+.psd-run-pin:hover{background-color:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.psd-run-pin:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psd-run[data-pinned='true']{background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,transparent)}
+.psd-run[data-pinned='true'] .psd-run-main{background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 6%,transparent)}
+.psd-run[data-pinned='true'] .psd-run-pin{opacity:1;visibility:visible;pointer-events:none;color:var(--dsw-alias-state-business-primary)}
+.psd-run[data-pinned='true']:hover .psd-run-pin,.psd-run[data-pinned='true']:focus-within .psd-run-pin{pointer-events:auto}
+.psd-run[data-pinned='true']:hover .psd-run-main{background-color:var(--dsw-alias-interactive-bg-hover)}
+@media (prefers-reduced-motion: reduce){.psd-run-pin{transition:none}}
 .psd-run-toggle{appearance:none;position:relative;z-index:1;flex:none;width:var(--psd-chevron-col,24px);height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .psd-run-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-run-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
@@ -4655,12 +4705,17 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-hovercard-path{color:#cfd3d6;font-size:12px;line-height:16px;white-space:normal;word-break:break-all;overflow-wrap:anywhere;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
 .psd-hovercard-time{color:#cfd3d6;font-size:12px;line-height:16px}
 .psd-hovercard-status{display:flex;align-items:center;gap:8px;color:#adb2b8;font-size:12px;line-height:20px}
-.psd-hovercard-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--dsw-alias-state-business-primary)}
+.psd-hovercard-dot{flex:none;width:10px;height:10px;border-radius:50%;corner-shape:round;background:var(--dsw-alias-state-business-primary)}
 .psd-hovercard-dot[data-state='done']{background:var(--dsw-alias-state-success-primary)}
 .psd-hovercard-row{display:flex;gap:8px;min-width:0;font-size:12px;line-height:16px}
 .psd-hovercard-key{flex:none;color:#adb2b8}
 .psd-hovercard-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#cfd3d6}
 .psd-hovercard-section{display:flex;flex-direction:column;gap:2px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12)}
+/* Native sidebar Session hover card: the figures slot's single wrapper (the
+   shell's hover content is a flex column with an 8 px gap, so the wrapper
+   reproduces the running card's section rhythm). Empty = hidden. */
+.psd-native-hover-figures{display:flex;flex-direction:column;gap:8px;min-width:0}
+.psd-native-hover-figures:empty{display:none}
 .psd-hovercard-section-head{display:flex;align-items:baseline;gap:8px;min-width:0;font-size:12px;line-height:16px}
 .psd-hovercard-section-title{flex:none;color:#fff}
 .psd-hovercard-section-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#cfd3d6;font-variant-numeric:tabular-nums}
@@ -5448,6 +5503,124 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
+     * Pinned main-Session ids from a document carrying `pinnedSessionIds`.
+     *
+     * The card's own pin document (localStorage) and any Workspaces snapshot the
+     * card reads share this shape, so one sanitizer serves both: only non-empty
+     * string ids are kept and each id appears once. The card deliberately pins
+     * only its own set; see {@link DW_PIN_KEY}.
+     * @param {object | undefined} snapshot - document with a `pinnedSessionIds` list.
+     * @returns {Set<string>} valid pinned Session ids.
+     */
+    function dwPinnedSessionIds(snapshot) {
+      const pinned = new Set()
+      const source = snapshot !== null && typeof snapshot === 'object' && Array.isArray(snapshot.pinnedSessionIds)
+        ? snapshot.pinnedSessionIds
+        : []
+      for (const id of source) {
+        if (typeof id === 'string' && id.length > 0) pinned.add(id)
+      }
+      return pinned
+    }
+
+    /**
+     * One card row for a pinned main Session that is not running and outside the
+     * finished-retention window: the pinned "never retires" case. The row keeps
+     * the Session's own effective end time, so unpinning re-derives it with the
+     * current rules instead of restarting a timer or resetting the end time.
+     * @param {object} summary - Session summary.
+     * @param {object | null} owner - owning Workspace row.
+     * @param {string} id - Session id.
+     * @param {Function} t - dynamic-Workspaces translate.
+     * @param {number} updatedAt - effective last-activity time.
+     * @returns {object} row.
+     */
+    function dwPinnedRow(summary, owner, id, t, updatedAt) {
+      return {
+        id,
+        title: typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0 ? summary.displayTitle : id,
+        workspace: owner === null ? t('group.ungrouped') : dwWorkspaceLabel(owner, t),
+        workspacePath: owner !== null && typeof owner.path === 'string' ? owner.path : '',
+        workspaceId: owner !== null ? owner.workspaceId : null,
+        cwd: typeof summary.cwd === 'string' && summary.cwd.length > 0 ? summary.cwd : null,
+        updatedAt,
+        subagents: 0,
+        state: 'done',
+        pinned: true
+      }
+    }
+
+    /**
+     * Combine the card's derived rows with the pinned main Sessions.
+     *
+     * Pinned rows always lead the card, newest activity first, and are listed
+     * regardless of the running / finished-retention window: the card's pin is a
+     * "keep this here" state, so time never retires it. The remaining rows
+     * keep exactly the existing running-then-recent order. Pinned running rows
+     * keep their running state and subagent count; a pinned finished Session
+     * outside the retention window is listed with `state:'done'` and its own
+     * original end time (unpin uses the same facts to re-derive the row by the
+     * ordinary rules). Blank, archived, subagent, and unknown Sessions are never
+     * listed, exactly like the ordinary card rows.
+     * @param {object} input - derivation input.
+     * @param {object} input.list - Session list state (`ids`, `byId`).
+     * @param {Map | undefined} input.statuses - live Session status snapshot.
+     * @param {readonly object[]} input.workspaces - Workspace rows.
+     * @param {Function} input.t - dynamic-Workspaces translate.
+     * @param {Map<string, number> | undefined} input.runningParents - parent id → running child count.
+     * @param {Set<string>} input.archived - archived Session ids.
+     * @param {Record<string, number>} input.activity - true last-activity map.
+     * @param {Set<string>} input.pinnedIds - pinned main Session ids.
+     * @param {Array<object>} input.runningRows - rows from {@link dwRunningRows}.
+     * @param {Array<object>} input.recentRows - rows from {@link dwRecentRows}.
+     * @returns {Array<object>} card rows, pinned first.
+     */
+    function dwPinPanelRows(input) {
+      const {
+        list, statuses, workspaces, t, runningParents, archived, activity, pinnedIds, runningRows, recentRows
+      } = input
+      const runningById = new Map(runningRows.map((row) => [row.id, row]))
+      const recentById = new Map(recentRows.map((row) => [row.id, row]))
+      const pinnedRows = []
+      if (list !== null && typeof list === 'object' && list.byId !== undefined && Array.isArray(list.ids)) {
+        for (const id of list.ids) {
+          if (!pinnedIds.has(id)) continue
+          const running = runningById.get(id)
+          if (running !== undefined) {
+            pinnedRows.push({ ...running, pinned: true })
+            continue
+          }
+          const recent = recentById.get(id)
+          if (recent !== undefined) {
+            pinnedRows.push({ ...recent, pinned: true })
+            continue
+          }
+          const summary = list.byId[id]
+          if (summary === undefined || summary.blank === true || summary.origin === 'subagent') continue
+          if (archived.has(id)) continue
+          const owner = dwOwningWorkspace(id, workspaces)
+          const row = dwPinnedRow(
+            summary,
+            owner,
+            id,
+            t,
+            dwEffectiveUpdatedAt(activity, id, summary)
+          )
+          const runningNow = dwSessionRunning(id, summary, statuses) || runningParents.has(id)
+          row.state = runningNow ? 'running' : 'done'
+          row.subagents = runningNow ? (runningParents.get(id) ?? 0) : 0
+          pinnedRows.push(row)
+        }
+      }
+      pinnedRows.sort((left, right) => right.updatedAt - left.updatedAt)
+      const ordinary = runningRows
+        .filter((row) => !pinnedIds.has(row.id))
+        .concat(recentRows.filter((row) => !pinnedIds.has(row.id)))
+        .map((row) => ({ ...row, pinned: false }))
+      return pinnedRows.concat(ordinary)
+    }
+
+    /**
      * Sessions that keep a Workspace Active: running now, or last active
      * inside the retention window.
      * @param {object} list - Session list state.
@@ -5504,6 +5677,39 @@ function dwClearNativeAtmospheres() {
     function dwWriteFolds(folds) {
       try {
         window.localStorage.setItem(DW_FOLD_KEY, JSON.stringify({ active: folds.active, inactive: folds.inactive }))
+      } catch {
+        // A storage-denied browser keeps the in-memory state only.
+      }
+    }
+
+    /**
+     * Read the persisted pinned main-Session ids of the card. A corrupt,
+     * missing, or storage-denied document reads as empty; the read is sanitized
+     * and deduplicated through {@link dwPinnedSessionIds}.
+     * @returns {string[]} pinned Session ids, oldest pin first.
+     */
+    function dwReadPinnedIds() {
+      try {
+        const raw = window.localStorage.getItem(DW_PIN_KEY)
+        if (raw === null) return []
+        const value = JSON.parse(raw)
+        const source = value !== null && typeof value === 'object' && Array.isArray(value.pinned) ? value.pinned : []
+        return [...dwPinnedSessionIds({ pinnedSessionIds: source })]
+      } catch {
+        return []
+      }
+    }
+
+    /**
+     * Persist the card's pinned Session ids. The document is bounded; dropping
+     * the oldest pin first keeps it small without ever losing a recent one.
+     * @param {readonly string[]} ids - pinned Session ids, oldest pin first.
+     * @returns {void}
+     */
+    function dwWritePinnedIds(ids) {
+      try {
+        const bounded = ids.length > DW_PIN_LIMIT ? ids.slice(ids.length - DW_PIN_LIMIT) : ids
+        window.localStorage.setItem(DW_PIN_KEY, JSON.stringify({ version: DW_PIN_VERSION, pinned: bounded }))
       } catch {
         // A storage-denied browser keeps the in-memory state only.
       }
@@ -6168,6 +6374,79 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
+     * Inline copy of the shell's pin glyph pair (16 viewBox), used only when the
+     * seeded primitives do not expose `IconPinFillRegular` / `IconPinOutlineRegular`
+     * (older shell). The filled variant paints the head; the outline variant keeps
+     * it hollow but both share the needle.
+     * @param {object} props - glyph props.
+     * @param {boolean} props.filled - filled head or outline head.
+     * @param {number} [props.size] - rendered square size in px.
+     * @returns {object} the svg element.
+     */
+    function DwPinGlyph({ filled, size }) {
+      const length = typeof size === 'number' && Number.isFinite(size) ? size : 14
+      return React.createElement('svg', {
+        width: length,
+        height: length,
+        viewBox: '0 0 16 16',
+        fill: 'none',
+        'aria-hidden': true,
+        focusable: 'false'
+      },
+      React.createElement('path', {
+        d: DW_PIN_PATH,
+        fill: filled ? 'currentColor' : 'none',
+        stroke: 'currentColor',
+        strokeWidth: 1.25,
+        strokeLinejoin: 'round'
+      }),
+      React.createElement('path', { d: DW_PIN_NEEDLE_PATH, fill: 'currentColor' }))
+    }
+
+    /**
+     * Pin toggle in a main row's reserved title-left slot.
+     *
+     * The slot itself is the fixed geometry: CSS keeps its 16 px width in every
+     * state and only toggles the button's opacity/visibility, so revealing or
+     * hiding the control never moves the title or any trailing column. The filled
+     * violet marker stays visible on a pinned row after the pointer leaves
+     * (`pointer-events:none` until hover/focus) so the reason the row sits at the
+     * top is still readable.
+     * @param {object} props - component props.
+     * @param {Function} props.t - dynamic-Workspaces translate.
+     * @param {boolean} props.pinned - whether the Session is pinned.
+     * @param {Function} props.onToggle - toggle callback.
+     * @returns {object} the slot element.
+     */
+    function DwPinSlot({ t, pinned, onToggle }) {
+      const label = t(pinned ? 'pin.unpin' : 'pin.pin')
+      const glyph = pinned
+        ? (DW_PIN_FILL === null
+            ? React.createElement(DwPinGlyph, { filled: true })
+            : React.createElement(DW_PIN_FILL, { size: 14 }))
+        : (DW_PIN_OUTLINE === null
+            ? React.createElement(DwPinGlyph, { filled: false })
+            : React.createElement(DW_PIN_OUTLINE, { size: 14 }))
+      return React.createElement('span', {
+        className: 'psd-run-pin-slot',
+        'data-pinned': pinned ? 'true' : undefined
+      },
+      React.createElement('button', {
+        type: 'button',
+        className: 'psd-run-pin',
+        'aria-pressed': pinned ? 'true' : 'false',
+        'aria-label': label,
+        title: label,
+        'data-pinned': pinned ? 'true' : undefined,
+        onClick: (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onToggle()
+        }
+      }, glyph))
+    }
+
+    /**
      * One native-figure section of the row hover card: a header line (label plus
      * a right-aligned headline value) and right-aligned key/value rows, matching
      * the shell's Session-statistics dialog list.
@@ -6258,13 +6537,14 @@ function dwClearNativeAtmospheres() {
       const {
         t, rows, expanded, showAll, now, durations, childrenByParent, collapsedParents, acked,
         onToggle, onToggleAll, onToggleChildren, onOpen, interruptedT, onNewSession, currentSessionId,
-        projections, onEnsureProjections
+        projections, onEnsureProjections, pinnedIds, onTogglePin
       } = props
       const visible = expanded && !showAll ? rows.slice(0, DW_PANEL_LIMIT) : rows
       const canExpand = rows.length > DW_PANEL_LIMIT
       const anyRunning = rows.some((row) => row.state === 'running')
       const isRead = (sessionId, updatedAt) => dwIsAcked(acked, sessionId, updatedAt)
       const isCurrent = (sessionId) => typeof currentSessionId === 'string' && sessionId === currentSessionId
+      const isPinned = (row) => row.pinned === true || (pinnedIds !== null && pinnedIds !== undefined && typeof pinnedIds.has === 'function' && pinnedIds.has(row.id))
       // Card rows share the suite's interruption records; the rows also exist in
       // the native sidebar, whose badge seats already pull them, but ensuring and
       // watching here keeps this card correct on its own after a reconnect.
@@ -6497,6 +6777,7 @@ function dwClearNativeAtmospheres() {
             const collapsed = collapsedParents.has(row.id)
             const hasChildren = rowChildren.length > 0
             const interrupted = rowInterrupted(row.id)
+            const pinned = isPinned(row)
             // Fixed trailing columns, left to right: time 48 px, action 22 px,
             // disclosure 24 px, each separated by the 2 px row gap. Every parent
             // and child row reserves all three (child rows keep the action and
@@ -6511,6 +6792,7 @@ function dwClearNativeAtmospheres() {
             React.createElement('div', {
               className: isCurrent(row.id) ? 'psd-run psd-run-current' : 'psd-run',
               'data-state': row.state,
+              'data-pinned': pinned ? 'true' : undefined,
               'aria-current': isCurrent(row.id) ? 'true' : undefined,
               'data-actions': interrupted ? 'continue+new' : 'new',
               onClick: (event) => {
@@ -6522,15 +6804,7 @@ function dwClearNativeAtmospheres() {
               onMouseLeave: hideHover
             },
               isCurrent(row.id) ? React.createElement(DwAtmosphere, { key: 'atmos' }) : null,
-              React.createElement('button', {
-                type: 'button',
-                className: 'psd-run-main',
-                'aria-current': isCurrent(row.id) ? 'true' : undefined,
-                'aria-label': t('panel.open', { title: row.title }),
-                onClick: () => onOpen(row.id),
-                onFocus: (event) => showHover(row, event.currentTarget),
-                onBlur: hideHover
-              },
+              React.createElement('div', { className: 'psd-run-main' },
               React.createElement('span', { className: 'psd-run-head' },
                 running
                   ? React.createElement(StateDot, { state: 'ongoing', size: 14, className: 'psd-run-glyph' })
@@ -6545,8 +6819,25 @@ function dwClearNativeAtmospheres() {
                     'aria-label': interruptedT('badge.aria'),
                     title: interruptedTitle(row.id)
                   }, RemixGlyph(REMIX_WARNING_FILL, 13))
-                  : null,
-                React.createElement('span', { className: 'psd-run-title' }, row.title))),
+                  : null),
+              React.createElement(DwPinSlot, {
+                key: 'pin',
+                t,
+                pinned,
+                onToggle: () => onTogglePin(row.id)
+              }),
+              React.createElement('button', {
+                type: 'button',
+                className: 'psd-run-open',
+                'aria-current': isCurrent(row.id) ? 'true' : undefined,
+                'aria-label': t('panel.open', { title: row.title }),
+                onClick: (event) => {
+                  event.stopPropagation()
+                  onOpen(row.id)
+                },
+                onFocus: (event) => showHover(row, event.currentTarget),
+                onBlur: hideHover
+              }, React.createElement('span', { className: 'psd-run-title' }, row.title))),
               React.createElement('span', { key: 'spacer', className: 'psd-run-spacer', 'aria-hidden': true }),
               interrupted
                 ? React.createElement(DwContinueAction, {
@@ -6913,6 +7204,32 @@ function dwClearNativeAtmospheres() {
         })
       }, [parentSessions, uiWorkspace])
 
+      // The card pin is this panel's own fixed state: it keeps a main Session at
+      // the top of Running & recent instead of letting the retention window retire
+      // it. It is deliberately independent from the native sidebar pin (a
+      // project-organisation pin the Host persists for the Workspaces browser):
+      // an old sidebar pin must not surface here forever, and pinning here must
+      // not reorder the user's project lists. Like the bucket folds it persists
+      // per browser; the read-ack document stays the only Host-shared state.
+      const [pinnedIdList, setPinnedIdList] = React.useState(dwReadPinnedIds)
+      const pinnedIds = React.useMemo(
+        () => dwPinnedSessionIds({ pinnedSessionIds: pinnedIdList }),
+        [pinnedIdList]
+      )
+      // Persist outside the state updater (updaters must stay pure and React may
+      // replay them); the document is tiny and rewrite-on-change is idempotent.
+      React.useEffect(() => {
+        dwWritePinnedIds(pinnedIdList)
+      }, [pinnedIdList])
+      const togglePin = React.useCallback((sessionId) => {
+        if (typeof sessionId !== 'string' || sessionId.length === 0) return
+        setPinnedIdList((previous) => (
+          previous.includes(sessionId)
+            ? previous.filter((id) => id !== sessionId)
+            : previous.concat(sessionId)
+        ))
+      }, [])
+
       const runningParents = dwRunningSubagentParents(sessions, statuses)
       const workspaces = workspaceSnapshot?.items ?? []
       const archivedIds = new Set(workspaceSnapshot?.archivedSessionIds ?? [])
@@ -6936,7 +7253,22 @@ function dwClearNativeAtmospheres() {
       mainViewRef.current = { ids: new Set(mainViewIds), currentId: currentSessionId }
       const runningRows = dwRunningRows(sessions, statuses, workspaces, t, runningParents, archivedIds, sessionActivity)
       const recentRows = dwRecentRows(sessions, statuses, workspaces, t, now, runningParents, archivedIds, windows.recentMs, sessionActivity)
-      const panelRows = runningRows.concat(recentRows)
+      // Pinned main Sessions lead the card and never retire with time; every other
+      // row keeps exactly the existing running-then-recent order. Toggling a pin
+      // updates the card's own pinned document, which re-derives the row from its
+      // original end time, so no timer or end time is ever rewritten here.
+      const panelRows = dwPinPanelRows({
+        list: sessions,
+        statuses,
+        workspaces,
+        t,
+        runningParents,
+        archived: archivedIds,
+        activity: sessionActivity,
+        pinnedIds,
+        runningRows,
+        recentRows
+      })
       const childrenByParent = dwSubagentChildren(sessions, statuses, now, archivedIds, windows.recentMs, workspaces, sessionActivity)
       const runningIds = new Set(runningRows.map((row) => row.id))
       const durations = new Map()
@@ -6969,6 +7301,9 @@ function dwClearNativeAtmospheres() {
             const projections = source !== null && typeof source === 'object' ? source.projectionsBySession : undefined
             return {
               currentSessionId: latest.currentSessionId,
+              // The card's own pin document (localStorage, per browser), mirrored
+              // so E2E cleanup can prove the set it touched is empty.
+              pinnedIds: [...pinnedIdList],
               rows: ids.map((id) => ({ id, title: byId?.[id]?.displayTitle ?? null, state: latest.statuses?.get?.(id) ?? null })),
               values: Object.fromEntries(ids.map((id) => [id, projections?.[id]?.values ?? null]).filter(([, value]) => value !== null))
             }
@@ -7390,6 +7725,8 @@ function dwClearNativeAtmospheres() {
         projections: sessionProjections,
         onEnsureProjections: ensureProjections,
         onNewSession: openNewSession,
+        pinnedIds,
+        onTogglePin: togglePin,
         onToggle: () => setPanelExpanded((value) => !value),
         onToggleAll: () => setShowAll((value) => !value),
         onToggleChildren: (id) => setCollapsedParents((value) => {
@@ -7462,6 +7799,87 @@ function dwClearNativeAtmospheres() {
         parentSessions: ctx.sessions,
         interruptedT: ctx.locale.bind(INTERRUPTED_NS)
       }))), 'power-suite: dynamic-workspaces seat')
+    }
+    //#endregion
+
+    //#region feature: native session hover figures
+    /**
+     * Occupant of the shell's `sidebar.session.row.hover` seat: the three native
+     * figures the running-panel hover card shows, rendered inside the default
+     * sidebar Session hover card between its relative-time line and its trailing
+     * status lines. The seat is mounted only while that card is open; a Session
+     * whose projections carry no figures renders nothing, so the shipped card
+     * keeps its exact shape for a blank or stat-less Session.
+     * @param {object} props - slot props: the owner's `sessionId`, this feature's
+     *   `t` and `ensureProjections`, and the shell's standard hooks.
+     * @returns {object | null} the figure sections, or null when none has data.
+     */
+    function SessionHoverFigures(props) {
+      const { sessionId, t, ensureProjections } = props
+      // Root-scope slot entries receive the shell's `useSessions` standard hook;
+      // subscribing to the list state re-renders the open card when the Host
+      // pushes new projection values for this Session.
+      const sessions = props.useSessions((state) => state)
+      const projections = sessions !== null && typeof sessions === 'object'
+        ? sessions.projectionsBySession
+        : undefined
+      const record = typeof sessionId === 'string' && sessionId.length > 0
+        && projections !== null && typeof projections === 'object'
+        ? projections[sessionId]
+        : undefined
+      // Cold (persisted) Sessions carry only summary projections: the first mount
+      // of their hover card starts the one one-shot read the running panel's card
+      // also performs. The ref Set keeps it to one request per Session id for the
+      // mounted card, and error / migration records are never retried.
+      const requested = React.useRef(new Set())
+      React.useEffect(() => {
+        if (typeof sessionId !== 'string' || sessionId.length === 0) return
+        if (requested.current.has(sessionId)) return
+        if (!dwNeedsProjectionRead(record)) return
+        requested.current.add(sessionId)
+        if (typeof ensureProjections === 'function') ensureProjections(sessionId)
+      }, [sessionId, record, ensureProjections])
+      const values = record !== null && typeof record === 'object' ? record.values : undefined
+      // A single wrapper is the test/DOM anchor for "native sidebar hover card
+      // figures"; `:empty` hides it when the Session has no figures, so a blank
+      // card keeps the shipped spacing exactly.
+      return React.createElement('div', {
+        className: 'psd-native-hover-figures',
+        'data-psd-native-figures': ''
+      }, React.createElement(DwHovercardProjectionSections, {
+        sections: dwProjectionSections(values),
+        t
+      }))
+    }
+
+    /**
+     * Register the native Session hover-card occupant.
+     * @param {object} ctx - client root context.
+     * @returns {void}
+     */
+    function installSessionHoverFigures(ctx) {
+      // `installDynamicWorkspaces` runs first in `apply`, so the `DW_NS`
+      // dictionaries and the shared `.psd-hovercard-section*` styles it injects
+      // are already installed when this seat renders.
+      const t = ctx.locale.bind(DW_NS)
+      const ensureProjections = (sessionId) => {
+        const sessions = ctx.sessions
+        if (sessions === null || sessions === undefined) return
+        if (typeof sessions.refreshProjections !== 'function') return
+        try {
+          const pending = sessions.refreshProjections(sessionId)
+          if (pending !== null && pending !== undefined && typeof pending.catch === 'function') pending.catch(() => {})
+        } catch {
+          // A Host without the projection units leaves the figures out; the
+          // native card keeps every one of its own lines.
+        }
+      }
+      ctx.effect(() => ctx.slots.inject('sidebar.session.row.hover', () => ctx.slots.register({
+        name: 'sidebar.session.row.hover',
+        id: 'power-suite.session-hover-figures',
+        order: 100,
+        inject: () => ({ t, ensureProjections })
+      }, SessionHoverFigures)), 'power-suite: native session hover figures')
     }
     //#endregion
 
@@ -18324,6 +18742,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       installPromptHistoryPreview(ctx)
       installDraftAttachmentMemory(ctx)
       installDynamicWorkspaces(ctx)
+      installSessionHoverFigures(ctx)
       installInterruptedSessions(ctx)
       installQuickLook(ctx)
       installSettingsPage(ctx)
@@ -18433,6 +18852,17 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         dwCacheHitPercent,
         dwBilledInputTokens,
         dwContextOccupancy
+      }
+      // Pin derivation seam: pure helpers for the card's pinned-first ordering,
+      // the "never retires" row reconstruction, and the card's own pin document.
+      globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesPin = {
+        dwPinnedSessionIds,
+        dwPinPanelRows,
+        dwReadPinnedIds,
+        dwWritePinnedIds,
+        DW_PIN_KEY,
+        DW_PIN_VERSION,
+        DW_PIN_LIMIT
       }
     }
 
