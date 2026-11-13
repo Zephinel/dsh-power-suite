@@ -504,7 +504,11 @@ never outerHTML, input values, JS paths, XPath, or computed styles.
 For text-bearing leaf targets the ref additionally carries fallback anchors —
 a bounded absolute XPath, a normalized text quote (exact + prefix/suffix), a
 container-relative text position, and a JS-path expression — resolved in the
-order CSS candidates → XPath → text quote → text position; the four statuses
+order CSS candidates → XPath → text quote → text position; candidate resolution
+is two-phase (collect hit sets, prefer the first unique candidate by stability
+tier; Ambiguous only when all identifying candidates are genuinely non-unique;
+weak-strategy ambiguity continues down the chain), generated/hashed classes are
+filtered out, and identity uses the verified unique selector. The four statuses
 stay honest (unique text match resolves, duplicates stay ambiguous, changed
 text is content-changed) and the UI shows which strategy resolved the target.
 Records persist in a browser-owned **v3** document

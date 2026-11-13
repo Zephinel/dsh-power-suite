@@ -389,6 +389,13 @@
   canvas shrink by the delta and restore on exit, and the narrow-viewport layout
   falls back to the 320 px overlay rail. On very narrow viewports the sidebar can
   feel large — collapse it to the 48 px strip or use the overlay mode.
+- **Generated-class filtering is heuristic.** The word-like/generated-pattern
+  rule rejects the measured CSS-module hashes and keeps authored classes, but an
+  unusually hashed-looking authored class can be dropped (it falls back to other
+  candidates). True-duplicate ambiguity is unit-tested; the E2E fixture targets
+  the false-ambiguous fix. Generic tag/role matches still corroborate by text,
+  so a genuinely removed target can report Changed rather than Missing when a
+  same-tag DOM node remains.
 - **Fallback anchors are additive and partial.** Only text-bearing leaf
   elements capture `textQuote`/`textPosition`; absolute XPath is
   structure-sensitive (an id short-circuit helps, but reparenting can break it),

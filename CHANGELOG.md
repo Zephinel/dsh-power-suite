@@ -300,6 +300,17 @@ heading is added until the release is cut.
   + toast, honest unavailable state when no anchor exists). Records captured
   before this change keep working without the new anchors.
 
+- UI element annotation selector stability (P0, from the reference-coding
+  round): resolution is now two-phase — per-candidate hit sets are collected and
+  the first unique candidate (highest stability tier/score) wins, so a
+  non-unique high-tier candidate (e.g. a duplicated `aria-label`) no longer
+  short-circuits to Ambiguous when a lower-tier structural/anchor candidate
+  resolves uniquely; Ambiguous is reserved for genuinely all-non-unique
+  candidates, and weak XPath/text-position ambiguity no longer terminates the
+  text-quote fallback. CSS-module/hashed class names are filtered by a
+  word-like/generated-pattern heuristic, and record identity uses the verified
+  unique selector.
+
 ### Removed
 
 - Standalone Project detail page: the `project-view` feature is removed —
