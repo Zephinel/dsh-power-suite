@@ -6043,7 +6043,10 @@ function buildScenarios(harness) {
         document.getElementById('psa-anchor-fixture')?.remove()
         const wrap = document.createElement('div')
         wrap.id = 'psa-anchor-fixture'
-        Object.assign(wrap.style, { position: 'fixed', left: '360px', top: '300px', width: '360px', padding: '10px', zIndex: '400', background: 'rgb(44, 46, 52)', color: 'rgb(235, 238, 245)', borderRadius: '8px', fontSize: '13px' })
+        const host = document.createElement('div')
+        host.style.cssText = 'position:relative;z-index:auto;display:block;margin:8px 0'
+        host.setAttribute('data-psa-anchor-host', '')
+        Object.assign(wrap.style, { position: 'relative', zIndex: 'auto', display: 'block', margin: '12px 0', width: '360px', padding: '10px', background: 'rgb(44, 46, 52)', color: 'rgb(235, 238, 245)', borderRadius: '8px', fontSize: '13px' })
         const section = document.createElement('section')
         section.id = 'psa-anchor-section'
         const paragraph = document.createElement('p')
@@ -6054,7 +6057,10 @@ function buildScenarios(harness) {
         paragraph.append(leaf)
         section.append(paragraph)
         wrap.append(section)
-        document.body.append(wrap)
+        host.append(wrap)
+        const main = document.querySelector('[data-slot="main"]') || document.body
+        main.append(host)
+        if (typeof wrap.scrollIntoView === 'function') wrap.scrollIntoView({ block: 'center' })
         return true
       })()`)
       const anchorLeafRect = await h.page.findRect('[data-anchor-leaf]')
@@ -6641,7 +6647,13 @@ function buildScenarios(harness) {
             leafB.textContent = 'Scope authority text UNIQUE-T42'
             rowB.append(leafB)
             b.append(rowB)
-            root.append(a, b)
+            const weak = document.createElement('div')
+            weak.id = 'psa-weak'
+            weak.style.cssText = 'position:relative;z-index:auto;padding:6px;margin:4px 0;background:rgb(50,52,60);border-radius:6px'
+            const weakLeaf = document.createElement('span')
+            weakLeaf.textContent = 'Weak label text'
+            weak.append(weakLeaf)
+            root.append(a, b, weak)
             document.body.append(root)
             const key = 'power-suite.ui-annotation.annotations'
             const doc = JSON.parse(localStorage.getItem(key) || 'null')
@@ -6671,6 +6683,23 @@ function buildScenarios(harness) {
               note: '', included: true, lastStatus: 'resolved'
             }
             records.push(record)
+            // A3/T49 weak-label fixture: real text quote + surface still present, but
+            // no textDigest/name/unique selector => weak identity; an edit is Changed.
+            records.push({
+              version: 2, id: 'psa-weak-label-1', at: Date.now(), updatedAt: Date.now(), order: 1,
+              session: { sessionId: ${JSON.stringify(scopeSessionId)}, cwd: '/Users/rexxin/Development/dsh-power-suite', workspaceLabel: 'dsh-power-suite' },
+              route: '/', locator: {
+                tag: 'span', role: '', name: '', candidates: [{ kind: 'data', value: '[data-psa-weak-dead]', reliability: 0.9 }],
+                key: 'data:[data-psa-weak-dead]', path: '', uniqueSelector: null, uniqueVerified: false, ancestors: [], surface: 'page', ephemeral: false,
+                xpath: '/html[1]/body[1]/div[98]/span[1]', jsPath: '',
+                textQuote: { exact: 'Weak label text', prefix: '', suffix: '' },
+                textPosition: { container: '#psa-weak', start: 0, end: 'Weak label text'.length },
+                anchorTarget: null, anchorLeafTag: null, anchorAncestorChain: null, anchorSignature: null
+              },
+              component: 'other', text: 'Weak label text', textDigest: '', context: '',
+              bounds: { x: 800, y: 420, width: 160, height: 24 }, viewport: { width: window.innerWidth, height: window.innerHeight },
+              note: '', included: true, lastStatus: 'resolved'
+            })
             localStorage.setItem(key, JSON.stringify({ version: 3, updatedAt: Date.now(), records, groups: [] }))
           }
           if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true })
@@ -6738,6 +6767,32 @@ function buildScenarios(harness) {
       })()`)
       assert(scopeDecoy !== null, 'scope decoy row missing')
       assertEqual(scopeDecoy.status, 'ambiguous', `A3/T42: a duplicate INSIDE the captured scope must be honestly ambiguous: ${JSON.stringify(scopeDecoy)}`)
+      // A3/T49 weak label: weak identity + text quote + still-present surface; an edit
+      // must be Changed with "Unverifiable · weak identity" in the rail.
+      await h.page.evaluate(`(() => { const leaf = document.querySelector('#psa-weak span'); if (leaf !== null) leaf.textContent = 'Weak label txet'; return true })()`)
+      await sleep(300)
+      await h.page.moveTo(800, 200)
+      await sleep(200)
+      await h.click('[data-psa-open-settings]')
+      await sleep(200)
+      await h.click('[data-psa-rail-back]')
+      await sleep(300)
+      const weakState = await h.page.evaluate(`(() => {
+        const entry = document.querySelector('[data-psa-entry][data-psa-ref="psa-weak-label-1"]')
+        if (entry === null) return null
+        const dot = entry.querySelector('.psa-status-dot')
+        return {
+          status: entry.getAttribute('data-psa-status'),
+          confidence: entry.getAttribute('data-psa-confidence'),
+          label: dot?.getAttribute('aria-label') ?? '',
+          title: dot?.getAttribute('title') ?? ''
+        }
+      })()`)
+      assert(weakState !== null, 'weak-label record row missing')
+      assertEqual(weakState.status, 'changed', `A3/T49: weak identity edit should be Changed: ${JSON.stringify(weakState)}`)
+      assertEqual(weakState.confidence, 'weak', `A3/T49: weak identity Changed must be Unverifiable: ${JSON.stringify(weakState)}`)
+      assert(/Unverifiable|无法验证/.test(weakState.label + weakState.title), `A3/T49: weak label wording missing: ${JSON.stringify(weakState)}`)
+      assert(!/Content changed/.test(weakState.label + weakState.title), `A3/T49: weak record must not read Content changed: ${JSON.stringify(weakState)}`)
       await h.page.evaluate(`(() => { document.getElementById('psa-scope-a')?.parentElement?.remove(); localStorage.setItem('psa-scope-seed', 'done'); return true })()`)
       await h.ensureStatusPanel()
       await h.exit()
