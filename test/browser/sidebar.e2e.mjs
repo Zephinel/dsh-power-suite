@@ -636,6 +636,7 @@ const INJECT_SCRIPT = `(() => {
   }
   window.__psInjectedFactoryRan = false
   window.__psInjectErrors = []
+  window.__POWER_SUITE_TEST_HOOKS__ = window.__POWER_SUITE_TEST_HOOKS__ || {}
   init(__PSD_SOURCE__)
 })()`
 
@@ -879,6 +880,7 @@ const probe = {
       title: inner('.psd-hovercard-title'),
       path: inner('.psd-hovercard-path'),
       status: inner('.psd-hovercard-status'),
+      statusText: text(card.querySelector('.psd-hovercard-status')),
       session: inner('.psd-hovercard-session'),
       sessionText: text(card.querySelector('.psd-hovercard-session')),
       // Native session-figure sections (B6): header line plus right-aligned rows.
@@ -1129,15 +1131,34 @@ const probe = {
       const canvasStyle = canvas ? getComputedStyle(canvas) : null
       const scrimStyle = scrim ? getComputedStyle(scrim) : null
       let painted = -1
+      let avgSaturation = 0
+      let avgSaturationStrong = 0
+      let strongPainted = 0
+      let strongSaturationSum = 0
       if (canvas !== null) {
         try {
           const ctx = canvas.getContext('2d')
           if (ctx !== null && canvas.width > 0 && canvas.height > 0) {
             const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data
             painted = 0
-            for (let index = 3; index < data.length; index += 4) {
-              if (data[index] > 4) painted += 1
+            let saturationSum = 0
+            for (let index = 0; index + 3 < data.length; index += 4) {
+              if (data[index + 3] <= 4) continue
+              painted += 1
+              const r = data[index]
+              const g = data[index + 1]
+              const b = data[index + 2]
+              const max = Math.max(r, g, b)
+              const min = Math.min(r, g, b)
+              const saturation = max === 0 ? 0 : (max - min) / max
+              saturationSum += saturation
+              if (data[index + 3] >= 64) {
+                strongPainted += 1
+                strongSaturationSum += saturation
+              }
             }
+            avgSaturation = painted === 0 ? 0 : saturationSum / painted
+            avgSaturationStrong = strongPainted === 0 ? 0 : strongSaturationSum / strongPainted
           }
         } catch {
           painted = -1
@@ -1161,6 +1182,8 @@ const probe = {
           mixBlendMode: canvasStyle.mixBlendMode,
           pointerEvents: canvasStyle.pointerEvents,
           painted,
+          avgSaturation: Number(avgSaturation.toFixed(3)),
+          avgSaturationStrong: Number(avgSaturationStrong.toFixed(3)),
         },
         scrim: scrim === null ? null : {
           rect: rect(scrim),
@@ -2180,12 +2203,15 @@ function assertAtmosphereRow(label, row, atmos, content, options = {}) {
   assertEqual(atmos.overflow, 'hidden', `${label}: atmosphere wrapper must clip to the rounded rect`)
   assertEqual(atmos.pointerEvents, 'none', `${label}: atmosphere wrapper must not capture the pointer`)
   assertEqual(atmos.zIndex, '0', `${label}: atmosphere must sit on the background layer (z-index 0)`)
-  assert(atmos.opacity > 0.2 && atmos.opacity <= 1, `${label}: atmosphere must be visible (opacity ${atmos.opacity})`)
+  assert(atmos.opacity >= 0.7 && atmos.opacity <= 1, `${label}: atmosphere must be visible and vivid (opacity ${atmos.opacity}; baseline .78)`)
   assert(atmos.canvas, `${label}: atmosphere has no canvas`)
   assert(atmos.canvas.width > 0 && atmos.canvas.height > 0, `${label}: atmosphere canvas has no drawing buffer (${atmos.canvas.width}x${atmos.canvas.height})`)
   assert(atmos.canvas.painted > 0, `${label}: atmosphere canvas painted no rainbow pixels`)
   assert(atmos.canvas.filter.includes('blur'), `${label}: atmosphere canvas must keep the gas blur (${atmos.canvas.filter})`)
-  assertEqual(atmos.canvas.mixBlendMode, 'screen', `${label}: atmosphere canvas must use the screen blend`)
+  assert(atmos.canvas.filter.includes('saturate(1.5)'), `${label}: atmosphere canvas must keep the vivid saturate(1.5) baseline (${atmos.canvas.filter})`)
+  const saturationMin = options.saturationMin ?? 0.38
+  assert(atmos.canvas.avgSaturationStrong >= saturationMin, `${label}: atmosphere colours must stay vivid, not grey (blob-core saturation ${atmos.canvas.avgSaturationStrong}, all-pixel ${atmos.canvas.avgSaturation}, minimum ${saturationMin}; grey baseline was ~0.25)`)
+  assert(['multiply', 'screen'].includes(atmos.canvas.mixBlendMode), `${label}: atmosphere canvas must keep a vivid blend mode (${atmos.canvas.mixBlendMode})`)
   assertEqual(atmos.canvas.pointerEvents, 'none', `${label}: atmosphere canvas must not capture the pointer`)
   assert(atmos.scrim, `${label}: atmosphere has no contrast scrim`)
   for (const side of ['left', 'right', 'top', 'bottom']) {
@@ -2193,6 +2219,9 @@ function assertAtmosphereRow(label, row, atmos, content, options = {}) {
   }
   assertEqual(atmos.scrim.pointerEvents, 'none', `${label}: scrim must not capture the pointer`)
   assert(atmos.scrim.backgroundImage.includes('linear-gradient'), `${label}: scrim must be the faint dark gradient (${short(atmos.scrim.backgroundImage, 90)})`)
+  const scrimAlphas = [...atmos.scrim.backgroundImage.matchAll(/rgba\([^)]*?,\s*([0-9.]+)\)/g)].map((match) => Number(match[1]))
+  assert(scrimAlphas.length > 0, `${label}: scrim alpha could not be read (${atmos.scrim.backgroundImage})`)
+  assert(Math.max(...scrimAlphas) <= 0.24, `${label}: scrim must stay light enough to keep the gas vivid (max alpha ${Math.max(...scrimAlphas)})`)
   assert(content, `${label}: row content element missing`)
   assertEqual(content.position, 'relative', `${label}: real content must be positioned above the atmosphere`)
   assert(Number(content.zIndex) >= 2, `${label}: real content must stack above the atmosphere/scrim (z-index ${content.zIndex})`)
@@ -2305,7 +2334,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       const details = []
       for (const [label, row, atmos, content] of rows) {
         assert(row && atmos, `${label}: atmosphere missing under reduced motion`)
-        details.push(assertAtmosphereRow(label, row, atmos, content, { motion: 'static' }))
+        details.push(assertAtmosphereRow(label, row, atmos, content, { motion: 'static', saturationMin: 0.28 }))
       }
       return details.join('; ')
     } finally {
@@ -2372,6 +2401,32 @@ async function measureNativeTooltip(page, evidenceName = null) {
   await page.moveTo(900, 500)
   await sleep(300)
   return { row, tooltip }
+  await results.check('b4-5', 'dark theme keeps the atmosphere vivid (screen blend, high saturation, light scrim)', async () => {
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+    try {
+      await sleep(900)
+      const highlight = await page.eval(probe.currentHighlight)
+      const rows = [
+        ['card row', highlight.row, highlight.card, highlight.cardContent],
+        ['Workspace row', highlight.marker ? { rect: highlight.marker.rect, clientRect: highlight.marker.clientRect, radius: highlight.marker.radius } : null, highlight.marker?.atmos, highlight.marker?.content],
+        ['Session row', highlight.sessionMarker ? { rect: highlight.sessionMarker.rect, clientRect: highlight.sessionMarker.clientRect, radius: highlight.sessionMarker.radius } : null, highlight.sessionMarker?.atmos, highlight.sessionMarker?.content],
+      ]
+      const details = []
+      for (const [label, row, atmos, content] of rows) {
+        assert(row && atmos, `${label}: atmosphere missing in dark theme`)
+        assertEqual(atmos.canvas.mixBlendMode, 'screen', `${label}: dark theme must use the light-adding screen blend`)
+        assert(atmos.canvas.filter.includes('saturate(1.5)'), `${label}: dark theme must keep the vivid saturate baseline (${atmos.canvas.filter})`)
+        assert(atmos.canvas.avgSaturationStrong >= 0.38, `${label}: dark theme atmosphere must stay vivid (blob-core saturation ${atmos.canvas.avgSaturationStrong})`)
+        assert(atmos.opacity >= 0.7, `${label}: dark theme atmosphere opacity must stay vivid (${atmos.opacity})`)
+        details.push(`${label} sat ${atmos.canvas.avgSaturation} blend ${atmos.canvas.mixBlendMode}`)
+      }
+      return details.join('; ')
+    } finally {
+      await page.emulateMedia([])
+      await sleep(500)
+    }
+  })
+
 }
 
 async function runHoverCardChecks({ page, results, state }) {
@@ -2535,6 +2590,88 @@ async function runHoverCardChecks({ page, results, state }) {
     assert(card, 'hover card was not measured earlier')
     return 'hover card uses the inherited shell family'
   })
+  await results.check('b6-7', 'a live Session hover card refreshes its figures in place while open', async () => {
+    const candidates = await page.eval(() => {
+      const rows = []
+      for (const child of document.querySelectorAll('.psd-child')) {
+        if (child.dataset.state !== 'running') continue
+        const title = (child.querySelector('.psd-child-title')?.innerText ?? '').trim()
+        if (title.length > 0) rows.push({ kind: 'child', title })
+      }
+      for (const parent of document.querySelectorAll('.psd-run')) {
+        if (parent.dataset.state !== 'running') continue
+        const title = (parent.querySelector('.psd-run-title')?.innerText ?? '').trim()
+        if (title.length > 0) rows.push({ kind: 'parent', title })
+      }
+      return rows.slice(0, 2)
+    })
+    assert(candidates.length > 0, 'no running card row to probe for live figures')
+    const readFigures = async () => {
+      const card = await page.eval(probe.hoverCard)
+      if (card === null) return null
+      return {
+        statusText: card.statusText,
+        sections: card.sections.map((section) => `${section.title}|${section.value}`),
+      }
+    }
+    const attempts = []
+    for (const candidate of candidates) {
+      const opened = await openHoverCard(page, candidate.kind, candidate.title, { attempts: 6, timeoutMs: 3200 })
+      if (!opened) {
+        attempts.push(`${candidate.kind} "${short(candidate.title, 30)}": card did not open`)
+        continue
+      }
+      const first = await readFigures()
+      if (first === null) {
+        attempts.push(`${candidate.kind} "${short(candidate.title, 30)}": no card`)
+        continue
+      }
+      // Resolve the row to a Session id through the documented live test seam.
+      const live = await page.eval(() => (globalThis.__POWER_SUITE_TEST_HOOKS__?.dynamicWorkspacesLive
+        ? globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesLive.snapshot()
+        : null))
+      if (live === null || typeof live !== 'object') {
+        attempts.push('live projection seam unavailable')
+        break
+      }
+      const match = (live.rows ?? []).find((row) => row.title === candidate.title)
+      if (!match) {
+        attempts.push(`${candidate.kind} "${short(candidate.title, 30)}": no Session id match (${short(JSON.stringify(live.rows?.slice(0, 3)), 120)})`)
+        await page.moveTo(900, 500)
+        await sleep(350)
+        continue
+      }
+      const patched = await page.eval((sessionId) => {
+        const seam = globalThis.__POWER_SUITE_TEST_HOOKS__?.dynamicWorkspacesLive
+        return seam && typeof seam.patchStats === 'function' ? seam.patchStats(sessionId, 7, 11) : false
+      }, match.id)
+      let latest = first
+      let changed = false
+      if (patched) {
+        const deadline = Date.now() + 6000
+        while (Date.now() < deadline) {
+          await sleep(700)
+          latest = await readFigures()
+          if (latest !== null && JSON.stringify(latest.sections) !== JSON.stringify(first.sections)) {
+            changed = true
+            break
+          }
+        }
+      }
+      await page.eval((sessionId) => {
+        const seam = globalThis.__POWER_SUITE_TEST_HOOKS__?.dynamicWorkspacesLive
+        if (seam && typeof seam.restoreStats === 'function') seam.restoreStats(sessionId)
+      }, match.id)
+      await page.moveTo(900, 500)
+      await sleep(350)
+      if (changed) {
+        return `${candidate.kind} "${short(candidate.title, 32)}": open card re-read the patched live projection frame in place (${short(first.sections.join(' | '), 70)} -> ${short(latest.sections.join(' | '), 70)}); status "${first.statusText}" -> "${latest.statusText}"; no polling/request involved`
+      }
+      attempts.push(`${candidate.kind} "${short(candidate.title, 30)}": open card did not re-render the patched frame (status "${first.statusText}")`)
+    }
+    throw new Error(`a live Session's open hover card must refresh its figures from the pushed projection snapshot; probe results: ${attempts.join('; ')}`)
+  })
+
 }
 
 async function runFocusChecks({ page, results, state }) {
@@ -3205,9 +3342,11 @@ async function captureScreenshots(page, state) {
     shots.push(file)
     return file
   }
-  await page.emulateMedia([])
+  // Force the LIGHT theme for the light-theme evidence even when the machine's
+  // system appearance is dark (DSH follows prefers-color-scheme).
+  await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
   await page.moveTo(900, 500)
-  await sleep(300)
+  await sleep(500)
   await shot('01-card-light')
   // Icon-swap evidence: the panel header (identity glyph / pulse dot) plus the
   // card rows including the acknowledged row arranged by the B6 glyph check.
@@ -3269,11 +3408,11 @@ async function captureScreenshots(page, state) {
     await page.moveTo(900, 500)
     await sleep(400)
   }
-  await page.emulateMedia([])
-  await page.emulateMedia([{ name: 'prefers-reduced-motion', value: 'reduce' }])
+  await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+  await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }, { name: 'prefers-reduced-motion', value: 'reduce' }])
   await sleep(500)
   await shot('06-reduced-motion')
-  await page.emulateMedia([])
+  await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
   const searchToggle = await page.findRect('[data-psp-search-toggle]')
   if (searchToggle) {
     await page.clickAt(searchToggle.x, searchToggle.y)

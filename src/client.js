@@ -4718,13 +4718,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
    a renderer. Reduced motion paints one static pastel frame and stops rAF; a
    hidden tab pauses the loop; the renderer is destroyed when the row stops
    being highlighted. */
-.psd-atmos{position:absolute;inset:0;z-index:0;border-radius:inherit;overflow:hidden;pointer-events:none;isolation:isolate;opacity:.62;transition:opacity 220ms var(--ds-ease-in-out,ease)}
-.psd-atmos-canvas{display:block;width:100%;height:100%;pointer-events:none;filter:blur(3px) saturate(1.18);mix-blend-mode:screen}
-.psd-atmos-scrim{position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(90deg,rgba(16,18,22,.2),rgba(16,18,22,.3))}
-.psd-run-current:hover .psd-atmos,.psd-child-current:hover .psd-atmos,[data-psd-current-workspace='true']:hover .psd-atmos,[data-psd-current-session='true']:hover .psd-atmos{opacity:.8}
+.psd-atmos{position:absolute;inset:0;z-index:0;border-radius:inherit;overflow:hidden;pointer-events:none;isolation:isolate;opacity:.78;transition:opacity 220ms var(--ds-ease-in-out,ease)}
+.psd-atmos-canvas{display:block;width:100%;height:100%;pointer-events:none;filter:blur(3px) saturate(1.5) brightness(1.05);mix-blend-mode:multiply}
+.psd-atmos-scrim{position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(90deg,rgba(16,18,22,.08),rgba(16,18,22,.16))}
+.psd-run-current:hover .psd-atmos,.psd-child-current:hover .psd-atmos,[data-psd-current-workspace='true']:hover .psd-atmos,[data-psd-current-session='true']:hover .psd-atmos{opacity:.92}
 .psd-run-current,.psd-child-current,[data-psd-current-workspace='true'],[data-psd-current-session='true']{position:relative;isolation:isolate}
 .psd-run-current > *:not(.psd-atmos),.psd-child-current > *:not(.psd-atmos){position:relative;z-index:2}
 [data-psd-current-workspace='true'] > *:not([data-psd-atmos]),[data-psd-current-session='true'] > *:not([data-psd-atmos]){position:relative;z-index:2}
+body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.5) brightness(1.14)}
+body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(16,18,22,.12),rgba(16,18,22,.22))}
 @media (prefers-reduced-motion: reduce){.psd-atmos{transition:none}}
 
 `
@@ -4742,7 +4744,7 @@ const DW_ATMOS_PALETTE = [
 ]
 
 /** Baseline atmosphere config adapted from the V3 design doc (smoke mode). */
-const DW_ATMOS_CONFIG = { intensity: 0.56, spread: 1.16, drift: 1.2, stirring: 0.58, breathing: 0.22, blend: 0.9, vibrance: 1.32 }
+const DW_ATMOS_CONFIG = { intensity: 0.64, spread: 1.18, drift: 1.2, stirring: 0.58, breathing: 0.22, blend: 1.0, vibrance: 1.72 }
 
 /**
  * Mount the Canvas 2D rainbow-gas renderer into one atmosphere wrapper.
@@ -4805,25 +4807,29 @@ function dwAtmosphereMount(host) {
     const span = Math.max(width, height)
     // A low broad wash keeps the whole pill tinted, not just the blob cores.
     const wash = ctx.createLinearGradient(0, 0, width, 0)
+    const washAlpha = Math.min(0.22, 0.15 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.spread * DW_ATMOS_CONFIG.blend)
     for (let index = 0; index < DW_ATMOS_PALETTE.length; index += 1) {
       const color = DW_ATMOS_PALETTE[index]
-      wash.addColorStop(index / (DW_ATMOS_PALETTE.length - 1), `rgba(${color[0]},${color[1]},${color[2]},${(0.1 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.spread).toFixed(3)})`)
+      wash.addColorStop(index / (DW_ATMOS_PALETTE.length - 1), `rgba(${color[0]},${color[1]},${color[2]},${washAlpha.toFixed(3)})`)
     }
     ctx.globalCompositeOperation = 'source-over'
     ctx.fillStyle = wash
     ctx.fillRect(0, 0, width, height)
-    // Drifting prism blobs: two coupled orbits + breathing alpha ≈ gas flow.
-    ctx.globalCompositeOperation = 'lighter'
+    // Drifting prism blobs: two coupled orbits + breathing alpha ≈ gas flow. The
+    // blobs paint over each other (not additive) so their hues stay saturated
+    // instead of summing to white; the CSS blend then applies the theme recipe.
+    ctx.globalCompositeOperation = 'source-over'
     const breath = 1 + DW_ATMOS_CONFIG.breathing * 0.11 * Math.sin(time * 0.37)
     for (const blob of blobs) {
       const color = DW_ATMOS_PALETTE[blob.hue]
       const cx = width * (0.5 + 0.34 * Math.sin(time * blob.speed * DW_ATMOS_CONFIG.drift + blob.phase) + 0.09 * Math.sin(time * 0.23 * DW_ATMOS_CONFIG.stirring + blob.phase * 1.7))
       const cy = height * (0.5 + 0.32 * Math.cos(time * blob.speed * 0.8 * DW_ATMOS_CONFIG.drift + blob.phase * 1.3) + 0.08 * Math.sin(time * 0.19 + blob.phase))
       const radius = Math.max(2, span * blob.size * (0.5 + 0.16 * Math.sin(time * 0.31 + blob.phase)))
-      const alpha = Math.min(0.6, 0.34 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.vibrance * breath)
+      const alpha = Math.min(0.85, 0.44 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.vibrance * DW_ATMOS_CONFIG.blend * breath)
       const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius)
       gradient.addColorStop(0, `rgba(${color[0]},${color[1]},${color[2]},${alpha.toFixed(3)})`)
-      gradient.addColorStop(0.55, `rgba(${color[0]},${color[1]},${color[2]},${(alpha * 0.42).toFixed(3)})`)
+      gradient.addColorStop(0.35, `rgba(${color[0]},${color[1]},${color[2]},${(alpha * 0.86).toFixed(3)})`)
+      gradient.addColorStop(0.62, `rgba(${color[0]},${color[1]},${color[2]},${(alpha * 0.34).toFixed(3)})`)
       gradient.addColorStop(1, `rgba(${color[0]},${color[1]},${color[2]},0)`)
       ctx.fillStyle = gradient
       ctx.beginPath()
@@ -6947,7 +6953,53 @@ function dwClearNativeAtmospheres() {
       }
 
       latestRef.current = { sessions, statuses, workspaces: workspaceSnapshot, folds, windows, activity: sessionActivity, currentSessionId }
-
+      // Test seam for the live hover-card figures: expose which Session each card
+      // row maps to and a scoped patch/restore on the live projection snapshot, so
+      // the E2E harness can prove the open card re-reads pushed projection frames
+      // (no polling involved) without waiting for real model activity.
+      const liveHooks = globalThis.__POWER_SUITE_TEST_HOOKS__
+      if (liveHooks !== null && typeof liveHooks === 'object') {
+        const stash = new Map()
+        liveHooks.dynamicWorkspacesLive = {
+          snapshot: () => {
+            const latest = latestRef.current
+            const source = latest.sessions
+            const ids = source !== null && typeof source === 'object' && Array.isArray(source.ids) ? source.ids : []
+            const byId = source !== null && typeof source === 'object' ? source.byId : undefined
+            const projections = source !== null && typeof source === 'object' ? source.projectionsBySession : undefined
+            return {
+              currentSessionId: latest.currentSessionId,
+              rows: ids.map((id) => ({ id, title: byId?.[id]?.displayTitle ?? null, state: latest.statuses?.get?.(id) ?? null })),
+              values: Object.fromEntries(ids.map((id) => [id, projections?.[id]?.values ?? null]).filter(([, value]) => value !== null))
+            }
+          },
+          patchStats: (sessionId, deltaTurns, deltaSteps) => {
+            const latest = latestRef.current
+            const record = latest.sessions?.projectionsBySession?.[sessionId]
+            if (record === null || record === undefined || typeof record.values !== 'object' || record.values === null) return false
+            stash.set(sessionId, record.values)
+            const base = record.values.sessionStats
+            if (base === null || base === undefined || typeof base !== 'object') return false
+            record.values = {
+              ...record.values,
+              sessionStats: {
+                ...base,
+                turns: (Number(base.turns) || 0) + deltaTurns,
+                steps: (Number(base.steps) || 0) + deltaSteps
+              }
+            }
+            return true
+          },
+          restoreStats: (sessionId) => {
+            const original = stash.get(sessionId)
+            if (original === undefined) return false
+            const record = latestRef.current.sessions?.projectionsBySession?.[sessionId]
+            if (record !== null && record !== undefined) record.values = original
+            stash.delete(sessionId)
+            return true
+          }
+        }
+      }
       // Read state is derived at render time from the acknowledged baseline:
       // opening a Session raises its baseline to the observed `updatedAt`, and a
       // genuinely newer activity naturally exceeds that baseline again. There is
