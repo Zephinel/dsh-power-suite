@@ -16191,9 +16191,12 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-popover-ref .psa-icon-btn{width:20px;height:20px}
 .psa-popover-status{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:16px}
 .psa-levels{display:inline-flex;align-items:center;gap:2px;margin-left:auto}
-.psa-popover-note{display:flex;flex-direction:column;gap:4px}
+.psa-popover-note{display:flex;flex-direction:column;gap:8px}
+.psa-popover-note-head{display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:18px}
+.psa-popover-note-head > .psa-muted{flex:1;min-width:0}
+.psa-popover-note-head .psa-icon-btn{width:18px;height:18px;flex:none}
 .psa-popover-textarea{box-sizing:border-box;width:100%;min-height:56px;max-height:150px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
-.psa-popover-actions{display:flex;gap:6px}
+.psa-popover-actions{display:flex;flex-wrap:nowrap;gap:6px}
 .psa-popover-actions .psa-btn{flex:1;justify-content:center}
 .psa-note-editor{position:fixed;box-sizing:border-box;width:300px;display:flex;flex-direction:column;gap:6px;padding:10px 12px 12px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:17px;pointer-events:auto;z-index:55}
 .psa-note-editor-textarea{box-sizing:border-box;width:100%;min-height:96px;max-height:220px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:17px;resize:vertical}
@@ -17417,11 +17420,29 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           title: t('popover.levelDown'),
           onClick: () => controller.levelDown()
         }, RemixGlyph(REMIX_ARROW_DOWN_LINE, 13)))),
-      React.createElement('label', { className: 'psa-popover-note', 'data-psa-own': '' },
-        React.createElement('span', { className: 'psa-muted' }, t('detail.requirement')),
+      React.createElement('div', { className: 'psa-popover-note', 'data-psa-own': '' },
+        React.createElement('div', { className: 'psa-popover-note-head', 'data-psa-popover-note-head': '', 'data-psa-own': '' },
+          React.createElement('label', {
+            className: 'psa-muted',
+            'data-psa-popover-note-label': '',
+            'data-psa-own': '',
+            htmlFor: 'psa-popover-note'
+          }, t('detail.requirement')),
+          inCollection
+            ? React.createElement('button', {
+              type: 'button',
+              className: 'psa-icon-btn psa-detail-danger',
+              'data-psa-popover-delete': '',
+              'data-psa-own': '',
+              'aria-label': t('popover.delete'),
+              title: t('popover.delete'),
+              onClick: () => controller.removeSelection()
+            }, RemixGlyph(REMIX_DELETE_BIN_LINE, 12))
+            : null),
         React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
           React.createElement('textarea', {
             className: 'psa-popover-textarea',
+            id: 'psa-popover-note',
             'data-psa-note': '',
             'data-psa-own': '',
             rows: 3,
@@ -17432,7 +17453,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
             onFocus: () => controller.beginEdit(),
             onBlur: () => controller.endEdit()
           }))),
-      React.createElement('div', { className: 'psa-popover-actions' },
+      React.createElement('div', { className: 'psa-popover-actions', 'data-psa-popover-actions': '' },
         React.createElement('button', {
           type: 'button',
           className: 'psa-btn',
@@ -17447,18 +17468,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           'data-psa-commit': '',
           'data-psa-own': '',
           onClick: () => controller.commitSelection()
-        }, inCollection ? t('popover.update') : t('popover.commit')),
-        inCollection
-          ? React.createElement('button', {
-            type: 'button',
-            className: 'psa-icon-btn psa-detail-danger',
-            'data-psa-popover-delete': '',
-            'data-psa-own': '',
-            'aria-label': t('popover.delete'),
-            title: t('popover.delete'),
-            onClick: () => controller.removeSelection()
-          }, RemixGlyph(REMIX_DELETE_BIN_LINE, 14))
-          : null))
+        }, inCollection ? t('popover.update') : t('popover.commit'))))
     }
 
     /**
