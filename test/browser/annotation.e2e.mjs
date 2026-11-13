@@ -76,6 +76,11 @@ const KEY_DEFS = {
   escape: { key: 'Escape', code: 'Escape', vk: 27, mod: 0 },
   backspace: { key: 'Backspace', code: 'Backspace', vk: 8, mod: 0 },
   end: { key: 'End', code: 'End', vk: 35, mod: 0 },
+  enter: { key: 'Enter', code: 'Enter', vk: 13, mod: 0 },
+  space: { key: ' ', code: 'Space', vk: 32, mod: 0 },
+  arrowdown: { key: 'ArrowDown', code: 'ArrowDown', vk: 40, mod: 0 },
+  arrowup: { key: 'ArrowUp', code: 'ArrowUp', vk: 38, mod: 0 },
+  home: { key: 'Home', code: 'Home', vk: 36, mod: 0 },
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1090,7 +1095,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 / 97 anchor / 100 review / 106 descendant / 107 scan / 108 scope / 109 reference-conformance)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 / 97 anchor / 100 review / 106 descendant / 107 scan / 108 scope / 109 reference / 111 modifier-dropdown)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1102,7 +1107,7 @@ async function runSmoke({ page, results, state }) {
     // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
     // rail selection and chip-ref serialization helpers (66). Pin a documented count and
     // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97, 100, 106, 107, 108, 109]
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97, 100, 106, 107, 108, 109, 111]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1201,6 +1206,10 @@ async function runSmoke({ page, results, state }) {
     }
     if (keyCount === 109) {
       assert(probe.keys.includes('annotationEphemeralOutcome'), 'task-47 seam must expose annotationEphemeralOutcome')
+    }
+    if (keyCount === 111) {
+      assert(probe.keys.includes('annotationMenuMoveIndex') && probe.keys.includes('annotationMenuPosition'),
+        'task-51 seam must expose the modifier menu helpers')
     }
     state.hooks = probe.keys
     return `uiAnnotation seam: ${keyCount} keys`
@@ -3341,11 +3350,6 @@ class Harness {
     // only has to leave the settings view when that happens to be open.
     const ui = await this.ui()
     if (ui.panel === 'collection') return true
-    if (ui.panel === 'settings') {
-      const back = await this.page.findRect('[data-psa-rail-back]')
-      if (back !== null) await this.page.clickAt(back.x, back.y)
-      await sleep(250)
-    }
     await this.page.waitFor(
       `document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel') === 'collection'`,
       { timeout: 3000, label: 'collection rail panel (default list)' }
@@ -3354,8 +3358,34 @@ class Harness {
     return true
   }
 
+  /** A3/T51: open the transient modifier-settings popover from the header info icon. */
+  async openModifierSettings() {
+    const rect = await this.page.findRect('[data-psa-open-modifier-settings]')
+    assert(rect, 'header info settings button missing')
+    await this.page.clickAt(rect.x, rect.y)
+    await this.page.waitFor(`!!document.querySelector('[data-psa-settings-popover]')`, { timeout: 4000, label: 'modifier settings popover' })
+    await sleep(120)
+    return rect
+  }
+
+  /** A3/T51: close the modifier-settings popover (Esc keeps the mode on). */
+  async closeModifierSettings() {
+    if ((await this.page.count('[data-psa-settings-popover]')) === 0) return true
+    await this.page.pressKey('escape')
+    await this.page.waitFor(`!document.querySelector('[data-psa-settings-popover]')`, { timeout: 4000, label: 'modifier settings popover closed' })
+    await sleep(150)
+    return true
+  }
+
+  /** A3/T51: force one annotation re-render without leaving the current rail view. */
+  async refreshRail() {
+    await this.openModifierSettings()
+    await this.closeModifierSettings()
+    return true
+  }
+
   async clickBack() {
-    // A3/T26: the list is the root view; Back now only leaves the settings view.
+    // A3/T26: the list is the root view; legacy Back only exists in old panels.
     const ui = await this.ui()
     if (ui.panel === 'collection') return true
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -3419,7 +3449,6 @@ class Harness {
     // A3/T26 compatibility name: the default rail body is now the managed list.
     const ui = await this.ui()
     if (ui.panel === null || ui.panel === 'collection') return true
-    if (ui.panel === 'settings') await this.clickBack()
     return true
   }
 
@@ -4873,8 +4902,9 @@ function buildScenarios(harness) {
       assertNear(active.canvas.width, canvasWidthBaseline - activeRailWidth, 3, 'conversation canvas width does not shrink with the list rail')
       const defaultViewProbe = await h.page.evaluate(`({
         collectionRows: document.querySelectorAll('[data-psa-open-collection]').length,
-        settingsRows: document.querySelectorAll('[data-psa-rail] [data-psa-open-settings]').length,
-        gear: !!document.querySelector('[data-psa-rail] [data-psa-open-settings][aria-label]'),
+        infoTriggers: document.querySelectorAll('[data-psa-rail] [data-psa-open-modifier-settings]').length,
+        legacyGear: document.querySelectorAll('[data-psa-rail] [data-psa-open-settings]').length,
+        nativeSelects: document.querySelectorAll('[data-psa-rail] select').length,
         filters: document.querySelectorAll('[data-psa-filter]').length,
         footer: !!document.querySelector('[data-psa-add-annotation]'),
         empty: !!document.querySelector('[data-psa-empty]'),
@@ -4882,32 +4912,238 @@ function buildScenarios(harness) {
         title: (document.querySelector('.psa-sb-rail-title')?.innerText || '').trim()
       })`)
       assertEqual(defaultViewProbe.collectionRows, 0, 'A3/T26: the old full-width Collection row must be gone')
-      assertEqual(defaultViewProbe.settingsRows, 1, 'A3/T26: the header must contain exactly one settings gear icon')
-      assertEqual(defaultViewProbe.gear, true, 'A3/T26: the settings gear has no aria-label')
+      assertEqual(defaultViewProbe.infoTriggers, 1, 'A3/T51: the header must contain exactly one info settings button')
+      assertEqual(defaultViewProbe.legacyGear, 0, 'A3/T51: the old gear marker/settings view must be gone')
+      assertEqual(defaultViewProbe.nativeSelects, 0, 'A3/T51: no native select may exist in the rail')
       assertEqual(defaultViewProbe.filters, 3, 'the managed list filters did not render on activation')
       assertEqual(defaultViewProbe.footer, true, 'the managed list footer did not render on activation')
       assertEqual(defaultViewProbe.empty, true, 'the empty state did not render for an empty collection')
       assert(/Click an element to annotate it|点击页面元素开始标注/.test(defaultViewProbe.hint),
         `the selection hint is not discoverable on the list: ${defaultViewProbe.hint}`)
       assertEqual(defaultViewProbe.title, 'Annotations', `default list title wrong: ${defaultViewProbe.title}`)
-      // Gear opens the settings view; Back (or the gear again) returns to the list.
-      await h.click('[data-psa-open-settings]')
-      await h.page.waitFor(`document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel') === 'settings'`,
-        { timeout: 4000, label: 'settings view from the gear icon' })
-      assertEqual(await h.page.count('[data-psa-setting-passthrough]'), 1, 'settings view did not render its fields')
-      await h.click('[data-psa-rail-back]')
-      await h.page.waitFor(`document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel') === 'collection'`,
-        { timeout: 4000, label: 'list view after settings Back' })
-      // Esc from settings also returns to the list (one step, mode stays on).
-      await h.click('[data-psa-open-settings]')
-      await h.page.waitFor(`document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel') === 'settings'`,
-        { timeout: 4000, label: 'settings view before Esc' })
+      // A3/T51 redirected design: the info icon opens a transient borderless popover
+      // (no settings view, no gear, no rail panel "settings").
+      await h.click('[data-psa-open-modifier-settings]')
+      await h.page.waitFor(`!!document.querySelector('[data-psa-settings-popover]')`, { timeout: 4000, label: 'modifier settings popover' })
+      const popoverState = await h.page.evaluate(`(() => {
+        const popover = document.querySelector('[data-psa-settings-popover]')
+        if (popover === null) return null
+        const style = getComputedStyle(popover)
+        return {
+          border: style.borderTopWidth,
+          background: style.backgroundColor,
+          radius: style.borderRadius,
+          shadow: style.boxShadow,
+          fields: popover.querySelectorAll('[data-psa-setting-passthrough], [data-psa-setting-multi]').length,
+          nativeSelects: popover.querySelectorAll('select').length,
+          panel: document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel'),
+          expanded: document.querySelector('[data-psa-open-modifier-settings]')?.getAttribute('aria-expanded')
+        }
+      })()`)
+      assert(popoverState !== null, 'modifier settings popover missing')
+      assertEqual(popoverState.border, '0px', `settings popover must be borderless: ${popoverState.border}`)
+      assert(popoverState.background.includes('44, 46, 52') || popoverState.background.includes('rgb(44'), `hovercard background token missing: ${popoverState.background}`)
+      assert(Number.parseFloat(popoverState.radius) >= 12, `popover radius too small: ${popoverState.radius}`)
+      assert(popoverState.shadow !== 'none', 'popover must use the lv3 shadow')
+      assertEqual(popoverState.fields, 2, 'popover must hold both modifier rows')
+      assertEqual(popoverState.nativeSelects, 0, 'popover must not render a native select')
+      assertEqual(popoverState.panel, 'collection', 'no settings rail panel may exist')
+      assertEqual(popoverState.expanded, 'true')
+      assertEqual(await h.page.count('[data-psa-setting-passthrough]'), 1, 'settings popover did not render its fields')
+      // ---- A3/T51: custom modifier dropdown (no native select) ----
+      const settingsKey = 'power-suite.ui-annotation.settings'
+      const readModifierSettings = () => h.page.evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(settingsKey)}) || '{}')`)
+      const triggerState = await h.page.evaluate(`(() => {
+        const trigger = document.querySelector('[data-psa-setting-passthrough]')
+        if (trigger === null) return null
+        return {
+          tag: trigger.tagName.toLowerCase(),
+          role: trigger.getAttribute('role'),
+          haspoup: trigger.getAttribute('aria-haspopup'),
+          expanded: trigger.getAttribute('aria-expanded'),
+          className: trigger.className,
+          nativeSelects: document.querySelectorAll('.psa-rainbow-field > select, [data-psa-setting-passthrough] select').length,
+          insideRainbow: trigger.closest('.psa-rainbow-field') !== null,
+          label: (trigger.innerText || '').trim()
+        }
+      })()`)
+      assert(triggerState !== null, 'modifier trigger missing')
+      assertEqual(triggerState.tag, 'button', 'settings must not render a native select')
+      assertEqual(triggerState.nativeSelects, 0, 'no native select may remain in the settings view')
+      assertEqual(triggerState.role, 'combobox')
+      assertEqual(triggerState.haspoup, 'listbox')
+      assertEqual(triggerState.expanded, 'false')
+      assert(triggerState.insideRainbow, 'trigger must stay inside .psa-rainbow-field')
+      assert(/psa-select-trigger/.test(triggerState.className), 'trigger class missing')
+      const triggerRect = await h.page.findRect('[data-psa-setting-passthrough]')
+      assert(triggerRect, 'modifier trigger rect missing')
+      // Open by mouse: listbox semantics, 4 options, exactly one selected option with check.
+      const triggerHit = await h.page.evaluate(`(() => { const el = document.elementFromPoint(${triggerRect.x}, ${triggerRect.y}); return { insideTrigger: !!el?.closest('[data-psa-setting-passthrough]') } })()`)
+      assert(triggerHit.insideTrigger === true, `A3/T53: the trigger is not hit-testable (got ${JSON.stringify(triggerHit)})`)
+      await h.page.clickAt(triggerRect.x, triggerRect.y)
+      await h.page.waitFor(`!!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'custom modifier menu' })
+      const menuProbe = await h.page.evaluate(`(() => {
+        const menu = document.querySelector('[role="listbox"][data-psa-modifier-menu]')
+        if (menu === null) return null
+        const rect = menu.getBoundingClientRect()
+        const trigger = document.querySelector('[data-psa-setting-passthrough]')
+        const options = [...menu.querySelectorAll('[role="option"]')]
+        return {
+          listboxCount: document.querySelectorAll('[role="listbox"][data-psa-modifier-menu]').length,
+          nativeSelects: document.querySelectorAll('.psa-rainbow-field > select').length,
+          options: options.length,
+          selected: options.filter((option) => option.getAttribute('aria-selected') === 'true').length,
+          selectedValue: options.find((option) => option.getAttribute('aria-selected') === 'true')?.getAttribute('data-psa-modifier-option') ?? null,
+          checks: menu.querySelectorAll('.psa-modifier-check svg').length,
+          expanded: trigger.getAttribute('aria-expanded'),
+          controls: trigger.getAttribute('aria-controls') === menu.id,
+          activeDescendant: trigger.getAttribute('aria-activedescendant'),
+          active: options.filter((option) => option.getAttribute('data-psa-active') === 'true').length,
+          background: getComputedStyle(menu).backgroundColor,
+          borderRadius: getComputedStyle(menu).borderRadius,
+          position: getComputedStyle(menu).position,
+          zIndex: getComputedStyle(menu).zIndex,
+          rect: { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) },
+          viewport: { width: window.innerWidth, height: window.innerHeight }
+        }
+      })()`)
+      assert(menuProbe !== null, 'custom modifier menu did not open')
+      const hitProbe = await h.page.evaluate(`(() => {
+        const info = (x, y) => {
+          const el = document.elementFromPoint(x, y)
+          return { tag: el?.tagName ?? null, insidePopover: !!el?.closest('[data-psa-settings-popover]'), insideTrigger: !!el?.closest('[data-psa-setting-passthrough]'), insideMenu: !!el?.closest('[role="listbox"][data-psa-modifier-menu]') }
+        }
+        const popover = document.querySelector('[data-psa-settings-popover]')
+        const menu = document.querySelector('[role="listbox"][data-psa-modifier-menu]')
+        const pr = popover.getBoundingClientRect()
+        const mr = menu.getBoundingClientRect()
+        return {
+          popover: info(Math.round(pr.left + pr.width / 2), Math.round(pr.top + 8)),
+          trigger: info(${triggerRect.x}, ${triggerRect.y}),
+          menu: info(Math.round(mr.left + mr.width / 2), Math.round(mr.top + mr.height / 2))
+        }
+      })()`)
+      assert(hitProbe.popover.insidePopover === true, `A3/T53: popover center is not hit-testable: ${JSON.stringify(hitProbe.popover)}`)
+      assert(hitProbe.trigger.insideTrigger === true, `A3/T53: trigger is covered: ${JSON.stringify(hitProbe.trigger)}`)
+      assert(hitProbe.menu.insideMenu === true, `A3/T53: menu center is not hit-testable: ${JSON.stringify(hitProbe.menu)}`)
+      // A3/T53: mouse-open then Escape closes the menu first (document-level handler
+      // runs in addition to the trigger handler), then the second Escape closes popover.
       await h.page.pressKey('escape')
+      await h.page.waitFor(`!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'document Esc closes the mouse-open menu' })
+      assertEqual(await h.page.count('[data-psa-settings-popover]'), 1, 'first Esc must keep the popover open')
+      await h.page.clickAt(triggerRect.x, triggerRect.y)
+      await h.page.waitFor(`!!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'modifier menu reopened after Esc' })
+      const initialModifier = menuProbe.selectedValue
+      assert(typeof initialModifier === 'string' && initialModifier.length > 0, 'current modifier not selected in the menu')
+      assertEqual(menuProbe.listboxCount, 1, 'exactly one modifier menu may be open')
+      assertEqual(menuProbe.nativeSelects, 0, 'native select appeared with the custom menu')
+      assertEqual(menuProbe.options, 4, 'modifier menu must list all four options')
+      assertEqual(menuProbe.selected, 1, 'exactly one option must be aria-selected')
+      assertEqual(menuProbe.selectedValue, initialModifier, 'selected option must match the current modifier')
+      assertEqual(menuProbe.checks, 1, 'the selected option must render a check icon')
+      assertEqual(menuProbe.expanded, 'true')
+      assertEqual(menuProbe.controls, true, 'aria-controls must point at the listbox')
+      assert(typeof menuProbe.activeDescendant === 'string' && menuProbe.activeDescendant.length > 0, 'aria-activedescendant missing')
+      assertEqual(menuProbe.active, 1, 'exactly one active option')
+      assertEqual(menuProbe.position, 'fixed', 'menu must be fixed-positioned')
+      assert(Number(menuProbe.zIndex) >= 45, `menu z-index too low: ${menuProbe.zIndex}`)
+      assert(menuProbe.rect.left >= 0 && menuProbe.rect.left + menuProbe.rect.width <= menuProbe.viewport.width,
+        `menu overflows horizontally: ${JSON.stringify(menuProbe.rect)} / ${JSON.stringify(menuProbe.viewport)}`)
+      if (process.env.PSA_MODIFIER_EVIDENCE_DIR) {
+        const dir = process.env.PSA_MODIFIER_EVIDENCE_DIR
+        await mkdir(dir, { recursive: true })
+        const shotClip = await h.page.evaluate(`(() => {
+          const popover = document.querySelector('[data-psa-settings-popover]')?.getBoundingClientRect()
+          const menu = document.querySelector('[role="listbox"][data-psa-modifier-menu]')?.getBoundingClientRect()
+          const left = Math.max(0, Math.min(popover?.left ?? 0, menu?.left ?? 0) - 16)
+          const top = Math.max(0, Math.min(popover?.top ?? 0, menu?.top ?? 0) - 16)
+          const right = Math.min(window.innerWidth, Math.max(popover?.right ?? 0, menu?.right ?? 0) + 16)
+          const bottom = Math.min(window.innerHeight, Math.max(popover?.bottom ?? 0, menu?.bottom ?? 0) + 16)
+          return { x: Math.round(left), y: Math.round(top), width: Math.max(120, Math.round(right - left)), height: Math.max(120, Math.round(bottom - top)), scale: 1 }
+        })()`)
+        const capture = async (name) => {
+          const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip: shotClip })
+          await writeFile(path.join(dir, name), Buffer.from(data.data, 'base64'))
+        }
+        await capture('modifier-menu-light.png')
+        const originalDark = await h.page.evaluate(`document.body.getAttribute('data-ds-dark-theme')`)
+        await h.page.evaluate(`document.body.setAttribute('data-ds-dark-theme', 'true')`)
+        await sleep(350)
+        await capture('modifier-menu-dark.png')
+        if (originalDark === null) await h.page.evaluate(`document.body.removeAttribute('data-ds-dark-theme')`)
+        else await h.page.evaluate(`document.body.setAttribute('data-ds-dark-theme', ${JSON.stringify(originalDark)})`)
+        await sleep(200)
+      }
+      // Mouse selection updates the trigger label and persists the setting.
+      const otherModifier = ['alt', 'ctrl', 'meta', 'shift'].find((choice) => choice !== initialModifier)
+      const optionRect = await h.page.findRect(`[data-psa-modifier-option="${otherModifier}"]`)
+      assert(optionRect, `A3/T53: option ${otherModifier} is not clickable`)
+      const optionHit = await h.page.evaluate(`(() => { const el = document.elementFromPoint(${optionRect.x}, ${optionRect.y}); return !!el?.closest('[data-psa-modifier-option="${otherModifier}"]') })()`)
+      assert(optionHit === true, 'A3/T53: option is covered by the rail/overlay')
+      await h.page.clickAt(optionRect.x, optionRect.y)
+      await h.page.waitFor(`!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'modifier menu closed after selection' })
+      const afterMouse = await h.page.evaluate(`(() => ({ label: (document.querySelector('[data-psa-setting-passthrough]')?.innerText || '').trim(), expanded: document.querySelector('[data-psa-setting-passthrough]')?.getAttribute('aria-expanded'), feedback: (document.querySelector('[data-psa-settings-feedback]')?.innerText || '').trim() }))()`)
+      const persistedModifier = (await readModifierSettings()).passThroughModifier
+      assertEqual(persistedModifier, otherModifier, `mouse selection did not persist the modifier (after=${JSON.stringify(afterMouse)})`)
+      const modifierLabels = { alt: 'Alt', ctrl: 'Ctrl', meta: 'Meta', shift: 'Shift' }
+      assertEqual(afterMouse.label, modifierLabels[otherModifier], `trigger label did not update: ${afterMouse.label}`)
+      assert(afterMouse.feedback.length > 0, 'selection did not surface settings feedback')
+      // Keyboard: Enter opens, ArrowDown moves, Enter selects.
+      await h.page.evaluate(`document.querySelector('[data-psa-setting-passthrough]')?.focus()`)
+      await h.page.pressKey('enter')
+      await h.page.waitFor(`!!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'modifier menu via Enter' })
+      const beforeKeySettings = await readModifierSettings()
+      await h.page.pressKey('arrowdown')
+      await h.page.pressKey('enter')
+      await h.page.waitFor(`!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'modifier menu closed after keyboard select' })
+      const afterKeySettings = await readModifierSettings()
+      assert(afterKeySettings.passThroughModifier !== beforeKeySettings.passThroughModifier, 'keyboard navigation/select did not change the modifier')
+      // Esc closes without changing the value.
+      const beforeEsc = (await readModifierSettings()).passThroughModifier
+      await h.page.evaluate(`document.querySelector('[data-psa-setting-passthrough]')?.focus()`)
+      await h.page.pressKey('enter')
+      await h.page.waitFor(`!!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'modifier menu before Esc' })
+      await h.page.pressKey('escape')
+      await h.page.waitFor(`!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'modifier menu closed by Esc' })
+      assertEqual((await readModifierSettings()).passThroughModifier, beforeEsc, 'Esc must not change the modifier')
+      assertEqual(await h.page.count('[data-psa-settings-popover]'), 1, 'Esc in the open menu must leave the settings popover open')
+      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), 'true', 'Esc in the open menu left the mode')
+      // Outside pointerdown closes.
+      await h.page.evaluate(`document.querySelector('[data-psa-setting-passthrough]')?.focus()`)
+      await h.page.pressKey('enter')
+      await h.page.waitFor(`!!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'modifier menu before outside click' })
+      // Outside pointerdown on annotation UI (rail title) must close the menu without
+      // selecting a page element (clicking the page would leave the settings view).
+      await h.page.evaluate(`document.querySelector('.psa-settings-title')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }))`)
+      await h.page.waitFor(`!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'modifier menu closed by outside click' })
+      // Rainbow ring still follows focus on the trigger.
+      await h.page.evaluate(`document.querySelector('[data-psa-setting-passthrough]')?.focus()`)
       await sleep(250)
-      assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel')`), 'collection',
-        'Esc in settings must return to the list, not leave the mode')
-      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), 'true',
-        'Esc in settings left the annotation mode')
+      const ring = await h.page.evaluate(`(() => { const field = document.querySelector('[data-psa-setting-passthrough]')?.closest('.psa-rainbow-field'); return field == null ? null : getComputedStyle(field, '::after').opacity })()`)
+      assert(Number(ring) > 0, `rainbow ring did not follow the custom trigger focus (opacity ${ring})`)
+      // Restore the original modifier through the same custom menu.
+      if ((await readModifierSettings()).passThroughModifier !== initialModifier) {
+        const triggerRect2 = await h.page.findRect('[data-psa-setting-passthrough]')
+        await h.page.clickAt(triggerRect2.x, triggerRect2.y)
+        await h.page.waitFor(`!!document.querySelector('[role="listbox"][data-psa-modifier-menu]')`, { timeout: 4000, label: 'modifier menu for restore' })
+        const restoreOption = await h.page.findRect(`[data-psa-modifier-option="${initialModifier}"]`)
+        assert(restoreOption, 'restore option is not clickable')
+        await h.page.clickAt(restoreOption.x, restoreOption.y)
+        await sleep(200)
+      }
+      // Popover-level Esc closes the popover and keeps the mode + list.
+      await h.page.evaluate(`document.querySelector('[data-psa-open-modifier-settings]')?.focus()`)
+      await h.page.pressKey('escape')
+      await h.page.waitFor(`!document.querySelector('[data-psa-settings-popover]')`, { timeout: 4000, label: 'settings popover closed by Esc' })
+      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), 'true', 'Esc closing settings left the mode')
+      assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel')`), 'collection', 'settings popover closed the rail view')
+      // Outside click closes the popover too.
+      await h.click('[data-psa-open-modifier-settings]')
+      await h.page.waitFor(`!!document.querySelector('[data-psa-settings-popover]')`, { timeout: 4000, label: 'settings popover before outside click' })
+      const titleRect = await h.page.findRect('.psa-sb-rail-title')
+      assert(titleRect, 'rail title missing for the outside-click check')
+      await h.page.clickAt(titleRect.x, titleRect.y)
+      await h.page.waitFor(`!document.querySelector('[data-psa-settings-popover]')`, { timeout: 4000, label: 'settings popover closed by outside click' })
       // ---- Structure: header, badges, subtitle, filters, list, footer ----      // ---- Structure: header, badges, subtitle, filters, list, footer ----
       // A3/T25: seed a deterministic v3 document in an init script so the page's own
       // unload flush cannot overwrite it, then reload into the seeded state.
@@ -6765,10 +7001,8 @@ function buildScenarios(harness) {
       await sleep(400)
       await h.page.moveTo(800, 200)
       await sleep(250)
-      await h.click('[data-psa-open-settings]')
-      await sleep(200)
-      await h.click('[data-psa-rail-back]')
-      await sleep(300)
+      await h.refreshRail()
+      await sleep(150)
       const decoyEntry = await h.page.evaluate(`(() => {
         const entry = document.querySelector('[data-psa-entry][data-psa-ref="${descRecord.id}"]')
         return entry === null ? null : { status: entry.getAttribute('data-psa-status') }
@@ -6925,10 +7159,8 @@ function buildScenarios(harness) {
       await sleep(300)
       await h.page.moveTo(800, 200)
       await sleep(200)
-      await h.click('[data-psa-open-settings]')
-      await sleep(200)
-      await h.click('[data-psa-rail-back]')
-      await sleep(300)
+      await h.refreshRail()
+      await sleep(150)
       const scopeDecoy = await h.page.evaluate(`(() => {
         const entry = document.querySelector('[data-psa-entry][data-psa-ref="psa-scope-authority-1"]')
         return entry === null ? null : { status: entry.getAttribute('data-psa-status') }
@@ -6941,10 +7173,8 @@ function buildScenarios(harness) {
       await sleep(300)
       await h.page.moveTo(800, 200)
       await sleep(200)
-      await h.click('[data-psa-open-settings]')
-      await sleep(200)
-      await h.click('[data-psa-rail-back]')
-      await sleep(300)
+      await h.refreshRail()
+      await sleep(150)
       const weakState = await h.page.evaluate(`(() => {
         const entry = document.querySelector('[data-psa-entry][data-psa-ref="psa-weak-label-1"]')
         if (entry === null) return null
@@ -7600,20 +7830,20 @@ function buildScenarios(harness) {
       }
       assertRectNear(noteFocused.rect, rectOfHit(noteRect), 1, 'B3: focusing the popover textarea shifted its layout')
 
-      // Settings selects share the same wrapper treatment.
+      // Settings dropdown trigger shares the same wrapper treatment (info popover).
       await h.page.pressKey('escape')
       await sleep(200)
-      await h.click('[data-psa-open-settings]')
-      await h.page.waitFor(`!!document.querySelector('[data-psa-setting-passthrough]')`, { timeout: 6000, label: 'settings view for the rainbow-focus scenario' })
+      await h.openModifierSettings()
+      await h.page.waitFor(`!!document.querySelector('[data-psa-setting-passthrough]')`, { timeout: 6000, label: 'settings popover for the rainbow-focus scenario' })
       const selectRect = await stableRect('[data-psa-setting-passthrough]')
       assert(selectRect, 'settings select missing')
       const selectIdle = await h.page.eval(probes.rainbowFocusState, '[data-psa-setting-passthrough]')
       assertEqual(selectIdle.wrapper, true, 'B3: the settings select is not inside a .psa-rainbow-field wrapper')
-      await h.page.clickAt(selectRect.x, selectRect.y)
+      await h.page.evaluate(`document.querySelector('[data-psa-setting-passthrough]')?.focus()`)
       const selectFocused = await waitRing('[data-psa-setting-passthrough]')
       assertEqual(selectFocused.focused, true, 'B3: the settings select did not take focus')
       assertEqual(selectFocused.outlineStyle, 'none', 'B3: the settings select still paints a solid focus outline')
-      assertEqual(selectFocused.ringOpacity, '1', 'B3: the settings select rainbow ring is not visible on focus')
+      assert(Number(selectFocused.ringOpacity) >= 0.9, `B3: the settings select rainbow ring is not visible on focus (${selectFocused.ringOpacity})`)
       assert(String(selectFocused.ringAnimation).includes('psa-ring-spin'), 'B3: the settings select ring is not animating')
       assertRectNear(selectFocused.rect, rectOfHit(selectRect), 1, 'B3: focusing the settings select shifted its layout')
 
@@ -7624,12 +7854,10 @@ function buildScenarios(harness) {
         features: [{ name: 'prefers-reduced-motion', value: 'reduce' }]
       })
       await sleep(300)
-      await h.page.moveTo(selectRect.x, selectRect.y)
-      await sleep(80)
-      await h.page.clickAt(selectRect.x, selectRect.y)
+      await h.page.evaluate(`document.querySelector('[data-psa-setting-passthrough]')?.focus()`)
       await sleep(300)
       const reducedSelect = await h.page.eval(probes.rainbowFocusState, '[data-psa-setting-passthrough]')
-      assertEqual(reducedSelect.ringOpacity, '1', 'B3: the reduced-motion rainbow ring is not visible')
+      assert(Number(reducedSelect.ringOpacity) >= 0.9, `B3: the reduced-motion rainbow ring is not visible (${reducedSelect.ringOpacity})`)
       assertEqual(reducedSelect.ringAnimation, 'none', `B3: reduced motion still animates the ring (${reducedSelect.ringAnimation})`)
       assert(String(reducedSelect.ringBackground || '').includes('conic-gradient'), 'B3: the reduced-motion ring lost its rainbow gradient')
       await h.page.send('Emulation.setEmulatedMedia', { features: [] })

@@ -129,7 +129,7 @@ a strip freed from the right edge instead of covering the conversation.
 
 ![Annotation mode with the page shrunk and the rail in the freed right strip](assets/annotation-mode.png)
 
-- The active-mode rail (managed annotation list and its settings view) uses the
+- The active-mode rail (managed annotation list) uses the
   wide `clamp(320px, 24vw, 420px)` — ≈415 px at a 1728 px viewport — so rows and
   group cards stay readable; the frame padding follows and the canvas shrinks by
   the rail width. There is no compact intermediate view any more; only the
@@ -188,14 +188,16 @@ intermediate status screen and no full-width "Collection" / "Settings" entry
 rows:
 
 - header `Annotations` + total badge + a compact one-line subtitle and, when
-  elements are selected, a `N elements selected` hint; a **Remix settings-line
-  icon**, collapse and exit controls sit in the top rail header (no launcher
-  control is docked there: the launcher hides while active);
+  elements are selected, a `N elements selected` hint; a **Remix
+  information-line icon** (transient modifier-settings popover), collapse and exit
+  controls sit in the top rail header (no launcher control is docked there: the
+  launcher hides while active);
 - the filter chips, list toolbar, singles/group cards and the two-action footer
   are visible immediately (empty state when nothing is annotated yet);
-- the gear opens the existing settings view; its Back control or Esc returns to
-  the list, and Esc from the list leaves the mode (after the usual edit/selection
-  rungs). The launcher/collapse/exit controls stay available in that header.
+- the info (i) icon opens the transient modifier-settings popover; Esc or an
+  outside click closes it (the mode stays on), and Esc from the list leaves the
+  mode after the usual edit/selection rungs. The launcher/collapse/exit controls
+  stay available in that header.
 
 ### Launcher hide/show
 
@@ -260,9 +262,9 @@ opens the note popover.
   2. the current selection clears and its popover closes;
   3. the mode turns off and the original layout returns.
 
-  When the collection or settings view is open, Esc returns to the status view
-  before the mode can be exited; an expanded note editor or an in-progress
-  marquee also closes on Esc.
+  When the modifier-settings popover or its dropdown is open, Esc closes those
+  first (dropdown, then popover) before any mode exit; an expanded note editor or
+  an in-progress marquee also closes on Esc.
 - **Interaction isolation** — while the mode is active and not passed through,
   the pointer events that could drive the page are consumed in the capture phase:
   `pointerdown`, `mousedown`, `pointerup`, `mouseup`, `click`, `auxclick`,
@@ -1101,8 +1103,25 @@ insertion, and the composer keeps focus so the human can edit before sending.
 
 ## Settings
 
-The rail's **settings** view holds the two interaction modifiers. Both apply
-immediately, and the key handlers always read the current values.
+The rail header has a small **info (i) icon** (Remix information-line) that opens
+a transient, **borderless** modifier-settings popover anchored to it (no settings
+view, gear page, or rail navigation step). The popover uses the plugin hovercard
+style — background `var(--dsw-hovercard-bg,#2C2C2E)`, no border, 14px radius,
+`--dsw-shadow-lv3`, white 12px text — and holds the two interaction modifier rows.
+Each row is a **custom dropdown** (trigger button + chevron, fixed portal menu):
+there is no native `<select>`/OS menu anywhere.
+
+Both modifiers apply immediately, and the key handlers always read the current
+values. The dropdown trigger is a `role=combobox` button inside
+`.psa-rainbow-field` (rainbow focus ring preserved) with `aria-haspopup=listbox`,
+`aria-expanded`, `aria-controls` and `aria-activedescendant`; the menu is a fixed
+listbox (below the trigger by default, flipped above when needed, viewport-clamped,
+at least 180px wide) with `role=option`, `aria-selected`, a check icon on the
+selected row, and hover/active accents. Keyboard: Enter/Space/ArrowDown opens;
+ArrowUp/Down/Home/End navigate; Enter/Space selects; Esc closes the dropdown and
+keeps focus on the trigger; Tab and outside pointerdown close; only one menu is
+open at a time; focus is never trapped. Esc with the popover open closes the
+popover (mode stays on); clicking outside it closes it as well.
 
 | Setting | Default | Choices | Purpose |
 |---|---|---|---|
@@ -1111,8 +1130,8 @@ immediately, and the key handlers always read the current values.
 
 The two modifiers must never be equal. Setting one to the other's current value
 applies the new value and moves the other modifier to a different choice; the
-settings view names the moved field and its new value, and an equal pair is never
-stored. Missing or unreadable stored values fall back to the defaults.
+popover's inline status line names the moved field and its new value, and an equal
+pair is never stored. Missing or unreadable stored values fall back to the defaults.
 
 Storage is browser-local and has four separate keys under the
 `power-suite.ui-annotation.` prefix:
@@ -1141,7 +1160,7 @@ not synced to another browser or device.
 ### Focus treatment
 
 Every annotation input — the popover request field, the collection row note, the
-expanded note editor, and the two settings selects — uses the plugin's shared
+expanded note editor, and the two settings dropdown triggers — uses the plugin's shared
 **rainbow focus ring** instead of a solid blue outline. The ring is painted by a
 wrapper's `::after` mask ring (2 px band, `inset: -2px`, no layout shift), fades
 in over 140 ms, spins once every 3.2 s while drifting hue over 14 s, and uses the
@@ -1303,7 +1322,8 @@ package manifest.
   sending. This is the shell's semantic API, not a DOM setter or a synthetic
   `input` event. The composer is focused afterwards.
 - **Explicit state machine** — one pure reducer with the phases
-  `off | idle | inspect | selected | multi | collection`, a settings view flag,
+  `off | idle | inspect | selected | multi | collection`, a legacy `settings` view value
+  (kept only for state compatibility; unreachable in the UI),
   and transient `passThrough`, `boxing`, `draggingLauncher`, and
   `draggingPopover` states. Every transition is an action
   (`activate`, `deactivate`, `hover`, `selectSingle`, `toggleMulti`, `setMulti`,
@@ -1697,7 +1717,7 @@ acceptance `test/browser/`.
   the rail, and the collection still work.
 - **Modifier conflicts are moved, not hidden.** Setting one modifier to the
   other's current key keeps the pair valid by moving the other modifier, and the
-  settings view says what changed; an equal pair is never stored.
+  popover status line says what changed; an equal pair is never stored.
 - **Annotation mode is not accessible by keyboard alone.** The mode is entered
   and driven with the pointer (the launcher, hover, selection, and popover are
   mouse-oriented); keyboard users can use native keyboard shortcuts while it is
@@ -1768,9 +1788,9 @@ opens the note popover.
   2. the current selection clears and its popover closes;
   3. the mode turns off and the original layout returns.
 
-  When the collection or settings view is open, Esc returns to the status view
-  before the mode can be exited; an expanded note editor or an in-progress
-  marquee also closes on Esc.
+  When the modifier-settings popover or one of its dropdowns is open, Esc closes
+  those first (dropdown, then popover) and the mode stays on; an expanded note
+  editor or an in-progress marquee also closes on Esc.
 - **Interaction isolation** — while the mode is active and not passed through,
   the pointer events that could drive the page are consumed in the capture phase:
   `pointerdown`, `mousedown`, `pointerup`, `mouseup`, `click`, `auxclick`,
@@ -2404,7 +2424,7 @@ immediately, and the key handlers always read the current values.
 
 The two modifiers must never be equal. Setting one to the other's current value
 applies the new value and moves the other modifier to a different choice; the
-settings view names the moved field and its new value, and an equal pair is never
+popover status line names the moved field and its new value, and an equal pair is never
 stored. Missing or unreadable stored values fall back to the defaults.
 
 Storage is browser-local and has four separate keys under the
@@ -2596,7 +2616,8 @@ package manifest.
   sending. This is the shell's semantic API, not a DOM setter or a synthetic
   `input` event. The composer is focused afterwards.
 - **Explicit state machine** — one pure reducer with the phases
-  `off | idle | inspect | selected | multi | collection`, a settings view flag,
+  `off | idle | inspect | selected | multi | collection`, a legacy `settings` view value
+  (kept only for state compatibility; unreachable in the UI),
   and transient `passThrough`, `boxing`, `draggingLauncher`, and
   `draggingPopover` states. Every transition is an action
   (`activate`, `deactivate`, `hover`, `selectSingle`, `toggleMulti`, `setMulti`,
@@ -2990,7 +3011,7 @@ acceptance `test/browser/`.
   the rail, and the collection still work.
 - **Modifier conflicts are moved, not hidden.** Setting one modifier to the
   other's current key keeps the pair valid by moving the other modifier, and the
-  settings view says what changed; an equal pair is never stored.
+  popover status line says what changed; an equal pair is never stored.
 - **Annotation mode is not accessible by keyboard alone.** The mode is entered
   and driven with the pointer (the launcher, hover, selection, and popover are
   mouse-oriented); keyboard users can use native keyboard shortcuts while it is
