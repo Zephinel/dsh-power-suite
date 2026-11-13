@@ -2334,6 +2334,7 @@ if (ui === undefined) {
     assert.ok(footer.includes("t('sidebar.cancelAnnotation')"), 'footer danger label is Cancel Annotation')
     assert.ok(footer.includes('controller.requestExit()'), 'footer danger uses the confirmed exit path')
     assert.ok(source.includes('REMIX_SETTINGS_LINE'), 'settings-line glyph constant exists')
+    assert.ok(source.includes("M12 1L21.5 6.5V17.5L12 23L2.5 17.5V6.5L12 1Z"), 'settings-line constant carries the official Remix settings-line path (hexagon + ring), not a different gear glyph')
     assert.ok(source.includes('RemixGlyph(REMIX_SETTINGS_LINE'), 'rail header uses the settings-line glyph')
     assert.ok(source.includes('pointer-events:none') && source.includes('.psa-layer{position:fixed'), 'marks layer remains pointer-transparent')
   })
