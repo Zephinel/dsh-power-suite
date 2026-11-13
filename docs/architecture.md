@@ -561,8 +561,9 @@ delete actions, and the requirement popover commits or updates the record,
 deletes it with a 5 s undo slot, and auto-dismisses after either action. The
 right rail's **default body** is the managed annotation sidebar (no status or
 Collection entry to click through): the header carries the title, total badge,
-selection hint, a settings-line icon (opens the settings view; Back/Esc
-returns), collapse and exit. It widens to `clamp(320px, 24vw, 420px)` (the frame
+selection hint, an info (i) icon (opens a borderless modifier-settings popover
+with custom dropdowns; document-level Esc closes the menu then the popover),
+collapse and exit. It widens to `clamp(320px, 24vw, 420px)` (the frame
 padding and canvas follow; settings keeps the same wide width to avoid a jump)
 and renders an **Annotations** header with a total badge, **All / Singles /
 Groups** filters with live counts, a unified list of single rows and collapsible

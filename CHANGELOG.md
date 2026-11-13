@@ -377,6 +377,17 @@ heading is added until the release is cut.
   pinned by unit tests. Deferred reference-conformance limitations moved into
   the user docs.
 
+- UI element annotation settings: the rail header's settings gear/settings view
+  is replaced by an **info (i) icon** that opens a small **borderless
+  hovercard-style popover** (background `#2C2C2E`, border 0, lv3 shadow) with
+  the two modifier rows — pass-through and multi-select — each using a
+  **custom dropdown** (combobox trigger + fixed listbox, checkmark, full
+  keyboard support, ARIA combobox/listbox/option, outside/Esc close, no native
+  select or OS menu). Conflict feedback appears inline; the popover renders
+  inline in the rail/overlay stacking context (above the raised annotation
+  layer) and document-level Esc closes the menu first, then the popover, with
+  the mode staying on. The old settings view/Back path is removed.
+
 ### Removed
 
 - Standalone Project detail page: the `project-view` feature is removed —
