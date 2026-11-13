@@ -389,6 +389,13 @@
   canvas shrink by the delta and restore on exit, and the narrow-viewport layout
   falls back to the 320 px overlay rail. On very narrow viewports the sidebar can
   feel large — collapse it to the 48 px strip or use the overlay mode.
+- **Transient-surface pinning covers pointer-leave closes only.** While a
+  floating-surface annotation's popover is open, pointer-leave close events are
+  suppressed so the surface stays put; a menu that closes from a timer, scroll
+  or keyboard path can still disappear (the status then changes honestly while
+  the captured locator summary is preserved). The real async subagent dropdown
+  is not deterministic in the blank-session E2E harness, so a synthetic
+  hover-menu fixture is the acceptance oracle for this behavior.
 - **Exiting the mode clears the annotation records (by design).** The header X,
   the footer **Cancel Annotation** action and the final Esc step ask for
   confirmation and then clear every single/group record, page mark and the
