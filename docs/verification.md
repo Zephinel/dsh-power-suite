@@ -22,15 +22,15 @@ npm run pack:check
 
 Current evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round):
 
-- `npm test`: **219 tests, 219 passed, 0 failed, 0 skipped** after the 0.3.0
+- `npm test`: **222 tests, 222 passed, 0 failed, 0 skipped** after the 0.3.0
   Project-view removal (the 24 project-view tests were deleted with the page),
   including **14** read-acks, **22** session-activity Host tests, **7** extra
   interrupted-session tests (error/max-tokens/aborted-cause cases and SSE stream
-  frames), **11** Dynamic-Workspaces hover-card figure tests, and **109**
+  frames), **11** Dynamic-Workspaces hover-card figure tests, and **112**
   UI-element-annotation tests through the browser-factory test seam; per-file:
   dynamic-workspaces-stats 11, interrupted-host 20, interrupted-sessions 7,
   prompt-history 6, read-acks 14, session-activity 22, session-artifacts 16,
-  settings 6, ui-annotation 109, workspace-presets 8.
+  settings 6, ui-annotation 112, workspace-presets 8.
 - `npm run check`: passed (`16 modules, 10 test files`).
 - Interrupted-state SSE transport was verified with cookie auth: 200,
   `content-type: text/event-stream; charset=utf-8`, no-store/no-buffering, first
@@ -213,13 +213,24 @@ API/plugin network failures in every run below):
   >= 8 px inside the pill's right edge, pill content-paced, mask boundary
   recalculated), and both cross-branch annotation-mode hover-card pin states.
 - Annotation harness `test/browser/annotation.e2e.mjs`: `--smoke` **6/6 PASS**
-  with the **91-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
+  with the **100-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
   FAIL 0** (including `10b`, the real pinned-cross-branch-card check),
   scenario 11 **PASS 7 / 0 / 0**, scenario 12 **PASS 7 / 0 / 0** (marks, detail
   card, requirement edit with `updatedAt`, delete → 5 s undo, popover layout:
   delete in the Requirement caption row (marked state only), footer exactly two
   primary buttons on one non-wrapping row, caption→textarea gap 9 px, rainbow
   ring exact on all edges),
+  scenario 12 additionally proves P1/P2 anchor hardening: duplicate-text rows
+  are disambiguated by capture-time context and resolve via text-quote; a
+  one-character text edit reports **Content changed** (not Missing); an
+  icon-only target replaced in place reports **changed** and draws **no mark**
+  on the replacement (weak-identity gate), while a strong-identity text target
+  still resolves via text anchor; Copy locator/XPath/JS path are live-tested in
+  the popover, detail card and rail row (live vs saved-anchor vs full-XPath
+  unavailable toasts); rendered-text whitespace separators and bounded fallback
+  scans/cache are unit-tested. The round went through an independent review:
+  first verdict FAIL (icon-only false Resolved), fixed at one structural
+  identity gate, delta re-review **PASS-WITH-NITS** with gates re-run green.
   scenario 12 additionally proves P0 selector stability: two controls sharing
   `aria-label="New session"` with distinct structural paths resolve **Resolved**
   (high-tier candidate hits 2, lower-tier structural candidate hits 1) instead of
@@ -370,7 +381,7 @@ batch removed-member serialization are unit-tested only.
 > [0.3.0 polish round acceptance](#030-polish-round-acceptance-2026-11-13-merged-build)
 > above**; the annotation model has since grown to the v2 record/persistence,
 > floating-surface, marks/detail and composer-chip implementation with the
-> 91-key seam generation.
+> 100-key seam generation.
 
 Date: 2026-11-12 (round-2 fix build, `fix/ui-annotation-review-fixes`). The
 feature is browser-only ([ui-annotation.md](ui-annotation.md)), so its acceptance
