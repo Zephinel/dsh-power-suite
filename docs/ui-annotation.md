@@ -38,9 +38,11 @@ page's content elements, never reads form values, and never sends the message.
   the popover and clears the selection automatically; floating surfaces are
   marked as transient in the popover. Delete annotation appears only when the
   element is **already marked** (then the primary action reads **Update
-  requirement** and the trash sits beside it): an unmarked selection has nothing
-  to delete yet, so it shows **Mark requirement** only, and the popover's close X
-  discards the selection.
+  requirement**); the trash lives in the **Requirement caption row** at the row's
+  right end, above the textarea, so the footer keeps exactly the two primary
+  buttons on one row. An unmarked selection has nothing to delete yet, so it
+  shows **Mark requirement** only (no trash), and the popover's close X discards
+  the selection.
 - **Composer reference chip** — Quick reference (from the popover, the detail
   card, or a rail row) inserts one native inline reference chip into the current
   composer; the batch footer inserts **one group chip** (`UI annotations × N`).
@@ -392,7 +394,11 @@ It shows:
   updates the record and then auto-dismisses the popover and clears the
   selection, keeping the page marks visible; it does not touch the composer;
 - **Delete annotation** — the danger X for an element that is already in the
-  collection. It deletes immediately (no confirmation) and shows the undo toast.
+  collection. It sits in the Requirement caption row above the textarea
+  (right-aligned, same line as the caption; the footer stays two buttons on one
+  row), deletes immediately (no confirmation), and shows the undo toast. The
+  caption row sits 8 px above the textarea (the earlier gap was 4 px), and the
+  rainbow ring still hugs the textarea border box exactly.
 
 With no Session composer mounted (for example on the Start page), insert actions
 are unavailable: the collection view shows **Open a session before inserting a
