@@ -10386,6 +10386,27 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     }
 
     /**
+     * A3/T42: captured-scope authority decision. In-scope results are authoritative:
+     * a unique in-scope target resolves even if out-of-scope duplicates exist; only
+     * an EMPTY in-scope result may use the bounded document fallback. In-scope
+     * ambiguity is terminal (real decoy inside the captured scope).
+     * @param {{ inScope?: { targets?: Array<object>, ambiguous?: boolean }, fallback?: { targets?: Array<object>, ambiguous?: boolean } }} input - collected candidates.
+     * @returns {{ source: 'scope' | 'fallback' | 'none', target: object | null, ambiguous: boolean }} decision.
+     */
+    function annotationScopeAuthorityOutcome(input) {
+      const source = input !== null && typeof input === 'object' ? input : {}
+      const inScope = source.inScope !== null && typeof source.inScope === 'object' ? source.inScope : {}
+      const fallback = source.fallback !== null && typeof source.fallback === 'object' ? source.fallback : {}
+      const inTargets = Array.isArray(inScope.targets) ? inScope.targets.filter((target) => target !== null && target !== undefined) : []
+      if (inScope.ambiguous === true || inTargets.length > 1) return { source: 'scope', target: null, ambiguous: true }
+      if (inTargets.length === 1) return { source: 'scope', target: inTargets[0], ambiguous: false }
+      const fbTargets = Array.isArray(fallback.targets) ? fallback.targets.filter((target) => target !== null && target !== undefined) : []
+      if (fallback.ambiguous === true || fbTargets.length > 1) return { source: 'fallback', target: null, ambiguous: true }
+      if (fbTargets.length === 1) return { source: 'fallback', target: fbTargets[0], ambiguous: false }
+      return { source: 'none', target: null, ambiguous: false }
+    }
+
+    /**
      * A3/T38 (⑤): count non-overlapping occurrences of `exact` in rendered text.
      * Used by the capture climb so it never falls back to raw textContent.
      * @param {string} text - rendered text.
@@ -14164,16 +14185,29 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       let weakAmbiguity = null
       for (const [name, via] of fallbacks) {
         if (typeof source[name] !== 'function') continue
-        let status = null
+        let rawStatus = null
         try {
-          status = source[name]()
+          rawStatus = source[name]()
         } catch {
-          status = null
+          rawStatus = null
+        }
+        // A3/T44: a resolver may return `{ status, terminal:true }` when its
+        // ambiguity is authoritative (e.g. multiple distinct targets inside the
+        // captured descendant scope). Terminal ambiguity ends the chain — later
+        // position/XPath fallbacks must never override it.
+        let terminal = false
+        let status = rawStatus
+        if (rawStatus !== null && typeof rawStatus === 'object') {
+          terminal = rawStatus.terminal === true
+          status = typeof rawStatus.status === 'string' ? rawStatus.status : null
         }
         if (status === 'resolved' || status === 'changed') return { status, via }
-        // A3/T33: ambiguity from a WEAK strategy (xpath/position) must not stop the
-        // chain — a later text quote can still resolve uniquely.
-        if (status === 'ambiguous' && weakAmbiguity === null) weakAmbiguity = { status: 'ambiguous', via }
+        if (status === 'ambiguous') {
+          if (terminal) return { status: 'ambiguous', via }
+          // A3/T33: ambiguity from a WEAK strategy (xpath/position) must not stop the
+          // chain — a later text quote can still resolve uniquely.
+          if (weakAmbiguity === null) weakAmbiguity = { status: 'ambiguous', via }
+        }
       }
       if (weakAmbiguity !== null) return weakAmbiguity
       return { status: cssStatus, via: 'css' }
@@ -15542,37 +15576,88 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const hint = locator.textPosition !== null && typeof locator.textPosition === 'object' && typeof locator.textPosition.start === 'number'
           ? locator.textPosition.start : undefined
         if (locator.anchorTarget === 'descendant') {
-          // A3/T38 (③): collect all plausible descendant leaves across scopes, climb
-          // each to its signed ancestor, then decide uniqueness — a single scope hit
-          // with drifted context must not terminate as Changed while a decoy exists.
-          const targets = []
-          let ambiguous = false
-          const considerLeaf = (leaf) => {
-            if (leaf === null || leaf === undefined) return
-            const climb = resolveDescendantClimb(ref, leaf)
-            if (climb === null) return
-            if (climb.status === 'ambiguous') ambiguous = true
-            else if (climb.element !== null && !targets.includes(climb.element)) targets.push(climb.element)
-          }
-          for (const scope of quoteSearchScopes(ref)) {
+          noteFallbackScan()
+          const leafTag = typeof locator.anchorLeafTag === 'string' && locator.anchorLeafTag.length > 0 ? locator.anchorLeafTag : locator.tag
+          /**
+           * Collect valid climbed targets for one scope only (bounded).
+           * @param {Element} scope - scope element.
+           * @returns {{ targets: Array<object>, ambiguous: boolean }} valid targets + real ambiguity.
+           */
+          const collectScopeTargets = (scope) => {
+            const targets = []
+            let ambiguous = false
             const rendered = annotationRenderedTextOf(scope, 1400)
             const matches = annotationScoreQuoteMatches(rendered.text, quote, hint, 6)
             for (const match of matches) {
               if (match.score < 0.5) continue
-              considerLeaf(annotationElementAtRenderedOffset(scope, match.index))
+              const leaf = annotationElementAtRenderedOffset(scope, match.index)
+              if (leaf === null) continue
+              const climb = resolveDescendantClimb(ref, leaf)
+              if (climb === null) continue
+              if (climb.status === 'ambiguous') { ambiguous = true; continue }
+              if (climb.element === null) continue
+              const status = validateFallbackHit(climb.element, ref, { proximity: true })
+              if (status !== 'resolved' && status !== 'changed') continue
+              if (!targets.includes(climb.element)) targets.push(climb.element)
+            }
+            return { targets, ambiguous }
+          }
+          // 1) Captured scope is authoritative when its selector still resolves.
+          const containerSelector = locator.textPosition !== null && typeof locator.textPosition === 'object'
+            && typeof locator.textPosition.container === 'string' ? locator.textPosition.container : ''
+          let container = null
+          if (containerSelector.length > 0) {
+            try {
+              container = document.querySelector(containerSelector)
+            } catch {
+              container = null
             }
           }
-          const leafTag = typeof locator.anchorLeafTag === 'string' && locator.anchorLeafTag.length > 0 ? locator.anchorLeafTag : locator.tag
+          if (container !== null) {
+            const inScope = collectScopeTargets(container)
+            const scoped = annotationScopeAuthorityOutcome({ inScope, fallback: { targets: [], ambiguous: false } })
+            if (scoped.ambiguous) return { status: 'ambiguous', terminal: true }
+            if (scoped.target !== null) {
+              const status = validateFallbackHit(scoped.target, ref, { proximity: true })
+              if (status === 'resolved' || status === 'changed') return status
+              // The in-scope hit failed validation: treat the scope as empty and use
+              // the bounded document fallback (honest re-anchor).
+            }
+          }
+          // 2) Bounded document fallback only when the scope is missing/broken/empty.
+          const fallbackTargets = []
+          let fallbackAmbiguous = false
+          const bodyRendered = annotationRenderedTextOf(document.body, 1400)
+          const bodyMatches = annotationScoreQuoteMatches(bodyRendered.text, quote, hint, 6)
+          for (const match of bodyMatches) {
+            if (match.score < 0.5) continue
+            const leaf = annotationElementAtRenderedOffset(document.body, match.index)
+            if (leaf === null) continue
+            const climb = resolveDescendantClimb(ref, leaf)
+            if (climb === null) continue
+            if (climb.status === 'ambiguous') { fallbackAmbiguous = true; continue }
+            if (climb.element === null) continue
+            const status = validateFallbackHit(climb.element, ref, { proximity: true })
+            if (status !== 'resolved' && status !== 'changed') continue
+            if (!fallbackTargets.includes(climb.element)) fallbackTargets.push(climb.element)
+          }
           const elements = document.getElementsByTagName(leafTag.length > 0 ? String(leafTag).toLowerCase() : '*')
-          for (let index = 0; index < elements.length && index < ANNOTATION_FALLBACK_SCAN_MAX; index += 1) {
+          for (let index = 0; index < elements.length && index < ANNOTATION_FALLBACK_SCAN_MAX && fallbackTargets.length <= 32; index += 1) {
             const leaf = elements[index]
             if (leaf === null || typeof leaf !== 'object' || leaf.closest('[data-psa-own]') !== null) continue
             if (annotationRenderedTextOf(leaf, 120).text !== quote.exact) continue
-            considerLeaf(leaf)
+            const climb = resolveDescendantClimb(ref, leaf)
+            if (climb === null) continue
+            if (climb.status === 'ambiguous') { fallbackAmbiguous = true; continue }
+            if (climb.element === null) continue
+            const status = validateFallbackHit(climb.element, ref, { proximity: true })
+            if (status !== 'resolved' && status !== 'changed') continue
+            if (!fallbackTargets.includes(climb.element)) fallbackTargets.push(climb.element)
           }
-          if (ambiguous || targets.length > 1) return 'ambiguous'
-          if (targets.length === 1) {
-            const status = validateFallbackHit(targets[0], ref, { proximity: true })
+          const outcome = annotationScopeAuthorityOutcome({ inScope: { targets: [], ambiguous: false }, fallback: { targets: fallbackTargets, ambiguous: fallbackAmbiguous } })
+          if (outcome.ambiguous) return { status: 'ambiguous', terminal: true }
+          if (outcome.target !== null) {
+            const status = validateFallbackHit(outcome.target, ref, { proximity: true })
             if (status === 'resolved' || status === 'changed') return status
           }
           return null
@@ -15747,6 +15832,39 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         noteFallbackScan()
         const quote = ref?.locator?.textQuote ?? null
         if (quote === null || typeof quote !== 'object' || typeof quote.exact !== 'string') return null
+        // A3/T44: mirror the scope-authority decision for the fallback node: when the
+        // captured container still resolves, only an in-scope unique target may be
+        // used (an in-scope duplicate is terminal -> no live node for copy/marks).
+        if (ref?.locator?.anchorTarget === 'descendant') {
+          const containerSelector = ref?.locator?.textPosition?.container
+          if (typeof containerSelector === 'string' && containerSelector.length > 0) {
+            try {
+              const container = document.querySelector(containerSelector)
+              if (container !== null) {
+                const rendered = annotationRenderedTextOf(container, 1400)
+                const matches = annotationScoreQuoteMatches(rendered.text, quote, undefined, 6)
+                const targets = []
+                let ambiguous = false
+                for (const match of matches) {
+                  if (match.score < 0.5) continue
+                  const leaf = annotationElementAtRenderedOffset(container, match.index)
+                  if (leaf === null) continue
+                  const climb = resolveDescendantClimb(ref, leaf)
+                  if (climb === null) continue
+                  if (climb.status === 'ambiguous') { ambiguous = true; continue }
+                  if (climb.element === null) continue
+                  if (!targets.includes(climb.element)) targets.push(climb.element)
+                }
+                if (ambiguous || targets.length > 1) return null
+                if (targets.length === 1) {
+                  return validateFallbackHit(targets[0], ref, { proximity: true }) === 'resolved' ? targets[0] : null
+                }
+              }
+            } catch {
+              // Fall through to the bounded document fallback.
+            }
+          }
+        }
         for (const scope of quoteSearchScopes(ref)) {
           const rendered = annotationRenderedTextOf(scope, 1400)
           const matches = annotationScoreQuoteMatches(rendered.text, quote, undefined, 2)
@@ -20959,6 +21077,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationDescendantAncestorMatches,
         annotationStatusConfidence,
         annotationStatusLabelKey,
+        annotationScopeAuthorityOutcome,
         debugFallbackScanProbe: () => (annotationController !== null && annotationController !== undefined
           && typeof annotationController.debugFallbackScanProbe === 'function'
           ? annotationController.debugFallbackScanProbe()
