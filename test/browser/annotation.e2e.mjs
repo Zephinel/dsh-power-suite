@@ -1090,7 +1090,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1102,7 +1102,7 @@ async function runSmoke({ page, results, state }) {
     // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
     // rail selection and chip-ref serialization helpers (66). Pin a documented count and
     // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79]
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1156,6 +1156,11 @@ async function runSmoke({ page, results, state }) {
     if (keyCount === 79) {
       for (const key of ['annotationGroupFromSelection', 'annotationSidebarCounts', 'annotationFilterEntries', 'annotationGroupSummary']) {
         assert(probe.keys.includes(key), `redesigned-sidebar seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
+      }
+    }
+    if (keyCount === 80) {
+      for (const key of ['annotationEntryOrdinals', 'annotationGroupSummary', 'annotationSidebarCounts']) {
+        assert(probe.keys.includes(key), `task-29 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
       }
     }
     state.hooks = probe.keys
@@ -2997,11 +3002,19 @@ class Harness {
     const active = await this.page.evaluate(`document.documentElement.getAttribute('data-psa-active') === 'true'`)
     if (!active) return false
     if ((await this.page.count('[data-psa-exit]')) > 0) {
-      await this.click('[data-psa-exit]', {
-        appliedWhen: async () => !(await this.page.evaluate(`document.documentElement.getAttribute('data-psa-active') === 'true'`)),
-      })
+      await this.click('[data-psa-exit]')
     } else {
       await this.page.pressKey('escape')
+    }
+    // A3/T29: exits with records ask for confirmation; accept it in the harness.
+    const confirmDeadline = Date.now() + 1500
+    while (Date.now() < confirmDeadline) {
+      if ((await this.page.count('[data-psa-exit-clear]')) > 0) {
+        await this.click('[data-psa-exit-clear]')
+        break
+      }
+      if (!(await this.page.evaluate(`document.documentElement.getAttribute('data-psa-active') === 'true'`))) break
+      await sleep(40)
     }
     await this.page.waitFor(
       `document.documentElement.getAttribute('data-psa-active') === null`,
@@ -3291,57 +3304,39 @@ function buildScenarios(harness) {
       await h.ensurePluginsView()
       const baseline = await h.frame()
       assertEqual(baseline.htmlActive, null, 'mode should be off before the scenario starts')
-      // A3/T26: the launcher flies from its floating slot into the docked header slot
-      // (and back on exit) instead of vanishing instantly.
+      // A3/T29: clicking the launcher hides it (fade/scale, no docking, no flight)
+      // and it only reappears once the mode is fully exited.
       const animLauncher = await h.page.findRect('[data-psa-launcher]')
-      assert(animLauncher, 'idle launcher missing for the dock-animation probe')
-      const flightVisible = () => h.page.evaluate(`document.querySelector('[data-psa-launcher-flight]') !== null`)
+      assert(animLauncher, 'idle launcher missing for the hide-animation probe')
+      const launcherHidden = () => h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-launcher-hidden')`)
       await h.page.clickAt(animLauncher.x, animLauncher.y)
-      let dockFlight = false
-      const dockDeadline = Date.now() + 1500
-      while (Date.now() < dockDeadline) {
-        if (await flightVisible()) { dockFlight = true; break }
-        await sleep(25)
-      }
-      await h.page.waitFor(`document.documentElement.getAttribute('data-psa-active') === 'true'`, { timeout: 8000, label: 'mode active after the dock-animation click' })
-      assert(dockFlight, 'A3/T26: no [data-psa-launcher-flight] element appeared during activation')
-      if (process.env.PSA_LAUNCHER_ANIM_DIR) {
-        await mkdir(process.env.PSA_LAUNCHER_ANIM_DIR, { recursive: true })
-        const frameNow = await h.frame()
-        const railX = frameNow.rail === null ? VIEWPORT.width - 420 : frameNow.rail.x
-        const left = Math.max(0, Math.min(animLauncher.x, railX) - 24)
-        const top = Math.max(0, Math.min(animLauncher.y, frameNow.rail === null ? 0 : frameNow.rail.y) - 24)
-        const width = Math.min(VIEWPORT.width - left, Math.max(animLauncher.x + 60, railX + 60) - left)
-        const height = Math.min(VIEWPORT.height - top, Math.max(animLauncher.y + 80, 120) - top)
-        const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip: { x: left, y: top, width, height, scale: 1 } })
-        await writeFile(path.join(process.env.PSA_LAUNCHER_ANIM_DIR, 'launcher-docking-midflight.png'), Buffer.from(data.data, 'base64'))
-      }
-      await sleep(500)
-      assertEqual(await flightVisible(), false, 'A3/T26: the dock flight element did not go away')
-      // h.exit() sleeps past the short flight, so drive the real exit click and poll
-      // for the transient element concurrently.
+      await h.page.waitFor(`document.documentElement.getAttribute('data-psa-active') === 'true'`, { timeout: 8000, label: 'mode active after the launcher click' })
+      await sleep(320)
+      assertEqual(await launcherHidden(), 'true', 'A3/T29: the launcher must hide while annotation mode is active')
+      assertEqual(await h.page.count('[data-psa-launcher]'), 1, 'A3/T29: exactly one launcher control must exist while active')
+      assertEqual(await h.page.count('[data-psa-launcher-docked]'), 0, 'A3/T29: no docked launcher may exist')
+      assertEqual(await h.page.count('[data-psa-launcher-flight]'), 0, 'A3/T29: no flying launcher element may exist')
+      const hiddenStyle = await h.page.evaluate(`(() => {
+        const launcher = document.querySelector('[data-psa-launcher]')
+        if (launcher === null) return null
+        const style = getComputedStyle(launcher)
+        const rect = launcher.getBoundingClientRect()
+        return { opacity: style.opacity, transform: style.transform, pointerEvents: style.pointerEvents, ariaHidden: launcher.getAttribute('aria-hidden'), rect: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) } }
+      })()`)
+      assert(hiddenStyle !== null, 'hidden launcher probe missing')
+      assertEqual(hiddenStyle.opacity, '0', 'A3/T29: the active launcher is not faded out')
+      assert(hiddenStyle.transform !== 'none' && hiddenStyle.transform.includes('matrix'), 'A3/T29: the hidden launcher has no scale transform')
+      assertEqual(hiddenStyle.pointerEvents, 'none', 'A3/T29: the hidden launcher must not receive pointer input')
+      assertEqual(hiddenStyle.ariaHidden, 'true', 'A3/T29: the hidden launcher is not aria-hidden')
+      // No records yet: the header X exits directly and the launcher animates back in.
       await h.click('[data-psa-exit]')
-      let undockFlight = false
-      const undockDeadline = Date.now() + 1500
-      while (Date.now() < undockDeadline) {
-        if (await flightVisible()) { undockFlight = true; break }
-        await sleep(25)
-      }
-      await h.page.waitFor(`document.documentElement.getAttribute('data-psa-active') === null`, { timeout: 8000, label: 'mode off after the undock-animation exit' })
-      assert(undockFlight, 'A3/T26: no [data-psa-launcher-flight] element appeared during exit')
-      if (process.env.PSA_LAUNCHER_ANIM_DIR) {
-        const frameOff = await h.frame()
-        const railX = frameOff.rail === null ? VIEWPORT.width - 420 : frameOff.rail.x
-        const left = Math.max(0, Math.min(animLauncher.x, railX) - 24)
-        const top = 0
-        const width = Math.min(VIEWPORT.width - left, Math.max(animLauncher.x + 60, railX + 60) - left)
-        const height = Math.min(VIEWPORT.height - top, Math.max(animLauncher.y + 80, 160) - top)
-        const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip: { x: left, y: top, width, height, scale: 1 } })
-        await writeFile(path.join(process.env.PSA_LAUNCHER_ANIM_DIR, 'launcher-undocking-midflight.png'), Buffer.from(data.data, 'base64'))
-      }
-      await sleep(500)
-      assertEqual(await flightVisible(), false, 'A3/T26: the undock flight element did not go away')
-      assertEqual(await h.page.count('[data-psa-launcher]'), 1, 'A3/T26: the flight left the resting launcher count wrong')
+      await h.page.waitFor(`document.documentElement.getAttribute('data-psa-active') === null`, { timeout: 8000, label: 'mode off after the direct exit' })
+      await sleep(320)
+      assertEqual(await launcherHidden(), 'false', 'A3/T29: the launcher did not reappear after exiting')
+      const reappeared = await h.launcherRect()
+      assert(reappeared !== null, 'launcher missing after exit')
+      assertEqual(await h.page.count('[data-psa-launcher]'), 1, 'A3/T29: exactly one launcher must exist when idle')
+      // A3/T19: the launcher floats only while idle. Drag it to a known place first;
       // A3/T19: the launcher floats only while idle. Drag it to a known place first;
       // it must return to that exact place after a docked mode cycle.
       const idleLauncherStart = await h.page.findRect('[data-psa-launcher]')
@@ -3402,42 +3397,30 @@ function buildScenarios(harness) {
         frame.rail.x >= frame.viewport.width - railWidth - 3,
         `rail does not sit in the freed right strip (rail.x=${frame.rail.x}, viewport=${frame.viewport.width})`
       )
-      // A3/T19: while active the launcher is docked INSIDE the rail, not floating.
-      const readDockedLauncher = async () => h.page.evaluate(`(() => {
+      // A3/T29: while active the launcher is hidden in place (no dock, no flight).
+      const activeLauncherState = await h.page.evaluate(`(() => {
         const launcher = document.querySelector('[data-psa-launcher]')
         if (launcher === null) return null
-        const rail = launcher.closest('[data-psa-rail]')
-        const rect = launcher.getBoundingClientRect()
-        const railRect = rail === null ? null : rail.getBoundingClientRect()
+        const style = getComputedStyle(launcher)
         return {
           count: document.querySelectorAll('[data-psa-launcher]').length,
-          docked: launcher.getAttribute('data-psa-launcher-docked') === 'true',
-          inRail: rail !== null,
-          inLayer: launcher.closest('[data-psa-layer]') !== null,
-          ariaPressed: launcher.getAttribute('aria-pressed'),
-          rect: { left: Math.round(rect.x), top: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
-          railRect: railRect === null ? null : {
-            left: Math.round(railRect.x), top: Math.round(railRect.y),
-            width: Math.round(railRect.width), height: Math.round(railRect.height)
-          }
+          hidden: launcher.getAttribute('data-psa-launcher-hidden'),
+          opacity: style.opacity,
+          pointerEvents: style.pointerEvents,
+          inRail: launcher.closest('[data-psa-rail]') !== null,
+          docked: document.querySelectorAll('[data-psa-launcher-docked]').length,
+          flight: document.querySelectorAll('[data-psa-launcher-flight]').length
         }
       })()`)
-      const insideRail = (launcherRect, railRect) => launcherRect !== null && railRect !== null
-        && launcherRect.left >= railRect.left - 1 && launcherRect.top >= railRect.top - 1
-        && launcherRect.left + launcherRect.width <= railRect.left + railRect.width + 1
-        && launcherRect.top + launcherRect.height <= railRect.top + railRect.height + 1
-      const dockedActive = await readDockedLauncher()
-      assert(dockedActive !== null, 'no launcher control while active')
-      assertEqual(dockedActive.count, 1, 'there must be exactly one launcher control while active')
-      assertEqual(dockedActive.docked, true, 'the active launcher is not the docked rail control')
-      assertEqual(dockedActive.inRail, true, 'the active launcher is not inside the annotation rail')
-      assertEqual(dockedActive.inLayer, false, 'the launcher is still rendered in the floating layer while active')
-      assertEqual(dockedActive.ariaPressed, 'true', 'the docked launcher does not report aria-pressed=true')
-      assert(dockedActive.rect.width >= 24 && dockedActive.rect.height >= 24,
-        `docked launcher box too small: ${JSON.stringify(dockedActive.rect)}`)
-      assert(insideRail(dockedActive.rect, dockedActive.railRect),
-        `docked launcher is outside the rail bounds (docked ${JSON.stringify(dockedActive.rect)}, rail ${JSON.stringify(dockedActive.railRect)})`)
-      await captureLauncherClip('launcher-active-docked.png', dockedActive.railRect)
+      assert(activeLauncherState !== null, 'no launcher control while active')
+      assertEqual(activeLauncherState.count, 1, 'there must be exactly one launcher control while active')
+      assertEqual(activeLauncherState.hidden, 'true', 'A3/T29: the active launcher is not hidden')
+      assertEqual(activeLauncherState.opacity, '0', 'A3/T29: the active launcher is not faded out')
+      assertEqual(activeLauncherState.pointerEvents, 'none', 'A3/T29: the hidden launcher still receives pointer input')
+      assertEqual(activeLauncherState.inRail, false, 'A3/T29: the launcher must not be docked in the rail header')
+      assertEqual(activeLauncherState.docked, 0, 'A3/T29: no docked launcher control may exist')
+      assertEqual(activeLauncherState.flight, 0, 'A3/T29: no flying launcher element may exist')
+      await captureLauncherClip('launcher-active-hidden.png', { left: frame.rail.x, top: frame.rail.y, width: frame.rail.width, height: frame.rail.height })
       // Blocked native New Session: real click must not reach the native handlers.
       const probeInfo = await h.page.eval(probes.installElementProbe, 'button[aria-label="New session"]')
       assert(probeInfo.targets > 0, 'native New Session button not found for the blocked-click probe')
@@ -3456,27 +3439,27 @@ function buildScenarios(harness) {
       const afterText = await h.mainText()
       assert(/^(Plugins|插件)/.test(afterText), `the blocked New Session click left the Plugins page: ${short(afterText, 180)}`)
       assertEqual(after.sessionId, null, 'the blocked New Session click opened a conversation')
-      // A3/T19: narrow overlay rail keeps the docked control inside the rail.
+      // A3/T29: narrow overlay layout keeps the list at the 320px floor with the
+      // launcher still hidden (no docked copy anywhere).
       await h.page.setViewport(800, 700)
       await sleep(700)
       const narrowFrame = await h.frame()
       assertEqual(narrowFrame.railMode, 'overlay', 'the narrow viewport did not switch the rail to overlay mode')
       assert(narrowFrame.rail !== null, 'rail missing in the narrow overlay layout')
-      const narrowDocked = await readDockedLauncher()
-      assert(narrowDocked !== null && narrowDocked.inRail, 'docked launcher missing in the narrow overlay layout')
-      assert(insideRail(narrowDocked.rect, narrowDocked.railRect),
-        `narrow overlay docked launcher outside the rail bounds (docked ${JSON.stringify(narrowDocked.rect)}, rail ${JSON.stringify(narrowDocked.railRect)})`)
-      await captureLauncherClip('launcher-narrow-overlay-docked.png', narrowDocked.railRect)
+      assertEqual(Number.parseFloat(narrowFrame.railWidthVar || '0'), 320, 'narrow overlay list width is not the 320px floor')
+      const narrowLauncher = await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-launcher-hidden')`)
+      assertEqual(narrowLauncher, 'true', 'A3/T29: the launcher is not hidden in the narrow overlay layout')
+      await captureLauncherClip('launcher-narrow-overlay-hidden.png', { left: narrowFrame.rail.x, top: narrowFrame.rail.y, width: narrowFrame.rail.width, height: narrowFrame.rail.height })
       await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
       await sleep(700)
-      // Click the docked launcher: it exits the mode, and the floating launcher returns
-      // at the remembered idle position (drag persistence across a mode cycle).
-      await h.click('[data-psa-launcher-docked]')
+      // Header X exits directly (no records) and the floating launcher returns at the
+      // remembered idle position (drag persistence across a mode cycle).
+      await h.click('[data-psa-exit]')
       await h.page.waitFor(
         `document.documentElement.getAttribute('data-psa-active') === null`,
-        { timeout: 8000, label: 'mode off after clicking the docked launcher' }
+        { timeout: 8000, label: 'mode off after header X' }
       )
-      await sleep(500)
+      await sleep(450)
       const returnedFloating = await h.launcherRect()
       assert(returnedFloating, 'floating launcher did not return after exiting the mode')
       assertNear(returnedFloating.left, rememberedIdle.left, 3, 'floating launcher returned at the wrong remembered x')
@@ -3493,7 +3476,7 @@ function buildScenarios(harness) {
         left: returnedFloating.left, top: returnedFloating.top,
         width: returnedFloating.width, height: returnedFloating.height
       })
-      return `rail ${railWidth}px, padding ${padding}px, docked launcher ${dockedActive.rect.width}x${dockedActive.rect.height} inside rail (${JSON.stringify(dockedActive.railRect)}), narrow overlay docked inside rail, exit returned floating at (${returnedFloating.left},${returnedFloating.top}) == remembered (${rememberedIdle.left},${rememberedIdle.top}), post-activate rail stable${activation.retried ? ' (after one activation retry)' : ''}, blocked click: 0 native hits / ${preventedPointers + preventedClicks} prevented events, view stayed on Plugins`
+      return `rail ${railWidth}px, padding ${padding}px, active launcher hidden in place (no dock/flight, one control), narrow overlay 320px with hidden launcher, header X returned floating at (${returnedFloating.left},${returnedFloating.top}) == remembered (${rememberedIdle.left},${rememberedIdle.top}), post-activate rail stable${activation.retried ? ' (after one activation retry)' : ''}, blocked click: 0 native hits / ${preventedPointers + preventedClicks} prevented events, view stayed on Plugins`
 
     },
 
@@ -3770,6 +3753,14 @@ function buildScenarios(harness) {
       assertEqual(groupStored.records.length, 0, 'the batch commit must not create independent single records')
       assertEqual(groupStored.groups[0].itemCount, 3, 'the group must contain all three selected elements')
       assertEqual(groupStored.groups[0].requirement, 'Batch group requirement', 'the shared requirement was not persisted on the group')
+      // A3/T29: the group is ONE ordinal; all its page marks carry the same number.
+      await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length >= 3`, { timeout: 6000, label: 'group element marks' })
+      const groupMarkIndices = await h.page.evaluate(`[...document.querySelectorAll('[data-psa-mark]')].map((mark) => mark.getAttribute('data-psa-mark-index'))`)
+      assert(groupMarkIndices.length >= 3, `expected one page mark per group item: ${JSON.stringify(groupMarkIndices)}`)
+      assertEqual(new Set(groupMarkIndices).size, 1, `group items must share ONE ordinal, got ${JSON.stringify(groupMarkIndices)}`)
+      assertEqual(groupMarkIndices[0], '1', `the first group must be ordinal #1, got ${groupMarkIndices[0]}`)
+      assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-group] .psa-entry-index')?.innerText`), '#1',
+        'the group card does not show its single ordinal')
       // The collection view shows the group (with its children), not three singles.
       await h.openCollection()
       await sleep(300)
@@ -4429,6 +4420,7 @@ function buildScenarios(harness) {
         return {
           count: document.querySelectorAll('[data-psa-launcher]').length,
           docked: launcher.getAttribute('data-psa-launcher-docked') === 'true',
+          hidden: launcher.getAttribute('data-psa-launcher-hidden') === 'true',
           inRail: rail !== null,
           inLayer: layer !== null,
           activeAttr: launcher.getAttribute('data-psa-active'),
@@ -4495,65 +4487,68 @@ function buildScenarios(harness) {
       assert(dragged.left !== moved.left || dragged.top !== moved.top, 'the corner drag never moved the launcher')
       // ---- Active: the launcher is docked in the rail; dragging it must do nothing. ----
       await h.activate()
-      const dockedBefore = await readLauncher()
-      assert(dockedBefore !== null, 'launcher missing after activation')
-      assertEqual(dockedBefore.count, 1, 'exactly one launcher control must exist while active')
-      assertEqual(dockedBefore.docked, true, 'the active launcher is not docked in the rail')
-      assertEqual(dockedBefore.inRail, true, 'the docked launcher is not inside the rail')
-      assertEqual(dockedBefore.inLayer, false, 'the launcher is still floating over content while active')
-      assertEqual(dockedBefore.ariaPressed, 'true', 'the docked launcher is not aria-pressed')
-      assert(insideRail(dockedBefore.rect, dockedBefore.railRect),
-        `docked launcher outside the rail bounds (docked ${JSON.stringify(dockedBefore.rect)}, rail ${JSON.stringify(dockedBefore.railRect)})`)
+      await sleep(320)
+      const activeLauncher = await readLauncher()
+      assert(activeLauncher !== null, 'launcher missing while active')
+      assertEqual(activeLauncher.count, 1, 'exactly one launcher control must exist while active')
+      assertEqual(activeLauncher.docked, false, 'A3/T29: no launcher may be docked in the rail header')
+      const hiddenLauncher = await h.page.evaluate(`(() => {
+        const launcher = document.querySelector('[data-psa-launcher]')
+        if (launcher === null) return null
+        const style = getComputedStyle(launcher)
+        return { hidden: launcher.getAttribute('data-psa-launcher-hidden'), opacity: style.opacity, pointerEvents: style.pointerEvents, active: launcher.getAttribute('data-psa-active') }
+      })()`)
+      assertEqual(hiddenLauncher.hidden, 'true', 'A3/T29: the active launcher is not hidden')
+      assertEqual(hiddenLauncher.opacity, '0', 'A3/T29: the active launcher is not faded out')
+      assertEqual(hiddenLauncher.pointerEvents, 'none', 'A3/T29: the hidden launcher still receives pointer input')
+      assertEqual(await h.page.count('[data-psa-launcher-docked]'), 0, 'A3/T29: docked launcher must not exist')
+      assertEqual(await h.page.count('[data-psa-launcher-flight]'), 0, 'A3/T29: flying launcher must not exist')
       const storedWhileActive = await h.page.evaluate(`localStorage.getItem('power-suite.ui-annotation.launcher')`)
-      await h.page.moveTo(dockedBefore.rect.left + Math.round(dockedBefore.rect.width / 2), dockedBefore.rect.top + Math.round(dockedBefore.rect.height / 2))
-      await h.page.mouse({ type: 'mousePressed', x: dockedBefore.rect.left + 13, y: dockedBefore.rect.top + 13, button: 'left', clickCount: 1 })
+      // Dragging is impossible while active: the launcher is hidden, and a stray drag
+      // gesture must not move/persist anything.
+      const hiddenPoint = await h.launcherRect()
+      await h.page.mouse({ type: 'mousePressed', x: hiddenPoint.left + 10, y: hiddenPoint.top + 10, button: 'left', clickCount: 1 })
       for (let step = 1; step <= 4; step += 1) {
-        await h.page.mouse({ type: 'mouseMoved', x: dockedBefore.rect.left + 13 - step * 20, y: dockedBefore.rect.top + 13 - step * 15, button: 'left', buttons: 1 })
+        await h.page.mouse({ type: 'mouseMoved', x: hiddenPoint.left + 10 - step * 20, y: hiddenPoint.top + 10 - step * 15, button: 'left', buttons: 1 })
         await sleep(25)
       }
-      await h.page.mouse({ type: 'mouseReleased', x: dockedBefore.rect.left - 67, y: dockedBefore.rect.top - 47, button: 'left', clickCount: 1 })
-      await sleep(450)
-      const dockedAfterDrag = await readLauncher()
-      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), 'true', 'dragging the docked launcher exited the mode')
-      assertEqual(dockedAfterDrag.docked, true, 'the docked launcher changed state after a drag attempt')
-      assertEqual(dockedAfterDrag.rect.left, dockedBefore.rect.left, 'the docked launcher moved horizontally after a drag attempt (drag must be idle-only)')
-      assertEqual(dockedAfterDrag.rect.top, dockedBefore.rect.top, 'the docked launcher moved vertically after a drag attempt (drag must be idle-only)')
-      assertEqual(
-        await h.page.evaluate(`localStorage.getItem('power-suite.ui-annotation.launcher')`),
-        storedWhileActive,
-        'a drag attempt on the docked launcher persisted a position'
-      )
-      // ---- Wheel scrolling does not move the docked control. ----
+      await h.page.mouse({ type: 'mouseReleased', x: hiddenPoint.left - 70, y: hiddenPoint.top - 50, button: 'left', clickCount: 1 })
+      await sleep(350)
+      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), 'true', 'a drag on the hidden launcher exited the mode')
+      assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-launcher-hidden')`), 'true', 'the hidden launcher changed state after a drag attempt')
+      assertEqual(await h.page.evaluate(`localStorage.getItem('power-suite.ui-annotation.launcher')`), storedWhileActive, 'a drag attempt while active persisted a position')
+      // ---- Wheel scrolling does not move the hidden launcher. ----
       const scrollable = await h.page.eval(probes.installScrollProbe)
       assert(scrollable, 'no native scrollable region available for the scroll-stability assertion')
       const scrolledBefore = await h.launcherRect()
       await h.page.wheel(scrollable.x, scrollable.y, -260)
       await sleep(320)
       const scrolledAfter = await h.launcherRect()
-      assertEqual(scrolledAfter.left, scrolledBefore.left, 'docked launcher moved horizontally when the page scrolled')
-      assertEqual(scrolledAfter.top, scrolledBefore.top, 'docked launcher moved vertically when the page scrolled')
-      // ---- Narrow overlay layout keeps the docked control inside the rail. ----
+      assertEqual(scrolledAfter.left, scrolledBefore.left, 'hidden launcher moved horizontally when the page scrolled')
+      assertEqual(scrolledAfter.top, scrolledBefore.top, 'hidden launcher moved vertically when the page scrolled')
+      // ---- Narrow overlay layout: no docked launcher; list keeps the 320 px floor. ----
       await h.page.setViewport(800, 700)
       await sleep(700)
       const narrowFrame = await h.frame()
       assertEqual(narrowFrame.railMode, 'overlay', 'the narrow viewport did not switch the rail to overlay mode')
-      const narrowDocked = await readLauncher()
-      assert(narrowDocked !== null && narrowDocked.inRail, 'docked launcher missing in the narrow overlay layout')
-      assert(insideRail(narrowDocked.rect, narrowDocked.railRect),
-        `narrow overlay docked launcher outside the rail bounds (docked ${JSON.stringify(narrowDocked.rect)}, rail ${JSON.stringify(narrowDocked.railRect)})`)
+      assertEqual(Number.parseFloat(narrowFrame.railWidthVar || '0'), 320, 'narrow overlay list width is not the 320px floor')
+      assertEqual(await h.page.count('[data-psa-launcher-docked]'), 0, 'a docked launcher appeared in the narrow overlay layout')
+      assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-launcher-hidden')`), 'true',
+        'the launcher is not hidden in the narrow overlay layout')
       await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
       await sleep(700)
-      // ---- Exit via the docked control: the floating launcher returns at the dragged corner. ----
-      await h.click('[data-psa-launcher-docked]')
+      // ---- Header X exits directly (no records); the floating launcher returns at the dragged corner. ----
+      await h.click('[data-psa-exit]')
       await h.page.waitFor(
         `document.documentElement.getAttribute('data-psa-active') === null`,
-        { timeout: 8000, label: 'mode off after clicking the docked launcher' }
+        { timeout: 8000, label: 'mode off after header X' }
       )
-      await sleep(450)
-      const returned = await h.launcherRect()
-      assert(returned, 'floating launcher missing after exiting the mode')
-      assertNear(returned.left, dragged.left, 3, 'the floating launcher did not return to the dragged x')
-      assertNear(returned.top, dragged.top, 3, 'the floating launcher did not return to the dragged y')
+      await sleep(400)
+      const returned = await readLauncher()
+      assert(returned !== null, 'floating launcher missing after exiting the mode')
+      assertEqual(returned.hidden, false, 'the launcher is still hidden after exiting')
+      assertNear(returned.rect.left, dragged.left, 3, 'the floating launcher did not return to the dragged x')
+      assertNear(returned.rect.top, dragged.top, 3, 'the floating launcher did not return to the dragged y')
       // ---- Reload: mode off by default; the remembered floating position survives. ----
       await h.page.reload()
       await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after reload' })
@@ -4565,7 +4560,7 @@ function buildScenarios(harness) {
       assertEqual(reloadedLauncher.activeAttr, 'false', 'the floating launcher is marked active after reload')
       assertNear(reloadedLauncher.rect.left, dragged.left, 2, 'remembered launcher x after reload')
       assertNear(reloadedLauncher.rect.top, dragged.top, 2, 'remembered launcher y after reload')
-      return `idle drag clamp (${dragged.left},${dragged.top}); active docked ${dockedBefore.rect.width}x${dockedBefore.rect.height} inside rail; docked drag ignored; wheel stable; 800x700 overlay docked inside rail; exit returned floating at (${returned.left},${returned.top}) == dragged; reload kept it`
+      return `idle drag clamp (${dragged.left},${dragged.top}); active launcher hidden (fade/scale, no dock/flight, one control); drag/wheel no-op while hidden; 800x700 overlay 320px with hidden launcher; header X returned floating at (${returned.rect.left},${returned.rect.top}) == dragged; reload kept it`
     },
 
     9: async () => {
@@ -4723,8 +4718,18 @@ function buildScenarios(harness) {
         assert(action.rect !== null && action.rect.height >= 18 && action.rect.width >= 18, `action hit target too small: ${JSON.stringify(action.rect)}`)
       }
       assertEqual(sidebar.footer.primary, 'Add annotation', `footer primary label wrong: ${sidebar.footer.primary}`)
-      assertEqual(sidebar.footer.secondary, 'Clear collection', `footer danger label wrong when nothing is selected: ${sidebar.footer.secondary}`)
+      assertEqual(sidebar.footer.secondary, 'Cancel Annotation', `footer danger label wrong: ${sidebar.footer.secondary}`)
       assert(sidebar.footer.primaryHeight >= 30 && sidebar.footer.secondaryHeight >= 30, 'footer actions are under the 30px height target')
+      const footerWidths = await h.page.evaluate(`(() => {
+        const primary = document.querySelector('[data-psa-add-annotation]')
+        const danger = document.querySelector('[data-psa-cancel-annotation]')
+        if (primary === null || danger === null) return null
+        const a = primary.getBoundingClientRect()
+        const b = danger.getBoundingClientRect()
+        return { primary: Math.round(a.width), danger: Math.round(b.width) }
+      })()`)
+      assert(footerWidths !== null, 'footer action widths could not be measured')
+      assert(Math.abs(footerWidths.primary - footerWidths.danger) <= 2, `footer buttons are not equal width: ${JSON.stringify(footerWidths)}`)
       assertEqual(sidebar.empty, false, 'empty state rendered with a populated collection')
       assertEqual(sidebar.list.overflowX, false, 'sidebar content overflows horizontally at the wide width')
       assert(sidebar.list.scrollable !== null, 'sidebar list element missing')
@@ -4755,21 +4760,6 @@ function buildScenarios(harness) {
       const expanded = await h.page.eval(probes.sidebarState)
       assertEqual(expanded.groupItems, 4, 'expanding the group did not restore its children')
       assertEqual(JSON.stringify(expanded.expandedGroups), JSON.stringify(['true', 'false']), 'expand did not update aria-expanded')
-      // ---- Footer secondary switches to Clear selection when a page element is selected ----
-      const editorRect = await h.page.findRect('[data-psa-entry]')
-      assert(editorRect, 'no sidebar row to focus for the selection state')
-      const navPoint = await h.page.eval(probes.pluginNavRect)
-      if (navPoint !== null) {
-        await h.page.moveTo(navPoint.x, navPoint.y)
-        await sleep(120)
-        await h.page.clickAt(navPoint.x, navPoint.y)
-        await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'single selection from the page' })
-        await sleep(200)
-        const selectedFooter = await h.page.eval(probes.sidebarState)
-        assertEqual(selectedFooter.footer.secondary, 'Clear selection', `footer danger must switch to Clear selection: ${selectedFooter.footer.secondary}`)
-        await h.page.pressKey('escape')
-        await sleep(200)
-      }
       // ---- Light/dark high-fidelity captures of the required states ----
       if (process.env.PSA_SIDEBAR_EVIDENCE_DIR) {
         const dir = process.env.PSA_SIDEBAR_EVIDENCE_DIR
@@ -4824,29 +4814,75 @@ function buildScenarios(harness) {
       assert(narrowSidebar !== null && narrowSidebar.list.overflowX === false, 'narrow overlay sidebar overflows horizontally')
       await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
       await sleep(700)
-      // ---- Empty state ----
-      await h.page.evaluate(`localStorage.setItem('psa-t25-fixture', 'clear')`)
-      await h.page.reload()
-      await h.page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after clearing the sidebar' })
-      await h.page.waitFor(`!!document.querySelector('[data-psa-launcher]')`, { timeout: 20000, label: 'launcher after clearing the sidebar' })
-      await sleep(600)
-      await h.ensureSidebarExpanded()
-      await h.ensureConversation()
+      // ---- Exit confirmation: Cancel keeps state; Clear & exit clears records + storage ----
+      await h.click('[data-psa-cancel-annotation]')
+      await h.page.waitFor(`!!document.querySelector('[data-psa-exit-confirm]')`, { timeout: 4000, label: 'exit confirmation dialog' })
+      await sleep(200)
+      const confirmDialog = await h.page.evaluate(`(() => {
+        const dialog = document.querySelector('[data-psa-exit-confirm]')
+        if (dialog === null) return null
+        const rect = dialog.getBoundingClientRect()
+        const titleNode = dialog.querySelector('.psa-exit-confirm-title')
+        const messageNode = dialog.querySelector('.psa-exit-confirm-message')
+        return {
+          count: dialog.getAttribute('data-psa-exit-count'),
+          title: (titleNode?.innerText || '').replace(/\\s+/g, ' ').trim(),
+          message: (messageNode?.innerText || '').replace(/\\s+/g, ' ').trim(),
+          text: (String(titleNode?.innerText || '') + ' ' + String(messageNode?.innerText || '')).replace(/\\s+/g, ' ').trim(),
+          role: dialog.getAttribute('role'),
+          rect: { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) },
+          cancel: !!dialog.querySelector('[data-psa-exit-cancel]'),
+          clear: !!dialog.querySelector('[data-psa-exit-clear]')
+        }
+      })()`)
+      assert(confirmDialog !== null, 'A3/T29: no exit confirmation dialog appeared for Cancel Annotation')
+      assertEqual(confirmDialog.count, '8', `confirmation count wrong: ${confirmDialog.count}`)
+      assert(/Exit annotation mode and clear 8 annotations\?/.test(confirmDialog.text), `confirmation message wrong: ${short(confirmDialog.text)}`)
+      assertEqual(confirmDialog.role, 'alertdialog', 'confirmation is not an alertdialog')
+      assert(confirmDialog.cancel && confirmDialog.clear, 'confirmation buttons missing')
+      await h.click('[data-psa-exit-cancel]')
+      await sleep(250)
+      assertEqual(await h.page.count('[data-psa-exit-confirm]'), 0, 'Cancel did not close the confirmation')
+      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), 'true', 'Cancel left the annotation mode')
+      assertEqual((await h.page.eval(probes.annotationStorage)).count, 4, 'Cancel changed the stored records')
+      // Confirm: clears all records, flushes the empty v3 document, exits, launcher returns.
+      await h.click('[data-psa-cancel-annotation]')
+      await h.page.waitFor(`!!document.querySelector('[data-psa-exit-confirm]')`, { timeout: 4000, label: 'exit confirmation before clearing' })
+      if (process.env.PSA_T29_EVIDENCE_DIR) {
+        await mkdir(process.env.PSA_T29_EVIDENCE_DIR, { recursive: true })
+        const dialog = confirmDialog
+        const pad = 12
+        const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip: { x: Math.max(0, dialog.rect.left - pad), y: Math.max(0, dialog.rect.top - pad), width: dialog.rect.width + pad * 2, height: dialog.rect.height + pad * 2, scale: 1 } })
+        await writeFile(path.join(process.env.PSA_T29_EVIDENCE_DIR, 'exit-confirm-dialog.png'), Buffer.from(data.data, 'base64'))
+      }
+      await h.click('[data-psa-exit-clear]')
+      await h.page.waitFor(`document.documentElement.getAttribute('data-psa-active') === null`, { timeout: 8000, label: 'mode off after Clear & exit' })
+      await sleep(400)
+      assertEqual(await h.page.count('[data-psa-exit-confirm]'), 0, 'confirm dialog stayed after clearing')
+      const clearedStorage = await h.page.eval(probes.annotationStorage)
+      assertEqual(clearedStorage.version, 3, 'cleared document lost its v3 version')
+      assertEqual(clearedStorage.count, 0, 'confirmed exit did not clear the records')
+      assertEqual(clearedStorage.itemCount, 0, 'confirmed exit left group items behind')
+      assertEqual(await h.page.evaluate(`document.querySelector('[data-psa-launcher]')?.getAttribute('data-psa-launcher-hidden')`), 'false',
+        'the launcher did not reappear after Clear & exit')
+      const clearedLauncher = await h.launcherRect()
+      assert(clearedLauncher !== null, 'floating launcher missing after clearing exit')
+      // ---- Empty state: re-entering shows the empty managed list directly ----
       await h.activate()
       await h.openCollection()
       await sleep(300)
       const emptySidebar = await h.page.eval(probes.sidebarState)
       assertEqual(emptySidebar.empty, true, 'empty state did not render for an empty collection')
       assertEqual(emptySidebar.rows, 0, 'empty collection still rendered rows')
-      if (process.env.PSA_SIDEBAR_EVIDENCE_DIR) {
+      if (process.env.PSA_T29_EVIDENCE_DIR) {
         const frame = await h.frame()
         const rail = frame.rail
         const pad = 10
-        const dir = process.env.PSA_SIDEBAR_EVIDENCE_DIR
+        const dir = process.env.PSA_T29_EVIDENCE_DIR
         await mkdir(dir, { recursive: true })
         const clip = { x: Math.max(0, rail.x - pad), y: Math.max(0, rail.y - pad), width: rail.width + pad * 2, height: Math.min(VIEWPORT.height - 2, rail.height + pad * 2), scale: 1 }
         const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip })
-        await writeFile(path.join(dir, 'sidebar-empty-light.png'), Buffer.from(data.data, 'base64'))
+        await writeFile(path.join(dir, 'footer-empty-state.png'), Buffer.from(data.data, 'base64'))
       }
       // Exit: full layout restoration from the wide sidebar.
       await h.exit()

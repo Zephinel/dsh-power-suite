@@ -9288,8 +9288,6 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     /** A3/T24: estimated batch popover size used for placement clamping. */
     const ANNOTATION_BATCH_POPOVER_SIZE = { width: 320, height: 240 }
 
-    /** A3/T26: launcher dock/undock flight duration (ms); CSS matches this. */
-    const ANNOTATION_LAUNCHER_FLIGHT_MS = 220
 
     /** A3/T9: the composer trigger source that owns annotation reference chips. */
     const ANNOTATION_CHIP_SOURCE = 'ui-annotation'
@@ -9489,6 +9487,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'sidebar.addAnnotation': 'Add annotation',
       'sidebar.clearSelection': 'Clear selection',
       'sidebar.clearCollection': 'Clear collection',
+      'sidebar.cancelAnnotation': 'Cancel Annotation',
+      'exitConfirm.title': 'Clear annotations and exit?',
+      'exitConfirm.message': 'Exit annotation mode and clear {count} annotations? These will not be kept for the next session.',
+      'exitConfirm.cancel': 'Cancel',
+      'exitConfirm.clear': 'Clear & exit',
       'sidebar.emptyTitle': 'No annotations yet',
       'sidebar.emptyHint': 'Select an element on the page to add your first annotation.',
       'sidebar.filterEmpty': 'Nothing matches this filter.',
@@ -9679,6 +9682,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       'sidebar.addAnnotation': '添加标注',
       'sidebar.clearSelection': '清空选择',
       'sidebar.clearCollection': '清空标注集',
+      'sidebar.cancelAnnotation': '取消标注',
+      'exitConfirm.title': '清除标注并退出？',
+      'exitConfirm.message': '退出标注模式并清除 {count} 条标注？这些标注不会被保留到下一次进入。',
+      'exitConfirm.cancel': '取消',
+      'exitConfirm.clear': '清除并退出',
       'sidebar.emptyTitle': '还没有标注',
       'sidebar.emptyHint': '在页面上选择一个元素即可添加第一条标注。',
       'sidebar.filterEmpty': '当前筛选下没有内容。',
@@ -9745,6 +9753,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     const REMIX_ARROW_DOWN_LINE = 'M13.0001 16.1716L18.3641 10.8076L19.7783 12.2218L12.0001 20L4.22192 12.2218L5.63614 10.8076L11.0001 16.1716V4H13.0001V16.1716Z'
     const REMIX_DELETE_BIN_LINE = 'M17 6H22V8H20V21C20 21.5523 19.5523 22 19 22H5C4.44772 22 4 21.5523 4 21V8H2V6H7V3C7 2.44772 7.44772 2 8 2H16C16.5523 2 17 2.44772 17 3V6ZM18 8H6V20H18V8ZM9 11H11V17H9V11ZM13 11H15V17H13V11ZM9 4V6H15V4H9Z'
     const REMIX_LIST_CHECK_2 = 'M11 4H21V6H11V4ZM11 8H17V10H11V8ZM11 14H21V16H11V14ZM11 18H17V20H11V18ZM3 4H9V10H3V4ZM5 6V8H7V6H5ZM3 14H9V20H3V14ZM5 16V18H7V16H5Z'
+    const REMIX_SETTINGS_LINE = 'M12 1a1 1 0 0 1 1 1v1.062a7.002 7.002 0 0 1 1.696.702l.752-.752a1 1 0 0 1 1.414 1.415l-.752.751A7.002 7.002 0 0 1 16.812 7H17.9a1 1 0 0 1 0 2h-1.088a7.002 7.002 0 0 1-.702 1.696l.752.752a1 1 0 0 1-1.414 1.414l-.752-.752a7.003 7.003 0 0 1-1.696.702V13.9a1 1 0 0 1-2 0v-1.088a7.003 7.003 0 0 1-1.696-.702l-.752.752a1 1 0 0 1-1.414-1.414l.752-.752A7.002 7.002 0 0 1 6.188 9H5.1a1 1 0 0 1 0-2h1.088a7.002 7.002 0 0 1 .702-1.696l-.752-.752a1 1 0 0 1 1.414-1.415l.752.752A7.002 7.002 0 0 1 10 3.062V2a1 1 0 0 1 1-1Zm0 5a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z'
     const REMIX_SETTINGS_3_LINE = 'M8.68637 4.0001L10.293 2.39348C11.6835 1.00295 13.9379 1.00295 15.3284 2.39348L16.935 4.0001H19.2427C20.8995 4.0001 22.2427 5.34325 22.2427 7.0001V9.30772L23.8492 10.9143C25.2398 12.3048 25.2398 14.5592 23.8492 15.9497L22.2427 17.5564V19.864C22.2427 21.5208 20.8995 22.864 19.2427 22.864H16.935L15.3284 24.4706C13.9379 25.8611 11.6835 25.8611 10.293 24.4706L8.68637 22.864H6.37874C4.72189 22.864 3.37874 21.5208 3.37874 19.864V17.5564L1.77212 15.9497C0.381596 14.5592 0.381596 12.3048 1.77212 10.9143L3.37874 9.30772V7.0001C3.37874 5.34325 4.72189 4.0001 6.37874 4.0001H8.68637ZM13.9143 4.41431C13.1332 3.63326 11.8669 3.63326 11.0858 4.41431L8.9431 6.55701H6.37874C5.82645 6.55701 5.37874 7.00472 5.37874 7.55701V10.1214L3.23603 12.2641C2.45498 13.0451 2.45498 14.3114 3.23603 15.0925L5.37874 17.2352V19.864C5.37874 20.4163 5.82645 20.864 6.37874 20.864H9.00754L11.0858 22.9423C11.8669 23.7234 13.1332 23.7234 13.9143 22.9423L15.9925 20.864H18.6213C19.1736 20.864 19.6213 20.4163 19.6213 19.864V17.2352L21.764 15.0925C22.5451 14.3114 22.5451 13.0451 21.764 12.2641L19.6213 10.1214V7.55701C19.6213 7.00472 19.1736 6.55701 18.6213 6.55701H16.0569L13.9143 4.41431ZM12.6213 13.864C13.7259 13.864 14.6213 12.9686 14.6213 11.864C14.6213 10.7595 13.7259 9.86402 12.6213 9.86402C11.5167 9.86402 10.6213 10.7595 10.6213 11.864C10.6213 12.9686 11.5167 13.864 12.6213 13.864Z'
 
     const REMIX_ANNOTATION_COPY_LINE = 'M6.9998 6V3C6.9998 2.44772 7.44752 2 7.9998 2H19.9998C20.5521 2 20.9998 2.44772 20.9998 3V17C20.9998 17.5523 20.5521 18 19.9998 18H16.9998V20.9991C16.9998 21.5519 16.5499 22 15.993 22H4.00666C3.45059 22 3 21.5554 3 20.9991L3.0026 7.00087C3.0027 6.44811 3.45264 6 4.00942 6H6.9998ZM5.00242 8L5.00019 20H14.9998V8H5.00242ZM8.9998 6H16.9998V16H18.9998V4H8.9998V6Z'
@@ -11262,6 +11271,25 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
       const all = single + group
       return { all, single, group, items, current: all, other }
+    }
+
+    /**
+     * A3/T29: one visible ordinal per top-level entry. A batch group occupies a
+     * SINGLE ordinal shared by all its items; the next single/group continues from
+     * the next number (no per-item increments).
+     * @param {Array<object>} collection - top-level entries.
+     * @returns {Array<number>} 1-based ordinals aligned with the entries.
+     */
+    function annotationEntryOrdinals(collection) {
+      const list = Array.isArray(collection) ? collection : []
+      const ordinals = []
+      let ordinal = 0
+      for (const entry of list) {
+        if (entry === null || typeof entry !== 'object') continue
+        ordinal += 1
+        ordinals.push(ordinal)
+      }
+      return ordinals
     }
 
     /**
@@ -13512,8 +13540,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         chipPreview: null,
         // A3/T22: the × affordance shown over a hovered annotation reference chip.
         chipAction: null,
-        // A3/T26: transient launcher dock/undock flight (never persisted).
-        launcherFlight: null,
+        // A3/T29: secondary confirmation before an exit that would clear records.
+        exitConfirm: null,
+
         // A3 Phase 2-A transient UI state (never persisted): page marks derived per
         // geometry frame, the record under the pointer, the floating detail card,
         // and the single-slot undo payload.
@@ -14169,11 +14198,22 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       function markRectsOf(state) {
         const marks = []
         const collection = state !== null && typeof state === 'object' && Array.isArray(state.collection) ? state.collection : []
-        // A3/T24: group items are page marks too; the badge shows the group's
-        // shared requirement, and indices count every element across the list.
-        const records = annotationFlattenRecords(collection)
-        for (let index = 0; index < records.length; index += 1) {
-          const entry = records[index]
+        // A3/T29: page-mark badges use one ordinal per entry; every item of a group
+        // shows the group's single number (#7, #7, …), and the next entry is #8.
+        const ordinals = annotationEntryOrdinals(collection)
+        const flattened = []
+        for (let index = 0; index < collection.length; index += 1) {
+          const entry = collection[index]
+          if (entry === null || typeof entry !== 'object') continue
+          if (annotationIsGroup(entry)) {
+            const requirement = typeof entry.requirement === 'string' ? entry.requirement : ''
+            for (const item of annotationGroupItems(entry)) flattened.push({ record: { ...item, note: requirement }, ordinal: ordinals[index] })
+          } else {
+            flattened.push({ record: entry, ordinal: ordinals[index] })
+          }
+        }
+        for (let index = 0; index < flattened.length; index += 1) {
+          const entry = flattened[index].record
           if (collectionScopeOf(entry) !== 'current') continue
           if (markStatusRevision !== domRevision) {
             markStatusCache.clear()
@@ -14192,7 +14232,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           const excerpt = annotationMarkerBadgeText(entry.note)
           marks.push({
             id: entry.id,
-            index: index + 1,
+            index: flattened[index].ordinal,
             rect,
             stale: status === 'changed',
             summary: excerpt.text,
@@ -15180,6 +15220,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         const current = snapshot()
         const state = current.state
         if (state.phase === 'off') return
+        if (current.exitConfirm !== null) {
+          cancelExitConfirm()
+          return
+        }
         // A3/T6: the hover detail card is the first Esc rung (it was opened last).
         if (current.detailCard !== null) {
           closeDetailCard()
@@ -15203,12 +15247,13 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           return
         }
         // A3/T26: the managed list is the root body; only settings has a rung above
-        // it, and the next Esc from the list leaves the mode.
+        // it, and the next Esc from the list leaves the mode (asking first when
+        // records exist — A3/T29).
         if (state.view === 'settings') {
           dispatch({ type: 'exitOne' })
           return
         }
-        deactivate()
+        requestExit()
       }
 
       /**
@@ -15385,38 +15430,6 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         }, 180)
       }
 
-      /** Monotonic id for the current launcher flight (0 = none). */
-      let launcherFlightSeq = 0
-      /** Pending clear timer for the launcher flight. */
-      let launcherFlightTimer = null
-
-      /**
-       * Start the transient launcher flight between the remembered floating slot
-       * and the docked rail-header slot (A3/T26). The flight element is
-       * pointer-transparent and purely visual; the resting launcher is unchanged.
-       * @param {'dock' | 'undock'} mode - direction.
-       * @param {{ x: number, y: number }} from - start top-left (viewport px).
-       * @param {{ x: number, y: number }} to - end top-left (viewport px).
-       * @returns {void}
-       */
-      function startLauncherFlight(mode, from, to) {
-        try {
-          if (typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-            && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-        } catch {
-          // A throwing matchMedia keeps the instant path.
-        }
-        if (launcherFlightTimer !== null) window.clearTimeout(launcherFlightTimer)
-        launcherFlightSeq += 1
-        const id = launcherFlightSeq
-        publish({ launcherFlight: { id, mode, from, to, size: ANNOTATION_LAUNCHER_SIZE } })
-        launcherFlightTimer = window.setTimeout(() => {
-          launcherFlightTimer = null
-          const current = snapshot().launcherFlight
-          if (current !== null && current.id === id) publish({ launcherFlight: null })
-        }, ANNOTATION_LAUNCHER_FLIGHT_MS + 40)
-      }
-
       /**
        * Turn annotation mode on: markers, layout, listeners.
        *
@@ -15442,22 +15455,6 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           // leaves the shell chrome raised.
           capturePaintLayer()
           scheduleGeometry()
-          // A3/T26: the floating launcher is gone; fly a transient copy from its
-          // remembered slot into the docked header control once the rail painted.
-          const flightFrom = idleLauncherPosition !== null
-            ? { x: idleLauncherPosition.x, y: idleLauncherPosition.y }
-            : null
-          if (flightFrom !== null) {
-            window.requestAnimationFrame(() => {
-              window.requestAnimationFrame(() => {
-                if (!isActive()) return
-                const docked = document.querySelector('[data-psa-launcher]')
-                if (docked === null) return
-                const rect = docked.getBoundingClientRect()
-                startLauncherFlight('dock', flightFrom, { x: Math.round(rect.left), y: Math.round(rect.top) })
-              })
-            })
-          }
         } catch (error) {
           try {
             dispatch({ type: 'deactivate' })
@@ -15495,8 +15492,6 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           flushAnnotationRecords()
           return
         }
-        const dockedBefore = document.querySelector('[data-psa-launcher]')
-        const dockedRect = dockedBefore === null ? null : dockedBefore.getBoundingClientRect()
         try {
           dispatch({ type: 'deactivate' })
         } finally {
@@ -15512,22 +15507,11 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           cancelMarkerHoverTimer()
           cancelDetailClose()
           closeDetailCard()
-          publish({ markRects: [], markerHoverId: null, markUndo: null, chipPreview: null, launcherFlight: null })
+          publish({ markRects: [], markerHoverId: null, markUndo: null, chipPreview: null })
           uninstallPageListeners()
           disconnectFrameObserver()
           restoreAnnotationLayout()
           flushAnnotationRecords()
-          // A3/T26: reverse flight from the docked slot to the restored floating one.
-          if (dockedRect !== null) {
-            window.requestAnimationFrame(() => {
-              window.requestAnimationFrame(() => {
-                const floating = document.querySelector('[data-psa-launcher]')
-                if (floating === null) return
-                const rect = floating.getBoundingClientRect()
-                startLauncherFlight('undock', { x: Math.round(dockedRect.left), y: Math.round(dockedRect.top) }, { x: Math.round(rect.left), y: Math.round(rect.top) })
-              })
-            })
-          }
           if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
           feedbackTimer = null
           try {
@@ -16367,6 +16351,40 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       }
 
       /**
+       * A3/T29: ask before leaving the mode while annotation records exist. With no
+       * records the mode exits directly.
+       * @returns {void}
+       */
+      function requestExit() {
+        if (!isActive()) return
+        const state = snapshot().state
+        const count = annotationTotalItemCount(state.collection)
+        if (count === 0) {
+          deactivate()
+          return
+        }
+        publish({ exitConfirm: { count } })
+      }
+
+      /** Dismiss the exit confirmation without changing anything. @returns {void} */
+      function cancelExitConfirm() {
+        if (snapshot().exitConfirm !== null) publish({ exitConfirm: null })
+      }
+
+      /**
+       * Confirm the exit: clear ALL records (singles + groups), flush the empty v3
+       * document immediately, close selection/popovers, and leave the mode.
+       * @returns {void}
+       */
+      function confirmExitClear() {
+        publish({ exitConfirm: null })
+        dispatch({ type: 'collectionClear' })
+        dispatch({ type: 'selectSingle', ref: null })
+        flushAnnotationRecords()
+        deactivate()
+      }
+
+      /**
        * A3/T25: footer primary action — save the current page selection (single
        * record or batch group) when one exists, otherwise return to the selection
        * status view so the user can pick elements.
@@ -16827,6 +16845,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         setFilter,
         primaryAddAnnotation,
         clearSelectionOrCollection,
+        requestExit,
+        cancelExitConfirm,
+        confirmExitClear,
         removeGroupItem,
         removeEntry,
         removeSelection,
@@ -16868,16 +16889,15 @@ html[data-psa-active="true"] [data-psp-search-toggle]{display:none!important}
 html[data-psa-active="true"] [data-psd-hovercard]{pointer-events:auto;z-index:120!important}
 html[data-psa-active="true"]:not([data-psa-passthrough="true"]) body{cursor:crosshair}
 html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
+.psa-launcher{transition:opacity 180ms ease,transform 180ms ease;transform-origin:center}
+.psa-launcher[data-psa-launcher-hidden=true]{opacity:0;transform:scale(.72);pointer-events:none}
+@media (prefers-reduced-motion:reduce){.psa-launcher{transition:none}}
 .psa-launcher{position:fixed;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:50%;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);box-shadow:var(--dsw-elevation-panel,0 6px 24px rgb(0 0 0 / 18%));cursor:grab;pointer-events:auto;touch-action:none;user-select:none;z-index:50}
 .psa-launcher:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-layer-1))}
 .psa-launcher[data-psa-active=true]{color:var(--dsw-alias-state-business-primary);border-color:var(--dsw-alias-state-business-primary)}
 .psa-launcher[data-psa-dragging=true]{cursor:grabbing}
 .psa-launcher:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px}
 .psa-launcher-icon{display:block}
-.psa-launcher-docked{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:none;box-sizing:border-box;width:26px;height:26px;padding:0;border:1px solid var(--dsw-alias-state-business-primary);border-radius:50%;background:transparent;color:var(--dsw-alias-state-business-primary);cursor:pointer}
-.psa-launcher-docked:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.psa-launcher-docked:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px}
-.psa-launcher-docked .psa-launcher-count{top:-5px;right:-5px}
 .psa-launcher-count{position:absolute;top:-4px;right:-4px;box-sizing:border-box;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));font-size:10.5px;line-height:15px;text-align:center;font-variant-numeric:tabular-nums}
 .psa-layer{position:fixed;inset:0;pointer-events:none;z-index:39}
 .psa-hover{position:fixed;box-sizing:border-box;border:1px dashed var(--dsw-alias-state-business-primary);border-radius:3px}
@@ -16982,15 +17002,6 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-sb-rail-title{font-weight:600;font-size:13px;letter-spacing:.01em}
 .psa-sb-total{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 6px;border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);color:var(--dsw-alias-label-secondary);font-size:11px;font-weight:600;flex:none}
 .psa-sb-head{display:flex;flex-direction:column;gap:2px;padding:2px 2px 0}
-.psa-launcher-flight{position:fixed;z-index:151;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border-radius:50%;border:1px solid var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-state-business-primary);box-shadow:var(--dsw-elevation-panel,0 6px 18px rgb(0 0 0 / 20%));pointer-events:none;transition:left 220ms cubic-bezier(.18,.8,.24,1),top 220ms cubic-bezier(.18,.8,.24,1),transform 220ms ease-out}
-.psa-launcher-docked{animation:psa-launcher-dock-in 220ms cubic-bezier(.18,.8,.24,1)}
-.psa-launcher:not([data-psa-active=true]){animation:psa-launcher-float-in 220ms cubic-bezier(.18,.8,.24,1)}
-@keyframes psa-launcher-dock-in{from{opacity:0;transform:scale(.72)}to{opacity:1;transform:scale(1)}}
-@keyframes psa-launcher-float-in{from{opacity:.4;transform:scale(.86)}to{opacity:1;transform:scale(1)}}
-@media (prefers-reduced-motion:reduce){
-.psa-launcher-flight{transition:none}
-.psa-launcher-docked,.psa-launcher:not([data-psa-active=true]){animation:none}
-}
 .psa-sb-hint{color:var(--dsw-alias-label-tertiary);font-size:10.5px;line-height:14px}
 .psa-sb-head-row{display:flex;align-items:center;gap:6px}
 .psa-sb-back{appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;padding:2px 4px;border-radius:var(--dsw-radius-sm,4px);cursor:pointer}
@@ -17030,11 +17041,16 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-group .psa-entry-name{font-weight:600}
 .psa-group-items{margin-left:6px}
 .psa-group-item{min-height:26px}
+.psa-exit-confirm{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(360px,calc(100vw - 32px));box-sizing:border-box;display:flex;flex-direction:column;gap:10px;padding:16px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 30%));color:var(--dsw-alias-label-primary);pointer-events:auto;z-index:70;font-size:12.5px;line-height:18px}
+.psa-exit-confirm-title{font-weight:600;font-size:13px}
+.psa-exit-confirm-message{color:var(--dsw-alias-label-secondary)}
+.psa-exit-confirm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:2px}
+.psa-exit-confirm-danger{min-height:30px;padding:0 12px;border:1px solid color-mix(in srgb,var(--dsw-alias-state-error-primary,var(--dsw-alias-label-secondary)) 55%,transparent);border-radius:var(--dsw-radius-sm,8px);background:color-mix(in srgb,var(--dsw-alias-state-error-primary,var(--dsw-alias-label-secondary)) 16%,transparent);color:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-secondary));font:inherit;font-size:12px;cursor:pointer}
 .psa-sb-footer{flex:none;display:flex;gap:8px;padding:10px 12px 12px;border-top:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent))}
-.psa-sb-primary{flex:1;min-height:34px;border:0;border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-state-business-primary);color:#fff;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+.psa-sb-primary{flex:1 1 50%;min-height:34px;border:0;border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-state-business-primary);color:#fff;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
 .psa-sb-primary:hover:not(:disabled){filter:brightness(1.06)}
 .psa-sb-primary:disabled{opacity:.5;cursor:default}
-.psa-sb-danger{flex:none;min-height:34px;padding:0 14px;border:1px solid color-mix(in srgb,var(--dsw-alias-state-error-primary,var(--dsw-alias-label-secondary)) 55%,transparent);border-radius:var(--dsw-radius-sm,8px);background:transparent;color:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-secondary));font:inherit;font-size:12px;cursor:pointer}
+.psa-sb-danger{flex:1 1 50%;min-height:34px;padding:0 14px;border:1px solid color-mix(in srgb,var(--dsw-alias-state-error-primary,var(--dsw-alias-label-secondary)) 55%,transparent);border-radius:var(--dsw-radius-sm,8px);background:transparent;color:var(--dsw-alias-state-error-primary,var(--dsw-alias-label-secondary));font:inherit;font-size:12px;cursor:pointer}
 .psa-sb-danger:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-error-primary,var(--dsw-alias-label-secondary)) 10%,transparent)}
 .psa-sb-danger:disabled{opacity:.45;cursor:default}
 .psa-sb-filter:focus-visible,.psa-sb-tool:focus-visible,.psa-sb-primary:focus-visible,.psa-sb-danger:focus-visible,.psa-entry-name:focus-visible,.psa-icon-btn:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}
@@ -17198,12 +17214,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       // A3/T19: exactly one launcher control at any time. While active it lives
       // docked inside the rail (rendered by AnnotationRail); while idle it floats at
       // its remembered position over the page.
-      if (!active) {
-        node.push(React.createElement(AnnotationLauncher, { key: 'launcher', t, controller, snapshot }))
-      }
-      if (snapshot.launcherFlight !== null) {
-        node.push(React.createElement(AnnotationLauncherFlight, { key: `launcher-flight-${snapshot.launcherFlight.id}`, snapshot }))
-      }
+      node.push(React.createElement(AnnotationLauncher, { key: 'launcher', t, controller, snapshot }))
       if (active) {
         node.push(React.createElement(AnnotationHighlights, { key: 'layer', snapshot, t }))
         node.push(React.createElement(AnnotationRail, { key: 'rail', t, controller, snapshot }))
@@ -17222,6 +17233,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       }
       if (snapshot.chipAction !== null) {
         node.push(React.createElement(AnnotationChipDelete, { key: 'chip-delete', t, controller, snapshot }))
+      }
+      if (snapshot.exitConfirm !== null) {
+        node.push(React.createElement(AnnotationExitConfirm, { key: 'exit-confirm', t, controller, snapshot }))
       }
       if (snapshot.noteEditor !== null) node.push(React.createElement(AnnotationNoteEditor, { key: 'note-editor', t, controller, snapshot }))
       if (snapshot.markUndo !== null) {
@@ -17273,8 +17287,11 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         'data-psa-launcher': '',
         'data-psa-own': '',
         'data-psa-active': active ? 'true' : 'false',
+        'data-psa-launcher-hidden': active ? 'true' : 'false',
         'data-psa-dragging': snapshot.launcherDragging ? 'true' : undefined,
         'aria-pressed': active ? 'true' : 'false',
+        'aria-hidden': active ? 'true' : undefined,
+        tabIndex: active ? -1 : 0,
         'aria-label': active ? t('launcher.exit') : t('launcher.enter'),
         title: active ? t('launcher.exit') : t('launcher.enter'),
         style: { left: `${snapshot.launcherPosition.x}px`, top: `${snapshot.launcherPosition.y}px` },
@@ -17288,69 +17305,6 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       count > 0
         ? React.createElement('span', { className: 'psa-launcher-count', 'data-psa-own': '' }, String(count))
         : null)
-    }
-
-    /**
-     * The same round launcher control, docked inside the right rail while the mode
-     * is active (A3/T19): it never floats over page content, keeps the glyph and
-     * the collection count badge, reports `aria-pressed="true"`, and clicking it
-     * exits the mode exactly like the floating launcher.
-     * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
-     * @returns {object} the docked launcher button.
-     */
-    function AnnotationDockedLauncher(props) {
-      const { t, controller, snapshot } = props
-      const count = snapshot.state.collection.length
-      return React.createElement('button', {
-        type: 'button',
-        className: 'psa-launcher-docked',
-        'data-psa-launcher': '',
-        'data-psa-launcher-docked': 'true',
-        'data-psa-own': '',
-        'data-psa-active': 'true',
-        'aria-pressed': 'true',
-        'aria-label': t('launcher.exit'),
-        title: t('launcher.exit'),
-        onClick: () => controller.deactivate()
-      },
-      RemixGlyph(REMIX_FOCUS_3_LINE, 15, 'psa-launcher-icon'),
-      count > 0
-        ? React.createElement('span', { className: 'psa-launcher-count', 'data-psa-own': '' }, String(count))
-        : null)
-    }
-
-    /**
-     * A3/T26: transient flying launcher used for the dock/undock animation. It is
-     * pointer-transparent, paints above the rail, and is removed from the state
-     * when the flight ends; the resting launcher/docked control stay exactly as
-     * before (one `[data-psa-launcher]` control at rest).
-     * @param {{ snapshot: object }} props - surface props.
-     * @returns {object | null} the flying launcher.
-     */
-    function AnnotationLauncherFlight(props) {
-      const flight = props.snapshot.launcherFlight
-      const [flying, setFlying] = React.useState(false)
-      React.useEffect(() => {
-        if (flight === null) return undefined
-        setFlying(false)
-        const frame = window.requestAnimationFrame(() => setFlying(true))
-        return () => window.cancelAnimationFrame(frame)
-      }, [flight === null ? 0 : flight.id])
-      if (flight === null) return null
-      const position = flying ? flight.to : flight.from
-      return React.createElement('div', {
-        className: 'psa-launcher-flight',
-        'data-psa-launcher-flight': '',
-        'data-psa-flight-mode': flight.mode,
-        'data-psa-own': '',
-        'aria-hidden': 'true',
-        style: {
-          left: `${position.x}px`,
-          top: `${position.y}px`,
-          width: `${flight.size}px`,
-          height: `${flight.size}px`
-        }
-      }, RemixGlyph(REMIX_FOCUS_3_LINE, 20, 'psa-launcher-icon'))
     }
 
     /**
@@ -17479,7 +17433,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         'aria-pressed': state.view === 'settings' ? 'true' : 'false',
         title: state.view === 'settings' ? t('rail.back') : t('settings.title'),
         onClick: () => controller.openView(state.view === 'settings' ? 'collection' : 'settings')
-      }, RemixGlyph(REMIX_SETTINGS_3_LINE, 14))
+      }, RemixGlyph(REMIX_SETTINGS_LINE, 14))
       const exitButton = React.createElement('button', {
         type: 'button',
         className: 'psa-icon-btn',
@@ -17487,7 +17441,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         'data-psa-own': '',
         'aria-label': t('rail.exit'),
         title: t('rail.exit'),
-        onClick: () => controller.deactivate()
+        onClick: () => controller.requestExit()
       }, RemixGlyph(REMIX_CLOSE_LINE, 14))
       if (collapsed) {
         return React.createElement('aside', {
@@ -17502,7 +17456,6 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         },
         React.createElement('div', { className: 'psa-rail-header' },
           collapseButton,
-          AnnotationDockedLauncher({ t, controller, snapshot }),
           settingsButton,
           count > 0
             ? React.createElement('button', {
@@ -17542,7 +17495,6 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
             title: t('sidebar.subtitle')
           }, String(annotationSidebarCounts(state.collection, controller.currentSessionId()).items))
           : null,
-        AnnotationDockedLauncher({ t, controller, snapshot }),
         settingsButton,
         collapseButton,
         exitButton),
@@ -17745,11 +17697,13 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         list.push(React.createElement('div', { key: 'filter-empty', className: 'psa-sb-empty', 'data-psa-filter-empty': '', 'data-psa-own': '' },
           React.createElement('div', { className: 'psa-sb-empty-hint' }, t('sidebar.filterEmpty'))))
       } else {
+        const ordinals = annotationEntryOrdinals(entries)
         filtered.forEach((entry) => {
           const index = entries.indexOf(entry)
+          const ordinal = ordinals[index] ?? (index + 1)
           list.push(annotationIsGroup(entry)
-            ? React.createElement(AnnotationGroupRow, { key: entry.id, t, controller, snapshot, entry, index })
-            : React.createElement(AnnotationEntryRow, { key: entry.id, t, controller, snapshot, entry, index }))
+            ? React.createElement(AnnotationGroupRow, { key: entry.id, t, controller, snapshot, entry, index, ordinal })
+            : React.createElement(AnnotationEntryRow, { key: entry.id, t, controller, snapshot, entry, index, ordinal }))
         })
       }
       nodes.push(React.createElement('div', {
@@ -17772,7 +17726,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
      * @returns {object} the group card.
      */
     function AnnotationGroupRow(props) {
-      const { t, controller, entry, index } = props
+      const { t, controller, entry, index, ordinal } = props
       const scope = controller.collectionScopeOf(entry)
       const included = scope === 'current' && entry.included !== false
       const expanded = entry.collapsed !== true
@@ -17804,7 +17758,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           'data-psa-own': '',
           onChange: (event) => controller.setEntryIncluded(entry.id, event.currentTarget.checked === true)
         })),
-        React.createElement('span', { className: 'psa-entry-index' }, `#${index + 1}`),
+        React.createElement('span', { className: 'psa-entry-index' }, `#${ordinal ?? (index + 1)}`),
         React.createElement('button', {
           type: 'button',
           className: 'psa-entry-name',
@@ -17899,7 +17853,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
               'data-psa-own': '',
               'data-psa-ref': item.id
             },
-            React.createElement('span', { className: 'psa-entry-index' }, `#${index + 1}.${itemIndex + 1}`),
+            React.createElement('span', { className: 'psa-entry-index' }, `#${ordinal ?? (index + 1)}.${itemIndex + 1}`),
             React.createElement('button', {
               type: 'button',
               className: 'psa-group-item-name',
@@ -17940,6 +17894,46 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
+     * A3/T29: secondary confirmation shown when leaving the mode would clear
+     * annotation records. Cancel leaves everything untouched; Clear & exit clears
+     * all records, flushes the empty document and exits.
+     * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
+     * @returns {object | null} the confirmation dialog.
+     */
+    function AnnotationExitConfirm(props) {
+      const { t, controller, snapshot } = props
+      const confirm = snapshot.exitConfirm
+      if (confirm === null) return null
+      return React.createElement('div', {
+        className: 'psa-exit-confirm',
+        'data-psa-exit-confirm': '',
+        'data-psa-exit-count': String(confirm.count),
+        'data-psa-own': '',
+        role: 'alertdialog',
+        'aria-modal': 'true',
+        'aria-label': t('exitConfirm.title')
+      },
+      React.createElement('div', { className: 'psa-exit-confirm-title', 'data-psa-own': '' }, t('exitConfirm.title')),
+      React.createElement('div', { className: 'psa-exit-confirm-message', 'data-psa-own': '' },
+        t('exitConfirm.message', { count: confirm.count })),
+      React.createElement('div', { className: 'psa-exit-confirm-actions', 'data-psa-own': '' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-sb-tool',
+          'data-psa-exit-cancel': '',
+          'data-psa-own': '',
+          onClick: () => controller.cancelExitConfirm()
+        }, t('exitConfirm.cancel')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psa-exit-confirm-danger',
+          'data-psa-exit-clear': '',
+          'data-psa-own': '',
+          onClick: () => controller.confirmExitClear()
+        }, t('exitConfirm.clear'))))
+    }
+
+    /**
      * One collection row (A3/T8): include checkbox (other-Session rows disabled),
      * index, element label → preview, status, Session/Workspace/surface metadata,
      * locator, inline rainbow note editor, and the per-row actions.
@@ -17947,7 +17941,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
      * @returns {object} the row.
      */
     function AnnotationEntryRow(props) {
-      const { t, controller, entry, index } = props
+      const { t, controller, entry, index, ordinal } = props
       const scope = controller.collectionScopeOf(entry)
       // A resolution chip only means something for the current page's Session; for
       // another Session the row is marked `other` instead of claiming a live match (F9).
@@ -17986,7 +17980,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           'data-psa-own': '',
           onChange: (event) => controller.setEntryIncluded(entry.id, event.currentTarget.checked === true)
         })),
-        React.createElement('span', { className: 'psa-entry-index' }, `#${index + 1}`),
+        React.createElement('span', { className: 'psa-entry-index' }, `#${ordinal ?? (index + 1)}`),
         React.createElement('span', { className: 'psa-sb-type', 'data-psa-type-badge': 'single', 'data-psa-own': '' },
           t('sidebar.type.single')),
         React.createElement('button', {
@@ -18091,12 +18085,10 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
-     * A3/T25: redesigned sidebar footer. Primary "Add annotation" saves the
-     * current page selection (single record or batch group) / returns to the page;
-     * the danger action clears the current selection, or the whole collection when
-     * nothing is selected (with the existing undo slot). Sort/clear admin tools
-     * (select-all / deselect / batch insert / delete selected) live in the list
-     * toolbar above, keeping the footer to the two specified actions.
+     * A3/T29: sidebar footer with two equal-width actions. The primary saves the
+     * current page selection; the danger action is "Cancel Annotation", which asks
+     * for confirmation (when records exist), clears all records, flushes the empty
+     * v3 document and exits the mode.
      * @param {Function} t - bound translate.
      * @param {object} controller - annotation controller.
      * @param {object} snapshot - current snapshot.
@@ -18105,17 +18097,12 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     function annotationCollectionFooter(t, controller, snapshot) {
       const state = snapshot.state
       const hasSelection = state.selection.length > 0
-      const sessionId = controller.currentSessionId()
-      const scopeCounts = annotationScopeCounts(state.collection, sessionId)
-      const canClearCollection = state.collection.length > 0
       return React.createElement('div', { className: 'psa-sb-footer', 'data-psa-sidebar-footer': '', 'data-psa-own': '' },
         React.createElement('button', {
           type: 'button',
           className: 'psa-sb-primary',
           'data-psa-add-annotation': '',
-          'data-psa-add': '',
           'data-psa-own': '',
-          disabled: !hasSelection && state.collection.length === 0 && false,
           title: hasSelection ? t('batch.saveGroup') : t('sidebar.addAnnotation'),
           onClick: () => controller.primaryAddAnnotation()
         }, hasSelection
@@ -18126,11 +18113,11 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           className: 'psa-sb-danger',
           'data-psa-clear-selection': '',
           'data-psa-clear': '',
+          'data-psa-cancel-annotation': '',
           'data-psa-own': '',
-          disabled: !hasSelection && !canClearCollection,
-          title: hasSelection ? t('sidebar.clearSelection') : t('sidebar.clearCollection'),
-          onClick: () => controller.clearSelectionOrCollection()
-        }, hasSelection ? t('sidebar.clearSelection') : t('sidebar.clearCollection')))
+          title: t('sidebar.cancelAnnotation'),
+          onClick: () => controller.requestExit()
+        }, t('sidebar.cancelAnnotation')))
     }
 
     /**
@@ -19098,6 +19085,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationSidebarCounts,
         annotationFilterEntries,
         annotationGroupSummary,
+        annotationEntryOrdinals,
         upsertAnnotationRecord,
         removeAnnotationRecord,
         restoreAnnotationRecord,
