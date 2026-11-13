@@ -280,11 +280,21 @@ plugin already receives the Session list store through its existing `sessions`
 inject, and every live Host Session is push-seeded there — its
 `projectionsBySession[id].values` carries `sessionStats`, `tokenUsage`,
 `contextPressure`, and `contextBreakdown`, updated with each committed event, so
-a live row needs **no request at all**. A cold (persisted, not live) Session
+a live row needs **no request at all**. While the card stays open this is also
+**not frozen at hover start**: the card re-renders on the panel's once-per-second
+clock (and on every Session-store update) and re-reads the live
+`projectionsBySession` snapshot each render, so `turns`/`steps`, token totals,
+context percent and the observed run duration tick in place as frames arrive —
+no extra polling, no extra network. Measured live while hovering: a running
+parent went `3 turns 344 steps` → `3 turns 345 steps` (Tool time
+`308m8s` → `313m50s`) within 15 s, and a running nested subagent went
+`6 turns 398 steps / 357,367 output tok` → `6 turns 399 steps / 357,463 output
+tok` (context `725K` → `726K`) within 6 s. A cold (persisted, not live) Session
 carries only summary keys; the first hover of that row starts exactly one
 `sessions.refreshProjections(id)` read (deduped per Session for the seat
 lifetime, never polled, never retried after an error or a `migration-required`
-result), and the card fills the figures in when the values land. There is no
+result), and the card fills the figures in when the values land; cold Sessions
+therefore stay one-shot. There is no
 Host route, no new inject, and no loading state: the card renders immediately
 with the plain rows and grows its sections in place. Missing units, unknown
 Sessions, migration-only logs, and Sessions without usage all just omit the
@@ -514,19 +524,31 @@ native sidebar Session row of the open Session:
   2. `.psd-atmos` — an absolutely positioned wrapper (`inset: 0`,
      `border-radius: inherit`, `overflow: hidden`, `pointer-events: none`) that
      hosts a small self-contained **Canvas 2D gas renderer**. The canvas is
-     sized to the row box (DPR clamped to 1.25, ~30 fps) and paints a low broad
-     prism wash plus nine drifting/breathing radial blobs under
-     `mix-blend-mode: screen` and `blur(3px) saturate(1.18)`, giving the
-     "rainbow smoke inside the pill" flow. Config baseline: intensity .56,
-     spread 1.16, drift 1.2, stirring .58, breathing .22, blend .90,
-     vibrance 1.32, `prism` palette;
-  3. `.psd-atmos-scrim` — a faint dark gradient
-     (`rgba(16,18,22,.20)` → `rgba(16,18,22,.30)`, `z-index: 1` inside the
-     wrapper) above the canvas so the title/time/actions stay readable;
+     sized to the row box (DPR clamped to 1.25, ~30 fps) and paints a broad
+     prism wash plus nine drifting/breathing radial blobs. The blobs paint over
+     each other (source-over, not additive) so overlapping hues stay saturated
+     instead of summing to grey/white. The vivid theme recipe: light theme
+     `mix-blend-mode: multiply` + `blur(3px) saturate(1.5) brightness(1.05)`,
+     dark theme `mix-blend-mode: screen` + `blur(3px) saturate(1.5)
+     brightness(1.14)`. Config baseline: intensity .64, spread 1.18, drift 1.2,
+     stirring .58, breathing .22, blend 1.0, vibrance 1.72, `prism` palette
+     (before the vibrancy pass: intensity .56 / spread 1.16 / blend .90 /
+     vibrance 1.32);
+  3. `.psd-atmos-scrim` — a light dark gradient above the canvas so the
+     title/time/actions stay readable without dulling the gas: light theme
+     `rgba(16,18,22,.08)` → `rgba(16,18,22,.16)`, dark theme
+     `rgba(16,18,22,.12)` → `rgba(16,18,22,.22)` (`z-index: 1` inside the
+     wrapper). It is deliberately light: the vivid canvas is the point and the
+     content already sits above both layers;
   4. the real row content is raised to `position: relative; z-index: 2` — its
      DOM, events, grid/columns and hover actions are unchanged.
-  The wrapper sits at `z-index: 0`, is `opacity: .62` while the row is active and
-  rises to `.8` on row hover (hover raises visibility slightly). Only highlighted
+  The wrapper sits at `z-index: 0`, is `opacity: .78` while the row is active and
+  rises to `.92` on row hover (hover raises visibility slightly). The sidebar E2E
+  pins the vivid baseline (canvas `saturate(1.5)`, wrapper opacity ≥ .7, scrim
+  max alpha ≤ .24, blob-core colour saturation ≥ .45, theme-specific blend) so
+  the atmosphere cannot silently regress to grey (measured blob-core saturation
+  rose from ~0.25 before the vibrancy pass to ~0.40+ animated / ~0.30 static).
+  Only highlighted
   rows exist and animate; one renderer per highlighted row (max 3: card row +
   native Workspace row + native Session row). A hidden tab pauses the RAF loop,
   `prefers-reduced-motion: reduce` paints one static pastel frame and stops the
@@ -721,7 +743,9 @@ The native **View options** menu picks how Sessions are grouped:
 - **Session figures are a client-side projection read, not new Host data.** The
   hover card reads `sessionStats`, `tokenUsage`, `contextPressure`, and
   `contextBreakdown` from the existing `sessions` inject
-  (`projectionsBySession`), so live Sessions need no request at all. A cold
+  (`projectionsBySession`), so live Sessions need no request at all; while the
+  card stays open it keeps re-reading that live snapshot on the 1 s panel clock,
+  so the figures refresh in place instead of freezing at hover start. A cold
   (persisted) Session gets **one** `refreshProjections` read on first hover —
   deduplicated per Session, never polled, never retried after an error or a
   `migration-required` result. The card renders immediately and only grows the
