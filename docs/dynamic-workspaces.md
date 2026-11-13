@@ -267,33 +267,64 @@ retires with time.
 ## Pinned Sessions
 
 Main Sessions can be pinned from their row in the Running & recent card. The pin
-is the DSH shell's own **Host-persisted Session pin** — the same
-`WorkspaceSnapshot.pinnedSessionIds` set and the same
-`ctx.uiWorkspace.pinSession(id)` / `unpinSession(id)` services the native
-sidebar row's pin marker and menu use — not a second plugin-owned state. One set
-of facts therefore drives both surfaces: a pin made from this card pins the
-Session in the native sidebar (its marker, and the shell's saved-order fronting),
-a pin made from the native sidebar or its context menu shows up here, and
-because the Host owns the set it follows the user across every browser and
-device paired with that `$DSH_HOME`. The card keeps only its presentation rule —
-pinned main Sessions lead the card and never retire with time. It adds no Host
-route, store, or profile change, so shipping it needs no DSH Web service
-restart: the client half loads with the page (a merge into the linked checkout
-plus a page reload is enough).
+is the **card's own** state, deliberately independent of the native sidebar's
+project-organisation pin (`WorkspaceSnapshot.pinnedSessionIds`): reading that
+set was rejected on live feedback because the Host already carried six old
+sidebar pins (Sessions 2–19 days old), which surfaced here with times that did
+not belong in a running panel. The card therefore never reads, writes, or
+surfaces the native sidebar pin, and the default card content stays exactly the
+ordinary running/recent rows — the running Session and its running subagent
+children included — plus only the Sessions pinned from this card. No row is
+prefilled or tinted until it is pinned.
 
-The measured live Host already carried **six native sidebar pins** (on Sessions
-2–19 days old, kept for project organisation); they now appear as the card's
-pinned prefix, so the five-row default can start fully pinned and **View all**
-reveals the rest. That is the intended consequence of one shared state: the card
-lists exactly what the native sidebar marks as pinned.
+The pinned set is shared across devices through the Host:
+
+```text
+GET  /api/power-suite.session-pins
+POST /api/power-suite.session-pins   { "ops": [{ "op": "pin" | "unpin", "id": "<sessionId>" }] }
+$DSH_HOME/dsh-power-suite/session-pins.json
+{ "version": 1, "rev": <n>, "pinned": ["<sessionId>", ...] }
+```
+
+The Host document is written atomically (temporary sibling + rename), bounded at
+**500** ids with the oldest pin dropped first, applied in arrival order (**last
+write wins per Session**), and its `rev` bumps only when a real change happens.
+Every browser and profile using the same `$DSH_HOME` — i.e. every paired device —
+converges on that one set.
+
+The browser keeps a versioned local cache (`localStorage` key
+`power-suite.dynamic-workspaces.pinned`; `{ version, rev, pinned, pending,
+migrated }`) so the card paints immediately and keeps working offline:
+
+- A toggle appends the `pin`/`unpin` operation to `pending`, and the card replays
+  the queue over the confirmed `pinned` set, so the row moves and tints at once.
+  Queued operations are POSTed after a 150 ms debounce and retried on the next
+  sync cycle.
+- The client GETs the Host document on mount, on window focus, on visibility
+  changes, and every 30 s. On the first successful contact (`migrated: false`)
+  it merges the locally cached pins into the Host document — publishing the ones
+  the Host does not know yet — so pins made before the Host route existed are
+  not lost. Afterwards the Host document is authoritative and the queue simply
+  replays on top.
+- A missing route (an older Host that has not restarted with this build) or a
+  transport failure is not an error state: the card runs **local-only** and
+  retries on the next cycle, so the UI never breaks. The live E2E seam reports
+  reachability as `pinShared`; until the Host service serves the route it is
+  `false` and the shared/cross-device checks are reported as an honest skip, not
+  a pass.
+
+Deployment note: the client half reaches the served GUI on a page reload (no
+service restart); the new Host route only exists after the DSH Web service is
+restarted with the merged linked checkout. Until then the card is local-only.
 
 - **Pinned first, newest activity first**: pinned rows sort before every
   unpinned row, newest activity first — a pinned running row and a pinned
   recently finished row sort by the same effective activity time the card
-  already uses. The unpinned running rows keep their existing order after them,
-  and the unpinned recently finished rows keep theirs last, so pinning never
-  reshuffles the ordinary list. The card's five-row **View all** default still
-  applies to the combined list.
+  already uses, and a remotely pinned row arrives with the next Host sync. The
+  unpinned running rows keep their existing order after them, and the unpinned
+  recently finished rows keep theirs last, so pinning never reshuffles the
+  ordinary list. The card's five-row **View all** default still applies to the
+  combined list.
 - **Never retires**: a pinned main Session is listed regardless of its running
   status or the finished-Session retention window. A pinned running row keeps
   its live state and its running subagent count; a pinned finished row is
@@ -301,27 +332,15 @@ lists exactly what the native sidebar marks as pinned.
   owning Workspace label/path, directory, `done` state, zero subagents — but
   with **no retention cutoff**. Its last-activity/`updatedAt` time stays the
   original value: pinning never re-times or resets the row's end time, so
-  **unpin** re-derives the row immediately under the ordinary rules — the card
-  recomputes from the same facts as soon as the Host's updated Workspaces
-  snapshot arrives, with no reload and no re-timing: an ended Session already
+  **unpin** re-derives the row immediately under the ordinary rules — the
+  effective set updates on the click (the queued operation is already part of
+  the local cache), with no reload and no re-timing: an ended Session already
   outside the retention window leaves the card, and a still-running one returns
   to the running group in activity order.
-- **Native reorder is a one-way side effect**: pinning through the shell also
-  fronts the Session in the native sidebar's saved Session order — exactly what
-  the native pin menu does. Unpinning removes the pin and returns the row to the
-  ordinary card rules, but does **not** restore the saved position the pin
-  fronted. This is native shell behaviour the card reuses, not a plugin
-  reordering rule.
 - **Scope: main Sessions only**: nested subagent child rows carry no pin slot,
   no marker, and no tint. Blank, archived, `origin: "subagent"`, and unknown
-  Session ids are ignored even when a pinned id in the Host set has no usable
-  summary.
-- **Host support**: the pin control is rendered only when the shell exposes both
-  `pinSession` and `unpinSession`; on an older Host the card keeps its exact
-  previous shape (no pin slot). A toggle is in-flight guarded per row, so a
-  double click cannot race the Host snapshot; a refused write (access policy,
-  archived row, transport) leaves the pin state unchanged and the card follows
-  the next snapshot — there is no optimistic local marker.
+  Session ids are ignored even when a pinned id in the cache/Host set has no
+  usable summary.
 - **No layout jump**: every main row reserves a fixed 16 px pin slot **between
   the leading state glyph and the title**. The slot is always in the DOM; only
   `opacity` / `visibility` / `pointer-events` change, so revealing the control
@@ -335,7 +354,7 @@ lists exactly what the native sidebar marks as pinned.
   which point a click unpins. Every state carries `aria-pressed` and a
   localized label (`Pin session` / `Unpin session`), so the toggle is announced
   correctly.
-- **Pinned row tint**: the row gets a subtle violet tint —
+- **Pinned row tint**: only pinned rows get the subtle violet tint —
   `color-mix(in srgb, var(--dsw-alias-state-business-primary) 7%, transparent)`
   on the row, 6% on its body pill — plus the filled glyph, so "why is this at
   the top" stays readable after the pointer leaves. Columns, indentation, child

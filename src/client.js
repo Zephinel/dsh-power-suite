@@ -4420,6 +4420,42 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** localStorage key holding the two bucket fold states. */
     const DW_FOLD_KEY = 'power-suite.dynamic-workspaces.folds'
 
+    /**
+     * localStorage key caching the card's pinned main-Session ids.
+     *
+     * The card pin belongs to this panel: it keeps a main Session on top of
+     * Running & recent instead of letting the retention window retire it, and it
+     * deliberately does not read or write the native sidebar pin (an old
+     * project-organisation pin must never surface here). The Host owns the shared
+     * document (see {@link DW_PIN_ROUTE}); this local copy gives the first paint,
+     * offline use, and a queue for operations not published yet.
+     */
+    const DW_PIN_KEY = 'power-suite.dynamic-workspaces.pinned'
+
+    /** Schema version of the cached pin document. */
+    const DW_PIN_VERSION = 1
+
+    /** Authenticated Host route sharing the card's pinned ids across devices. */
+    const DW_PIN_ROUTE = 'api/power-suite.session-pins'
+
+    /** How often the client re-reads the Host-shared pin document. */
+    const DW_PIN_SYNC_POLL_MS = 30000
+
+    /** Abort a hung pin GET/POST so the next sync cycle can retry. */
+    const DW_PIN_REQUEST_TIMEOUT_MS = 8000
+
+    /** Debounce before queued pin operations are published to the Host. */
+    const DW_PIN_PUSH_DEBOUNCE_MS = 150
+
+    /** Most pinned ids one document keeps; the Host drops the oldest pin first. */
+    const DW_PIN_LIMIT = 500
+
+    /** Most queued operations the local cache keeps for a retry. */
+    const DW_PIN_MAX_PENDING = 200
+
+    /** Longest accepted Session id; the Host validator uses the same bound. */
+    const DW_PIN_MAX_ID_LENGTH = 200
+
     /** Highest number of rows the summary card lists before "view all". */
     const DW_PANEL_LIMIT = 5
 
@@ -5485,27 +5521,167 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
-     * Pinned main-Session ids from the Workspaces snapshot.
+     * Sanitize one pinned-id source into a Set.
      *
-     * The pin is the DSH Session's own Host-persisted fixed state
-     * (`WorkspaceSnapshot.pinnedSessionIds`, written by the shell's
-     * `uiWorkspace.pinSession` / `unpinSession`), shared with the native sidebar's
-     * pin marker and delivered to every browser/device paired with this Host. The
-     * card reads that same set, so a pin made in the card or in the native
-     * sidebar/menu is one shared state everywhere. Only non-empty string ids are
-     * kept and each id appears once.
-     * @param {object | undefined} snapshot - Workspaces snapshot carrying `pinnedSessionIds`.
+     * Accepts a bare id array (the cache/Host document shape) or an object with
+     * `pinned` / `pinnedSessionIds` arrays (older cached documents and test
+     * fixtures). Only non-empty string ids are kept, each id appears once, and the
+     * list is bounded to the Host document limit.
+     * @param {unknown} value - id array or an object carrying one.
      * @returns {Set<string>} valid pinned Session ids.
      */
-    function dwPinnedSessionIds(snapshot) {
+    function dwSanitizePinnedIds(value) {
       const pinned = new Set()
-      const source = snapshot !== null && typeof snapshot === 'object' && Array.isArray(snapshot.pinnedSessionIds)
-        ? snapshot.pinnedSessionIds
-        : []
+      let source = []
+      if (Array.isArray(value)) source = value
+      else if (value !== null && typeof value === 'object') {
+        if (Array.isArray(value.pinned)) source = value.pinned
+        else if (Array.isArray(value.pinnedSessionIds)) source = value.pinnedSessionIds
+      }
       for (const id of source) {
-        if (typeof id === 'string' && id.length > 0) pinned.add(id)
+        if (typeof id !== 'string' || id.length === 0 || id.length > DW_PIN_MAX_ID_LENGTH) continue
+        pinned.add(id)
+        if (pinned.size >= DW_PIN_LIMIT) break
       }
       return pinned
+    }
+
+    /**
+     * Effective pinned ids for painting: the confirmed set with the queued
+     * operations replayed on top, so a toggle shows immediately while its Host
+     * write is still in flight/failed.
+     * @param {readonly string[]} pinned - confirmed pinned ids.
+     * @param {readonly Array<{ op: 'pin' | 'unpin', id: string }>} pending - queued operations.
+     * @returns {Set<string>} effective pinned ids.
+     */
+    function dwPinEffectiveIds(pinned, pending) {
+      const ids = dwSanitizePinnedIds(pinned)
+      if (Array.isArray(pending)) {
+        for (const entry of pending) {
+          if (entry === null || typeof entry !== 'object') continue
+          if (typeof entry.id !== 'string' || entry.id.length === 0) continue
+          if (entry.op === 'pin') ids.add(entry.id)
+          else if (entry.op === 'unpin') ids.delete(entry.id)
+        }
+      }
+      return ids
+    }
+
+    /**
+     * Read the cached pin state: last Host document seen, queued operations, and
+     * whether this browser has reconciled with the Host at least once. Corrupt,
+     * missing, or storage-denied documents read as an empty local state.
+     * @returns {{ version: number, rev: number, pinned: string[], pending: Array<object>, migrated: boolean }} cached state.
+     */
+    function dwReadPinCache() {
+      const fallback = { version: DW_PIN_VERSION, rev: 0, pinned: [], pending: [], migrated: false }
+      try {
+        const raw = window.localStorage.getItem(DW_PIN_KEY)
+        if (raw === null) return fallback
+        const value = JSON.parse(raw)
+        if (value === null || typeof value !== 'object' || Array.isArray(value)) return fallback
+        const pending = []
+        if (Array.isArray(value.pending)) {
+          for (const entry of value.pending) {
+            if (entry === null || typeof entry !== 'object') continue
+            if (entry.op !== 'pin' && entry.op !== 'unpin') continue
+            if (typeof entry.id !== 'string' || entry.id.length === 0 || entry.id.length > DW_PIN_MAX_ID_LENGTH) continue
+            pending.push({ op: entry.op, id: entry.id })
+            if (pending.length >= DW_PIN_MAX_PENDING) break
+          }
+        }
+        const rev = typeof value.rev === 'number' && Number.isFinite(value.rev) && value.rev >= 0
+          ? Math.floor(value.rev)
+          : 0
+        return {
+          version: DW_PIN_VERSION,
+          rev,
+          pinned: [...dwSanitizePinnedIds(value.pinned)],
+          pending,
+          migrated: value.migrated === true
+        }
+      } catch {
+        return fallback
+      }
+    }
+
+    /**
+     * Persist the cached pin state.
+     * @param {object} state - cached state.
+     * @returns {void}
+     */
+    function dwWritePinCache(state) {
+      try {
+        window.localStorage.setItem(DW_PIN_KEY, JSON.stringify({
+          version: DW_PIN_VERSION,
+          rev: state.rev,
+          pinned: state.pinned,
+          pending: state.pending,
+          migrated: state.migrated
+        }))
+      } catch {
+        // A storage-denied browser keeps the in-memory state only.
+      }
+    }
+
+    /**
+     * Read the Host-shared pin document. A missing route (older Host, service not
+     * restarted yet) or a transport failure reads as null and leaves the local
+     * cache authoritative.
+     * @returns {Promise<{ rev: number, pinned: string[] } | null>} the document or null.
+     */
+    async function dwFetchPinnedSessions() {
+      const controller = new AbortController()
+      const timer = window.setTimeout(() => controller.abort(), DW_PIN_REQUEST_TIMEOUT_MS)
+      try {
+        const response = await fetch(appUrl(DW_PIN_ROUTE), {
+          credentials: 'same-origin',
+          headers: { accept: 'application/json' },
+          signal: controller.signal
+        })
+        if (!response.ok) return null
+        const payload = await response.json()
+        if (payload === null || typeof payload !== 'object') return null
+        const rev = typeof payload.rev === 'number' && Number.isFinite(payload.rev) && payload.rev >= 0
+          ? Math.floor(payload.rev)
+          : 0
+        return { rev, pinned: [...dwSanitizePinnedIds(payload.pinned)] }
+      } catch {
+        return null
+      } finally {
+        window.clearTimeout(timer)
+      }
+    }
+
+    /**
+     * Publish queued pin operations to the Host and read back the authoritative
+     * document.
+     * @param {readonly Array<{ op: 'pin' | 'unpin', id: string }>} ops - operations to apply.
+     * @returns {Promise<{ rev: number, pinned: string[] } | null>} the document or null.
+     */
+    async function dwPostPinOps(ops) {
+      const controller = new AbortController()
+      const timer = window.setTimeout(() => controller.abort(), DW_PIN_REQUEST_TIMEOUT_MS)
+      try {
+        const response = await fetch(appUrl(DW_PIN_ROUTE), {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { accept: 'application/json', 'content-type': 'application/json' },
+          body: JSON.stringify({ ops }),
+          signal: controller.signal
+        })
+        if (!response.ok) return null
+        const payload = await response.json()
+        if (payload === null || typeof payload !== 'object') return null
+        const rev = typeof payload.rev === 'number' && Number.isFinite(payload.rev) && payload.rev >= 0
+          ? Math.floor(payload.rev)
+          : 0
+        return { rev, pinned: [...dwSanitizePinnedIds(payload.pinned)] }
+      } catch {
+        return null
+      } finally {
+        window.clearTimeout(timer)
+      }
     }
 
     /**
@@ -6489,7 +6665,7 @@ function dwClearNativeAtmospheres() {
       const {
         t, rows, expanded, showAll, now, durations, childrenByParent, collapsedParents, acked,
         onToggle, onToggleAll, onToggleChildren, onOpen, interruptedT, onNewSession, currentSessionId,
-        projections, onEnsureProjections, pinnedIds, pinEnabled, onTogglePin
+        projections, onEnsureProjections, pinnedIds, onTogglePin
       } = props
       const visible = expanded && !showAll ? rows.slice(0, DW_PANEL_LIMIT) : rows
       const canExpand = rows.length > DW_PANEL_LIMIT
@@ -6772,14 +6948,12 @@ function dwClearNativeAtmospheres() {
                     title: interruptedTitle(row.id)
                   }, RemixGlyph(REMIX_WARNING_FILL, 13))
                   : null),
-              pinEnabled
-                ? React.createElement(DwPinSlot, {
-                  key: 'pin',
-                  t,
-                  pinned,
-                  onToggle: () => onTogglePin(row.id, pinned)
-                })
-                : null,
+              React.createElement(DwPinSlot, {
+                key: 'pin',
+                t,
+                pinned,
+                onToggle: () => onTogglePin(row.id)
+              }),
               React.createElement('button', {
                 type: 'button',
                 className: 'psd-run-open',
@@ -7158,41 +7332,133 @@ function dwClearNativeAtmospheres() {
         })
       }, [parentSessions, uiWorkspace])
 
-      // Pin is the DSH Session's own Host-persisted fixed state: the card reads
-      // the same `WorkspaceSnapshot.pinnedSessionIds` the native sidebar pin
-      // marker uses and toggles it through the same `uiWorkspace.pinSession` /
-      // `unpinSession`, so a pin follows the user across browsers and devices
-      // paired with this Host, and pinning from the native sidebar or menu shows
-      // up here too. The card adds only its own presentation/ordering rule:
-      // pinned main Sessions lead and never retire with time.
-      const pinnedIds = dwPinnedSessionIds(workspaceSnapshot)
-      const pinEnabled = uiWorkspace !== null && uiWorkspace !== undefined
-        && typeof uiWorkspace.pinSession === 'function'
-        && typeof uiWorkspace.unpinSession === 'function'
-      const pinInFlightRef = React.useRef(new Set())
-      const togglePin = React.useCallback((sessionId, pinned) => {
-        if (!pinEnabled || typeof sessionId !== 'string' || sessionId.length === 0) return
-        // One write per Session at a time: a double click cannot race the Host
-        // snapshot and flip the pin twice.
-        const inFlight = pinInFlightRef.current
-        if (inFlight.has(sessionId)) return
-        const method = pinned ? 'unpinSession' : 'pinSession'
-        if (typeof uiWorkspace[method] !== 'function') return
-        inFlight.add(sessionId)
-        let pending
+      // The card pin is this panel's own fixed state, shared through the Host so
+      // it follows the user across every paired browser/device but never imports
+      // the native sidebar's project-organisation pins (those must not surface
+      // here). The local cache paints instantly and queues operations while the
+      // Host route is unreachable (e.g. before the service restart that installs
+      // it); the Host document is authoritative once a GET succeeds.
+      const [pinCache, setPinCache] = React.useState(dwReadPinCache)
+      const pinnedIds = React.useMemo(
+        () => dwPinEffectiveIds(pinCache.pinned, pinCache.pending),
+        [pinCache]
+      )
+      const [pinShared, setPinShared] = React.useState(false)
+      React.useEffect(() => {
+        dwWritePinCache(pinCache)
+      }, [pinCache])
+      const pinStateRef = React.useRef({ cache: pinCache, flushing: false, syncInFlight: false, disposed: false, flushTimer: null })
+      pinStateRef.current.cache = pinCache
+      const schedulePinFlushRef = React.useRef(() => {})
+      // Publish the queued operations. A no-op when nothing is queued; runs after
+      // the debounce, after a successful sync, and on every sync cycle (retry).
+      const flushPinOps = React.useCallback(async () => {
+        const state = pinStateRef.current
+        if (state.disposed || state.flushing) return
+        const ops = state.cache.pending
+        if (ops.length === 0) return
+        state.flushing = true
         try {
-          pending = uiWorkspace[method](sessionId)
-        } catch {
-          inFlight.delete(sessionId)
-          return
+          const document = await dwPostPinOps(ops)
+          if (document === null || state.disposed) {
+            if (!state.disposed) setPinShared(false)
+            return
+          }
+          setPinShared(true)
+          setPinCache((previous) => {
+            // Operations appended while the request was in flight stay queued.
+            const rest = previous.pending.length > ops.length ? previous.pending.slice(ops.length) : []
+            return { version: DW_PIN_VERSION, rev: document.rev, pinned: document.pinned, pending: rest, migrated: true }
+          })
+        } finally {
+          state.flushing = false
         }
-        // A refused write (access policy, archived row, transport) leaves the
-        // Workspaces snapshot untouched; the row keeps its previous state and the
-        // failure stays out of the unhandled-rejection log.
-        Promise.resolve(pending).catch(() => {}).finally(() => {
-          inFlight.delete(sessionId)
+        // Publish anything queued during the request once the render lands.
+        if (state.cache.pending.length > 0) schedulePinFlushRef.current()
+      }, [])
+      const schedulePinFlush = React.useCallback(() => {
+        const state = pinStateRef.current
+        if (state.disposed || state.flushTimer !== null) return
+        state.flushTimer = window.setTimeout(() => {
+          state.flushTimer = null
+          void flushPinOps()
+        }, DW_PIN_PUSH_DEBOUNCE_MS)
+      }, [flushPinOps])
+      schedulePinFlushRef.current = schedulePinFlush
+      // Read the authoritative Host document. On first contact this browser's
+      // cached pins are merged in (publishing any the Host does not know yet), so
+      // pins made before the Host route existed are not lost; afterwards the Host
+      // document wins and the queued operations simply replay on top.
+      const syncPinDocument = React.useCallback(async () => {
+        const state = pinStateRef.current
+        if (state.disposed || state.syncInFlight) return
+        state.syncInFlight = true
+        try {
+          const document = await dwFetchPinnedSessions()
+          if (document === null || state.disposed) {
+            if (!state.disposed) setPinShared(false)
+            return
+          }
+          setPinShared(true)
+          setPinCache((previous) => {
+            const pending = previous.pending
+            if (!previous.migrated) {
+              const merged = [...document.pinned]
+              for (const id of previous.pinned) if (!merged.includes(id)) merged.push(id)
+              const ops = []
+              for (const id of merged) if (!document.pinned.includes(id)) ops.push({ op: 'pin', id })
+              const nextPending = ops.length === 0 ? pending : pending.concat(ops)
+              return {
+                version: DW_PIN_VERSION,
+                rev: document.rev,
+                pinned: merged,
+                pending: nextPending.length > DW_PIN_MAX_PENDING
+                  ? nextPending.slice(nextPending.length - DW_PIN_MAX_PENDING)
+                  : nextPending,
+                migrated: true
+              }
+            }
+            return { version: DW_PIN_VERSION, rev: document.rev, pinned: document.pinned, pending, migrated: true }
+          })
+          schedulePinFlushRef.current()
+        } finally {
+          state.syncInFlight = false
+        }
+      }, [])
+      React.useEffect(() => {
+        const state = pinStateRef.current
+        state.disposed = false
+        const sync = () => { void syncPinDocument() }
+        sync()
+        const timer = window.setInterval(sync, DW_PIN_SYNC_POLL_MS)
+        const onFocus = () => sync()
+        const onVisibility = () => {
+          if (document.visibilityState === 'visible') sync()
+        }
+        window.addEventListener('focus', onFocus)
+        document.addEventListener('visibilitychange', onVisibility)
+        return () => {
+          state.disposed = true
+          window.clearInterval(timer)
+          window.removeEventListener('focus', onFocus)
+          document.removeEventListener('visibilitychange', onVisibility)
+          if (state.flushTimer !== null) {
+            window.clearTimeout(state.flushTimer)
+            state.flushTimer = null
+          }
+        }
+      }, [syncPinDocument])
+      const togglePin = React.useCallback((sessionId) => {
+        if (typeof sessionId !== 'string' || sessionId.length === 0) return
+        setPinCache((previous) => {
+          const effective = dwPinEffectiveIds(previous.pinned, previous.pending)
+          const op = effective.has(sessionId) ? 'unpin' : 'pin'
+          const pending = previous.pending.concat({ op, id: sessionId })
+          if (pending.length > DW_PIN_MAX_PENDING) pending.splice(0, pending.length - DW_PIN_MAX_PENDING)
+          return { ...previous, pending }
         })
-      }, [pinEnabled, uiWorkspace])
+        schedulePinFlush()
+      }, [schedulePinFlush])
 
       const runningParents = dwRunningSubagentParents(sessions, statuses)
       const workspaces = workspaceSnapshot?.items ?? []
@@ -7265,10 +7531,11 @@ function dwClearNativeAtmospheres() {
             const projections = source !== null && typeof source === 'object' ? source.projectionsBySession : undefined
             return {
               currentSessionId: latest.currentSessionId,
-              // Host-shared native pin state, mirrored so E2E can verify the card
-              // and the native sidebar read the same set across browser profiles.
-              pinnedIds: Array.isArray(latest.workspaces?.pinnedSessionIds) ? [...latest.workspaces.pinnedSessionIds] : [],
-              pinSupported: typeof uiWorkspace?.pinSession === 'function' && typeof uiWorkspace?.unpinSession === 'function',
+              // The card's own effective pin set (Host document + queued local
+              // operations), mirrored so E2E can verify the shared state and the
+              // local fallback without reading React internals.
+              pinnedIds: [...pinnedIds],
+              pinShared,
               rows: ids.map((id) => ({ id, title: byId?.[id]?.displayTitle ?? null, state: latest.statuses?.get?.(id) ?? null })),
               values: Object.fromEntries(ids.map((id) => [id, projections?.[id]?.values ?? null]).filter(([, value]) => value !== null))
             }
@@ -7691,7 +7958,6 @@ function dwClearNativeAtmospheres() {
         onEnsureProjections: ensureProjections,
         onNewSession: openNewSession,
         pinnedIds,
-        pinEnabled,
         onTogglePin: togglePin,
         onToggle: () => setPanelExpanded((value) => !value),
         onToggleAll: () => setShowAll((value) => !value),
@@ -20131,10 +20397,13 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         dwBilledInputTokens,
         dwContextOccupancy
       }
-      // Pin derivation seam: pure helpers for the card's pinned-first ordering
-      // and the "never retires" row reconstruction over the Host-shared pin set.
+      // Pin seam: the card's own id sanitizer/optimistic replay helpers plus the
+      // pinned-first "never retires" row derivation.
       globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesPin = {
-        dwPinnedSessionIds,
+        dwSanitizePinnedIds,
+        dwPinEffectiveIds,
+        dwReadPinCache,
+        dwWritePinCache,
         dwPinPanelRows
       }
     }

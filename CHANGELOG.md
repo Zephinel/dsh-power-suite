@@ -137,26 +137,36 @@ heading is added until the release is cut.
 - Running & recent pinning, shared native hover figures, and a circular status
   dot: **main Session rows** in the Running & recent card now carry a
   hover-revealed **Pin** control (a fixed 16 px slot between the leading state
-  glyph and the title, so the title never shifts) that toggles the DSH Session's
-  own **Host-persisted pin** — `WorkspaceSnapshot.pinnedSessionIds` through
-  `ctx.uiWorkspace.pinSession` / `unpinSession`, the same state and services as
-  the native sidebar row's pin marker and menu. The pin therefore follows the
-  user across every browser and device paired with the Host: card and native
-  sidebar agree in both directions (the user's pre-existing native pins appear
-  as the card's pinned prefix, and a card pin marks/fronts the native sidebar
-  row and survives a reload), with no plugin localStorage document, no new Host
-  route or store, and no DSH Web service restart. Pinned main Sessions sort
-  first, newest activity first, and never retire with time: a pinned finished
-  Session stays listed with its original title/Workspace/path and last-activity
-  time (no re-timing), unpin immediately returns the row to the ordinary queue
-  under the normal retention rules (it does not restore the saved order the pin
-  fronted — native shell behaviour), and pinned rows show a filled violet pin
-  glyph plus a subtle violet tint; subagent child rows keep no pin control, and
-  blank, archived, or unknown Session ids cannot be pinned. The **native sidebar
-  session hover card** now renders the same **Session statistics**, **Token
-  usage**, and **context** sections as the card's hover card through the
-  shell's `sidebar.session.row.hover` slot, reusing the same strings, formatter
-  recipes, live projections, and one-shot cold projection read, and contributing
+  glyph and the title, so the title never shifts) that keeps that main Session
+  on top of **Running & recent** past the finished-retention window. The pin is
+  the card's **own** state, deliberately independent of the native sidebar's
+  project-organisation pin (never read, written, or surfaced here — the live
+  Host's six old sidebar pins would otherwise flood the running panel), and it is
+  **Host-shared for cross-device use**: a new authenticated
+  `GET|POST /api/power-suite.session-pins` route persists a bounded document
+  (`$DSH_HOME/dsh-power-suite/session-pins.json`, `{version, rev, pinned}`, max
+  500 ids with the oldest dropped first, atomic writes, last write wins, `rev`
+  bumping only on a real change) that every browser and device using the same
+  `$DSH_HOME` converges on. The client keeps a versioned `localStorage` cache
+  (`{version, rev, pinned, pending, migrated}`) with a queued-operation replay
+  for instant first paint, optimistic toggles and offline/local-only use, GETs
+  the Host document on mount/focus/visibility/every 30 s, merges cached pins into
+  the Host on first contact (so pre-route pins are not lost) and POSTs queued
+  pin/unpin operations; when the route is absent the card simply runs local-only
+  until the Host is restarted with the route, with no UI breakage. The default
+  card content is unchanged — the ordinary running/recent rows including running
+  subagent children — and no row is prefilled or tinted. Pinned main Sessions
+  sort first, newest activity first, and never retire with time: a pinned
+  finished Session stays listed with its original title/Workspace/path and
+  last-activity time (no re-timing), unpin immediately returns the row to the
+  ordinary queue under the normal retention rules, and pinned rows show a filled
+  violet pin glyph plus a subtle violet tint; subagent child rows keep no pin
+  control, and blank, archived, or unknown Session ids cannot be pinned.
+  The **native sidebar session hover card** now renders the same **Session
+  statistics**, **Token usage**, and **context** sections as the card's hover
+  card through the shell's `sidebar.session.row.hover` slot, reusing the same
+  strings, formatter recipes, live projections, and one-shot cold projection
+  read, and contributing
   no nodes for a Session without figures (the native card is not restyled,
   widened, or reordered). The running-card hover status dot is now a **perfect
   circle**: the shell's global `corner-shape: superellipse(1.5)` painted the
