@@ -67,6 +67,22 @@ heading is added until the release is cut.
 
 ### Added
 
+- UI element annotation precision: picking is now **leaf-first** (DevTools-inspect
+  style) on ordinary pages and inside floating surfaces — hover and click target
+  the deepest eligible element under the pointer (titles, subtitles, timestamps,
+  token counters, inline SVG icons/paths, then rows/buttons), walking up only for
+  the plugin's own UI, structural tags, or zero-size nodes, and never escaping a
+  floating surface's root. The popover's Parent/Child controls walk the full
+  hovered ancestor chain (Child back to the deepest element, Parent up to the
+  surface/page container), and the whole surface stays selectable via its
+  background/padding or Parent. Selection outlines and popover anchoring use the
+  picked live element so any leaf keeps correct geometry; records keep honest
+  locators/status for weak (e.g. SVG) targets. Limits (bare text nodes resolve to
+  their parent element, CSS pseudo-elements aren't elements, `pointer-events:none`
+  targets fall back to the nearest ancestor) are documented.
+
+### Added
+
 - Native session figures in the Running & recent row hover card: for the hovered
   Session (parent or nested subagent row) the card appends **Session statistics**
   (`{turns} turns {steps} steps`, LLM time, tool time, average TTFT, TPS in the
