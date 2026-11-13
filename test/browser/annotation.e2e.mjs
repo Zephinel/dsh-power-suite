@@ -2384,6 +2384,28 @@ const probes = {
     }
   },
 
+  /** A3/T21: composer-chip hover preview state (content + geometry). */
+  chipPreview: () => {
+    const preview = document.querySelector('[data-psa-chip-preview]')
+    if (preview === null) return null
+    const rect = preview.getBoundingClientRect()
+    const text = (preview.innerText || preview.textContent || '').replace(/\s+/g, ' ').trim()
+    return {
+      title: preview.querySelector('[data-psa-chip-preview-title]')?.innerText ?? null,
+      requirement: preview.querySelector('[data-psa-chip-preview-requirement]')?.innerText ?? null,
+      count: preview.querySelector('[data-psa-chip-preview-count]')?.innerText ?? null,
+      listItems: [...preview.querySelectorAll('.psa-chip-preview-item')].map((item) => (item.innerText || '').replace(/\s+/g, ' ').trim()),
+      text,
+      role: preview.getAttribute('role'),
+      pointerEvents: getComputedStyle(preview).pointerEvents,
+      rect: {
+        x: Math.round(rect.x), y: Math.round(rect.y),
+        width: Math.round(rect.width), height: Math.round(rect.height),
+        viewport: { width: innerWidth, height: innerHeight }
+      }
+    }
+  },
+
   // ---- A3 Phase 2-A: page marks, hover detail card, undo toast -------------------------
 
   /** Current page marks with their geometry, badge excerpt, and hit-test state. */
@@ -5083,6 +5105,83 @@ function buildScenarios(harness) {
       const transcriptBefore = await h.transcript()
       assertEqual(transcriptBefore.messages, 0, 'the chip insertion sent a message')
 
+      // A3/T21: hovering the annotation chip shows the custom detail preview.
+      const singleChipCenter = { x: singleChip.chips[0].x, y: singleChip.chips[0].y }
+      await h.page.moveTo(singleChipCenter.x, singleChipCenter.y)
+      try {
+        await h.page.waitFor(`!!document.querySelector('[data-psa-chip-preview]')`, { timeout: 4000, label: 'chip hover preview' })
+      } catch (error) {
+        const debug = await h.page.evaluate(`(() => {
+          const chips = [...document.querySelectorAll('[data-composer-chip="ui-annotation"]')]
+          const chip = chips[0] || null
+          const rect = chip === null ? null : chip.getBoundingClientRect()
+          const hit = chip === null ? null : document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+          return {
+            chips: chips.length,
+            rect,
+            hitTag: hit === null ? null : hit.tagName,
+            hitInChip: hit !== null && hit.closest !== undefined && hit.closest('[data-composer-chip]') !== null,
+            hitInEditor: hit !== null && hit.closest !== undefined && hit.closest('[data-conversation-region="composer"] [data-lexical-editor="true"]') !== null,
+            preview: !!document.querySelector('[data-psa-chip-preview]'),
+            hooks: !!window.__POWER_SUITE_TEST_HOOKS__,
+            events: window.__psaChipHoverEvents ?? null,
+            storePreview: window.__POWER_SUITE_TEST_HOOKS__?.annotationController?.store?.getSnapshot?.().chipPreview ?? null,
+            overlays: document.querySelectorAll('[data-psa-layer]').length,
+            previewMarkers: document.querySelectorAll('.psa-chip-preview').length
+          }
+        })()`)
+        throw new Error(`${error.message} | debug=${JSON.stringify(debug)}`)
+      }
+      await sleep(150)
+      const chipPreview = await h.page.eval(probes.chipPreview)
+      assert(chipPreview !== null, 'the chip hover preview did not render')
+      assertEqual(chipPreview.role, 'tooltip', 'the chip hover preview is not a tooltip')
+      assertEqual(chipPreview.pointerEvents, 'none', 'the chip hover preview must not intercept the pointer')
+      assert(/Chip requirement two/.test(chipPreview.text), `the chip preview is missing the requirement text: ${short(chipPreview.text)}`)
+      assert(/Locator|Reference|定位/.test(chipPreview.text), `the chip preview is missing the locator label: ${short(chipPreview.text)}`)
+      assert(/\d+, \d+ · \d+×\d+/.test(chipPreview.text), `the chip preview is missing the position box: ${short(chipPreview.text)}`)
+      assert(/Session|会话/.test(chipPreview.text) && /Workspace|工作区/.test(chipPreview.text), `the chip preview is missing session/workspace: ${short(chipPreview.text)}`)
+      assert(/Resolved|已解析/.test(chipPreview.text), `the chip preview is missing the live status: ${short(chipPreview.text)}`)
+      if (process.env.PSA_CHIP_EVIDENCE_DIR) {
+        await mkdir(process.env.PSA_CHIP_EVIDENCE_DIR, { recursive: true })
+        const pad = 14
+        const left = Math.max(0, Math.min(singleChipCenter.x, chipPreview.rect.x) - pad)
+        const top = Math.max(0, Math.min(singleChipCenter.y, chipPreview.rect.y) - pad)
+        const right = Math.min(VIEWPORT.width, Math.max(singleChipCenter.x, chipPreview.rect.x + chipPreview.rect.width) + pad)
+        const bottom = Math.min(VIEWPORT.height, Math.max(singleChipCenter.y, chipPreview.rect.y + chipPreview.rect.height) + pad)
+        const data = await h.page.send('Page.captureScreenshot', {
+          format: 'png',
+          clip: { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top), scale: 1 }
+        })
+        await writeFile(path.join(process.env.PSA_CHIP_EVIDENCE_DIR, 'chip-hover-preview-single.png'), Buffer.from(data.data, 'base64'))
+      }
+      assert(chipPreview.rect.x >= 0 && chipPreview.rect.y >= 0, `chip preview overflows the viewport: ${JSON.stringify(chipPreview.rect)}`)
+      assert(chipPreview.rect.x + chipPreview.rect.width <= chipPreview.rect.viewport.width + 1
+        && chipPreview.rect.y + chipPreview.rect.height <= chipPreview.rect.viewport.height + 1,
+        `chip preview overflows the viewport: ${JSON.stringify(chipPreview.rect)}`)
+      // Leaves the chip → hidden; Esc → hidden; scroll → hidden.
+      await h.page.moveTo(700, 160)
+      await sleep(250)
+      assertEqual(await h.page.eval(probes.chipPreview), null, 'the chip hover preview did not hide on pointer leave')
+      await h.page.moveTo(singleChipCenter.x, singleChipCenter.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-chip-preview]')`, { timeout: 4000, label: 'chip hover preview again' })
+      await h.page.pressKey('escape')
+      await sleep(200)
+      assertEqual(await h.page.eval(probes.chipPreview), null, 'Esc did not hide the chip hover preview')
+      assertEqual(await h.page.evaluate(`document.documentElement.getAttribute('data-psa-active')`), 'true',
+        'Esc on the chip hover preview must not also leave the annotation mode')
+      await h.page.moveTo(singleChipCenter.x, singleChipCenter.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-chip-preview]')`, { timeout: 4000, label: 'chip hover preview before scroll' })
+      await h.page.wheel(700, 400, 320)
+      await sleep(250)
+      // Unrelated inner scroll containers (chat auto-scroll) must NOT flicker the
+      // preview away; a document/window scroll (the chip moves with content) does.
+      assert(await h.page.eval(probes.chipPreview) !== null,
+        'an unrelated inner scroll container hid the chip hover preview')
+      await h.page.evaluate(`document.dispatchEvent(new Event('scroll'))`)
+      await sleep(250)
+      assertEqual(await h.page.eval(probes.chipPreview), null, 'a document scroll did not hide the chip hover preview')
+
       // Chip click (through the pass-through modifier) opens the record's detail card.
       await h.page.keyDown('alt')
       try {
@@ -5149,6 +5248,34 @@ function buildScenarios(harness) {
       assertEqual(batchChip.chips.length, 1, 'D2: the batch insert must produce exactly one group chip')
       assert(/UI annotations|UI 标注/.test(batchChip.chips[0].text || ''), `the group chip label is wrong: ${short(batchChip.chips[0].text)}`)
       assert(!/^(\d+)\. /m.test(batchChip.text || ''), 'the batch chip must not insert the plain numbered blocks')
+      // A3/T21: hovering the grouped batch chip shows the counted preview.
+      await h.page.moveTo(batchChip.chips[0].x, batchChip.chips[0].y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-chip-preview]')`, { timeout: 4000, label: 'group chip hover preview' })
+      await sleep(150)
+      const groupPreview = await h.page.eval(probes.chipPreview)
+      assert(groupPreview !== null, 'the group chip hover preview did not render')
+      assert(/(2).*(annotations|标注)|UI annotations × 2|UI 标注 × 2/.test(groupPreview.text),
+        `the group chip preview is missing the count summary: ${short(groupPreview.text)}`)
+      assert(groupPreview.listItems.length >= 1, `the group chip preview is missing the record list: ${short(groupPreview.text)}`)
+      if (process.env.PSA_CHIP_EVIDENCE_DIR) {
+        await mkdir(process.env.PSA_CHIP_EVIDENCE_DIR, { recursive: true })
+        const pad = 14
+        const chipPoint = { x: batchChip.chips[0].x, y: batchChip.chips[0].y }
+        const left = Math.max(0, Math.min(chipPoint.x, groupPreview.rect.x) - pad)
+        const top = Math.max(0, Math.min(chipPoint.y, groupPreview.rect.y) - pad)
+        const right = Math.min(VIEWPORT.width, Math.max(chipPoint.x, groupPreview.rect.x + groupPreview.rect.width) + pad)
+        const bottom = Math.min(VIEWPORT.height, Math.max(chipPoint.y, groupPreview.rect.y + groupPreview.rect.height) + pad)
+        const data = await h.page.send('Page.captureScreenshot', {
+          format: 'png',
+          clip: { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top), scale: 1 }
+        })
+        await writeFile(path.join(process.env.PSA_CHIP_EVIDENCE_DIR, 'chip-hover-preview-group.png'), Buffer.from(data.data, 'base64'))
+      }
+      await h.page.moveTo(700, 160)
+      await sleep(250)
+      assertEqual(await h.page.eval(probes.chipPreview), null, 'the group chip hover preview did not hide on pointer leave')
+      await h.page.moveTo(batchChip.chips[0].x, batchChip.chips[0].y)
+      await sleep(150)
       const afterBatch = await h.ui()
       assertEqual(afterBatch.panel, 'collection', 'the batch insert must keep the collection view (spec 4.4)')
       assertEqual((await h.transcript()).messages, 0, 'the batch chip insertion sent a message')
@@ -5341,6 +5468,44 @@ function buildScenarios(harness) {
       assert(String(noteFocused.ringAnimation).includes('psa-ring-spin'), `B3: the rainbow ring spin animation is missing (animation ${noteFocused.ringAnimation})`)
       assert(String(noteFocused.ringAnimation).includes('psa-ring-hue'), `B3: the shared-recipe hue drift animation is missing (animation ${noteFocused.ringAnimation})`)
       assertEqual(noteFocused.ringDuration, '3.2s, 14s', 'B3: ring animation durations do not match the shared plugin recipe')
+      // A3/T21: the ring wrapper must hug the control's border box exactly (no
+      // bottom baseline gap that would expose the textarea's own bottom border).
+      const ringGeometry = await h.page.evaluate(`(() => {
+        const input = document.querySelector('[data-psa-note]')
+        if (input === null) return null
+        const wrapper = input.closest('.psa-rainbow-field')
+        if (wrapper === null) return null
+        const a = input.getBoundingClientRect()
+        const b = wrapper.getBoundingClientRect()
+        const after = getComputedStyle(wrapper, '::after')
+        return {
+          input: { left: Math.round(a.left), top: Math.round(a.top), width: Math.round(a.width), height: Math.round(a.height) },
+          wrapper: { left: Math.round(b.left), top: Math.round(b.top), width: Math.round(b.width), height: Math.round(b.height) },
+          gaps: { top: Math.round(a.top - b.top), left: Math.round(a.left - b.left), right: Math.round(b.right - a.right), bottom: Math.round(b.bottom - a.bottom) },
+          display: getComputedStyle(input).display,
+          inset: after.inset,
+        }
+      })()`)
+      assert(ringGeometry !== null, 'the rainbow wrapper geometry could not be measured')
+      assertEqual(ringGeometry.display, 'block', 'A3/T21: the wrapped textarea is not display:block (baseline gap risk)')
+      for (const [edge, gap] of Object.entries(ringGeometry.gaps)) {
+        assert(Math.abs(gap) <= 1, `A3/T21: rainbow wrapper does not hug the textarea on the ${edge} edge (gap ${gap}px)`)
+      }
+      assertEqual(ringGeometry.input.width, ringGeometry.wrapper.width, 'A3/T21: wrapper width differs from the textarea width')
+      assertEqual(ringGeometry.input.height, ringGeometry.wrapper.height, 'A3/T21: wrapper height differs from the textarea height')
+      if (process.env.PSA_RING_EVIDENCE_DIR) {
+        await mkdir(process.env.PSA_RING_EVIDENCE_DIR, { recursive: true })
+        const pad = 16
+        const clip = {
+          x: Math.max(0, ringGeometry.input.left - pad),
+          y: Math.max(0, ringGeometry.input.top - pad),
+          width: Math.ceil(ringGeometry.input.width + pad * 2),
+          height: Math.ceil(ringGeometry.input.height + pad * 2),
+          scale: 1
+        }
+        const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip })
+        await writeFile(path.join(process.env.PSA_RING_EVIDENCE_DIR, 'rainbow-ring-alignment.png'), Buffer.from(data.data, 'base64'))
+      }
       assertRectNear(noteFocused.rect, rectOfHit(noteRect), 1, 'B3: focusing the popover textarea shifted its layout')
 
       // Settings selects share the same wrapper treatment.

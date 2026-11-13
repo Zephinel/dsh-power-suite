@@ -9282,6 +9282,9 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     /** A3/T6: the badge requirement summary is a one-line excerpt of this many characters. */
     const ANNOTATION_MARK_SUMMARY_MAX = 18
 
+    /** A3/T21: estimated composer-chip hover preview size used for clamping. */
+    const ANNOTATION_CHIP_PREVIEW_SIZE = { width: 320, height: 150 }
+
     /** A3/T9: the composer trigger source that owns annotation reference chips. */
     const ANNOTATION_CHIP_SOURCE = 'ui-annotation'
 
@@ -9703,6 +9706,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     /** Attributes that make a stable locator, most reliable first. */
     const LOCATOR_DATA_ATTRIBUTES = [
       ['data-row-key', 0.98],
+      ['data-message-id', 0.97],
+      ['data-turn-id', 0.96],
       ['data-conversation-region', 0.95],
       ['data-conversation-session', 0.86],
       ['data-testid', 0.92],
@@ -10143,6 +10148,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     /** Attribute names that may anchor a verified unique selector, most reliable first. */
     const UNIQUE_SELECTOR_ATTRIBUTES = [
       'data-row-key',
+      'data-message-id',
+      'data-turn-id',
       'data-conversation-region',
       'data-testid',
       'data-slot',
@@ -10152,6 +10159,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
     /** Attribute names kept on one persisted stable-ancestor entry. */
     const STABLE_ANCESTOR_ATTRIBUTES = new Set([
       'data-row-key',
+      'data-message-id',
+      'data-turn-id',
       'data-conversation-region',
       'data-conversation-session',
       'data-testid',
@@ -12911,6 +12920,8 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         flashRefId: null,
         flashRect: null,
         noteEditor: null,
+        // A3/T21: composer reference-chip hover preview (transient, never persisted).
+        chipPreview: null,
         // A3 Phase 2-A transient UI state (never persisted): page marks derived per
         // geometry frame, the record under the pointer, the floating detail card,
         // and the single-slot undo payload.
@@ -14460,6 +14471,14 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
       function onKeyDown(event) {
         if (!isActive()) return
         if (event.isComposing === true) return
+        if (event.key === 'Escape' && snapshot().chipPreview !== null) {
+          // The transient chip tooltip closes first: Esc must not also clear the
+          // selection, close the popover, or leave the mode in the same keypress.
+          event.preventDefault()
+          event.stopPropagation()
+          hideChipPreview()
+          return
+        }
         const wantPassThrough = modifierMatches(event, settings.passThroughModifier)
         if (snapshot().state.passThrough !== wantPassThrough) setPassThrough(wantPassThrough)
         if (event.key === 'Escape') {
@@ -14809,7 +14828,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
           cancelMarkerHoverTimer()
           cancelDetailClose()
           closeDetailCard()
-          publish({ markRects: [], markerHoverId: null, markUndo: null })
+          publish({ markRects: [], markerHoverId: null, markUndo: null, chipPreview: null })
           uninstallPageListeners()
           disconnectFrameObserver()
           restoreAnnotationLayout()
@@ -15174,6 +15193,132 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         return inserted
       }
 
+      /** The chip element currently showing the hover preview (or null). */
+      let chipPreviewElement = null
+
+      /**
+       * Hide the composer-chip hover preview.
+       * @returns {boolean} whether a preview was visible.
+       */
+      function hideChipPreview() {
+        const wasVisible = chipPreviewElement !== null || snapshot().chipPreview !== null
+        chipPreviewElement = null
+        if (snapshot().chipPreview !== null) publish({ chipPreview: null })
+        return wasVisible
+      }
+
+      /**
+       * Resolve one annotation reference chip to a preview model from the local
+       * store only (no network): the chip label is matched against our records'
+       * element labels, and the grouped batch chip against the localized batch
+       * label. Native chips never match and therefore get no preview.
+       * @param {Element} chip - `[data-composer-chip="ui-annotation"]` element.
+       * @returns {object | null} preview model, or null for a lookalike chip.
+       */
+      function chipPreviewModel(chip) {
+        const label = String(chip.innerText || chip.textContent || '').replace(/\s+/g, ' ').trim().replace(/^@\s*/, '')
+        if (label.length === 0) return null
+        const batchTemplate = t('chip.batchLabel')
+        const batchPrefix = batchTemplate.split('{count}')[0].trim()
+        if (batchPrefix.length > 0 && label.startsWith(batchPrefix)) {
+          const parsed = /(\d+)/.exec(label)
+          const sessionId = annotationBridge.sessionId ?? snapshot().state.sessionId
+          const selected = annotationSelectedEntries(snapshot().state.collection, sessionId)
+          const count = parsed !== null ? Number(parsed[1]) : selected.length
+          return {
+            kind: 'batch',
+            count: count > 0 ? count : selected.length,
+            items: selected.slice(0, 6).map((entry) => ({ label: elementLabel(entry), note: typeof entry.note === 'string' ? entry.note : '' }))
+          }
+        }
+        const record = snapshot().state.collection.find((entry) => (elementLabel(entry) || 'UI annotation') === label)
+        if (record === undefined) return null
+        return { kind: 'record', refId: record.id }
+      }
+
+      /**
+       * Pointer-over handler for the composer-chip hover preview. Delegated from
+       * the plugin install: only chips rendered with our source are considered.
+       * @param {PointerEvent} event - pointerover event.
+       * @returns {void}
+       */
+      function onChipPointerOver(event) {
+        const target = event !== null && event.target instanceof Element ? event.target : null
+        if (target === null) return
+        const chip = typeof target.closest === 'function' ? target.closest('[data-composer-chip="ui-annotation"]') : null
+        if (chip === null) {
+          if (chipPreviewElement !== null) {
+            // Layout churn under the pointer can emit pointerover events whose
+            // target is not the chip; keep the preview while the chip is hovered.
+            try {
+              if (typeof chipPreviewElement.matches === 'function' && chipPreviewElement.matches(':hover')) return
+            } catch {
+              // fall through to hide
+            }
+            hideChipPreview('over-miss')
+          }
+          return
+        }
+        if (chipPreviewElement === chip) return
+        const editor = typeof chip.closest === 'function' ? chip.closest('[data-conversation-region="composer"] [data-lexical-editor="true"]') : null
+        if (editor === null) return
+        const model = chipPreviewModel(chip)
+        try {
+          globalThis.__psaChipHoverTrace = `model:${model === null ? 'null' : model.kind}`
+        } catch {
+          // ignore
+        }
+        if (model === null) {
+          hideChipPreview('no-model')
+          return
+        }
+        const rect = chip.getBoundingClientRect()
+        const position = clampDetailCardPosition(
+          { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+          ANNOTATION_CHIP_PREVIEW_SIZE,
+          annotationViewport(),
+          isActive() ? snapshot().railWidth : 0
+        )
+        chipPreviewElement = chip
+        publish({ chipPreview: { ...model, x: position.x, y: position.y, placement: position.placement } })
+      }
+
+      /**
+       * Scroll handler: hide the preview when the scrolled element is the document
+       * or an ancestor of the chip (the chip moved with content). Unrelated scroll
+       * containers (chat auto-scroll) must not flicker the preview away.
+       * @param {Event} event - scroll event (capture).
+       * @returns {void}
+       */
+      function onChipScroll(event) {
+        if (chipPreviewElement === null) return
+        const target = event !== null && typeof event === 'object' ? event.target : null
+        const isAncestorScroll = target === document
+          || target === window
+          || (target instanceof Element && (target === chipPreviewElement || target.contains(chipPreviewElement)))
+        if (isAncestorScroll) hideChipPreview()
+      }
+
+      /**
+       * Pointer-out handler: hide the preview once the pointer leaves the chip.
+       * @param {PointerEvent} event - pointerout event.
+       * @returns {void}
+       */
+      function onChipPointerOut(event) {
+        if (chipPreviewElement === null) return
+        const related = event !== null && event.relatedTarget instanceof Element ? event.relatedTarget : null
+        if (related !== null && (related === chipPreviewElement || chipPreviewElement.contains(related))) return
+        // React re-renders elsewhere on the page can emit spurious pointerout events
+        // for nodes under the pointer; only hide when the physical pointer really
+        // left the chip (`:hover` is the browser's own hit-test state).
+        try {
+          if (typeof chipPreviewElement.matches === 'function' && chipPreviewElement.matches(':hover')) return
+        } catch {
+          // A throwing matches() must not keep a stale preview on screen.
+        }
+        hideChipPreview()
+      }
+
       /**
        * The record a chip candidate names, for the `@` pick path.
        * @param {string} refId - record id from the candidate value.
@@ -15233,6 +15378,7 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
        * @returns {boolean} whether the preview was accepted.
        */
       function openChipReference(ref) {
+        hideChipPreview()
         const parsed = parseAnnotationChipRef(ref)
         if (parsed === null) return false
         if (parsed.kind === 'batch') {
@@ -15706,6 +15852,10 @@ html[${PROJECT_PAGE_ATTR}='true'] [data-psp-rail],html[${PROJECT_PAGE_ATTR}='tru
         attachComposerServices,
         chipCandidates,
         chipRecord,
+        onChipPointerOver,
+        onChipPointerOut,
+        onChipScroll,
+        hideChipPreview,
         chipClipboardText,
         serializeChip,
         openChipReference,
@@ -15894,6 +16044,20 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-detail-card .psa-detail-requirement{background:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 8%,transparent);color:var(--dsw-static-neutral-bluish-00)}
 .psa-detail-card .psa-detail-requirement[data-psa-detail-empty=true]{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 52%,transparent)}
 .psa-popover .psa-detail-danger,.psa-detail-card .psa-detail-danger{color:var(--dsw-alias-state-error-secondary,var(--dsw-alias-state-error-primary))}
+/* A3/T21: composer reference-chip hover preview. Same native hover-card recipe as
+   the detail card, pointer-transparent so it never traps the pointer. */
+.psa-chip-preview{position:fixed;box-sizing:border-box;width:320px;max-height:min(52vh,380px);overflow:auto;display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-hovercard-bg,#2C2C2E);box-shadow:var(--dsw-shadow-lv3,none);color:var(--dsw-static-neutral-bluish-00);font-family:inherit;font-size:12px;line-height:17px;pointer-events:none;z-index:47}
+.psa-chip-preview-head{display:flex;align-items:center;gap:6px}
+.psa-chip-preview-title{flex:1;min-width:0;font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psa-chip-preview-requirement{white-space:pre-wrap;overflow-wrap:anywhere;max-height:120px;overflow:auto;padding:4px 6px;border-radius:var(--dsw-radius-sm,6px);background:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 8%,transparent)}
+.psa-chip-preview-meta{display:grid;grid-template-columns:auto minmax(0,1fr);gap:1px 8px;margin:0;font-size:11px;line-height:16px;color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 64%,transparent)}
+.psa-chip-preview-meta dt{margin:0;white-space:nowrap}
+.psa-chip-preview-meta dd{margin:0;color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 82%,transparent);overflow-wrap:anywhere}
+.psa-chip-preview-count{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 72%,transparent);font-size:11px}
+.psa-chip-preview-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.psa-chip-preview-item{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px}
+.psa-chip-preview-item-label{font-weight:500}
+.psa-chip-preview-item-note{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 64%,transparent)}
 /* B3: rainbow circulating focus ring for annotation inputs. */
  Values are copied from
    the shared dynamic-workspaces recipe (.psf-rainbow-focus) so every plugin input
@@ -15911,6 +16075,14 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-rainbow-field > .psa-note-editor-textarea,
 .psa-rainbow-field > .psa-detail-textarea,
 .psa-rainbow-field > .psa-select{position:relative;z-index:1;outline:none}
+/* The ring must hug the control's border box exactly: a textarea/input/select is
+   inline-level by default, which leaves a baseline descender gap under it inside
+   the wrapper; the ring (inset:-2px on the wrapper) then hangs below the control
+   and the control's own bottom border shows through. Rendering the control as a
+   block makes the wrapper's box exactly the control's border box. */
+.psa-rainbow-field > textarea,
+.psa-rainbow-field > input,
+.psa-rainbow-field > select{display:block;vertical-align:top}
 @keyframes psa-ring-spin{to{--psa-ring-angle:360deg}}
 @keyframes psa-ring-hue{from{filter:hue-rotate(0deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}to{filter:hue-rotate(360deg) saturate(.92) drop-shadow(0 0 5px rgba(178,150,255,.38))}}
 @media (prefers-reduced-motion:reduce){
@@ -16000,6 +16172,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         if (snapshot.detailCard !== null) {
           node.push(React.createElement(AnnotationDetailCard, { key: 'detail', t, controller, snapshot }))
         }
+      }
+      if (snapshot.chipPreview !== null) {
+        node.push(React.createElement(AnnotationChipPreview, { key: 'chip-preview', t, controller, snapshot }))
       }
       if (snapshot.noteEditor !== null) node.push(React.createElement(AnnotationNoteEditor, { key: 'note-editor', t, controller, snapshot }))
       if (snapshot.markUndo !== null) {
@@ -16864,6 +17039,75 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
+     * Transient hover preview for one composer reference chip (A3/T21).
+     *
+     * Read-only, pointer-transparent tooltip anchored to the chip; it shows the
+     * same information a user needs from the detail card (requirement, locator,
+     * live position/bounds, Session/workspace, status) or, for the grouped batch
+     * chip, the count and first records. It never steals focus and disappears on
+     * pointer leave / Esc / scroll.
+     * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
+     * @returns {object | null} the preview card.
+     */
+    function AnnotationChipPreview(props) {
+      const { t, controller, snapshot } = props
+      const preview = snapshot.chipPreview
+      if (preview === null || typeof preview !== 'object') return null
+      const metaRow = (label, value) => React.createElement(React.Fragment, null,
+        React.createElement('dt', null, label),
+        React.createElement('dd', null, value))
+      let title = t('detail.title')
+      let content = null
+      if (preview.kind === 'batch') {
+        title = t('chip.batchLabel', { count: preview.count })
+        content = [
+          React.createElement('div', { key: 'count', className: 'psa-chip-preview-count', 'data-psa-chip-preview-count': '' },
+            `${preview.count} ${t('collection.count', { count: preview.count })}`),
+          React.createElement('ul', { key: 'items', className: 'psa-chip-preview-list' },
+            (Array.isArray(preview.items) ? preview.items : []).map((item, index) => React.createElement('li', {
+              key: `${index}-${item.label}`,
+              className: 'psa-chip-preview-item'
+            }, React.createElement('span', { className: 'psa-chip-preview-item-label' }, `#${index + 1} ${item.label}`),
+            item.note ? React.createElement('span', { className: 'psa-chip-preview-item-note' }, ` — ${annotationMarkerBadgeText(item.note, 48).text}`) : null)))
+        ]
+      } else {
+        const record = snapshot.state.collection.find((entry) => entry !== null && typeof entry === 'object' && entry.id === preview.refId)
+        if (record === undefined) return null
+        const status = controller.statusOf(record)
+        const requirement = typeof record.note === 'string' ? record.note : ''
+        const locator = annotationLocatorText(record)
+        const bounds = normalizeAnnotationBounds(record.bounds) ?? { x: 0, y: 0, width: 0, height: 0 }
+        const session = record.session !== null && typeof record.session === 'object' ? record.session : {}
+        const sessionText = `${sessionShortLabel(session.sessionId) || t('insert.noSession')} · ${formatAnnotationTime(record.at)}`
+        const workspace = session.workspaceLabel || annotationWorkspaceLabel(session.cwd) || '—'
+        title = `${t('detail.requirement')} · ${elementLabel(record)}`
+        content = [
+          React.createElement('div', { key: 'req', className: 'psa-chip-preview-requirement', 'data-psa-chip-preview-requirement': '' },
+            requirement.length > 0 ? requirement : t('detail.emptyRequirement')),
+          React.createElement('dl', { key: 'meta', className: 'psa-chip-preview-meta' },
+            metaRow(t('detail.status'), t(`popover.status.${status}`)),
+            metaRow(t('detail.locator'), locator),
+            metaRow(t('detail.position'), `${Math.round(bounds.x)}, ${Math.round(bounds.y)} · ${Math.round(bounds.width)}×${Math.round(bounds.height)}`),
+            metaRow(t('detail.session'), sessionText),
+            metaRow(t('detail.workspace'), workspace))
+        ]
+        title = elementLabel(record)
+      }
+      return React.createElement('div', {
+        className: 'psa-chip-preview',
+        'data-psa-chip-preview': '',
+        'data-psa-own': '',
+        'data-psa-status': preview.kind === 'record' ? undefined : 'batch',
+        role: 'tooltip',
+        'aria-label': title,
+        style: { left: `${preview.x}px`, top: `${preview.y}px` }
+      },
+      React.createElement('div', { className: 'psa-chip-preview-head' },
+        React.createElement('span', { className: 'psa-chip-preview-title', 'data-psa-chip-preview-title': '' }, title)),
+      content)
+    }
+
+    /**
      * The draggable element popover with the note editor and the two actions.
      * @param {{ t: Function, controller: object, snapshot: object }} props - surface props.
      * @returns {object | null} the popover.
@@ -17219,6 +17463,48 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         id: ANNOTATION_SEAT_ID,
         order: 60
       }, AnnotationSessionSeat)), 'power-suite: ui annotation composer seat')
+      // A3/T21: delegated composer-chip hover preview listeners (they only fire on
+      // chips the shell renders with `data-composer-chip="ui-annotation"`, so the
+      // shell itself is untouched and native chips are ignored).
+      ctx.effect(() => {
+        const onPointerOver = (event) => {
+          if (annotationController !== null) annotationController.onChipPointerOver(event)
+        }
+        const onPointerOut = (event) => {
+          if (annotationController !== null) annotationController.onChipPointerOut(event)
+        }
+        const onPointerMove = (event) => {
+          // Re-show the preview after it was dismissed (Esc) without requiring the
+          // pointer to leave and re-enter the chip: pointerover alone does not fire
+          // when the pointer is already inside the chip.
+          if (annotationController !== null) annotationController.onChipPointerOver(event)
+        }
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape' || annotationController === null) return
+          // Esc first closes the transient chip tooltip and must not also clear a
+          // selection or leave the mode in the same keypress.
+          if (annotationController.hideChipPreview()) {
+            event.preventDefault()
+            event.stopPropagation()
+            if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation()
+          }
+        }
+        const onScroll = (event) => {
+          if (annotationController !== null) annotationController.onChipScroll(event)
+        }
+        document.addEventListener('pointerover', onPointerOver, true)
+        document.addEventListener('pointerout', onPointerOut, true)
+        document.addEventListener('pointermove', onPointerMove, true)
+        document.addEventListener('keydown', onKeyDown, true)
+        window.addEventListener('scroll', onScroll, true)
+        return () => {
+          document.removeEventListener('pointerover', onPointerOver, true)
+          document.removeEventListener('pointerout', onPointerOut, true)
+          document.removeEventListener('pointermove', onPointerMove, true)
+          document.removeEventListener('keydown', onKeyDown, true)
+          window.removeEventListener('scroll', onScroll, true)
+        }
+      }, 'power-suite: ui annotation chip hover preview')
       // A3/T9: the composer chip pipeline is injected dynamically so the plugin
       // keeps working on embeds without the chat UI. `conversation`+`inputTriggers`
       // arrive when the composer services are installed; the source registration
