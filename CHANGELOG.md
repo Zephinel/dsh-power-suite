@@ -236,12 +236,18 @@ heading is added until the release is cut.
   chip (single or grouped) now shows the custom annotation detail tooltip —
   requirement, locator, captured position box, Session/Workspace, live status,
   or the group count/list — while clicking keeps its existing behavior; chat-flow
-  element picks now anchor to `data-message-id`/`data-turn-id`, so leaf targets in
-  a streaming/virtualized chat resolve across re-renders instead of reporting a
+  element picks now anchor to the shell's real chat attributes
+  (`data-chat-node-key`/`data-chat-anchor-key`/`data-chat-group-key`/
+  `data-chat-turn`/`data-chat-flow-key`), so leaf targets in a
+  streaming/virtualized chat resolve across re-renders instead of reporting a
   stale positional locator (the four statuses stay truthful, and annotations
-  captured before this change are not silently remapped); and the rainbow input
-  focus ring now hugs the wrapped control's border box on all four edges (the
-  inline-level baseline gap that exposed the control's bottom border is fixed).
+  captured before this change are not silently remapped — re-annotate them);
+  hovering or focusing a single/grouped annotation chip shows an own 16 px ×
+  that removes exactly that reference chip through the composer editor in one
+  undo step (other chips and text preserved, never sent), while the chip hover
+  tooltip stays read-only; and the rainbow input focus ring now hugs the wrapped
+  control's border box on all four edges (the inline-level baseline gap that
+  exposed the control's bottom border is fixed).
 
 ### Removed
 

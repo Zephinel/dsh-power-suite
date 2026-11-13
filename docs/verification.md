@@ -22,15 +22,15 @@ npm run pack:check
 
 Current evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round):
 
-- `npm test`: **210 tests, 210 passed, 0 failed, 0 skipped** after the 0.3.0
+- `npm test`: **211 tests, 211 passed, 0 failed, 0 skipped** after the 0.3.0
   Project-view removal (the 24 project-view tests were deleted with the page),
   including **14** read-acks, **22** session-activity Host tests, **7** extra
   interrupted-session tests (error/max-tokens/aborted-cause cases and SSE stream
-  frames), **11** Dynamic-Workspaces hover-card figure tests, and **100**
+  frames), **11** Dynamic-Workspaces hover-card figure tests, and **101**
   UI-element-annotation tests through the browser-factory test seam; per-file:
   dynamic-workspaces-stats 11, interrupted-host 20, interrupted-sessions 7,
   prompt-history 6, read-acks 14, session-activity 22, session-artifacts 16,
-  settings 6, ui-annotation 100, workspace-presets 8.
+  settings 6, ui-annotation 101, workspace-presets 8.
 - `npm run check`: passed (`16 modules, 10 test files`).
 - Interrupted-state SSE transport was verified with cookie auth: 200,
   `content-type: text/event-stream; charset=utf-8`, no-store/no-buffering, first
@@ -190,8 +190,9 @@ API/plugin network failures in every run below):
   card, requirement edit with `updatedAt`, delete → 5 s undo),
   scenario 13 **PASS 7 / SKIP 1 (`13f`) / 0** (single native chip, hover preview
   tooltip with requirement/locator/position/Session/workspace/status, grouped
-  chip hover summary, chip click preview, Backspace removal, one grouped batch
-  chip, transcript 0, never sent),
+  chip hover summary, chip click preview, chip × removal (only that chip
+  removed, one undo step, other chips preserved), Backspace removal, one grouped
+  batch chip, transcript 0, never sent),
   scenario 14 **PASS 7 / 0 / 0** (reload restores records/marks, removed target
   is honestly missing), scenario 15 **PASS 7 / 0 / 0** (rainbow focus ring on
   popover/collection/editor/settings inputs, no solid outline, no layout shift,
@@ -257,10 +258,14 @@ B6 figure totals, and the project-page removal.
   composer reference chips (single + grouped, send-time serialization, missing
   record blocks the send, plain-text fallback, and a hover preview tooltip on
   annotation chips showing requirement/locator/position/Session/workspace/status
-  or the group summary), stable `data-message-id`/`data-turn-id` anchors for
+  or the group summary), stable `data-chat-node-key`/`data-chat-anchor-key`/
+  `data-chat-group-key`/`data-chat-turn`/`data-chat-flow-key` anchors for
   chat-flow picks (positional chat paths no longer go stale on streaming
   re-renders; genuinely replaced nodes still report missing/ambiguous/changed),
-  and the rainbow input focus ring.
+  a chip × removal affordance (hover/focus a single or grouped annotation chip
+  shows our own ×, which removes exactly that reference chip through the
+  composer editor in one undo step, preserving other chips/text and never
+  sending), and the rainbow input focus ring.
 - Dynamic Workspaces: fixed trailing grid with child rows lacking New session,
   right-aligned times, the internal rainbow atmosphere on the current card row,
   its owning Workspace row and the native Session row, the native-aligned 320 px

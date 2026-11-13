@@ -515,8 +515,11 @@ with undo, and one grouped batch chip).
 Annotation reference chips also carry a hover preview: the browser watches the
 shell's `[data-composer-chip="ui-annotation"]` markup, looks the record up in the
 local store, and shows the custom detail tooltip anchored to the chip (pointer
-transparent, no focus steal, dismissed on leave/Esc/scroll). Chat-flow picks
-capture `data-message-id`/`data-turn-id` as stable selector anchors so a leaf in
+transparent, no focus steal, dismissed on leave/Esc/scroll), plus an own 16 px ×
+overlay on hover/focus that removes exactly that reference chip through the
+composer's Lexical editor (one undo step; the shell chip DOM is never mutated). Chat-flow picks
+capture `data-chat-node-key`/`data-chat-anchor-key`/`data-chat-group-key`/
+`data-chat-turn`/`data-chat-flow-key` as stable selector anchors so a leaf in
 a streaming/virtualized message resolves across re-renders; the resolution
 statuses stay honest and pre-fix records are not auto-remapped.
 
