@@ -2668,6 +2668,52 @@ async function runCurrentHighlightChecks({ page, results, state }) {
   })
 
 
+
+  await results.check('b4-13', 'running-panel row text uses the native Workspace tokens in light mode (dark unchanged)', async () => {
+    const read = () => page.eval(() => {
+      const colorOf = (selector) => {
+        const node = document.querySelector(selector)
+        return node === null ? null : getComputedStyle(node).color
+      }
+      return {
+        titles: [...document.querySelectorAll('.psd-run-title, .psd-child-title')].map((node) => getComputedStyle(node).color),
+        times: [...document.querySelectorAll('.psd-run-time, .psd-child-time')].map((node) => getComputedStyle(node).color),
+        childRows: [...document.querySelectorAll('.psd-child')].map((node) => getComputedStyle(node).color),
+        nativeTitle: colorOf('[class*="sessionRow"] [class*="title"]'),
+        nativeTime: colorOf('[class*="sessionRow"] [class*="time"]'),
+      }
+    })
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    try {
+      await sleep(700)
+      const light = await read()
+      assert(light.titles.length > 0, 'no running-panel rows to compare against the native Workspace rows')
+      assert(light.nativeTitle, 'no native Workspace session row title to compare against')
+      for (const color of light.titles) {
+        assertEqual(color, light.nativeTitle, `light mode: every running-panel row title must use the native Workspace title token (got ${color}, native ${light.nativeTitle})`)
+      }
+      assertEqual(light.nativeTitle, 'rgb(15, 17, 21)', `native light Workspace title must be the primary label token, got ${light.nativeTitle}`)
+      // Times keep the native tertiary label outside the highlighted row; the
+      // highlighted row keeps the earlier secondary-label lift for contrast on
+      // the pastel atmosphere.
+      for (const color of light.times) {
+        assert(color === light.nativeTime || color === 'rgb(97, 102, 107)', `light mode: running-panel time must stay native tertiary (${light.nativeTime}) or the highlighted-row secondary lift, got ${color}`)
+      }
+      await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+      await sleep(700)
+      const dark = await read()
+      if (dark.childRows.length > 0) {
+        for (const color of dark.childRows) {
+          assertEqual(color, 'rgb(207, 211, 214)', `dark mode: child rows must keep the unchanged secondary label token (got ${color})`)
+        }
+      }
+      return `light: titles all ${light.nativeTitle}, times ${[...new Set(light.times)].join(' / ')}; dark child rows ${[...new Set(dark.childRows)].join(' / ') || 'none'}`
+    } finally {
+      await page.emulateMedia([])
+      await sleep(400)
+    }
+  })
+
 }
 
 /**
@@ -2698,6 +2744,8 @@ async function measureNativeTooltip(page, evidenceName = null) {
 async function runHoverCardChecks({ page, results, state }) {
   log('\n=== B5/C2/C3: row hover card vs the native tooltip oracle ===')
   await results.check('b5-1', 'native sidebar tooltip measured live as the alignment oracle (light + dark)', async () => {
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    await sleep(800)
     const light = await measureNativeTooltip(page, state.shotsEnabled ? '09-native-tooltip-light' : null)
     assert(light.tooltip, 'native hover tooltip did not appear over a native session row (light theme)')
     state.nativeTooltip = light.tooltip
@@ -2711,20 +2759,29 @@ async function runHoverCardChecks({ page, results, state }) {
     state.nativeTooltipDark = dark.tooltip
     assertEqual(light.tooltip.offsetFromSidebarRight, 0, 'native tooltip must sit flush on the sidebar right edge')
     assertEqual(light.tooltip.borderWidth, '0px', 'native tooltip must be borderless')
-    // The native hover card recipe is theme-invariant (the shell pins its own
-    // --dsw-hovercard-bg to #2C2C2E); both themes must compute the same surface.
-    assertEqual(dark.tooltip.background, light.tooltip.background, `native tooltip surface must be the same in light and dark (light ${light.tooltip.background}, dark ${dark.tooltip.background})`)
+    // The theme-following light-mode override makes the native session info card a
+    // light surface with dark theme-text; dark mode keeps the shell's own
+    // #2C2C2E + static light palette recipe byte-identical.
+    assertEqual(light.tooltip.background, 'rgb(255, 255, 255)', `native light tooltip surface must follow the light theme, got ${light.tooltip.background}`)
+    assertEqual(light.tooltip.title.color, 'rgb(15, 17, 21)', `native light tooltip title must use the light primary label, got ${light.tooltip.title.color}`)
+    assertEqual(light.tooltip.path.color, 'rgb(97, 102, 107)', `native light tooltip path must use the light secondary label, got ${light.tooltip.path.color}`)
+    assertEqual(light.tooltip.status.color, 'rgb(129, 133, 140)', `native light tooltip status must use the light tertiary label, got ${light.tooltip.status.color}`)
+    assertEqual(dark.tooltip.background, 'rgb(44, 44, 46)', `native dark tooltip surface must stay the shell hover-card colour, got ${dark.tooltip.background}`)
+    assertEqual(dark.tooltip.title.color, 'rgb(255, 255, 255)', `native dark tooltip title must stay white, got ${dark.tooltip.title.color}`)
+    assertEqual(dark.tooltip.path.color, 'rgb(207, 211, 214)', `native dark tooltip path must stay #cfd3d6, got ${dark.tooltip.path.color}`)
+    assertEqual(dark.tooltip.status.color, 'rgb(173, 178, 184)', `native dark tooltip status must stay #adb2b8, got ${dark.tooltip.status.color}`)
     assertEqual(dark.tooltip.boxShadow, light.tooltip.boxShadow, 'native tooltip elevation must be the same in light and dark')
     assertEqual(light.tooltip.backgroundImage, 'none', 'native tooltip surface is a flat colour, no gradient layer')
     assertEqual(light.tooltip.backdropFilter, 'none', 'native tooltip has no backdrop filter')
     for (const [label, tooltip] of [['light', light.tooltip], ['dark', dark.tooltip]]) {
-      assertEqual(tooltip.background, 'rgb(44, 44, 46)', `native ${label} tooltip surface must resolve to the shell hover-card colour rgb(44, 44, 46)`)
       assertEqual(tooltip.radius, '16px', `native ${label} tooltip radius`)
     }
-    return `oracle ${light.tooltip.background} both themes, radius ${light.tooltip.radius}, padding ${light.tooltip.padding}, border ${light.tooltip.borderWidth}`
+    return `oracle light ${light.tooltip.background}/${light.tooltip.title.color}, dark ${dark.tooltip.background}/#fff, radius ${light.tooltip.radius}, padding ${light.tooltip.padding}`
   })
 
-  await results.check('b5-2', 'our hover card reproduces the native tooltip recipe in light and dark', async () => {
+  await results.check('b5-2', 'our hover card follows the theme like the native tooltip, with the same chrome', async () => {
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    await sleep(700)
     const native = state.nativeTooltip
     const nativeDark = state.nativeTooltipDark
     // The live card re-sorts under a stationary pointer; retry until the card is
@@ -2757,7 +2814,11 @@ async function runHoverCardChecks({ page, results, state }) {
     }
     if (state.shotsEnabled) await writeEvidenceShot(page, '10-our-hovercard-light', card.rect)
     compare(card, native, 'light')
-    assertEqual(card.background, 'rgb(44, 44, 46)', `our light hover card must resolve to the native hover-card surface #2C2C2E, got ${card.background}`)
+    assertEqual(card.background, native.background, 'light: our hover card background must match the live light native hover card surface')
+    assertEqual(card.background, 'rgb(255, 255, 255)', `our light hover card must follow the light theme, got ${card.background}`)
+    assertEqual(card.title.color, 'rgb(15, 17, 21)', `our light hover card title must use the light primary label, got ${card.title.color}`)
+    assertEqual(card.path.color, 'rgb(97, 102, 107)', `our light hover card path must use the light secondary label, got ${card.path.color}`)
+    assertEqual(card.status.color, 'rgb(129, 133, 140)', `our light hover card status must use the light tertiary label, got ${card.status.color}`)
     const lastLight = card
     await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
     await sleep(800)
@@ -2769,14 +2830,85 @@ async function runHoverCardChecks({ page, results, state }) {
       assert(card, 'our hover card did not appear after the hover delay (dark theme)')
       if (state.shotsEnabled) await writeEvidenceShot(page, '10-our-hovercard-dark', card.rect)
       compare(card, nativeDark, 'dark')
-      assertEqual(card.background, 'rgb(44, 44, 46)', `our dark hover card must resolve to the native hover-card surface #2C2C2E (not the theme-dependent --dsw-alias-tooltip-bg), got ${card.background}`)
-      assertEqual(card.background, lastLight.background, 'our hover card surface must be the same in light and dark, like the native tooltip')
+      assertEqual(card.background, 'rgb(44, 44, 46)', `our dark hover card must keep the native hover-card surface #2C2C2E, got ${card.background}`)
+      assert(card.background !== lastLight.background, 'our hover card must follow the active theme (light surface in light, #2C2C2E in dark)')
     } finally {
       await page.emulateMedia([])
       await sleep(400)
     }
     await page.moveTo(900, 500)
     return `light ${lastLight.background} / dark ${card.background}; radius ${card.radius}, border ${card.borderWidth}, elevation matched`
+  })
+
+  await results.check('b5-5', 'plugin popover surfaces follow the light theme and keep the dark recipe unchanged', async () => {
+    const readSearch = async () => {
+      const toggle = await page.findRect('[data-psp-search-toggle]')
+      if (!toggle) return null
+      await page.clickAt(toggle.x, toggle.y)
+      await sleep(800)
+      const facts = await page.eval(() => {
+        const card = document.querySelector('.psp-search-card')
+        if (card === null) return null
+        const s = getComputedStyle(card)
+        const count = card.querySelector('.psp-search-count')
+        return { bg: s.backgroundColor, color: s.color, count: count === null ? null : getComputedStyle(count).color }
+      })
+      await page.pressEscape()
+      await sleep(400)
+      return facts
+    }
+    const readCard = async () => {
+      await page.moveTo(900, 500)
+      await sleep(250)
+      await hoverRow(page, 0)
+      await sleep(1200)
+      const card = await page.eval(probe.hoverCard)
+      await page.moveTo(900, 500)
+      await sleep(250)
+      return card
+    }
+    const ruleText = await page.evaluate(`(() => {
+      let found = { themeRule: false, rail: false, quicklook: false }
+      for (const sheet of document.styleSheets) {
+        let rules
+        try { rules = sheet.cssRules } catch { continue }
+        if (!rules) continue
+        for (const rule of rules) {
+          const text = rule.cssText || ''
+          if (text.includes('body:not([data-ds-dark-theme])') && (text.includes('.psd-hovercard') || text.includes('.psp-search-card'))) found.themeRule = true
+          if (text.includes('.psp-rail-card')) found.rail = true
+          if (text.includes('.dsa-quicklook')) found.quicklook = true
+        }
+      }
+      return found
+    })()`)
+    assert(ruleText.themeRule, 'the light-mode theme-following card rule is missing')
+    assert(ruleText.rail && ruleText.quicklook, 'the prompt-history rail card / quick-look surface are not covered by the theme-following rule')
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    try {
+      await sleep(800)
+      const lightCard = await readCard()
+      assert(lightCard, 'no hover card in light mode')
+      assertEqual(lightCard.background, 'rgb(255, 255, 255)', `light hover card must use the light surface, got ${lightCard.background}`)
+      assertEqual(lightCard.title.color, 'rgb(15, 17, 21)', `light hover card title must use the light primary label, got ${lightCard.title.color}`)
+      const lightSearch = await readSearch()
+      assert(lightSearch, 'search card did not open in light mode')
+      assertEqual(lightSearch.bg, 'rgb(255, 255, 255)', `light search card must use the light surface, got ${lightSearch.bg}`)
+      assertEqual(lightSearch.count, 'rgb(129, 133, 140)', `light search card count must use the light tertiary label, got ${lightSearch.count}`)
+      await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+      await sleep(800)
+      const darkCard = await readCard()
+      assert(darkCard, 'no hover card in dark mode')
+      assertEqual(darkCard.background, 'rgb(44, 44, 46)', `dark hover card must keep the shell hover-card surface, got ${darkCard.background}`)
+      assertEqual(darkCard.title.color, 'rgb(255, 255, 255)', `dark hover card title must stay white, got ${darkCard.title.color}`)
+      const darkSearch = await readSearch()
+      assert(darkSearch, 'search card did not open in dark mode')
+      assertEqual(darkSearch.bg, 'rgb(44, 44, 46)', `dark search card must keep the shell hover-card surface, got ${darkSearch.bg}`)
+      return `hover card light ${lightCard.background} / dark ${darkCard.background}; search light ${lightSearch.bg} / dark ${darkSearch.bg}; rail+quick-look rules present`
+    } finally {
+      await page.emulateMedia([])
+      await sleep(400)
+    }
   })
 
   await results.check('b5-3', 'hover card dismisses on pointer leave (normal mode unchanged)', async () => {
@@ -2787,33 +2919,43 @@ async function runHoverCardChecks({ page, results, state }) {
     return 'card closed on leave (140 ms delay preserved)'
   })
 
-  await results.check('c2-1', 'every plugin tooltip-like card uses the native tooltip surface in both themes', async () => {
+  await results.check('c2-1', 'every plugin tooltip-like card follows the active theme and matches the native tooltip chrome', async () => {
     const native = state.nativeTooltip
-    assert(native, 'the native tooltip oracle was not measured earlier')
+    const nativeDark = state.nativeTooltipDark
+    assert(native && nativeDark, 'the native tooltip oracle was not measured earlier')
     const surfaces = ['psd-hovercard', 'dsa-quicklook', 'psp-rail-card', 'psp-search-card']
     const measured = {}
-    for (const theme of ['light', 'dark']) {
-      if (theme === 'dark') {
-        await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
-        await sleep(700)
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    try {
+      await sleep(800)
+      for (const theme of ['light', 'dark']) {
+        if (theme === 'dark') {
+          await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+          await sleep(900)
+        }
+        const expected = theme === 'light' ? native : nativeDark
+        const expectedBg = theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(44, 44, 46)'
+        for (const surface of surfaces) {
+          const card = await page.eval(probe.computedForClass, surface)
+          measured[`${theme}:${surface}`] = card
+          assertEqual(card.background, expectedBg, `${surface} (${theme}) must follow the theme surface (${expectedBg}), got ${card.background}`)
+          assertEqual(card.background, expected.background, `${surface} (${theme}) background must equal the live native hover card background (${expected.background}), got ${card.background}`)
+          assertEqual(card.backgroundImage, expected.backgroundImage, `${surface} (${theme}) must not add a background-image layer`)
+          assertEqual(card.backdropFilter, expected.backdropFilter, `${surface} (${theme}) backdrop filter must match the native tooltip`)
+          assertEqual(card.borderWidth, '0px', `${surface} (${theme}) must be borderless`)
+          assertEqual(card.radius, expected.radius, `${surface} (${theme}) radius must match the native tooltip`)
+          assertEqual(card.boxShadow, expected.boxShadow, `${surface} (${theme}) elevation must match the native tooltip exactly`)
+        }
       }
-      for (const surface of surfaces) {
-        const card = await page.eval(probe.computedForClass, surface)
-        measured[`${theme}:${surface}`] = card
-        assertEqual(card.background, 'rgb(44, 44, 46)', `${surface} (${theme}) must resolve to the native hover-card surface #2C2C2E, got ${card.background}`)
-        assertEqual(card.background, native.background, `${surface} (${theme}) background must equal the live native hover-card background (${native.background}), got ${card.background}`)
-        assertEqual(card.backgroundImage, native.backgroundImage, `${surface} (${theme}) must not add a background-image layer`)
-        assertEqual(card.backdropFilter, native.backdropFilter, `${surface} (${theme}) backdrop filter must match the native tooltip`)
-        assertEqual(card.borderWidth, '0px', `${surface} (${theme}) must be borderless`)
-        assertEqual(card.radius, native.radius, `${surface} (${theme}) radius must match the native tooltip`)
-        assertEqual(card.boxShadow, native.boxShadow, `${surface} (${theme}) elevation must match the native tooltip exactly`)
-      }
+      const lightUniques = new Set(surfaces.map((surface) => measured[`light:${surface}`].background))
+      const darkUniques = new Set(surfaces.map((surface) => measured[`dark:${surface}`].background))
+      assertEqual(lightUniques.size, 1, `all plugin tooltip surfaces must share the light background: ${[...lightUniques].join(' / ')}`)
+      assertEqual(darkUniques.size, 1, `all plugin tooltip surfaces must share the dark background: ${[...darkUniques].join(' / ')}`)
+      return `4 surfaces x 2 themes: light ${[...lightUniques][0]} / dark ${[...darkUniques][0]}; radius ${native.radius}; native elevation`
+    } finally {
+      await page.emulateMedia([])
+      await sleep(400)
     }
-    await page.emulateMedia([])
-    await sleep(300)
-    const unique = new Set(surfaces.map((surface) => measured[`light:${surface}`].background))
-    assertEqual(unique.size, 1, `all plugin tooltip surfaces must share one background: ${[...unique].join(' / ')}`)
-    return `4 surfaces x 2 themes on ${native.background}; radius ${native.radius}; native elevation`
   })
 
   await results.check('c3-1', 'bucket labels are title case, not uppercase', async () => {
