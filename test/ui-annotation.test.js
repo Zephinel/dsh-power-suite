@@ -78,7 +78,7 @@ if (ui === undefined) {
     'annotationFullXPathOf', 'annotationFallbackCacheKey', 'annotationLevenshteinWithin',
     'annotationHasStrongIdentity', 'annotationStructuralFallbackStatus', 'annotationCopyAnchorDecision',
     'annotationRenderedTextRepeatCount', 'annotationFirstTextLeafDescendant', 'annotationAncestorTagChain',
-    'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey', 'annotationScopeAuthorityOutcome', 'annotationEphemeralOutcome', 'annotationSegmentedIndex', 'annotationSegmentDisplayLabel', 'debugFallbackScanProbe',
+    'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey', 'annotationScopeAuthorityOutcome', 'annotationEphemeralOutcome', 'annotationSegmentedIndex', 'annotationSegmentDisplayLabel', 'annotationRailRightForPane', 'debugFallbackScanProbe',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -195,6 +195,7 @@ if (ui === undefined) {
     annotationEphemeralOutcome: [2, 3],
     annotationSegmentedIndex: [3, 3],
     annotationSegmentDisplayLabel: [1, 1],
+    annotationRailRightForPane: [2, 2],
     debugFallbackScanProbe: [0, 0],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
@@ -218,7 +219,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 111, 'the frozen task-57 generation is pinned')
+    assert.equal(SEAM_GENERATION, 112, 'the frozen task-68 generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -3049,6 +3050,15 @@ if (ui === undefined) {
     assert.equal(ui.annotationSegmentDisplayLabel('Ctrl'), 'Ctrl', 'labels without a separator are unchanged')
     assert.equal(ui.annotationSegmentDisplayLabel('  '), '')
     assert.equal(ui.annotationSegmentDisplayLabel(null), '')
+  })
+
+  test('A3/T68: native right-Sidebar pane rail offset geometry', () => {
+    assert.equal(ui.annotationRailRightForPane({ left: 950, right: 1728, width: 778 }, 1728), 778)
+    assert.equal(ui.annotationRailRightForPane({ left: 1200, right: 1728, width: 528 }, 1728), 528)
+    assert.equal(ui.annotationRailRightForPane(null, 1728), 0)
+    assert.equal(ui.annotationRailRightForPane({ left: 950, right: 1700, width: 750 }, 1728), 0, 'a pane not flush to the right edge does not dock the rail')
+    assert.equal(ui.annotationRailRightForPane({ left: 100, right: 1728, width: 1628 }, 1728), 0, 'a near-fullscreen pane has no room for the rail')
+    assert.equal(ui.annotationRailRightForPane({ left: 950, right: 1728, width: 60 }, 1728), 0, 'a collapsed pane is ignored')
   })
 
   //#region geometry and layout

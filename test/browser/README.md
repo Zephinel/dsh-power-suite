@@ -77,7 +77,7 @@ node test/browser/annotation.e2e.mjs --smoke         pipeline + feature-surface 
 node test/browser/annotation.e2e.mjs --shots-only    five screenshots only (no scenario assertions)
 node test/browser/annotation.e2e.mjs --assets        write screenshots to docs/assets instead of /tmp
 node test/browser/annotation.e2e.mjs --client PATH   inject a different client.js (e.g. a baseline)
-node test/browser/annotation.e2e.mjs --scenario 8    run exactly one scenario (validation: 1..15)
+node test/browser/annotation.e2e.mjs --scenario 8    run exactly one scenario (validation: 1..16)
 node test/browser/annotation.e2e.mjs --from 7        run scenarios 7-10 and 15 (ids in SCENARIO_ORDER)
 node test/browser/annotation.e2e.mjs --no-shots      skip screenshots
 node test/browser/annotation.e2e.mjs --keep-open     leave Chrome running (prints pid/CDP/profile)

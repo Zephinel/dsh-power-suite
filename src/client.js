@@ -12811,6 +12811,30 @@ function dwClearNativeAtmospheres() {
       return current
     }
 
+    /**
+     * A3/T68: annotation-rail right offset when the native right Sidebar (document
+     * preview / files pane) is open. The rail docks just left of that pane instead
+     * of painting over it, so preview content stays pointer-reachable. Only a
+     * visible pane flush to the viewport's right edge counts; a fullscreen pane
+     * (too wide to leave room) and absent/invalid panes keep the rail at the edge.
+     * @param {{ left?: number, right?: number, width?: number } | null} paneRect - native pane rect.
+     * @param {number} viewportWidth - viewport width.
+     * @returns {number} rail `right` offset in pixels (0 = keep the rail at the edge).
+     */
+    function annotationRailRightForPane(paneRect, viewportWidth) {
+      if (paneRect === null || typeof paneRect !== 'object') return 0
+      const width = Number(paneRect.width)
+      const left = Number(paneRect.left)
+      const right = Number(paneRect.right)
+      const viewport = Number(viewportWidth)
+      if (!Number.isFinite(width) || !Number.isFinite(left) || !Number.isFinite(right) || !Number.isFinite(viewport) || viewport <= 0) return 0
+      if (width < 120 || left < 0) return 0
+      if (Math.abs(viewport - right) > 2) return 0
+      const offset = Math.round(viewport - left)
+      if (offset <= 0 || offset > viewport * 0.7) return 0
+      return offset
+    }
+
     /** @returns {{ width: number, height: number }} the current viewport size. */
     function annotationViewport() {
       return {
@@ -14263,6 +14287,59 @@ function dwClearNativeAtmospheres() {
        * cannot silently drop the raise; exit restores the captured pair exactly.
        * @returns {void}
        */
+      /**
+       * A3/T68: keep the annotation rail clear of the native right Sidebar pane.
+       * The active document/files pane is identified from the Sidebar's own
+       * `data-sidebar-right-tab` markers; the rail's `right` offset becomes the
+       * pane's visible width. No pane => offset removed (rail stays at the edge).
+       * @returns {void}
+       */
+      function syncRailDock() {
+        let paneRect = null
+        const panes = document.querySelectorAll('[data-dockkit-pane][data-dockkit-pane-active="true"]')
+        for (const pane of panes) {
+          if (!(pane instanceof HTMLElement)) continue
+          if (pane.querySelector('[data-sidebar-right-tab]') === null) continue
+          const rect = pane.getBoundingClientRect()
+          if (rect.width <= 0 || rect.height <= 0) continue
+          paneRect = { left: rect.left, right: rect.right, width: rect.width }
+          break
+        }
+        const offset = annotationRailRightForPane(paneRect, annotationViewport().width)
+        const root = document.documentElement
+        if (offset > 0) {
+          if (root.style.getPropertyValue('--psa-rail-right') !== `${offset}px`) root.style.setProperty('--psa-rail-right', `${offset}px`)
+          if (root.getAttribute('data-psa-rail-offset') !== 'true') root.setAttribute('data-psa-rail-offset', 'true')
+        } else {
+          if (root.style.getPropertyValue('--psa-rail-right') !== '') root.style.removeProperty('--psa-rail-right')
+          if (root.hasAttribute('data-psa-rail-offset')) root.removeAttribute('data-psa-rail-offset')
+        }
+      }
+
+      /** A3/T68: native right Sidebar pane changes need a rail re-dock without a resize. */
+      let railDockObserver = null
+
+      /** @returns {void} */
+      function ensureRailDockObserver() {
+        if (railDockObserver !== null) return
+        railDockObserver = new MutationObserver(() => { syncRailDock() })
+        railDockObserver.observe(document.body, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['data-dockkit-pane-active', 'class', 'style']
+        })
+      }
+
+      /** @returns {void} */
+      function disconnectRailDockObserver() {
+        if (railDockObserver === null) return
+        railDockObserver.disconnect()
+        railDockObserver = null
+        document.documentElement.style.removeProperty('--psa-rail-right')
+        document.documentElement.removeAttribute('data-psa-rail-offset')
+      }
+
       function capturePaintLayer() {
         const overlay = document.querySelector('[data-shell-overlay]')
         if (!(overlay instanceof HTMLElement)) return
@@ -15505,9 +15582,7 @@ function dwClearNativeAtmospheres() {
           resolutionFirstDelta: resolvesFirst - resolvesBefore,
           resolutionSecondDelta: resolvesSecond - resolvesFirst,
           status: second.status,
-          confidence: second.confidence ?? 'strong',
-          revision: domRevision,
-          observing: domObserver !== null
+          confidence: second.confidence ?? 'strong'
         }
       }
 
@@ -16070,6 +16145,7 @@ function dwClearNativeAtmospheres() {
         const mode = layoutModeFor(size.width, annotationMeasureSidebarWidths(), railWidth)
         const frame = annotationLayoutFrame()
         if (isActive() && frame !== null) {
+          syncRailDock()
           captureFrameInline(frame)
           if (frameRestoreTimer !== null) {
             // Reactivating before the reverse transition finished must keep the marker.
@@ -16842,6 +16918,8 @@ function dwClearNativeAtmospheres() {
           // active window, after the frame works so a failed activation never
           // leaves the shell chrome raised.
           capturePaintLayer()
+          ensureRailDockObserver()
+          syncRailDock()
           scheduleGeometry()
         } catch (error) {
           try {
@@ -16853,6 +16931,7 @@ function dwClearNativeAtmospheres() {
           disconnectFrameObserver()
           clearResolvedNodeCache()
           clearTimers()
+          disconnectRailDockObserver()
           restoreAnnotationLayout({ immediate: true })
           announceAnnotationState(false)
           throw error
@@ -16876,6 +16955,7 @@ function dwClearNativeAtmospheres() {
           uninstallPageListeners()
           disconnectFrameObserver()
           clearResolvedNodeCache()
+          disconnectRailDockObserver()
           restoreAnnotationLayout()
           flushAnnotationRecords()
           return
@@ -16899,6 +16979,7 @@ function dwClearNativeAtmospheres() {
           publish({ markRects: [], markerHoverId: null, markUndo: null, chipPreview: null })
           uninstallPageListeners()
           disconnectFrameObserver()
+          disconnectRailDockObserver()
           restoreAnnotationLayout()
           flushAnnotationRecords()
           if (feedbackTimer !== null) window.clearTimeout(feedbackTimer)
@@ -18314,8 +18395,8 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 @media (prefers-reduced-motion:reduce){.psa-selection[data-psa-flash=true],.psa-multi[data-psa-flash=true],.psa-flash-outline{animation:none}}
 .psa-box{position:fixed;box-sizing:border-box;border:1px solid var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));opacity:.65}
 .psa-flash-outline{position:fixed;box-sizing:border-box;border:2px solid var(--dsw-alias-state-business-primary);border-radius:3px;animation:psa-flash .6s ease-out 1}
-.psa-rail{position:fixed;top:0;right:0;bottom:0;box-sizing:border-box;display:flex;flex-direction:column;min-height:0;width:var(--psa-rail-width,200px);background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12.5px;line-height:18px;pointer-events:auto;z-index:40}
-.psa-rail[data-psa-mode=overlay]{top:8px;right:8px;bottom:8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%))}
+.psa-rail{position:fixed;top:0;right:var(--psa-rail-right,0px);bottom:0;box-sizing:border-box;display:flex;flex-direction:column;min-height:0;width:var(--psa-rail-width,200px);background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12.5px;line-height:18px;pointer-events:auto;z-index:40}
+.psa-rail[data-psa-mode=overlay]{top:8px;right:calc(var(--psa-rail-right,0px) + 8px);bottom:8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-lg,12px);box-shadow:var(--dsw-elevation-panel,0 10px 30px rgb(0 0 0 / 22%))}
 .psa-rail[data-psa-collapsed=true]{align-items:center}
 .psa-rail-header{display:flex;align-items:center;gap:4px;padding:8px 8px 6px;flex:none}
 .psa-rail[data-psa-collapsed=true] .psa-rail-header{flex-direction:column;padding:8px 4px;gap:4px}
@@ -20711,6 +20792,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationEphemeralOutcome,
         annotationSegmentedIndex,
         annotationSegmentDisplayLabel,
+        annotationRailRightForPane,
         debugFallbackScanProbe: () => (annotationController !== null && annotationController !== undefined
           && typeof annotationController.debugFallbackScanProbe === 'function'
           ? annotationController.debugFallbackScanProbe()
