@@ -7127,19 +7127,20 @@ function dwClearNativeAtmospheres() {
               isCurrent(row.id) ? React.createElement(DwAtmosphere, { key: 'atmos' }) : null,
               React.createElement('div', { className: 'psd-run-main' },
               React.createElement('span', { className: 'psd-run-head' },
-                interrupted
-                  ? React.createElement('span', {
-                    className: 'psd-interrupted',
-                    role: 'img',
-                    'aria-label': interruptedT('badge.aria'),
-                    title: interruptedTitle(row.id)
-                  }, RemixGlyph(REMIX_WARNING_FILL, 13))
-                  : running
-                    ? React.createElement(StateDot, { state: 'ongoing', size: 14, className: 'psd-run-glyph' })
-                    : !isRead(row.id, row.updatedAt)
-                      ? React.createElement(StateDot, { state: 'done', size: 14, className: 'psd-run-glyph' })
-                      : React.createElement('span', { className: 'psd-run-brand', 'aria-hidden': true },
-                        RemixGlyph(DW_SPARKLING_LINE, 14, undefined, 0.82)),
+                React.createElement('span', { className: 'psd-run-glyph-cell' },
+                  interrupted
+                    ? React.createElement('span', {
+                      className: 'psd-interrupted',
+                      role: 'img',
+                      'aria-label': interruptedT('badge.aria'),
+                      title: interruptedTitle(row.id)
+                    }, RemixGlyph(REMIX_WARNING_FILL, 13))
+                    : running
+                      ? React.createElement(StateDot, { state: 'ongoing', size: 14, className: 'psd-run-glyph' })
+                      : !isRead(row.id, row.updatedAt)
+                        ? React.createElement(StateDot, { state: 'done', size: 14, className: 'psd-run-glyph' })
+                        : React.createElement('span', { className: 'psd-run-brand', 'aria-hidden': true },
+                          RemixGlyph(DW_SPARKLING_LINE, 16, undefined, 0.82))),
                 interrupted
                   ? React.createElement(DwContinueAction, {
                     className: 'psd-continue-inline',
@@ -7147,7 +7148,24 @@ function dwClearNativeAtmospheres() {
                     row
                   })
                   : null,
-                React.createElement('span', { className: 'psd-run-title' }, row.title))),
+                React.createElement(DwPinSlot, {
+                  key: 'pin',
+                  t,
+                  pinned,
+                  onToggle: () => onTogglePin(row.id)
+                }),
+                React.createElement('button', {
+                  type: 'button',
+                  className: 'psd-run-open',
+                  'aria-current': isCurrent(row.id) ? 'true' : undefined,
+                  'aria-label': t('panel.open', { title: row.title }),
+                  onClick: (event) => {
+                    event.stopPropagation()
+                    onOpen(row.id)
+                  },
+                  onFocus: (event) => showHover(row, event.currentTarget),
+                  onBlur: hideHover
+                }, React.createElement('span', { className: 'psd-run-title' }, row.title)))),
               React.createElement('span', { key: 'spacer', className: 'psd-run-spacer', 'aria-hidden': true }),
               React.createElement('span', { className: 'psd-run-time' }, time),
               React.createElement(DwRowActionSlot, {
