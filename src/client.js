@@ -728,7 +728,7 @@ window.__ModuleLoader__.load({
      */
     const QUICKLOOK_CSS = `
 .dsa-quicklook{position:fixed;z-index:1000;box-sizing:border-box;display:flex;flex-direction:column;max-height:min(560px,calc(100vh - 32px));overflow:hidden;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-hovercard-bg,#2c2c2e);color:var(--dsw-static-neutral-bluish-00,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);animation:dsa-quicklook-in .16s cubic-bezier(.22,1,.36,1)}
-.dsa-quicklook-header{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.12);min-width:0;flex:none}
+.dsa-quicklook-header{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--psd-card-divider,rgba(255,255,255,.12));min-width:0;flex:none}
 .dsa-quicklook-title{min-width:0;flex:1}
 .dsa-quicklook-name{font-size:14px;font-weight:500;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsa-quicklook-meta{color:var(--dsw-static-neutral-bluish-400,#adb2b8);font-size:12px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:16px}
@@ -741,7 +741,7 @@ window.__ModuleLoader__.load({
 .dsa-quicklook-frame{width:100%;height:340px;border:0;background:#fff;align-self:stretch}
 .dsa-quicklook-media{max-width:100%;max-height:340px}
 .dsa-quicklook-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:32px 18px;text-align:center;color:var(--dsw-static-neutral-bluish-400,#adb2b8);font-size:12px}
-.dsa-quicklook-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 20px 12px 40px;border-top:1px solid rgba(255,255,255,.12);flex:none}
+.dsa-quicklook-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 20px 12px 40px;border-top:1px solid var(--psd-card-divider,rgba(255,255,255,.12));flex:none}
 .dsa-quicklook-note{color:var(--dsw-static-neutral-bluish-400,#adb2b8);font-size:12px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsa-quicklook-actions{display:inline-flex;align-items:center;gap:6px;flex:none}
 .dsa-quicklook-action{appearance:none;border:0;background:transparent;color:var(--dsw-static-neutral-bluish-300,#cfd3d6);cursor:pointer;padding:0;width:32px;height:32px;flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;text-decoration:none;transition:background .15s ease,color .15s ease}
@@ -4650,21 +4650,66 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-hovercard{position:fixed;z-index:1000;box-sizing:border-box;width:${DW_HOVERCARD_WIDTH}px;max-height:min(${DW_HOVERCARD_MAX_HEIGHT}px,calc(100vh - 16px));overflow-x:hidden;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-hovercard-bg,#2c2c2e);color:var(--dsw-static-neutral-bluish-00,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;font-size:12px;line-height:16px;pointer-events:none}
 .psd-hovercard::-webkit-scrollbar{display:none;width:0;height:0}
 .psd-hovercard-content{display:flex;flex-direction:column;gap:8px}
-.psd-hovercard-title{color:#fff;font-size:14px;line-height:20px;font-weight:400;overflow-wrap:break-word}
-.psd-hovercard-session{color:#fff;font-size:13px;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.psd-hovercard-path{color:#cfd3d6;font-size:12px;line-height:16px;white-space:normal;word-break:break-all;overflow-wrap:anywhere;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
-.psd-hovercard-time{color:#cfd3d6;font-size:12px;line-height:16px}
-.psd-hovercard-status{display:flex;align-items:center;gap:8px;color:#adb2b8;font-size:12px;line-height:20px}
+.psd-hovercard-title{color:var(--dsw-static-neutral-bluish-00,#fff);font-size:14px;line-height:20px;font-weight:400;overflow-wrap:break-word}
+.psd-hovercard-session{color:var(--dsw-static-neutral-bluish-00,#fff);font-size:13px;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.psd-hovercard-path{color:var(--dsw-static-neutral-bluish-300,#cfd3d6);font-size:12px;line-height:16px;white-space:normal;word-break:break-all;overflow-wrap:anywhere;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
+.psd-hovercard-time{color:var(--dsw-static-neutral-bluish-300,#cfd3d6);font-size:12px;line-height:16px}
+.psd-hovercard-status{display:flex;align-items:center;gap:8px;color:var(--dsw-static-neutral-bluish-400,#adb2b8);font-size:12px;line-height:20px}
 .psd-hovercard-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--dsw-alias-state-business-primary)}
 .psd-hovercard-dot[data-state='done']{background:var(--dsw-alias-state-success-primary)}
 .psd-hovercard-row{display:flex;gap:8px;min-width:0;font-size:12px;line-height:16px}
-.psd-hovercard-key{flex:none;color:#adb2b8}
-.psd-hovercard-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#cfd3d6}
-.psd-hovercard-section{display:flex;flex-direction:column;gap:2px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12)}
+.psd-hovercard-key{flex:none;color:var(--dsw-static-neutral-bluish-400,#adb2b8)}
+.psd-hovercard-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-static-neutral-bluish-300,#cfd3d6)}
+.psd-hovercard-section{display:flex;flex-direction:column;gap:2px;padding-top:8px;border-top:1px solid var(--psd-card-divider,rgba(255,255,255,.12))}
 .psd-hovercard-section-head{display:flex;align-items:baseline;gap:8px;min-width:0;font-size:12px;line-height:16px}
-.psd-hovercard-section-title{flex:none;color:#fff}
-.psd-hovercard-section-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#cfd3d6;font-variant-numeric:tabular-nums}
-.psd-hovercard-row-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:#cfd3d6;font-variant-numeric:tabular-nums}
+.psd-hovercard-section-title{flex:none;color:var(--dsw-static-neutral-bluish-00,#fff)}
+.psd-hovercard-section-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:var(--dsw-static-neutral-bluish-300,#cfd3d6);font-variant-numeric:tabular-nums}
+.psd-hovercard-row-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:var(--dsw-static-neutral-bluish-300,#cfd3d6);font-variant-numeric:tabular-nums}
+/* Theme-following session info cards (user fix). The plugin cards below copied
+   the native hover-card recipe (#2C2C2E + static light palette) verbatim, so in
+   light mode they stayed dark. Light mode now uses the light shell surface and
+   theme text tokens; dark mode keeps the original recipe byte-identical (the
+   fallback values are the static palette). */
+body:not([data-ds-dark-theme]) .psd-hovercard,
+body:not([data-ds-dark-theme]) .psp-rail-card,
+body:not([data-ds-dark-theme]) .psp-search-card,
+body:not([data-ds-dark-theme]) .dsa-quicklook{
+  --psd-card-divider:var(--dsw-alias-border-l2);
+  --dsw-hovercard-bg:var(--dsw-alias-bg-layer-1,#fff);
+  --dsw-static-neutral-bluish-00:var(--dsw-alias-label-primary,#0f1115);
+  --dsw-static-neutral-bluish-300:var(--dsw-alias-label-secondary,#61666b);
+  --dsw-static-neutral-bluish-400:var(--dsw-alias-label-tertiary,#81858c);
+}
+/* The native (shell) session info hovercard is theme-invariant dark by design
+   (--dsw-hovercard-bg pinned to #2C2C2E on its module class). The user asked
+   the hovercards to follow the system theme, so light mode overrides that one
+   native surface and its static text palette here. This targets the shell's
+   hashed hovercard class: if a future shell build renames it, the rule silently
+   stops matching and the native dark card returns (graceful degradation). Dark
+   mode and all other native surfaces are untouched. */
+body:not([data-ds-dark-theme]) ._card_bgejw_9{
+  --dsw-hovercard-bg:var(--dsw-alias-bg-layer-1,#fff);
+  --dsw-static-neutral-bluish-00:var(--dsw-alias-label-primary,#0f1115);
+  --dsw-static-neutral-bluish-300:var(--dsw-alias-label-secondary,#61666b);
+  --dsw-static-neutral-bluish-400:var(--dsw-alias-label-tertiary,#81858c);
+}
+/* The shell's workspace hover-preview text classes are hardcoded light-palette
+   hex values (not tokens), so the surface override above needs matching text
+   rules. Same fragility note as the surface rule. */
+body:not([data-ds-dark-theme]) ._card_bgejw_9 .YDXeBa_hoverTitle{color:var(--dsw-alias-label-primary,#0f1115)}
+body:not([data-ds-dark-theme]) ._card_bgejw_9 .YDXeBa_hoverPath,
+body:not([data-ds-dark-theme]) ._card_bgejw_9 .YDXeBa_hoverTime{color:var(--dsw-alias-label-secondary,#61666b)}
+body:not([data-ds-dark-theme]) ._card_bgejw_9 .YDXeBa_hoverStatus{color:var(--dsw-alias-label-tertiary,#81858c)}
+/* Running & recent row text vs native Workspace rows (user fix). In light mode
+   finished rows and child rows used the secondary label token (#61666b) titles while
+   native Workspace session titles are the primary label token (#0f1115), so the panel
+   read lighter/less readable. Align all row titles (and the child row/glyph) to
+   the native primary token; time keeps the tertiary label like native rows, while
+   the highlighted row keeps its earlier secondary-label lift for contrast on
+   the pastel atmosphere. Dark mode unchanged. */
+body:not([data-ds-dark-theme]) .psd-run[data-state='done'] .psd-run-title,
+body:not([data-ds-dark-theme]) .psd-child-title,
+body:not([data-ds-dark-theme]) .psd-child{color:var(--dsw-alias-label-primary,#0f1115)}
 .psd-run,.psd-child{--psd-title-fade:28px}
 /* Fixed 22 px action slot between the time column and the disclosure column.
    Main rows hold the New session button here; nested subagent rows hold only
