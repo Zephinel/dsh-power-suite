@@ -159,17 +159,18 @@ sidebar's panel tabs. It starts expanded.
   keyboard `focus-within`, so revealing it never shifts the title, time, action
   or disclosure columns. The button stops the row's open handler; clicking the
   row body (including the title's faded tail) still opens the Session.
-- **Interrupted rows**: a row whose Session is interrupted (main or child) shows
-  an amber warning badge before the title, taken from the suite's shared
-  interrupted-Session records; its **Continue** action reuses the interrupted
-  feature's continuation request: it opens that Session and then sends the
-  continuation once the conversation is open and idle. On a **subagent row**
-  Continue sits in that row's fixed action slot (children have no New session
-  button, so the slot is free). On a **main row** the slot is reserved for New
-  session, so Continue is a hover/focus-revealed overlay immediately left of
-  the time column, over the title's faded tail — the old cluster position — and
-  no fixed column moves. Interrupted children therefore show only Continue in
-  the action column; New session is never reintroduced for child rows.
+- **Interrupted rows**: a row whose Session is interrupted (main or child)
+  replaces its status dot with an amber warning badge, taken from the suite's
+  shared interrupted-Session records. Immediately to its right sits an
+  **icon-only Continue triangle** (no visible label; `aria-label`/tooltip keep
+  the text), hidden until the row is hovered or keyboard-focused. It reuses the
+  interrupted feature's continuation request: it opens that Session and then
+  sends the continuation once the conversation is open and idle. The triangle
+  is inline in the row head, so its position never changes and no fixed column
+  moves; the trailing 22 px action slot stays reserved (New session only on a
+  main row, empty on a child row). The badge is deliberately darker on the
+  rainbow-highlighted rows in light mode so it does not glow too bright. New
+  session is never reintroduced for child rows.
 - **New session**: the native shell's "new chat" sprite icon (with an inlined
   Remix fallback) creates a blank Session in **the row's own directory** using
   the Session service, then opens it — without opening the source Session. When
@@ -251,9 +252,10 @@ sidebar's panel tabs. It starts expanded.
   under the group. Each child row has its own leading glyph (the same running /
   unread / acknowledged states, using the white `robot-2-line` icon when
   acknowledged), title, relative time, and the same reserved trailing columns
-  (time, the empty 22 px action slot — Continue only while interrupted — and the
-  disclosure spacer), so child and parent times and disclosure arrows sit on the
-  same vertical lines. Child rows render no New session control.
+  (time, the always-empty 22 px action slot — Continue is inline beside the
+  interrupted badge, not in this slot — and the disclosure spacer), so child and
+  parent times and disclosure arrows sit on the same vertical lines. Child rows
+  render no New session control.
   Each parent folds independently; the card header still folds the whole list.
 - **Click**: clicking a parent row opens that Session; clicking a child row
   opens the child Session. The whole row body is clickable (the action buttons
@@ -940,12 +942,13 @@ The native **View options** menu picks how Sessions are grouped:
   dependencies); reduced-motion users get one static frame and the RAF loop
   stops. Two marker attributes are written on the native rows and removed when
   the selection changes or the plugin unloads. A hidden tab pauses the loop.
-- **Row actions are hover/focus-revealed.** The main row's New session button,
-  the child row's interrupted Continue, and the main row's Continue overlay are
-  hidden until the row is hovered or keyboard-focused; a touch-only device has
-  no hover, so those row actions are not reachable there
-  (the Workspace's own New Session still is). Every button sits on a reserved
-  fixed-width column, so revealing it never changes the row layout.
+- **Row actions are hover/focus-revealed.** The main row's New session button
+  and the inline interrupted Continue triangle (main and child rows) are hidden
+  until the row is hovered or keyboard-focused; a touch-only device has no
+  hover, so those row actions are not reachable there (the Workspace's own New
+  Session still is). New session sits on the reserved fixed-width column and
+  Continue is inline immediately after the interrupted badge, so revealing
+  either never changes the row layout or row height.
 - **Continue sends a real continuation.** The row's Continue action reuses the
   interrupted-session continuation flow, so pressing it actually asks the Host to
   resume that Session (it opens the Session first and then continues). The badge
