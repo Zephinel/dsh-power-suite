@@ -249,6 +249,13 @@ API/plugin network failures in every run below):
   docs. Delta re-review **PASS-WITH-NITS** (no required changes); S6/S10/S12/S14
   green; S4 showed an environment/host-state timeout that reproduces with the
   pre-delta client (not this delta).
+  Running & recent row icons/chevrons/status/child glyphs were lifted to the
+  native Workspace icon weight in light mode (label-tertiary #81858c →
+  label-secondary #61666b; brand/sparkle stays label-primary; dark unchanged),
+  and the native Workspace session-info hover card was widened from the shell's
+  244 px to the plugin card's 320 px in both themes (scoped hash override,
+  graceful fallback) so figure labels/values no longer truncate early; sidebar
+  E2E b4-14/b5-7 pin the computed icon tokens and width/no-truncation facts.
   Session hovercards now follow the active theme (light surface `#fff` with
   `#0f1115`/`#61666b`/`#81858c` tokens, dark unchanged `#2C2C2E` + white),
   including the plugin's `.psd-hovercard`/`.psp-*`/`.dsa-quicklook` cards and a
