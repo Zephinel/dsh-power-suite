@@ -4834,7 +4834,7 @@ async function openArtifactsByPointer(page) {
 async function runFilesArtifactsChecks({ page, results, state }) {
   log('\n=== Files pane ↔ Artifacts toggle (task-72) ===')
   let filesReady = false
-  await results.check('files-1', 'Files header exposes exactly one native-style Artifacts tool right of reload', async () => {
+  await results.check('files-1', 'Files header exposes exactly one native-style Artifacts tool left of reload', async () => {
     await openFilesTab(page)
     filesReady = true
     const header = await page.eval(filesProbe.header)
@@ -4846,7 +4846,7 @@ async function runFilesArtifactsChecks({ page, results, state }) {
     assertEqual(header.button.rect.height, 28, 'button height must match the native 28 px header tools')
     assertEqual(header.button.glyph.width, 15, 'glyph must match the native 15 px tool glyph')
     assert(header.reload, 'reload tool not found for the ordering check')
-    assert(header.button.rect.left > header.reload.right, 'Artifacts tool must sit right of the reload/auto-refresh controls')
+    assert(header.button.rect.right < header.reload.left, 'Artifacts tool must sit left of the reload/auto-refresh controls')
     assert(header.page.top <= header.button.rect.top && header.button.rect.bottom <= header.page.top + 42, 'button must stay inside the 38 px Files header band')
     assert(!header.standaloneGuideEntry, 'the standalone Artifacts Start-guide entry must be removed (single entry point)')
     assert(!header.artifactsTab, 'no standalone Artifacts page type/tab must remain')
