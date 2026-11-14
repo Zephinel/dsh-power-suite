@@ -7,7 +7,8 @@ mode's own two modifiers are changed inside its rail, not on that page.
 
 ## Session artifacts
 
-Open the right Sidebar's Start page and choose **Artifacts**. The panel lists
+Open the right Sidebar's **Files** pane and click the **Artifacts** button in its
+header (right of reload). The panel lists
 files this Session created or delivered, plus the images and files you attached
 to your own prompts. Image rows show a 40 px rounded thumbnail by default (other
 files keep a file icon). The **filter dropdown at the header's right edge,

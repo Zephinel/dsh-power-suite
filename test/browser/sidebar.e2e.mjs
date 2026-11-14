@@ -4284,6 +4284,504 @@ async function runAnnotationPinChecks({ page, results, state }) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Files pane ↔ Artifacts toggle (task-72)
+// ---------------------------------------------------------------------------------------------
+
+/** Page-side probes for the Files-header Artifacts action and its overlay. */
+const filesProbe = {
+  /** The Files page header and the new tool button inside its actions row. */
+  header: () => {
+    const rect = (el) => {
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return {
+        left: Math.round(r.left),
+        top: Math.round(r.top),
+        right: Math.round(r.right),
+        bottom: Math.round(r.bottom),
+        width: Math.round(r.width),
+        height: Math.round(r.height),
+      }
+    }
+    const button = document.querySelector('[data-files-artifacts-button]')
+    const reload = document.querySelector('[data-files-reload]')
+    const page = document.querySelector('[data-files-page]')
+    const header = page ? page.firstElementChild : null
+    const glyph = button ? button.querySelector('svg') : null
+    return {
+      page: rect(page),
+      header: rect(header),
+      button: button
+        ? {
+            rect: rect(button),
+            label: button.getAttribute('aria-label'),
+            pressed: button.getAttribute('aria-pressed'),
+            className: button.className,
+            glyph: rect(glyph),
+          }
+        : null,
+      buttonCount: document.querySelectorAll('[data-files-artifacts-button]').length,
+      reload: rect(reload),
+      standaloneGuideEntry: document.querySelector('[data-sidebar-right-guide-entry="session-artifacts"]') !== null,
+      artifactsTab: [...document.querySelectorAll('[role="tab"]')].some((el) => /^(Artifacts|产物)\b/.test((el.innerText || '').trim())),
+    }
+  },
+
+  /** One snapshot of the Files/Artifacts view: overlay, marker, navigator fade. */
+  view: () => {
+    const rect = (el) => {
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return {
+        left: Math.round(r.left),
+        top: Math.round(r.top),
+        right: Math.round(r.right),
+        bottom: Math.round(r.bottom),
+        width: Math.round(r.width),
+        height: Math.round(r.height),
+      }
+    }
+    const overlay = document.querySelector('[data-psfa-overlay]')
+    const content = document.querySelector('[data-files-content]')
+    const page = document.querySelector('[data-files-page]')
+    const button = document.querySelector('[data-files-artifacts-button]')
+    const back = document.querySelector('[data-artifacts-back]')
+    const panel = document.querySelector('.psfa-view .dsa-root')
+    const navigator = content ? content.querySelector(':scope > :not([data-psfa-overlay])') : null
+    const backgroundToken = (() => {
+      const probe = document.createElement('div')
+      probe.style.background = 'var(--dsw-alias-bg-base)'
+      document.body.appendChild(probe)
+      const value = getComputedStyle(probe).backgroundColor
+      probe.remove()
+      return value
+    })()
+    const overlayStyle = overlay ? getComputedStyle(overlay) : null
+    return {
+      overlayCount: document.querySelectorAll('[data-psfa-overlay]').length,
+      overlay: overlay
+        ? {
+            rect: rect(overlay),
+            state: overlay.getAttribute('data-psfa-state'),
+            animation: overlayStyle.animationName,
+            background: overlayStyle.backgroundColor,
+            zIndex: overlayStyle.zIndex,
+            insideContent: content !== null && content.contains(overlay),
+          }
+        : null,
+      content: rect(content),
+      pageMarker: page ? page.getAttribute('data-psfa-active') : null,
+      navigatorOpacity: navigator ? Number(getComputedStyle(navigator).opacity) : null,
+      button: button
+        ? {
+            pressed: button.getAttribute('aria-pressed'),
+            expanded: button.getAttribute('aria-expanded'),
+            focused: document.activeElement === button,
+          }
+        : null,
+      back: back ? { rect: rect(back), focused: document.activeElement === back } : null,
+      panel: panel
+        ? {
+            phase: panel.getAttribute('data-artifacts-phase'),
+            rows: panel.querySelectorAll('.dsa-row').length,
+            empty: panel.querySelector('.dsa-empty') !== null,
+            loading: panel.querySelector('.dsa-loading') !== null,
+            error: panel.querySelector('.dsa-retry') !== null,
+            count: (panel.querySelector('.dsa-count')?.textContent || '').trim(),
+          }
+        : null,
+      backgroundToken,
+      markerCount: document.querySelectorAll('[data-psfa-active]').length,
+    }
+  },
+}
+
+/**
+ * Open the right Sidebar and its Files tab (the Start guide's Workspace files
+ * entry), so the Files page with the new header action is mounted.
+ * @param {object} page - Page wrapper.
+ * @returns {Promise<void>}
+ */
+async function openFilesTab(page) {
+  const open = await page.eval(() => {
+    if (document.querySelector('[data-sidebar-right-open]') !== null) return true
+    const button = [...document.querySelectorAll('button')].find((el) => el.getAttribute('aria-label') === 'Open right sidebar')
+    if (!(button instanceof HTMLElement)) return false
+    button.click()
+    return true
+  })
+  assert(open, 'right Sidebar could not be opened (no "Open right sidebar" control)')
+  await page.waitForFn(() => document.querySelector('[data-sidebar-right-open]') !== null, [], { timeout: 10000, label: 'right Sidebar open' })
+  const already = await page.eval(() => document.querySelector('[data-files-page]') !== null)
+  if (already) {
+    await page.waitForFn(() => document.querySelector('[data-files-artifacts-button]') !== null, [], { timeout: 8000, label: 'Files header action mounted' })
+    return
+  }
+  // The right Sidebar slides open; wait until the Start-guide entry is laid out
+  // and then activate it through its own handler, so a still-animating row can
+  // never move the click onto a different guide entry.
+  await page.waitForFn(
+    () => {
+      const el = document.querySelector('[data-sidebar-right-guide-entry="files"]')
+      return el instanceof HTMLElement && el.getBoundingClientRect().height > 0
+    },
+    [],
+    { timeout: 10000, label: 'Files Start-guide entry' }
+  )
+  const activated = await page.eval(() => {
+    const el = document.querySelector('[data-sidebar-right-guide-entry="files"]')
+    if (!(el instanceof HTMLElement)) return false
+    el.scrollIntoView({ block: 'center' })
+    el.click()
+    return true
+  })
+  assert(activated, 'Files entry is missing from the right Sidebar Start guide')
+  await page.waitForFn(() => document.querySelector('[data-files-page]') !== null, [], { timeout: 12000, label: 'Files page mounted' })
+  await page.waitForFn(() => document.querySelector('[data-files-artifacts-button]') !== null, [], { timeout: 8000, label: 'Files header action mounted' })
+  await sleep(400)
+}
+
+/** Collapse the right Sidebar when it is open (best effort). */
+async function closeRightSidebar(page) {
+  try {
+    const at = await page.eval(() => {
+      const el = [...document.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === 'Collapse right sidebar')
+      if (!(el instanceof HTMLElement)) return null
+      const r = el.getBoundingClientRect()
+      if (r.width <= 0) return null
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }
+    })
+    if (at === null) return
+    await page.clickAt(at.x, at.y)
+    await sleep(500)
+  } catch {
+    // Collapsing is best effort; the checks run with the pane either way.
+  }
+}
+
+/**
+ * Click the Files-header Artifacts button and sample the overlay one animation
+ * frame later, so the enter/exit phase and CSS animation are observable.
+ * @param {object} page - Page wrapper.
+ * @returns {Promise<object | null>} sampled overlay state, or null when missing.
+ */
+function clickArtifactsButtonSampled(page) {
+  return page.evaluate(`new Promise((resolve) => {
+    const button = document.querySelector('[data-files-artifacts-button]')
+    if (!(button instanceof HTMLElement)) { resolve(null); return }
+    button.click()
+    let frames = 0
+    const sample = () => {
+      frames += 1
+      const overlay = document.querySelector('[data-psfa-overlay]')
+      if (overlay !== null) {
+        const style = getComputedStyle(overlay)
+        resolve({
+          state: overlay.getAttribute('data-psfa-state'),
+          animation: style.animationName,
+          opacity: style.opacity,
+          transform: style.transform,
+          count: document.querySelectorAll('[data-psfa-overlay]').length
+        })
+        return
+      }
+      if (frames >= 4) { resolve(null); return }
+      requestAnimationFrame(sample)
+    }
+    requestAnimationFrame(sample)
+  })`)
+}
+
+async function waitArtifactsOpen(page) {
+  await page.waitForFn(
+    () => document.querySelector('[data-psfa-overlay]')?.getAttribute('data-psfa-state') === 'open',
+    [],
+    { timeout: 5000, label: 'Artifacts view settled open' }
+  )
+}
+
+async function waitArtifactsClosed(page) {
+  await page.waitForFn(
+    () => document.querySelector('[data-psfa-overlay]') === null,
+    [],
+    { timeout: 5000, label: 'Artifacts view removed (Files back)' }
+  )
+}
+
+async function waitArtifactsPanelSettled(page) {
+  await page.waitForFn(
+    () => {
+      const phase = document.querySelector('.psfa-view .dsa-root')?.getAttribute('data-artifacts-phase')
+      return phase === 'ready' || phase === 'error'
+    },
+    [],
+    { timeout: 12000, label: 'artifacts list response settled' }
+  )
+}
+
+/** Open the overlay through a real pointer click on the header button. */
+async function openArtifactsByPointer(page) {
+  const at = await page.findRect('[data-files-artifacts-button]')
+  assert(at, 'Files-header Artifacts button is not visible')
+  await page.moveTo(900, 500)
+  await sleep(150)
+  await page.clickAt(at.x, at.y)
+  await waitArtifactsOpen(page)
+}
+
+/**
+ * The task-72 acceptance checks: the Files-header button exists in the native
+ * actions row, the overlay replaces the Files content with the animated
+ * transition, and click-again/Back/Esc/tab-close/session-switch all return to a
+ * clean Files view in both themes and under reduced motion.
+ * @param {object} context - checks context.
+ * @returns {Promise<void>}
+ */
+async function runFilesArtifactsChecks({ page, results, state }) {
+  log('\n=== Files pane ↔ Artifacts toggle (task-72) ===')
+  let filesReady = false
+  await results.check('files-1', 'Files header exposes exactly one native-style Artifacts tool right of reload', async () => {
+    await openFilesTab(page)
+    filesReady = true
+    const header = await page.eval(filesProbe.header)
+    assert(header.page, 'Files page is not mounted')
+    assert(header.button, 'data-files-artifacts-button is missing from the Files header')
+    assertEqual(header.buttonCount, 1, 'exactly one Artifacts tool must exist in the Files header')
+    assert(/^(Artifacts|产物)$/.test(header.button.label || ''), `button aria-label must be "Artifacts"/"产物", got ${header.button.label}`)
+    assertEqual(header.button.rect.width, 28, 'button width must match the native 28 px header tools')
+    assertEqual(header.button.rect.height, 28, 'button height must match the native 28 px header tools')
+    assertEqual(header.button.glyph.width, 15, 'glyph must match the native 15 px tool glyph')
+    assert(header.reload, 'reload tool not found for the ordering check')
+    assert(header.button.rect.left > header.reload.right, 'Artifacts tool must sit right of the reload/auto-refresh controls')
+    assert(header.page.top <= header.button.rect.top && header.button.rect.bottom <= header.page.top + 42, 'button must stay inside the 38 px Files header band')
+    assert(!header.standaloneGuideEntry, 'the standalone Artifacts Start-guide entry must be removed (single entry point)')
+    assert(!header.artifactsTab, 'no standalone Artifacts page type/tab must remain')
+    state.filesHeader = header
+    return `button ${header.button.rect.left}..${header.button.rect.right} (reload ${header.reload.left}..${header.reload.right}), glyph ${header.button.glyph.width}px`
+  })
+
+  if (!filesReady) {
+    for (const id of ['files-2', 'files-3', 'files-4', 'files-5', 'files-6', 'files-7', 'files-8', 'files-9']) {
+      await results.skip(id, 'Files-pane Artifacts checks', 'skipped: the Files page did not mount')
+    }
+    return
+  }
+
+  await results.check('files-2', 'clicking the button cross-fades the Files content into the Artifacts list', async () => {
+    const sample = await clickArtifactsButtonSampled(page)
+    assert(sample, 'Artifacts overlay did not render after the button click')
+    assertEqual(sample.state, 'opening', `overlay must start in the opening phase, got ${sample.state}`)
+    assert(sample.animation.includes('psfa-view-enter'), `enter animation missing (${sample.animation})`)
+    assertEqual(sample.count, 1, 'exactly one overlay must be mounted')
+    await waitArtifactsOpen(page)
+    await waitArtifactsPanelSettled(page)
+    await sleep(350)
+    const view = await page.eval(filesProbe.view)
+    assertEqual(view.overlayCount, 1, 'exactly one overlay while open')
+    assert(view.overlay, 'overlay disappeared after settling')
+    assert(view.overlay.insideContent, 'overlay must be a portal inside [data-files-content]')
+    for (const edge of ['left', 'top', 'right', 'bottom']) {
+      assertNear(view.overlay.rect[edge], view.content[edge], 1, `overlay ${edge} must match the Files content box`)
+    }
+    assertEqual(view.overlay.zIndex, '2', 'overlay z-index inside the pane content')
+    assertEqual(view.pageMarker, 'true', 'Files page must carry the data-psfa-active marker while open')
+    assertEqual(view.button.pressed, 'true', 'the header button must show its active pressed state')
+    assertEqual(view.markerCount, 1, 'exactly one Files page marker')
+    assert(view.navigatorOpacity !== null && view.navigatorOpacity < 0.05, `Files navigator must fade behind the overlay (opacity ${view.navigatorOpacity})`)
+    assert(view.panel, 'the artifacts panel did not render inside the overlay')
+    assertEqual(view.panel.phase, 'ready', 'artifacts list request must settle ready')
+    assert(!view.panel.error, 'artifacts list request failed')
+    assert(view.panel.rows > 0 || view.panel.empty, 'the artifacts view must show a list or its empty state')
+    state.filesOpen = view
+    return `opening animation ${sample.animation}; overlay ${view.overlay.rect.width}x${view.overlay.rect.height} == content; panel ${view.panel.rows} rows / empty=${view.panel.empty}`
+  })
+
+  await results.check('files-3', 'clicking again reverses the transition and restores Files', async () => {
+    const sample = await clickArtifactsButtonSampled(page)
+    assert(sample, 'closing did not render the overlay')
+    assertEqual(sample.state, 'closing', `overlay must start in the closing phase, got ${sample.state}`)
+    assert(sample.animation.includes('psfa-view-exit'), `exit animation missing (${sample.animation})`)
+    await waitArtifactsClosed(page)
+    await page.waitForFn(
+      () => {
+        const content = document.querySelector('[data-files-content]')
+        const navigator = content ? content.querySelector(':scope > :not([data-psfa-overlay])') : null
+        return navigator !== null && Number(getComputedStyle(navigator).opacity) > 0.95
+      },
+      [],
+      { timeout: 3000, label: 'Files navigator restored' }
+    )
+    const view = await page.eval(filesProbe.view)
+    assertEqual(view.overlayCount, 0, 'overlay must be unmounted after closing')
+    assertEqual(view.pageMarker, null, 'the Files page marker must be removed after closing')
+    assertEqual(view.button.pressed, 'false', 'button pressed state must clear')
+    assertEqual(view.button.focused, true, 'focus must return to the header button')
+    state.filesClosed = view
+    return `closing animation ${sample.animation}; overlay removed, Files navigator opacity ${view.navigatorOpacity}`
+  })
+
+  await results.check('files-4', 'the in-panel Back control returns to Files', async () => {
+    await openArtifactsByPointer(page)
+    await waitArtifactsPanelSettled(page)
+    const back = await page.findRect('[data-artifacts-back]')
+    assert(back, 'Back button is missing from the artifacts panel header')
+    await page.clickAt(back.x, back.y)
+    await waitArtifactsClosed(page)
+    const view = await page.eval(filesProbe.view)
+    assertEqual(view.overlayCount, 0, 'Back did not close the artifacts view')
+    assertEqual(view.pageMarker, null, 'Back left the Files page marker behind')
+    return `Back at ${back.x},${back.y} closed the view`
+  })
+
+  await results.check('files-5', 'Escape returns to Files', async () => {
+    await openArtifactsByPointer(page)
+    await waitArtifactsPanelSettled(page)
+    await page.pressEscape()
+    await waitArtifactsClosed(page)
+    const view = await page.eval(filesProbe.view)
+    assertEqual(view.overlayCount, 0, 'Escape did not close the artifacts view')
+    assertEqual(view.button.pressed, 'false', 'Escape left the header button pressed')
+    return 'Esc closed the artifacts view'
+  })
+
+  await results.check('files-6', 'the view is theme-correct in light and dark', async () => {
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    await sleep(300)
+    await openArtifactsByPointer(page)
+    await waitArtifactsPanelSettled(page)
+    await sleep(250)
+    const light = await page.eval(filesProbe.view)
+    assertEqual(light.overlay.background, light.backgroundToken, 'overlay must use the shell surface color in light theme')
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+    await sleep(600)
+    const dark = await page.eval(filesProbe.view)
+    assertEqual(dark.overlay.background, dark.backgroundToken, 'overlay must use the shell surface color in dark theme')
+    assert(light.overlay.background !== dark.overlay.background, 'the overlay background must follow the theme')
+    await page.emulateMedia([])
+    await sleep(300)
+    const closeAt = await page.findRect('[data-files-artifacts-button]')
+    assert(closeAt, 'Artifacts button disappeared before the theme check could close the view')
+    await page.clickAt(closeAt.x, closeAt.y)
+    await waitArtifactsClosed(page)
+    return `light ${light.overlay.background} / dark ${dark.overlay.background}`
+  })
+
+  await results.check('files-7', 'reduced motion swaps instantly with no animations', async () => {
+    await waitArtifactsClosed(page)
+    await page.emulateMedia([{ name: 'prefers-reduced-motion', value: 'reduce' }])
+    await sleep(300)
+    // The 0 ms settlement can win the race against the first animation frame, so
+    // a missed sample is expected; when a sample is caught it must carry no
+    // animation. Both directions must complete quickly (no 160-180 ms transition).
+    const openedSample = await clickArtifactsButtonSampled(page)
+    if (openedSample !== null) {
+      assertEqual(openedSample.animation, 'none', 'no enter animation under reduced motion')
+      assert(['opening', 'open'].includes(openedSample.state), `unexpected open phase ${openedSample.state}`)
+    }
+    const openStarted = Date.now()
+    await waitArtifactsOpen(page)
+    assert(Date.now() - openStarted < 1500, 'reduced-motion open did not swap promptly')
+    const button = await page.findRect('[data-files-artifacts-button]')
+    assert(button, 'Artifacts button disappeared under reduced motion')
+    const closeStarted = Date.now()
+    await page.clickAt(button.x, button.y)
+    await waitArtifactsClosed(page)
+    assert(Date.now() - closeStarted < 1500, 'reduced-motion close did not swap promptly')
+    await page.emulateMedia([])
+    await sleep(300)
+    return `enter sample ${openedSample === null ? 'settled before first frame' : openedSample.animation}; both swaps prompt`
+  })
+
+  await results.check('files-8', 'closing the Files tab tears the overlay down (no leaks)', async () => {
+    await openArtifactsByPointer(page)
+    await waitArtifactsPanelSettled(page)
+    const closeTab = await page.eval(() => {
+      const tab = [...document.querySelectorAll('[role="tab"]')].find((el) => /^(Files|文件)\b/.test((el.innerText || '').trim()))
+      if (!(tab instanceof HTMLElement)) return null
+      const buttons = [...tab.querySelectorAll('button')].filter((el) => el.getBoundingClientRect().width > 0)
+      const hit = buttons[buttons.length - 1]
+      if (!(hit instanceof HTMLElement)) return null
+      const r = hit.getBoundingClientRect()
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }
+    })
+    assert(closeTab, 'Files tab close button not found')
+    await page.clickAt(closeTab.x, closeTab.y)
+    await page.waitForFn(
+      () => document.querySelector('[data-files-page]') === null && document.querySelector('[data-psfa-overlay]') === null,
+      [],
+      { timeout: 8000, label: 'Files tab closed and overlay removed' }
+    )
+    const leftovers = await page.evaluate(`({
+      overlays: document.querySelectorAll('[data-psfa-overlay]').length,
+      buttons: document.querySelectorAll('[data-files-artifacts-button]').length,
+      markers: document.querySelectorAll('[data-psfa-active]').length
+    })`)
+    assertEqual(leftovers.overlays, 0, 'overlay leaked after the tab closed')
+    assertEqual(leftovers.buttons, 0, 'header button leaked after the tab closed')
+    assertEqual(leftovers.markers, 0, 'Files page marker leaked after the tab closed')
+    return 'tab close removed overlay, button and marker'
+  })
+
+  await results.check('files-9', 'a Session switch closes the right-pane view without leftovers', async () => {
+    const rows = await page.count('.psd-run')
+    if (rows === 0) {
+      await results.skip('files-9', 'a Session switch closes the right-pane view', 'no running/recent card rows in this live GUI')
+      return
+    }
+    await openFilesTab(page)
+    await openArtifactsByPointer(page)
+    await waitArtifactsPanelSettled(page)
+    const before = await page.eval(() => document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') ?? null)
+    assert(before, 'no open Session id could be read before the switch')
+    // Prefer a card row that is not the current Session; when every row is the
+    // current one, create a fresh Session through the native flow instead.
+    const target = await page.eval(() => {
+      const rows = [...document.querySelectorAll('.psd-run')]
+      const row = rows.find((candidate) => !candidate.classList.contains('psd-run-current')) ?? null
+      if (row !== null) {
+        const main = row.querySelector('.psd-run-main')
+        if (main instanceof HTMLElement) {
+          const r = main.getBoundingClientRect()
+          return { kind: 'row', x: Math.round(r.left + 30), y: Math.round(r.top + r.height / 2) }
+        }
+      }
+      const newSession = [...document.querySelectorAll('button')].find((el) => el.getAttribute('aria-label') === 'New session' && el.getBoundingClientRect().top < 200)
+      if (!(newSession instanceof HTMLElement)) return null
+      const r = newSession.getBoundingClientRect()
+      return { kind: 'new-session', x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }
+    })
+    assert(target, 'no card row or new-Session control available for the session-switch check')
+    await page.moveTo(900, 500)
+    await sleep(150)
+    await page.clickAt(target.x, target.y)
+    await page.waitForFn(
+      (previous) => {
+        const current = document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') ?? null
+        return current !== null && current !== previous
+      },
+      [before],
+      { timeout: 15000, label: 'main Session switched' }
+    )
+    await page.waitForFn(
+      () => document.querySelectorAll('[data-psfa-overlay]').length === 0,
+      [],
+      { timeout: 10000, label: 'artifacts overlay gone after the session switch' }
+    )
+    const leftovers = await page.evaluate(`({
+      overlays: document.querySelectorAll('[data-psfa-overlay]').length,
+      buttons: document.querySelectorAll('[data-files-artifacts-button]').length,
+      markers: document.querySelectorAll('[data-psfa-active]').length
+    })`)
+    assertEqual(leftovers.overlays, 0, 'overlay survived the Session switch')
+    assertEqual(leftovers.markers, 0, 'Files page marker survived the Session switch')
+    return `session ${before} → switched; overlay gone (buttons ${leftovers.buttons})`
+  })
+
+  await closeRightSidebar(page)
+  await page.emulateMedia([])
+}
+
+// ---------------------------------------------------------------------------------------------
 // Screenshots
 // ---------------------------------------------------------------------------------------------
 
@@ -4487,9 +4985,76 @@ async function captureScreenshots(page, state) {
   await captureLayoutEvidence(page, shot, 'dark')
   await capturePillEvidence(page, shot, 'dark')
   await captureFocusEvidence(page, shot, 'dark')
+  await captureFilesArtifactsEvidence(page, shot)
   await page.emulateMedia([])
   await sleep(300)
   return shots
+}
+
+/**
+ * Photograph the Files-header Artifacts tool and the open artifacts view inside
+ * the right Sidebar, in both themes. Best effort: the screenshot pass must not
+ * fail on a live-data hiccup.
+ * @param {object} page - Page wrapper.
+ * @param {Function} shot - screenshot(name, clip) helper.
+ * @returns {Promise<void>}
+ */
+async function captureFilesArtifactsEvidence(page, shot) {
+  try {
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    await openFilesTab(page)
+    await page.waitForFn(
+      () => {
+        const panel = document.querySelector('[data-sidebar-right-panel]')
+        return panel instanceof HTMLElement && panel.getBoundingClientRect().width > 100
+      },
+      [],
+      { timeout: 8000, label: 'right Sidebar laid out for evidence' }
+    )
+    await sleep(400)
+    const filesClip = await page.eval(() => {
+      const page = document.querySelector('[data-files-page]')
+      const panel = document.querySelector('[data-sidebar-right-panel]')
+      if (!(page instanceof HTMLElement) || !(panel instanceof HTMLElement)) return null
+      const r = panel.getBoundingClientRect()
+      const header = page.firstElementChild.getBoundingClientRect()
+      return {
+        x: Math.max(0, Math.round(r.left)),
+        y: Math.max(0, Math.round(r.top)),
+        width: Math.min(Math.round(r.width), window.innerWidth - Math.max(0, Math.round(r.left))),
+        height: Math.min(Math.round(header.height + 120), 220),
+      }
+    })
+    if (filesClip !== null && filesClip.width > 0) await shot('20-files-header-light', filesClip)
+    await openArtifactsByPointer(page)
+    await waitArtifactsPanelSettled(page)
+    await sleep(350)
+    await shot('21-files-artifacts-light')
+    const clip = await page.eval(() => {
+      const panel = document.querySelector('[data-sidebar-right-panel]')
+      if (!(panel instanceof HTMLElement)) return null
+      const r = panel.getBoundingClientRect()
+      return {
+        x: Math.max(0, Math.round(r.left)),
+        y: Math.max(0, Math.round(r.top)),
+        width: Math.min(Math.round(r.width), window.innerWidth - Math.max(0, Math.round(r.left))),
+        height: Math.min(Math.round(r.height), window.innerHeight),
+      }
+    })
+    if (clip !== null && clip.width > 0) await shot('22-files-artifacts-pane-light', clip)
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+    await sleep(700)
+    await shot('23-files-artifacts-dark')
+    if (clip !== null && clip.width > 0) await shot('24-files-artifacts-pane-dark', clip)
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    await sleep(300)
+    await page.pressEscape()
+    await waitArtifactsClosed(page)
+    await closeRightSidebar(page)
+  } catch (error) {
+    // Evidence capture is best effort; surface the reason for the run log.
+    log(`files-artifacts evidence skipped: ${short(error?.message || String(error), 240)}`)
+  }
 }
 
 /**
@@ -4723,6 +5288,7 @@ async function run() {
       await runFocusChecks({ page, results, state })
       await runFoldChecks({ page, results, state })
       await runAnnotationPinChecks({ page, results, state })
+      await runFilesArtifactsChecks({ page, results, state })
       if (opts.shots) {
         log('\n=== Screenshots ===')
         const shots = await captureScreenshots(page, state)

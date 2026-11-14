@@ -627,8 +627,7 @@ modifiers), `power-suite.ui-annotation.launcher` (position),
 
 | Slot | Purpose |
 |---|---|
-| `sidebar.right.pane.tab` | Artifacts tab type and the shared hover preview |
-| `sidebarRightTabs.register` | Artifacts guide card on the Start page |
+| `sidebar.right.tab.files.actions` | Artifacts toggle button in the native Files pane header (opens the in-pane artifacts overlay) |
 | `contextMenu.icon` | Workspace menu icon |
 | `contextMenus.register` (`workspace`) | Default agent preset submenu |
 | `conversation.input.overlay` | Renderless prompt-history keyboard seat, draft-attachment memory seat, and the annotation mode's Session bridge seat (Session id, input actions, and the Session's cwd/workspace label mirrored from the slot's `useSessions` hook) |

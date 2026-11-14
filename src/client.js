@@ -4,9 +4,10 @@
  * One client entry owns every feature's browser surface, kept in its own
  * `#region feature:` marks so another feature can be added the same way.
  *
- * Session artifacts registers one page type in the right Sidebar and one card
- * for its Start guide. The panel asks the Host for the current Session's
- * artifact list and renders each row with three zero-install actions:
+ * Session artifacts registers one action in the native Files page header that
+ * swaps the pane content for an animated overlay listing the current Session's
+ * artifacts (the standalone page type and its Start-guide card are gone). It
+ * asks the Host for the list and renders each row with three zero-install actions:
  *
  * - Open: the file in the right Sidebar's native document preview (the
  *   workspace-files + document-preview pipeline), through a
@@ -54,11 +55,17 @@ window.__ModuleLoader__.load({
     /** This feature's copy namespace. */
     const NS = 'sessionArtifacts'
 
-    /** This feature's implementation identity: the tab key and the guide dispatch id. */
-    const ID = '@rexxin/dsh-power-suite/artifacts'
+    /** Slot cell identity of the Files-header Artifacts action. */
+    const FILES_ACTION_ID = 'power-suite.files-artifacts'
 
-    /** The page type opened by this plugin's guide card. */
-    const KIND = 'session-artifacts'
+    /** Files ↔ Artifacts view phases owned by the Files-header action. */
+    const FILES_ARTIFACTS_PHASES = ['files', 'opening', 'open', 'closing']
+
+    /** Enter transition length in ms (overlay fade + 14 px slide). */
+    const FILES_ARTIFACTS_ENTER_MS = 180
+
+    /** Exit transition length in ms (reverse of the enter transition). */
+    const FILES_ARTIFACTS_EXIT_MS = 160
 
     /** Authenticated exact routes registered by the Host half. */
     const LIST_ROUTE = 'api/session-artifacts.list'
@@ -71,9 +78,8 @@ window.__ModuleLoader__.load({
 
     //#region copy
     const EN = {
-      'guide.title': 'Artifacts',
-      'guide.description': 'Files this session created or delivered',
-      'tab.title': 'Artifacts',
+      'panel.title': 'Artifacts',
+      'action.back': 'Back to files',
       'list.count': '{count} artifacts',
       'list.countOne': '1 artifact',
       'list.countOf': '{shown} of {total} artifacts',
@@ -106,9 +112,8 @@ window.__ModuleLoader__.load({
       'preview.resize': 'Resize preview'
     }
     const ZH = {
-      'guide.title': '产物',
-      'guide.description': '本会话创建或交付的文件',
-      'tab.title': '产物',
+      'panel.title': '产物',
+      'action.back': '返回文件',
       'list.count': '{count} 个产物',
       'list.countOne': '1 个产物',
       'list.countOf': '显示 {shown} / 共 {total} 个产物',
@@ -187,6 +192,10 @@ window.__ModuleLoader__.load({
 .dsa-root{display:flex;flex-direction:column;min-height:0;height:100%;box-sizing:border-box;color:var(--dsw-alias-label-primary);font-size:13px;line-height:20px}
 .dsa-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px 6px}
 .dsa-count{color:var(--dsw-alias-label-tertiary);font-size:12px}
+.dsa-back{appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:0;width:24px;height:24px;flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--dsw-radius-sm,6px)}
+.dsa-back:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dsa-back:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.dsa-header-leading{display:inline-flex;align-items:center;gap:2px;min-width:0;flex:none}
 .dsa-refresh{appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:0;width:24px;height:24px;flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--dsw-radius-sm,6px)}
 .dsa-refresh:hover:enabled{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dsa-refresh:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
@@ -238,6 +247,28 @@ window.__ModuleLoader__.load({
 .dsa-loading{flex:1;display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);font-size:12px}
 `
     /**
+     * Files-pane chrome for the Artifacts action: the header tool button and the
+     * in-pane overlay transition. Kept separate from the artifacts list stylesheet
+     * because the button exists while the overlay is closed.
+     */
+    const FILES_ARTIFACTS_CSS = `
+.psfa-tool{appearance:none;box-sizing:border-box;width:28px;height:28px;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-sm,8px);cursor:pointer;background:0 0;border:none;flex:none;justify-content:center;align-items:center;padding:6px;line-height:1;display:inline-flex}
+.psfa-tool svg{width:15px;height:15px}
+@media (hover:hover){.psfa-tool:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}}
+.psfa-tool[aria-pressed='true']{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.psfa-tool:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psfa-view{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;min-height:0;box-sizing:border-box;overflow:hidden;background:var(--dsw-alias-bg-base)}
+.psfa-view:focus{outline:none}
+.psfa-view[data-psfa-state='opening']{animation:psfa-view-enter var(--psfa-enter-ms,180ms) cubic-bezier(.22,1,.36,1) both}
+.psfa-view[data-psfa-state='closing']{animation:psfa-view-exit var(--psfa-exit-ms,160ms) cubic-bezier(.4,0,.2,1) both;pointer-events:none}
+[data-files-page] [data-files-content] > :not([data-psfa-overlay]){transition:opacity var(--psfa-enter-ms,180ms) var(--ds-ease-in-out,ease),transform var(--psfa-enter-ms,180ms) var(--ds-ease-in-out,ease)}
+[data-files-page][data-psfa-active='true'] [data-files-content] > :not([data-psfa-overlay]){opacity:0;transform:translateX(-14px);pointer-events:none}
+@keyframes psfa-view-enter{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+@keyframes psfa-view-exit{from{opacity:1;transform:none}to{opacity:0;transform:translateX(14px)}}
+@media (prefers-reduced-motion: reduce){.psfa-view[data-psfa-state='opening'],.psfa-view[data-psfa-state='closing']{animation:none}[data-files-page] [data-files-content] > :not([data-psfa-overlay]){transition:none}}
+`
+
+    /**
      * Render the local stylesheet with the panel.
      *
      * A component-local style element is the sanctioned mechanism (no global
@@ -253,7 +284,7 @@ window.__ModuleLoader__.load({
     //#region icons
     // Remix Icon path data (Apache-2.0, https://remixicon.com), inlined so the
     // panel needs no icon package at runtime.
-    const REMIX_AI_GENERATE_3D_LINE = 'M15.1416 2.81836L13.1016 3.94824L12 3.31055L4.5 7.65234V7.6582L12 12V20.6895L19.5 16.3467V11.5L21.5 10.3291V17.5L12 23L2.5 17.5V6.5L12 1L15.1416 2.81836ZM18.5293 2.31934C18.7059 1.8935 19.2943 1.89349 19.4707 2.31934L19.7236 2.93066C20.1556 3.97346 20.9615 4.80618 21.9746 5.25684L22.6924 5.57617C23.1026 5.75901 23.1026 6.3562 22.6924 6.53906L21.9326 6.87695C20.9449 7.31624 20.1534 8.11944 19.7139 9.12793L19.4668 9.69336C19.2864 10.1075 18.7137 10.1075 18.5332 9.69336L18.2871 9.12793C17.8476 8.11929 17.0552 7.31628 16.0674 6.87695L15.3076 6.53906C14.8974 6.35622 14.8974 5.75899 15.3076 5.57617L16.0254 5.25684C17.0385 4.80618 17.8445 3.97348 18.2764 2.93066L18.5293 2.31934Z'
+    const REMIX_ARROW_LEFT_LINE = 'M7.82843 10.9999H20V12.9999H7.82843L13.1924 18.3638L11.7782 19.778L4 11.9999L11.7782 4.22168L13.1924 5.63589L7.82843 10.9999Z'
     const REMIX_REFRESH_LINE = 'M5.46257 4.43262C7.21556 2.91688 9.5007 2 12 2C17.5228 2 22 6.47715 22 12C22 14.1361 21.3302 16.1158 20.1892 17.7406L17 12H20C20 7.58172 16.4183 4 12 4C9.84982 4 7.89777 4.84827 6.46023 6.22842L5.46257 4.43262ZM18.5374 19.5674C16.7844 21.0831 14.4993 22 12 22C6.47715 22 2 17.5228 2 12C2 9.86386 2.66979 7.88416 3.8108 6.25944L7 12H4C4 16.4183 7.58172 20 12 20C14.1502 20 16.1022 19.1517 17.5398 17.7716L18.5374 19.5674Z'
     const REMIX_FILTER_LINE = 'M21 4V6H20L15 13.5V22H9V13.5L4 6H3V4H21ZM6.4037 6L11 12.8944V20H13V12.8944L17.5963 6H6.4037Z'
     /**
@@ -306,18 +337,6 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The guide card's glyph: a generated 3D package (Remix ai-generate-3d-line).
-     * @param {{ size?: number, className?: string }} props - slot-supplied icon props.
-     * @returns {object} the SVG element.
-     */
-    function GuideIcon(props) {
-      const size = typeof props.size === 'number' ? props.size : 18
-      // Remix art fills its 24-unit box edge to edge, while the native guide
-      // glyphs keep internal padding; scale it down to match their optical size.
-      return RemixGlyph(REMIX_AI_GENERATE_3D_LINE, size, props.className, 0.72)
-    }
-
-    /**
      * The row's glyph: one file outline.
      * @returns {object} the SVG element.
      */
@@ -363,13 +382,16 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The empty state's glyph: an open tray.
+     * The artifacts glyph: an open tray (empty state and the Files-header action).
+     * @param {{ size?: number, className?: string }} [props] - optional edge length.
      * @returns {object} the SVG element.
      */
-    function TrayIcon() {
+    function TrayIcon(props) {
+      const size = typeof props?.size === 'number' ? props.size : 28
       return React.createElement('svg', {
-        width: 28,
-        height: 28,
+        width: size,
+        height: size,
+        className: typeof props?.className === 'string' ? props.className : undefined,
         viewBox: '0 0 24 24',
         fill: 'none',
         stroke: 'currentColor',
@@ -2267,6 +2289,9 @@ window.__ModuleLoader__.load({
      */
     function ArtifactsPanel(props) {
       const { sessionId, t, sidebarRight } = props
+      // Optional: rendered by the Files-pane overlay so the list has a Back
+      // affordance next to its own count/filter/refresh tools.
+      const onBack = typeof props.onBack === 'function' ? props.onBack : null
       const [phase, setPhase] = React.useState('loading')
       const [payload, setPayload] = React.useState(null)
       const [failure, setFailure] = React.useState('')
@@ -2463,8 +2488,20 @@ window.__ModuleLoader__.load({
           filterMenu)
         : null
 
+      const leading = React.createElement('div', { className: 'dsa-header-leading' },
+        onBack === null
+          ? null
+          : React.createElement('button', {
+            type: 'button',
+            className: 'dsa-back',
+            onClick: onBack,
+            title: t('action.back'),
+            'aria-label': t('action.back'),
+            'data-artifacts-back': ''
+          }, RemixGlyph(REMIX_ARROW_LEFT_LINE, 16)),
+        React.createElement('span', { className: 'dsa-count' }, phase === 'ready' ? countText : ''))
       const header = React.createElement('header', { className: 'dsa-header' },
-        React.createElement('span', { className: 'dsa-count' }, phase === 'ready' ? countText : ''),
+        leading,
         React.createElement('div', { className: 'dsa-header-tools' },
           filterTrigger,
           React.createElement('button', {
@@ -2478,7 +2515,7 @@ window.__ModuleLoader__.load({
           }, RemixGlyph(REMIX_REFRESH_LINE, 14))))
 
       if (phase === 'error') {
-        return React.createElement('div', { className: 'dsa-root' },
+        return React.createElement('div', { className: 'dsa-root', 'data-artifacts-phase': phase },
           panelStyle(),
           header,
           React.createElement('div', { className: 'dsa-empty' },
@@ -2578,11 +2615,212 @@ window.__ModuleLoader__.load({
         body = React.createElement('ul', { className: 'dsa-list' }, rows)
       }
 
-      return React.createElement('div', { className: 'dsa-root' },
+      return React.createElement('div', { className: 'dsa-root', 'data-artifacts-phase': phase },
         panelStyle(),
         header,
         body,
         artifacts.length > 0 ? React.createElement('footer', { className: 'dsa-footer' }, t('footer.note')) : null)
+    }
+    //#endregion
+
+    //#region feature: session artifacts — Files-header action
+    /**
+     * Initial Files ↔ Artifacts view state.
+     * @returns {{ phase: string }} the initial state.
+     */
+    function filesArtifactsInitialState() {
+      return { phase: 'files' }
+    }
+
+    /**
+     * Pure phase transition for the Files-header Artifacts toggle.
+     *
+     * Phases: files → opening → open → closing → files. `toggle` flips the
+     * direction (also mid-transition), `opened`/`closed` come from the animation
+     * timer, and any Session change resets to Files.
+     * @param {{ phase: string }} state - current state.
+     * @param {{ type: string }} action - transition.
+     * @returns {{ phase: string }} next state; the same object when unchanged.
+     */
+    function filesArtifactsReduce(state, action) {
+      const phase = state !== null && typeof state === 'object' && FILES_ARTIFACTS_PHASES.includes(state.phase)
+        ? state.phase
+        : 'files'
+      const type = action !== null && typeof action === 'object' ? action.type : ''
+      if (type === 'session') return phase === 'files' ? state : { phase: 'files' }
+      if (type === 'toggle') {
+        if (phase === 'files') return { phase: 'opening' }
+        if (phase === 'opening') return { phase: 'closing' }
+        if (phase === 'closing') return { phase: 'opening' }
+        return { phase: 'closing' }
+      }
+      if (type === 'opened') return phase === 'opening' ? { phase: 'open' } : state
+      if (type === 'closed') return phase === 'closing' ? { phase: 'files' } : state
+      return state
+    }
+
+    /**
+     * Timer length of one transition phase.
+     * @param {string} phase - phase name.
+     * @param {boolean} reducedMotion - whether reduced motion is requested.
+     * @returns {number} milliseconds; 0 swaps instantly.
+     */
+    function filesArtifactsPhaseMs(phase, reducedMotion) {
+      if (reducedMotion === true) return 0
+      if (phase === 'opening') return FILES_ARTIFACTS_ENTER_MS
+      if (phase === 'closing') return FILES_ARTIFACTS_EXIT_MS
+      return 0
+    }
+
+    /**
+     * The Files-header action: a native-style tool button that swaps the Files
+     * pane content for the current Session's artifacts list.
+     *
+     * The list is a React portal into this tab's `[data-files-content]`, so the
+     * Files navigator stays mounted underneath and the pane keeps its geometry.
+     * One marker attribute on `[data-files-page]` fades the navigator behind the
+     * incoming view; enter/exit are CSS transitions (instant under reduced
+     * motion). A second click, Back, or Esc returns to Files; a Session change,
+     * pane close, or plugin unload removes the overlay and all listeners/timers.
+     * @param {object} props - session-scoped slot props plus injected t/sidebarRight.
+     * @returns {object} the tool button and, while open, the overlay portal.
+     */
+    function ArtifactsFilesAction(props) {
+      const { t, sidebarRight } = props
+      const slotSessionId = typeof props.sessionId === 'string' ? props.sessionId : ''
+      const [state, dispatch] = React.useReducer(filesArtifactsReduce, undefined, filesArtifactsInitialState)
+      const phase = state.phase
+      const open = phase === 'opening' || phase === 'open'
+      const showing = phase !== 'files'
+      const buttonRef = React.useRef(null)
+      const viewRef = React.useRef(null)
+      const stageRef = React.useRef({ page: null, content: null })
+      const previousPhaseRef = React.useRef(phase)
+      const [sessionId, setSessionId] = React.useState(slotSessionId)
+      const [, setStageVersion] = React.useState(0)
+
+      // The slot is session-scoped and normally injects `sessionId`; the DOM
+      // owner is only a fallback for a shell that omits the prop.
+      React.useEffect(() => {
+        if (slotSessionId.length > 0) {
+          setSessionId(slotSessionId)
+          return
+        }
+        const button = buttonRef.current
+        const owner = button instanceof HTMLElement ? button.closest('[data-sidebar-right-session]') : null
+        setSessionId(owner instanceof HTMLElement && typeof owner.dataset.sidebarRightSession === 'string'
+          ? owner.dataset.sidebarRightSession
+          : '')
+      }, [slotSessionId])
+
+      // Re-resolve the portal host from this button's own Files page; the page
+      // root can be re-rendered by the shell without unmounting this action.
+      React.useLayoutEffect(() => {
+        const button = buttonRef.current
+        const page = button instanceof HTMLElement ? button.closest('[data-files-page]') : null
+        const content = page instanceof HTMLElement ? page.querySelector('[data-files-content]') : null
+        const nextPage = page instanceof HTMLElement ? page : null
+        const nextContent = content instanceof HTMLElement ? content : null
+        if (stageRef.current.page !== nextPage || stageRef.current.content !== nextContent) {
+          stageRef.current = { page: nextPage, content: nextContent }
+          if (showing) setStageVersion((version) => version + 1)
+        }
+      })
+
+      // Settle opening/closing on a timer; reduced motion settles on the next tick.
+      React.useEffect(() => {
+        if (phase !== 'opening' && phase !== 'closing') return undefined
+        const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        const timer = window.setTimeout(() => {
+          dispatch({ type: phase === 'opening' ? 'opened' : 'closed' })
+        }, filesArtifactsPhaseMs(phase, reduced))
+        return () => window.clearTimeout(timer)
+      }, [phase])
+
+      // Fade the Files navigator behind the incoming view with one marker attribute.
+      React.useEffect(() => {
+        const page = stageRef.current.page
+        if (!(page instanceof HTMLElement)) return undefined
+        if (open) page.setAttribute('data-psfa-active', 'true')
+        else page.removeAttribute('data-psfa-active')
+        return () => { page.removeAttribute('data-psfa-active') }
+      }, [phase, open])
+
+      // A different Session invalidates the overlay and its list request.
+      React.useEffect(() => {
+        dispatch({ type: 'session' })
+      }, [sessionId])
+
+      // Esc returns to Files, but only when the artifacts filter menu is not the
+      // current Esc target (its own handler closes the menu first).
+      React.useEffect(() => {
+        if (!showing) return undefined
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape' || event.defaultPrevented) return
+          if (document.querySelector('.dsa-filter-menu') !== null) return
+          event.preventDefault()
+          event.stopPropagation()
+          dispatch({ type: 'toggle' })
+        }
+        document.addEventListener('keydown', onKeyDown)
+        return () => document.removeEventListener('keydown', onKeyDown)
+      }, [showing])
+
+      // Move focus into the opened view (Back leads) and back to the header button.
+      React.useEffect(() => {
+        const previous = previousPhaseRef.current
+        previousPhaseRef.current = phase
+        if (phase === 'opening') {
+          const timer = window.setTimeout(() => {
+            const back = viewRef.current?.querySelector('[data-artifacts-back]')
+            if (back instanceof HTMLElement) back.focus()
+            else if (viewRef.current instanceof HTMLElement) viewRef.current.focus()
+          }, 0)
+          return () => window.clearTimeout(timer)
+        }
+        if (phase === 'files' && previous !== 'files') {
+          const button = buttonRef.current
+          if (button instanceof HTMLElement) button.focus()
+        }
+        return undefined
+      }, [phase])
+
+      const button = React.createElement('button', {
+        ref: buttonRef,
+        type: 'button',
+        className: 'psfa-tool',
+        'data-files-artifacts-button': '',
+        'aria-label': t('panel.title'),
+        title: t('panel.title'),
+        'aria-pressed': open ? 'true' : 'false',
+        'aria-expanded': open ? 'true' : 'false',
+        'aria-controls': 'psfa-artifacts-view',
+        onClick: () => dispatch({ type: 'toggle' })
+      }, TrayIcon({ size: 15 }))
+
+      const view = showing && stageRef.current.content !== null
+        ? ReactDOM.createPortal(React.createElement('div', {
+          ref: viewRef,
+          id: 'psfa-artifacts-view',
+          className: 'psfa-view',
+          'data-psfa-view': 'artifacts',
+          'data-psfa-state': phase,
+          'data-psfa-overlay': '',
+          role: 'region',
+          'aria-label': t('panel.title'),
+          tabIndex: -1
+        }, React.createElement(ArtifactsPanel, {
+          sessionId,
+          t,
+          sidebarRight,
+          onBack: () => dispatch({ type: 'toggle' })
+        })), stageRef.current.content)
+        : null
+
+      return React.createElement(React.Fragment, null,
+        React.createElement('style', null, FILES_ARTIFACTS_CSS),
+        button,
+        view)
     }
     //#endregion
 
@@ -20707,26 +20945,6 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 
     //#region plugin
     /**
-     * The page type and its Start-guide card.
-     * @param {Function} t - namespace-bound translate.
-     * @returns {object} the registry definition.
-     */
-    function artifactsDefinition(t) {
-      return {
-        id: ID,
-        kind: KIND,
-        title: () => t('tab.title'),
-        guide: [{
-          id: 'open',
-          order: 62,
-          title: () => t('guide.title'),
-          description: () => t('guide.description'),
-          icon: GuideIcon
-        }]
-      }
-    }
-
-    /**
      * Register dictionaries, the page type, and its Session-scoped body.
      * @param {object} ctx - client root context.
      * @returns {void}
@@ -20753,13 +20971,15 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         }
       }
       ctx.effect(() => ctx.locale.register(NS, { en: EN, zh: ZH }), 'power-suite: session-artifacts dictionaries')
-      ctx.effect(() => ctx.sidebarRightTabs.register(artifactsDefinition(t)), 'power-suite: session-artifacts page type')
-      ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
-        name: 'sidebar.right.pane.tab',
-        key: ID,
+      // The Files page header is the single artifacts entry point; the standalone
+      // artifacts page type, its tab body and its Start-guide card are gone.
+      ctx.effect(() => ctx.slots.inject('sidebar.right.tab.files.actions', () => ctx.slots.register({
+        name: 'sidebar.right.tab.files.actions',
+        id: FILES_ACTION_ID,
+        order: 40,
         locale: NS,
-        inject: (sessionId) => ({ sessionId, t, sidebarRight: ctx.sidebarRight })
-      }, ArtifactsPanel)), 'power-suite: session-artifacts tab body')
+        inject: () => ({ t, sidebarRight: ctx.sidebarRight })
+      }, ArtifactsFilesAction)), 'power-suite: session-artifacts Files action')
       installWorkspacePresetMenu(ctx)
       installWorkspacePresetRouting(ctx)
       installPromptHistory(ctx)
@@ -20894,6 +21114,15 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationChipCandidates,
         serializeAnnotationChip
       }
+      // The Files-header Artifacts toggle's pure model (phase reducer + timers).
+      globalThis.__POWER_SUITE_TEST_HOOKS__.filesArtifacts = {
+        FILES_ARTIFACTS_PHASES,
+        FILES_ARTIFACTS_ENTER_MS,
+        FILES_ARTIFACTS_EXIT_MS,
+        filesArtifactsInitialState,
+        filesArtifactsReduce,
+        filesArtifactsPhaseMs
+      }
       // The dynamic-Workspaces hover card's native figures. Kept in its own
       // namespace so the annotation seam above stays byte-for-byte stable.
       globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesStats = {
@@ -20914,7 +21143,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     //#endregion
 
     return {
-      inject: ['slots', 'locale', 'sidebarRight', 'sidebarRightTabs', 'contextMenus', 'remote', 'remote.agentPresets', 'uiWorkspace', 'sessions'],
+      inject: ['slots', 'locale', 'sidebarRight', 'contextMenus', 'remote', 'remote.agentPresets', 'uiWorkspace', 'sessions'],
       apply
     }
   }
