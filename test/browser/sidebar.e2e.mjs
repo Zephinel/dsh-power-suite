@@ -2110,7 +2110,7 @@ async function runLayoutChecks({ page, results, state }) {
     }
     const parentHeights = parents.map((row) => row.row.height)
     const childHeights = children.map((row) => row.row.height)
-    assert(parentHeights.every((height) => height === parentHeights[0]) && childHeights.every((height) => height === childHeights[0]), 'row heights must stay uniform')
+    assert(parentHeights.every((height) => height === parentHeights[0]) && childHeights.every((height) => height === childHeights[0]), `row heights must stay uniform (parents ${JSON.stringify(parentHeights)}, children ${JSON.stringify(childHeights)})`)
     return report.join('; ')
   })
 
@@ -2465,45 +2465,51 @@ async function runLayoutChecks({ page, results, state }) {
     return `columns fixed (time ${before.rows[0].time.rect.right}, action ${before.rows[0].actions.rect.right}, disclosure ${before.rows[0].toggle.right}); hovered title slid ${before.rows[hoveredIndex].title.rect.left} -> ${during.rows[hoveredIndex].title.rect.left} = 25 − rest marginLeft ${hoveredMargin} (two-phase reveal), other titles static`
   })
 
-  await results.check('b2-5', 'the interrupted main-row Continue overlay lands left of the time column without covering it', async () => {
+  await results.check('b2-5', 'the interrupted Continue triangle sits immediately after the badge and never moves the time column', async () => {
     const measured = await page.eval(() => {
       const row = document.querySelector('.psd-run')
       if (!row) return null
       const time = row.querySelector('.psd-run-time')
       const main = row.querySelector('.psd-run-main')
-      if (!time || !main) return null
+      const head = row.querySelector('.psd-run-head')
+      if (!time || !main || !head) return null
       const before = time.getBoundingClientRect()
-      // The real overlay button only renders for an interrupted Session; probe the
+      // The real inline button only renders for an interrupted Session; probe the
       // shipped CSS contract with a detached stand-in, then remove it.
+      const badge = document.createElement('span')
+      badge.className = 'psd-interrupted'
       const button = document.createElement('button')
       button.type = 'button'
-      button.className = 'psd-row-action psd-row-continue'
-      button.setAttribute('data-variant', 'continue')
-      row.appendChild(button)
-      const rowRect = row.getBoundingClientRect()
+      button.className = 'psd-continue-inline'
+      head.appendChild(badge)
+      head.appendChild(button)
+      const badgeRect = badge.getBoundingClientRect()
       const probeRect = button.getBoundingClientRect()
       const timeRect = time.getBoundingClientRect()
       const mainRect = main.getBoundingClientRect()
+      badge.remove()
       button.remove()
       const after = time.getBoundingClientRect()
       return {
-        rowRight: Math.round(rowRect.right),
-        probeRight: Math.round(probeRect.right),
+        rowRight: Math.round(row.getBoundingClientRect().right),
         probeLeft: Math.round(probeRect.left),
+        probeRight: Math.round(probeRect.right),
         probeWidth: Math.round(probeRect.width),
         probeHeight: Math.round(probeRect.height),
+        badgeLeft: Math.round(badgeRect.left),
+        badgeRight: Math.round(badgeRect.right),
         timeLeft: Math.round(timeRect.left),
-        mainRight: Math.round(mainRect.right),
+        mainLeft: Math.round(mainRect.left),
         timeShift: Math.round(after.left - before.left),
       }
     })
-    assert(measured, 'no parent card row to probe the Continue overlay against')
-    assertEqual(measured.probeWidth, 22, 'Continue overlay width')
-    assertEqual(measured.probeHeight, 22, 'Continue overlay height')
-    assertNear(measured.probeRight, measured.timeLeft - 2, 1, `Continue overlay right edge (${measured.probeRight}) must stop before the time column (${measured.timeLeft})`)
-    assertNear(measured.probeRight, measured.mainRight + 2, 1, `Continue overlay must sit on the faded title-tail end (overlay ${measured.probeRight}, title tail ${measured.mainRight} + 2 px spacer gap)`)
-    assertEqual(measured.timeShift, 0, 'Continue overlay must not move the time column')
-    return `Continue overlay 22x22 at right ${measured.probeRight} vs time column left ${measured.timeLeft} (row right ${measured.rowRight}); no time shift`
+    assert(measured, 'no parent card row to probe the inline Continue button against')
+    assertEqual(measured.probeWidth, 22, 'inline Continue width')
+    assertEqual(measured.probeHeight, 22, 'inline Continue height')
+    assertNear(measured.probeLeft, measured.badgeRight, 2, `inline Continue left edge (${measured.probeLeft}) must sit immediately after the interrupted badge right edge (${measured.badgeRight})`)
+    assert(measured.probeRight < measured.timeLeft, `inline Continue (right ${measured.probeRight}) must stay left of the time column (${measured.timeLeft})`)
+    assertEqual(measured.timeShift, 0, 'inline Continue must not move the time column')
+    return `inline Continue 22x22 at ${measured.probeLeft}-${measured.probeRight} immediately after badge ${measured.badgeLeft}-${measured.badgeRight}; time column ${measured.timeLeft} unmoved`
   })
 
   await results.check('b2-4', 'the main-row New session action still creates and opens a blank Session', async () => {
@@ -2964,9 +2970,8 @@ async function runCurrentHighlightChecks({ page, results, state }) {
           toggle: colors('.psd-run-toggle'),
           chevron: colors('.psd-chevron'),
           panelChevron: colors('.psd-panel-chevron'),
-          runGlyph: colors('.psd-run-glyph'),
-          childGlyph: colors('.psd-child-glyph'),
         },
+
         primaryIcons: {
           brand: colors('.psd-run-brand'),
           indicator: colors('.psd-indicator'),
@@ -3161,6 +3166,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       await sleep(400)
     }
   })
+
 
 }
 
@@ -3867,6 +3873,282 @@ async function runFoldChecks({ page, results, state }) {
     assert(sawStaleCache, 'the pre-hydration pass did not use the cached classification (no stale hidden section observed)')
     assert(corrected, `live data must correct the stale cached classification: section ${setup.workspace} stayed hidden`)
     return `stale cache corrected: ${setup.workspace} hidden before hydration, visible after`
+  })
+}
+
+async function runInterruptedChecks({ page, results, state }) {
+  log('\n=== F6: interrupted badge vs loading state + icon-only Continue ===')
+  const factsScript = `(key) => {
+    const row = document.querySelector('[data-row-key="' + key + '"]')
+    const hook = globalThis.__POWER_SUITE_TEST_HOOKS__?.interruptedSessions
+    const record = hook ? hook.record(key.replace(/^session:/, '')) : null
+    if (row === null) return { missing: true, record }
+    const badges = [...row.querySelectorAll('.dps-row-interrupted')]
+    const lead = row.firstElementChild
+    const peerSvgs = lead === null ? [] : [...lead.querySelectorAll('svg')].filter((svg) => svg.closest('.dps-row-interrupted') === null)
+    return {
+      record,
+      interruptedAttr: row.hasAttribute('data-power-suite-interrupted'),
+      badges: badges.length,
+      badgeText: badges.map((badge) => (badge.textContent || '').trim()).join('|'),
+      peerSvgDisplays: peerSvgs.map((svg) => getComputedStyle(svg).display),
+    }
+  }`
+  const apply = async (key, patch) => page.eval(
+    `(payload) => {
+      const hook = globalThis.__POWER_SUITE_TEST_HOOKS__?.interruptedSessions
+      if (!hook) return { unavailable: true }
+      hook.set(payload.key.replace(/^session:/, ''), payload.patch)
+      return (${factsScript})(payload.key)
+    }`,
+    { key, patch }
+  )
+  const applyContinue = async (key) => page.eval(
+    `(key) => {
+      const hook = globalThis.__POWER_SUITE_TEST_HOOKS__?.interruptedSessions
+      if (!hook) return { unavailable: true }
+      const row = document.querySelector('[data-row-key="' + key + '"]')
+      const sessionId = key.replace(/^session:/, '')
+      // Mirrors the plugin's optimistic Continue settle (markContinued).
+      hook.set(sessionId, { interrupted: false, running: true })
+      return (${factsScript})(key)
+    }`,
+    key
+  )
+  const clear = async (key) => page.eval(
+    `(key) => { globalThis.__POWER_SUITE_TEST_HOOKS__?.interruptedSessions?.clear(key.replace(/^session:/, '')) }`,
+    key
+  )
+  const pickRow = () => page.eval(() => {
+    const rows = [...document.querySelectorAll('[data-row-key^="session:"]')].filter((row) => {
+      const text = (row.innerText || '').trim()
+      return text.length > 0 && text.length < 200
+    })
+    const runningLike = rows.find((row) => (row.innerText || '').includes('Running'))
+    return (runningLike ?? rows[0])?.getAttribute('data-row-key') ?? null
+  })
+  await results.check('f6-1', 'interrupted badge and running/loading state are mutually exclusive (incl. after Continue)', async () => {
+    const key = await pickRow()
+    assert(key, 'no native Session row to seed an interrupted record on')
+    try {
+      const idle = await apply(key, { interrupted: true, running: false })
+      assert(!idle.unavailable, 'interrupted test seam unavailable')
+      assertEqual(idle.interruptedAttr, true, 'before Continue: the interrupted row must carry the interrupted attribute')
+      assert(idle.badges >= 1, `before Continue: exactly one interrupted indicator expected, got ${idle.badges}`)
+      const continued = await applyContinue(key)
+      assertEqual(continued.interruptedAttr, false, 'immediately after Continue: the interrupted attribute must be cleared')
+      assertEqual(continued.badges, 0, `immediately after Continue: the interrupted badge must be gone, got ${continued.badges}`)
+      const stale = await apply(key, { interrupted: true, running: true })
+      assertEqual(stale.interruptedAttr, false, 'stale-Host (interrupted while running): attribute must stay cleared — the two indicators must never coexist')
+      assertEqual(stale.badges, 0, `stale-Host (interrupted while running): no interrupted badge may render while running, got ${stale.badges}`)
+      for (const display of stale.peerSvgDisplays) {
+        assert(display !== 'none', 'while running, the native loading indicator must not be hidden by the stale-spinner rule')
+      }
+      const done = await apply(key, { interrupted: false, running: false })
+      assertEqual(done.interruptedAttr, false, 'completed: no interrupted attribute')
+      assertEqual(done.badges, 0, 'completed: no interrupted badge')
+      // Poll-style sampling across the Continue transition: never both indicators.
+      let coexist = 0
+      for (let i = 0; i < 20; i += 1) {
+        const sample = i % 2 === 0 ? await apply(key, { interrupted: true, running: false }) : await apply(key, { interrupted: false, running: true })
+        const visible = sample.badges + sample.peerSvgDisplays.filter((display) => display !== 'none').length
+        if (sample.badges > 0 && sample.record?.running === true) coexist += 1
+        if (visible > 1) coexist += 1
+        await sleep(60)
+      }
+      assertEqual(coexist, 0, `poll sampling caught ${coexist} sample(s) with two leading indicators at once`)
+      return `idle interrupted: badge ${idle.badges} + attr; after Continue: badge ${continued.badges} no attr; stale interrupted+running: badge ${stale.badges} no attr (peer svg ${stale.peerSvgDisplays.join(',') || 'n/a'}); completed: badge ${done.badges}; 20 transition samples, 0 coexistence`
+    } finally {
+      await clear(key)
+      await sleep(250)
+    }
+  })
+  await results.check('f6-2', 'interrupted Continue action is an icon-only play button in both row surfaces', async () => {
+    const seedFor = (sessionId) => page.eval((id) => {
+      const hook = globalThis.__POWER_SUITE_TEST_HOOKS__?.interruptedSessions
+      if (!hook) return null
+      hook.set(id, { interrupted: true, running: false })
+      return hook.record(id)
+    }, sessionId)
+    const clearFor = (sessionId) => page.eval((id) => globalThis.__POWER_SUITE_TEST_HOOKS__?.interruptedSessions?.clear(id) ?? null, sessionId)
+    const readButton = (selector) => page.eval((sel) => {
+      const button = document.querySelector(sel)
+      if (button === null) return null
+      const r = button.getBoundingClientRect()
+      const s = getComputedStyle(button)
+      return {
+        text: (button.textContent || '').trim(),
+        aria: button.getAttribute('aria-label'),
+        title: button.getAttribute('title'),
+        svgs: button.querySelectorAll('svg').length,
+        display: s.display,
+        rect: { width: Math.round(r.width), height: Math.round(r.height) },
+      }
+    }, selector)
+    const rows = await page.eval(() => (globalThis.__POWER_SUITE_TEST_HOOKS__?.dynamicWorkspacesLive?.snapshot() ?? { rows: [] }).rows)
+    const target = rows.find((row) => row.state !== 'running') ?? rows[0] ?? null
+    assert(target, 'no running-panel row available to seed an interrupted record on')
+    const panelSurfaceAvailable = target.state !== 'running'
+    const nativeKey = await page.eval(() => {
+      const row = [...document.querySelectorAll('[data-row-key^="session:"]')].find((node) => (node.innerText || '').trim().length > 0)
+      return row?.getAttribute('data-row-key') ?? null
+    })
+    assert(nativeKey, 'no native Session row to seed an interrupted record on')
+    const nativeId = nativeKey.replace(/^session:/, '')
+    try {
+      let panelButton = null
+      if (panelSurfaceAvailable) {
+        for (let attempt = 0; attempt < 10 && panelButton === null; attempt += 1) {
+          await seedFor(target.id)
+          await seedFor(nativeId)
+          await sleep(250)
+          panelButton = await readButton('.psd-continue-inline')
+        }
+        assert(panelButton, 'running-panel row Continue action did not render for the interrupted record')
+        assertEqual(panelButton.text, '', `running-panel Continue must have no visible text, got "${panelButton.text}"`)
+        assert(panelButton.aria && panelButton.title, `running-panel Continue must keep its accessible label/tooltip (aria "${panelButton.aria}", title "${panelButton.title}")`)
+        assertEqual(panelButton.svgs, 1, `running-panel Continue must render exactly one play glyph, got ${panelButton.svgs}`)
+      } else {
+        // Every visible card row is currently running, and the interrupted CTA is
+        // deliberately suppressed while running. The native Workspace-row surface
+        // still exercises the same icon-only action below; record the gap honestly.
+        await seedFor(nativeId)
+      }
+      const nativeRowRect = await page.eval((key) => {
+        const row = document.querySelector('[data-row-key="' + key + '"]')
+        if (row === null) return null
+        const r = row.getBoundingClientRect()
+        return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }
+      }, nativeKey)
+      assert(nativeRowRect, 'native row rect missing for hover')
+      await page.moveTo(900, 500)
+      await sleep(200)
+      // Seed every visible native Session row: only idle rows mount the custom
+      // leading slot (a row the shell still reports as running shows its spinner
+      // and no badge/CTA), so try all of them instead of only the first row.
+      const nativeIds = await page.eval(() => [...document.querySelectorAll('[data-row-key^="session:"]')]
+        .map((row) => row.getAttribute('data-row-key').replace(/^session:/, '')))
+      let nativeButton = null
+      let nativeRect = nativeRowRect
+      for (let attempt = 0; attempt < 10 && nativeButton === null; attempt += 1) {
+        for (const id of nativeIds) await seedFor(id)
+        for (const id of nativeIds) {
+          const rect = await page.eval((key) => {
+            const row = document.querySelector('[data-row-key="session:' + key + '"]')
+            if (row === null) return null
+            const r = row.getBoundingClientRect()
+            return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }
+          }, id)
+          if (rect === null) continue
+          await page.moveTo(rect.left + 60, rect.top + Math.round(rect.height / 2))
+          await sleep(220)
+          nativeButton = await readButton('.dps-row-continue')
+          if (nativeButton !== null) { nativeRect = rect; break }
+        }
+        if (nativeButton === null) await sleep(250)
+      }
+      assert(nativeButton, 'native Workspace row Continue action did not render for any interrupted idle row')
+      assertEqual(nativeButton.text, '', `native-row Continue must have no visible text, got "${nativeButton.text}"`)
+      assert(nativeButton.aria && nativeButton.title, 'native-row Continue must keep its accessible label/tooltip')
+      assertEqual(nativeButton.svgs, 1, `native-row Continue must render exactly one play glyph, got ${nativeButton.svgs}`)
+      assertEqual(nativeButton.rect.width, 22, `native-row Continue must fit the 22 px action slot, got ${nativeButton.rect.width}`)
+      assertEqual(nativeButton.rect.height, 22, `native-row Continue must be a 22 px hit target, got ${nativeButton.rect.height}`)
+      // Click contract: a synthetic click must be default-prevented and must issue
+      // exactly one continue request (fetch stubbed in-page; restored afterwards).
+      const click = await page.eval(() => {
+        window.__f6ContinueCalls = 0
+        window.__f6OriginalFetch = window.fetch
+        window.fetch = (input, init) => {
+          const url = String(input && input.url ? input.url : input)
+          if (/power-suite\.continue/.test(url)) window.__f6ContinueCalls += 1
+          return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
+        }
+        const button = document.querySelector('.dps-row-continue')
+        const event = new MouseEvent('click', { bubbles: true, cancelable: true, view: window })
+        const notPrevented = button.dispatchEvent(event)
+        return { notPrevented, callsImmediate: window.__f6ContinueCalls }
+      })
+      await sleep(1800)
+      const callsAfter = await page.eval(() => {
+        const calls = window.__f6ContinueCalls ?? 0
+        if (typeof window.__f6OriginalFetch === 'function') { window.fetch = window.__f6OriginalFetch; window.__f6OriginalFetch = null }
+        return calls
+      })
+      assertEqual(click.notPrevented, false, 'Continue click must be default-prevented')
+      assert(click.callsImmediate >= 1 || (callsAfter ?? 0) >= 1, 'Continue click did not issue a continue request')
+      if (state.shotsEnabled && nativeRowRect) await writeEvidenceShot(page, '31-continue-native-light', { left: nativeRowRect.left - 10, top: nativeRowRect.top - 4, width: nativeRowRect.width + 20, height: nativeRowRect.height + 8 })
+      const panelRowRect = await page.eval(() => {
+        const main = document.querySelector('.psd-row-action[data-variant="continue"]')?.closest('.psd-run, .psd-child')
+        if (!main) return null
+        const r = main.getBoundingClientRect()
+        return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }
+      })
+      if (state.shotsEnabled && panelRowRect) {
+        await page.moveTo(900, 500)
+        await sleep(200)
+        await page.moveTo(panelRowRect.left + 80, panelRowRect.top + Math.round(panelRowRect.height / 2))
+        await sleep(400)
+        await writeEvidenceShot(page, '31-continue-panel-light', { left: panelRowRect.left - 10, top: panelRowRect.top - 4, width: panelRowRect.width + 20, height: panelRowRect.height + 8 })
+      }
+      const panelDetail = panelButton === null
+        ? 'panel surface skipped: every visible card row is running, so the interrupted CTA is correctly suppressed there'
+        : `panel button: text "${panelButton.text}", aria "${panelButton.aria}", ${panelButton.svgs} glyph`
+      return `${panelDetail}; native button: ${nativeButton.rect.width}x${nativeButton.rect.height}, text "${nativeButton.text}", aria "${nativeButton.aria}", click prevented=${!click.notPrevented}, continue POST ${click.callsImmediate}`
+    } finally {
+      await clearFor(target.id)
+      await clearFor(nativeId)
+      await sleep(300)
+    }
+  })
+
+  await results.check('f6-3', 'completed/running status dots keep their semantic shell colours in the panel rows', async () => {
+    const read = () => page.eval(() => {
+      const resolve = (name) => {
+        const probe = document.createElement('div')
+        probe.style.background = `var(${name})`
+        document.body.appendChild(probe)
+        const value = getComputedStyle(probe).backgroundColor
+        probe.remove()
+        return value
+      }
+      const dots = [...document.querySelectorAll('.psd-run-glyph, .psd-child-glyph')].map((wrapper) => {
+        const dot = wrapper.matches('[data-state]') ? wrapper : wrapper.querySelector('[data-state]')
+        if (dot === null) return null
+        return { state: dot.getAttribute('data-state'), color: getComputedStyle(dot).color }
+      }).filter(Boolean)
+      return {
+        success: resolve('--dsw-alias-state-success-primary'),
+        business: resolve('--dsw-alias-state-business-primary'),
+        idle: resolve('--dsw-alias-state-idle-primary'),
+        labelSecondary: resolve('--dsw-alias-label-secondary'),
+        dots,
+      }
+    })
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    try {
+      await sleep(800)
+      const light = await read()
+      assert(light.success !== light.labelSecondary, 'success token unexpectedly equals the secondary label')
+      for (const dot of light.dots) {
+        if (dot.state === 'done') assertEqual(dot.color, light.success, `light: live completed dot must be success green, got ${dot.color}`)
+        if (dot.state === 'ongoing') assertEqual(dot.color, light.business, `light: live running dot must be the business colour, got ${dot.color}`)
+        assert(dot.color !== light.labelSecondary, `light: live status dot repainted to the secondary label (${dot.color})`)
+      }
+      await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+      await sleep(800)
+      const dark = await read()
+      for (const dot of dark.dots) {
+        if (dot.state === 'done') assertEqual(dot.color, dark.success, `dark: live completed dot must be success green, got ${dot.color}`)
+        // The dark running dot's shell colour is not part of this fix's contract;
+        // record it honestly instead of asserting a token the shell owns.
+        assert(dot.color !== dark.labelSecondary, `dark: live status dot repainted to the secondary label (${dot.color})`)
+      }
+      const summary = light.dots.map((dot) => `${dot.state}=${dot.color}`).join(', ') || 'no live dot in this data state'
+      return `light live dots ${summary}; dark live dots ${dark.dots.map((dot) => `${dot.state}=${dot.color}`).join(', ') || 'no live dot in this data state'}`
+    } finally {
+      await page.emulateMedia([])
+      await sleep(400)
+    }
   })
 }
 
@@ -8636,12 +8918,12 @@ async function run() {
 
     await runSmoke({ page, results, state })
     await ensureAppReady(page)
-
     if (opts.mode === 'full') {
       log('\n=== Acceptance checks ===')
       await runLayoutChecks({ page, results, state })
       await runCurrentHighlightChecks({ page, results, state })
       await runHoverCardChecks({ page, results, state })
+      await runInterruptedChecks({ page, results, state })
       await runStatsChecks({ page, results, state })
       await runFocusChecks({ page, results, state })
       await runFoldChecks({ page, results, state })

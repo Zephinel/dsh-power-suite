@@ -3596,7 +3596,6 @@ window.__ModuleLoader__.load({
       'badge.aria': 'Task did not finish',
       'badge.title': 'The last task did not finish. Hover this session to continue it.',
       'badge.title.subagent': 'A delegated subagent task did not finish. Hover this session to continue it.',
-      'continue.label': 'Continue',
       'continue.aria': 'Continue the unfinished task',
       'continue.prompt': 'Continue the unfinished task.',
       'continue.summary': 'Continue unfinished task',
@@ -3606,7 +3605,6 @@ window.__ModuleLoader__.load({
       'badge.aria': '任务未完成',
       'badge.title': '上一个任务未完成，悬停此会话可继续。',
       'badge.title.subagent': '委派的子任务未完成，悬停此会话可继续。',
-      'continue.label': '继续',
       'continue.aria': '继续未完成的任务',
       'continue.prompt': '继续完成上一个任务。',
       'continue.summary': '继续未完成的任务',
@@ -3795,6 +3793,21 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Whether a record should render the interrupted indicator.
+     *
+     * Interrupted and running/loading are mutually exclusive in the same leading
+     * seat: after Continue the Host can still report the previous turn as
+     * interrupted while the continuation turn is running, which used to show the
+     * warning badge next to the loading spinner. The badge is therefore only
+     * valid for an idle interrupted Session (running !== true).
+     * @param {object | null} record - one interrupted record.
+     * @returns {boolean} true when the warning badge/CTA should be visible.
+     */
+    function interruptedIndicatorActive(record) {
+      return record !== null && record !== undefined && record.status === 'ready' && record.interrupted === true && record.running !== true
+    }
+
+    /**
      * Locally settle a record after an action the Host has not observed yet.
      * @param {string} sessionId - Session identity.
      * @param {boolean} interrupted - next interruption flag.
@@ -3803,6 +3816,18 @@ window.__ModuleLoader__.load({
     function markInterrupted(sessionId, interrupted) {
       const existing = interruptedRecord(sessionId) ?? {}
       setInterruptedRecord(sessionId, { ...existing, status: 'ready', interrupted })
+    }
+
+    /**
+     * Optimistically settle the record right after a Continue request succeeds:
+     * the interruption is being resumed, so the badge/CTA disappears and the row
+     * is running until the Host's next answer reconciles the record.
+     * @param {string} sessionId - Session identity.
+     * @returns {void}
+     */
+    function markContinued(sessionId) {
+      const existing = interruptedRecord(sessionId) ?? {}
+      setInterruptedRecord(sessionId, { ...existing, status: 'ready', interrupted: false, running: true })
     }
 
     /**
@@ -3952,11 +3977,17 @@ html[data-input-modality="keyboard"] [data-row-key^="session:"][data-power-suite
 [data-row-key^="session:"][data-power-suite-interrupted]:hover>span:last-child,
 html[data-input-modality="keyboard"] [data-row-key^="session:"][data-power-suite-interrupted]:focus-within>span:first-child,
 html[data-input-modality="keyboard"] [data-row-key^="session:"][data-power-suite-interrupted]:focus-within>span:last-child{position:relative;z-index:2}
-.dps-row-interrupted{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;color:var(--dsw-alias-state-warn-primary);pointer-events:none}
-.dps-row-continue{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px 0 5px;border:0;border-radius:var(--dsw-radius-sm,4px);background:color-mix(in srgb,var(--dsw-alias-label-primary) 8%,transparent);color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:1;cursor:pointer;flex:none}
-.dps-row-continue:hover{background:color-mix(in srgb,var(--dsw-alias-label-primary) 14%,transparent);color:var(--dsw-alias-label-primary)}
-.dps-row-continue:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
-[data-row-key^="session:"][data-power-suite-interrupted] > span:first-child > svg{display:none!important}
+.dps-row-interrupted{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;color:var(--dsw-alias-state-warn-primary);pointer-events:none;flex:none}
+.dps-row-continue{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;flex:none;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
+[data-row-key^="session:"][data-power-suite-interrupted]:hover .dps-row-continue,
+[data-row-key^="session:"][data-power-suite-interrupted]:focus-within .dps-row-continue{opacity:1;pointer-events:auto}
+.dps-row-continue svg{display:block;flex:none}
+.dps-row-continue:hover{background:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);color:var(--dsw-alias-label-primary)}
+.dps-row-continue:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+[data-row-key^="session:"][data-power-suite-interrupted] > span:first-child > svg,
+[data-row-key^="session:"][data-power-suite-interrupted] > span:first-child > [class*="_dot_"]{display:none!important}
+body:not([data-ds-dark-theme]) [data-psd-current-workspace='true'] .dps-row-interrupted,
+body:not([data-ds-dark-theme]) [data-psd-current-session='true'] .dps-row-interrupted{color:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 72%,var(--dsw-alias-label-primary))}
 html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] button[class$="_primary"]>svg{display:none!important}
 html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] button[class$="_primary"]::before{content:"";display:block;width:16px;height:16px;background-color:currentColor;-webkit-mask:${PLAY_MASK} center/contain no-repeat;mask:${PLAY_MASK} center/contain no-repeat}
 `
@@ -4014,7 +4045,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       for (const [sessionId, record] of interruptedStore.records) {
         const row = document.querySelector(`[data-row-key="session:${escapeSelectorValue(sessionId)}"]`)
         if (row === null) continue
-        const interrupted = record.status === 'ready' && record.interrupted === true
+        const interrupted = interruptedIndicatorActive(record)
         if (interrupted !== true) {
           row.removeAttribute('data-power-suite-interrupted')
           for (const badge of row.querySelectorAll('.dps-row-interrupted[data-dynamic-badge="true"]')) badge.remove()
@@ -4048,7 +4079,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         if (key === null) continue
         const sessionId = key.slice('session:'.length)
         const record = interruptedStore.records.get(sessionId)
-        if (record !== undefined && record.status === 'ready' && record.interrupted === true) continue
+        if (interruptedIndicatorActive(record)) continue
         row.removeAttribute('data-power-suite-interrupted')
         for (const badge of row.querySelectorAll('.dps-row-interrupted[data-dynamic-badge="true"]')) badge.remove()
       }
@@ -4064,7 +4095,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     function InterruptedBadge(props) {
       const { sessionId, t } = props
       const record = useInterruptedRecord(sessionId)
-      const interrupted = record !== null && record.status === 'ready' && record.interrupted === true
+      const interrupted = interruptedIndicatorActive(record)
       React.useEffect(() => {
         const row = document.querySelector(`[data-row-key="session:${escapeSelectorValue(sessionId)}"]`)
         if (row === null) return undefined
@@ -4076,12 +4107,24 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         return () => row.removeAttribute('data-power-suite-interrupted')
       }, [sessionId, interrupted])
       if (!interrupted) return null
-      return React.createElement('span', {
-        className: 'dps-row-interrupted',
-        role: 'img',
-        'aria-label': t('badge.aria'),
-        title: record.subagent === true ? t('badge.title.subagent') : t('badge.title')
-      }, React.createElement(RemixIcon, { path: REMIX_WARNING_FILL, size: 14 }))
+      return React.createElement(React.Fragment, null,
+        React.createElement('span', {
+          className: 'dps-row-interrupted',
+          role: 'img',
+          'aria-label': t('badge.aria'),
+          title: record.subagent === true ? t('badge.title.subagent') : t('badge.title')
+        }, React.createElement(RemixIcon, { path: REMIX_WARNING_FILL, size: 14 })),
+        React.createElement('button', {
+          type: 'button',
+          className: 'dps-row-continue',
+          title: t('continue.aria'),
+          'aria-label': t('continue.aria'),
+          onClick: (event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            requestContinue(sessionId)
+          }
+        }, React.createElement(RemixIcon, { path: REMIX_PLAY_FILL, size: 14 })))
     }
 
     /**
@@ -4094,8 +4137,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     function InterruptedContinueAction(props) {
       const { sessionId, t } = props
       const record = useInterruptedRecord(sessionId, false)
-      const interrupted = record !== null && record.status === 'ready' && record.interrupted === true
+      const interrupted = interruptedIndicatorActive(record)
       if (!interrupted) return null
+      // Icon-only play triangle (user request): no visible text; the accessible
+      // name/tooltip keep the label. Same click contract: continue in place,
+      // never open/navigate the row.
       return React.createElement('button', {
         type: 'button',
         className: 'dps-row-continue',
@@ -4106,7 +4152,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           event.stopPropagation()
           requestContinue(sessionId)
         }
-      }, React.createElement(RemixIcon, { path: REMIX_PLAY_FILL, size: 11 }), React.createElement('span', null, t('continue.label')))
+      }, React.createElement(RemixIcon, { path: REMIX_PLAY_FILL, size: 14 }))
     }
 
     /**
@@ -4122,7 +4168,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       const draft = useInput((state) => state.draft)
       const phase = useInput((state) => state.phase)
       const record = useInterruptedRecord(sessionId, true)
-      const interrupted = record !== null && record.status === 'ready' && record.interrupted === true
+      const interrupted = interruptedIndicatorActive(record)
       const latest = React.useRef({})
       latest.current = { sessionId, draft, phase, interrupted, inputActions, t }
 
@@ -4148,7 +4194,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           if (!response.ok) throw new Error(`HTTP ${response.status}`)
           rememberContinueTime(sentAt)
           interruptedRuntime.hideContinuationRows?.()
-          markInterrupted(target, false)
+          markContinued(target)
           window.setTimeout(() => refreshInterrupted(target), 2500)
         }).catch(() => {
           refreshInterrupted(target)
@@ -4392,12 +4438,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         order: 20,
         inject: () => ({ t })
       }, InterruptedBadge)), 'power-suite: interrupted badge')
-      ctx.effect(() => ctx.slots.inject('sidebar.workspaces.session.row.action', () => ctx.slots.register({
-        name: 'sidebar.workspaces.session.row.action',
-        id: 'power-suite.interrupted-continue',
-        order: 30,
-        inject: () => ({ t })
-      }, InterruptedContinueAction)), 'power-suite: interrupted continue action')
       ctx.effect(() => ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({
         name: 'conversation.input.overlay',
         id: 'power-suite.interrupted-continue-seat',
@@ -4798,7 +4838,7 @@ body:not([data-ds-dark-theme]) .psd-child{color:var(--dsw-alias-label-primary,#0
    secondary label (#61666b) so they sit at or above the native row icon weight;
    the brand/sparkle/indicator glyphs already use the primary label. Geometry,
    sizes and layout are untouched; dark mode keeps its original tertiary icons. */
-body:not([data-ds-dark-theme]) :is(.psd-row-action,.psd-run-toggle,.psd-chevron,.psd-panel-chevron,.psd-run-glyph,.psd-child-glyph){color:var(--dsw-alias-label-secondary,#61666b)}
+body:not([data-ds-dark-theme]) :is(.psd-row-action,.psd-run-toggle,.psd-chevron,.psd-panel-chevron){color:var(--dsw-alias-label-secondary,#61666b)}
 .psd-run,.psd-child{--psd-title-fade:28px}
 /* Fixed 22 px action slot between the time column and the disclosure column.
    Main rows hold the New session button here; nested subagent rows hold only
@@ -4809,8 +4849,14 @@ body:not([data-ds-dark-theme]) :is(.psd-row-action,.psd-run-toggle,.psd-chevron,
 /* Continue on an interrupted main row is an overlay over the faded title tail,
    immediately left of the time column: the 22 px action slot stays reserved for
    New session, and no fixed column moves when the action appears. */
-.psd-row-continue{position:absolute;z-index:2;top:50%;right:calc(var(--psd-time-col,48px) + var(--psd-action-col,22px) + var(--psd-chevron-col,24px) + 6px);transform:translateY(-50%);opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
-.psd-run:hover .psd-row-continue,.psd-run:focus-within .psd-row-continue{opacity:1;pointer-events:auto}
+.psd-continue-inline{display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;margin:-1px 0 -1px -8px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
+.psd-run:hover .psd-continue-inline,.psd-run:focus-within .psd-continue-inline,.psd-child:hover .psd-continue-inline,.psd-child:focus-within .psd-continue-inline{opacity:1;pointer-events:auto}
+.psd-continue-inline svg{display:block;flex:none}
+.psd-continue-inline:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.psd-continue-inline:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
+.psd-child .psd-continue-inline{width:18px;height:18px;margin:0 0 0 -6px}
+body:not([data-ds-dark-theme]) .psd-run-current .psd-interrupted,
+body:not([data-ds-dark-theme]) .psd-child-current .psd-interrupted{color:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 72%,var(--dsw-alias-label-primary))}
 .psd-row-action{appearance:none;display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
 .psd-row-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-row-action:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
@@ -4901,7 +4947,19 @@ body:not([data-ds-dark-theme]) .psd-atmos-canvas{filter:blur(3px) saturate(1.22)
 body:not([data-ds-dark-theme]) .psd-atmos{opacity:.56}
 body:not([data-ds-dark-theme]) .psd-atmos-scrim{background:linear-gradient(90deg,rgba(255,255,255,.68),rgba(255,255,255,.55))}
 body:not([data-ds-dark-theme]) .psd-run-current:hover .psd-atmos,body:not([data-ds-dark-theme]) .psd-child-current:hover .psd-atmos,body:not([data-ds-dark-theme]) [data-psd-current-workspace='true']:hover .psd-atmos,body:not([data-ds-dark-theme]) [data-psd-current-session='true']:hover .psd-atmos{opacity:.68}
-body:not([data-ds-dark-theme]) .psd-run-current :is(.psd-run-time,.psd-run-glyph,.psd-run-brand,.psd-row-action,.psd-run-toggle),body:not([data-ds-dark-theme]) .psd-child-current :is(.psd-child-time,.psd-child-glyph,.psd-child-brand,.psd-row-action){color:var(--dsw-alias-label-secondary)}
+body:not([data-ds-dark-theme]) .psd-run-current :is(.psd-run-time,.psd-run-brand,.psd-row-action,.psd-run-toggle),body:not([data-ds-dark-theme]) .psd-child-current :is(.psd-child-time,.psd-child-brand,.psd-row-action){color:var(--dsw-alias-label-secondary)}
+/* Status dots keep their semantic shell colours (user fix): the light-mode icon
+   lift above must not repaint the shell StateDot currentColor. The wrapper keeps
+   the task-62 secondary weight for non-dot child glyphs; the semantic state
+   colours win for the dot itself: ongoing business, completed success green,
+   idle idle colour. Dark mode keeps its shell tokens. */
+body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-child-glyph){color:var(--dsw-alias-label-secondary,#61666b)}
+body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-child-glyph)[data-state='ongoing'],
+body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-child-glyph) [data-state='ongoing']{color:var(--dsw-alias-state-business-primary)}
+body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-child-glyph)[data-state='done'],
+body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-child-glyph) [data-state='done']{color:var(--dsw-alias-state-success-primary)}
+body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-child-glyph)[data-state='idle'],
+body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-child-glyph) [data-state='idle']{color:var(--dsw-alias-state-idle-primary)}
 /* Row action hover + keyboard focus (user fix): the light-mode icon-lift rule
    above (0,2,1) outranks the base .psd-row-action:hover (0,2,0), so re-assert the
    primary label for hover and focus-visible in light mode; dark mode already
@@ -6532,7 +6590,7 @@ function dwClearNativeAtmospheres() {
       const label = interruptedT('continue.aria')
       return React.createElement('button', {
         type: 'button',
-        className: className === undefined ? 'psd-row-action' : `psd-row-action ${className}`,
+        className: className === undefined ? 'psd-row-action' : className,
         'data-variant': 'continue',
         'aria-label': label,
         title: label,
@@ -6595,12 +6653,6 @@ function dwClearNativeAtmospheres() {
           t,
           row,
           onNewSession
-        }))
-      } else if (interrupted) {
-        buttons.push(React.createElement(DwContinueAction, {
-          key: 'continue',
-          interruptedT,
-          row
         }))
       }
       return React.createElement('span', {
@@ -6801,9 +6853,11 @@ function dwClearNativeAtmospheres() {
           for (const dispose of unwatch) dispose()
         }
       }, [interruptedKey])
-      const rowInterrupted = React.useCallback((sessionId) => {
-        const record = interruptedRecord(sessionId)
-        return record !== null && record.status === 'ready' && record.interrupted === true
+      const rowInterrupted = React.useCallback((sessionId, running) => {
+        // Never show the interrupted mark (or its Continue CTA) while the row is
+        // running/loading, even when the Host still reports the previous turn as
+        // interrupted; the card row passes its live shell state.
+        return running !== true && interruptedIndicatorActive(interruptedRecord(sessionId))
       }, [])
       const interruptedTitle = (sessionId) => {
         const record = interruptedRecord(sessionId)
@@ -7043,8 +7097,7 @@ function dwClearNativeAtmospheres() {
             const rowChildren = childrenByParent.get(row.id) ?? []
             const collapsed = collapsedParents.has(row.id)
             const hasChildren = rowChildren.length > 0
-            const interrupted = rowInterrupted(row.id)
-            const pinned = isPinned(row)
+            const interrupted = rowInterrupted(row.id, running)
             // Fixed trailing columns, left to right: time 48 px, action 22 px,
             // disclosure 24 px, each separated by the 2 px row gap. Every parent
             // and child row reserves all three (child rows keep the action and
@@ -7073,13 +7126,6 @@ function dwClearNativeAtmospheres() {
               isCurrent(row.id) ? React.createElement(DwAtmosphere, { key: 'atmos' }) : null,
               React.createElement('div', { className: 'psd-run-main' },
               React.createElement('span', { className: 'psd-run-head' },
-                React.createElement('span', { className: 'psd-run-glyph-cell' },
-                  running
-                    ? React.createElement(StateDot, { state: 'ongoing', size: 14, className: 'psd-run-glyph' })
-                    : !isRead(row.id, row.updatedAt)
-                      ? React.createElement(StateDot, { state: 'done', size: 14, className: 'psd-run-glyph' })
-                      : React.createElement('span', { className: 'psd-run-brand', 'aria-hidden': true },
-                        RemixGlyph(DW_SPARKLING_LINE, 16, undefined, 0.82))),
                 interrupted
                   ? React.createElement('span', {
                     className: 'psd-interrupted',
@@ -7087,33 +7133,21 @@ function dwClearNativeAtmospheres() {
                     'aria-label': interruptedT('badge.aria'),
                     title: interruptedTitle(row.id)
                   }, RemixGlyph(REMIX_WARNING_FILL, 13))
-                  : null),
-              React.createElement(DwPinSlot, {
-                key: 'pin',
-                t,
-                pinned,
-                onToggle: () => onTogglePin(row.id)
-              }),
-              React.createElement('button', {
-                type: 'button',
-                className: 'psd-run-open',
-                'aria-current': isCurrent(row.id) ? 'true' : undefined,
-                'aria-label': t('panel.open', { title: row.title }),
-                onClick: (event) => {
-                  event.stopPropagation()
-                  onOpen(row.id)
-                },
-                onFocus: (event) => showHover(row, event.currentTarget),
-                onBlur: hideHover
-              }, React.createElement('span', { className: 'psd-run-title' }, row.title))),
+                  : running
+                    ? React.createElement(StateDot, { state: 'ongoing', size: 14, className: 'psd-run-glyph' })
+                    : !isRead(row.id, row.updatedAt)
+                      ? React.createElement(StateDot, { state: 'done', size: 14, className: 'psd-run-glyph' })
+                      : React.createElement('span', { className: 'psd-run-brand', 'aria-hidden': true },
+                        RemixGlyph(DW_SPARKLING_LINE, 14, undefined, 0.82)),
+                interrupted
+                  ? React.createElement(DwContinueAction, {
+                    className: 'psd-continue-inline',
+                    interruptedT,
+                    row
+                  })
+                  : null,
+                React.createElement('span', { className: 'psd-run-title' }, row.title))),
               React.createElement('span', { key: 'spacer', className: 'psd-run-spacer', 'aria-hidden': true }),
-              interrupted
-                ? React.createElement(DwContinueAction, {
-                  className: 'psd-row-continue',
-                  interruptedT,
-                  row
-                })
-                : null,
               React.createElement('span', { className: 'psd-run-time' }, time),
               React.createElement(DwRowActionSlot, {
                 t,
@@ -7145,7 +7179,7 @@ function dwClearNativeAtmospheres() {
                   workspaceId: child.workspaceId ?? row.workspaceId ?? null,
                   cwd: child.cwd ?? row.cwd ?? null
                 }
-                const childInterrupted = rowInterrupted(child.id)
+                const childInterrupted = rowInterrupted(child.id, child.state === 'running')
                 const childCurrent = isCurrent(child.id)
                 return React.createElement('div', {
                   key: child.id,
@@ -7172,19 +7206,25 @@ function dwClearNativeAtmospheres() {
                   onBlur: hideHover
                 },
                 React.createElement('span', { className: 'psd-child-glyph' },
-                  child.state === 'running'
-                    ? React.createElement(StateDot, { state: 'ongoing', size: 10 })
-                    : !isRead(child.id, child.updatedAt)
-                      ? React.createElement(StateDot, { state: 'done', size: 10 })
-                      : React.createElement('span', { className: 'psd-child-brand', 'aria-hidden': true },
-                        RemixGlyph(DW_ROBOT_2_LINE, 12))),
+                  childInterrupted
+                    ? React.createElement('span', {
+                      className: 'psd-interrupted',
+                      role: 'img',
+                      'aria-label': interruptedT('badge.aria'),
+                      title: interruptedTitle(child.id)
+                    }, RemixGlyph(REMIX_WARNING_FILL, 13))
+                    : child.state === 'running'
+                      ? React.createElement(StateDot, { state: 'ongoing', size: 10 })
+                      : !isRead(child.id, child.updatedAt)
+                        ? React.createElement(StateDot, { state: 'done', size: 10 })
+                        : React.createElement('span', { className: 'psd-child-brand', 'aria-hidden': true },
+                          RemixGlyph(DW_ROBOT_2_LINE, 12))),
                 childInterrupted
-                  ? React.createElement('span', {
-                    className: 'psd-interrupted',
-                    role: 'img',
-                    'aria-label': interruptedT('badge.aria'),
-                    title: interruptedTitle(child.id)
-                  }, RemixGlyph(REMIX_WARNING_FILL, 13))
+                  ? React.createElement(DwContinueAction, {
+                    className: 'psd-continue-inline',
+                    interruptedT,
+                    row: childRow
+                  })
                   : null,
                 React.createElement('span', { className: 'psd-child-title' }, child.title)),
                 React.createElement('span', { key: 'spacer', className: 'psd-child-spacer', 'aria-hidden': true }),
@@ -21545,6 +21585,25 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
      */
     function apply(ctx) {
       const t = ctx.locale.bind(NS)
+      // Documented test seam: seed/settle one interrupted record and re-sync the
+      // native row decoration, so the E2E can exercise the interrupted-idle,
+      // continued-running and completed phases without sending a real Continue.
+      const testHooks = globalThis.__POWER_SUITE_TEST_HOOKS__
+      if (testHooks !== null && typeof testHooks === 'object') {
+        testHooks.interruptedSessions = {
+          set: (sessionId, patch) => {
+            setInterruptedRecord(sessionId, { status: 'ready', interrupted: false, running: false, ...patch })
+            syncInterruptedRows()
+            return interruptedRecord(sessionId)
+          },
+          clear: (sessionId) => {
+            interruptedStore.records.delete(sessionId)
+            syncInterruptedRows()
+          },
+          record: (sessionId) => interruptedRecord(sessionId),
+          sync: () => syncInterruptedRows()
+        }
+      }
       ctx.effect(() => ctx.locale.register(NS, { en: EN, zh: ZH }), 'power-suite: session-artifacts dictionaries')
       ctx.effect(() => ctx.sidebarRightTabs.register(artifactsDefinition(t)), 'power-suite: session-artifacts page type')
       ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
