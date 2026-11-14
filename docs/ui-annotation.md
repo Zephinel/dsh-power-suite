@@ -262,9 +262,9 @@ opens the note popover.
   2. the current selection clears and its popover closes;
   3. the mode turns off and the original layout returns.
 
-  When the modifier-settings popover or its dropdown is open, Esc closes those
-  first (dropdown, then popover) before any mode exit; an expanded note editor or
-  an in-progress marquee also closes on Esc.
+  When the modifier-settings popover is open, Esc closes it first (mode stays on)
+  before any mode exit; an expanded note editor or an in-progress marquee also
+  closes on Esc.
 - **Interaction isolation** — while the mode is active and not passed through,
   the pointer events that could drive the page are consumed in the capture phase:
   `pointerdown`, `mousedown`, `pointerup`, `mouseup`, `click`, `auxclick`,
@@ -1108,20 +1108,25 @@ a transient, **borderless** modifier-settings popover anchored to it (no setting
 view, gear page, or rail navigation step). The popover uses the plugin hovercard
 style — background `var(--dsw-hovercard-bg,#2C2C2E)`, no border, 14px radius,
 `--dsw-shadow-lv3`, white 12px text — and holds the two interaction modifier rows.
-Each row is a **custom dropdown** (trigger button + chevron, fixed portal menu):
-there is no native `<select>`/OS menu anywhere.
+Each row is a **custom segmented control** (radiogroup with four always-visible
+segments): there is no dropdown, listbox, native `<select>` or OS menu anywhere.
 
 Both modifiers apply immediately, and the key handlers always read the current
-values. The dropdown trigger is a `role=combobox` button inside
-`.psa-rainbow-field` (rainbow focus ring preserved) with `aria-haspopup=listbox`,
-`aria-expanded`, `aria-controls` and `aria-activedescendant`; the menu is a fixed
-listbox (below the trigger by default, flipped above when needed, viewport-clamped,
-at least 180px wide) with `role=option`, `aria-selected`, a check icon on the
-selected row, and hover/active accents. Keyboard: Enter/Space/ArrowDown opens;
-ArrowUp/Down/Home/End navigate; Enter/Space selects; Esc closes the dropdown and
-keeps focus on the trigger; Tab and outside pointerdown close; only one menu is
-open at a time; focus is never trapped. Esc with the popover open closes the
-popover (mode stays on); clicking outside it closes it as well.
+values. The control is a `role=radiogroup` with `aria-labelledby` the row label;
+each segment is a `<button role=radio aria-checked>` inside `.psa-rainbow-field`
+(rainbow focus ring preserved), with linked labels for the group and full
+modifier names as `aria-label`. Roving tabindex keeps exactly one segment
+tabbable (the checked one). The track has a subtle `rgba(255,255,255,.06)`
+background with a 1px alpha border and 9px radius; the checked segment uses a
+subtle primary accent tint (`color-mix(..., var(--dsw-alias-state-business-primary), 30%)
+with white text), hover uses `rgba(255,255,255,.08)`, and focus uses the rainbow
+ring instead of a solid outline; dark and light themes keep the hovercard popover
+tokens. Keyboard: ArrowLeft/Right and ArrowUp/Down move the selection with
+wrap-around, Home/End jump to the first/last segment, Enter/Space selects;
+selection is persisted immediately (`power-suite.ui-annotation.settings`) and
+conflicts move the other modifier with inline feedback. Esc closes the popover
+(mode stays on); Tab leaves the group; clicking outside closes the popover; focus
+is never trapped.
 
 | Setting | Default | Choices | Purpose |
 |---|---|---|---|
@@ -1160,7 +1165,7 @@ not synced to another browser or device.
 ### Focus treatment
 
 Every annotation input — the popover request field, the collection row note, the
-expanded note editor, and the two settings dropdown triggers — uses the plugin's shared
+expanded note editor, and the two settings segmented controls — uses the plugin's shared
 **rainbow focus ring** instead of a solid blue outline. The ring is painted by a
 wrapper's `::after` mask ring (2 px band, `inset: -2px`, no layout shift), fades
 in over 140 ms, spins once every 3.2 s while drifting hue over 14 s, and uses the
@@ -1788,9 +1793,8 @@ opens the note popover.
   2. the current selection clears and its popover closes;
   3. the mode turns off and the original layout returns.
 
-  When the modifier-settings popover or one of its dropdowns is open, Esc closes
-  those first (dropdown, then popover) and the mode stays on; an expanded note
-  editor or an in-progress marquee also closes on Esc.
+  When the modifier-settings popover is open, Esc closes it first and the mode
+  stays on; an expanded note editor or an in-progress marquee also closes on Esc.
 - **Interaction isolation** — while the mode is active and not passed through,
   the pointer events that could drive the page are consumed in the capture phase:
   `pointerdown`, `mousedown`, `pointerup`, `mouseup`, `click`, `auxclick`,

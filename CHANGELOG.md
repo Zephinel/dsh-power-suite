@@ -499,6 +499,14 @@ heading is added until the release is cut.
   layer) and document-level Esc closes the menu first, then the popover, with
   the mode staying on. The old settings view/Back path is removed.
 
+- UI element annotation modifier settings are now **custom segmented controls**
+  inside the info-icon borderless popover: two `role=radiogroup` rows with four
+  `role=radio` segments (Alt/Ctrl/Meta/Shift), roving tabindex, arrow/Home/End/
+  Enter/Space selection, persistence + inline conflict feedback, glass track and
+  primary-accent checked segment, rainbow focus ring on the checked radio; the
+  dropdown/listbox implementation (and its seam helpers) is removed. No native
+  `<select>` or OS menu remains.
+
 ### Removed
 
 - Standalone Project detail page: the `project-view` feature is removed —
