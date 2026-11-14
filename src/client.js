@@ -12479,49 +12479,21 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
-     * A3/T51: move one listbox active index with wrap-around.
-     * @param {number} current - current index (-1 when none).
-     * @param {number} delta - movement.
-     * @param {number} length - option count.
+     * A3/T55: move one segmented-control selection index (radiogroup semantics).
+     * `next`/`prev` wrap; `first`/`last` clamp; an empty list has no active index.
+     * @param {number} current - current selected index (-1 when none).
+     * @param {'next' | 'prev' | 'first' | 'last'} move - movement.
+     * @param {number} length - segment count.
      * @returns {number} next index, or -1 for an empty list.
      */
-    function annotationMenuMoveIndex(current, delta, length) {
+    function annotationSegmentedIndex(current, move, length) {
       const count = typeof length === 'number' && Number.isFinite(length) && length > 0 ? Math.floor(length) : 0
       if (count === 0) return -1
-      const step = typeof delta === 'number' && Number.isFinite(delta) ? Math.round(delta) : 0
+      if (move === 'first') return 0
+      if (move === 'last') return count - 1
       const base = typeof current === 'number' && Number.isFinite(current) && current >= 0 ? Math.floor(current) : 0
-      return ((base + step) % count + count) % count
-    }
-
-    /**
-     * A3/T51: fixed-position menu geometry for the custom modifier dropdown.
-     * @param {{ trigger: object, menu: object, viewport: object, gap?: number, margin?: number }} input - geometry.
-     * @returns {{ left: number, top: number, width: number, placement: 'below' | 'above' }} position.
-     */
-    function annotationMenuPosition(input) {
-      const source = input !== null && typeof input === 'object' ? input : {}
-      const trigger = source.trigger !== null && typeof source.trigger === 'object' ? source.trigger : {}
-      const menu = source.menu !== null && typeof source.menu === 'object' ? source.menu : {}
-      const viewport = source.viewport !== null && typeof source.viewport === 'object' ? source.viewport : {}
-      const gap = typeof source.gap === 'number' && Number.isFinite(source.gap) ? source.gap : 6
-      const margin = typeof source.margin === 'number' && Number.isFinite(source.margin) ? source.margin : 8
-      const triggerLeft = typeof trigger.left === 'number' ? trigger.left : 0
-      const triggerTop = typeof trigger.top === 'number' ? trigger.top : 0
-      const triggerWidth = typeof trigger.width === 'number' ? trigger.width : 0
-      const triggerHeight = typeof trigger.height === 'number' ? trigger.height : 0
-      const viewWidth = typeof viewport.width === 'number' ? viewport.width : 0
-      const viewHeight = typeof viewport.height === 'number' ? viewport.height : 0
-      const width = Math.max(180, Math.round(triggerWidth))
-      const height = typeof menu.height === 'number' && menu.height > 0 ? Math.round(menu.height) : 0
-      const maxLeft = Math.max(margin, viewWidth - width - margin)
-      const left = Math.min(Math.max(Math.round(triggerLeft), margin), maxLeft)
-      const belowTop = Math.round(triggerTop + triggerHeight + gap)
-      const aboveTop = Math.round(triggerTop - gap - height)
-      const fitsBelow = height === 0 || belowTop + height <= viewHeight - margin
-      const placement = !fitsBelow && aboveTop >= margin ? 'above' : 'below'
-      const rawTop = placement === 'above' ? aboveTop : belowTop
-      const maxTop = Math.max(margin, viewHeight - height - margin)
-      return { left, top: Math.min(Math.max(Math.round(rawTop), margin), maxTop), width, placement }
+      if (move === 'prev') return ((base - 1) % count + count) % count
+      return ((base + 1) % count + count) % count
     }
 
     /**
@@ -15349,6 +15321,8 @@ function dwClearNativeAtmospheres() {
        */
       function statusDetailOf(ref) {
         if (ref === null || typeof ref !== 'object' || ref.locator === null || typeof ref.locator !== 'object') return { status: 'missing', via: 'css' }
+        // Status cache correctness depends on the DOM revision observer being live.
+        ensureDomObserver()
         const cacheKey = annotationFallbackCacheKey(ref.id, domRevision)
         const cached = fallbackStatusCache.get(cacheKey)
         if (cached !== undefined) return cached
@@ -15438,7 +15412,9 @@ function dwClearNativeAtmospheres() {
           resolutionFirstDelta: resolvesFirst - resolvesBefore,
           resolutionSecondDelta: resolvesSecond - resolvesFirst,
           status: second.status,
-          confidence: second.confidence ?? 'strong'
+          confidence: second.confidence ?? 'strong',
+          revision: domRevision,
+          observing: domObserver !== null
         }
       }
 
@@ -16453,23 +16429,8 @@ function dwClearNativeAtmospheres() {
        * @param {KeyboardEvent} event - keydown.
        * @returns {void}
        */
-      /** A3/T51: custom modifier dropdown is open; annotation shortcuts stand down. */
-      let modifierMenuOpen = false
-
-      /**
-       * Mark the custom modifier dropdown as open/closed.
-       * @param {boolean} open - whether a modifier menu is open.
-       * @returns {void}
-       */
-      function setModifierMenuOpen(open) {
-        modifierMenuOpen = open === true
-      }
-
       function onKeyDown(event) {
         if (!isActive()) return
-        // A3/T51: while the custom modifier dropdown is open it owns the keyboard
-        // (Esc closes the menu, not the settings view / mode).
-        if (modifierMenuOpen) return
         if (event.isComposing === true) return
         if (event.key === 'Escape' && snapshot().chipPreview !== null) {
           // The transient chip tooltip closes first: Esc must not also clear the
@@ -18185,7 +18146,6 @@ function dwClearNativeAtmospheres() {
         levelUp: () => shiftChain(1),
         levelDown: () => shiftChain(-1),
         setModifier,
-        setModifierMenuOpen,
         toggleSettingsOpen,
         closeSettingsOpen,
         updateCollectionNote,
@@ -18217,8 +18177,6 @@ function dwClearNativeAtmospheres() {
         copyXPath,
         copyJsPath,
         copyFullXPath,
-        annotationMenuMoveIndex,
-        annotationMenuPosition,
         debugFallbackScanProbe,
         isInCollection,
         collectionScopeOf,
@@ -18317,22 +18275,15 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-empty-title{color:var(--dsw-alias-label-primary);font-weight:500}
 .psa-field{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
 .psa-field-label{min-width:0;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psa-select{appearance:none;height:26px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-l1,transparent));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-layer-1));color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;cursor:pointer}
-.psa-select-trigger{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psa-select-trigger > span{overflow:hidden;text-overflow:ellipsis}
-.psa-select-trigger[aria-expanded=true]{border-color:var(--dsw-alias-state-business-primary,var(--dsw-alias-border-l2,transparent))}
-.psa-modifier-menu{position:fixed;box-sizing:border-box;padding:5px;border:0;border-radius:14px;background:var(--dsw-hovercard-bg,#2C2C2E);color:var(--dsw-static-neutral-bluish-00,#f5f6f8);box-shadow:var(--dsw-elevation-lv3,var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,.35)));font-family:inherit;font-size:12px;line-height:18px;outline:none;pointer-events:auto;z-index:47;animation:psa-modifier-in 120ms var(--ds-ease-out,ease-out)}
-.psa-modifier-option{display:flex;align-items:center;gap:8px;height:30px;padding:0 9px;border-radius:9px;cursor:pointer;user-select:none;color:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psa-modifier-option:hover,.psa-modifier-option[data-psa-active=true]{background:rgba(255,255,255,.08)}
-.psa-modifier-option[aria-selected=true]{background:rgba(255,255,255,.12);font-weight:500}
-.psa-modifier-check{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;flex:none;color:var(--dsw-alias-state-business-primary,#a78bff)}
-@keyframes psa-modifier-in{from{opacity:0;transform:translateY(-2px)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.psa-modifier-menu{animation:none}}
+.psa-segmented{display:flex;align-items:stretch;gap:2px;padding:2px;box-sizing:border-box;border-radius:9px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);min-width:0}
+ .psa-segmented-option{appearance:none;flex:1 1 0;min-width:0;height:24px;padding:0 3px;border:0;border-radius:7px;background:transparent;color:rgba(255,255,255,.78);font:inherit;font-size:10px;line-height:1;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;outline:none}
+.psa-segmented-option:hover{background:rgba(255,255,255,.08)}
+.psa-segmented-option[aria-checked=true]{background:color-mix(in srgb, var(--dsw-alias-state-business-primary,#7C5CFF) 30%, transparent);color:var(--dsw-static-neutral-bluish-00,#fff);font-weight:500}
+.psa-segmented-option:focus-visible{outline:none}
+.psa-settings-row{display:flex;flex-direction:column;align-items:stretch;gap:6px;margin:9px 0}
+.psa-settings-row-label{color:var(--dsw-static-neutral-bluish-00,#f5f6f8);white-space:nowrap}
 .psa-settings-popover{position:fixed;box-sizing:border-box;z-index:46;padding:12px;border:0;border-radius:14px;background:var(--dsw-hovercard-bg,#2C2C2E);color:var(--dsw-static-neutral-bluish-00,#f5f6f8);box-shadow:var(--dsw-elevation-lv3,var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,.35)));font-family:inherit;font-size:12px;line-height:18px;pointer-events:auto;animation:psa-modifier-in 120ms var(--ds-ease-out,ease-out)}
 .psa-settings-title{font-size:12.5px;font-weight:500;margin:0 0 10px}
-.psa-settings-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0}
-.psa-settings-row-label{flex:none;color:var(--dsw-static-neutral-bluish-00,#f5f6f8);white-space:nowrap}
-.psa-settings-row .psa-select{background:rgba(255,255,255,.08);border-color:transparent;color:inherit}
 .psa-settings-feedback{min-height:16px;margin-top:8px;color:var(--dsw-alias-state-warn-primary,#ffc46b);font-size:11.5px;line-height:16px}
 .psa-settings-note{margin-top:4px;color:rgba(255,255,255,.62);font-size:11.5px;line-height:16px}
 @media (prefers-reduced-motion:reduce){.psa-settings-popover{animation:none}}
@@ -18500,8 +18451,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
 .psa-rainbow-field > .psa-popover-textarea,
 .psa-rainbow-field > .psa-entry-note,
 .psa-rainbow-field > .psa-note-editor-textarea,
-.psa-rainbow-field > .psa-detail-textarea,
-.psa-rainbow-field > .psa-select{position:relative;z-index:1;outline:none}
+.psa-rainbow-field > .psa-detail-textarea{position:relative;z-index:1;outline:none}
 /* The ring must hug the control's border box exactly: a textarea/input/select is
    inline-level by default, which leaves a baseline descender gap under it inside
    the wrapper; the ring (inset:-2px on the wrapper) then hangs below the control
@@ -19342,6 +19292,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         'data-psa-entry-scope': scope,
         'data-psa-status': status,
         'data-psa-confidence': confidence,
+        'data-psa-via': statusDetail !== null && typeof statusDetail === 'object' ? (statusDetail.via ?? '') : '',
         'data-psa-entry-included': included ? 'true' : 'false'
       },
       React.createElement('div', { className: 'psa-entry-head' },
@@ -19519,189 +19470,80 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
 
     /**
-     * A3/T51: custom-styled modifier dropdown (replaces the native <select>).
-     * Trigger is a combobox button inside `.psa-rainbow-field`; the menu is a fixed
-     * inline layer inside the same rail/overlay stacking context (so real pointer
-     * events reach it above the raised overlay), with listbox/option semantics and
-     * full keyboard control. Only one menu is open at a time; focus stays on the
-     * trigger (no focus trap).
-     * @param {{ t: Function, controller: object, fieldName: string, value: string, dataAttribute: string, labelId: string }} props - dropdown props.
-     * @returns {object} trigger + optional menu portal.
+     * A3/T55: custom segmented control for one modifier (radiogroup semantics).
+     * Four always-visible segments (Alt/Ctrl/Meta/Shift); roving tabindex, arrow /
+     * Home / End selection, click/Enter/Space select; the rainbow focus ring wraps
+     * the whole control via `.psa-rainbow-field`. No listbox/menu/native select.
+     * @param {{ t: Function, controller: object, fieldName: string, value: string, dataAttribute: string, labelId: string }} props - segmented props.
+     * @returns {object} radiogroup.
      */
-    let annotationOpenModifierMenuId = null
-    function AnnotationModifierSelect(props) {
+    function AnnotationModifierSegmented(props) {
       const { t, controller, fieldName, value, dataAttribute, labelId } = props
-      const menuId = `psa-modifier-menu-${fieldName}`
-      const [open, setOpen] = React.useState(false)
-      const [activeIndex, setActiveIndex] = React.useState(() => Math.max(0, MODIFIER_CHOICES.indexOf(value)))
-      const [position, setPosition] = React.useState(null)
-      const triggerRef = React.useRef(null)
-      const menuRef = React.useRef(null)
+      const groupId = `psa-modifier-group-${fieldName}`
+      const buttonRefs = React.useRef([])
       /**
-       * Close the menu; optionally restore focus to the trigger.
-       * @param {boolean} focusTrigger - focus the trigger after closing.
+       * Select one segment through the controller (persist + conflict feedback).
+       * @param {number} index - segment index.
+       * @param {boolean} focus - focus the segment after selection.
        * @returns {void}
        */
-      const close = (focusTrigger) => {
-        if (annotationOpenModifierMenuId === menuId) annotationOpenModifierMenuId = null
-        controller.setModifierMenuOpen(false)
-        setOpen(false)
-        if (focusTrigger === true && triggerRef.current !== null) triggerRef.current.focus({ preventScroll: true })
-      }
-      /** Measure the trigger and place the fixed menu below/above it. @returns {void} */
-      const place = () => {
-        const trigger = triggerRef.current
-        if (trigger === null) return
-        const rect = trigger.getBoundingClientRect()
-        setPosition(annotationMenuPosition({
-          trigger: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-          menu: { width: Math.max(180, rect.width), height: MODIFIER_CHOICES.length * 30 + 10 },
-          viewport: { width: window.innerWidth, height: window.innerHeight }
-        }))
-      }
-      /**
-       * Open the menu on one active option.
-       * @param {number} [index] - active option index.
-       * @returns {void}
-       */
-      const openMenu = (index) => {
-        if (annotationOpenModifierMenuId !== null && annotationOpenModifierMenuId !== menuId) {
-          document.dispatchEvent(new CustomEvent('psa-modifier-close', { detail: { except: menuId } }))
-        }
-        annotationOpenModifierMenuId = menuId
-        controller.setModifierMenuOpen(true)
-        const initial = typeof index === 'number' && index >= 0 ? index : Math.max(0, MODIFIER_CHOICES.indexOf(value))
-        setActiveIndex(initial)
-        place()
-        setOpen(true)
-      }
-      /**
-       * Commit one option (controller resolves modifier conflicts + feedback).
-       * @param {number} index - option index.
-       * @returns {void}
-       */
-      const choose = (index) => {
+      const selectSegment = (index, focus) => {
         const choice = MODIFIER_CHOICES[index]
-        close(true)
         if (typeof choice === 'string') controller.setModifier(fieldName, choice)
+        if (focus === true) {
+          const node = buttonRefs.current[index]
+          if (node !== null && node !== undefined && typeof node.focus === 'function') node.focus({ preventScroll: true })
+        }
       }
-      React.useEffect(() => {
-        if (!open) return undefined
-        // A3/T53: document-level Escape so mouse-open (or unfocused) menus close
-        // reliably; the annotation shortcut stand-down otherwise swallows it.
-        const onDocumentKeyDown = (event) => {
-          if (event.key !== 'Escape') return
+      /**
+       * Keyboard handling for the radiogroup (automatic activation).
+       * @param {object} event - keydown event.
+       * @param {number} index - focused segment index.
+       * @returns {void}
+       */
+      const onSegmentKeyDown = (event, index) => {
+        let move = null
+        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') move = 'next'
+        else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') move = 'prev'
+        else if (event.key === 'Home') move = 'first'
+        else if (event.key === 'End') move = 'last'
+        if (move !== null) {
           event.preventDefault()
-          event.stopPropagation()
-          if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation()
-          close(true)
-        }
-        const onPointerDown = (event) => {
-          const target = event.target
-          if (triggerRef.current !== null && triggerRef.current.contains(target)) return
-          if (menuRef.current !== null && menuRef.current.contains(target)) return
-          close(false)
-        }
-        const onOtherOpen = () => { close(false) }
-        const onResize = () => { close(false) }
-        const onScroll = () => { close(false) }
-        document.addEventListener('keydown', onDocumentKeyDown, true)
-        document.addEventListener('pointerdown', onPointerDown, true)
-        document.addEventListener('psa-modifier-close', onOtherOpen)
-        window.addEventListener('resize', onResize)
-        window.addEventListener('scroll', onScroll, true)
-        return () => {
-          document.removeEventListener('keydown', onDocumentKeyDown, true)
-          document.removeEventListener('pointerdown', onPointerDown, true)
-          document.removeEventListener('psa-modifier-close', onOtherOpen)
-          window.removeEventListener('resize', onResize)
-          window.removeEventListener('scroll', onScroll, true)
-        }
-      }, [open])
-      React.useEffect(() => () => {
-        if (annotationOpenModifierMenuId === menuId) annotationOpenModifierMenuId = null
-        controller.setModifierMenuOpen(false)
-      }, [])
-      const onTriggerKeyDown = (event) => {
-        if (event.key === 'Escape') {
-          if (!open) return
-          event.preventDefault()
-          event.stopPropagation()
-          close(true)
+          selectSegment(annotationSegmentedIndex(index, move, MODIFIER_CHOICES.length), true)
           return
         }
-        if (open && event.key === 'Tab') { close(false); return }
-        if (!open) {
-          if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
-            event.preventDefault()
-            openMenu(Math.max(0, MODIFIER_CHOICES.indexOf(value)))
-          } else if (event.key === 'ArrowUp') {
-            event.preventDefault()
-            openMenu(MODIFIER_CHOICES.length - 1)
-          }
-          return
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          selectSegment(index, true)
         }
-        if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((index) => annotationMenuMoveIndex(index, 1, MODIFIER_CHOICES.length)) }
-        else if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((index) => annotationMenuMoveIndex(index, -1, MODIFIER_CHOICES.length)) }
-        else if (event.key === 'Home') { event.preventDefault(); setActiveIndex(0) }
-        else if (event.key === 'End') { event.preventDefault(); setActiveIndex(MODIFIER_CHOICES.length - 1) }
-        else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(activeIndex) }
       }
-      const trigger = React.createElement('button', {
-        ref: triggerRef,
-        type: 'button',
-        id: `${menuId}-trigger`,
-        className: 'psa-select psa-select-trigger',
-        'data-psa-own': '',
-        [dataAttribute]: '',
-        role: 'combobox',
-        'aria-haspopup': 'listbox',
-        'aria-expanded': open ? 'true' : 'false',
-        'aria-controls': menuId,
-        'aria-labelledby': labelId,
-        'aria-activedescendant': open && activeIndex >= 0 ? `${menuId}-option-${activeIndex}` : undefined,
-        title: t(`modifier.${value}`),
-        onClick: () => { if (open) close(false); else openMenu(Math.max(0, MODIFIER_CHOICES.indexOf(value))) },
-        onKeyDown: onTriggerKeyDown,
-        onBlur: (event) => {
-          if (!open) return
-          const next = event.relatedTarget
-          if (next !== null && next !== undefined && triggerRef.current !== null && triggerRef.current.contains(next)) return
-          if (next !== null && next !== undefined && menuRef.current !== null && menuRef.current.contains(next)) return
-          close(false)
-        }
-      }, React.createElement('span', null, t(`modifier.${value}`)), RemixGlyph(REMIX_ARROW_DOWN_LINE, 12))
-      const menu = open && position !== null ? React.createElement('div', {
-        className: 'psa-modifier-menu',
-        role: 'listbox',
-        id: menuId,
-        ref: menuRef,
-        'data-psa-own': '',
-        'data-psa-modifier-menu': '',
-        'aria-labelledby': labelId,
-        style: { left: `${position.left}px`, top: `${position.top}px`, width: `${position.width}px` },
-        onMouseDown: (event) => event.preventDefault(),
-        onBlur: (event) => {
-          const next = event.relatedTarget
-          if (next !== null && next !== undefined && triggerRef.current !== null && triggerRef.current.contains(next)) return
-          if (next !== null && next !== undefined && menuRef.current !== null && menuRef.current.contains(next)) return
-          close(false)
-        }
-      }, MODIFIER_CHOICES.map((choice, index) => React.createElement('div', {
-        key: choice,
-        id: `${menuId}-option-${index}`,
-        role: 'option',
-        className: 'psa-modifier-option',
-        'data-psa-modifier-option': choice,
-        'data-psa-active': index === activeIndex ? 'true' : 'false',
-        'aria-selected': choice === value ? 'true' : 'false',
-        onClick: () => choose(index),
-        onMouseEnter: () => setActiveIndex(index)
-      },
-      React.createElement('span', { className: 'psa-modifier-check', 'aria-hidden': 'true' },
-        choice === value ? RemixGlyph(REMIX_CHECK_LINE, 12) : null),
-      React.createElement('span', null, t(`modifier.${choice}`))))) : null
-      return React.createElement(React.Fragment, null, trigger, menu)
+      return React.createElement('span', { className: 'psa-rainbow-field', 'data-psa-own': '', style: { display: 'block', minWidth: '0' } },
+        React.createElement('div', {
+          className: 'psa-segmented',
+          id: groupId,
+          role: 'radiogroup',
+          'aria-labelledby': labelId,
+          'data-psa-own': '',
+          [dataAttribute]: '',
+          'data-psa-modifier-group': fieldName
+        }, MODIFIER_CHOICES.map((choice, index) => React.createElement('button', {
+          key: choice,
+          ref: (node) => { buttonRefs.current[index] = node },
+          type: 'button',
+          role: 'radio',
+          className: 'psa-segmented-option',
+          id: `${groupId}-${choice}`,
+          'data-psa-own': '',
+          'data-psa-modifier-option': choice,
+          'aria-label': t(`modifier.${choice}`),
+          'aria-checked': choice === value ? 'true' : 'false',
+          tabIndex: choice === value ? 0 : -1,
+          onClick: () => selectSegment(index, false),
+          onKeyDown: (event) => onSegmentKeyDown(event, index)
+        }, (() => {
+          const label = t(`modifier.${choice}`)
+          return label.includes('/') ? label.split('/').pop().trim() : label
+        })()))))
     }
 
     /**
@@ -19719,8 +19561,8 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         const trigger = document.querySelector('[data-psa-open-modifier-settings]')
         if (trigger !== null) {
           const rect = trigger.getBoundingClientRect()
-          const width = Math.min(300, Math.max(260, window.innerWidth - 16))
-          const height = 196
+          const width = Math.min(320, Math.max(300, window.innerWidth - 16))
+          const height = 240
           const left = Math.min(Math.max(Math.round(rect.right - width), 8), Math.max(8, window.innerWidth - width - 8))
           const below = Math.round(rect.bottom + 8)
           const above = Math.round(rect.top - height - 8)
@@ -19734,11 +19576,9 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           if (trigger !== null && trigger.contains(target)) return
           controller.closeSettingsOpen()
         }
-        // A3/T53: document-level Escape; when a dropdown menu is open it owns the
-        // first Escape (its own handler runs after this one), then the popover.
+        // A3/T53/T55: document-level Escape closes the popover (no nested menu now).
         const onDocumentKeyDown = (event) => {
           if (event.key !== 'Escape') return
-          if (document.querySelector('[role="listbox"][data-psa-modifier-menu]') !== null) return
           event.preventDefault()
           event.stopPropagation()
           controller.closeSettingsOpen()
@@ -19767,8 +19607,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         const labelId = `psa-modifier-label-${fieldName}`
         return React.createElement('div', { className: 'psa-settings-row', 'data-psa-own': '' },
           React.createElement('span', { className: 'psa-settings-row-label', id: labelId }, t(labelKey)),
-          React.createElement('span', { className: 'psa-rainbow-field', 'data-psa-own': '', style: { minWidth: '118px' } },
-            React.createElement(AnnotationModifierSelect, { t, controller, fieldName, value, dataAttribute, labelId })))
+          React.createElement(AnnotationModifierSegmented, { t, controller, fieldName, value, dataAttribute, labelId }))
       }
       if (position === null) return null
       const settings = snapshot.settings
@@ -20780,8 +20619,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationStatusLabelKey,
         annotationScopeAuthorityOutcome,
         annotationEphemeralOutcome,
-        annotationMenuMoveIndex,
-        annotationMenuPosition,
+        annotationSegmentedIndex,
         debugFallbackScanProbe: () => (annotationController !== null && annotationController !== undefined
           && typeof annotationController.debugFallbackScanProbe === 'function'
           ? annotationController.debugFallbackScanProbe()
