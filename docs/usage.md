@@ -1,6 +1,6 @@
 # Usage
 
-All eight features ship in one plugin. Open the Plugins page, select **DSH Power
+Every feature ships in one plugin. Open the Plugins page, select **DSH Power
 Suite**, and use the plugin's own settings section for the Host-side preferences
 (the prompt-history modifier and the two retention windows). The annotation
 mode's own two modifiers are changed inside its rail, not on that page.
@@ -189,6 +189,32 @@ remembers the browser files for the page lifetime. The shell itself only
 persists the draft text. A page reload still loses the attachments, sending the
 draft clears the memory, and removing every attachment explicitly (after they
 were restored) stops them from coming back.
+
+## Composer image gallery
+
+Paste several screenshots into the composer, then click one. When the composer
+holds **two or more** pasted images, the plugin opens a continuous viewer
+instead of the shell's single-image lightbox:
+
+- the clicked screenshot appears first with a **`N / M`** counter in the
+  top-centre pill;
+- **Previous/Next** buttons sit at the left/right of the image and are disabled
+  at the first/last image (no wrap); **←/→** arrow keys do the same;
+- one **mouse-wheel** gesture steps exactly one image (momentum events inside a
+  260 ms cooldown are swallowed), and the page behind never scrolls;
+- **Esc**, the backdrop, or the close pill dismisses the viewer and returns
+  focus to the thumbnail that opened it; a second click is not needed;
+- removing a pasted image while the viewer is open clamps it to the remaining
+  images (a `1 / 1` counter with both buttons disabled); removing every image
+  closes the viewer;
+- the overlay is borderless with the shell's tooltip/elevation tokens, follows
+  light and dark themes, and appears instantly under reduced motion.
+
+With a **single** pasted image the plugin does not intercept the click, so the
+shell's own single-image lightbox behaves exactly as before. Only composer
+attachment thumbnails are handled: page and Markdown images are untouched. The
+viewer is per page and closes on a Session switch, a composer unmount, or plugin
+unload; it does not add a URL or history entry.
 
 ## Interrupted sessions
 
