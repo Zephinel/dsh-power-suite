@@ -3978,9 +3978,10 @@ html[data-input-modality="keyboard"] [data-row-key^="session:"][data-power-suite
 html[data-input-modality="keyboard"] [data-row-key^="session:"][data-power-suite-interrupted]:focus-within>span:first-child,
 html[data-input-modality="keyboard"] [data-row-key^="session:"][data-power-suite-interrupted]:focus-within>span:last-child{position:relative;z-index:2}
 .dps-row-interrupted{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;color:var(--dsw-alias-state-warn-primary);pointer-events:none;flex:none}
-.dps-row-continue{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;flex:none;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
-[data-row-key^="session:"][data-power-suite-interrupted]:hover .dps-row-continue,
-[data-row-key^="session:"][data-power-suite-interrupted]:focus-within .dps-row-continue{opacity:1;pointer-events:auto}
+.dps-row-continue-slot{display:inline-flex;align-items:center;justify-content:center;width:0;height:22px;overflow:hidden;opacity:0;pointer-events:none;transition:width 200ms var(--ds-ease-in-out,ease) 160ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
+[data-row-key^="session:"][data-power-suite-interrupted]:hover .dps-row-continue-slot,
+[data-row-key^="session:"][data-power-suite-interrupted]:focus-within .dps-row-continue-slot{width:22px;opacity:1;pointer-events:auto;transition:width 200ms var(--ds-ease-in-out,ease) 0ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
+.dps-row-continue{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;flex:none;opacity:1;pointer-events:auto}
 .dps-row-continue svg{display:block;flex:none}
 .dps-row-continue:hover{background:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);color:var(--dsw-alias-label-primary)}
 .dps-row-continue:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
@@ -4114,17 +4115,18 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           'aria-label': t('badge.aria'),
           title: record.subagent === true ? t('badge.title.subagent') : t('badge.title')
         }, React.createElement(RemixIcon, { path: REMIX_WARNING_FILL, size: 14 })),
-        React.createElement('button', {
-          type: 'button',
-          className: 'dps-row-continue',
-          title: t('continue.aria'),
-          'aria-label': t('continue.aria'),
-          onClick: (event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            requestContinue(sessionId)
-          }
-        }, React.createElement(RemixIcon, { path: REMIX_PLAY_FILL, size: 14 })))
+        React.createElement('span', { className: 'dps-row-continue-slot' },
+          React.createElement('button', {
+            type: 'button',
+            className: 'dps-row-continue',
+            title: t('continue.aria'),
+            'aria-label': t('continue.aria'),
+            onClick: (event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              requestContinue(sessionId)
+            }
+          }, React.createElement(RemixIcon, { path: REMIX_PLAY_FILL, size: 14 }))))
     }
 
     /**
@@ -4849,12 +4851,15 @@ body:not([data-ds-dark-theme]) :is(.psd-row-action,.psd-run-toggle,.psd-chevron,
 /* Continue on an interrupted main row is an overlay over the faded title tail,
    immediately left of the time column: the 22 px action slot stays reserved for
    New session, and no fixed column moves when the action appears. */
-.psd-continue-inline{display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;margin:-1px 0 -1px -8px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
-.psd-run:hover .psd-continue-inline,.psd-run:focus-within .psd-continue-inline,.psd-child:hover .psd-continue-inline,.psd-child:focus-within .psd-continue-inline{opacity:1;pointer-events:auto}
+.psd-continue-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:0;height:20px;margin-right:0;overflow:hidden;opacity:0;pointer-events:none;transition:width 200ms var(--ds-ease-in-out,ease) 160ms,margin-right 200ms var(--ds-ease-in-out,ease) 160ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
+.psd-run:hover .psd-continue-slot,.psd-run:focus-within .psd-continue-slot,.psd-child:hover .psd-continue-slot,.psd-child:focus-within .psd-continue-slot{width:22px;margin-right:2px;opacity:1;pointer-events:auto;transition:width 200ms var(--ds-ease-in-out,ease) 0ms,margin-right 200ms var(--ds-ease-in-out,ease) 0ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
+.psd-child .psd-continue-slot{height:18px}
+.psd-child:hover .psd-continue-slot,.psd-child:focus-within .psd-continue-slot{width:18px}
+.psd-continue-inline{display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;margin:0;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;opacity:1;pointer-events:auto}
 .psd-continue-inline svg{display:block;flex:none}
 .psd-continue-inline:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-continue-inline:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
-.psd-child .psd-continue-inline{width:18px;height:18px;margin:0 0 0 -6px}
+.psd-child .psd-continue-inline{width:18px;height:18px}
 body:not([data-ds-dark-theme]) .psd-run-current .psd-interrupted,
 body:not([data-ds-dark-theme]) .psd-child-current .psd-interrupted{color:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 72%,var(--dsw-alias-label-primary))}
 .psd-row-action{appearance:none;display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
@@ -7142,11 +7147,12 @@ function dwClearNativeAtmospheres() {
                         : React.createElement('span', { className: 'psd-run-brand', 'aria-hidden': true },
                           RemixGlyph(DW_SPARKLING_LINE, 16, undefined, 0.82))),
                 interrupted
-                  ? React.createElement(DwContinueAction, {
-                    className: 'psd-continue-inline',
-                    interruptedT,
-                    row
-                  })
+                  ? React.createElement('span', { className: 'psd-continue-slot' },
+                    React.createElement(DwContinueAction, {
+                      className: 'psd-continue-inline',
+                      interruptedT,
+                      row
+                    }))
                   : null,
                 React.createElement(DwPinSlot, {
                   key: 'pin',
@@ -7239,11 +7245,12 @@ function dwClearNativeAtmospheres() {
                         : React.createElement('span', { className: 'psd-child-brand', 'aria-hidden': true },
                           RemixGlyph(DW_ROBOT_2_LINE, 12))),
                 childInterrupted
-                  ? React.createElement(DwContinueAction, {
-                    className: 'psd-continue-inline',
-                    interruptedT,
-                    row: childRow
-                  })
+                  ? React.createElement('span', { className: 'psd-continue-slot' },
+                    React.createElement(DwContinueAction, {
+                      className: 'psd-continue-inline',
+                      interruptedT,
+                      row: childRow
+                    }))
                   : null,
                 React.createElement('span', { className: 'psd-child-title' }, child.title)),
                 React.createElement('span', { key: 'spacer', className: 'psd-child-spacer', 'aria-hidden': true }),
