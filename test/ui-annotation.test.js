@@ -78,7 +78,7 @@ if (ui === undefined) {
     'annotationFullXPathOf', 'annotationFallbackCacheKey', 'annotationLevenshteinWithin',
     'annotationHasStrongIdentity', 'annotationStructuralFallbackStatus', 'annotationCopyAnchorDecision',
     'annotationRenderedTextRepeatCount', 'annotationFirstTextLeafDescendant', 'annotationAncestorTagChain',
-    'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey', 'annotationScopeAuthorityOutcome', 'annotationEphemeralOutcome', 'annotationSegmentedIndex', 'debugFallbackScanProbe',
+    'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey', 'annotationScopeAuthorityOutcome', 'annotationEphemeralOutcome', 'annotationSegmentedIndex', 'annotationSegmentDisplayLabel', 'debugFallbackScanProbe',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -194,6 +194,7 @@ if (ui === undefined) {
     annotationScopeAuthorityOutcome: [1, 1],
     annotationEphemeralOutcome: [2, 3],
     annotationSegmentedIndex: [3, 3],
+    annotationSegmentDisplayLabel: [1, 1],
     debugFallbackScanProbe: [0, 0],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
@@ -217,7 +218,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 110, 'the frozen task-55 generation is pinned')
+    assert.equal(SEAM_GENERATION, 111, 'the frozen task-57 generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -3038,6 +3039,16 @@ if (ui === undefined) {
     assert.equal(ui.annotationSegmentedIndex(1, 'last', 4), 3)
     assert.equal(ui.annotationSegmentedIndex(-1, 'next', 4), 1)
     assert.equal(ui.annotationSegmentedIndex(0, 'next', 0), -1, 'empty radiogroup has no active index')
+  })
+
+  test('A3/T57: modifier segment display labels keep symbols with short names', () => {
+    assert.equal(ui.annotationSegmentDisplayLabel('⌥ / Alt'), '⌥ Alt')
+    assert.equal(ui.annotationSegmentDisplayLabel('⌃ / Ctrl'), '⌃ Ctrl')
+    assert.equal(ui.annotationSegmentDisplayLabel('⌘ / Meta'), '⌘ Meta')
+    assert.equal(ui.annotationSegmentDisplayLabel('⇧ / Shift'), '⇧ Shift')
+    assert.equal(ui.annotationSegmentDisplayLabel('Ctrl'), 'Ctrl', 'labels without a separator are unchanged')
+    assert.equal(ui.annotationSegmentDisplayLabel('  '), '')
+    assert.equal(ui.annotationSegmentDisplayLabel(null), '')
   })
 
   //#region geometry and layout
