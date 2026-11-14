@@ -249,7 +249,12 @@ API/plugin network failures in every run below):
   docs. Delta re-review **PASS-WITH-NITS** (no required changes); S6/S10/S12/S14
   green; S4 showed an environment/host-state timeout that reproduces with the
   pre-delta client (not this delta).
-  Running & recent row icons/chevrons/status/child glyphs were lifted to the
+  On the highlighted running row the New-session (+) action now darkens to the
+  primary label on hover/focus in both themes (previously the light icon-lift
+  rule outranked the action's hover colour, so + stayed secondary while the
+  native pin control darkened; non-current row hover was restored too); sidebar
+  E2E b4-15 pins rest→hover→restore colours, glyph inheritance and non-current
+  hover in light+dark. Running & recent row icons/chevrons/status/child glyphs were lifted to the
   native Workspace icon weight in light mode (label-tertiary #81858c →
   label-secondary #61666b; brand/sparkle stays label-primary; dark unchanged),
   and the native Workspace session-info hover card was widened from the shell's
