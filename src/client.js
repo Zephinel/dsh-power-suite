@@ -4693,6 +4693,12 @@ body:not([data-ds-dark-theme]) ._card_bgejw_9{
   --dsw-static-neutral-bluish-300:var(--dsw-alias-label-secondary,#61666b);
   --dsw-static-neutral-bluish-400:var(--dsw-alias-label-tertiary,#81858c);
 }
+/* The shell's session-info hover card is fixed at 244 px, narrower than the
+   plugin session-info card (DW_HOVERCARD_WIDTH = 320 px), so its labels/values
+   truncated early in the user's screenshot. Match the width in both themes,
+   keeping the padding/radius/elevation and a viewport clamp; hash-dependency
+   caveat is the same as the colour override above. */
+._card_bgejw_9{width:320px;max-width:calc(100vw - 16px)}
 /* The shell's workspace hover-preview text classes are hardcoded light-palette
    hex values (not tokens), so the surface override above needs matching text
    rules. Same fragility note as the surface rule. */
@@ -4710,6 +4716,14 @@ body:not([data-ds-dark-theme]) ._card_bgejw_9 .YDXeBa_hoverStatus{color:var(--ds
 body:not([data-ds-dark-theme]) .psd-run[data-state='done'] .psd-run-title,
 body:not([data-ds-dark-theme]) .psd-child-title,
 body:not([data-ds-dark-theme]) .psd-child{color:var(--dsw-alias-label-primary,#0f1115)}
+/* Running & recent icon colours (user fix): the minor row/panel icons used the
+   tertiary label (#81858c) while the native Workspace icons the user compared
+   against read darker. Light mode lifts the plugin's interactive/disclosure icons
+   (row actions, disclosure toggle + chevron, child glyphs, status glyph) to the
+   secondary label (#61666b) so they sit at or above the native row icon weight;
+   the brand/sparkle/indicator glyphs already use the primary label. Geometry,
+   sizes and layout are untouched; dark mode keeps its original tertiary icons. */
+body:not([data-ds-dark-theme]) :is(.psd-row-action,.psd-run-toggle,.psd-chevron,.psd-panel-chevron,.psd-run-glyph,.psd-child-glyph){color:var(--dsw-alias-label-secondary,#61666b)}
 .psd-run,.psd-child{--psd-title-fade:28px}
 /* Fixed 22 px action slot between the time column and the disclosure column.
    Main rows hold the New session button here; nested subagent rows hold only
