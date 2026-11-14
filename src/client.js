@@ -7244,14 +7244,6 @@ function dwClearNativeAtmospheres() {
                         ? React.createElement(StateDot, { state: 'done', size: 10 })
                         : React.createElement('span', { className: 'psd-child-brand', 'aria-hidden': true },
                           RemixGlyph(DW_ROBOT_2_LINE, 12))),
-                childInterrupted
-                  ? React.createElement('span', { className: 'psd-continue-slot' },
-                    React.createElement(DwContinueAction, {
-                      className: 'psd-continue-inline',
-                      interruptedT,
-                      row: childRow
-                    }))
-                  : null,
                 React.createElement('span', { className: 'psd-child-title' }, child.title)),
                 React.createElement('span', { key: 'spacer', className: 'psd-child-spacer', 'aria-hidden': true }),
                 React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t)),
