@@ -225,9 +225,9 @@ test('identity glyphs are swapped without touching the rest of the marker recipe
   const source = client.source
   // Header all-complete indicator: DeepSeek brand glyph in the same 14 px slot.
   assert.match(source, /className: 'psd-spark' \}, RemixGlyph\(DW_DEEPSEEK_FILL, 14\)\)/)
-  // Read/acknowledged parent row: the sparkling glyph fills the 16 px leading-glyph
-  // cell (slightly larger than the 14 px state dots, same 0.82 path scale).
-  assert.match(source, /className: 'psd-run-glyph-cell'[\s\S]{0,400}className: 'psd-run-brand'[\s\S]{0,200}RemixGlyph\(DW_SPARKLING_LINE, 16, undefined, 0\.82\)/)
+  // Read/acknowledged parent row: the sparkling glyph fills the leading-glyph
+  // cell at the same 0.82 path scale (interrupted rows swap it for the badge).
+  assert.match(source, /className: 'psd-run-brand'[\s\S]{0,200}RemixGlyph\(DW_SPARKLING_LINE, 14, undefined, 0\.82\)/)
   // Nested subagent rows keep their robot glyph.
   assert.match(source, /className: 'psd-child-brand'[\s\S]{0,200}RemixGlyph\(DW_ROBOT_2_LINE, 12\)/)
   // The running (blue pulse) and unread-completion (green done dot) branches are untouched.
