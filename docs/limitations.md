@@ -539,3 +539,15 @@
   animations.
 - Hover preview geometry is remembered per browser in `localStorage`; it does
   not sync across devices.
+- **Light-mode contrast and the document preview.** The rainbow-atmosphere rows
+  now meet the documented light-mode thresholds; native sidebar rows rely on
+  shell tokens (their tertiary time text remains ~3.0:1, documented). The
+  reported dark-on-dark document-preview panel could not be reproduced in a
+  forced-light throwaway browser: the plugin defines no `--dsw-*` variables and
+  the native light preview tokens measured correct, so the residual low
+  contrast is shell-owned (diff line numbers/hunks and added-line green) and
+  was not patched from the plugin; the user's exact state needs their DOM/theme
+  state if it persists. Remaining NITs: segment symbols render at the existing
+  10px type; the b4-9 native-row title/time slots use plugin-only selectors so
+  the "native title ≥4.5" wording is covered only by the generic worst-native
+  text ≥3 assertion.
