@@ -4886,7 +4886,6 @@ body:not([data-ds-dark-theme]) :is(.psd-row-action,.psd-run-toggle,.psd-chevron,
    brightness lift — the row-level lift already applies while hovered, and the
    control under the pointer brightens one small extra step. Native sidebar
    rows' action buttons get the same treatment. */
-.psd-run-current .psd-row-action:hover,.psd-run-current .psd-run-toggle:hover,.psd-run-current .psd-run-pin:hover,.psd-run-current[data-pinned='true'] .psd-run-pin:hover,.psd-child-current .psd-row-action:hover{background-color:transparent;filter:brightness(1.2)}
 [data-psd-current-session='true'] button:hover,[data-psd-current-session='true'] [role='button']:hover,[data-psd-current-workspace='true'] button:hover,[data-psd-current-workspace='true'] [role='button']:hover{background-color:transparent!important;filter:brightness(1.2)}
 body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.5) brightness(1.14)}
 body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(16,18,22,.12),rgba(16,18,22,.22))}
