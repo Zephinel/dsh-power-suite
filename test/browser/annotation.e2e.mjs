@@ -189,8 +189,8 @@ function parseArgs(argv) {
       throw error
     }
     const value = Number(raw)
-    if (!Number.isInteger(value) || value < 1 || value > 15) {
-      const error = new Error(`invalid ${name} "${raw}": expected an integer in the 1..15 scenario range`)
+    if (!Number.isInteger(value) || value < 1 || value > 16) {
+      const error = new Error(`invalid ${name} "${raw}": expected an integer in the 1..16 scenario range`)
       error.exitCode = 2
       throw error
     }
@@ -545,6 +545,10 @@ class Page {
       return false
     }
     if (/\/favicon\.ico$/i.test(pathname)) return false
+    // A3/T68: the pre-installed intelligent-ui plugin probes its own update route
+    // when native Sidebar chrome is used; that plugin is outside this feature and
+    // its 404 is not an annotation-surface failure.
+    if (pathname.startsWith('/api/intelligent-ui/')) return false
     if (pathname.startsWith('/api/') || pathname.startsWith('/plugins')) return true
     return ['Document', 'Fetch', 'XHR'].includes(type)
   }
@@ -1097,7 +1101,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 / 97 anchor / 100 review / 106 descendant / 107 scan / 108 scope / 109 reference / 110 segmented / 111 segment-symbols)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 / 97 anchor / 100 review / 106 descendant / 107 scan / 108 scope / 109 reference / 110 segmented / 111 symbols / 112 preview-dock)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1109,7 +1113,7 @@ async function runSmoke({ page, results, state }) {
     // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
     // rail selection and chip-ref serialization helpers (66). Pin a documented count and
     // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97, 100, 106, 107, 108, 109, 110, 111]
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97, 100, 106, 107, 108, 109, 110, 111, 112]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1214,6 +1218,9 @@ async function runSmoke({ page, results, state }) {
     }
     if (keyCount === 111) {
       assert(probe.keys.includes('annotationSegmentDisplayLabel'), 'task-57 seam must expose annotationSegmentDisplayLabel')
+    }
+    if (keyCount === 112) {
+      assert(probe.keys.includes('annotationRailRightForPane'), 'task-68 seam must expose annotationRailRightForPane')
     }
     state.hooks = probe.keys
     return `uiAnnotation seam: ${keyCount} keys`
@@ -3565,9 +3572,10 @@ const SCENARIO_TITLES = {
   13: 'composer chip: Quick reference, hover preview, chip × removal (single+group, one undo step), Backspace removal, real chat-anchor capture, ONE batch group chip, not sent',
   14: 'persistence: reload restores records/marks; removed target is missing and not drawn',
   15: 'rainbow input focus ring: wrapper ring, no solid outline, reduced motion, no layout shift',
+  16: 'native document preview is annotatable: rail docks beside the right Sidebar, image/text hover+select+mark, native action suppressed, preview still usable after exit',
 }
 
-const SCENARIO_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+const SCENARIO_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 
 function buildScenarios(harness) {
   const h = harness
@@ -7891,6 +7899,139 @@ function buildScenarios(harness) {
       const noteStateAfter = await h.page.eval(probes.paintLayerState)
       assertEqual(noteStateAfter.raised, null, 'B3: data-psa-raised leaked after exiting the mode')
       return 'rainbow wrapper + ::after ring (shared recipe: 3.2s spin + 14s hue) on popover/collection/editor textareas and settings select; outline none; rect stable; reduced motion static ring; mode exit restored'
+    },
+
+    16: async () => {
+      await h.ensureModeOff()
+      await h.page.setViewport(VIEWPORT.width, VIEWPORT.height)
+      await sleep(350)
+      await h.ensureSidebarExpanded()
+      await h.ensureConversation()
+      // Open the native right Sidebar's Files page (mode off), so opening the
+      // preview is a native action rather than an annotation pick.
+      let expand = await h.page.findRect('[data-sidebar-right-expand]')
+      if (expand) { await h.page.clickAt(expand.x, expand.y); await sleep(700) }
+      let filesGuide = await h.page.findRect('[data-sidebar-right-guide-entry="files"]')
+      if (!filesGuide) {
+        const collapse = await h.page.findRect('[data-sidebar-right-toggle]')
+        if (collapse) { await h.page.clickAt(collapse.x, collapse.y); await sleep(500) }
+        expand = await h.page.findRect('[data-sidebar-right-expand]')
+        if (expand) { await h.page.clickAt(expand.x, expand.y); await sleep(700) }
+        filesGuide = await h.page.findRect('[data-sidebar-right-guide-entry="files"]')
+      }
+      assert(filesGuide, 'A3/T68: native Files guide entry is missing from the right Sidebar')
+      await h.page.clickAt(filesGuide.x, filesGuide.y)
+      await h.page.waitFor(`!!document.querySelector('[data-files-entry][data-files-path]')`, { timeout: 8000, label: 'native workspace file rows' })
+      await sleep(500)
+      const filePick = await h.page.evaluate(`(() => {
+        const rows = [...document.querySelectorAll('[data-files-entry][data-files-path]')].filter((el) => el.getBoundingClientRect().width > 0)
+        const row = rows.find((el) => /\\/icon\\.png$/.test(el.getAttribute('data-files-path') || '')) || rows.find((el) => /\\.(md|json|txt|gitignore)$/i.test(el.getAttribute('data-files-path') || '')) || rows[0]
+        if (row === null) return null
+        const r = row.getBoundingClientRect()
+        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), path: row.getAttribute('data-files-path') }
+      })()`)
+      assert(filePick, 'A3/T68: no workspace file could be opened')
+      await h.page.clickAt(filePick.x, filePick.y)
+      await h.page.waitFor(`!!document.querySelector('[data-document-preview]')`, { timeout: 10000, label: 'native document preview' })
+      await sleep(1200)
+      const fileName = filePick.path.split('/').pop()
+      const beforeMode = await h.page.evaluate(`(() => {
+        const preview = document.querySelector('[data-document-preview]')
+        const image = [...preview.querySelectorAll('img')].sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width)[0] ?? null
+        return { kind: image !== null && image.getBoundingClientRect().width >= 100 ? 'image' : 'text', active: document.documentElement.getAttribute('data-psa-active') }
+      })()`)
+      assertEqual(beforeMode.active, null, 'A3/T68: preview opened with annotation mode already active')
+      await h.activate()
+      await h.page.waitFor(`!!document.querySelector('[data-psa-rail]')`, { timeout: 6000, label: 'rail over the native preview' })
+      await sleep(600)
+      const dock = await h.page.evaluate(`(() => {
+        const preview = document.querySelector('[data-document-preview]')
+        const pane = preview?.closest('[data-dockkit-pane]') ?? null
+        const rail = document.querySelector('[data-psa-rail]')
+        if (preview === null || pane === null || rail === null) return null
+        const pr = preview.getBoundingClientRect()
+        const nr = pane.getBoundingClientRect()
+        const rr = rail.getBoundingClientRect()
+        const image = [...preview.querySelectorAll('img')].sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width)[0] ?? null
+        const ir = image !== null && image.getBoundingClientRect().width >= 100 ? image.getBoundingClientRect() : null
+        const point = ir === null ? { x: Math.round(pr.left + 120), y: Math.round(pr.top + 150) } : { x: Math.round(ir.left + ir.width / 2), y: Math.round(ir.top + ir.height / 2) }
+        const hit = document.elementFromPoint(point.x, point.y)
+        return {
+          active: document.documentElement.getAttribute('data-psa-active'),
+          offset: document.documentElement.getAttribute('data-psa-rail-offset'),
+          preview: { left: Math.round(pr.left), right: Math.round(pr.right) },
+          pane: { left: Math.round(nr.left), right: Math.round(nr.right) },
+          rail: { left: Math.round(rr.left), right: Math.round(rr.right) },
+          point,
+          hitInPreview: hit === null ? false : preview.contains(hit) || hit.closest('[data-document-preview]') !== null,
+          hitInRail: hit === null ? false : rail.contains(hit),
+          image: ir === null ? null : { left: Math.round(ir.left), top: Math.round(ir.top), width: Math.round(ir.width), height: Math.round(ir.height), scrollTop: image.closest('[data-document-zoom-scrollport]')?.scrollTop ?? 0, scrollLeft: image.closest('[data-document-zoom-scrollport]')?.scrollLeft ?? 0 }
+        }
+      })()`)
+      assert(dock, 'A3/T68: native preview/rail geometry could not be measured')
+      assertEqual(dock.active, 'true', 'A3/T68: mode is not active over the preview')
+      assertEqual(dock.offset, 'true', 'A3/T68: the rail did not dock beside the native right Sidebar')
+      assert(dock.rail.right <= dock.pane.left + 1, `A3/T68: rail still overlaps the right Sidebar (${JSON.stringify(dock)})`)
+      assertEqual(dock.hitInRail, false, 'A3/T68: the preview centre is still covered by the rail')
+      assertEqual(dock.hitInPreview, true, `A3/T68: the preview centre is not hit-testable (${JSON.stringify(dock)})`)
+      await h.page.moveTo(dock.point.x, dock.point.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-hover]')`, { timeout: 5000, label: 'hover outline over the native preview' })
+      const hoverRect = await h.page.evaluate(`(() => { const el = document.querySelector('[data-psa-hover]'); if (el === null) return null; const r = el.getBoundingClientRect(); return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) } })()`)
+      assert(hoverRect, 'A3/T68: no hover outline over the native preview')
+      assert(hoverRect.left >= dock.preview.left - 1 && hoverRect.left + hoverRect.width <= dock.preview.right + 1, `A3/T68: hover outline is outside the preview (${JSON.stringify(hoverRect)})`)
+      await h.page.clickAt(dock.point.x, dock.point.y)
+      await h.page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 6000, label: 'annotation popover over the native preview' })
+      const popoverText = await h.page.evaluate(`(document.querySelector('[data-psa-popover]')?.innerText || '').replace(/\\s+/g, ' ').trim()`)
+      assert(popoverText.length > 20 && /(Target|目标)/.test(popoverText), `A3/T68: popover did not open on the previewed content: ${short(popoverText)}`)
+      const afterClick = await h.page.evaluate(`(() => {
+        const image = [...document.querySelectorAll('[data-document-preview] img')].sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width)[0] ?? null
+        if (image === null || image.getBoundingClientRect().width < 100) return { immutable: true, pan: null }
+        const r = image.getBoundingClientRect()
+        const expected = ${dock.image === null ? 'null' : JSON.stringify(dock.image)}
+        return { immutable: expected === null || (Math.abs(r.left - expected.left) <= 1 && Math.abs(r.top - expected.top) <= 1), pan: image.getAttribute('data-pan') }
+      })()`)
+      assertEqual(afterClick.immutable, true, 'A3/T68: an annotating click panned/moved the native image')
+      assert(afterClick.pan === null || afterClick.pan === 'none', 'A3/T68: an annotating click started native image panning')
+      await h.click('[data-psa-add]')
+      await h.page.waitFor(`!!document.querySelector('[data-psa-mark]')`, { timeout: 6000, label: 'mark over the native preview' })
+      const marked = await h.page.evaluate(`(() => ({ marks: document.querySelectorAll('[data-psa-mark]').length, entries: document.querySelectorAll('[data-psa-entry]').length }))()`)
+      assertEqual(marked.marks, 1, 'A3/T68: the preview annotation did not draw a mark')
+      assert(marked.entries >= 1, 'A3/T68: the preview annotation did not enter the rail')
+      if (process.env.PSA_PREVIEW_EVIDENCE_DIR) {
+        const dir = process.env.PSA_PREVIEW_EVIDENCE_DIR
+        await mkdir(dir, { recursive: true })
+        const clip = await h.page.evaluate(`(() => {
+          const preview = document.querySelector('[data-document-preview]')?.getBoundingClientRect()
+          const rail = document.querySelector('[data-psa-rail]')?.getBoundingClientRect()
+          if (preview === undefined || preview === null || rail === undefined || rail === null) return null
+          const left = Math.max(0, Math.min(preview.left, rail.left) - 16)
+          const top = Math.max(0, Math.min(preview.top, rail.top) - 16)
+          const right = Math.min(innerWidth, Math.max(preview.right, rail.right) + 16)
+          const bottom = Math.min(innerHeight, Math.max(preview.bottom, rail.bottom) + 16)
+          return { x: Math.round(left), y: Math.round(top), width: Math.round(right - left), height: Math.round(bottom - top), scale: 1 }
+        })()`)
+        if (clip !== null) {
+          const capture = async (name) => {
+            const data = await h.page.send('Page.captureScreenshot', { format: 'png', clip })
+            await writeFile(path.join(dir, name), Buffer.from(data.data, 'base64'))
+          }
+          await capture('native-preview-annotation-light.png')
+          const originalDark = await h.page.evaluate(`document.body.getAttribute('data-ds-dark-theme')`)
+          await h.page.evaluate(`document.body.setAttribute('data-ds-dark-theme', 'true')`)
+          await sleep(300)
+          await capture('native-preview-annotation-dark.png')
+          if (originalDark === null) await h.page.evaluate(`document.body.removeAttribute('data-ds-dark-theme')`)
+          else await h.page.evaluate(`document.body.setAttribute('data-ds-dark-theme', ${JSON.stringify(originalDark)})`)
+          await sleep(150)
+        }
+      }
+      await h.exit()
+      await sleep(400)
+      const afterExit = await h.page.evaluate(`(() => ({ offset: document.documentElement.getAttribute('data-psa-rail-offset'), active: document.documentElement.getAttribute('data-psa-active'), preview: !!document.querySelector('[data-document-preview]') }))()`)
+      assertEqual(afterExit.offset, null, 'A3/T68: the rail dock offset leaked after exit')
+      assertEqual(afterExit.active, null, 'A3/T68: the mode did not exit cleanly')
+      assertEqual(afterExit.preview, true, 'A3/T68: the native preview disappeared after leaving the mode')
+      return `${beforeMode.kind} preview ${fileName}: mode active, rail docked at ${dock.rail.left}-${dock.rail.right} left of Sidebar ${dock.pane.left}-${dock.pane.right}, hover+select+mark over preview, native pan suppressed, offset cleared after exit`
     },
   }
 }
