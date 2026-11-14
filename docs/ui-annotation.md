@@ -348,6 +348,20 @@ be unique. Native modals and context menus stack above the annotation layer
 Cross-origin iframes, Shadow DOM internals, and canvas pixels remain
 unselectable.
 
+### Native right-Sidebar document preview
+
+The native right Sidebar's document preview (workspace files opened from the Files
+page; image, text and Markdown previews) is part of the annotatable page. When
+annotation mode is active and a right-Sidebar pane is visible, the rail **docks
+immediately to the left of that pane** (its `right` offset is the pane's visible
+width) instead of painting over it, so preview content stays pointer-reachable:
+hover outlines, click selection, the requirement popover and marks work over the
+preview image/line, and an annotating click does not start the preview's native
+image panning. The dock offset is removed when the pane closes or the mode exits,
+and the preview remains usable afterwards. A near-fullscreen preview pane leaves no
+room to dock, so the rail stays at the viewport edge and may cover the preview's
+right side; resize the Sidebar or leave fullscreen to annotate it.
+
 ### Multi-select and marquee
 
 The multi-select modifier (Shift by default) switches clicks from "select one" to
@@ -1405,7 +1419,7 @@ repository root against a running GUI:
 ```bash
 node test/browser/annotation.e2e.mjs            # smoke + 13 scenarios + screenshots
 node test/browser/annotation.e2e.mjs --smoke    # pipeline smoke only
-node test/browser/annotation.e2e.mjs --scenario 10 --no-shots  # one scenario (1-15), no captures
+node test/browser/annotation.e2e.mjs --scenario 10 --no-shots  # one scenario (1-16), no captures
 ```
 
 It opens the real DSH Web GUI with a fresh Chrome profile (`--user-data-dir`),
@@ -1558,7 +1572,7 @@ Phase 2 UX pass along with the new detail card and marks.
   `--assets` writes them to `docs/assets/` (the default is a temporary
   directory), `--client <path>` injects an alternate client file, `--scenario N`
   or `--from N` runs a subset (scenario ids 1-15; this build's order is
-  1-15, with 11/10b/13f recording explicit cross-branch/env SKIP rows in this
+  1-16, with 11/10b/13f recording explicit cross-branch/env SKIP rows in this
   worktree and running for real after the merge), `--no-shots` skips captures, `--headful` shows the
   browser, and `--keep-open` leaves Chrome running for inspection.
 - Gate semantics: the exit code is `0` only when every check passes; `1` for any
@@ -2691,7 +2705,7 @@ repository root against a running GUI:
 ```bash
 node test/browser/annotation.e2e.mjs            # smoke + 13 scenarios + screenshots
 node test/browser/annotation.e2e.mjs --smoke    # pipeline smoke only
-node test/browser/annotation.e2e.mjs --scenario 10 --no-shots  # one scenario (1-15), no captures
+node test/browser/annotation.e2e.mjs --scenario 10 --no-shots  # one scenario (1-16), no captures
 ```
 
 It opens the real DSH Web GUI with a fresh Chrome profile (`--user-data-dir`),
@@ -2844,7 +2858,7 @@ Phase 2 UX pass along with the new detail card and marks.
   `--assets` writes them to `docs/assets/` (the default is a temporary
   directory), `--client <path>` injects an alternate client file, `--scenario N`
   or `--from N` runs a subset (scenario ids 1-15; this build's order is
-  1-15, with 11/10b/13f recording explicit cross-branch/env SKIP rows in this
+  1-16, with 11/10b/13f recording explicit cross-branch/env SKIP rows in this
   worktree and running for real after the merge), `--no-shots` skips captures, `--headful` shows the
   browser, and `--keep-open` leaves Chrome running for inspection.
 - Gate semantics: the exit code is `0` only when every check passes; `1` for any
