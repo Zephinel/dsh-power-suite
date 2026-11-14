@@ -4903,17 +4903,12 @@ body:not([data-ds-dark-theme]) .psd-atmos{opacity:.56}
 body:not([data-ds-dark-theme]) .psd-atmos-scrim{background:linear-gradient(90deg,rgba(255,255,255,.68),rgba(255,255,255,.55))}
 body:not([data-ds-dark-theme]) .psd-run-current:hover .psd-atmos,body:not([data-ds-dark-theme]) .psd-child-current:hover .psd-atmos,body:not([data-ds-dark-theme]) [data-psd-current-workspace='true']:hover .psd-atmos,body:not([data-ds-dark-theme]) [data-psd-current-session='true']:hover .psd-atmos{opacity:.68}
 body:not([data-ds-dark-theme]) .psd-run-current :is(.psd-run-time,.psd-run-glyph,.psd-run-brand,.psd-row-action,.psd-run-toggle),body:not([data-ds-dark-theme]) .psd-child-current :is(.psd-child-time,.psd-child-glyph,.psd-child-brand,.psd-row-action){color:var(--dsw-alias-label-secondary)}
-/* Highlighted-row action hover (user fix): the light-theme current-row colour
-   rule above is more specific than .psd-row-action:hover, so the New-session +
-   stayed secondary on hover while other action buttons (e.g. the native pin)
-   darkened. Restore the primary label on hover/focus for the highlighted rows
-   in both themes. Scope: only the action buttons inside the current card row /
-   current child row; non-current rows keep their existing hover behaviour. */
-.psd-run-current .psd-row-action:hover,.psd-run-current .psd-row-action:focus-visible,.psd-child-current .psd-row-action:hover,.psd-child-current .psd-row-action:focus-visible{color:var(--dsw-alias-label-primary)}
-/* The light-mode icon-lift rule above outranks .psd-row-action:hover on every
-   row, so restore the primary hover/focus colour for all row actions there. */
-body:not([data-ds-dark-theme]) .psd-row-action:hover,body:not([data-ds-dark-theme]) .psd-row-action:focus-visible{color:var(--dsw-alias-label-primary)}
-body:not([data-ds-dark-theme]) .psd-run-current .psd-row-action:hover,body:not([data-ds-dark-theme]) .psd-run-current .psd-row-action:focus-visible,body:not([data-ds-dark-theme]) .psd-child-current .psd-row-action:hover,body:not([data-ds-dark-theme]) .psd-child-current .psd-row-action:focus-visible{color:var(--dsw-alias-label-primary)}
+/* Row action hover + keyboard focus (user fix): the light-mode icon-lift rule
+   above (0,2,1) outranks the base .psd-row-action:hover (0,2,0), so re-assert the
+   primary label for hover and focus-visible in light mode; dark mode already
+   darkens through the base hover rule, which no colour override outranks. */
+body:not([data-ds-dark-theme]) .psd-row-action:hover,
+body:not([data-ds-dark-theme]) .psd-row-action:focus-visible{color:var(--dsw-alias-label-primary)}
 @media (prefers-reduced-motion: reduce){.psd-atmos{transition:none}}
 
 `
