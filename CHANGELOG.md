@@ -396,6 +396,20 @@ heading is added until the release is cut.
   dropdown/listbox implementation (and its seam helpers) is removed. No native
   `<select>` or OS menu remains.
 
+- UI element annotation segmented controls now show the modifier-key symbols
+  (`⌥ Alt`, `⌃ Ctrl`, `⌘ Meta`, `⇧ Shift`) with full localized aria-labels,
+  equal widths and no truncation.
+- Dynamic-workspaces rainbow atmosphere rows are readable in light mode: a
+  brighter pastel canvas (saturate/brightness lift, lower wrapper opacity), a
+  white readability veil instead of the dark scrim, and lifted secondary
+  text/icons on highlighted rows (card title 5.51:1→14.72:1, time/icons
+  1.08:1→4.52:1, native Workspace worst text 15.45:1); dark mode unchanged and
+  the sidebar E2E pins the light thresholds/theme-aware atmosphere facts. The
+  reported dark document-preview panel was found shell-owned/not reproducible
+  (plugin defines no `--dsw-*` variables; native light preview tokens are
+  correct; only the shell diff sub-palette is low-contrast) — documented as a
+  shell-side limitation, no broad override added.
+
 ### Removed
 
 - Standalone Project detail page: the `project-view` feature is removed —

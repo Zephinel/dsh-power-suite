@@ -22,15 +22,15 @@ npm run pack:check
 
 Current evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round):
 
-- `npm test`: **228 tests, 228 passed, 0 failed, 0 skipped** after the 0.3.0
+- `npm test`: **229 tests, 229 passed, 0 failed, 0 skipped** after the 0.3.0
   Project-view removal (the 24 project-view tests were deleted with the page),
   including **14** read-acks, **22** session-activity Host tests, **7** extra
   interrupted-session tests (error/max-tokens/aborted-cause cases and SSE stream
-  frames), **11** Dynamic-Workspaces hover-card figure tests, and **118**
+  frames), **11** Dynamic-Workspaces hover-card figure tests, and **119**
   UI-element-annotation tests through the browser-factory test seam; per-file:
   dynamic-workspaces-stats 11, interrupted-host 20, interrupted-sessions 7,
   prompt-history 6, read-acks 14, session-activity 22, session-artifacts 16,
-  settings 6, ui-annotation 118, workspace-presets 8.
+  settings 6, ui-annotation 119, workspace-presets 8.
 - `npm run check`: passed (`16 modules, 10 test files`).
 - Interrupted-state SSE transport was verified with cookie auth: 200,
   `content-type: text/event-stream; charset=utf-8`, no-store/no-buffering, first
@@ -213,7 +213,7 @@ API/plugin network failures in every run below):
   >= 8 px inside the pill's right edge, pill content-paced, mask boundary
   recalculated), and both cross-branch annotation-mode hover-card pin states.
 - Annotation harness `test/browser/annotation.e2e.mjs`: `--smoke` **6/6 PASS**
-  with the **110-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
+  with the **111-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
   FAIL 0** (including `10b`, the real pinned-cross-branch-card check),
   scenario 11 **PASS 7 / 0 / 0**, scenario 12 **PASS 7 / 0 / 0** (marks, detail
   card, requirement edit with `updatedAt`, delete → 5 s undo, popover layout:
@@ -249,6 +249,19 @@ API/plugin network failures in every run below):
   docs. Delta re-review **PASS-WITH-NITS** (no required changes); S6/S10/S12/S14
   green; S4 showed an environment/host-state timeout that reproduces with the
   pre-delta client (not this delta).
+  The segmented-control segments now show the modifier-key symbols
+  (`⌥ Alt`/`⌃ Ctrl`/`⌘ Meta`/`⇧ Shift`) with full localized aria-labels, equal
+  widths and no truncation. Light mode also got a contrast pass: the rainbow
+  atmosphere row's canvas is a brighter pastel (saturate/brightness lift,
+  wrapper opacity .56/.68), the scrim becomes a white readability veil and
+  highlighted-row secondary text/icons are lifted to `label-secondary`, so the
+  card title measures 14.72:1 and time/icons 4.52:1 (was 5.51:1/1.08:1), native
+  Workspace worst text 15.45:1; dark mode is unchanged. The reported dark
+  document-preview panel was investigated and found shell-owned/not
+  reproducible (plugin defines 0 `--dsw-*` variables; native light tokens are
+  correct; only shell diff sub-palette is low-contrast) — documented, no unsafe
+  override. Sidebar E2E pins the light thresholds and theme-aware atmosphere
+  facts (45/45).
   The modifier controls were then changed from dropdowns to custom **segmented
   controls** inside the same info popover: two `role=radiogroup` rows with four
   `role=radio` segments each (Alt/Ctrl/Meta/Shift), roving tabindex, arrow/Home/
@@ -450,7 +463,7 @@ batch removed-member serialization are unit-tested only.
 > [0.3.0 polish round acceptance](#030-polish-round-acceptance-2026-11-13-merged-build)
 > above**; the annotation model has since grown to the v2 record/persistence,
 > floating-surface, marks/detail and composer-chip implementation with the
-> 110-key seam generation.
+> 111-key seam generation.
 
 Date: 2026-11-12 (round-2 fix build, `fix/ui-annotation-review-fixes`). The
 feature is browser-only ([ui-annotation.md](ui-annotation.md)), so its acceptance
