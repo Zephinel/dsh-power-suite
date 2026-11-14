@@ -4844,7 +4844,7 @@ async function runFilesArtifactsChecks({ page, results, state }) {
     assert(/^(Artifacts|产物)$/.test(header.button.label || ''), `button aria-label must be "Artifacts"/"产物", got ${header.button.label}`)
     assertEqual(header.button.rect.width, 28, 'button width must match the native 28 px header tools')
     assertEqual(header.button.rect.height, 28, 'button height must match the native 28 px header tools')
-    assertEqual(header.button.glyph.width, 15, 'glyph must match the native 15 px tool glyph')
+    assertEqual(header.button.glyph.width, 18, 'glyph must match the native tool glyph weight')
     assert(header.reload, 'reload tool not found for the ordering check')
     assert(header.button.rect.right <= header.reload.left + 1, 'Artifacts tool must sit immediately left of the reload control')
     assert(header.reload.left - header.button.rect.right <= 24, `Artifacts tool must hug the reload control (gap ${header.reload.left - header.button.rect.right}px)`)

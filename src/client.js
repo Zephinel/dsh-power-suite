@@ -252,8 +252,8 @@ window.__ModuleLoader__.load({
      * because the button exists while the overlay is closed.
      */
     const FILES_ARTIFACTS_CSS = `
-.psfa-tool{appearance:none;box-sizing:border-box;width:28px;height:28px;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-sm,8px);cursor:pointer;background:0 0;border:none;flex:none;justify-content:center;align-items:center;padding:6px;line-height:1;display:inline-flex}
-.psfa-tool svg{width:15px;height:15px}
+.psfa-tool{appearance:none;box-sizing:border-box;width:28px;height:28px;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-sm,8px);cursor:pointer;background:0 0;border:none;flex:none;justify-content:center;align-items:center;padding:5px;line-height:1;display:inline-flex}
+.psfa-tool svg{width:18px;height:18px}
 @media (hover:hover){.psfa-tool:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}}
 .psfa-tool[aria-pressed='true']{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .psfa-tool:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
@@ -2820,7 +2820,7 @@ window.__ModuleLoader__.load({
         'aria-expanded': open ? 'true' : 'false',
         'aria-controls': 'psfa-artifacts-view',
         onClick: () => dispatch({ type: 'toggle' })
-      }, TrayIcon({ size: 15 }))
+      }, TrayIcon({ size: 18 }))
 
       const view = showing && stageRef.current.content !== null
         ? ReactDOM.createPortal(React.createElement('div', {
