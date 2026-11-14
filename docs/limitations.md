@@ -551,3 +551,14 @@
   10px type; the b4-9 native-row title/time slots use plugin-only selectors so
   the "native title ≥4.5" wording is covered only by the generic worst-native
   text ≥3 assertion.
+- **Theme-following hovercards and shell class hashes.** The native session-info
+  hover card is themed and widened to the plugin card's 320 px through a scoped
+  light-mode/width override that depends on shell module class hashes
+  (`_card_bgejw_9` and hashed text classes); a shell rename degrades gracefully
+  to the native dark 244 px card. The shell copy-feedback style
+  (`_copied_bgejw_36{color:#fff}`) is not remapped and may be white-on-white if
+  reachable in light mode. The exact markdown preview modal was not
+  deterministically reproducible in the harness; the native document-preview
+  pane itself measured light/readable. The narrow-viewport `max-width` clamp and
+  genuine long-value ellipsis for the shared card width are CSS-preserved but
+  not separately asserted.
