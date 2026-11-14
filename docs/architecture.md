@@ -302,11 +302,15 @@ no New session action (they keep empty action/disclosure spacers, and an
 interrupted child keeps only Continue in the action slot), and the header joins
 the same grid. Each row's workspace title/path, status, last-active time,
 subagent count, and the three native Session figures live in a native-style
-hover card that does not capture the pointer and matches the live native sidebar
-session hover-card recipe (flush left edge, borderless, the fixed `#2C2C2E`
-`--dsw-hovercard-bg` surface in both themes, the shell's native elevation and
-typography). The same recipe is used by the other plugin tooltip-like surfaces
-(Artifact Quick Look, prompt-history cards, annotation popover/detail cards). The figures come from the injected `sessions` service's
+hover card that does not capture the pointer and follows the active theme
+(flush left edge, borderless, shell elevation/typography): light mode paints a
+white surface with the light label tokens (title `#0f1115`, secondary
+`#61666b`, tertiary `#81858c`), dark mode keeps the `#2C2C2E`
+`--dsw-hovercard-bg` recipe; a minimal scoped light-mode override themes the
+native shell session-info card as well. The same theme-following recipe is used
+by the other plugin tooltip-like surfaces (Artifact Quick Look, prompt-history
+cards), while annotation popover/detail cards keep their separate fixed recipe.
+Running & recent row titles use the native Workspace title token in light mode. The figures come from the injected `sessions` service's
 `projectionsBySession` map — live Sessions are push-seeded, a cold persisted
 Session gets exactly one deduplicated `refreshProjections` read on first hover,
 and each section is omitted when its projection data is absent (no loading
