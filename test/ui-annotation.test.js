@@ -78,7 +78,7 @@ if (ui === undefined) {
     'annotationFullXPathOf', 'annotationFallbackCacheKey', 'annotationLevenshteinWithin',
     'annotationHasStrongIdentity', 'annotationStructuralFallbackStatus', 'annotationCopyAnchorDecision',
     'annotationRenderedTextRepeatCount', 'annotationFirstTextLeafDescendant', 'annotationAncestorTagChain',
-    'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey', 'annotationScopeAuthorityOutcome', 'annotationEphemeralOutcome', 'annotationMenuMoveIndex', 'annotationMenuPosition', 'debugFallbackScanProbe',
+    'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey', 'annotationScopeAuthorityOutcome', 'annotationEphemeralOutcome', 'annotationSegmentedIndex', 'debugFallbackScanProbe',
     'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
     'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
     'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
@@ -193,8 +193,7 @@ if (ui === undefined) {
     annotationStatusLabelKey: [2, 2],
     annotationScopeAuthorityOutcome: [1, 1],
     annotationEphemeralOutcome: [2, 3],
-    annotationMenuMoveIndex: [3, 3],
-    annotationMenuPosition: [1, 1],
+    annotationSegmentedIndex: [3, 3],
     debugFallbackScanProbe: [0, 0],
     annotationUndoRemoveMany: [2, 3],
     annotationScopeCounts: [2, 2],
@@ -218,7 +217,7 @@ if (ui === undefined) {
 
   test('the seam publishes exactly the frozen §3.7 surface', () => {
     assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 111, 'the frozen task-51 generation is pinned')
+    assert.equal(SEAM_GENERATION, 110, 'the frozen task-55 generation is pinned')
     assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
     assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
     assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
@@ -3031,20 +3030,14 @@ if (ui === undefined) {
       'the hint must fade with distance, not add a binary bonus')
   })
 
-  test('A3/T51: modifier menu navigation and fixed-position geometry', () => {
-    assert.equal(ui.annotationMenuMoveIndex(0, 1, 4), 1)
-    assert.equal(ui.annotationMenuMoveIndex(3, 1, 4), 0, 'ArrowDown wraps')
-    assert.equal(ui.annotationMenuMoveIndex(0, -1, 4), 3, 'ArrowUp wraps')
-    assert.equal(ui.annotationMenuMoveIndex(-1, 1, 4), 1)
-    assert.equal(ui.annotationMenuMoveIndex(0, 1, 0), -1, 'empty list has no active index')
-    const viewport = { width: 1728, height: 900 }
-    const below = ui.annotationMenuPosition({ trigger: { left: 1200, top: 200, width: 96, height: 26 }, menu: { width: 180, height: 130 }, viewport })
-    assert.deepEqual(plain(below), { left: 1200, top: 232, width: 180, placement: 'below' })
-    const flipped = ui.annotationMenuPosition({ trigger: { left: 1200, top: 820, width: 96, height: 26 }, menu: { width: 180, height: 130 }, viewport })
-    assert.deepEqual(plain(flipped), { left: 1200, top: 684, width: 180, placement: 'above' })
-    const clamped = ui.annotationMenuPosition({ trigger: { left: 1700, top: 200, width: 320, height: 26 }, menu: { width: 320, height: 130 }, viewport })
-    assert.equal(clamped.width, 320)
-    assert(clamped.left <= viewport.width - clamped.width - 8, 'menu must be clamped inside the viewport')
+  test('A3/T55: segmented-control selection index semantics', () => {
+    assert.equal(ui.annotationSegmentedIndex(0, 'next', 4), 1)
+    assert.equal(ui.annotationSegmentedIndex(3, 'next', 4), 0, 'ArrowRight wraps')
+    assert.equal(ui.annotationSegmentedIndex(0, 'prev', 4), 3, 'ArrowLeft wraps')
+    assert.equal(ui.annotationSegmentedIndex(2, 'first', 4), 0)
+    assert.equal(ui.annotationSegmentedIndex(1, 'last', 4), 3)
+    assert.equal(ui.annotationSegmentedIndex(-1, 'next', 4), 1)
+    assert.equal(ui.annotationSegmentedIndex(0, 'next', 0), -1, 'empty radiogroup has no active index')
   })
 
   //#region geometry and layout
