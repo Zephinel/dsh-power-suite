@@ -4966,7 +4966,7 @@ async function runComposerGalleryChecks({ page, results, state, opts }) {
     })
 
     if (!seeded) {
-      for (const id of ['gallery-2', 'gallery-3', 'gallery-4', 'gallery-5', 'gallery-6', 'gallery-7', 'gallery-8']) {
+      for (const id of ['gallery-2', 'gallery-3', 'gallery-4', 'gallery-5', 'gallery-6', 'gallery-7', 'gallery-8', 'gallery-9']) {
         await results.skip(id, 'Composer image gallery checks', 'skipped: the composer rail could not be seeded')
       }
       return
@@ -5083,6 +5083,18 @@ async function runComposerGalleryChecks({ page, results, state, opts }) {
       assertEqual(after.count, 0, 'gallery overlay removed after Escape')
       assertEqual(after.nativeDialogs, 0, 'Escape did not leak a native lightbox')
       return `focus back on ${focused.alt}, overlay removed`
+    })
+
+    await results.check('gallery-9', 'clicking the backdrop dismisses the gallery', async () => {
+      await clickComposerThumb(page, 0)
+      await waitGalleryOpen(page)
+      const open = await page.eval(galleryProbe.gallery)
+      assert(open.present, 'gallery did not reopen for the backdrop check')
+      await page.clickAt(80, 400)
+      await waitGalleryClosed(page)
+      const after = await page.eval(galleryProbe.gallery)
+      assertEqual(after.count, 0, 'backdrop click must dismiss the gallery')
+      return 'left backdrop click closed the gallery'
     })
 
     await results.check('gallery-8', 'attachment removal while open clamps the viewer, and a single image is not intercepted', async () => {
