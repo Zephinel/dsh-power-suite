@@ -4727,6 +4727,19 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 [data-psd-current-workspace='true'] > *:not([data-psd-atmos]),[data-psd-current-session='true'] > *:not([data-psd-atmos]){position:relative;z-index:2}
 body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.5) brightness(1.14)}
 body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(16,18,22,.12),rgba(16,18,22,.22))}
+/* Light-mode readability (user fix). The multiply canvas over the light surface
+   turned the pill into a medium saturated tone; the shell's tertiary time/icons
+   and the hover-revealed row actions then nearly vanished. In light mode the
+   rainbow stays visible as a brighter pastel veil: the canvas is a touch
+   brighter and less saturated, the wrapper is less opaque, and the scrim is a
+   light veil (not a dark one). The plugin's own secondary text/icons inside the
+   highlighted rows are lifted from label-tertiary to label-secondary so they
+   clear WCAG AA on the remaining pastel. Dark mode is untouched. */
+body:not([data-ds-dark-theme]) .psd-atmos-canvas{filter:blur(3px) saturate(1.22) brightness(1.22)}
+body:not([data-ds-dark-theme]) .psd-atmos{opacity:.56}
+body:not([data-ds-dark-theme]) .psd-atmos-scrim{background:linear-gradient(90deg,rgba(255,255,255,.68),rgba(255,255,255,.55))}
+body:not([data-ds-dark-theme]) .psd-run-current:hover .psd-atmos,body:not([data-ds-dark-theme]) .psd-child-current:hover .psd-atmos,body:not([data-ds-dark-theme]) [data-psd-current-workspace='true']:hover .psd-atmos,body:not([data-ds-dark-theme]) [data-psd-current-session='true']:hover .psd-atmos{opacity:.68}
+body:not([data-ds-dark-theme]) .psd-run-current :is(.psd-run-time,.psd-run-glyph,.psd-run-brand,.psd-row-action,.psd-run-toggle),body:not([data-ds-dark-theme]) .psd-child-current :is(.psd-child-time,.psd-child-glyph,.psd-child-brand,.psd-row-action){color:var(--dsw-alias-label-secondary)}
 @media (prefers-reduced-motion: reduce){.psd-atmos{transition:none}}
 
 `

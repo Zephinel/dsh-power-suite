@@ -540,20 +540,33 @@ native sidebar Session row of the open Session:
      stirring .58, breathing .22, blend 1.0, vibrance 1.72, `prism` palette
      (before the vibrancy pass: intensity .56 / spread 1.16 / blend .90 /
      vibrance 1.32);
-  3. `.psd-atmos-scrim` — a light dark gradient above the canvas so the
-     title/time/actions stay readable without dulling the gas: light theme
-     `rgba(16,18,22,.08)` → `rgba(16,18,22,.16)`, dark theme
-     `rgba(16,18,22,.12)` → `rgba(16,18,22,.22)` (`z-index: 1` inside the
-     wrapper). It is deliberately light: the vivid canvas is the point and the
-     content already sits above both layers;
+  3. `.psd-atmos-scrim` — a veil above the canvas so the row content stays
+     readable without dulling the gas. Light usage is a **white readability
+     veil** `rgba(255,255,255,.68)` → `rgba(255,255,255,.55)` (the canvas itself
+     is a brighter pastel there: `saturate(1.22) brightness(1.22)`); dark mode
+     keeps the original `rgba(16,18,22,.12)` → `rgba(16,18,22,.22)` dark scrim
+     (`z-index: 1` inside the wrapper);
   4. the real row content is raised to `position: relative; z-index: 2` — its
      DOM, events, grid/columns and hover actions are unchanged.
-  The wrapper sits at `z-index: 0`, is `opacity: .78` while the row is active and
-  rises to `.92` on row hover (hover raises visibility slightly). The sidebar E2E
-  pins the vivid baseline (canvas `saturate(1.5)`, wrapper opacity ≥ .7, scrim
-  max alpha ≤ .24, blob-core colour saturation ≥ .45, theme-specific blend) so
-  the atmosphere cannot silently regress to grey (measured blob-core saturation
-  rose from ~0.25 before the vibrancy pass to ~0.40+ animated / ~0.30 static).
+  **Light-mode readability:** the light wrapper is a translucent veil
+  (`opacity: .56`, `.68` on row hover — down from `.78/.92`) so the pill stays a
+  bright pastel instead of a medium saturated slab. Secondary text/icons of the
+  plugin's own highlighted rows (time, glyph, brand, row actions, toggle) are
+  lifted from `label-tertiary` to `label-secondary` in light mode, so they clear
+  WCAG AA on the remaining pastel; the title keeps `label-primary`. Measured
+  before → after on the card row's local backdrop: title `5.5:1 → 14.7:1`
+  (`#0f1115` on `rgb(162,124,186) → rgb(238,234,237)`), time/icons/actions
+  `1.08:1 → 4.52:1` (`#81858c → #61666b`); native Workspace row title `15.5:1`.
+  Dark mode is untouched (screen blend, dark scrim, `.78/.92`, measured title
+  contrast keeps its pre-fix baseline).
+  The sidebar E2E pins both baselines: dark vividness (`saturate(1.5)`, wrapper
+  opacity ≥ .7, dark scrim max alpha ≤ .24, blob-core saturation ≥ .45) and the
+  light readability recipe (canvas `saturate(1.22) brightness(1.22)`, white veil
+  alpha 0.4–0.75, wrapper opacity ≤ .72, card title ≥ 4.5:1, card time ≥ 4.5:1,
+  trailing controls ≥ 3:1, native-row titles ≥ 4.5:1 and native worst visible
+  text ≥ 3:1 — the native tertiary time stays a shell token at ~3:1, see
+  limitations) so neither theme can silently regress (measured blob-core
+  saturation is ~0.40+ animated / ~0.30 static).
   Only highlighted
   rows exist and animate; one renderer per highlighted row (max 3: card row +
   native Workspace row + native Session row). A hidden tab pauses the RAF loop,
@@ -741,6 +754,19 @@ The native **View options** menu picks how Sessions are grouped:
 - **Expanded sidebar only.** Rail mode hides the card and offers no tree to
   bucket.
 - **Flat list mode has no buckets.** Only the summary card applies.
+- **Light-mode contrast is plugin-owned only inside the plugin's own rows.** The
+  atmosphere's light-mode white veil, the `label-secondary` lift for the plugin's
+  own secondary text/icons, and the E2E baselines apply to `.psd-*` rows; native
+  shell text inside the marked Workspace/Session rows keeps shell tokens (the
+  native tertiary time stays around 3:1 on light surfaces). The native document
+  preview/Workspace preview pane is shell-owned: measured in light theme it is a
+  white surface with `--dsw-alias-label-primary` text (18.9:1) and its remaining
+  low-contrast items are the shell's own diff sub-palette (line numbers/hunk
+  `#81858c` ≈ 3.7:1, added-line green `#22c55e` ≈ 2.3:1 on white). This plugin
+  defines no `--dsw-*` theme tokens and does not override those surfaces, so a
+  dark-on-dark preview is a shell/theme-state issue to fix in the shell theme,
+  not here; the plugin's intentionally dark floating previews use the native
+  hover-card surface with static light text.
 - **DSH DOM dependency.** The anchors are internal to the shipped sidebar, not a
   public contract. If a future DSH changes the slot attribute, the `tree` role, or
   the row-key scheme, this feature degrades to doing nothing while the native
