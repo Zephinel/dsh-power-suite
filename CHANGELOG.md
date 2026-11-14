@@ -571,7 +571,8 @@ heading is added until the release is cut.
 - Running & recent card hover highlight: the hover surface now covers the whole
   row like the native sidebar rows instead of a content-paced inner pill that
   lit only the title; the row body stays transparent so no second nested pill
-  appears, and atmosphere rows keep their transparent surface.
+  appears, pinned rows keep their violet tint under the hover layer, and
+  atmosphere rows keep their transparent surface.
 
 ## [0.2.0] — undated development snapshot
 

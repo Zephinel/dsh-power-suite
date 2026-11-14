@@ -1663,14 +1663,14 @@ Three user-reported regressions after the 2026-11-14 interrupted/pin row refacto
 Checks:
 
 - `npm test`: **271/271** pass; `npm run check`: exit 0 (**18 modules, 14 test
-  files**, pack list 73 entries).
+  files**, pack list 77 entries).
 - Live GUI (launchd `dsh-web`, dark theme, throwaway headless Chrome, worktree
   `src/client.js` injected through the loader swap; real CDP mouse input, no
   clicks that mutate sessions other than opening them):
   - Native interrupted row, rest → hover: leading cell `16 → 38 px`, Continue
     triangle at `36–58 px` immediately right of the badge, title left edge
     `42 → 64 px`, no `::before` mask (`content: none`), native trailing actions
-    `70–187 px`; the row keeps the native hover surface and the title stays
+    `183–265 px`; the row keeps the native hover surface and the title stays
     visible (the title marquee is the shell's own behaviour).
   - Real current + interrupted row (open the interrupted Session, then hover):
     atmosphere wrapper stays `position:absolute; z-index:0` at `258x32 px`
@@ -1693,10 +1693,21 @@ Checks:
   (full-row card hover), [card-interrupted-rest-hover.png](assets/card-interrupted-rest-hover.png)
   (left: interrupted card row at rest, right: hovered; static replica).
 - `test/browser/sidebar.e2e.mjs` was updated for the new contracts (`b2-1`
-  full-row surface, `b2-5` stand-in margin, ordinary-row hover surface, probe
-  fields). The full sidebar E2E suite was **not** re-run this round because it
-  creates blank Sessions and pins rows on the shared live Host; the targeted
-  live-DOM measurements above stand in. Note the pin-mode section of that harness
-  already carried pre-existing geometry assertions from before the 2026-11-14
-  markup move (e.g. `gapHeadToSlot = 9` when the slot moved inside the head), so
-  a full green pin run is not claimed here.
+  full-row surface, `b2-5` stand-in margin, ordinary-row hover surface, pinned
+  row hover surface, probe fields). The full sidebar E2E suite was **not** re-run
+  this round because it creates blank Sessions and pins rows on the shared live
+  Host; the targeted live-DOM measurements above stand in. Note the pin-mode
+  section of that harness already carried pre-existing geometry assertions from
+  before the 2026-11-14 markup move (e.g. `gapHeadToSlot = 9` when the slot moved
+  inside the head), so a full green pin run is not claimed here.
+- Independent review round (same branch): reviewer found the pinned-row violet
+  tint was replaced by the generic hover token because the new `(0,4,0)` full-row
+  hover rule outranked the pinned `(0,3,0)` rule; fixed by giving the pinned hover
+  rule the same structural guards (`(0,5,0)`, `color-mix` of tint + hover token),
+  with the atmosphere suppression at equal specificity declared later so a pinned
+  current row still stays transparent. Static replica check: pinned rest
+  `color(srgb 0.478431 0.666667 1 / 0.07)` → hover
+  `color(srgb 0.744582 0.836763 1 / 0.142941)`, body transparent; pinned+current
+  row stays `rgba(0, 0, 0, 0)` on hover. Reviewer's other finding (stale in-harness
+  `gapHeadToSlot`/`headChildCount` guards from the earlier markup move) is
+  pre-existing and left untouched, as recorded above.

@@ -5026,7 +5026,13 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run[data-pinned='true']{background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,transparent)}
 .psd-run[data-pinned='true'] .psd-run-pin{opacity:1;visibility:visible;pointer-events:none;color:var(--dsw-alias-state-business-primary);transition:background-color 120ms var(--ds-ease-in-out,ease)}
 .psd-run[data-pinned='true']:hover .psd-run-pin,.psd-run[data-pinned='true']:focus-within .psd-run-pin{pointer-events:auto}
-.psd-run[data-pinned='true']:hover,.psd-run[data-pinned='true']:focus-within{background-color:var(--dsw-alias-interactive-bg-hover)}
+/* Pinned rows keep their violet tint under the full-row hover surface: this rule
+   carries the same :not(:has(...)) guard as the generic hover rule, so its higher
+   specificity (0,5,0) beats (0,4,0) and layers the hover token over the tint. The
+   atmosphere suppression below stays at the same specificity and is declared later,
+   so a pinned current row still keeps its transparent surface. */
+.psd-run[data-pinned='true']:hover:not(:has(.psd-run-toggle:hover)),
+.psd-run[data-pinned='true']:focus-within:not(:has(.psd-run-toggle:focus)){background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,var(--dsw-alias-interactive-bg-hover))}
 @media (prefers-reduced-motion: reduce){.psd-run-pin,.psd-run-pin-slot,.psd-run-open{transition:none}}
 .psd-run-toggle{appearance:none;position:relative;z-index:1;flex:none;width:var(--psd-chevron-col,24px);height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .psd-run-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}

@@ -9668,16 +9668,18 @@ async function runPinChecks({ page, results, state }) {
     assertEqual(calm.row.backgroundImage, 'none', `no background-image layer on the pinned row (${calm.row.backgroundImage})`)
     assertEqual(calm.main.backgroundImage, 'none', `no background-image layer on the pinned body pill (${calm.main.backgroundImage})`)
     const rowTint = calm.row.background
-    // Hovering a pinned row must give the ordinary hover feedback on the body pill, not a
-    // second tint layer (the body pill was made transparent at rest, hover still works).
+    // Hovering a pinned row layers the full-row hover surface over the violet tint; the
+    // body pill stays transparent (there is no second inner pill any more).
     await hoverCardRowByTitle(page, 'parent', target.title)
     await sleep(300)
     const hovered = await page.eval(probePin.pinnedRowFacts, target.title)
     assert(hovered !== null && hovered.rowHovered === true, 'the pinned row was not hovered for the hover-feedback check')
-    assert(hovered.main.background !== 'rgba(0, 0, 0, 0)',
-      `hovering a pinned row must still show the ordinary hover feedback on the body pill (got ${hovered.main.background})`)
-    assert(hovered.main.background !== rowTint,
-      `the hover feedback must not re-introduce the row tint on the body pill (hover ${hovered.main.background}, row tint ${rowTint})`)
+    assertEqual(hovered.main.background, 'rgba(0, 0, 0, 0)',
+      `the pinned row body must stay transparent on hover (main background ${hovered.main.background})`)
+    assert(hovered.row.background !== 'rgba(0, 0, 0, 0)',
+      `hovering a pinned row must show hover feedback on the row surface (got ${hovered.row.background})`)
+    assert(hovered.row.background !== rowTint,
+      `the hover feedback must layer over, not replace, the row tint (hover ${hovered.row.background}, row tint ${rowTint})`)
     assertEqual(hovered.row.backgroundImage, 'none', 'hovering must not add a background-image layer on the pinned row')
     await clickRowPin(page, target.title, 'unpin')
     state.pinned = state.pinned.filter((entry) => entry.id !== resolved.id)
