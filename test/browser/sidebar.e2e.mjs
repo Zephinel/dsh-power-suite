@@ -2782,6 +2782,85 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     }
   })
 
+  await results.check('b4-15', 'highlighted-row New-session action darkens on hover like the pin control (light + dark)', async () => {
+    const measure = () => page.eval(() => {
+      const colorOf = (node) => node === null ? null : getComputedStyle(node).color
+      const rectOf = (node) => {
+        if (node === null) return null
+        const r = node.getBoundingClientRect()
+        return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }
+      }
+      const currentRow = document.querySelector('.psd-run-current, .psd-child-current')
+      const currentAction = currentRow === null ? null : currentRow.querySelector('.psd-row-action')
+      const otherRow = [...document.querySelectorAll('.psd-run, .psd-child')].find((row) => !row.classList.contains('psd-run-current') && !row.classList.contains('psd-child-current') && row.querySelector('.psd-row-action'))
+      const otherAction = otherRow === undefined ? null : otherRow.querySelector('.psd-row-action')
+      const pin = document.querySelector('[class*="pinnedAction"], [class*="pinIndicator"]')
+      return {
+        bodyDark: document.body.hasAttribute('data-ds-dark-theme'),
+        currentRow: rectOf(currentRow),
+        currentAction: currentAction === null ? null : { color: colorOf(currentAction), glyph: colorOf(currentAction.querySelector('svg')), rect: rectOf(currentAction) },
+        otherAction: otherAction === null ? null : { color: colorOf(otherAction), rect: rectOf(otherAction) },
+        pin: pin === null ? null : { color: colorOf(pin), rect: rectOf(pin) },
+      }
+    })
+    const hover = async (rect) => {
+      await page.moveTo(900, 500)
+      await sleep(250)
+      await page.moveTo(rect.left + Math.round(rect.width / 2), rect.top + Math.round(rect.height / 2))
+      await sleep(400)
+    }
+    const moveAway = async () => {
+      await page.moveTo(900, 500)
+      await sleep(300)
+    }
+    const expectedPrimary = { light: 'rgb(15, 17, 21)', dark: 'rgb(249, 250, 251)' }
+    const expectedRest = { light: 'rgb(97, 102, 107)', dark: 'rgb(173, 178, 184)' }
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    try {
+      await sleep(800)
+      const lightBase = await measure()
+      assert(lightBase.currentAction, 'no current card row with a New-session action to measure (light)')
+      assertEqual(lightBase.currentAction.color, expectedRest.light, `light: the highlighted row action must start on the secondary label before hover, got ${lightBase.currentAction.color}`)
+      await hover(lightBase.currentAction.rect)
+      const lightHover = await measure()
+      assertEqual(lightHover.currentAction.color, expectedPrimary.light, `light: the highlighted row New-session action must darken to the primary label on hover (like the pin), got ${lightHover.currentAction.color}`)
+      assertEqual(lightHover.currentAction.glyph, expectedPrimary.light, `light: the + glyph itself must inherit the darkened hover colour, got ${lightHover.currentAction.glyph}`)
+      if (state.shotsEnabled && lightBase.currentRow) await writeEvidenceShot(page, '21-action-hover-light', { left: lightBase.currentRow.left - 12, top: lightBase.currentRow.top - 6, width: lightBase.currentRow.width + 24, height: lightBase.currentRow.height + 12 })
+      await moveAway()
+      const lightRest = await measure()
+      assertEqual(lightRest.currentAction.color, expectedRest.light, `light: the action colour must return to normal after the pointer leaves, got ${lightRest.currentAction.color}`)
+      let otherRest = null
+      if (lightRest.otherAction !== null) {
+        otherRest = lightRest.otherAction.color
+        await hover(lightRest.otherAction.rect)
+        const otherHover = await measure()
+        assertEqual(otherHover.otherAction.color, expectedPrimary.light, `light: non-current row action hover must stay unchanged (primary), got ${otherHover.otherAction.color}`)
+        await moveAway()
+      }
+      let pinLight = null
+      if (lightRest.pin !== null) {
+        await hover(lightRest.pin.rect)
+        const pinAfter = await measure()
+        pinLight = pinAfter.pin.color
+        await moveAway()
+      }
+      await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+      await sleep(800)
+      const darkBase = await measure()
+      assert(darkBase.currentAction, 'no current card row with a New-session action to measure (dark)')
+      assertEqual(darkBase.currentAction.color, expectedRest.dark, `dark: the highlighted row action must start on the tertiary label before hover, got ${darkBase.currentAction.color}`)
+      await hover(darkBase.currentAction.rect)
+      const darkHover = await measure()
+      assertEqual(darkHover.currentAction.color, expectedPrimary.dark, `dark: the highlighted row New-session action must darken to the primary label on hover, got ${darkHover.currentAction.color}`)
+      if (state.shotsEnabled && darkBase.currentRow) await writeEvidenceShot(page, '21-action-hover-dark', { left: darkBase.currentRow.left - 12, top: darkBase.currentRow.top - 6, width: darkBase.currentRow.width + 24, height: darkBase.currentRow.height + 12 })
+      await moveAway()
+      return `light ${lightBase.currentAction.color} -> ${lightHover.currentAction.color} (glyph ${lightHover.currentAction.glyph}); dark ${darkBase.currentAction.color} -> ${darkHover.currentAction.color}; non-current hover ${otherRest === null ? 'n/a' : otherRest + ' -> primary'}; pin hover ${pinLight ?? 'not present in this data state'}`
+    } finally {
+      await page.emulateMedia([])
+      await sleep(400)
+    }
+  })
+
 }
 
 /**
