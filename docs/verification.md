@@ -249,7 +249,14 @@ API/plugin network failures in every run below):
   docs. Delta re-review **PASS-WITH-NITS** (no required changes); S6/S10/S12/S14
   green; S4 showed an environment/host-state timeout that reproduces with the
   pre-delta client (not this delta).
-  The segmented-control segments now show the modifier-key symbols
+  Session hovercards now follow the active theme (light surface `#fff` with
+  `#0f1115`/`#61666b`/`#81858c` tokens, dark unchanged `#2C2C2E` + white),
+  including the plugin's `.psd-hovercard`/`.psp-*`/`.dsa-quicklook` cards and a
+  minimal scoped light override for the native shell session-info hover card;
+  Running & recent row titles were aligned to the native Workspace title token
+  (`#0f1115`) in light mode while dark rows are unchanged. Sidebar E2E b5-1/b5-2/
+  b5-5/c2-1/b4-13 pin the computed light/dark surfaces, chrome parity and
+  title-token equality (47/47, 0 page errors). The segmented-control segments now show the modifier-key symbols
   (`⌥ Alt`/`⌃ Ctrl`/`⌘ Meta`/`⇧ Shift`) with full localized aria-labels, equal
   widths and no truncation. Light mode also got a contrast pass: the rainbow
   atmosphere row's canvas is a brighter pastel (saturate/brightness lift,

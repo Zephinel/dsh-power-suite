@@ -410,6 +410,17 @@ heading is added until the release is cut.
   correct; only the shell diff sub-palette is low-contrast) — documented as a
   shell-side limitation, no broad override added.
 
+- Dynamic-workspaces session hovercards now follow the active theme: light mode
+  uses a white surface with the light label tokens (title `#0f1115`, secondary
+  `#61666b`, tertiary `#81858c`) for the plugin's `.psd-hovercard`/`.psp-*`/
+  `.dsa-quicklook` cards and a minimal scoped override for the native shell
+  session-info hover card; dark mode is byte-identical (`#2C2C2E` + white).
+  Running & recent row titles are aligned to the native Workspace title token in
+  light mode (dark rows unchanged), so the panel reads as dark/readable as the
+  Workspace rows. The native override depends on shell module class hashes and
+  degrades gracefully to the native dark card; the exact markdown preview modal
+  was not deterministically reproducible.
+
 ### Removed
 
 - Standalone Project detail page: the `project-view` feature is removed —
