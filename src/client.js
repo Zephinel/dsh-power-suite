@@ -9343,7 +9343,7 @@ function dwClearNativeAtmospheres() {
     const ANNOTATION_SURFACE_MAX_LEVELS = 12
 
     /** F1: annotation paint layer z-index: above native hover cards (100), below modals (1000)/menus (1100). */
-    const ANNOTATION_PAINT_Z = 150
+    const ANNOTATION_PAINT_Z = 2000
 
     /** Root marker for the raised paint layer, asserted by the live E2E. */
     const ANNOTATION_RAISED_ATTR = 'data-psa-raised'
