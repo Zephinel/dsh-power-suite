@@ -1,9 +1,46 @@
 # Session artifacts
 
-A DSH Power Suite feature: one **Artifacts** card in the right Sidebar's Start
-page that lists every file the current Session created or delivered **plus the
-images and files the user attached to their own prompts**, with actions that
-work from whatever device is viewing the page.
+A DSH Power Suite feature: an **Artifacts** button in the native **Files** pane
+header switches that pane's content to the current Session's artifact list — every
+file the Session created or delivered **plus the images and files the user
+attached to their own prompts** — with actions that work from whatever device is
+viewing the pane. The list is no longer a standalone right-Sidebar page type or a
+Start-guide card; the Files-header button is the single entry point.
+
+## Opening it (Files pane toggle)
+
+The right Sidebar's **Files** page header carries one extra tool button on its
+actions row, right of the reload/auto-refresh controls (slot
+`sidebar.right.tab.files.actions`, cell `power-suite.files-artifacts`, order
+**40**, so it renders after the shipped open-in-app action). It is a native-style
+28 x 28 px tool with the shell's radius, hover/active background and a 15 px open
+tray glyph; its accessible name and title are **Artifacts** / **产物**, and it
+shows `aria-pressed="true"` while the list is shown.
+
+- Clicking it **cross-fades the pane content**: the Files navigator fades to 20 %
+  and slides 14 px left behind the incoming view, while the artifacts view fades
+  in from 14 px right over 180 ms (`cubic-bezier(.22,1,.36,1)`). Closing reverses
+  it over 160 ms.
+- The artifacts view is a React portal **inside that Files tab's
+  `[data-files-content]`**, sized to the content box, so it replaces the Files
+  content without changing the pane geometry (no layout jump) and the Files
+  navigator stays mounted underneath.
+- The view reuses the same panel (count, All/Generated/Provided filter, Refresh,
+  rows, thumbnails, hover Quick Look, footer) with one addition: a leading
+  **Back** button. Clicking the header button again, **Back**, or **Esc** returns
+  to Files; the header button's pressed state and focus follow the view.
+- `prefers-reduced-motion: reduce` swaps both directions instantly (no animation
+  or transform); the pane is otherwise identical.
+- The Files page root carries one marker attribute `data-psfa-active="true"`
+  while the view is open (used only by the injected stylesheet for the navigator
+  fade; removed on close/unmount). A second Session, a tab close, or plugin unload
+  removes the view, its list request, listeners and marker. Collapsing the right
+  Sidebar hides the whole dockkit surface without unmounting it, so reopening it
+  restores the same Files/Artifacts view; closing the tab or switching Sessions is
+  the teardown path.
+- An artifact list left open in an **older build's standalone Artifacts tab** has
+  no page type any more and is dropped by the shell's tab state on the next
+  layout restore; the Files-header button replaces it.
 
 ## What it shows
 
@@ -266,16 +303,30 @@ plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-
 ```
 
 The Host half serves the list, raw, preview, and attachment routes; the browser
-half registers the page type, its guide card, the thumbnails, and the source
-filter. Restart the Host process after upgrading the package's JavaScript.
+half registers the **Files-header Artifacts action** (and its animated in-pane
+view), the thumbnails, and the source filter. Restart the Host process after
+upgrading the package's JavaScript.
 
 Implementation: Host entry [`src/features/session-artifacts/host.js`](../src/features/session-artifacts/host.js),
 pure fold [`artifact-index.js`](../src/features/session-artifacts/artifact-index.js),
 browser surface [`client.js`](../src/client.js) under its `feature: session artifacts`
-region, tests [`test/session-artifacts.test.js`](../test/session-artifacts.test.js).
+region, unit tests [`test/session-artifacts.test.js`](../test/session-artifacts.test.js)
+and [`test/files-artifacts.test.js`](../test/files-artifacts.test.js), live checks in
+[`test/browser/sidebar.e2e.mjs`](../test/browser/sidebar.e2e.mjs) (`files-*`).
 
 ## Limits
 
+- **Single entry point.** The Files-header button replaces the old standalone
+  Artifacts page type, its tab and its Start-guide card. The list is only
+  reachable from a Session with a workspace (the Files page exists only then);
+  the right Sidebar must be open on its Files tab.
+- **Overlay, not a route.** The view is in-pane state owned by the Files-header
+  action; it is not a URL, cannot be deep-linked, and does not survive a tab
+  close or Session switch (it resets to Files). Collapsing the Sidebar hides it
+  together with the pane and re-shows it on reopen.
+- **Transition constants.** Enter 180 ms / exit 160 ms, 14 px slide; reduced
+  motion is an instant swap. The Files navigator fades/translates only through one
+  marker attribute and is restored on close.
 - **Current Session only** — subagent Sessions and other Sessions are not
   listed. User-provided attachments are limited to this Session's human prompts.
 - **Provided rows need the attachment service.** A Host composition without the
