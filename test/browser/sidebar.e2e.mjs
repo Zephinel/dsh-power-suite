@@ -2478,11 +2478,16 @@ async function runLayoutChecks({ page, results, state }) {
       // shipped CSS contract with a detached stand-in, then remove it.
       const badge = document.createElement('span')
       badge.className = 'psd-interrupted'
+      const slot = document.createElement('span')
+      slot.className = 'psd-continue-slot'
+      slot.style.width = '22px'
+      slot.style.opacity = '1'
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'psd-continue-inline'
+      slot.appendChild(button)
       head.appendChild(badge)
-      head.appendChild(button)
+      head.appendChild(slot)
       const badgeRect = badge.getBoundingClientRect()
       const probeRect = button.getBoundingClientRect()
       const timeRect = time.getBoundingClientRect()
