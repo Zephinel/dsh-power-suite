@@ -106,7 +106,11 @@ sidebar's panel tabs. It starts expanded.
   clipped title inside the pill's right padding (parent rows end 10 px before
   the content-column boundary, child rows 8 px), never under the trailing
   columns. The 14 px/20 px title size matches the native sidebar rows, and the
-  time is drawn at 11 px in the tabular-numeric tertiary label colour. Running Sessions are always listed,
+  time is drawn at 11 px in the tabular-numeric tertiary label colour. In light
+  mode every row title (including finished and child rows) uses the native
+  Workspace session title token `label-primary` — finished rows no longer dim to
+  `label-secondary` there, so the panel reads as dark as the native Workspace
+  rows below it; dark mode keeps its original dimming. Running Sessions are always listed,
   then recently finished Sessions inside
   the finished-Session **retention window** (default 2 hours, configurable in
   [Settings](settings.md)), each group newest activity first. A running row uses the
@@ -187,18 +191,16 @@ sidebar's panel tabs. It starts expanded.
   column's right edge** (same offset 0 as the native tooltip, no longer
   intruding into the sidebar), its top aligns with the hovered row's top (then
   clamped to the viewport), and its chrome is the native borderless session
-  hover card — 16 px radius, the shell's `--dsw-hovercard-bg` surface
-  (`#2C2C2E`) with its static title/secondary/tertiary text colours,
-  `--dsw-shadow-lv3` elevation, 12 x 16 px padding, 14/20 px title, 12/16 px
-  path/time, and a 12/20 px status line with a 10 px dot — all inherited from
-  the shell font. The dot is a true circle: it sets `corner-shape: round`
-  explicitly, because the shell theme applies
-  `*, :before, :after { corner-shape: var(--dsw-corner-shape) }`
-  (`superellipse(1.5)`), which paints a plain `border-radius: 50%` dot as a
-  squircle. That surface is deliberately **theme-invariant**, exactly like
-  the native session hover card: the shell pins its own hover-card background to
-  #2C2C2E in both light and dark (the theme-dependent
-  `--dsw-alias-tooltip-bg` token is *not* used for this card). The card is 320 px
+  hover card — 16 px radius, `--dsw-shadow-lv3` elevation, 12 x 16 px padding,
+  14/20 px title, 12/16 px path/time, and a 12/20 px status line with a 10 px
+  dot — all inherited from the shell font. Unlike the native hover card, the
+  plugin cards **follow the active theme**: light mode paints the light surface
+  (`--dsw-alias-bg-layer-1`, measured `#fff`) with `label-primary` /
+  `label-secondary` / `label-tertiary` text (measured title `#0f1115` on
+  `#fff`), while dark mode keeps the shell's `--dsw-hovercard-bg` `#2C2C2E`
+  surface with the static light palette (measured title white / path `#cfd3d6` /
+  status `#adb2b8`), exactly as the native card does there. The theme-dependent
+  `--dsw-alias-tooltip-bg` token is *not* used. The card is 320 px
   wide (the native tooltip is 244 px; the card grows so each native figure row
   fits its label and right-aligned value on one line) with `max-height:
   min(560px, calc(100vh - 16px))` and internal scroll. It does not capture the
@@ -835,23 +837,29 @@ Plugin surfaces follow the shell's own recipes instead of bespoke chrome:
   code blocks use the shell code-font token `--ds-font-family-code` (the
   earlier `--dsw-font-code` name did not exist, so they silently fell back to a
   generic monospace).
-- **Borderless floating cards on the native tooltip surface**: the row hover
-  card, the hover Quick Look card (`.dsa-quicklook`) and the prompt-history
+- **Borderless floating cards that follow the theme**: the row hover card, the
+  hover Quick Look card (`.dsa-quicklook`) and the prompt-history
   preview/search cards (`.psp-rail-card`, `.psp-search-card`) are borderless: no
   outline/border and no 0.5 px `--dsw-elevation-*` stroke ring — they use the
   native tooltip elevation `--dsw-shadow-lv3` (0 0 1 px #0003, 0 0 4 px
-  #00000005, 0 12 px 32 px #00000014) with a 16 px radius. All four share the
-  native session hover card's **theme-invariant surface**:
-  `background: var(--dsw-hovercard-bg, #2C2C2E)` (the shell pins that token to
-  #2C2C2E in both themes, exactly like its own session hover card; the
-  theme-dependent `--dsw-alias-tooltip-bg` is deliberately not used), no
-  background-image and no backdrop filter, with the shell's static
-  title/secondary/tertiary text colours
-  (`--dsw-static-neutral-bluish-00`/`-300`/`-400`), and inner quick-look panels
-  left transparent so the whole card reads as one flat tooltip surface. The
-  sidebar E2E measures the live native tooltip in emulated light **and** dark
-  and asserts every one of the four cards computes the same background, border,
-  radius and elevation in both themes.
+  #00000005, 0 12 px 32 px #00000014) with a 16 px radius. All four follow the
+  active theme: **light mode** paints the light surface
+  (`--dsw-alias-bg-layer-1`, `#fff`) with `label-primary` / `label-secondary` /
+  `label-tertiary` text and `--dsw-alias-border-l2` dividers; **dark mode**
+  keeps the native hover-card recipe (`background:
+  var(--dsw-hovercard-bg, #2C2C2E)`, no background-image/backdrop filter, static
+  title/secondary/tertiary palette). Inner quick-look panels stay transparent so
+  the card reads as one flat surface in both themes. The UI-annotation note
+  tooltips are a separate prior preference and deliberately keep their own dark
+  surface. The native shell session info / file-preview hover card is
+  theme-invariant (#2C2C2E + static light text) in the shell; light mode
+  overrides that **one native surface** with a single scoped rule
+  (`body:not([data-ds-dark-theme]) ._card_bgejw_9` plus its hashed
+  `.YDXeBa_hover*` text classes) so it follows the light theme too — dark mode
+  and every other native surface are untouched. The sidebar E2E measures the
+  live native tooltip and our four cards in emulated light **and** dark and
+  asserts the theme-following surfaces/text (light `#fff` + `#0f1115` title,
+  dark `#2C2C2E` + white) plus the unchanged border/radius/elevation.
 - **Rainbow focus highlight for plugin inputs**: focused plugin text inputs and
   choice controls show the same flowing rainbow track that used to draw the
   current-chat ring, in place of a solid-colour focus border. The shared class
@@ -921,6 +929,13 @@ The native **View options** menu picks how Sessions are grouped:
 - **Expanded sidebar only.** Rail mode hides the card and offers no tree to
   bucket.
 - **Flat list mode has no buckets.** Only the summary card applies.
+- **The native theme-following hovercard override depends on shell module class
+  names.** Light mode turns the shell's session info / file-preview hover card
+  light by overriding `._card_bgejw_9` and its hashed `.YDXeBa_hover*` text
+  classes (the shell pins that surface to #2C2C2E in both themes). If a future
+  shell build renames those classes the rule silently stops matching and the
+  native dark card returns — graceful, but the light-mode follow is then lost
+  until the selector is updated. Plugin-owned cards don't have this dependency.
 - **Light-mode contrast is plugin-owned only inside the plugin's own rows.** The
   atmosphere's light-mode white veil, the `label-secondary` lift for the plugin's
   own secondary text/icons, and the E2E baselines apply to `.psd-*` rows; native
