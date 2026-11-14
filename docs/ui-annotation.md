@@ -1114,8 +1114,9 @@ segments): there is no dropdown, listbox, native `<select>` or OS menu anywhere.
 Both modifiers apply immediately, and the key handlers always read the current
 values. The control is a `role=radiogroup` with `aria-labelledby` the row label;
 each segment is a `<button role=radio aria-checked>` inside `.psa-rainbow-field`
-(rainbow focus ring preserved), with linked labels for the group and full
-modifier names as `aria-label`. Roving tabindex keeps exactly one segment
+(rainbow focus ring preserved), with linked labels for the group; visible segment
+text shows the key symbol + short name (`⌥ Alt`, `⌃ Ctrl`, `⌘ Meta`, `⇧ Shift`)
+while `aria-label` keeps the full modifier name. Roving tabindex keeps exactly one segment
 tabbable (the checked one). The track has a subtle `rgba(255,255,255,.06)`
 background with a 1px alpha border and 9px radius; the checked segment uses a
 subtle primary accent tint (`color-mix(..., var(--dsw-alias-state-business-primary), 30%)

@@ -1097,7 +1097,7 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 / 97 anchor / 100 review / 106 descendant / 107 scan / 108 scope / 109 reference / 110 segmented-controls)', async () => {
+  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 / 97 anchor / 100 review / 106 descendant / 107 scan / 108 scope / 109 reference / 110 segmented / 111 segment-symbols)', async () => {
     const probe = await page.evaluate(
       `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
     )
@@ -1109,7 +1109,7 @@ async function runSmoke({ page, results, state }) {
     // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
     // rail selection and chip-ref serialization helpers (66). Pin a documented count and
     // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97, 100, 106, 107, 108, 109, 110]
+    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97, 100, 106, 107, 108, 109, 110, 111]
     const keyCount = probe.keys.length
     assert(
       ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
@@ -1211,6 +1211,9 @@ async function runSmoke({ page, results, state }) {
     }
     if (keyCount === 110) {
       assert(probe.keys.includes('annotationSegmentedIndex'), 'task-55 seam must expose annotationSegmentedIndex')
+    }
+    if (keyCount === 111) {
+      assert(probe.keys.includes('annotationSegmentDisplayLabel'), 'task-57 seam must expose annotationSegmentDisplayLabel')
     }
     state.hooks = probe.keys
     return `uiAnnotation seam: ${keyCount} keys`
@@ -4970,6 +4973,7 @@ function buildScenarios(harness) {
             checked: checked.length,
             checkedValue: checked[0]?.getAttribute('data-psa-modifier-option') ?? null,
             tabbable: radios.filter((radio) => radio.tabIndex === 0).length,
+            labels: radios.map((radio) => ({ choice: radio.getAttribute('data-psa-modifier-option'), text: (radio.textContent || '').trim(), aria: radio.getAttribute('aria-label') || '', overflow: radio.scrollWidth > radio.clientWidth + 1 })),
             display: groupStyle.display,
             radius: groupStyle.borderRadius,
             background: groupStyle.backgroundColor,
@@ -5005,6 +5009,12 @@ function buildScenarios(harness) {
         const maxWidth = Math.max(...group.widths)
         const minWidth = Math.min(...group.widths)
         assert(maxWidth - minWidth <= 3, `segments must be equal width (${group.widths.join(',')})`)
+        const expectedLabels = { alt: '⌥ Alt', ctrl: '⌃ Ctrl', meta: '⌘ Meta', shift: '⇧ Shift' }
+        for (const label of group.labels) {
+          assertEqual(label.text, expectedLabels[label.choice], `segment ${label.choice} visible label must be symbol + name`)
+          assert(label.aria.includes(label.text.split(' ')[0]) && label.aria.length > label.text.length, `segment ${label.choice} aria-label must keep the full semantic label (${label.aria})`)
+          assertEqual(label.overflow, false, `segment ${label.choice} text is truncated/overflows (${label.text})`)
+        }
       }
       // Checked segments must match the persisted modifier settings.
       const persistedNow = await readModifierSettings()

@@ -1488,6 +1488,136 @@ const probe = {
     return result
   },
 
+  /**
+   * Light/dark contrast facts for atmosphere rows: reconstructs the rendered
+   * backdrop from the canvas pixel + multiply/screen blend + wrapper opacity +
+   * scrim, then compares it with the computed text/icon colours (WCAG sRGB
+   * relative luminance). Documented estimate: three canvas samples per row.
+   */
+  atmosContrast: () => {
+    const parseColor = (text) => {
+      const match = text === null || text === undefined ? null : text.match(/rgba?\(([^)]+)\)/)
+      if (match === null) return null
+      const parts = match[1].split(',').map((part) => Number(part.trim()))
+      return { r: parts[0] ?? 0, g: parts[1] ?? 0, b: parts[2] ?? 0, a: parts.length > 3 ? parts[3] : 1 }
+    }
+    const luminance = ({ r, g, b }) => {
+      const channel = (value) => {
+        const c = Math.max(0, Math.min(255, value)) / 255
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+      }
+      return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+    }
+    const contrast = (a, b) => {
+      const la = luminance(a)
+      const lb = luminance(b)
+      return Number(((Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)).toFixed(2))
+    }
+    const mix = (base, layer, alpha) => ({
+      r: Math.round(layer.r * alpha + base.r * (1 - alpha)),
+      g: Math.round(layer.g * alpha + base.g * (1 - alpha)),
+      b: Math.round(layer.b * alpha + base.b * (1 - alpha)),
+    })
+    const blendChannel = (base, layer, mode) => {
+      const b = Math.max(0, Math.min(255, base))
+      const l = Math.max(0, Math.min(255, layer))
+      if (mode === 'multiply') return (b * l) / 255
+      if (mode === 'screen') return 255 - ((255 - b) * (255 - l)) / 255
+      return l
+    }
+    const backdropOf = (row, panel) => {
+      const wrapper = [...row.children].find((node) => node instanceof HTMLElement && node.classList.contains('psd-atmos'))
+      if (wrapper === undefined) return null
+      const canvas = wrapper.querySelector('canvas.psd-atmos-canvas')
+      const scrim = wrapper.querySelector('.psd-atmos-scrim')
+      if (canvas === null || scrim === null) return null
+      const ctx = canvas.getContext('2d')
+      if (ctx === null || canvas.width === 0 || canvas.height === 0) return null
+      const image = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+      const mode = getComputedStyle(canvas).mixBlendMode
+      const wrapperStyle = getComputedStyle(wrapper)
+      const opacity = Number(wrapperStyle.opacity)
+      const scrimColor = parseColor(getComputedStyle(scrim).backgroundImage) ?? { r: 255, g: 255, b: 255, a: 0 }
+      const panelBg = parseColor(getComputedStyle(panel).backgroundColor) ?? { r: 255, g: 255, b: 255, a: 1 }
+      const samples = [0.2, 0.5, 0.78].map((fx) => {
+        const x = Math.min(canvas.width - 1, Math.floor(canvas.width * fx))
+        const y = Math.floor(canvas.height / 2)
+        const index = (y * canvas.width + x) * 4
+        return { r: image[index], g: image[index + 1], b: image[index + 2], a: image[index + 3] / 255 }
+      })
+      const backdrops = samples.map((pixel) => {
+        const blended = {
+          r: blendChannel(panelBg.r, pixel.r, mode),
+          g: blendChannel(panelBg.g, pixel.g, mode),
+          b: blendChannel(panelBg.b, pixel.b, mode),
+        }
+        const afterCanvas = mix(panelBg, blended, pixel.a)
+        const afterOpacity = mix(panelBg, afterCanvas, opacity)
+        return mix(afterOpacity, scrimColor, scrimColor.a)
+      })
+      const average = {
+        r: Math.round((backdrops[0].r + backdrops[1].r + backdrops[2].r) / 3),
+        g: Math.round((backdrops[0].g + backdrops[1].g + backdrops[2].g) / 3),
+        b: Math.round((backdrops[0].b + backdrops[1].b + backdrops[2].b) / 3),
+      }
+      return { wrapper, canvas, scrim, mode, opacity, scrimColor, backdrops, average, panelBg }
+    }
+    const colorOf = (node) => node === null ? null : parseColor(getComputedStyle(node).color)
+    const describe = (node) => node === null ? null : String(node.className ?? node.tagName).slice(0, 48)
+    const panel = document.querySelector('.psd-panel')
+    if (panel === null) return null
+    const perHost = (host, kind) => {
+      const backdrop = backdropOf(host, panel)
+      if (backdrop === null) return null
+      const titleNode = host.querySelector('.psd-run-title, .psd-child-title')
+      const timeNode = host.querySelector('.psd-run-time, .psd-child-time')
+      const toggleNode = host.querySelector('.psd-run-toggle, .psd-run-toggle-spacer')
+      const actionNode = host.querySelector('.psd-row-action')
+      const glyphNode = host.querySelector('.psd-run-glyph, .psd-child-glyph')
+      const named = (node) => {
+        const color = colorOf(node)
+        return color === null ? null : { color: [color.r, color.g, color.b], contrast: Math.min(...backdrop.backdrops.map((bg) => contrast(color, bg))) }
+      }
+      // Native rows: collect the worst-contrast text colour among descendants.
+      let minText = null
+      for (const node of host.querySelectorAll('*')) {
+        if (node.closest('.psd-atmos') !== null) continue
+        const color = colorOf(node)
+        if (color === null || color.a === 0) continue
+        const hasText = [...node.childNodes].some((child) => child.nodeType === 3 && (child.textContent ?? '').trim().length > 0)
+        if (!hasText) continue
+        const nodeRect = node.getBoundingClientRect()
+        if (nodeRect.width < 4 || nodeRect.height < 4) continue
+        const value = Math.min(...backdrop.backdrops.map((bg) => contrast(color, bg)))
+        if (minText === null || value < minText.contrast) minText = { color: [color.r, color.g, color.b], contrast: value, className: describe(node), text: (node.textContent ?? '').trim().slice(0, 24) }
+      }
+      return {
+        kind,
+        rowRect: { width: Math.round(host.getBoundingClientRect().width), height: Math.round(host.getBoundingClientRect().height) },
+        blend: backdrop.mode,
+        opacity: backdrop.opacity,
+        scrim: [backdrop.scrimColor.r, backdrop.scrimColor.g, backdrop.scrimColor.b, backdrop.scrimColor.a],
+        backdrop: backdrop.average,
+        panelBg: [backdrop.panelBg.r, backdrop.panelBg.g, backdrop.panelBg.b],
+        title: named(titleNode),
+        time: named(timeNode),
+        toggle: named(toggleNode),
+        action: named(actionNode),
+        glyph: named(glyphNode),
+        minText,
+      }
+    }
+    const card = document.querySelector('.psd-run-current, .psd-child-current')
+    const workspace = document.querySelector('[data-psd-current-workspace="true"]')
+    const session = document.querySelector('[data-psd-current-session="true"]')
+    return {
+      dark: document.body.hasAttribute('data-ds-dark-theme'),
+      card: card === null ? null : perHost(card, card.classList.contains('psd-run-current') ? 'parent' : 'child'),
+      workspace: workspace === null ? null : perHost(workspace, 'workspace'),
+      session: session === null ? null : perHost(session, 'session'),
+    }
+  },
+
   /** Theme + resolved tooltip tokens, for both-theme alignment assertions. */
   themeSnapshot: () => {
     const root = document.documentElement
@@ -2476,14 +2606,23 @@ function assertAtmosphereRow(label, row, atmos, content, options = {}) {
   assertEqual(atmos.overflow, 'hidden', `${label}: atmosphere wrapper must clip to the rounded rect`)
   assertEqual(atmos.pointerEvents, 'none', `${label}: atmosphere wrapper must not capture the pointer`)
   assertEqual(atmos.zIndex, '0', `${label}: atmosphere must sit on the background layer (z-index 0)`)
-  assert(atmos.opacity >= 0.7 && atmos.opacity <= 1, `${label}: atmosphere must be visible and vivid (opacity ${atmos.opacity}; baseline .78)`)
+  const lightGas = atmos.canvas !== null && atmos.canvas.mixBlendMode === 'multiply'
+  if (lightGas) {
+    assert(atmos.opacity >= 0.5 && atmos.opacity <= 0.72, `${label}: light-mode atmosphere must stay an airy veil (opacity ${atmos.opacity}; light baseline .56 active / .68 hover)`)
+  } else {
+    assert(atmos.opacity >= 0.7 && atmos.opacity <= 1, `${label}: atmosphere must be visible and vivid (opacity ${atmos.opacity}; dark baseline .78)`)
+  }
   assert(atmos.canvas, `${label}: atmosphere has no canvas`)
   assert(atmos.canvas.width > 0 && atmos.canvas.height > 0, `${label}: atmosphere canvas has no drawing buffer (${atmos.canvas.width}x${atmos.canvas.height})`)
   assert(atmos.canvas.painted > 0, `${label}: atmosphere canvas painted no rainbow pixels`)
   assert(atmos.canvas.filter.includes('blur'), `${label}: atmosphere canvas must keep the gas blur (${atmos.canvas.filter})`)
-  assert(atmos.canvas.filter.includes('saturate(1.5)'), `${label}: atmosphere canvas must keep the vivid saturate(1.5) baseline (${atmos.canvas.filter})`)
-  const saturationMin = options.saturationMin ?? 0.38
-  debugLog(`atmosphere ${label}: canvas ${atmos.canvas.width}x${atmos.canvas.height} painted=${atmos.canvas.painted} strong=${atmos.canvas.avgSaturationStrong} all=${atmos.canvas.avgSaturation} motion=${atmos.motion} blend=${atmos.canvas.mixBlendMode}`)
+  if (lightGas) {
+    assert(atmos.canvas.filter.includes('saturate(1.22)') && atmos.canvas.filter.includes('brightness(1.22)'), `${label}: light-mode canvas must keep the brighter/softer pastel filter (${atmos.canvas.filter})`)
+  } else {
+    assert(atmos.canvas.filter.includes('saturate(1.5)'), `${label}: atmosphere canvas must keep the vivid saturate(1.5) baseline (${atmos.canvas.filter})`)
+  }
+  const saturationMin = options.saturationMin ?? (lightGas ? 0.3 : 0.38)
+
   assert(atmos.canvas.avgSaturationStrong >= saturationMin, `${label}: atmosphere colours must stay vivid, not grey (blob-core saturation ${atmos.canvas.avgSaturationStrong}, all-pixel ${atmos.canvas.avgSaturation}, minimum ${saturationMin}; grey baseline was ~0.25)`)
   assert(['multiply', 'screen'].includes(atmos.canvas.mixBlendMode), `${label}: atmosphere canvas must keep a vivid blend mode (${atmos.canvas.mixBlendMode})`)
   assertEqual(atmos.canvas.pointerEvents, 'none', `${label}: atmosphere canvas must not capture the pointer`)
@@ -2492,10 +2631,15 @@ function assertAtmosphereRow(label, row, atmos, content, options = {}) {
     assertNear(atmos.scrim.rect[side], box[side], 1, `${label}: scrim must cover the row's paint box (${side})`)
   }
   assertEqual(atmos.scrim.pointerEvents, 'none', `${label}: scrim must not capture the pointer`)
-  assert(atmos.scrim.backgroundImage.includes('linear-gradient'), `${label}: scrim must be the faint dark gradient (${short(atmos.scrim.backgroundImage, 90)})`)
+  assert(atmos.scrim.backgroundImage.includes('linear-gradient'), `${label}: scrim must be a gradient (${short(atmos.scrim.backgroundImage, 90)})`)
   const scrimAlphas = [...atmos.scrim.backgroundImage.matchAll(/rgba\([^)]*?,\s*([0-9.]+)\)/g)].map((match) => Number(match[1]))
   assert(scrimAlphas.length > 0, `${label}: scrim alpha could not be read (${atmos.scrim.backgroundImage})`)
-  assert(Math.max(...scrimAlphas) <= 0.24, `${label}: scrim must stay light enough to keep the gas vivid (max alpha ${Math.max(...scrimAlphas)})`)
+  if (lightGas) {
+    assert(/rgba\(255,\s*255,\s*255,/.test(atmos.scrim.backgroundImage), `${label}: light-mode scrim must be the white readability veil (${short(atmos.scrim.backgroundImage, 90)})`)
+    assert(Math.max(...scrimAlphas) >= 0.4 && Math.max(...scrimAlphas) <= 0.75, `${label}: light-mode veil alpha must sit in the readable range (max alpha ${Math.max(...scrimAlphas)})`)
+  } else {
+    assert(Math.max(...scrimAlphas) <= 0.24, `${label}: dark-mode scrim must stay light enough to keep the gas vivid (max alpha ${Math.max(...scrimAlphas)})`)
+  }
   assert(content, `${label}: row content element missing`)
   assertEqual(content.position, 'relative', `${label}: real content must be positioned above the atmosphere`)
   assert(Number(content.zIndex) >= 2, `${label}: real content must stack above the atmosphere/scrim (z-index ${content.zIndex})`)
@@ -2527,7 +2671,10 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     return `opened "${short(target.title, 40)}"`
   })
 
-  await results.check('b4-1', 'card row, owning Workspace row and open Session row paint the clipped internal atmosphere', async () => {
+  await results.check('b4-1', 'card row, owning Workspace row and open Session row paint the clipped internal atmosphere (light mode)', async () => {
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    try {
+      await sleep(600)
     let highlight = await page.eval(probe.currentHighlight)
     state.highlight = highlight
     if (highlight.marker && highlight.sessionId !== null && highlight.marker.rowKey) {
@@ -2562,6 +2709,10 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     const sessionSummary = assertAtmosphereRow('native Session row', { rect: highlight.sessionMarker.rect, clientRect: highlight.sessionMarker.clientRect, radius: highlight.sessionMarker.radius }, highlight.sessionMarker.atmos, highlight.sessionMarker.content)
     assertEqual(highlight.atmosCount, 3, `exactly three atmosphere renderers expected (card row + Workspace row + Session row), got ${highlight.atmosCount}`)
     return `${cardSummary}; ${workspaceSummary}; ${sessionSummary}`
+    } finally {
+      await page.emulateMedia([])
+      await sleep(400)
+    }
   })
 
   await results.check('b4-2', 'opening another sidebar Session moves the marker and the atmosphere with it', async () => {
@@ -2651,30 +2802,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     }
     return `${summary}; child row radius ${highlight.row.radius}`
   })
-}
 
-/**
- * Hover a native sidebar session row and return the live native tooltip facts.
- * The native tooltip has its own show delay/heuristic, so retry once.
- * @param {object} page - Page wrapper.
- * @param {string | null} evidenceName - optional close-up evidence file name.
- * @returns {Promise<{ row: object, tooltip: object | null }>} native row + tooltip.
- */
-async function measureNativeTooltip(page, evidenceName = null) {
-  const row = await ensureNativeSessionRow(page)
-  const hover = async () => {
-    await page.moveTo(700, 400)
-    await sleep(400)
-    await page.moveTo(row.rect.left + 40, row.rect.top + Math.round(row.rect.height / 2))
-    await sleep(1500)
-    return page.eval(probe.nativeTooltip)
-  }
-  let tooltip = await hover()
-  if (tooltip === null) tooltip = await hover()
-  if (tooltip !== null && evidenceName !== null) await writeEvidenceShot(page, evidenceName, tooltip.rect)
-  await page.moveTo(900, 500)
-  await sleep(300)
-  return { row, tooltip }
   await results.check('b4-5', 'dark theme keeps the atmosphere vivid (screen blend, high saturation, light scrim)', async () => {
     await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
     try {
@@ -2700,6 +2828,85 @@ async function measureNativeTooltip(page, evidenceName = null) {
       await sleep(500)
     }
   })
+
+  await results.check('b4-9', 'light-mode atmosphere rows keep readable text/icons (dark mode unchanged)', async () => {
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    try {
+      await sleep(900)
+      // Make the marked native Workspace row visible (expand it if collapsed).
+      await page.eval(() => {
+        const row = document.querySelector('[data-psd-current-workspace="true"]')
+        if (row instanceof HTMLElement && row.getAttribute('aria-expanded') === 'false') row.click()
+      })
+      await sleep(700)
+      const light = await page.eval(probe.atmosContrast)
+      assert(light && light.card, 'no current card row to measure in light mode')
+      const assertHost = (label, host, thresholds) => {
+        assert(host, `${label}: atmosphere contrast facts missing`)
+        const backdropText = `rgb(${host.backdrop.r},${host.backdrop.g},${host.backdrop.b})`
+        assertEqual(host.blend, 'multiply', `${label}: light theme must keep the multiply gas blend`)
+        assert(host.scrim[0] >= 200 && host.scrim[1] >= 200 && host.scrim[2] >= 200, `${label}: light-mode scrim must be a light veil (got rgb(${host.scrim.slice(0, 3).join(',')}))`)
+        assert(host.scrim[3] >= 0.35, `${label}: light-mode scrim alpha must be >= 0.35 to lift the pastel (got ${host.scrim[3]})`)
+        assert(host.opacity <= 0.72, `${label}: light-mode atmosphere opacity must stay <= 0.72 (got ${host.opacity})`)
+        if (host.title !== null) {
+          assert(host.title.contrast >= thresholds.title, `${label}: title contrast ${host.title.contrast}:1 must be >= ${thresholds.title}:1 against the local backdrop ${backdropText}`)
+        }
+        if (host.time !== null) {
+          assert(host.time.contrast >= thresholds.time, `${label}: time contrast ${host.time.contrast}:1 must be >= ${thresholds.time}:1 against the local backdrop ${backdropText}`)
+        }
+        if (host.minText !== null) {
+          assert(host.minText.contrast >= thresholds.minText, `${label}: worst text contrast ${host.minText.contrast}:1 ("${short(host.minText.text, 24)}") must be >= ${thresholds.minText}:1`)
+        }
+        for (const key of ['toggle', 'action', 'glyph']) {
+          if (host[key] !== null) {
+            assert(host[key].contrast >= thresholds.control, `${label}: ${key} contrast ${host[key].contrast}:1 must be >= ${thresholds.control}:1`)
+          }
+        }
+        return `${label} title ${host.title?.contrast ?? 'n/a'}:1, time ${host.time?.contrast ?? 'n/a'}:1, worst text ${host.minText?.contrast ?? 'n/a'}:1 (backdrop rgb(${host.backdrop.r},${host.backdrop.g},${host.backdrop.b}))`
+      }
+      const summaries = [assertHost('card row', light.card, { title: 4.5, time: 4.5, minText: 4.5, control: 3 })]
+      if (light.workspace !== null) summaries.push(assertHost('native Workspace row', light.workspace, { title: 4.5, time: 3, minText: 3, control: 3 }))
+      if (light.session !== null) summaries.push(assertHost('native Session row', light.session, { title: 4.5, time: 3, minText: 3, control: 3 }))
+      await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+      await sleep(900)
+      const dark = await page.eval(probe.atmosContrast)
+      assert(dark && dark.card, 'no current card row to measure in dark mode')
+      assertEqual(dark.card.blend, 'screen', 'dark theme must keep the screen gas blend (unchanged)')
+      assert(dark.card.scrim[0] < 60 && dark.card.scrim[1] < 60, `dark theme must keep its dark scrim (got rgb(${dark.card.scrim.slice(0, 3).join(',')}))`)
+      assert(dark.card.opacity >= 0.7, `dark theme atmosphere opacity must stay at its previous level (got ${dark.card.opacity})`)
+      assert(dark.card.title.contrast >= 3.5, `dark title contrast ${dark.card.title.contrast}:1 must keep its pre-fix baseline (measured 3.8:1 before the light-mode fix)`)
+      return `${summaries.join('; ')}; dark unchanged: blend ${dark.card.blend}, scrim rgb(${dark.card.scrim.slice(0, 3).join(',')}), opacity ${dark.card.opacity}, title ${dark.card.title.contrast}:1`
+    } finally {
+      await page.emulateMedia([])
+      await sleep(500)
+    }
+  })
+
+
+}
+
+/**
+ * Hover a native sidebar session row and return the live native tooltip facts.
+ * The native tooltip has its own show delay/heuristic, so retry once.
+ * @param {object} page - Page wrapper.
+ * @param {string | null} evidenceName - optional close-up evidence file name.
+ * @returns {Promise<{ row: object, tooltip: object | null }>} native row + tooltip.
+ */
+async function measureNativeTooltip(page, evidenceName = null) {
+  const row = await ensureNativeSessionRow(page)
+  const hover = async () => {
+    await page.moveTo(700, 400)
+    await sleep(400)
+    await page.moveTo(row.rect.left + 40, row.rect.top + Math.round(row.rect.height / 2))
+    await sleep(1500)
+    return page.eval(probe.nativeTooltip)
+  }
+  let tooltip = await hover()
+  if (tooltip === null) tooltip = await hover()
+  if (tooltip !== null && evidenceName !== null) await writeEvidenceShot(page, evidenceName, tooltip.rect)
+  await page.moveTo(900, 500)
+  await sleep(300)
+  return { row, tooltip }
 
 }
 

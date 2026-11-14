@@ -3132,7 +3132,7 @@ window.__ModuleLoader__.load({
       'history.current': 'Current shortcut: {shortcut}',
       'modifier.primary': '⌘ / Ctrl',
       'modifier.alt': '⌥ / Alt',
-      'modifier.ctrl': 'Ctrl',
+      'modifier.ctrl': '⌃ / Ctrl',
       'modifier.shift': '⇧ / Shift',
       'modifier.off': 'Off',
       'shortcut.primary.mac': '⌘ + ↑ / ↓',
@@ -3170,7 +3170,7 @@ window.__ModuleLoader__.load({
       'history.current': '当前快捷键：{shortcut}',
       'modifier.primary': '⌘ / Ctrl',
       'modifier.alt': '⌥ / Alt',
-      'modifier.ctrl': 'Ctrl',
+      'modifier.ctrl': '⌃ / Ctrl',
       'modifier.shift': '⇧ / Shift',
       'modifier.off': '关闭',
       'shortcut.primary.mac': '⌘ + ↑ / ↓',
@@ -4836,6 +4836,19 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 [data-psd-current-session='true'] button:hover,[data-psd-current-session='true'] [role='button']:hover,[data-psd-current-workspace='true'] button:hover,[data-psd-current-workspace='true'] [role='button']:hover{background-color:transparent!important;filter:brightness(1.2)}
 body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.5) brightness(1.14)}
 body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(16,18,22,.12),rgba(16,18,22,.22))}
+/* Light-mode readability (user fix). The multiply canvas over the light surface
+   turned the pill into a medium saturated tone; the shell's tertiary time/icons
+   and the hover-revealed row actions then nearly vanished. In light mode the
+   rainbow stays visible as a brighter pastel veil: the canvas is a touch
+   brighter and less saturated, the wrapper is less opaque, and the scrim is a
+   light veil (not a dark one). The plugin's own secondary text/icons inside the
+   highlighted rows are lifted from label-tertiary to label-secondary so they
+   clear WCAG AA on the remaining pastel. Dark mode is untouched. */
+body:not([data-ds-dark-theme]) .psd-atmos-canvas{filter:blur(3px) saturate(1.22) brightness(1.22)}
+body:not([data-ds-dark-theme]) .psd-atmos{opacity:.56}
+body:not([data-ds-dark-theme]) .psd-atmos-scrim{background:linear-gradient(90deg,rgba(255,255,255,.68),rgba(255,255,255,.55))}
+body:not([data-ds-dark-theme]) .psd-run-current:hover .psd-atmos,body:not([data-ds-dark-theme]) .psd-child-current:hover .psd-atmos,body:not([data-ds-dark-theme]) [data-psd-current-workspace='true']:hover .psd-atmos,body:not([data-ds-dark-theme]) [data-psd-current-session='true']:hover .psd-atmos{opacity:.68}
+body:not([data-ds-dark-theme]) .psd-run-current :is(.psd-run-time,.psd-run-glyph,.psd-run-brand,.psd-row-action,.psd-run-toggle),body:not([data-ds-dark-theme]) .psd-child-current :is(.psd-child-time,.psd-child-glyph,.psd-child-brand,.psd-row-action){color:var(--dsw-alias-label-secondary)}
 @media (prefers-reduced-motion: reduce){.psd-atmos{transition:none}}
 
 `
@@ -9350,7 +9363,7 @@ function dwClearNativeAtmospheres() {
       'settings.saved': 'Settings saved',
       'settings.hint': 'Hold the pass-through key to use the page normally. Hold the multi-select key to add elements or drag a box.',
       'modifier.alt': '⌥ / Alt',
-      'modifier.ctrl': 'Ctrl',
+      'modifier.ctrl': '⌃ / Ctrl',
       'modifier.meta': '⌘ / Meta',
       'modifier.shift': '⇧ / Shift',
       'feedback.modeOn': 'Annotation mode on',
@@ -9560,7 +9573,7 @@ function dwClearNativeAtmospheres() {
       'settings.saved': '设置已保存',
       'settings.hint': '按住透传键可正常操作页面；按住多选键可加选元素或拖出选框。',
       'modifier.alt': '⌥ / Alt',
-      'modifier.ctrl': 'Ctrl',
+      'modifier.ctrl': '⌃ / Ctrl',
       'modifier.meta': '⌘ / Meta',
       'modifier.shift': '⇧ / Shift',
       'feedback.copyXPathSuccess': '已复制 XPath',
@@ -13222,6 +13235,21 @@ function dwClearNativeAtmospheres() {
       const base = typeof current === 'number' && Number.isFinite(current) && current >= 0 ? Math.floor(current) : 0
       if (move === 'prev') return ((base - 1) % count + count) % count
       return ((base + 1) % count + count) % count
+    }
+
+    /**
+     * A3/T57: visible label for one segmented modifier option. The i18n labels are
+     * `"<symbol> / <Name>"`; segments show symbol + short name (`⌥ Alt`, `⌃ Ctrl`).
+     * Labels without a separator are returned unchanged.
+     * @param {unknown} label - dictionary label.
+     * @returns {string} display label.
+     */
+    function annotationSegmentDisplayLabel(label) {
+      const text = typeof label === 'string' ? label.trim() : ''
+      if (text.length === 0) return ''
+      const parts = text.split('/').map((part) => part.trim()).filter((part) => part.length > 0)
+      if (parts.length >= 2) return `${parts[0]} ${parts[1]}`
+      return parts[0] ?? ''
     }
 
     /**
@@ -20411,10 +20439,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           tabIndex: choice === value ? 0 : -1,
           onClick: () => selectSegment(index, false),
           onKeyDown: (event) => onSegmentKeyDown(event, index)
-        }, (() => {
-          const label = t(`modifier.${choice}`)
-          return label.includes('/') ? label.split('/').pop().trim() : label
-        })()))))
+        }, annotationSegmentDisplayLabel(t(`modifier.${choice}`))))))
     }
 
     /**
@@ -21498,6 +21523,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationScopeAuthorityOutcome,
         annotationEphemeralOutcome,
         annotationSegmentedIndex,
+        annotationSegmentDisplayLabel,
         debugFallbackScanProbe: () => (annotationController !== null && annotationController !== undefined
           && typeof annotationController.debugFallbackScanProbe === 'function'
           ? annotationController.debugFallbackScanProbe()
