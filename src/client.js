@@ -3132,7 +3132,7 @@ window.__ModuleLoader__.load({
       'history.current': 'Current shortcut: {shortcut}',
       'modifier.primary': '⌘ / Ctrl',
       'modifier.alt': '⌥ / Alt',
-      'modifier.ctrl': 'Ctrl',
+      'modifier.ctrl': '⌃ / Ctrl',
       'modifier.shift': '⇧ / Shift',
       'modifier.off': 'Off',
       'shortcut.primary.mac': '⌘ + ↑ / ↓',
@@ -3170,7 +3170,7 @@ window.__ModuleLoader__.load({
       'history.current': '当前快捷键：{shortcut}',
       'modifier.primary': '⌘ / Ctrl',
       'modifier.alt': '⌥ / Alt',
-      'modifier.ctrl': 'Ctrl',
+      'modifier.ctrl': '⌃ / Ctrl',
       'modifier.shift': '⇧ / Shift',
       'modifier.off': '关闭',
       'shortcut.primary.mac': '⌘ + ↑ / ↓',
@@ -8622,7 +8622,7 @@ function dwClearNativeAtmospheres() {
       'settings.saved': 'Settings saved',
       'settings.hint': 'Hold the pass-through key to use the page normally. Hold the multi-select key to add elements or drag a box.',
       'modifier.alt': '⌥ / Alt',
-      'modifier.ctrl': 'Ctrl',
+      'modifier.ctrl': '⌃ / Ctrl',
       'modifier.meta': '⌘ / Meta',
       'modifier.shift': '⇧ / Shift',
       'feedback.modeOn': 'Annotation mode on',
@@ -8832,7 +8832,7 @@ function dwClearNativeAtmospheres() {
       'settings.saved': '设置已保存',
       'settings.hint': '按住透传键可正常操作页面；按住多选键可加选元素或拖出选框。',
       'modifier.alt': '⌥ / Alt',
-      'modifier.ctrl': 'Ctrl',
+      'modifier.ctrl': '⌃ / Ctrl',
       'modifier.meta': '⌘ / Meta',
       'modifier.shift': '⇧ / Shift',
       'feedback.copyXPathSuccess': '已复制 XPath',
@@ -12494,6 +12494,21 @@ function dwClearNativeAtmospheres() {
       const base = typeof current === 'number' && Number.isFinite(current) && current >= 0 ? Math.floor(current) : 0
       if (move === 'prev') return ((base - 1) % count + count) % count
       return ((base + 1) % count + count) % count
+    }
+
+    /**
+     * A3/T57: visible label for one segmented modifier option. The i18n labels are
+     * `"<symbol> / <Name>"`; segments show symbol + short name (`⌥ Alt`, `⌃ Ctrl`).
+     * Labels without a separator are returned unchanged.
+     * @param {unknown} label - dictionary label.
+     * @returns {string} display label.
+     */
+    function annotationSegmentDisplayLabel(label) {
+      const text = typeof label === 'string' ? label.trim() : ''
+      if (text.length === 0) return ''
+      const parts = text.split('/').map((part) => part.trim()).filter((part) => part.length > 0)
+      if (parts.length >= 2) return `${parts[0]} ${parts[1]}`
+      return parts[0] ?? ''
     }
 
     /**
@@ -19540,10 +19555,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
           tabIndex: choice === value ? 0 : -1,
           onClick: () => selectSegment(index, false),
           onKeyDown: (event) => onSegmentKeyDown(event, index)
-        }, (() => {
-          const label = t(`modifier.${choice}`)
-          return label.includes('/') ? label.split('/').pop().trim() : label
-        })()))))
+        }, annotationSegmentDisplayLabel(t(`modifier.${choice}`))))))
     }
 
     /**
@@ -20620,6 +20632,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         annotationScopeAuthorityOutcome,
         annotationEphemeralOutcome,
         annotationSegmentedIndex,
+        annotationSegmentDisplayLabel,
         debugFallbackScanProbe: () => (annotationController !== null && annotationController !== undefined
           && typeof annotationController.debugFallbackScanProbe === 'function'
           ? annotationController.debugFallbackScanProbe()
