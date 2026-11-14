@@ -2714,6 +2714,74 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     }
   })
 
+  await results.check('b4-14', 'running-panel icon colours match or beat the native Workspace icon weight in light mode', async () => {
+    const read = () => page.eval(() => {
+      const colors = (selector) => [...document.querySelectorAll(selector)].map((node) => getComputedStyle(node).color)
+      return {
+        secondaryIcons: {
+          action: colors('.psd-row-action'),
+          toggle: colors('.psd-run-toggle'),
+          chevron: colors('.psd-chevron'),
+          panelChevron: colors('.psd-panel-chevron'),
+          runGlyph: colors('.psd-run-glyph'),
+          childGlyph: colors('.psd-child-glyph'),
+        },
+        primaryIcons: {
+          brand: colors('.psd-run-brand'),
+          indicator: colors('.psd-indicator'),
+          spark: colors('.psd-spark'),
+        },
+        nativeIcons: {
+          slot: colors('[class*="YDXeBa_slot"]'),
+          folder: colors('[class*="YDXeBa_folder"]'),
+          action: colors('[class*="YDXeBa_iconButton"]'),
+        },
+      }
+    })
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    try {
+      await sleep(800)
+      const light = await read()
+      const secondary = light.secondaryIcons
+      assert(secondary.action.length > 0, 'no running-panel row action icons to measure')
+      for (const [name, list] of Object.entries(secondary)) {
+        for (const color of list) {
+          assertEqual(color, 'rgb(97, 102, 107)', `light mode: ${name} icon must use the secondary label token (#61666b) so icons read darker than the native tertiary row icons, got ${color}`)
+        }
+      }
+      const primaryBrand = [...light.primaryIcons.brand, ...light.primaryIcons.indicator, ...light.primaryIcons.spark]
+      for (const color of primaryBrand) {
+        assertEqual(color, 'rgb(15, 17, 21)', `light mode: brand/sparkle/indicator glyphs must keep the primary label token, got ${color}`)
+      }
+      const nativeColors = new Set([...light.nativeIcons.slot, ...light.nativeIcons.folder, ...light.nativeIcons.action])
+      assert(nativeColors.size > 0, 'no native Workspace icons to compare against')
+      // Native icon tokens in light: row slot/folder + action buttons use the
+      // tertiary label (#81858c); disclosure/pin indicators use label-caption
+      // (#adb2b8); project-row folder glyphs use the business state colour
+      // (#4176e6) and branded glyphs can be primary.
+      const nativeAllowed = new Set(['rgb(129, 133, 140)', 'rgb(173, 178, 184)', 'rgb(15, 17, 21)', 'rgb(65, 118, 230)'])
+      for (const color of nativeColors) {
+        assert(nativeAllowed.has(color), `native Workspace icon colours unexpectedly changed (got ${color})`)
+      }
+      await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+      await sleep(800)
+      const dark = await read()
+      // Dark mode is unchanged: minor icons stay the tertiary label (#adb2b8)
+      // and child glyphs inherit the unchanged secondary child-row colour
+      // (#cfd3d6).
+      const darkAllowed = new Set(['rgb(173, 178, 184)', 'rgb(207, 211, 214)'])
+      for (const [name, list] of Object.entries(dark.secondaryIcons)) {
+        for (const color of list) {
+          assert(darkAllowed.has(color), `dark mode: ${name} icon must keep its unchanged dark colour, got ${color}`)
+        }
+      }
+      return `light: row/action/toggle/chevron/child glyph ${secondary.action[0]}, brand ${light.primaryIcons.brand[0] ?? 'n/a'}, native ${[...nativeColors].join(' / ')}; dark unchanged ${dark.secondaryIcons.action[0] ?? 'no rows'}`
+    } finally {
+      await page.emulateMedia([])
+      await sleep(400)
+    }
+  })
+
 }
 
 /**
@@ -2905,6 +2973,108 @@ async function runHoverCardChecks({ page, results, state }) {
       assert(darkSearch, 'search card did not open in dark mode')
       assertEqual(darkSearch.bg, 'rgb(44, 44, 46)', `dark search card must keep the shell hover-card surface, got ${darkSearch.bg}`)
       return `hover card light ${lightCard.background} / dark ${darkCard.background}; search light ${lightSearch.bg} / dark ${darkSearch.bg}; rail+quick-look rules present`
+    } finally {
+      await page.emulateMedia([])
+      await sleep(400)
+    }
+  })
+
+  await results.check('b5-6', 'DEBUG icon inventory v2', async () => {
+    const read = () => page.eval(() => {
+      const facts = (el) => {
+        const s = getComputedStyle(el)
+        const r = el.getBoundingClientRect()
+        return { cls: String(el.className).slice(0, 46), tag: el.tagName, color: s.color, fill: s.fill, bg: s.backgroundColor, size: `${Math.round(r.width)}x${Math.round(r.height)}` }
+      }
+      const ours = [...document.querySelectorAll('.psd-panel *')].filter((el) => el.tagName === 'svg' || el.tagName === 'use' || /psd-(run-brand|run-glyph|child-glyph|run-toggle|row-action|panel-chevron|indicator|spark|pulse|chevron)/.test(String(el.className))).map(facts)
+      const native = [...document.querySelectorAll('[class*="YDXeBa"]')].filter((el) => el.tagName === 'svg' || el.tagName === 'use' || /slot|folder|chevron|iconButton|pinIndicator|rowQuickActions|pinnedAction|dot/.test(String(el.className))).map(facts)
+      return { ours: ours.slice(0, 24), native: native.slice(0, 24) }
+    })
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    try {
+      await sleep(900)
+      console.log('ICONV2-LIGHT ' + JSON.stringify(await read()))
+      await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+      await sleep(800)
+      console.log('ICONV2-DARK ' + JSON.stringify(await read()))
+      return 'logged'
+    } finally {
+      await page.emulateMedia([])
+      await sleep(400)
+    }
+  })
+
+  await results.check('b5-7', 'plugin and native session-info hover cards share the same width (no early truncation)', async () => {
+    const ourCard = () => page.eval(() => {
+      const card = document.querySelector('.psd-hovercard')
+      if (card === null) return null
+      const sections = [...card.querySelectorAll('.psd-hovercard-section-head')].map((head) => {
+        const title = head.querySelector('.psd-hovercard-section-title')
+        const value = head.querySelector('.psd-hovercard-section-value')
+        return {
+          title: title?.textContent ?? null,
+          titleFits: title ? title.scrollWidth <= title.clientWidth + 1 : null,
+          value: value?.textContent ?? null,
+          valueFits: value ? value.scrollWidth <= value.clientWidth + 1 : null,
+        }
+      })
+      return { width: Math.round(card.getBoundingClientRect().width), sections }
+    })
+    const nativeCard = () => page.eval(() => {
+      const card = document.querySelector('._card_bgejw_9')
+      if (card === null) return null
+      const title = card.querySelector('[class*="hoverTitle"]')
+      const path = card.querySelector('[class*="hoverPath"]')
+      return {
+        width: Math.round(card.getBoundingClientRect().width),
+        title: title?.textContent ?? null,
+        titleFits: title ? title.scrollWidth <= title.clientWidth + 1 : null,
+        path: path?.textContent ?? null,
+        pathFits: path ? path.scrollWidth <= path.clientWidth + 1 : null,
+      }
+    })
+    const hoverOurs = async () => {
+      await page.moveTo(900, 500)
+      await sleep(250)
+      await hoverRow(page, 0)
+      await sleep(1200)
+      return ourCard()
+    }
+    const hoverNative = async () => {
+      await page.moveTo(900, 500)
+      await sleep(300)
+      const row = await ensureNativeSessionRow(page)
+      await page.moveTo(row.rect.left + 40, row.rect.top + Math.round(row.rect.height / 2))
+      await sleep(1600)
+      return nativeCard()
+    }
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    try {
+      await sleep(800)
+      const oursLight = await hoverOurs()
+      assert(oursLight, 'our hover card did not appear (light)')
+      assertEqual(oursLight.width, 320, `our session-info card must be the documented 320 px wide, got ${oursLight.width}`)
+      assert(oursLight.sections.length > 0, 'our hover card has no figure sections to check for truncation')
+      for (const section of oursLight.sections) {
+        assert(section.titleFits !== false, `light: section label "${section.title}" is truncated`)
+        assert(section.valueFits !== false, `light: section value "${section.value}" is truncated`)
+      }
+      const stats = oursLight.sections.find((section) => /Session statistics|会话统计/.test(section.title ?? ''))
+      assert(stats, `the Session statistics section is missing (${oursLight.sections.map((section) => section.title).join(' / ')})`)
+      assert(/turns|轮/.test(stats.value ?? ''), `Session statistics value looks truncated: "${stats.value}"`)
+      const nativeLight = await hoverNative()
+      assert(nativeLight, 'native session-info hover card did not appear (light)')
+      assertEqual(nativeLight.width, oursLight.width, `native Workspace card width (${nativeLight.width}) must equal our session-info card width (${oursLight.width})`)
+      assert(nativeLight.titleFits !== false, `light: native card title truncated ("${nativeLight.title}")`)
+      assert(nativeLight.pathFits !== false, `light: native card path truncated ("${nativeLight.path}")`)
+      await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+      await sleep(800)
+      const oursDark = await hoverOurs()
+      assert(oursDark, 'our hover card did not appear (dark)')
+      const nativeDark = await hoverNative()
+      assert(nativeDark, 'native session-info hover card did not appear (dark)')
+      assertEqual(nativeDark.width, oursDark.width, `dark: native Workspace card width (${nativeDark.width}) must equal our card width (${oursDark.width})`)
+      return `ours light/dark ${oursLight.width}/${oursDark.width}px, native light/dark ${nativeLight.width}/${nativeDark.width}px; stats value "${stats.value}" fits; native title/path fit`
     } finally {
       await page.emulateMedia([])
       await sleep(400)
