@@ -1631,3 +1631,72 @@ surfaces so a hairline can never mimic a border in either theme. Toast/dialog sh
 assertions are conditional on those surfaces being present; S2/S5/S8 exercised the launcher
 (always in smoke), rail and toasts/dialog as applicable. Known pre-existing `b4-1` canvas
 saturation flake remains environment-timing-only and passed on the second attempt.
+
+## Sidebar hover geometry + interrupted-row hover fixes (2026-11-15, `fix/sidebar-hover-geometry`)
+
+Three user-reported regressions after the 2026-11-14 interrupted/pin row refactor
+(`b772ff5`, `cf810c7`, `5387c78`):
+
+1. **Interrupted native Session row on hover** lost its title/time (an opaque
+   `::before` mask left over from the retired trailing-edge Continue CTA) and, on
+   the current Session row, the rainbow atmosphere layer was caught by the mask's
+   positional `span:first-child` z-index rule: the wrapper flipped from
+   `position:absolute;z-index:0` to `position:relative;z-index:2` in flow, shrank
+   to a partial pill and pushed the warning badge/title right. Fix: delete the
+   mask and its positional rules; let the native leading status cell widen
+   (`width:auto`) for the interrupted row so the inline Continue triangle fits and
+   the title slides right; skip the injected atmosphere wrapper when the
+   stale-spinner decorator looks for the native leading cell.
+2. **Running & recent interrupted row title at rest** sat shifted right: the
+   2026-11-14 markup moved the pin/Continue slots inside the `.psd-run-head`
+   flex container (`gap:8px`), so two 0 px slots still added up to 16 px of gap
+   before hover. Fix: gap-less head + a 9 px margin on the leading glyph cell.
+   Rest title returns to `46 + shift` (first-character centre 56), hover/pinned
+   stays `71` for ordinary rows, and the interrupted row's collapsed slots add
+   nothing until the row is hovered.
+3. **Running & recent hover surface** lit only the content-paced inner pill; the
+   native Workspaces rows light the whole row. Fix: paint the hover background on
+   `.psd-run`/`.psd-child` (inner body stays transparent, atmosphere rows stay
+   suppressed with matching specificity), and the same leading-cell margin
+   removes the oversized glyph-to-title gap.
+
+Checks:
+
+- `npm test`: **271/271** pass; `npm run check`: exit 0 (**18 modules, 14 test
+  files**, pack list 73 entries).
+- Live GUI (launchd `dsh-web`, dark theme, throwaway headless Chrome, worktree
+  `src/client.js` injected through the loader swap; real CDP mouse input, no
+  clicks that mutate sessions other than opening them):
+  - Native interrupted row, rest → hover: leading cell `16 → 38 px`, Continue
+    triangle at `36–58 px` immediately right of the badge, title left edge
+    `42 → 64 px`, no `::before` mask (`content: none`), native trailing actions
+    `70–187 px`; the row keeps the native hover surface and the title stays
+    visible (the title marquee is the shell's own behaviour).
+  - Real current + interrupted row (open the interrupted Session, then hover):
+    atmosphere wrapper stays `position:absolute; z-index:0` at `258x32 px`
+    (full row), leading cell 38 px, triangle visible, title visible — the old
+    in-flow rainbow pill / collapsed title no longer reproduces.
+  - Card ordinary row: rest title `49 px` from the row's left edge
+    (`46 + --psd-title-shift 3`), hover title `71 px` (pin slot `16 + 9`), hover
+    surface = full row `240 px` wide, inner body transparent.
+  - Card interrupted row geometry (static replica of the card DOM + shipped CSS,
+    same 320 px panel; the live Host had no interrupted row inside the retention
+    window): rest title `49 px`, first-character centre on the 56 px column,
+    Continue slot `0 px`; hover: Continue `22 px` + pin `16 + 9 px`, title
+    `95 px`, row surface painted, body transparent.
+  - Current card row hovered: row/body backgrounds stay `rgba(0,0,0,0)` under the
+    rainbow; pin and New session still reveal.
+  - Page errors: 0 in every run.
+- Evidence images: [sidebar-interrupted-hover.png](assets/sidebar-interrupted-hover.png)
+  (native interrupted row hover), [sidebar-interrupted-current-hover.png](assets/sidebar-interrupted-current-hover.png)
+  (current + interrupted, rainbow intact), [card-fullrow-hover.png](assets/card-fullrow-hover.png)
+  (full-row card hover), [card-interrupted-rest-hover.png](assets/card-interrupted-rest-hover.png)
+  (left: interrupted card row at rest, right: hovered; static replica).
+- `test/browser/sidebar.e2e.mjs` was updated for the new contracts (`b2-1`
+  full-row surface, `b2-5` stand-in margin, ordinary-row hover surface, probe
+  fields). The full sidebar E2E suite was **not** re-run this round because it
+  creates blank Sessions and pins rows on the shared live Host; the targeted
+  live-DOM measurements above stand in. Note the pin-mode section of that harness
+  already carried pre-existing geometry assertions from before the 2026-11-14
+  markup move (e.g. `gapHeadToSlot = 9` when the slot moved inside the head), so
+  a full green pin run is not claimed here.

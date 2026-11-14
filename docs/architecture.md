@@ -634,8 +634,7 @@ modifiers), `power-suite.ui-annotation.launcher` (position),
 | `conversation.input.dock` | Session hooks for the body-portaled prompt-history rail |
 | `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation and the UI element annotation launcher/rail/popover |
 | `plugins.bundle.config` | Plugin settings page |
-| `sidebar.session.row.leading` | Interrupted-session badge |
-| `sidebar.workspaces.session.row.action` | Continue action |
+| `sidebar.session.row.leading` | Interrupted-session badge plus the hover/focus inline Continue triangle |
 
 ## Invariants
 

@@ -101,10 +101,11 @@ sidebar's panel tabs. It starts expanded.
   column's right edge always equals the row's right edge and every row's time
   right edge equals `row right − 50 px` (22 action + 24 disclosure + the two
   2 px gaps), no matter whether a title is short or clipped. The title control
-  keeps its content-paced width (so the hover pill still hugs the label) and its
-  `max-width: calc(100% − 100 px)` cap, and the right-edge gradient mask fades a
-  clipped title inside the pill's right padding (parent rows end 10 px before
-  the content-column boundary, child rows 8 px), never under the trailing
+  keeps its content-paced width (for the click target and the fade geometry)
+  and its `max-width: calc(100% − 100 px)` cap while the hover surface itself
+  spans the full row, and the right-edge gradient mask fades a clipped title
+  inside the row's right padding (parent rows end 10 px before the
+  content-column boundary, child rows 8 px), never under the trailing
   columns. The 14 px/20 px title size matches the native sidebar rows, and the
   time is drawn at 11 px in the tabular-numeric tertiary label colour. In light
   mode every row title (including finished and child rows) uses the native
@@ -231,19 +232,17 @@ sidebar's panel tabs. It starts expanded.
   spacer. Parent rows, child rows, and the header therefore share the same
   time, action, and disclosure columns: the header's empty time column and its
   count badge (right-anchored on the action column) complete the same grid.
-- **Hover highlights**: the row-body highlight is a rounded pill paced by its
-  **content** — the leading glyph plus the (possibly faded) title — with roomy
-  horizontal insets so the text never touches the pill edge: parent rows use
-  `padding: 4px 10px 4px 14px` (left 14 px, right 10 px) and child rows
-  `padding: 3px 8px 3px 10px` (left 10 px, right 8 px), so the title's right
-  edge always sits at least 8 px inside the pill's right edge (measured by the
-  sidebar E2E alongside the unchanged right-anchored grid). The pill still
-  never stretches across empty space. Non-text
-  controls keep fixed highlight blocks that line up across all rows: 22 x 22 px
-  for each action button and 24 x 26 px for the disclosure arrow. Hovering the
-  disclosure arrow highlights only the arrow (the body pill is suppressed), so
-  the two highlights stay independent and never compose into a nested two-layer
-  highlight.
+- **Hover highlights**: hovering paints the **whole row** with the native hover
+  surface, exactly like the native sidebar Session/Workspace rows (user request:
+  the old content-paced inner pill highlighted only the title while the native
+  rows light the full row). The row body (`.psd-run-main`/`.psd-child-main`)
+  stays transparent, so there is no nested second pill; the text keeps roomy
+  horizontal insets (parent rows `4px 10px 4px 14px`, child rows
+  `3px 8px 3px 10px`). Non-text controls keep fixed highlight blocks that line
+  up across all rows: 22 x 22 px for each action button and 24 x 26 px for the
+  disclosure arrow. Hovering the disclosure arrow highlights only the arrow (the
+  row surface is suppressed), so the two highlights stay independent and never
+  compose into a nested two-layer highlight.
 - **Row height**: every card row — main and nested child, ordinary and
   current/atmosphere — uses the native Workspace project-row height (34 px,
   `--psd-row-h` on the card), so the card and the Workspace list below it share
@@ -1250,9 +1249,9 @@ Manual checks on the running DSH Web GUI:
     and completion restore the green dot. The panel header shows the green-free
     state pair: the blue pulse dot while anything runs, and the white
     `deepseek-fill` brand glyph when every listed task is complete. Check that
-    hovering the row body shows the content-paced pill and the arrow's own
-    highlight stays independent, and that the card body scrolls with a hidden
-    scrollbar.
+    hovering the row body paints the full-row hover surface (the inner body
+    stays transparent) and the arrow's own highlight stays independent, and that
+    the card body scrolls with a hidden scrollbar.
 11. Check the card header geometry: the text block is content-sized (its hover
     highlight hugs the label), **View all** and the header chevron stay 30 px
     tall with the shell corner radius, the count badge is right-anchored above

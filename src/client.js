@@ -4231,24 +4231,30 @@ window.__ModuleLoader__.load({
     const PLAY_MASK = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="${REMIX_PLAY_FILL}"/></svg>`)}")`
 
     const INTERRUPTED_CSS = `
+/* Interrupted native Session rows keep the shell's own hover surface and title;
+   hovering only reveals the inline Continue triangle in the leading status cell.
+   The old opaque ::before mask and the first/last-child z-index lift are gone: the
+   mask erased the title/time on hover, and its positional "first child" selector
+   caught the injected rainbow atmosphere wrapper (current Session row) and turned
+   it from an absolute background layer into an in-flow pill that pushed the badge
+   and collapsed the title (user report). The native leading cell is a fixed 16 px
+   status column; it widens for this row so the 22 px triangle has room and the
+   title slides right instead of being clipped. */
 [data-row-key^="session:"][data-power-suite-interrupted]{position:relative}
-[data-row-key^="session:"][data-power-suite-interrupted]::before{content:"";position:absolute;inset:0;z-index:1;border-radius:var(--dsw-radius-md);background-color:var(--dsw-specific-sidebar-fill);background-image:linear-gradient(var(--dsw-alias-interactive-bg-hover),var(--dsw-alias-interactive-bg-hover));opacity:0;pointer-events:none}
-[data-row-key^="session:"][data-power-suite-interrupted]:hover::before,
-html[data-input-modality="keyboard"] [data-row-key^="session:"][data-power-suite-interrupted]:focus-within::before{opacity:1}
-[data-row-key^="session:"][data-power-suite-interrupted]:hover>span:first-child,
-[data-row-key^="session:"][data-power-suite-interrupted]:hover>span:last-child,
-html[data-input-modality="keyboard"] [data-row-key^="session:"][data-power-suite-interrupted]:focus-within>span:first-child,
-html[data-input-modality="keyboard"] [data-row-key^="session:"][data-power-suite-interrupted]:focus-within>span:last-child{position:relative;z-index:2}
+[data-row-key^="session:"][data-power-suite-interrupted]>span:has(.dps-row-interrupted){width:auto;justify-content:flex-start}
 .dps-row-interrupted{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;color:var(--dsw-alias-state-warn-primary);pointer-events:none;flex:none}
-.dps-row-continue-slot{display:inline-flex;align-items:center;justify-content:center;width:0;height:22px;overflow:hidden;opacity:0;pointer-events:none;transition:width 200ms var(--ds-ease-in-out,ease) 160ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
+.dps-row-continue-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:0;height:22px;margin:0;overflow:hidden;opacity:0;pointer-events:none;transition:width 200ms var(--ds-ease-in-out,ease) 160ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
 [data-row-key^="session:"][data-power-suite-interrupted]:hover .dps-row-continue-slot,
 [data-row-key^="session:"][data-power-suite-interrupted]:focus-within .dps-row-continue-slot{width:22px;opacity:1;pointer-events:auto;transition:width 200ms var(--ds-ease-in-out,ease) 0ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
 .dps-row-continue{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;flex:none;opacity:1;pointer-events:auto}
 .dps-row-continue svg{display:block;flex:none}
 .dps-row-continue:hover{background:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);color:var(--dsw-alias-label-primary)}
 .dps-row-continue:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
-[data-row-key^="session:"][data-power-suite-interrupted] > span:first-child > svg,
-[data-row-key^="session:"][data-power-suite-interrupted] > span:first-child > [class*="_dot_"]{display:none!important}
+/* The leading seat is mounted through a display:contents slot wrapper, so the
+   stale spinner is a descendant rather than a direct child. Keep only the plugin's
+   own mark and Continue slot in that cell. */
+[data-row-key^="session:"][data-power-suite-interrupted]>span:has(.dps-row-interrupted) span[data-slot]>*:not(.dps-row-interrupted):not(.dps-row-continue-slot),
+[data-row-key^="session:"][data-power-suite-interrupted]>span:has(.dps-row-interrupted)>*:not(.dps-row-interrupted):not(.dps-row-continue-slot):not(span[data-slot]){display:none!important}
 body:not([data-ds-dark-theme]) [data-psd-current-workspace='true'] .dps-row-interrupted,
 body:not([data-ds-dark-theme]) [data-psd-current-session='true'] .dps-row-interrupted{color:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 72%,var(--dsw-alias-label-primary))}
 html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] button[class$="_primary"]>svg{display:none!important}
@@ -4315,7 +4321,10 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
           continue
         }
         row.setAttribute('data-power-suite-interrupted', '')
-        const leading = row.firstElementChild
+        // The rainbow-atmosphere wrapper is injected as the row's first child; the
+        // stale-spinner badge must land in the native leading cell instead, never
+        // inside the atmosphere layer.
+        const leading = [...row.children].find((child) => !child.hasAttribute('data-psd-atmos')) ?? null
         if (leading === null) continue
         const badges = [...row.querySelectorAll('.dps-row-interrupted')]
         const persistent = badges.find((badge) => badge.getAttribute('data-dynamic-badge') !== 'true')
@@ -4973,17 +4982,27 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-item{display:flex;flex-direction:column;min-width:0}
 .psd-run{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:var(--psd-row-h,34px);padding:0 0 0 7px;border-radius:var(--dsw-radius-md,8px);cursor:pointer}
 .psd-run-main{appearance:none;display:flex;flex:0 1 auto;box-sizing:border-box;min-width:0;min-height:var(--psd-row-h,34px);max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:0;padding:4px 10px 4px 14px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.psd-run:hover:not(:has(.psd-run-toggle:hover)) .psd-run-main{background-color:var(--dsw-alias-interactive-bg-hover)}
+/* The hover surface covers the whole row like the native sidebar rows (user
+   request); the old content-paced inner pill highlighted only the title. The
+   disclosure keeps its own 24 px block: hovering it suppresses the row surface. */
+.psd-run:hover:not(:has(.psd-run-toggle:hover)),.psd-run:focus-within:not(:has(.psd-run-toggle:focus)){background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-run-open{appearance:none;display:flex;flex:1 1 auto;min-width:0;max-width:100%;align-items:center;padding:0;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;margin-left:var(--psd-title-shift,0px);transition:margin-left 220ms cubic-bezier(.4,0,.2,1)}
 .psd-run-open:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px;border-radius:var(--dsw-radius-sm,6px)}
 .psd-run-spacer,.psd-child-spacer{flex:1 1 auto;min-width:0}
 .psd-run-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
-.psd-run-head{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto;overflow:hidden;margin-right:0}
+/* The head is gap-less: the collapsed Continue/pin slots are 0 px wide, so a flex
+   gap between children would still push the title right before the pointer arrives
+   (user report: the title started shifted on an interrupted row that was not
+   hovered). Spacing is carried by the leading cell's 9 px right margin instead, so
+   the rest title starts at the first-character-centred column and only the revealed
+   slots move it; the pinned/hover column stays at 9 + 16 + 9 px. */
+.psd-run-head{display:flex;align-items:center;gap:0;min-width:0;flex:1 1 auto;overflow:hidden;margin-right:0}
 /* One fixed 16 px leading-glyph cell for every main-row state, so the 14 px state
    dots and the slightly larger sparkle share one centre column; the child-tree
-   trunk and the pin column are aligned to that same geometry. */
-.psd-run-glyph-cell{flex:none;display:inline-flex;align-items:center;justify-content:center;width:16px;height:20px}
+   trunk and the pin column are aligned to that same geometry. Its 9 px right
+   margin is the rest gap to the title when every slot is collapsed. */
+.psd-run-glyph-cell{flex:none;display:inline-flex;align-items:center;justify-content:center;width:16px;height:20px;margin-right:9px}
 .psd-run-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
 .psd-run-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
 .psd-run-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap;color:var(--dsw-alias-label-primary);font-size:14px;line-height:20px}
@@ -5007,7 +5026,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run[data-pinned='true']{background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,transparent)}
 .psd-run[data-pinned='true'] .psd-run-pin{opacity:1;visibility:visible;pointer-events:none;color:var(--dsw-alias-state-business-primary);transition:background-color 120ms var(--ds-ease-in-out,ease)}
 .psd-run[data-pinned='true']:hover .psd-run-pin,.psd-run[data-pinned='true']:focus-within .psd-run-pin{pointer-events:auto}
-.psd-run[data-pinned='true']:hover .psd-run-main{background-color:var(--dsw-alias-interactive-bg-hover)}
+.psd-run[data-pinned='true']:hover,.psd-run[data-pinned='true']:focus-within{background-color:var(--dsw-alias-interactive-bg-hover)}
 @media (prefers-reduced-motion: reduce){.psd-run-pin,.psd-run-pin-slot,.psd-run-open{transition:none}}
 .psd-run-toggle{appearance:none;position:relative;z-index:1;flex:none;width:var(--psd-chevron-col,24px);height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .psd-run-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
@@ -5018,7 +5037,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-children{position:relative;display:flex;flex-direction:column;gap:5px;margin:4px 0 6px 28.5px;padding-left:9px;border-left:1px solid var(--dsw-alias-border-l2)}
 .psd-child{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:var(--psd-row-h,34px);padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:18px;text-align:left;cursor:pointer}
 .psd-child-main{appearance:none;display:flex;flex:0 1 auto;box-sizing:border-box;min-width:0;min-height:var(--psd-row-h,34px);max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:7px;padding:3px 8px 3px 10.5px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.psd-child:hover .psd-child-main{background-color:var(--dsw-alias-interactive-bg-hover)}
+.psd-child:hover,.psd-child:focus-within{background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-child::before{content:'';position:absolute;left:-10px;top:50%;width:14px;height:1px;background:var(--dsw-alias-border-l2);pointer-events:none}
 .psd-child:last-child::after{content:'';position:absolute;left:-10px;top:calc(50% + 1px);bottom:-1px;width:2px;background:var(--dsw-alias-bg-layer-1);pointer-events:none}
 .psd-child-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
@@ -5114,7 +5133,7 @@ body:not([data-ds-dark-theme]) :is(.psd-row-action,.psd-run-toggle,.psd-chevron,
    immediately left of the time column: the 22 px action slot stays reserved for
    New session, and no fixed column moves when the action appears. */
 .psd-continue-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:0;height:20px;margin-right:0;overflow:hidden;opacity:0;pointer-events:none;transition:width 200ms var(--ds-ease-in-out,ease) 160ms,margin-right 200ms var(--ds-ease-in-out,ease) 160ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
-.psd-run:hover .psd-continue-slot,.psd-run:focus-within .psd-continue-slot,.psd-child:hover .psd-continue-slot,.psd-child:focus-within .psd-continue-slot{width:22px;margin-left:-8px;margin-right:2px;opacity:1;pointer-events:auto;transition:width 200ms var(--ds-ease-in-out,ease) 0ms,margin-right 200ms var(--ds-ease-in-out,ease) 0ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
+.psd-run:hover .psd-continue-slot,.psd-run:focus-within .psd-continue-slot,.psd-child:hover .psd-continue-slot,.psd-child:focus-within .psd-continue-slot{width:22px;margin-right:2px;opacity:1;pointer-events:auto;transition:width 200ms var(--ds-ease-in-out,ease) 0ms,margin-right 200ms var(--ds-ease-in-out,ease) 0ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
 .psd-child .psd-continue-slot{height:18px}
 .psd-child:hover .psd-continue-slot,.psd-child:focus-within .psd-continue-slot{width:18px}
 .psd-continue-inline{display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;margin:0;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;opacity:1;pointer-events:auto}
@@ -5179,10 +5198,14 @@ body:not([data-ds-dark-theme]) .psd-child-current .psd-interrupted{color:color-m
    (pin, New session, disclosure) stay. The native sidebar current Session and
    Workspace rows get the same treatment so their own hover/selected background
    never mixes into the rainbow paint. */
-.psd-run-current:hover:not(:has(.psd-run-toggle:hover)) .psd-run-main,.psd-run-current:focus-within:not(:has(.psd-run-toggle:focus)) .psd-run-main{background-color:transparent}
-.psd-run-current[data-pinned='true']{background-color:transparent}
-.psd-run-current[data-pinned='true'] .psd-run-main{background-color:transparent}
-.psd-child-current:hover .psd-child-main,.psd-child-current:focus-within .psd-child-main{background-color:transparent}
+/* Specificity note: the full-row hover rule above includes a :not(:has(...))
+   guard, so the suppression must carry the same structural guards to win on
+   atmosphere rows (a plain .psd-run-current:hover would lose to 0,4,0). */
+.psd-run.psd-run-current:hover:not(:has(.psd-run-toggle:hover)),
+.psd-run.psd-run-current:focus-within:not(:has(.psd-run-toggle:focus)),
+.psd-child.psd-child-current:hover,
+.psd-child.psd-child-current:focus-within{background-color:transparent}
+.psd-run.psd-run-current[data-pinned='true']{background-color:transparent}
 [data-psd-current-workspace='true'],[data-psd-current-session='true']{background-color:transparent!important}
 /* With no surface highlight to paint, the row's affordance becomes a brightness
    lift on the content itself (user request: brighten the text/icons instead of

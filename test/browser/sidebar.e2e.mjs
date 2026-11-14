@@ -21,7 +21,7 @@
  *       columns as empty spacers so their time ends on the parent row's time x, and
  *       they render no New session control; clipped titles carry the right-edge
  *       gradient mask.
- *   B2  hover highlight geometry: content-paced body pill, fixed-size control highlights
+ *   B2  hover highlight geometry: full-row hover surface like the native rows, fixed-size control highlights
  *       (22 px New session button, 24 px chevron) on the same columns in every row;
  *       revealing the actions moves no column, and the main-row New session action
  *       still creates and opens a blank Session.
@@ -1249,6 +1249,8 @@ const probe = {
       kind: hoveredRow ? (hoveredRow.classList.contains('psd-run') ? 'parent' : 'child') : null,
       mainBackground: main ? getComputedStyle(main).backgroundColor : null,
       mainRect: rect(main),
+      rowBackground: hoveredRow ? getComputedStyle(hoveredRow).backgroundColor : null,
+      rowRect: rect(hoveredRow),
       actionsOpacity: actions ? getComputedStyle(actions).opacity : null,
       slotRect: rect(actions),
       actionRects: actionButtons.map((button) => rect(button)),
@@ -2378,7 +2380,7 @@ async function runLayoutChecks({ page, results, state }) {
     return `toggle ${toggle.rect.width}px + spacer ${spacer.rect.width}px + chevron ${chevron.rect.width}px`
   })
 
-  await results.check('b2-1', 'hover reveals a fixed-size New session highlight and a content-paced body pill', async () => {
+  await results.check('b2-1', 'hover reveals a fixed-size New session highlight on a full-row surface', async () => {
     await page.eval(() => window.scrollTo(0, 0))
     const target = await hoverRow(page, 0)
     await sleep(400)
@@ -2393,12 +2395,13 @@ async function runLayoutChecks({ page, results, state }) {
     assertEqual(action.height, 22, 'New session highlight height')
     for (const radius of hovered.actionRadii) assert(radius !== '0px', 'action buttons must keep their rounded highlight block')
     assertNear(action.right, hovered.slotRect.right, 1, 'New session button must be right-anchored in the fixed action slot')
-    const body = hovered.mainRect
-    assert(body, 'hovered body pill rect missing')
-    assert(body.width < state.geometry.panel.width, 'body pill must be content-sized, not the full card width')
-    assert(hovered.mainBackground !== 'rgba(0, 0, 0, 0)', 'hovered body pill has no background')
+    const row = hovered.rowRect
+    assert(row, 'hovered row rect missing')
+    assert(hovered.rowBackground !== 'rgba(0, 0, 0, 0)', 'hovered row has no surface background (full-row hover)')
+    assert(row.width >= state.geometry.panel.width - 16, `the hover surface must span the row, not just the title (row ${row.width}px vs panel ${state.geometry.panel.width}px)`)
+    assertEqual(hovered.mainBackground, 'rgba(0, 0, 0, 0)', 'the inner body must stay transparent (no nested second pill)')
     state.hover = hovered
-    return `pill ${body.width}x${body.height}, New session ${action.width}x${action.height} at right ${action.right} of slot ${hovered.slotRect.right}, top ${target.rowTop}`
+    return `row surface ${row.width}x${row.height} ${hovered.rowBackground}, New session ${action.width}x${action.height} at right ${action.right} of slot ${hovered.slotRect.right}, top ${target.rowTop}`
   })
 
   await results.check('b2-2', 'nested child rows reveal no New session control; header highlight geometry unchanged', async () => {
@@ -2489,7 +2492,7 @@ async function runLayoutChecks({ page, results, state }) {
       slot.className = 'psd-continue-slot'
       slot.style.width = '22px'
       slot.style.opacity = '1'
-      slot.style.marginLeft = '-8px'
+      slot.style.marginLeft = '0px'
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'psd-continue-inline'
@@ -9157,8 +9160,10 @@ async function runPinChecks({ page, results, state }) {
     const ordinaryHovered = await page.eval(probePin.ordinaryCardRow)
     assert(ordinaryHovered !== null && ordinaryHovered.hovered === true, 'the ordinary card row was not hovered')
     assertEqual(ordinaryHovered.atmosPresent, false, 'the affordance comparison row must not carry an atmosphere')
-    assert(ordinaryHovered.mainBackground !== 'rgba(0, 0, 0, 0)',
-      `an ordinary card row must keep its hover pill (main background ${ordinaryHovered.mainBackground})`)
+    assert(ordinaryHovered.rowBackground !== 'rgba(0, 0, 0, 0)',
+      `an ordinary card row must keep its full-row hover surface (row background ${ordinaryHovered.rowBackground})`)
+    assertEqual(ordinaryHovered.mainBackground, 'rgba(0, 0, 0, 0)',
+      `the ordinary row body must stay transparent (no nested pill, main background ${ordinaryHovered.mainBackground})`)
     assertContentBrightness(ordinaryHovered, 'none', 'hovered ordinary card row')
     const ordinaryControl = await hoverCardControl(page, 'parent', ordinary.title, '.psd-row-action')
     assert(ordinaryControl.background !== 'rgba(0, 0, 0, 0)',

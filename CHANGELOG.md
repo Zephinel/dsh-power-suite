@@ -551,6 +551,28 @@ heading is added until the release is cut.
   and the default agent preset stays available from the Workspace context
   menu. Removing the page needs no data migration: it persisted no state.
 
+### Fixed
+
+- Sidebar interrupted-session hover: hovering an interrupted native Session row
+  keeps the shell's normal hover surface and its title/time visible, and reveals
+  the inline Continue triangle right after the warning mark. The obsolete opaque
+  `::before` hover mask (a leftover from the retired trailing-edge CTA) is gone.
+  The mask's positional `span:first-child` z-index rule used to catch the
+  injected rainbow-atmosphere wrapper on the current Session row, which turned
+  the background layer into an in-flow pill that pushed the badge right and
+  collapsed the title; the native status cell now widens with `width: auto` so
+  the triangle fits and the title slides right instead.
+- Running & recent card row geometry: collapsing the Continue/pin slots no
+  longer leaves flex gaps behind. The head is gap-less and the leading glyph
+  cell carries the rest spacing, so an interrupted row's title sits at the
+  first-character-centred rest column again and slides right only when the row
+  is hovered/focused (the pinned column stays at the documented 9 + 16 + 9 px);
+  the same change restores the native-like glyph-to-title gap.
+- Running & recent card hover highlight: the hover surface now covers the whole
+  row like the native sidebar rows instead of a content-paced inner pill that
+  lit only the title; the row body stays transparent so no second nested pill
+  appears, and atmosphere rows keep their transparent surface.
+
 ## [0.2.0] — undated development snapshot
 
 > **No release was tagged for 0.2.0 and no release date is claimed.** The package

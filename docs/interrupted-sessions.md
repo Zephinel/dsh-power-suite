@@ -9,10 +9,14 @@ message.
 
 - An **amber warning mark** sits left of the Session title, in the row's status
   cell, and stays visible by default.
-- **Hovering** the row reveals a **Continue** action at the trailing edge. The
-  same hover paints an opaque mask over the row's title and time, so the action
-  never collides with the text underneath; the mark and the action sit above the
-  mask. Both use theme tokens, so they follow light and dark mode.
+- **Hovering** the row keeps the shell's normal hover surface — the title and
+  time stay visible and the native trailing actions appear as on any Session row
+  — and reveals an inline **Continue** triangle immediately right of the warning
+  mark. The native status cell widens to hold the mark plus the triangle, so the
+  title slides right by the triangle's width instead of being covered by a mask
+  (the old opaque hover mask was left over from the retired trailing-edge CTA and
+  erased the title/time). The mark, the triangle and the native actions use theme
+  tokens, so they follow light and dark mode.
 - Opening that Session turns the composer's send control into a **play triangle**
   (`play-fill`). Pressing it with an empty draft continues the unfinished task;
   typing a draft first sends that draft normally instead.
@@ -71,10 +75,13 @@ Host:
 
 Browser:
 
-- `sidebar.session.row.leading` — the default-visible warning mark for idle rows.
+- `sidebar.session.row.leading` — the default-visible warning mark for idle rows
+  plus the hover/focus-revealed inline Continue triangle. The native status cell
+  is `width: auto` for this row, so the 22 px triangle fits and the title slides
+  right; no opaque hover mask is painted.
 - A row decorator covers rows whose native status still says running: it inserts
-  the warning into the native leading span and hides the stale spinner.
-- `sidebar.workspaces.session.row.action` — the hover-only Continue pill.
+  the warning into the native leading span (skipping the injected rainbow
+  atmosphere wrapper) and hides the stale spinner.
 - `conversation.input.overlay` — a renderless seat for the open Conversation
   that marks the shell, swaps the submit glyph, and starts the Host continuation
   route; it no longer submits a draft prompt.
