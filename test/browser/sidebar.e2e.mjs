@@ -43,13 +43,19 @@
  *       stale cached classification.
  *   F4  while annotation mode is active the hover card is pinned/annotatable
  *       (`data-psd-hovercard`, `data-psd-pinned`) and mode exit clears it.
+ *   task-72 the Files header exposes the Artifacts toggle and its animated in-pane
+ *       view (enter/exit transition, Back/Esc/theme/reduced-motion/cleanup).
+ *   task-74 the composer's multiple pasted screenshots open one continuous gallery
+ *       (counter, buttons, arrows, wheel debounce, focus return, clamp on removal,
+ *       single-image native lightbox unchanged).
  *
  * Side effects: one blank Session is created through the native New Session button per
  * run and one more through the card's main-row New session action (b2-4; both blank and
- * never typed into); one existing Session row is opened (from the card) to exercise the
- * current-highlight marker; `localStorage` for the throwaway profile is modified
- * (folds/bucket cache). No other session, setting or file is touched, and the token is
- * never printed. The harness exits 0 only when every check passed and the page reported
+ * never typed into); two tiny generated PNGs are pasted into (and removed again from)
+ * that blank Session's composer for the gallery checks; one existing Session row is
+ * opened (from the card) to exercise the current-highlight marker; `localStorage` for
+ * the throwaway profile is modified (folds/bucket cache). No other session, setting or
+ * file is touched, and the token is never printed. The harness exits 0 only when every check passed and the page reported
  * no errors; 1 on any failure; 2 on usage errors.
  *
  * Usage:
@@ -4782,6 +4788,410 @@ async function runFilesArtifactsChecks({ page, results, state }) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Composer image gallery (task-74)
+// ---------------------------------------------------------------------------------------------
+
+// Two valid in-memory PNGs (40x30 red, 30x40 blue) used to seed the composer
+// attachment rail through a synthetic paste. Generated locally, no network.
+const GALLERY_PNG_A = 'iVBORw0KGgoAAAANSUhEUgAAACgAAAAeCAIAAADRv8uKAAAAKklEQVR42u3NMQ0AAAgDsAmb/yALGXA06d9MeyJisVgsFovFYrFYLP4bL9HP3EyYzxBrAAAAAElFTkSuQmCC'
+const GALLERY_PNG_B = 'iVBORw0KGgoAAAANSUhEUgAAAB4AAAAoCAIAAABmcd1FAAAALElEQVR42u3MQQkAAAgEsAtmRCMaxhQ+hMHeS/UciVqtVqvVarVarVar/9cL6UyxKjg4CB8AAAAASUVORK5CYII='
+
+/** Page-side probes for the composer attachment rail and the gallery overlay. */
+const galleryProbe = {
+  /** Openable pasted-image thumbnails in rail order (title + img, no aria label). */
+  composerThumbs: () => {
+    const rect = (el) => {
+      const r = el.getBoundingClientRect()
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), width: Math.round(r.width), height: Math.round(r.height) }
+    }
+    const composer = document.querySelector('[data-conversation-region="composer"]')
+    if (!(composer instanceof HTMLElement)) return []
+    return [...composer.querySelectorAll('button')]
+      .filter((button) => {
+        if (!(button instanceof HTMLElement)) return false
+        const img = button.querySelector('img')
+        if (!(img instanceof HTMLImageElement)) return false
+        if (button.querySelector('svg') !== null) return false
+        if (button.hasAttribute('aria-label')) return false
+        if (button.children.length !== 1 || button.firstElementChild !== img) return false
+        return typeof button.getAttribute('title') === 'string' && button.getAttribute('title').length > 0
+      })
+      .map((button) => {
+        const img = button.querySelector('img')
+        return {
+          ...rect(button),
+          src: img.getAttribute('src'),
+          alt: img.getAttribute('alt'),
+          title: button.getAttribute('title'),
+          focused: document.activeElement === button,
+        }
+      })
+  },
+
+  /** Gallery overlay state. */
+  gallery: () => {
+    const root = document.querySelector('[data-psg-gallery]')
+    const counter = document.querySelector('[data-psg-counter]')
+    const image = document.querySelector('[data-psg-image]')
+    const prev = document.querySelector('[data-psg-prev]')
+    const next = document.querySelector('[data-psg-next]')
+    const close = document.querySelector('[data-psg-close]')
+    const rect = (el) => {
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), width: Math.round(r.width), height: Math.round(r.height) }
+    }
+    return {
+      present: root !== null,
+      count: document.querySelectorAll('[data-psg-gallery]').length,
+      role: root ? root.getAttribute('role') : null,
+      modal: root ? root.getAttribute('aria-modal') : null,
+      index: root ? Number(root.getAttribute('data-psg-index')) : null,
+      total: root ? Number(root.getAttribute('data-psg-total')) : null,
+      counter: counter ? (counter.textContent || '').trim() : null,
+      imageSrc: image ? image.getAttribute('src') : null,
+      imageAlt: image ? image.getAttribute('alt') : null,
+      prev: prev ? { ...rect(prev), disabled: prev.disabled, label: prev.getAttribute('aria-label') } : null,
+      next: next ? { ...rect(next), disabled: next.disabled, label: next.getAttribute('aria-label') } : null,
+      close: rect(close),
+      closeFocused: close !== null && document.activeElement === close,
+      nativeDialogs: [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')]
+        .filter((el) => !el.hasAttribute('data-psg-gallery')).length,
+      pageScrollY: window.scrollY,
+    }
+  },
+}
+
+/** Seed the composer attachment rail with two pasted PNGs (synthetic paste). */
+async function pasteComposerImages(page) {
+  const result = await page.eval((args) => {
+    const editor = document.querySelector('[data-lexical-editor="true"]')
+    if (!(editor instanceof HTMLElement)) return { ok: false, error: 'no composer editor' }
+    const make = (name, b64) => {
+      const bytes = Uint8Array.from(atob(b64), (character) => character.charCodeAt(0))
+      return new File([bytes], name, { type: 'image/png' })
+    }
+    const transfer = new DataTransfer()
+    transfer.items.add(make('gallery-one.png', args.a))
+    transfer.items.add(make('gallery-two.png', args.b))
+    editor.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }))
+    return { ok: true, files: transfer.files.length }
+  }, { a: GALLERY_PNG_A, b: GALLERY_PNG_B })
+  assert(result.ok, `synthetic image paste failed: ${result.error || 'unknown'}`)
+}
+
+async function waitComposerThumbs(page, count, timeout = 15000) {
+  await page.waitForFn(
+    (expected) => {
+      const composer = document.querySelector('[data-conversation-region="composer"]')
+      if (!(composer instanceof HTMLElement)) return false
+      const thumbs = [...composer.querySelectorAll('button')].filter((button) => {
+        const img = button.querySelector('img')
+        if (!(img instanceof HTMLImageElement)) return false
+        if (button.querySelector('svg') !== null || button.hasAttribute('aria-label')) return false
+        if (button.children.length !== 1 || button.firstElementChild !== img) return false
+        return typeof button.getAttribute('title') === 'string' && button.getAttribute('title').length > 0
+      })
+      return thumbs.length === expected
+    },
+    [count],
+    { timeout, label: `${count} openable composer image thumbnails` }
+  )
+  await sleep(300)
+}
+
+async function waitGalleryOpen(page) {
+  await page.waitForFn(() => document.querySelector('[data-psg-gallery]') !== null, [], { timeout: 5000, label: 'composer gallery open' })
+}
+
+async function waitGalleryClosed(page) {
+  await page.waitForFn(() => document.querySelector('[data-psg-gallery]') === null, [], { timeout: 5000, label: 'composer gallery closed' })
+}
+
+/** Click one composer thumbnail through real CDP input. */
+async function clickComposerThumb(page, index) {
+  const thumbs = (await page.eval(galleryProbe.composerThumbs)) || []
+  assert(thumbs[index], `composer thumbnail ${index} is missing (have ${thumbs.length})`)
+  await page.moveTo(900, 500)
+  await sleep(120)
+  await page.clickAt(thumbs[index].x, thumbs[index].y)
+  await waitGalleryOpen(page)
+  await sleep(220)
+}
+
+/** Click one of the gallery's icon buttons through real CDP input. */
+async function clickGalleryControl(page, selector) {
+  const target = await page.findRect(selector)
+  assert(target, `gallery control ${selector} is missing`)
+  await page.clickAt(target.x, target.y)
+  await sleep(260)
+}
+
+/** Remove every openable pasted attachment again (best effort cleanup). */
+async function removeComposerAttachments(page) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const remaining = await page.evaluate(`(() => {
+      const composer = document.querySelector('[data-conversation-region="composer"]')
+      if (!(composer instanceof HTMLElement)) return 0
+      const items = [...composer.querySelectorAll('button')].filter((button) => {
+        const img = button.querySelector('img')
+        return img instanceof HTMLImageElement && button.querySelector('svg') === null && !button.hasAttribute('aria-label') && button.children.length === 1 && button.firstElementChild === img && (button.getAttribute('title') || '').length > 0
+      })
+      const item = items[0] ? items[0].parentElement : null
+      const remove = item ? [...item.querySelectorAll('button')].find((button) => !button.querySelector('img')) : null
+      if (!(remove instanceof HTMLElement)) return items.length
+      remove.click()
+      return items.length - 1
+    })()`)
+    await sleep(400)
+    if (remaining === 0) break
+  }
+}
+
+/**
+ * Task-74 checks: a continuous viewer for the composer's pasted screenshots.
+ * Runs right after the blank-Session smoke, seeds two real PNG pastes through a
+ * synthetic DataTransfer paste, exercises every navigation input, then removes
+ * the attachments again so later checks see a clean composer.
+ * @param {object} context - checks context.
+ * @returns {Promise<void>}
+ */
+async function runComposerGalleryChecks({ page, results, state, opts }) {
+  log('\n=== Composer image gallery (task-74) ===')
+  let seeded = false
+  try {
+    await results.check('gallery-1', 'two pasted screenshots seed the composer rail in order', async () => {
+      await page.moveTo(900, 500)
+      await removeComposerAttachments(page)
+      await pasteComposerImages(page)
+      await waitComposerThumbs(page, 2)
+      const thumbs = await page.eval(galleryProbe.composerThumbs)
+      assertEqual(thumbs.length, 2, 'expected exactly two openable pasted thumbnails')
+      assertEqual(thumbs[0].alt, 'gallery-one.png', 'first thumbnail keeps the paste order')
+      assertEqual(thumbs[1].alt, 'gallery-two.png', 'second thumbnail keeps the paste order')
+      assert(thumbs[0].src.startsWith('blob:'), 'composer thumbnail uses its blob preview URL')
+      assert(thumbs[0].title.length > 0, 'thumbnail has the native open-original title')
+      state.galleryThumbs = thumbs
+      seeded = true
+      return `names ${thumbs.map((thumb) => thumb.alt).join(' → ')}, src blob previews`
+    })
+
+    if (!seeded) {
+      for (const id of ['gallery-2', 'gallery-3', 'gallery-4', 'gallery-5', 'gallery-6', 'gallery-7', 'gallery-8', 'gallery-9']) {
+        await results.skip(id, 'Composer image gallery checks', 'skipped: the composer rail could not be seeded')
+      }
+      return
+    }
+
+    await results.check('gallery-2', 'clicking one screenshot opens the gallery instead of the native lightbox', async () => {
+      await clickComposerThumb(page, 0)
+      const view = await page.eval(galleryProbe.gallery)
+      assert(view.present, 'plugin gallery did not open')
+      assertEqual(view.count, 1, 'exactly one gallery overlay')
+      assertEqual(view.role, 'dialog', 'gallery must be a dialog')
+      assertEqual(view.modal, 'true', 'gallery must be modal')
+      assertEqual(view.counter, '1 / 2', 'counter must show the position in the rail')
+      assertEqual(view.imageSrc, state.galleryThumbs[0].src, 'gallery shows the clicked screenshot first')
+      assertEqual(view.imageAlt, 'gallery-one.png', 'gallery image accessible name')
+      assertEqual(view.nativeDialogs, 0, 'the native single-image lightbox must not open')
+      assertEqual(view.prev.disabled, true, 'Previous is disabled on the first image')
+      assertEqual(view.next.disabled, false, 'Next is enabled on the first image')
+      assert(view.close !== null, 'gallery close control missing')
+      assertEqual(view.closeFocused, true, 'focus moves into the gallery')
+      state.galleryOpen = view
+      return `counter ${view.counter}, no native dialog, first image ${view.imageAlt}`
+    })
+
+    await results.check('gallery-3', 'Previous/Next buttons walk the pasted images in rail order', async () => {
+      await clickGalleryControl(page, '[data-psg-next]')
+      const second = await page.eval(galleryProbe.gallery)
+      assertEqual(second.counter, '2 / 2', 'Next moves to the second image')
+      assertEqual(second.imageSrc, state.galleryThumbs[1].src, 'Next shows the second rail image')
+      assertEqual(second.next.disabled, true, 'Next is disabled on the last image')
+      assertEqual(second.prev.disabled, false, 'Previous is enabled on the last image')
+      await clickGalleryControl(page, '[data-psg-prev]')
+      const first = await page.eval(galleryProbe.gallery)
+      assertEqual(first.counter, '1 / 2', 'Previous returns to the first image')
+      assertEqual(first.imageSrc, state.galleryThumbs[0].src, 'Previous shows the first rail image')
+      assertEqual(first.prev.disabled, true, 'Previous disables again at the start (no wrap)')
+      return '2 / 2 → 1 / 2 with clamped buttons'
+    })
+
+    await results.check('gallery-4', 'keyboard arrows navigate the same list', async () => {
+      const press = async (key, code, vk) => {
+        await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk })
+        await sleep(30)
+        await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk })
+        await sleep(220)
+      }
+      await press('ArrowRight', 'ArrowRight', 39)
+      const right = await page.eval(galleryProbe.gallery)
+      assertEqual(right.index, 1, 'ArrowRight moves to the next image')
+      await press('ArrowLeft', 'ArrowLeft', 37)
+      const left = await page.eval(galleryProbe.gallery)
+      assertEqual(left.index, 0, 'ArrowLeft moves to the previous image')
+      return 'ArrowRight 1→2, ArrowLeft 2→1'
+    })
+
+    await results.check('gallery-5', 'mouse wheel steps once per gesture', async () => {
+      const view = await page.eval(galleryProbe.gallery)
+      assertEqual(view.index, 0, 'wheel check starts from the first image')
+      await page.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 864, y: 450, deltaX: 0, deltaY: 120 })
+      await sleep(120)
+      const firstStep = await page.eval(galleryProbe.gallery)
+      assertEqual(firstStep.index, 1, 'one wheel gesture advances exactly one image')
+      await page.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 864, y: 450, deltaX: 0, deltaY: 120 })
+      await sleep(120)
+      const duringCooldown = await page.eval(galleryProbe.gallery)
+      assertEqual(duringCooldown.index, 1, 'a second event inside the cooldown must not skip another image')
+      await sleep(360)
+      await page.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 864, y: 450, deltaX: 0, deltaY: -120 })
+      await sleep(200)
+      const back = await page.eval(galleryProbe.gallery)
+      assertEqual(back.index, 0, 'a later gesture steps backward')
+      assertEqual(back.pageScrollY, 0, 'the gallery must not scroll the page behind it')
+      return 'one step per gesture, cooldown swallows momentum, reverse gesture works'
+    })
+
+    if (opts.shots) {
+      await results.check('gallery-6', 'light and dark gallery screenshots', async () => {
+        await mkdir(SHOTS_DIR, { recursive: true })
+        await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+        await sleep(350)
+        const lightFile = path.join(SHOTS_DIR, '30-composer-gallery-light.png')
+        await page.screenshot(lightFile)
+        const light = await page.eval(() => {
+          const counter = document.querySelector('[data-psg-counter]')
+          return counter ? getComputedStyle(counter).backgroundColor : null
+        })
+        await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+        await sleep(600)
+        const darkFile = path.join(SHOTS_DIR, '31-composer-gallery-dark.png')
+        await page.screenshot(darkFile)
+        const dark = await page.eval(() => {
+          const counter = document.querySelector('[data-psg-counter]')
+          return counter ? getComputedStyle(counter).backgroundColor : null
+        })
+        await page.emulateMedia([])
+        await sleep(300)
+        assert(light !== dark, 'gallery controls must follow the shell theme')
+        state.screenshots.push(lightFile, darkFile)
+        return `counter light ${light} / dark ${dark}; shots ${path.basename(lightFile)}, ${path.basename(darkFile)}`
+      })
+    } else {
+      await results.skip('gallery-6', 'light and dark gallery screenshots', 'screenshots disabled')
+    }
+
+    await results.check('gallery-7', 'Escape closes the gallery and returns focus to the clicked thumbnail', async () => {
+      await page.pressEscape()
+      await waitGalleryClosed(page)
+      await sleep(120)
+      const focus = await page.eval(galleryProbe.composerThumbs)
+      const focused = focus.find((thumb) => thumb.focused === true)
+      assert(focused, 'focus did not return to the clicked composer thumbnail')
+      assertEqual(focused.alt, 'gallery-one.png', 'focus returns to the thumbnail that opened the gallery')
+      const after = await page.eval(galleryProbe.gallery)
+      assertEqual(after.count, 0, 'gallery overlay removed after Escape')
+      assertEqual(after.nativeDialogs, 0, 'Escape did not leak a native lightbox')
+      return `focus back on ${focused.alt}, overlay removed`
+    })
+
+    await results.check('gallery-9', 'clicking the backdrop dismisses the gallery', async () => {
+      await clickComposerThumb(page, 0)
+      await waitGalleryOpen(page)
+      const open = await page.eval(galleryProbe.gallery)
+      assert(open.present, 'gallery did not reopen for the backdrop check')
+      await page.clickAt(80, 400)
+      await waitGalleryClosed(page)
+      const after = await page.eval(galleryProbe.gallery)
+      assertEqual(after.count, 0, 'backdrop click must dismiss the gallery')
+      return 'left backdrop click closed the gallery'
+    })
+
+    await results.check('gallery-8', 'attachment removal while open clamps the viewer, and a single image is not intercepted', async () => {
+      await clickComposerThumb(page, 0)
+      const openView = await page.eval(galleryProbe.gallery)
+      assertEqual(openView.total, 2, 'gallery opened on two images before removal')
+      await page.evaluate(`(() => {
+        const composer = document.querySelector('[data-conversation-region="composer"]')
+        const items = [...composer.querySelectorAll('button')].filter((button) => {
+          const img = button.querySelector('img')
+          return img instanceof HTMLImageElement && button.querySelector('svg') === null && !button.hasAttribute('aria-label') && button.children.length === 1 && button.firstElementChild === img && (button.getAttribute('title') || '').length > 0
+        })
+        const second = items[1]
+        if (second) {
+          const remove = [...second.parentElement.querySelectorAll('button')].find((button) => !button.querySelector('img'))
+          if (remove) remove.click()
+        }
+      })()`)
+      await page.waitForFn(
+        () => document.querySelector('[data-psg-gallery]')?.getAttribute('data-psg-total') === '1',
+        [],
+        { timeout: 5000, label: 'gallery clamps to the remaining image' }
+      )
+      const clamped = await page.eval(galleryProbe.gallery)
+      assertEqual(clamped.total, 1, 'removal clamps the gallery to the remaining image')
+      assertEqual(clamped.counter, '1 / 1', 'counter follows the clamped list')
+      assertEqual(clamped.prev.disabled, true, 'Previous disabled with one image')
+      assertEqual(clamped.next.disabled, true, 'Next disabled with one image')
+      await page.pressEscape()
+      await waitGalleryClosed(page)
+      await sleep(200)
+      // One image left: the plugin must NOT intercept its click, so the shell's
+      // own single-image lightbox stays in charge. The native lightbox is opened
+      // through the real React handler in a production browser, but its
+      // full-screen backdrop blur wedges this headless software renderer, so the
+      // check observes the click decision instead of opening it: a guard listener
+      // registered after ours records whether our interceptor cancelled the click
+      // and then stops the native handler from running.
+      const single = await page.evaluate(`new Promise((resolve) => {
+        const composer = document.querySelector('[data-conversation-region="composer"]')
+        const thumb = composer ? [...composer.querySelectorAll('button')].find((button) => {
+          const img = button.querySelector('img')
+          return img instanceof HTMLImageElement && button.querySelector('svg') === null && !button.hasAttribute('aria-label') && button.children.length === 1 && button.firstElementChild === img && (button.getAttribute('title') || '').length > 0
+        }) : null
+        if (!(thumb instanceof HTMLElement)) { resolve({ ok: false, reason: 'no single thumbnail' }); return }
+        let seen = null
+        const guard = (event) => {
+          seen = { prevented: event.defaultPrevented }
+          event.stopImmediatePropagation()
+          event.preventDefault()
+        }
+        document.addEventListener('click', guard, true)
+        const event = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })
+        try { thumb.dispatchEvent(event) } finally { document.removeEventListener('click', guard, true) }
+        resolve({ ok: true, seen, gallery: document.querySelectorAll('[data-psg-gallery]').length, preventedAfter: event.defaultPrevented })
+      })`)
+      assert(single.ok, `single-image probe failed: ${single.reason || 'unknown'}`)
+      assert(single.seen !== null, 'the single-image click never reached the guard listener')
+      assertEqual(single.seen.prevented, false, 'the plugin must not prevent the single-image click (native lightbox stays)')
+      assertEqual(single.gallery, 0, 'the plugin gallery must not open for a single image')
+      await removeComposerAttachments(page)
+      const cleaned = await page.eval(galleryProbe.composerThumbs)
+      assertEqual(cleaned.length, 0, 'pasted attachments are removed again after the checks')
+      return '2 → 1 clamp, single-image click not intercepted, composer cleaned'
+    })
+  } finally {
+    // Never leave a stray overlay or pasted attachment behind for later checks.
+    try {
+      await page.evaluate(`(() => {
+        for (const close of document.querySelectorAll('[data-psg-close]')) close.click()
+        for (const dialog of document.querySelectorAll('[role="dialog"][aria-modal="true"]')) {
+          if (dialog.hasAttribute('data-psg-gallery')) continue
+          const close = [...dialog.querySelectorAll('button')].find((button) => button.getAttribute('aria-label'))
+          if (close) close.click()
+        }
+      })()`)
+      await sleep(400)
+      await removeComposerAttachments(page)
+      await page.emulateMedia([])
+    } catch {
+      // Cleanup is best effort.
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Screenshots
 // ---------------------------------------------------------------------------------------------
 
@@ -5280,6 +5690,7 @@ async function run() {
     await ensureAppReady(page)
     if (opts.mode === 'full') {
       log('\n=== Acceptance checks ===')
+      await runComposerGalleryChecks({ page, results, state, opts })
       await runLayoutChecks({ page, results, state })
       await runCurrentHighlightChecks({ page, results, state })
       await runHoverCardChecks({ page, results, state })

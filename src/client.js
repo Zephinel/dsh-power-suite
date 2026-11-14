@@ -20943,6 +20943,481 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
     }
     //#endregion
 
+    //#region feature: composer image gallery
+    /**
+     * Composer image gallery: intercepts clicks on multiple pasted screenshots in
+     * the composer's attachment rail and opens one continuous viewer instead of the
+     * native single-image lightbox. Single-image composers keep native behavior.
+     *
+     * The native rail is DOM-measured (shell classes are hashed): openable pasted
+     * images are `button` elements inside `[data-conversation-region="composer"]`
+     * that contain exactly one `img`, carry a non-empty `title`, and have no
+     * `aria-label` (refused uploads set an aria-label error). Order is DOM order.
+     */
+
+    /** Copy namespace for the composer image gallery. */
+    const PSG_NS = 'composerImageGallery'
+
+    /** Slot cell identity of the gallery overlay. */
+    const PSG_SLOT_ID = 'power-suite.composer-image-gallery'
+
+    /** Deepest composer region the interception is scoped to. */
+    const PSG_COMPOSER_SELECTOR = '[data-conversation-region="composer"]'
+
+    /** Wheel distance that counts as one navigation gesture. */
+    const PSG_WHEEL_STEP_PX = 24
+
+    /** Minimum distance between two wheel-driven steps, in milliseconds. */
+    const PSG_WHEEL_COOLDOWN_MS = 260
+
+    /** Localised copy for the gallery overlay. */
+    const PSG_EN = {
+      'dialog': 'Image gallery',
+      'close': 'Close image gallery',
+      'previous': 'Previous image',
+      'next': 'Next image',
+      'counter': '{index} / {total}'
+    }
+    const PSG_ZH = {
+      'dialog': '图片查看器',
+      'close': '关闭图片查看器',
+      'previous': '上一张',
+      'next': '下一张',
+      'counter': '{index} / {total}'
+    }
+
+    // Remix Icon paths (Apache-2.0, https://remixicon.com), inlined for zero-install.
+    const PSG_ARROW_LEFT_LINE = 'M10.8284 12.0007L15.7782 16.9504L14.364 18.3646L8 12.0007L14.364 5.63672L15.7782 7.05093L10.8284 12.0007Z'
+    const PSG_ARROW_RIGHT_LINE = 'M13.1717 12.0007L8.22192 7.05093L9.63614 5.63672L16.0001 12.0007L9.63614 18.3646L8.22192 16.9504L13.1717 12.0007Z'
+    const PSG_CLOSE_LINE = 'M11.9997 10.5865L16.9495 5.63672L18.3637 7.05093L13.4139 12.0007L18.3637 16.9504L16.9495 18.3646L11.9997 13.4149L7.04996 18.3646L5.63574 16.9504L10.5855 12.0007L5.63574 7.05093L7.04996 5.63672L11.9997 10.5865Z'
+
+    /**
+     * Clamp a gallery index into `[0, count - 1]` (0 for an empty list).
+     * @param {number} index - candidate index.
+     * @param {number} count - number of images.
+     * @returns {number} the clamped index.
+     */
+    function psgClampIndex(index, count) {
+      const length = Number.isFinite(count) && count > 0 ? Math.trunc(count) : 0
+      if (length === 0) return 0
+      const value = Number.isFinite(index) ? Math.trunc(index) : 0
+      return Math.min(Math.max(0, value), length - 1)
+    }
+
+    /**
+     * Move one image in the given direction, clamped at the ends (no wrap).
+     * @param {number} index - current index.
+     * @param {number} count - number of images.
+     * @param {number} delta - positive for next, negative for previous.
+     * @returns {number} the next clamped index.
+     */
+    function psgStepIndex(index, count, delta) {
+      const length = Number.isFinite(count) && count > 0 ? Math.trunc(count) : 0
+      if (length === 0) return 0
+      const current = psgClampIndex(index, length)
+      if (delta > 0) return Math.min(current + 1, length - 1)
+      if (delta < 0) return Math.max(current - 1, 0)
+      return current
+    }
+
+    /**
+     * Reconcile an open gallery with a new rail snapshot. When the displayed image
+     * still exists its position follows that src; otherwise the index clamps into
+     * the new list (shows the neighbour). An empty list yields an empty result.
+     * @param {Array<{ src: string }>} images - fresh rail snapshot.
+     * @param {number} index - current index.
+     * @param {string} currentSrc - src currently displayed.
+     * @returns {{ images: Array<object>, index: number }} reconciled state.
+     */
+    function psgSyncState(images, index, currentSrc) {
+      const list = Array.isArray(images) ? images : []
+      if (list.length === 0) return { images: [], index: 0 }
+      if (typeof currentSrc === 'string' && currentSrc.length > 0) {
+        const found = list.findIndex((image) => image !== null && typeof image === 'object' && image.src === currentSrc)
+        if (found >= 0) return { images: list, index: found }
+      }
+      return { images: list, index: psgClampIndex(index, list.length) }
+    }
+
+    /**
+     * One wheel-gesture decision. Small deltas accumulate; a step fires once the
+     * accumulation reaches {@link PSG_WHEEL_STEP_PX} and the cooldown since the last
+     * step has elapsed (momentum events inside the cooldown are swallowed).
+     * @param {number} accumulated - pending wheel distance.
+     * @param {number} deltaY - this event's delta.
+     * @param {number} now - current timestamp (ms).
+     * @param {number} lastStepAt - timestamp of the previous step (ms).
+     * @returns {{ accum: number, step: -1 | 0 | 1, lastStepAt: number }} decision.
+     */
+    function psgWheelDecision(accumulated, deltaY, now, lastStepAt) {
+      const pending = (Number.isFinite(accumulated) ? accumulated : 0) + (Number.isFinite(deltaY) ? deltaY : 0)
+      const time = Number.isFinite(now) ? now : 0
+      const previous = Number.isFinite(lastStepAt) ? lastStepAt : Number.NEGATIVE_INFINITY
+      if (Math.abs(pending) < PSG_WHEEL_STEP_PX) return { accum: pending, step: 0, lastStepAt: previous }
+      if (time - previous < PSG_WHEEL_COOLDOWN_MS) return { accum: 0, step: 0, lastStepAt: previous }
+      return { accum: 0, step: pending > 0 ? 1 : -1, lastStepAt: time }
+    }
+
+    /**
+     * Collect the composer's openable pasted-image thumbnails in rail order.
+     * @param {Element | null} composer - composer region element.
+     * @returns {Array<{ src: string, name: string, button: HTMLElement }>} rail images.
+     */
+    function psgCollectImages(composer) {
+      const images = []
+      if (!(composer instanceof HTMLElement)) return images
+      const seen = new Set()
+      for (const button of composer.querySelectorAll('button')) {
+        if (!(button instanceof HTMLElement)) continue
+        const img = button.querySelector('img')
+        if (!(img instanceof HTMLImageElement)) continue
+        // The thumbnail button contains exactly the image; the remove button next
+        // to it has an SVG, and refused/failed uploads carry an aria-label error.
+        if (button.querySelector('svg') !== null) continue
+        if (button.hasAttribute('aria-label')) continue
+        if (button.children.length !== 1 || button.firstElementChild !== img) continue
+        const title = button.getAttribute('title')
+        if (typeof title !== 'string' || title.length === 0) continue
+        const src = img.getAttribute('src')
+        if (typeof src !== 'string' || src.length === 0 || seen.has(src)) continue
+        seen.add(src)
+        images.push({ src, name: img.getAttribute('alt') || '', button })
+      }
+      return images
+    }
+
+    /** Module-level gallery store: exactly one overlay can exist. */
+    let psgState = { open: false, images: [], index: 0 }
+    const psgListeners = new Set()
+    let psgSourceButton = null
+    let psgComposerRegion = null
+
+    /** Notify overlay subscribers. */
+    function psgEmit() {
+      for (const listener of [...psgListeners]) {
+        try {
+          listener()
+        } catch {
+          // A subscriber throw cannot break the store.
+        }
+      }
+    }
+
+    /**
+     * Subscribe the overlay component to gallery state.
+     * @param {Function} listener - change callback.
+     * @returns {Function} unsubscribe.
+     */
+    function psgSubscribe(listener) {
+      psgListeners.add(listener)
+      return () => psgListeners.delete(listener)
+    }
+
+    /** @returns {{ open: boolean, images: Array<object>, index: number }} current snapshot. */
+    function psgSnapshot() {
+      return psgState
+    }
+
+    /**
+     * Open the gallery on a collected rail snapshot.
+     * @param {Array<{ src: string, name: string, button: HTMLElement }>} collected - rail images.
+     * @param {number} index - clicked image index.
+     * @param {HTMLElement} sourceButton - clicked thumbnail (focus return target).
+     * @param {HTMLElement} composer - composer region (mutation watch target).
+     * @returns {void}
+     */
+    function psgOpen(collected, index, sourceButton, composer) {
+      const images = collected.map(({ src, name }) => ({ src, name }))
+      psgSourceButton = sourceButton
+      psgComposerRegion = composer
+      psgState = { open: true, images, index: psgClampIndex(index, images.length) }
+      psgEmit()
+    }
+
+    /**
+     * Close the gallery and optionally return focus to the clicked thumbnail.
+     * @param {{ restoreFocus?: boolean }} [options] - focus behavior.
+     * @returns {void}
+     */
+    function psgClose(options) {
+      const restoreFocus = options === null || options === undefined || options.restoreFocus !== false
+      const button = psgSourceButton
+      const wasOpen = psgState.open
+      psgSourceButton = null
+      psgComposerRegion = null
+      if (!wasOpen) return
+      psgState = { open: false, images: [], index: 0 }
+      psgEmit()
+      if (restoreFocus && button instanceof HTMLElement && button.isConnected) {
+        try {
+          button.focus({ preventScroll: true })
+        } catch {
+          button.focus()
+        }
+      }
+    }
+
+    /**
+     * Move the open gallery one image in the given direction (clamped).
+     * @param {number} delta - positive for next, negative for previous.
+     * @returns {void}
+     */
+    function psgStep(delta) {
+      if (!psgState.open) return
+      const index = psgStepIndex(psgState.index, psgState.images.length, delta)
+      if (index === psgState.index) return
+      psgState = { ...psgState, index }
+      psgEmit()
+    }
+
+    /**
+     * Re-read the composer rail while the gallery is open and reconcile the state:
+     * removed attachments clamp the index, an emptied rail closes the overlay.
+     * @returns {void}
+     */
+    function psgSync() {
+      if (!psgState.open) return
+      const composer = psgComposerRegion
+      if (!(composer instanceof HTMLElement) || !composer.isConnected) {
+        psgClose({ restoreFocus: false })
+        return
+      }
+      const collected = psgCollectImages(composer)
+      const currentSrc = psgState.images[psgState.index]?.src ?? ''
+      const next = psgSyncState(collected.map(({ src, name }) => ({ src, name })), psgState.index, currentSrc)
+      if (next.images.length === 0) {
+        psgClose({ restoreFocus: false })
+        return
+      }
+      if (next.images.length === psgState.images.length
+        && next.index === psgState.index
+        && next.images.every((image, position) => image.src === psgState.images[position]?.src)) return
+      psgState = { ...psgState, images: next.images, index: next.index }
+      psgEmit()
+    }
+
+    /**
+     * Document capture click handler: suppresses the native single-image lightbox
+     * when the composer holds two or more openable pasted images.
+     * @param {MouseEvent} event - click event.
+     * @returns {void}
+     */
+    function psgOnDocumentClick(event) {
+      if (psgState.open) return
+      if (event.defaultPrevented) return
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
+      const target = event.target
+      if (!(target instanceof Element)) return
+      const button = target.closest('button')
+      if (!(button instanceof HTMLElement)) return
+      const composer = button.closest(PSG_COMPOSER_SELECTOR)
+      if (!(composer instanceof HTMLElement)) return
+      const collected = psgCollectImages(composer)
+      if (collected.length < 2) return
+      const index = collected.findIndex((image) => image.button === button)
+      if (index < 0) return
+      // Capture phase runs above React's delegated handler; both calls are needed
+      // to replace the native lightbox instead of stacking a second overlay.
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      psgOpen(collected, index, button, composer)
+    }
+
+    /** Stylesheet for the gallery overlay (native lightbox recipe on shell tokens). */
+    const PSG_CSS = `
+.psg-root{position:fixed;inset:0;z-index:1000;pointer-events:auto;animation:psg-fade 140ms ease-out}
+.psg-mask{position:absolute;inset:0;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,.24));backdrop-filter:var(--dsw-mask-blur,none)}
+.psg-stage{position:absolute;inset:var(--dsh-frame-chrome-top,0px) 0 0;display:flex;align-items:center;justify-content:center;padding:40px;box-sizing:border-box;pointer-events:none}
+.psg-image,.psg-close,.psg-nav,.psg-counter{pointer-events:auto}
+.psg-image{position:relative;max-width:min(100%,1600px);max-height:100%;object-fit:contain;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-specific-input-major,var(--dsw-alias-bg-layer-1));border:0;box-shadow:var(--dsw-elevation-prominent,var(--dsw-shadow-lv3,none))}
+.psg-close,.psg-nav{position:absolute;z-index:2;display:grid;place-items:center;width:36px;height:36px;padding:0;box-sizing:border-box;border:.5px solid var(--dsw-alias-border-l2-darkmode-thin,var(--dsw-alias-border-l2,transparent));border-radius:999px;corner-shape:round;background:var(--dsw-specific-input-major,var(--dsw-alias-bg-layer-1));color:var(--dsw-alias-label-primary);cursor:pointer;box-shadow:var(--dsw-elevation-panel,none)}
+.psg-close{top:20px;right:20px}
+.psg-nav{top:50%;transform:translateY(-50%)}
+.psg-prev{left:20px}
+.psg-next{right:20px}
+.psg-close:hover,.psg-nav:hover:enabled{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.psg-close:focus-visible,.psg-nav:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:3px}
+.psg-nav:disabled{opacity:.35;cursor:default}
+.psg-counter{position:absolute;top:20px;left:50%;transform:translateX(-50%);z-index:2;display:inline-flex;align-items:center;height:36px;padding:0 14px;box-sizing:border-box;border-radius:999px;corner-shape:round;background:var(--dsw-specific-input-major,var(--dsw-alias-bg-layer-1));color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:18px;font-variant-numeric:tabular-nums;box-shadow:var(--dsw-elevation-panel,none)}
+@keyframes psg-fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion: reduce){.psg-root{animation:none}}
+`
+
+    /**
+     * The gallery overlay component. Subscribes to the module store, reconciles
+     * with the composer rail while open, and owns the modal input handling.
+     * @param {object} props - slot props plus injected t.
+     * @returns {object | null} the overlay, or null while closed.
+     */
+    function ComposerImageGallery(props) {
+      const { t } = props
+      const state = React.useSyncExternalStore(psgSubscribe, psgSnapshot, psgSnapshot)
+      const rootRef = React.useRef(null)
+      const open = state.open
+
+      // Reconcile with the live composer rail: attachment removal and Session
+      // switches change or empty the rail; a short interval catches a composer
+      // region that is replaced without mutations inside the old element.
+      React.useEffect(() => {
+        if (!open) return undefined
+        const composer = psgComposerRegion
+        const observer = typeof MutationObserver === 'function' && composer instanceof HTMLElement
+          ? new MutationObserver(() => psgSync())
+          : null
+        if (observer !== null && composer instanceof HTMLElement) {
+          observer.observe(composer, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] })
+        }
+        const interval = window.setInterval(() => psgSync(), 400)
+        return () => {
+          if (observer !== null) observer.disconnect()
+          window.clearInterval(interval)
+        }
+      }, [open])
+
+      // Modal keys while open: Esc closes, Left/Right navigate. Capture so shell
+      // shortcuts never see the arrows first.
+      React.useEffect(() => {
+        if (!open) return undefined
+        const onKeyDown = (event) => {
+          if (event.defaultPrevented) return
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            psgClose()
+            return
+          }
+          if (event.key === 'ArrowLeft' || event.key === 'Left') {
+            event.preventDefault()
+            event.stopPropagation()
+            psgStep(-1)
+            return
+          }
+          if (event.key === 'ArrowRight' || event.key === 'Right') {
+            event.preventDefault()
+            event.stopPropagation()
+            psgStep(1)
+          }
+        }
+        document.addEventListener('keydown', onKeyDown, true)
+        return () => document.removeEventListener('keydown', onKeyDown, true)
+      }, [open])
+
+      // One step per wheel gesture; the overlay must not scroll the page behind it.
+      React.useEffect(() => {
+        if (!open) return undefined
+        const root = rootRef.current
+        if (!(root instanceof HTMLElement)) return undefined
+        let accumulated = 0
+        let lastStepAt = Number.NEGATIVE_INFINITY
+        const onWheel = (event) => {
+          event.preventDefault()
+          const decision = psgWheelDecision(accumulated, event.deltaY, Date.now(), lastStepAt)
+          accumulated = decision.accum
+          if (decision.step === 0) return
+          lastStepAt = decision.lastStepAt
+          psgStep(decision.step)
+        }
+        root.addEventListener('wheel', onWheel, { passive: false })
+        return () => root.removeEventListener('wheel', onWheel)
+      }, [open])
+
+      // Move focus into the dialog on open; closing returns it to the thumbnail.
+      React.useEffect(() => {
+        if (!open) return
+        const close = rootRef.current?.querySelector('[data-psg-close]')
+        if (close instanceof HTMLElement) close.focus()
+      }, [open])
+
+      if (!open || state.images.length === 0) return null
+      const total = state.images.length
+      const index = psgClampIndex(state.index, total)
+      const image = state.images[index]
+      return React.createElement('div', {
+        className: 'psg-root',
+        ref: rootRef,
+        role: 'dialog',
+        'aria-modal': 'true',
+        'aria-label': t('dialog'),
+        'data-psg-gallery': '',
+        'data-psg-index': String(index),
+        'data-psg-total': String(total)
+      },
+      React.createElement('div', {
+        className: 'psg-mask',
+        'aria-hidden': true,
+        onClick: () => psgClose()
+      }),
+      React.createElement('div', { className: 'psg-stage' },
+        React.createElement('img', {
+          className: 'psg-image',
+          src: image.src,
+          alt: image.name,
+          draggable: false,
+          'data-psg-image': ''
+        })),
+      React.createElement('div', {
+        className: 'psg-counter',
+        'aria-live': 'polite',
+        'data-psg-counter': ''
+      }, t('counter', { index: index + 1, total })),
+      React.createElement('button', {
+        type: 'button',
+        className: 'psg-nav psg-prev',
+        'data-psg-prev': '',
+        'aria-label': t('previous'),
+        title: t('previous'),
+        disabled: index <= 0,
+        onClick: () => psgStep(-1)
+      }, RemixGlyph(PSG_ARROW_LEFT_LINE, 18)),
+      React.createElement('button', {
+        type: 'button',
+        className: 'psg-nav psg-next',
+        'data-psg-next': '',
+        'aria-label': t('next'),
+        title: t('next'),
+        disabled: index >= total - 1,
+        onClick: () => psgStep(1)
+      }, RemixGlyph(PSG_ARROW_RIGHT_LINE, 18)),
+      React.createElement('button', {
+        type: 'button',
+        className: 'psg-close',
+        'data-psg-close': '',
+        'aria-label': t('close'),
+        title: t('close'),
+        onClick: () => psgClose()
+      }, RemixGlyph(PSG_CLOSE_LINE, 16)))
+    }
+
+    /**
+     * Install the composer image gallery: dictionaries, stylesheet, the capture
+     * click interceptor, and the overlay slot entry.
+     * @param {object} ctx - client root context.
+     * @returns {void}
+     */
+    function installComposerImageGallery(ctx) {
+      const t = ctx.locale.bind(PSG_NS)
+      ctx.effect(() => ctx.locale.register(PSG_NS, { en: PSG_EN, zh: PSG_ZH }), 'power-suite: composer image gallery dictionaries')
+      ctx.effect(() => {
+        const tag = document.createElement('style')
+        tag.dataset.powerSuiteCss = 'composer-gallery'
+        tag.textContent = PSG_CSS
+        document.head.appendChild(tag)
+        return () => { tag.remove() }
+      }, 'power-suite: composer image gallery styles')
+      ctx.effect(() => {
+        document.addEventListener('click', psgOnDocumentClick, true)
+        return () => {
+          document.removeEventListener('click', psgOnDocumentClick, true)
+          psgClose({ restoreFocus: false })
+        }
+      }, 'power-suite: composer image gallery interceptor')
+      ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+        name: 'shell.overlay',
+        id: PSG_SLOT_ID
+      }, (props) => React.createElement(ComposerImageGallery, { ...props, t }))), 'power-suite: composer image gallery overlay')
+    }
+    //#endregion
+
     //#region plugin
     /**
      * Register dictionaries, the page type, and its Session-scoped body.
@@ -20989,6 +21464,7 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
       installInterruptedSessions(ctx)
       installQuickLook(ctx)
       installSettingsPage(ctx)
+      installComposerImageGallery(ctx)
       installUiAnnotation(ctx)
     }
 
@@ -21122,6 +21598,16 @@ html[data-psa-active="true"][data-psa-passthrough="true"] body{cursor:auto}
         filesArtifactsInitialState,
         filesArtifactsReduce,
         filesArtifactsPhaseMs
+      }
+      // The composer image gallery's pure model (index/step/sync/wheel decisions).
+      globalThis.__POWER_SUITE_TEST_HOOKS__.composerImageGallery = {
+        PSG_WHEEL_STEP_PX,
+        PSG_WHEEL_COOLDOWN_MS,
+        psgClampIndex,
+        psgStepIndex,
+        psgSyncState,
+        psgWheelDecision,
+        psgCollectImages
       }
       // The dynamic-Workspaces hover card's native figures. Kept in its own
       // namespace so the annotation seam above stays byte-for-byte stable.
