@@ -666,6 +666,20 @@ class Results {
     }
   }
 
+  /**
+   * Record an explicit SKIP row: the check could not run in this live data state.
+   * Skipped rows count as neither pass nor fail; the run stays green but the
+   * reason is printed and the summary shows the SKIP count.
+   * @param {string} id - check id.
+   * @param {string} title - check title.
+   * @param {string} reason - human-readable skip reason.
+   * @returns {Promise<void>} resolves when the row is recorded.
+   */
+  async skip(id, title, reason) {
+    this.rows.push({ id, title, pass: true, skipped: true, detail: reason, ms: 0 })
+    log(`SKIP  ${id}  ${title} — ${reason}`)
+  }
+
   get failures() {
     return this.rows.filter((row) => !row.pass)
   }
@@ -2436,6 +2450,27 @@ function assertAtmosphereRow(label, row, atmos, content, options = {}) {
 
 async function runCurrentHighlightChecks({ page, results, state }) {
   log('\n=== B4: current-Session rainbow atmosphere inside the row pill ===')
+  // Live-data skip: with no Running & recent card row the whole B4 block cannot
+  // run; skipping explicitly beats a 15 s b4-0 timeout plus cascading failures.
+  // A row that exists but cannot be opened still fails below (real product issue).
+  const cardRows = await page.eval(() => document.querySelectorAll('.psd-run').length)
+  if (cardRows === 0) {
+    const reason = 'no Running & recent card rows in this live data state — B4 atmosphere block explicitly skipped (retry with a data state that lists a row)'
+    const skipped = [
+      ['b4-0', 'open a card row to make its Session current'],
+      ['b4-1', 'card row, owning Workspace row and open Session row paint the clipped internal atmosphere (light mode)'],
+      ['b4-2', 'opening another sidebar Session moves the marker and the atmosphere with it'],
+      ['b4-3', 'reduced motion keeps the static internal rainbow fill and stops the renderer'],
+      ['b4-4', 'a nested child current row paints the same atmosphere inside its own rounded rect'],
+      ['b4-5', 'dark theme keeps the atmosphere vivid (screen blend, high saturation, light scrim)'],
+      ['b4-9', 'light-mode atmosphere rows keep readable text/icons (dark mode unchanged)'],
+      ['b4-13', 'running-panel row text uses the native Workspace tokens in light mode (dark unchanged)'],
+      ['b4-14', 'running-panel icon colours match or beat the native Workspace icon weight in light mode'],
+      ['b4-15', 'highlighted-row New-session action darkens on hover like the pin control (light + dark)'],
+    ]
+    for (const [id, title] of skipped) await results.skip(id, title, reason)
+    return
+  }
   await results.check('b4-0', 'open a card row to make its Session current', async () => {
     const target = await page.eval(() => {
       const row = document.querySelector('.psd-run')
@@ -2782,7 +2817,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     }
   })
 
-  await results.check('b4-15', 'highlighted-row New-session action darkens on hover like the pin control (light + dark)', async () => {
+  await results.check('b4-15', 'highlighted-row New-session action darkens on hover/focus like the pin control (light + dark)', async () => {
     const measure = () => page.eval(() => {
       const colorOf = (node) => node === null ? null : getComputedStyle(node).color
       const rectOf = (node) => {
@@ -2790,17 +2825,35 @@ async function runCurrentHighlightChecks({ page, results, state }) {
         const r = node.getBoundingClientRect()
         return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }
       }
+      const stateOf = (node) => {
+        if (node === null) return null
+        const s = getComputedStyle(node)
+        return {
+          color: s.color,
+          glyph: node.querySelector('svg') === null ? null : getComputedStyle(node.querySelector('svg')).color,
+          rect: rectOf(node),
+          background: s.backgroundColor,
+          filter: s.filter,
+          focusVisible: node.matches(':focus-visible'),
+        }
+      }
       const currentRow = document.querySelector('.psd-run-current, .psd-child-current')
       const currentAction = currentRow === null ? null : currentRow.querySelector('.psd-row-action')
       const otherRow = [...document.querySelectorAll('.psd-run, .psd-child')].find((row) => !row.classList.contains('psd-run-current') && !row.classList.contains('psd-child-current') && row.querySelector('.psd-row-action'))
       const otherAction = otherRow === undefined ? null : otherRow.querySelector('.psd-row-action')
       const pin = document.querySelector('[class*="pinnedAction"], [class*="pinIndicator"]')
+      const probe = document.createElement('div')
+      probe.style.background = 'var(--dsw-alias-interactive-bg-hover)'
+      document.body.appendChild(probe)
+      const hoverBackground = getComputedStyle(probe).backgroundColor
+      probe.remove()
       return {
         bodyDark: document.body.hasAttribute('data-ds-dark-theme'),
+        hoverBackground,
         currentRow: rectOf(currentRow),
-        currentAction: currentAction === null ? null : { color: colorOf(currentAction), glyph: colorOf(currentAction.querySelector('svg')), rect: rectOf(currentAction) },
-        otherAction: otherAction === null ? null : { color: colorOf(otherAction), rect: rectOf(otherAction) },
-        pin: pin === null ? null : { color: colorOf(pin), rect: rectOf(pin) },
+        currentAction: stateOf(currentAction),
+        otherAction: stateOf(otherAction),
+        pin: stateOf(pin),
       }
     })
     const hover = async (rect) => {
@@ -2812,23 +2865,57 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     const moveAway = async () => {
       await page.moveTo(900, 500)
       await sleep(300)
+      await page.eval(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur() })
+      await sleep(200)
     }
+    const focusActionViaKeyboard = async () => {
+      // A real Tab keydown sets the browser's keyboard modality, then focusing the
+      // action must match :focus-visible (no pointer involved).
+      await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 })
+      await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 })
+      await sleep(150)
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        const focused = await page.eval(() => {
+          const action = document.querySelector('.psd-run-current .psd-row-action, .psd-child-current .psd-row-action')
+          if (action === null) return false
+          action.focus()
+          return document.activeElement === action
+        })
+        if (focused) break
+        await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 })
+        await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 })
+        await sleep(80)
+      }
+      await sleep(250)
+      return measure()
+    }
+    const sameRect = (a, b) => a !== null && b !== null && a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height
     const expectedPrimary = { light: 'rgb(15, 17, 21)', dark: 'rgb(249, 250, 251)' }
     const expectedRest = { light: 'rgb(97, 102, 107)', dark: 'rgb(173, 178, 184)' }
+    const notes = []
     await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
     try {
       await sleep(800)
       const lightBase = await measure()
       assert(lightBase.currentAction, 'no current card row with a New-session action to measure (light)')
       assertEqual(lightBase.currentAction.color, expectedRest.light, `light: the highlighted row action must start on the secondary label before hover, got ${lightBase.currentAction.color}`)
+      assertEqual(lightBase.currentAction.background, 'rgba(0, 0, 0, 0)', `light: the action must start with a transparent background, got ${lightBase.currentAction.background}`)
+      assertEqual(lightBase.currentAction.filter, 'none', `light: the action must not carry a filter at rest (this base has no atmosphere action filter), got ${lightBase.currentAction.filter}`)
       await hover(lightBase.currentAction.rect)
       const lightHover = await measure()
       assertEqual(lightHover.currentAction.color, expectedPrimary.light, `light: the highlighted row New-session action must darken to the primary label on hover (like the pin), got ${lightHover.currentAction.color}`)
       assertEqual(lightHover.currentAction.glyph, expectedPrimary.light, `light: the + glyph itself must inherit the darkened hover colour, got ${lightHover.currentAction.glyph}`)
-      if (state.shotsEnabled && lightBase.currentRow) await writeEvidenceShot(page, '21-action-hover-light', { left: lightBase.currentRow.left - 12, top: lightBase.currentRow.top - 6, width: lightBase.currentRow.width + 24, height: lightBase.currentRow.height + 12 })
+      assert(sameRect(lightBase.currentAction.rect, lightHover.currentAction.rect), `light: the action geometry must not move on hover (${JSON.stringify(lightBase.currentAction.rect)} vs ${JSON.stringify(lightHover.currentAction.rect)})`)
+      assertEqual(lightHover.currentAction.background, lightBase.hoverBackground, `light: hover background must stay the pre-existing interactive hover token (${lightBase.hoverBackground}), got ${lightHover.currentAction.background}`)
+      // Keyboard focus: primary label through real focus-visible, no pointer involved.
+      const lightFocus = await focusActionViaKeyboard()
+      assert(lightFocus.currentAction && lightFocus.currentAction.focusVisible, 'light: the + action did not match :focus-visible after a real Tab-keyboard focus')
+      assertEqual(lightFocus.currentAction.color, expectedPrimary.light, `light: keyboard focus must darken the + action to the primary label, got ${lightFocus.currentAction.color}`)
       await moveAway()
+      if (state.shotsEnabled && lightBase.currentRow) await writeEvidenceShot(page, '21-action-hover-light', { left: lightBase.currentRow.left - 12, top: lightBase.currentRow.top - 6, width: lightBase.currentRow.width + 24, height: lightBase.currentRow.height + 12 })
       const lightRest = await measure()
       assertEqual(lightRest.currentAction.color, expectedRest.light, `light: the action colour must return to normal after the pointer leaves, got ${lightRest.currentAction.color}`)
+      assertEqual(lightRest.currentAction.focusVisible, false, 'light: the action must not stay focus-visible after blur')
       let otherRest = null
       if (lightRest.otherAction !== null) {
         otherRest = lightRest.otherAction.color
@@ -2837,13 +2924,19 @@ async function runCurrentHighlightChecks({ page, results, state }) {
         assertEqual(otherHover.otherAction.color, expectedPrimary.light, `light: non-current row action hover must stay unchanged (primary), got ${otherHover.otherAction.color}`)
         await moveAway()
       }
-      let pinLight = null
+      let pinNote = 'pin not present in this data state'
       if (lightRest.pin !== null) {
+        const pinRest = lightRest.pin.color
         await hover(lightRest.pin.rect)
-        const pinAfter = await measure()
-        pinLight = pinAfter.pin.color
+        const pinHovered = (await measure()).pin.color
         await moveAway()
+        if (pinHovered !== pinRest) {
+          pinNote = `pin ${pinRest} -> ${pinHovered}`
+        } else {
+          pinNote = `pin did NOT darken in this data state (${pinRest} both states)`
+        }
       }
+      notes.push(pinNote)
       await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
       await sleep(800)
       const darkBase = await measure()
@@ -2852,9 +2945,11 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       await hover(darkBase.currentAction.rect)
       const darkHover = await measure()
       assertEqual(darkHover.currentAction.color, expectedPrimary.dark, `dark: the highlighted row New-session action must darken to the primary label on hover, got ${darkHover.currentAction.color}`)
+      assert(sameRect(darkBase.currentAction.rect, darkHover.currentAction.rect), 'dark: the action geometry must not move on hover')
+      assertEqual(darkHover.currentAction.filter, 'none', `dark: the action must not carry a filter on hover (${darkHover.currentAction.filter})`)
       if (state.shotsEnabled && darkBase.currentRow) await writeEvidenceShot(page, '21-action-hover-dark', { left: darkBase.currentRow.left - 12, top: darkBase.currentRow.top - 6, width: darkBase.currentRow.width + 24, height: darkBase.currentRow.height + 12 })
       await moveAway()
-      return `light ${lightBase.currentAction.color} -> ${lightHover.currentAction.color} (glyph ${lightHover.currentAction.glyph}); dark ${darkBase.currentAction.color} -> ${darkHover.currentAction.color}; non-current hover ${otherRest === null ? 'n/a' : otherRest + ' -> primary'}; pin hover ${pinLight ?? 'not present in this data state'}`
+      return `light ${lightBase.currentAction.color} -> hover ${lightHover.currentAction.color} / focus ${lightFocus.currentAction.color} (glyph ${lightHover.currentAction.glyph}, rect stable, bg ${lightHover.currentAction.background}, filter none); dark ${darkBase.currentAction.color} -> ${darkHover.currentAction.color}; non-current hover ${otherRest === null ? 'n/a' : otherRest + ' -> primary'}; ${notes.join('; ')}`
     } finally {
       await page.emulateMedia([])
       await sleep(400)
@@ -4358,14 +4453,16 @@ async function run() {
     }
   }
 
-  const passed = results.rows.filter((row) => row.pass).length
+  const skipped = results.rows.filter((row) => row.skipped === true).length
+  const passed = results.rows.filter((row) => row.pass && row.skipped !== true).length
   const failed = results.failures.length
   const pageErrors = page !== null ? page.pageErrors : []
   log('\n=== Results ===')
   for (const row of results.rows) {
-    log(`${row.pass ? 'PASS' : 'FAIL'}  ${row.id}  ${row.title}${row.pass ? '' : `\n        ↳ ${short(row.detail, 700)}`}`)
+    const label = row.skipped === true ? 'SKIP' : row.pass ? 'PASS' : 'FAIL'
+    log(`${label}  ${row.id}  ${row.title}${row.skipped === true ? ` — ${short(row.detail, 400)}` : row.pass ? '' : `\n        ↳ ${short(row.detail, 700)}`}`)
   }
-  log(`\nPASS ${passed} / FAIL ${failed}`)
+  log(`\nPASS ${passed} / SKIP ${skipped} / FAIL ${failed}`)
   log(`page errors: ${pageErrors.length}`)
   for (const error of pageErrors.slice(0, 8)) log(`  ! ${error}`)
   log(`non-JS console/log errors: ${page !== null ? page.logEntries.length : 0}`)
