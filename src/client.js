@@ -252,7 +252,7 @@ window.__ModuleLoader__.load({
      * because the button exists while the overlay is closed.
      */
     const FILES_ARTIFACTS_CSS = `
-.psfa-tool{appearance:none;box-sizing:border-box;width:28px;height:28px;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-sm,8px);cursor:pointer;background:0 0;border:none;flex:none;justify-content:center;align-items:center;padding:6px;line-height:1;display:inline-flex;order:-1}
+.psfa-tool{appearance:none;box-sizing:border-box;width:28px;height:28px;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-sm,8px);cursor:pointer;background:0 0;border:none;flex:none;justify-content:center;align-items:center;padding:6px;line-height:1;display:inline-flex}
 .psfa-tool svg{width:15px;height:15px}
 @media (hover:hover){.psfa-tool:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}}
 .psfa-tool[aria-pressed='true']{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
@@ -2726,6 +2726,30 @@ window.__ModuleLoader__.load({
           if (showing) setStageVersion((version) => version + 1)
         }
       })
+
+      // The slot renders after the shipped reload tool; move this action (and its
+      // slot wrapper, when the shell wraps it) directly before reload so it sits
+      // at the red-box position immediately left of the refresh control.
+      React.useLayoutEffect(() => {
+        const button = buttonRef.current
+        if (!(button instanceof HTMLElement)) return undefined
+        const place = () => {
+          const page = button.closest('[data-files-page]')
+          const reload = page instanceof HTMLElement ? page.querySelector('[data-files-reload]') : null
+          if (!(reload instanceof HTMLElement) || reload.parentElement === null) return
+          const unit = button.parentElement !== null && button.parentElement !== reload.parentElement && button.parentElement.children.length === 1
+            ? button.parentElement
+            : button
+          if (unit.nextElementSibling === reload) return
+          reload.parentElement.insertBefore(unit, reload)
+        }
+        place()
+        const page = button.closest('[data-files-page]')
+        if (!(page instanceof HTMLElement) || typeof MutationObserver !== 'function') return undefined
+        const observer = new MutationObserver(place)
+        observer.observe(page, { childList: true, subtree: true })
+        return () => observer.disconnect()
+      }, [])
 
       // Settle opening/closing on a timer; reduced motion settles on the next tick.
       React.useEffect(() => {
