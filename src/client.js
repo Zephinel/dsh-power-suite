@@ -4712,12 +4712,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:var(--psd-row-h,34px);padding:0 0 0 7px;border-radius:var(--dsw-radius-md,8px);cursor:pointer}
 .psd-run-main{appearance:none;display:flex;flex:0 1 auto;box-sizing:border-box;min-width:0;min-height:var(--psd-row-h,34px);max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:0;padding:4px 10px 4px 14px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-run:hover:not(:has(.psd-run-toggle:hover)) .psd-run-main{background-color:var(--dsw-alias-interactive-bg-hover)}
-.psd-run-open{appearance:none;display:flex;flex:0 1 auto;min-width:0;max-width:100%;align-items:center;padding:0;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;margin-left:var(--psd-title-shift,0px);transition:margin-left 220ms cubic-bezier(.4,0,.2,1)}
+.psd-run-open{appearance:none;display:flex;flex:1 1 auto;min-width:0;max-width:100%;align-items:center;padding:0;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;margin-left:var(--psd-title-shift,0px);transition:margin-left 220ms cubic-bezier(.4,0,.2,1)}
 .psd-run-open:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px;border-radius:var(--dsw-radius-sm,6px)}
 .psd-run-spacer,.psd-child-spacer{flex:1 1 auto;min-width:0}
 .psd-run-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
-.psd-run-head{display:flex;align-items:center;gap:8px;min-width:0;flex:none;margin-right:9px}
+.psd-run-head{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto;overflow:hidden;margin-right:0}
 /* One fixed 16 px leading-glyph cell for every main-row state, so the 14 px state
    dots and the slightly larger sparkle share one centre column; the child-tree
    trunk and the pin column are aligned to that same geometry. */
@@ -4852,7 +4852,7 @@ body:not([data-ds-dark-theme]) :is(.psd-row-action,.psd-run-toggle,.psd-chevron,
    immediately left of the time column: the 22 px action slot stays reserved for
    New session, and no fixed column moves when the action appears. */
 .psd-continue-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:0;height:20px;margin-right:0;overflow:hidden;opacity:0;pointer-events:none;transition:width 200ms var(--ds-ease-in-out,ease) 160ms,margin-right 200ms var(--ds-ease-in-out,ease) 160ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
-.psd-run:hover .psd-continue-slot,.psd-run:focus-within .psd-continue-slot,.psd-child:hover .psd-continue-slot,.psd-child:focus-within .psd-continue-slot{width:22px;margin-right:2px;opacity:1;pointer-events:auto;transition:width 200ms var(--ds-ease-in-out,ease) 0ms,margin-right 200ms var(--ds-ease-in-out,ease) 0ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
+.psd-run:hover .psd-continue-slot,.psd-run:focus-within .psd-continue-slot,.psd-child:hover .psd-continue-slot,.psd-child:focus-within .psd-continue-slot{width:22px;margin-left:-8px;margin-right:2px;opacity:1;pointer-events:auto;transition:width 200ms var(--ds-ease-in-out,ease) 0ms,margin-right 200ms var(--ds-ease-in-out,ease) 0ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
 .psd-child .psd-continue-slot{height:18px}
 .psd-child:hover .psd-continue-slot,.psd-child:focus-within .psd-continue-slot{width:18px}
 .psd-continue-inline{display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;margin:0;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;opacity:1;pointer-events:auto}
@@ -7231,19 +7231,12 @@ function dwClearNativeAtmospheres() {
                   onBlur: hideHover
                 },
                 React.createElement('span', { className: 'psd-child-glyph' },
-                  childInterrupted
-                    ? React.createElement('span', {
-                      className: 'psd-interrupted',
-                      role: 'img',
-                      'aria-label': interruptedT('badge.aria'),
-                      title: interruptedTitle(child.id)
-                    }, RemixGlyph(REMIX_WARNING_FILL, 13))
-                    : child.state === 'running'
-                      ? React.createElement(StateDot, { state: 'ongoing', size: 10 })
-                      : !isRead(child.id, child.updatedAt)
-                        ? React.createElement(StateDot, { state: 'done', size: 10 })
-                        : React.createElement('span', { className: 'psd-child-brand', 'aria-hidden': true },
-                          RemixGlyph(DW_ROBOT_2_LINE, 12))),
+                  child.state === 'running'
+                    ? React.createElement(StateDot, { state: 'ongoing', size: 10 })
+                    : !isRead(child.id, child.updatedAt)
+                      ? React.createElement(StateDot, { state: 'done', size: 10 })
+                      : React.createElement('span', { className: 'psd-child-brand', 'aria-hidden': true },
+                        RemixGlyph(DW_ROBOT_2_LINE, 12))),
                 React.createElement('span', { className: 'psd-child-title' }, child.title)),
                 React.createElement('span', { key: 'spacer', className: 'psd-child-spacer', 'aria-hidden': true }),
                 React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t)),

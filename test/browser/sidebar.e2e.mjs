@@ -2482,6 +2482,7 @@ async function runLayoutChecks({ page, results, state }) {
       slot.className = 'psd-continue-slot'
       slot.style.width = '22px'
       slot.style.opacity = '1'
+      slot.style.marginLeft = '-8px'
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'psd-continue-inline'
