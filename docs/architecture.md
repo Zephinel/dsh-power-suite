@@ -541,8 +541,7 @@ from batch insert); only browser-local state persists —
 
 | Slot | Purpose |
 |---|---|
-| `sidebar.right.pane.tab` | Artifacts tab type and the shared hover preview |
-| `sidebarRightTabs.register` | Artifacts guide card on the Start page |
+| `sidebar.right.tab.files.actions` | Artifacts toggle button in the native Files pane header (opens the in-pane artifacts overlay) |
 | `contextMenu.icon` | Workspace menu icon |
 | `contextMenus.register` (`workspace`) | Default agent preset submenu |
 | `conversation.input.overlay` | Renderless prompt-history keyboard seat, draft-attachment memory seat, and the annotation mode's Session bridge seat |
