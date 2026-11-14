@@ -532,6 +532,14 @@ heading is added until the release is cut.
   degrades gracefully to the native dark card; the exact markdown preview modal
   was not deterministically reproducible.
 
+- Dynamic-workspaces running-panel icons now match the native Workspace icon
+  weight in light mode (row actions, disclosure/chevrons, status glyph and child
+  glyphs lifted from `label-tertiary` #81858c to `label-secondary` #61666b;
+  brand/sparkle stays `label-primary`; dark unchanged), and the native Workspace
+  session-info hover card now uses the plugin card's 320 px width in both themes
+  (scoped shell-hash override with graceful fallback) so figure labels/values no
+  longer truncate early.
+
 ### Removed
 
 - Standalone Project detail page: the `project-view` feature is removed —

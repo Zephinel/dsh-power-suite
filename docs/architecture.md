@@ -310,7 +310,9 @@ white surface with the light label tokens (title `#0f1115`, secondary
 native shell session-info card as well. The same theme-following recipe is used
 by the other plugin tooltip-like surfaces (Artifact Quick Look, prompt-history
 cards), while annotation popover/detail cards keep their separate fixed recipe.
-Running & recent row titles use the native Workspace title token in light mode. The figures come from the injected `sessions` service's
+Running & recent row titles and minor icons use the native Workspace
+title/icon tokens in light mode (brand glyph stays primary; dark unchanged), and
+both the plugin and native session-info cards share the 320 px width. The figures come from the injected `sessions` service's
 `projectionsBySession` map — live Sessions are push-seeded, a cold persisted
 Session gets exactly one deduplicated `refreshProjections` read on first hover,
 and each section is omitted when its projection data is absent (no loading

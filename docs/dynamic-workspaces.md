@@ -110,7 +110,15 @@ sidebar's panel tabs. It starts expanded.
   mode every row title (including finished and child rows) uses the native
   Workspace session title token `label-primary` — finished rows no longer dim to
   `label-secondary` there, so the panel reads as dark as the native Workspace
-  rows below it; dark mode keeps its original dimming. Running Sessions are always listed,
+  rows below it; dark mode keeps its original dimming. Light mode also lifts the
+  panel's minor icons to the same readable weight: row actions, the disclosure
+  toggle/chevron, the panel chevron, the status glyph and the child glyph use
+  `label-secondary` `#61666b` (measured; the native session-row slot/action
+  icons use the lighter `label-tertiary` `#81858c`, native project-row folder
+  glyphs use the business colour `#4176e6`, the native
+  disclosure/pin caption `#adb2b8`), while the brand / sparkle / header
+  indicator glyphs stay `label-primary` `#0f1115`. Icon geometry, sizes and
+  layout are unchanged; dark mode keeps its original tertiary icons. Running Sessions are always listed,
   then recently finished Sessions inside
   the finished-Session **retention window** (default 2 hours, configurable in
   [Settings](settings.md)), each group newest activity first. A running row uses the
@@ -200,10 +208,13 @@ sidebar's panel tabs. It starts expanded.
   `#fff`), while dark mode keeps the shell's `--dsw-hovercard-bg` `#2C2C2E`
   surface with the static light palette (measured title white / path `#cfd3d6` /
   status `#adb2b8`), exactly as the native card does there. The theme-dependent
-  `--dsw-alias-tooltip-bg` token is *not* used. The card is 320 px
-  wide (the native tooltip is 244 px; the card grows so each native figure row
-  fits its label and right-aligned value on one line) with `max-height:
-  min(560px, calc(100vh - 16px))` and internal scroll. It does not capture the
+  `--dsw-alias-tooltip-bg` token is *not* used. The card is **320 px wide and so
+  is the native session-info hover card**: the shell pins its own card at 244 px,
+  which truncated labels early in light-mode screenshots, so the scoped native
+  override widens it to the same 320 px (both themes; `max-width:
+  calc(100vw − 16px)` clamp) while keeping its padding/radius/elevation. The
+  plugin card uses `max-height: min(560px, calc(100vh - 16px))` and internal
+  scroll. It does not capture the
   pointer in normal mode (same show/hide delays as before, dismissed by Escape,
   scroll, or resize), and clicking the row still opens the Session. Below the
   plain detail rows it appends the three **native session figures** (see
@@ -934,8 +945,9 @@ The native **View options** menu picks how Sessions are grouped:
   light by overriding `._card_bgejw_9` and its hashed `.YDXeBa_hover*` text
   classes (the shell pins that surface to #2C2C2E in both themes). If a future
   shell build renames those classes the rule silently stops matching and the
-  native dark card returns — graceful, but the light-mode follow is then lost
-  until the selector is updated. Plugin-owned cards don't have this dependency.
+  native dark card returns (light-mode surface + the aligned 320 px width are
+  then lost) — graceful, but the light-mode follow is then lost until the
+  selector is updated. Plugin-owned cards don't have this dependency.
 - **Light-mode contrast is plugin-owned only inside the plugin's own rows.** The
   atmosphere's light-mode white veil, the `label-secondary` lift for the plugin's
   own secondary text/icons, and the E2E baselines apply to `.psd-*` rows; native
