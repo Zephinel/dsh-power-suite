@@ -7098,6 +7098,7 @@ function dwClearNativeAtmospheres() {
             const collapsed = collapsedParents.has(row.id)
             const hasChildren = rowChildren.length > 0
             const interrupted = rowInterrupted(row.id, running)
+            const pinned = isPinned(row)
             // Fixed trailing columns, left to right: time 48 px, action 22 px,
             // disclosure 24 px, each separated by the 2 px row gap. Every parent
             // and child row reserves all three (child rows keep the action and
