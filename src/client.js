@@ -4730,7 +4730,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-hovercard-path{color:var(--dsw-static-neutral-bluish-300,#cfd3d6);font-size:12px;line-height:16px;white-space:normal;word-break:break-all;overflow-wrap:anywhere;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
 .psd-hovercard-time{color:var(--dsw-static-neutral-bluish-300,#cfd3d6);font-size:12px;line-height:16px}
 .psd-hovercard-status{display:flex;align-items:center;gap:8px;color:var(--dsw-static-neutral-bluish-400,#adb2b8);font-size:12px;line-height:20px}
-.psd-hovercard-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--dsw-alias-state-business-primary)}
+.psd-hovercard-dot{flex:none;width:10px;height:10px;border-radius:50%;corner-shape:round;background:var(--dsw-alias-state-business-primary)}
 .psd-hovercard-dot[data-state='done']{background:var(--dsw-alias-state-success-primary)}
 .psd-hovercard-row{display:flex;gap:8px;min-width:0;font-size:12px;line-height:16px}
 .psd-hovercard-key{flex:none;color:var(--dsw-static-neutral-bluish-400,#adb2b8)}
