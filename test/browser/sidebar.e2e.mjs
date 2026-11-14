@@ -2979,31 +2979,6 @@ async function runHoverCardChecks({ page, results, state }) {
     }
   })
 
-  await results.check('b5-6', 'DEBUG icon inventory v2', async () => {
-    const read = () => page.eval(() => {
-      const facts = (el) => {
-        const s = getComputedStyle(el)
-        const r = el.getBoundingClientRect()
-        return { cls: String(el.className).slice(0, 46), tag: el.tagName, color: s.color, fill: s.fill, bg: s.backgroundColor, size: `${Math.round(r.width)}x${Math.round(r.height)}` }
-      }
-      const ours = [...document.querySelectorAll('.psd-panel *')].filter((el) => el.tagName === 'svg' || el.tagName === 'use' || /psd-(run-brand|run-glyph|child-glyph|run-toggle|row-action|panel-chevron|indicator|spark|pulse|chevron)/.test(String(el.className))).map(facts)
-      const native = [...document.querySelectorAll('[class*="YDXeBa"]')].filter((el) => el.tagName === 'svg' || el.tagName === 'use' || /slot|folder|chevron|iconButton|pinIndicator|rowQuickActions|pinnedAction|dot/.test(String(el.className))).map(facts)
-      return { ours: ours.slice(0, 24), native: native.slice(0, 24) }
-    })
-    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
-    try {
-      await sleep(900)
-      console.log('ICONV2-LIGHT ' + JSON.stringify(await read()))
-      await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
-      await sleep(800)
-      console.log('ICONV2-DARK ' + JSON.stringify(await read()))
-      return 'logged'
-    } finally {
-      await page.emulateMedia([])
-      await sleep(400)
-    }
-  })
-
   await results.check('b5-7', 'plugin and native session-info hover cards share the same width (no early truncation)', async () => {
     const ourCard = () => page.eval(() => {
       const card = document.querySelector('.psd-hovercard')

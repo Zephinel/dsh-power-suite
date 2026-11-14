@@ -114,8 +114,9 @@ sidebar's panel tabs. It starts expanded.
   rows below it; dark mode keeps its original dimming. Light mode also lifts the
   panel's minor icons to the same readable weight: row actions, the disclosure
   toggle/chevron, the panel chevron, the status glyph and the child glyph use
-  `label-secondary` `#61666b` (measured; the native row slot/folder icons and
-  action buttons use the lighter `label-tertiary` `#81858c`, the native
+  `label-secondary` `#61666b` (measured; the native session-row slot/action
+  icons use the lighter `label-tertiary` `#81858c`, native project-row folder
+  glyphs use the business colour `#4176e6`, the native
   disclosure/pin caption `#adb2b8`), while the brand / sparkle / header
   indicator glyphs stay `label-primary` `#0f1115`. Icon geometry, sizes and
   layout are unchanged; dark mode keeps its original tertiary icons. Running Sessions are always listed,
