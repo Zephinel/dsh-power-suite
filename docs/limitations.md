@@ -467,15 +467,17 @@
 - **A group shares one ordinal.** All items of a group show the group's number
   on their page marks; child sub-labels (e.g. `#7.1`) are subordinate and never
   advance the top-level sequence.
-- **Modifier settings are an info-icon popover.** The header info (i) icon opens
-  a borderless hovercard-style popover with the two modifier rows and custom
-  dropdowns; the popover/menu render as inline fixed layers inside the
-  rail/overlay stacking context (no body portal), so they depend on that
-  context. The legacy `settings` state value and reducer/controller branches
-  remain unreachable for compatibility. Remaining NITs: conflict-specific
-  feedback is live-probed but not asserted in S9; Space/Home/End/ArrowUp/
-  Tab-close/two-menu switching are unit-covered but not E2E; the collapsed-rail
-  popover path was not re-verified.
+- **Modifier settings are an info-icon popover with segmented controls.** The
+  header info (i) icon opens a borderless hovercard-style popover with two
+  radiogroup rows (four Alt/Ctrl/Meta/Shift segments each); the popover renders
+  as an inline fixed layer inside the rail/overlay stacking context, so it
+  depends on that context. The legacy `settings` state value and
+  reducer/controller branches remain unreachable for compatibility. Remaining
+  NITs: S12's scan-probe mutation→re-resolve leg is logged rather than asserted
+  after the segmented rewrite (deterministic cache-reuse half still asserted;
+  the verifier recommends a revision/observing guard); the popover height
+  estimate is 240 vs measured 246 (flip margin 6px tighter, no overflow); the
+  collapsed-rail popover path was not re-verified.
 - **Prompt-history search ring is deliberately calmer than the shared ring.**
   The parameterised rainbow ring's search-field variant is scoped to
   `.psp-search-field`; annotation inputs and settings pills keep the shared

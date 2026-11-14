@@ -213,7 +213,7 @@ API/plugin network failures in every run below):
   >= 8 px inside the pill's right edge, pill content-paced, mask boundary
   recalculated), and both cross-branch annotation-mode hover-card pin states.
 - Annotation harness `test/browser/annotation.e2e.mjs`: `--smoke` **6/6 PASS**
-  with the **111-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
+  with the **110-key** seam. On the final build: scenario 10 **PASS 8 / SKIP 0 /
   FAIL 0** (including `10b`, the real pinned-cross-branch-card check),
   scenario 11 **PASS 7 / 0 / 0**, scenario 12 **PASS 7 / 0 / 0** (marks, detail
   card, requirement edit with `updatedAt`, delete → 5 s undo, popover layout:
@@ -249,6 +249,15 @@ API/plugin network failures in every run below):
   docs. Delta re-review **PASS-WITH-NITS** (no required changes); S6/S10/S12/S14
   green; S4 showed an environment/host-state timeout that reproduces with the
   pre-delta client (not this delta).
+  The modifier controls were then changed from dropdowns to custom **segmented
+  controls** inside the same info popover: two `role=radiogroup` rows with four
+  `role=radio` segments each (Alt/Ctrl/Meta/Shift), roving tabindex, arrow/Home/
+  End/Enter/Space selection with persistence and inline conflict feedback,
+  rainbow ring on the checked radio, no native select/dropdown/listbox. S9 was
+  rewritten for real CDP clicks on the segments; screenshots show both controls
+  with selected segments. Independent delta review **PASS-WITH-NITS** (S12's
+  mutation→re-resolve assertion was logged rather than asserted; deterministic
+  cache-reuse half remains asserted).
   Annotation settings were redesigned to an info (i) icon opening a borderless
   hovercard-style popover with the two modifier rows and custom dropdowns (no
   native select/OS menu); a verifier BLOCKER found the first implementation's
@@ -441,7 +450,7 @@ batch removed-member serialization are unit-tested only.
 > [0.3.0 polish round acceptance](#030-polish-round-acceptance-2026-11-13-merged-build)
 > above**; the annotation model has since grown to the v2 record/persistence,
 > floating-surface, marks/detail and composer-chip implementation with the
-> 111-key seam generation.
+> 110-key seam generation.
 
 Date: 2026-11-12 (round-2 fix build, `fix/ui-annotation-review-fixes`). The
 feature is browser-only ([ui-annotation.md](ui-annotation.md)), so its acceptance
