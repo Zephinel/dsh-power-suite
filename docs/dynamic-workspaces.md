@@ -429,10 +429,11 @@ restarted with the merged linked checkout. Until then the card is local-only.
 
 ## Pending interaction notices
 
-When a Session **other than the one open in the main view** is blocked waiting
-for a human — a question or plan review from `ask_user_question`, or an
-approval — the client's `SessionStatus.pendingInteraction` makes a fixed notice
-stack appear beside the Running & recent card. It is a preview surface: the
+When a Session **other than the one open in the main view** is still **running**
+(`SessionStatus.running` is not `false`) and blocked waiting for a human — a
+question or plan review from `ask_user_question`, or an approval — the client's
+`SessionStatus.pendingInteraction` makes a fixed notice stack appear beside the
+Running & recent card. It is a preview surface: the
 stack never answers anything, the native composer card remains the only
 answering surface, and clicking a notice just opens that Session.
 
@@ -454,7 +455,9 @@ answering surface, and clicking a notice just opens that Session.
   snapshot the native composer cards use, so a notice disappears as soon as the
   Session becomes the one open in the main view, the interaction settles
   (answered, cancelled, or approved), or the Session is archived. Blank and
-  subagent Sessions never get a notice. Because `pendingInteraction` is one per
+  subagent Sessions never get a notice, and an explicitly idle Session
+  (`running: false`) keeps only its native composer card. Because
+  `pendingInteraction` is one per
   Session, a Session contributes at most one notice even when it has a
   multi-question batch.
 - **Hidden with the panel**: the stack is rendered through the card's existing

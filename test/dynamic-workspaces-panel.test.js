@@ -64,12 +64,11 @@ function summary(id, overrides = {}) {
   }
 }
 
-test('the panel seam exposes the final native-pin and notice helpers', () => {
+test('the panel seam exposes the notice helpers', () => {
   assert.notEqual(panel, undefined, 'hooks.dynamicWorkspacesPanel is missing')
   for (const name of SEAM_KEYS) {
     assert.equal(typeof panel[name], 'function', `${name} is exported through the seam`)
   }
-  assert.equal(panel.DW_NOTICE_LIMIT, 3)
   assert.equal(production.hooks, undefined, 'the test-hook seam stays inert when the flag is not set')
 })
 
@@ -101,6 +100,42 @@ test('pending notices cover questions, plan review and approval, newest first an
   assert.deepEqual(idsFrom(archived.notices), ['session-q', 'session-appr'])
   const none = derive({ list, statuses: undefined, currentSessionId: null, archived: new Set(), activity: {} })
   assert.deepEqual(idsFrom(none.notices), [])
+
+  // Filtering: blank, subagent, unknown and archived Sessions are skipped.
+  const filtered = derive({
+    list: { byId: {
+      blank: summary('blank', { blank: true }),
+      sub: summary('sub', { origin: 'subagent' }),
+      known: summary('known'),
+      idle: summary('idle')
+    } },
+    statuses: new Map([
+      ['blank', { pendingInteraction: { kind: 'question', sessionId: 'blank', questions: [{ id: 'q', question: 'Q' }] } }],
+      ['sub', { pendingInteraction: { kind: 'question', sessionId: 'sub', questions: [{ id: 'q', question: 'Q' }] } }],
+      ['missing', { pendingInteraction: { kind: 'approval', sessionId: 'missing', reason: 'R' } }],
+      ['archived', { pendingInteraction: { kind: 'question', sessionId: 'archived', questions: [{ id: 'q', question: 'Q' }] } }],
+      ['known', { running: true, pendingInteraction: { kind: 'question', sessionId: 'known', questions: [{ id: 'q', question: 'Q' }] } }],
+      ['idle', { running: false, pendingInteraction: { kind: 'question', sessionId: 'idle', questions: [{ id: 'q', question: 'Q' }] } }]
+    ]),
+    currentSessionId: null,
+    archived: new Set(['archived']),
+    activity: {}
+  })
+  assert.deepEqual(idsFrom(filtered.notices), ['known'], 'idle, archived, blank, subagent and missing Sessions are skipped')
+
+  // Headline fallbacks: approval reason, then approval tool name.
+  const approvalOnly = derive({
+    list: { byId: { a: summary('a'), b: summary('b') } },
+    statuses: new Map([
+      ['a', { pendingInteraction: { kind: 'approval', sessionId: 'a', reason: 'Allow rm?' } }],
+      ['b', { pendingInteraction: { kind: 'approval', sessionId: 'b', toolName: 'Bash' } }]
+    ]),
+    currentSessionId: null,
+    archived: new Set(),
+    activity: {}
+  })
+  assert.equal(approvalOnly.notices.find((notice) => notice.sessionId === 'a').headline, 'Allow rm?')
+  assert.equal(approvalOnly.notices.find((notice) => notice.sessionId === 'b').headline, 'Bash')
 
   const many = new Map()
   const byId = {}

@@ -2236,25 +2236,31 @@ Automated gates (measured by the Lead on this tree, 2026-11-15):
   (entryCount 85).
 - `node --check test/browser/sidebar.e2e.mjs`: pass.
 
-Live row-menu probe (Lead, real running GUI + throwaway headless Chrome):
-**15/15 checks**, 0 page errors — at rest the time is visible and the "…"
+Live row-menu probes (Lead, real running GUI + throwaway headless Chrome):
+**16/16 checks** plus a focused action probe, 0 page errors — at rest the time is
+visible and the "…"
 trigger hidden; on row hover the time hides, the trigger shows, and the
 restored title-left pin slot animates in (button visible); the trigger paints
 no hover background (`transparent`); the card-owned popup opens, keeps the
 time/trigger swap while open, and lists Rename / Fork session / Copy Session
 ID / Show in Finder / Archive session with **no Pin/Unpin entry**; Escape
-closes it and leaving the row restores the time. The current rainbow row
-follows the same rule and keeps its rainbow; 0 page errors.
+closes it and leaving the row restores the time; a second real click on the
+trigger toggles the menu closed. The focused action probe opened the menu and
+clicked **Copy Session ID**: the spy on `navigator.clipboard.writeText` recorded
+the Session id, the menu closed, and focus returned to the `…` trigger. The
+current rainbow row follows the same rule and keeps its rainbow.
 
-Live notice-component probe (Lead, real GUI with the test-hook seam and the
-real `DwPendingNotices` component mounted with synthetic notices — question /
-plan / approval plus a 2-question batch and a 2-card overflow): **13/13
-checks**, 0 page exceptions/console errors — stack rendered with
-`role="status"` and computed width **320 px**; three cards with kinds
-question/plan/approval in order; Session titles, headlines and the "2 questions"
-meta line; overflow line "+2 more"; every card carries its kind glyph; clicking
-the plan card reports `session-plan` through the component's `onOpen`;
-disposing the probe removes the stack.
+Historical notice-component probe (Lead, on the pre-review-fix build, real GUI
+with a test-hook seam that mounted `DwPendingNotices` with synthetic notices —
+question / plan / approval plus a 2-question batch and a 2-card overflow):
+**13/13 checks**, 0 page exceptions/console errors — stack rendered at 320 px
+with three ordered cards, Session titles, headlines, the "2 questions" meta
+line, the "+2 more" overflow line, kind glyphs, and a card click reporting
+`session-plan`. That probe is **historical, not reproducible on this tree**: the
+review removed the test-only mount seam as dead code and changed the container
+role from `status` to `region` (so assistive tech is not re-announced on every
+re-render). Rendering of the current component is covered by code review plus
+the derivation tests.
 
 **Evidence gap (honest):** no real pending question/approval was triggered in
 the running GUI, so the end-to-end

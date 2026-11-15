@@ -4717,15 +4717,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** localStorage key holding the two bucket fold states. */
     const DW_FOLD_KEY = 'power-suite.dynamic-workspaces.folds'
 
-    /** Width of one pending-interaction notice card, matching the hover card. */
-    const DW_NOTICE_WIDTH = 320
-
     /** Most pending notices shown at once; the rest collapse into a "+N" line. */
     const DW_NOTICE_LIMIT = 3
 
-    /** Pending-notice glyph paths (24 viewBox): question mark, clipboard, shield. */
+    /** Pending-notice glyph paths (24 viewBox): question mark and shield; the plan
+     *  notice reuses the existing file glyph. */
     const DW_NOTICE_QUESTION_PATH = 'M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM11 15V17H13V15H11ZM11 7V13H13V7H11Z'
-    const DW_NOTICE_PLAN_PATH = 'M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z'
     const DW_NOTICE_APPROVAL_PATH = 'M12 2L20 5V11C20 16.05 16.6 20.35 12 22C7.4 20.35 4 16.05 4 11V5L12 2ZM12 4.25L6 6.45V11C6 14.8 8.5 17.95 12 19.7C15.5 17.95 18 14.8 18 11V6.45L12 4.25Z'
 
     /**
@@ -4832,13 +4829,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'panel.open': 'Open {title}',
       'pin.pin': 'Pin session',
       'pin.unpin': 'Unpin session',
-      'row.more': 'Session actions',
+      'row.more': 'Session actions for {title}',
       'notice.kind.question': 'Question',
       'notice.kind.plan': 'Plan review',
       'notice.kind.approval': 'Approval',
       'notice.questions': '{count} questions',
       'notice.overflow': '+{count} more',
       'notice.aria': '{title} is waiting: {kind}',
+      'notice.region': 'Sessions waiting for your answer',
+      'menu.aria': 'Session actions',
       'panel.done': 'done',
       'panel.children': '{count} subagents',
       'panel.expandChildren': 'Show subagents of {title}',
@@ -4901,13 +4900,15 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'panel.open': '打开 {title}',
       'pin.pin': '固定会话',
       'pin.unpin': '取消固定',
-      'row.more': '会话操作',
+      'row.more': '{title} 的会话操作',
       'notice.kind.question': '提问',
       'notice.kind.plan': '计划审批',
       'notice.kind.approval': '权限请求',
       'notice.questions': '{count} 个问题',
       'notice.overflow': '还有 {count} 个',
       'notice.aria': '{title} 正在等待：{kind}',
+      'notice.region': '正在等你回答的 Session',
+      'menu.aria': '会话操作',
       'panel.done': '已完成',
       'panel.children': '{count} 个子代理',
       'panel.expandChildren': '展开 {title} 的子代理',
@@ -5008,9 +5009,9 @@ html[data-input-modality='keyboard'] .psd-run:focus-within:not(:has(.psd-run-tog
 .psd-run-spacer,.psd-child-spacer{flex:1 1 auto;min-width:0}
 .psd-run-timeslot{position:relative;flex:none;width:var(--psd-time-col,48px);height:20px}
 .psd-run-time{position:absolute;top:0;right:0;left:0;text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:20px;font-variant-numeric:tabular-nums;transition:opacity 120ms var(--ds-ease-in-out,ease)}
-.psd-run-more{appearance:none;position:absolute;top:50%;right:0;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;opacity:0;visibility:hidden;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease),visibility 0s linear 120ms,background-color 120ms var(--ds-ease-in-out,ease)}
+.psd-run-more{appearance:none;position:absolute;top:50%;right:0;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease),background-color 120ms var(--ds-ease-in-out,ease)}
 .psd-run[data-menuable='true']:hover .psd-run-time,.psd-run[data-menuable='true']:focus-within .psd-run-time,.psd-run[data-menu-open='true'] .psd-run-time{opacity:0}
-.psd-run[data-menuable='true']:hover .psd-run-more,.psd-run[data-menuable='true']:focus-within .psd-run-more,.psd-run[data-menu-open='true'] .psd-run-more{opacity:1;visibility:visible;pointer-events:auto;transition:opacity 120ms var(--ds-ease-in-out,ease),visibility 0s linear 0s,background-color 120ms var(--ds-ease-in-out,ease)}
+.psd-run[data-menuable='true']:hover .psd-run-more,.psd-run[data-menuable='true']:focus-within .psd-run-more,.psd-run[data-menu-open='true'] .psd-run-more{opacity:1;pointer-events:auto;transition:opacity 120ms var(--ds-ease-in-out,ease),background-color 120ms var(--ds-ease-in-out,ease)}
 .psd-run-more:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
 /* The head is gap-less: the collapsed Continue slot is 0 px wide, so a flex
@@ -5089,6 +5090,7 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-menu-item:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .psd-menu-item:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px;background:var(--dsw-alias-interactive-bg-hover)}
 .psd-menu-item:disabled{color:var(--dsw-alias-label-tertiary);cursor:default}
+.psd-menu-danger{color:var(--dsw-alias-state-warn-primary,#f5a524)}
 .psd-menu-sep{flex:none;height:1px;margin:4px 6px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 10%,transparent)}
 .psd-menu-loading{min-height:36px;padding:10px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px}
 .psd-notices{position:fixed;z-index:999;display:flex;flex-direction:column;gap:6px;pointer-events:none}
@@ -6343,6 +6345,9 @@ function dwClearNativeAtmospheres() {
       statuses.forEach((status, id) => {
         const pending = status !== null && typeof status === 'object' ? status.pendingInteraction : undefined
         if (pending === null || pending === undefined || typeof pending !== 'object') return
+        // The spec asks for notices only while the asking Session is running
+        // (an explicitly idle Session keeps its native composer card instead).
+        if (status.running === false) return
         const kind = pending.kind
         if (kind !== 'question' && kind !== 'plan-review' && kind !== 'approval') return
         const sessionId = typeof pending.sessionId === 'string' && pending.sessionId.length > 0
@@ -6388,7 +6393,7 @@ function dwClearNativeAtmospheres() {
      */
     function dwNoticePlacement(panelRect, viewportWidth, viewportHeight) {
       const gap = 8
-      const width = Math.min(DW_NOTICE_WIDTH, Math.max(240, viewportWidth - gap * 2))
+      const width = Math.min(DW_HOVERCARD_WIDTH, Math.max(240, viewportWidth - gap * 2))
       let left = Math.round(panelRect.right + gap)
       if (left + width > viewportWidth - gap) left = Math.round(panelRect.left - width - gap)
       if (left < gap) left = gap
@@ -7274,7 +7279,7 @@ function dwClearNativeAtmospheres() {
       const {
         t, rows, expanded, showAll, now, durations, childrenByParent, collapsedParents, acked,
         onToggle, onToggleAll, onToggleChildren, onOpen, interruptedT, onNewSession, currentSessionId,
-        projections, onEnsureProjections, pinnedIds, menuSessionId, onOpenSessionMenu, onTogglePin,
+        projections, onEnsureProjections, pinnedIds, menuSessionId, menuEnabled, onOpenSessionMenu, onTogglePin,
         notices, noticeOverflow
       } = props
       const visible = expanded && !showAll ? rows.slice(0, DW_PANEL_LIMIT) : rows
@@ -7582,8 +7587,7 @@ function dwClearNativeAtmospheres() {
             const hasChildren = rowChildren.length > 0
             const interrupted = rowInterrupted(row.id, running)
             const pinned = isPinned(row)
-            const current = isCurrent(row.id)
-            const menuOpen = typeof menuSessionId === 'string' && menuSessionId === row.id
+            const menuOpen = menuEnabled && typeof menuSessionId === 'string' && menuSessionId === row.id
             // Fixed trailing columns, left to right: time 48 px, action 22 px,
             // disclosure 24 px, each separated by the 2 px row gap. Every parent
             // and child row reserves all three (child rows keep the action and
@@ -7600,7 +7604,7 @@ function dwClearNativeAtmospheres() {
               'data-state': row.state,
               'data-pinned': pinned ? 'true' : undefined,
               'data-menu-open': menuOpen ? 'true' : undefined,
-              'data-menuable': 'true',
+              'data-menuable': menuEnabled ? 'true' : undefined,
               'aria-current': isCurrent(row.id) ? 'true' : undefined,
               'data-actions': interrupted ? 'continue+new' : 'new',
               onClick: (event) => {
@@ -7657,14 +7661,13 @@ function dwClearNativeAtmospheres() {
               React.createElement('span', { key: 'spacer', className: 'psd-run-spacer', 'aria-hidden': true }),
               React.createElement('span', { key: 'time', className: 'psd-run-timeslot' },
                 React.createElement('span', { className: 'psd-run-time' }, time),
-                React.createElement('button', {
+                menuEnabled ? React.createElement('button', {
                   type: 'button',
                   className: 'psd-run-more',
                   'data-psd-more': '',
                   'aria-haspopup': 'menu',
                   'aria-expanded': menuOpen ? 'true' : undefined,
                   'aria-label': t('row.more', { title: row.title }),
-                  title: t('row.more', { title: row.title }),
                   onClick: (event) => {
                     event.preventDefault()
                     event.stopPropagation()
@@ -7673,7 +7676,8 @@ function dwClearNativeAtmospheres() {
                   onPointerDown: (event) => event.stopPropagation()
                 }, DW_MORE_ICON === null
                   ? RemixGlyph(DW_MORE_PATH, 14)
-                  : React.createElement(DW_MORE_ICON, { size: 14 }))),
+                  : React.createElement(DW_MORE_ICON, { size: 14 }))
+                : null),
               React.createElement(DwRowActionSlot, {
                 t,
                 interruptedT,
@@ -7843,14 +7847,15 @@ function dwClearNativeAtmospheres() {
      * @param {Function} props.onClose - dismiss without running an action.
      * @returns {object | null} the fixed popup, or null while it has no content.
      */
-    function DwSessionMenu({ menu, onSelect, onClose }) {
+    function DwSessionMenu({ menu, onSelect, onClose, t }) {
       const rootRef = React.useRef(null)
       const itemRefs = React.useRef(new Map())
       const allViews = Array.isArray(menu.views) ? menu.views : []
       const isPinView = (view) => {
         const actionKey = String(view.id ?? '').split('/').pop()
-        return actionKey === 'pin' || actionKey === 'unpin'
-          || /^(un)?pin session$/iu.test(String(view.label ?? '').trim())
+        if (actionKey === 'pin' || actionKey === 'unpin') return true
+        const iconKey = view.icon !== null && typeof view.icon === 'object' ? String(view.icon.key ?? '') : ''
+        return iconKey === 'workspace.pin' || iconKey === 'workspace.unpin'
       }
       const views = allViews.filter((view) => view !== null && typeof view === 'object' && !isPinView(view))
       const width = 224
@@ -7895,6 +7900,10 @@ function dwClearNativeAtmospheres() {
         const onPointerDown = (event) => {
           const root = rootRef.current
           if (root !== null && root !== undefined && root.contains(event.target)) return
+          // The trigger is outside the popup: pressing it must reach its click
+          // handler (which toggles the menu) instead of closing on pointerdown.
+          const trigger = menu.trigger
+          if (trigger !== null && trigger !== undefined && trigger.contains(event.target)) return
           onClose()
         }
         document.addEventListener('keydown', onKeyDown, true)
@@ -7907,17 +7916,19 @@ function dwClearNativeAtmospheres() {
           window.removeEventListener('resize', onClose)
           window.removeEventListener('scroll', onClose, true)
         }
-      }, [menu.token])
+      }, [menu.token, views.length, menu.trigger])
       if (views.length === 0) {
         if (menu.ready !== true) {
-          return React.createElement('div', { className: 'psd-menu psd-menu-loading', 'data-psd-menu': '', role: 'menu', style }, '…')
+          return React.createElement('div', { className: 'psd-menu psd-menu-loading', 'data-psd-menu': '', role: 'menu', 'aria-label': t('menu.aria'), style }, '…')
         }
         return null
       }
       itemRefs.current = new Map()
       const rows = []
       views.forEach((view, index) => {
-        if (view.separatorBefore === true && index > 0) rows.push(React.createElement('div', { key: `sep-${view.id}`, className: 'psd-menu-sep' }))
+        if (view.separatorBefore === true && index > 0) {
+          rows.push(React.createElement('div', { key: `sep-${view.id}`, className: 'psd-menu-sep', role: 'separator' }))
+        }
         rows.push(React.createElement('button', {
           key: view.id,
           type: 'button',
@@ -7932,7 +7943,7 @@ function dwClearNativeAtmospheres() {
           onClick: () => onSelect(view.id)
         }, view.label))
       })
-      return React.createElement('div', { ref: rootRef, className: 'psd-menu', 'data-psd-menu': '', role: 'menu', style }, rows)
+      return React.createElement('div', { ref: rootRef, className: 'psd-menu', 'data-psd-menu': '', role: 'menu', 'aria-label': t('menu.aria'), style }, rows)
     }
 
     /**
@@ -7950,7 +7961,7 @@ function dwClearNativeAtmospheres() {
       if (!Array.isArray(notices) || notices.length === 0 || style === null) return null
       const glyphFor = (kind) => {
         const path = kind === 'plan'
-          ? DW_NOTICE_PLAN_PATH
+          ? REMIX_FILE_LINE
           : (kind === 'approval' ? DW_NOTICE_APPROVAL_PATH : DW_NOTICE_QUESTION_PATH)
         return RemixGlyph(path, 14)
       }
@@ -7977,7 +7988,8 @@ function dwClearNativeAtmospheres() {
       return React.createElement('div', {
         className: 'psd-notices',
         'data-psd-notices': '',
-        role: 'status',
+        role: 'region',
+        'aria-label': t('notice.region'),
         style
       },
       cards,
@@ -8040,12 +8052,23 @@ function dwClearNativeAtmospheres() {
       // behavior (Rename / Fork / Copy Session ID / Show in Finder / Archive);
       // only the pin entry is filtered out.
       const [sessionMenu, setSessionMenu] = React.useState(null)
-      /** Open menu occurrence: token, resolution, and its source subscription. */
+      /** Open menu occurrence: token, resolution, trigger element and subscription. */
       const sessionMenuRef = React.useRef(null)
+      /** Trigger element of the open menu, for focus restoration. */
+      const sessionMenuTriggerRef = React.useRef(null)
       const closeSessionMenu = React.useCallback(() => {
         const current = sessionMenuRef.current
+        const trigger = sessionMenuTriggerRef.current
+        sessionMenuTriggerRef.current = null
         sessionMenuRef.current = null
         setSessionMenu(null)
+        if (trigger !== null && trigger !== undefined && typeof trigger.focus === 'function' && trigger.isConnected) {
+          try {
+            trigger.focus({ preventScroll: true })
+          } catch {
+            trigger.focus()
+          }
+        }
         if (current === null) return
         if (typeof current.unsubscribe === 'function') {
           try {
@@ -8100,11 +8123,13 @@ function dwClearNativeAtmospheres() {
           unsubscribe = undefined
         }
         const rect = element instanceof HTMLElement ? element.getBoundingClientRect() : null
+        sessionMenuTriggerRef.current = element instanceof HTMLElement ? element : null
         sessionMenuRef.current = { token, resolution, unsubscribe }
         setSessionMenu({
           token,
           sessionId: row.id,
           title: row.title,
+          trigger: element instanceof HTMLElement ? element : null,
           point: rect === null ? { x: 0, y: 0 } : { x: Math.round(rect.left), y: Math.round(rect.bottom) },
           views: readViews(),
           ready: false
@@ -8118,13 +8143,19 @@ function dwClearNativeAtmospheres() {
       }, [contextMenus, sessionMenu, closeSessionMenu])
       const selectSessionMenuItem = React.useCallback((id) => {
         const current = sessionMenuRef.current
-        closeSessionMenu()
-        if (current === null || current.resolution === null) return
+        if (current === null || current.resolution === null) {
+          closeSessionMenu()
+          return
+        }
+        // Select BEFORE closing: the resolution's lifetime is aborted by dispose,
+        // and `select` refuses to run once aborted. `select` disposes on its own;
+        // the close afterwards is an idempotent second dispose.
         try {
           current.resolution.select(id)
         } catch {
           // A withdrawn contribution cannot execute; the menu is already closed.
         }
+        closeSessionMenu()
       }, [closeSessionMenu])
 
       const mountsRef = React.useRef(null)
@@ -8450,7 +8481,18 @@ function dwClearNativeAtmospheres() {
       // row keeps exactly the existing running-then-recent order. Toggling a pin
       // updates the card's own pinned document, which re-derives the row from its
       // original end time, so no timer or end time is ever rewritten here.
-      const panelRows = dwPinPanelRows({ pinnedIds, runningRows, recentRows })
+      const panelRows = dwPinPanelRows({
+        list: sessions,
+        statuses,
+        workspaces,
+        t,
+        runningParents,
+        archived: archivedIds,
+        activity: sessionActivity,
+        pinnedIds,
+        runningRows,
+        recentRows
+      })
       const childrenByParent = dwSubagentChildren(sessions, statuses, now, archivedIds, windows.recentMs, workspaces, sessionActivity)
       const runningIds = new Set(runningRows.map((row) => row.id))
       const durations = new Map()
@@ -8912,6 +8954,7 @@ function dwClearNativeAtmospheres() {
         pinnedIds,
         onTogglePin: togglePin,
         menuSessionId: sessionMenu !== null ? sessionMenu.sessionId : null,
+        menuEnabled: typeof contextMenus === 'object' && contextMenus !== null && typeof contextMenus.resolve === 'function',
         onOpenSessionMenu: openSessionMenu,
         notices: pendingNotices.notices,
         noticeOverflow: pendingNotices.overflow,
@@ -8963,6 +9006,7 @@ function dwClearNativeAtmospheres() {
         portal.push(ReactDOM.createPortal(React.createElement(DwSessionMenu, {
           key: 'session-menu',
           menu: sessionMenu,
+          t,
           onSelect: selectSessionMenuItem,
           onClose: closeSessionMenu
         }), document.body))
@@ -23714,44 +23758,6 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         dwPendingNotices,
         dwNoticePlacement,
         DW_NOTICE_LIMIT,
-        /**
-         * Test-only mount of the notice stack with synthetic data, so a browser
-         * probe can verify its real DOM rendering and click behavior without
-         * waiting for a live pending question.
-         * @param {Array<object>} notices - notice rows.
-         * @param {number} [overflow] - "+N" overflow count.
-         * @returns {{ host: HTMLElement, dispose: Function }} probe handle.
-         */
-        renderNoticesProbe: (notices, overflow = 0) => {
-          const host = document.createElement('div')
-          host.setAttribute('data-psd-notices-probe', '')
-          document.body.appendChild(host)
-          const root = ReactDOM.createRoot(host)
-          const translate = (key, params) => {
-            const template = DW_EN[key] ?? key
-            return params === undefined || params === null
-              ? template
-              : template.replace(/\{(\w+)\}/gu, (match, name) => String(params[name]))
-          }
-          root.render(React.createElement(DwPendingNotices, {
-            notices: Array.isArray(notices) ? notices : [],
-            overflow,
-            t: translate,
-            onOpen: (sessionId) => { window.__psdNoticeOpened = sessionId },
-            style: { left: 40, top: 40, width: DW_NOTICE_WIDTH }
-          }))
-          return {
-            host,
-            dispose: () => {
-              try {
-                root.unmount()
-              } catch {
-                // A probe page torn down mid-render needs no cleanup beyond removal.
-              }
-              host.remove()
-            }
-          }
-        }
       }
       // The update prompt's pure state machine: payload validation, the
       // prompt/no-prompt decision, and the per-version later/silence state.

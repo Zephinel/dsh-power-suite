@@ -424,8 +424,9 @@ Pending-interaction notices are a client-only addition beside the card: the seat
 subscribes to `props.useSessionStatus` (the same
 `SessionStatus.pendingInteraction` the native composer cards use), derives up to
 three waiting Sessions other than the one open in the main view (kinds
-`question`, `plan-review`, `approval`; blank, subagent, archived, and current
-Sessions filtered out), and renders a fixed 320 px stack inside the card's
+`question`, `plan-review`, `approval`; explicitly idle, blank, subagent,
+archived, and current Sessions filtered out), and renders a fixed 320 px stack
+inside the card's
 existing overlay-panel portal, with a "+N more" line beyond three. Placement
 prefers the card's right edge, flips to its left edge when it does not fit, and
 clamps to an 8 px viewport inset, re-measuring on resize, scroll, sidebar
