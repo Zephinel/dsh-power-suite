@@ -2299,13 +2299,14 @@ which fixes the rainbow flicker while the sidebar handle is dragged. Docs: new
 - Node **v24.22.3**; headless Chrome **157.0.8103.79**; viewport **1728×900**;
   throwaway `--user-data-dir`; one harness at a time; GUI token redacted.
 - Injected/served client: `src/client.js` md5
-  **`40e53d31744576696332e8ca73914e20`** (1,218,053 chars / 1,223,244 bytes).
+  **`7fff81b238fab5bea798c833ec0e9984`** (1,223,099 chars / 1,228,290 bytes).
 
 ### Automated gates (local, 2026-11-15)
 
-- `npm test`: **336 tests, 336 passed, 0 failed** — including the new
+- `npm test`: **337 tests, 337 passed, 0 failed** — including the new
   `test/sidebar-width.test.js` (**17/17**, Host store + route) and
-  `test/sidebar-width-client.test.js` (**8/8**, browser seam helpers).
+  `test/sidebar-width-client.test.js` (**9/9**, browser seam helpers, including
+  the collapse→reopen restore decision).
 - `npm run check`: **exit 0** — syntax, package manifest, docs links, the full
   test suite, the release-notes gate, and `npm pack --dry-run`
   (`entryCount` **88**).
@@ -2313,12 +2314,14 @@ which fixes the rainbow flicker while the sidebar handle is dragged. Docs: new
 
 ### Live acceptance — `node test/browser/sidebar.e2e.mjs --layout`
 
-Exit **0**; **PASS 10 / SKIP 1 / FAIL 0**; **0 page errors**; **0 real network
-failures**; **11.9 s**. Log:
-`.tmp-work/sidebar-width/e2e/layout-acceptance-2026-11-15.log`. The mode opens
-the running GUI in a throwaway headless Chrome, injects this worktree's client,
-drives the native sidebar handle with real CDP pointer input, and never creates
-or types into a Session.
+Exit **0**; **PASS 11 / SKIP 1 / FAIL 0**; **0 page errors**; **0 real network
+failures**; **9.3 s**. Log:
+`.tmp-work/sidebar-width/e2e/layout-acceptance-final.log`. The mode forces
+`prefers-reduced-motion: no-preference` (the pre-fix renderer already repainted
+synchronously under reduced motion, so the oracle must run the animated renderer),
+opens the running GUI in a throwaway headless Chrome, injects this worktree's
+client, drives the native sidebar handle with real CDP pointer input, and never
+creates or types into a Session.
 
 - `smoke-1..4` **PASS** — pipeline: injected client evaluated in the live page,
   card mounted, the current Session left untouched (0 transcript messages,
@@ -2326,9 +2329,10 @@ or types into a Session.
 - `lw-1` **PASS** — drag handle 8 px wide at x=280; sidebar column 280 px
   (grid `280px 1448px 0px`).
 - `lw-2` **PASS** — live atmosphere canvases on the current Workspace/Session
-  rows: workspace 258×34 painted=32606, session 258×32 painted=32630, animated.
+  rows: workspace 258×34 painted≈32450, session 258×32 painted≈32477, animated.
 - `lw-3` **PASS (flicker oracle)** — real CDP drag 280→320 px (+40 px over
-  10 steps); canvas element identity stable in all 10 samples; **9 per-step +
+  10 steps); the selected oracle canvas is an animated, running current-row
+  canvas; canvas element identity stable in all 10 samples; **9 per-step +
   20 in-frame backing-store resizes** observed; **0 blank bitmap samples**
   (0/10 per-step, 0/22 in-frame).
 - `lw-4` **PASS** — post-drag cache
@@ -2338,22 +2342,38 @@ or types into a Session.
   (`storeWidth=320`).
 - `lw-6` **SKIP** — `GET /api/power-suite.sidebar-width` returned **404** (the
   running Host process predates the merged plugin). The row is the explicit
-  "Host route loads after the DSH Web service restart" SKIP; **8**
+  "Host route loads after the DSH Web service restart" SKIP; the
   sidebar-width route probes were classified as expected rather than real
   network failures, and the per-origin browser cache is authoritative until the
   restart (covered by `lw-4`/`lw-5`).
+- `lw-8` **PASS** — collapse through the shell's own toggle then reopen through
+  the shell's own control: the collapsed rail settles on hover and the reopen is
+  a real pointer click; the width returns to the stored **320 px** instead of the
+  native 280 px default and the cache is not overwritten with 280.
 - `lw-7` **PASS** — cleanup dragged 320→280 px (pre-run 280 px); the Host route
   is absent so no Host document was written; residual report has 0 issues.
 
 ### Negative control and smoke regression (2026-11-15)
 
-- The same `--layout` mode against the pre-fix client copy
-  (`.tmp-work/sidebar-width/e2e/client-no-fix.js`) makes `lw-3` **FAIL** on
-  blank bitmap samples (drag steps 2–4 for both canvases,
-  `PASS 9 / SKIP 1 / FAIL 1`) while every other row stays green — the flicker
-  oracle discriminates the missing synchronous resize repaint.
+- The same `--layout` mode against the fixed client with **only the synchronous
+  resize repaint reverted** (`.tmp-work/sidebar-width/e2e/client-no-fix.js`)
+  makes `lw-3` **FAIL** on blank bitmap samples (drag steps 1, 8 and 9 for both
+  canvases; **PASS 10 / SKIP 1 / FAIL 1**, exit 1) while every feature row stays
+  green — the flicker oracle discriminates the missing synchronous resize
+  repaint, and not the rest of the feature.
 - `node test/browser/sidebar.e2e.mjs --smoke`: **exit 0**, **4/4 PASS**, 0 page
-  errors, **5.5 s**.
+  errors, **2.2 s**.
+
+### Review-fix hardening (same round)
+
+An independent review round found no blocker/major issues; the shipped code
+carries the resulting hardening: a local-write **generation guard** (Host
+answers older than the newest drag/write are discarded instead of rolling the
+live width back or confirming an unconfirmed write), an **8 s timeout** on every
+sync fetch (a stalled request cannot wedge the sync flags), and a three-frame
+confirming self-check that marks an incompatible layout-store seat **unreachable
+(inert)** while skipping the folded-landscape centered presentation; the
+collapse→reopen restore got a pure decision + unit test (`lw-8`).
 
 ### Evidence limits (state honestly)
 

@@ -43,6 +43,7 @@ const SEAM_KEYS = [
   'normalizeSidebarWidthPayload',
   'sidebarWidthBootstrap',
   'shouldAdoptSidebarWidth',
+  'sidebarWidthReopenRestore',
   'probe'
 ]
 
@@ -191,6 +192,18 @@ if (seam === undefined) {
     assert.equal(adopt({ currentWidth: 280, remoteWidth: null, dragging: false }), false)
     assert.equal(adopt({}), false)
     assert.equal(adopt(null), false)
+  })
+
+  test('reopening a collapsed sidebar restores the stored width instead of the native default', () => {
+    const restore = helper('sidebarWidthReopenRestore')
+    assert.equal(restore({ preferenceWidth: 320, width: 280, dragging: false }), 320, 'the stored width wins over the native 280')
+    assert.equal(restore({ preferenceWidth: 320, width: 320, dragging: false }), null, 'nothing to restore when the shell already matches')
+    assert.equal(restore({ preferenceWidth: 320, width: 280, dragging: true }), null, 'never fight a live drag')
+    assert.equal(restore({ preferenceWidth: 320, width: 0, dragging: false }), null, 'collapsed is not a restore input')
+    assert.equal(restore({ preferenceWidth: null, width: 280, dragging: false }), null, 'nothing durable to restore')
+    assert.equal(restore({ preferenceWidth: 999, width: 280, dragging: false }), null, 'invalid preference is ignored')
+    assert.equal(restore({ width: 280 }), null)
+    assert.equal(restore(null), null)
   })
 
   test('probe reports the inert state before install and stays side-effect free', () => {

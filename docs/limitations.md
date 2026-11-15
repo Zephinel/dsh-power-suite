@@ -114,7 +114,20 @@
   the package version or the seat shape (no `.store` handle, `create()`,
   `layoutInfo`, or `actions.setSidebar`), the feature stays inert instead of
   patching the shell, and the sidebar returns to the shell's in-memory behavior.
-  A DSH update that ships a new layout package needs the feature re-checked.
+  After attaching, a render-frame self-check confirms the rendered column over
+  three consecutive frames on a wide, unfolded viewport; a confirmed mismatch
+  also stops all writes (inert) rather than writing into a detached store. A DSH
+  update that ships a new layout package needs the feature re-checked.
+- **A slow Host cannot roll the width back.** Host answers that arrive after a
+  newer drag or local write are discarded (local-write generation), and every
+  sync fetch times out after **8 s**; the last local intent always wins locally.
+  The catch is the opposite direction: a width changed on another device is not
+  adopted mid-drag or while collapsed, and a tab that keeps dragging can
+  overwrite a newer remote value (see the last-write-wins bullet).
+- **Boot applies at attach, not guaranteed pre-paint.** The cached width is
+  applied as soon as the layout store seat is attached; the attach is retried
+  briefly because the shell plugin may load after this one, so a slow shell can
+  show the default for a frame before the stored width lands.
 - **Before the Host restarts, the browser cache is the authority.** The route
   exists only after the plugin's Host half is reloaded. Until then the page is
   local-only per origin: the cache still applies on boot and survives a reload,

@@ -84,12 +84,15 @@
  * checks the persisted/synced sidebar width: handle + measured width (lw-1), live
  * atmosphere canvas on the current row (lw-2), the flicker oracle over a ~10-step drag
  * (lw-3: stable canvas element identity, ≥1 backing-store resize, 0 blank bitmap
- * samples), the localStorage cache + seam `probe()` after the drag (lw-4), reload
- * persistence (lw-5), the Host route + second-fresh-profile cross-device adoption (lw-6,
- * explicit SKIP while the running Host predates the merged route), and the restore of
- * the pre-run width through the same drag (lw-7). It restores the pre-run width in a
- * `finally` block and reports the residual browser cache / Host document honestly; while
- * the Host route is absent only the throwaway profile's localStorage is written.
+ * samples, with `prefers-reduced-motion` forced to no-preference so the oracle always
+ * exercises the animated renderer), the localStorage cache + seam `probe()` after the
+ * drag (lw-4), reload persistence (lw-5), the Host route + second-fresh-profile
+ * cross-device adoption (lw-6, explicit SKIP while the running Host predates the merged
+ * route), the collapse→reopen restore of the stored width instead of the native 280 px
+ * default (lw-8), and the restore of the pre-run width through the same drag (lw-7). It
+ * restores the pre-run width in a `finally` block and reports the residual browser cache /
+ * Host document honestly; while the Host route is absent only the throwaway profile's
+ * localStorage is written.
  *
  * Usage:
  *   node test/browser/sidebar.e2e.mjs                 # full run (screenshots into .tmp-work/)
@@ -10573,21 +10576,36 @@ async function runLayoutWidthChecks({ page, results, state }) {
   state.mode = 'layout'
   state.layout = { startedAt: Date.now() }
   state.sidebarWidthShared = null
+  // The flicker oracle needs the animated renderer: the old renderer already
+  // redrew synchronously under reduced motion, so a reduced-motion page would
+  // pass lw-3 against the pre-fix client and silently weaken the oracle. Force
+  // the standard motion preference for this mode only (throwaway profile).
+  await page.emulateMedia([{ name: 'prefers-reduced-motion', value: 'no-preference' }]).catch(() => {})
+  log('layout motion preference: prefers-reduced-motion=no-preference (flicker oracle needs the animated renderer)')
 
   await results.check('lw-1', 'native sidebar drag handle present; current sidebar column width measured', async () => {
     await page.waitForFn(() => document.querySelector('[class*="_sidebarCol"]') !== null, [], { timeout: 20000, label: 'sidebar column' })
     let facts = await readSidebarShell(page)
     if (facts === null || facts.handle === null) {
       // A fresh profile starts expanded; recover a collapsed sidebar through the shell's
-      // own control (a normal user action) before declaring the handle missing.
+      // own control (a normal user action) before declaring the handle missing. The
+      // collapsed rail exposes `[data-sidebar-opener]`; the labels are a fallback for
+      // shell builds without that attribute.
       const expand = await page.eval(() => {
-        const labels = ['Expand sidebar', '展开侧边栏', '展开边栏']
-        const button = [...document.querySelectorAll('button')].find((element) => labels.includes((element.getAttribute('aria-label') ?? '').trim()))
-        if (button === null) return null
+        const labelled = ['Expand sidebar', 'Open sidebar', '展开侧边栏', '打开侧边栏', '展开边栏']
+        const candidates = [
+          ...document.querySelectorAll('[data-sidebar-opener]'),
+          ...document.querySelectorAll('[data-sidebar-toggle]'),
+          ...[...document.querySelectorAll('button')].filter((element) => labelled.includes((element.getAttribute('aria-label') ?? '').trim())),
+        ]
+        const button = candidates.find((element) => {
+          const rect = element.getBoundingClientRect()
+          return rect.width > 0 && rect.height > 0
+        })
+        if (button === undefined) return null
         const rect = button.getBoundingClientRect()
-        if (rect.width <= 0 || rect.height <= 0) return null
         return {
-          label: button.getAttribute('aria-label'),
+          label: button.getAttribute('aria-label') ?? button.getAttribute('data-sidebar-opener') ?? '',
           x: Math.round(rect.left + rect.width / 2),
           y: Math.round(rect.top + rect.height / 2),
         }
@@ -10640,12 +10658,24 @@ async function runLayoutWidthChecks({ page, results, state }) {
     const pre = state.layout.preWidth
     assert(typeof pre === 'number' && pre > 0, 'the pre-run sidebar width was not measured (lw-1 failed first)')
     await ensureLayoutAtmosphere(page)
+    // The oracle only discriminates the missing synchronous resize repaint while
+    // the animated renderer runs; reduced motion already repainted synchronously in
+    // the pre-fix client. The mode forces prefers-reduced-motion=no-preference above.
+    const paint = await page.eval(probeLayout.canvasPaint)
+    const animatedCurrent = paint.filter((canvas) => canvas.visible
+      && canvas.motion === 'animated' && canvas.running === 'true'
+      && (canvas.currentWorkspace === true || canvas.currentSession === true))
+    assert(animatedCurrent.length > 0,
+      `the flicker oracle needs an animated, running current-row atmosphere canvas (motion facts: ${short(JSON.stringify(paint.map((canvas) => ({ wrapper: canvas.wrapper, rowKey: canvas.rowKey, motion: canvas.motion, running: canvas.running }))), 320)})`)
     await page.eval(probeLayout.disarmFlicker).catch(() => false)
     const armed = await page.eval(probeLayout.armFlicker)
     state.layout.armed = armed
     assert(armed.count > 0, 'no atmosphere canvas exists to sample (the current-row rainbow is not mounted)')
     const oracle = armed.canvases.find((canvas) => canvas.currentWorkspace === true) ?? armed.canvases.find((canvas) => canvas.currentSession === true) ?? null
     assert(oracle !== null, `no atmosphere canvas on a current Workspace/Session row (armed: ${short(JSON.stringify(armed.canvases), 300)})`)
+    const animatedOracle = animatedCurrent.find((canvas) => canvas.rowKey === oracle.rowKey && canvas.wrapper === oracle.wrapper) ?? null
+    assert(animatedOracle !== null,
+      `the selected oracle canvas (wrapper ${oracle.wrapper}, row ${oracle.rowKey}px) is not one of the animated current-row canvases (${short(JSON.stringify(animatedCurrent.map((canvas) => ({ wrapper: canvas.wrapper, rowKey: canvas.rowKey }))), 240)})`)
     state.layout.oracleId = oracle.id
     // Choose the ±40 px direction that stays inside the shell's 264..420 drag range.
     let delta = SIDEBAR_DRAG_TOTAL_PX
@@ -10842,6 +10872,88 @@ async function runLayoutWidthChecks({ page, results, state }) {
       return `Host GET 200 ${short(JSON.stringify(host.payload), 120)}; second fresh profile adopted ${second.adopted.width}px (probe attached=${secondProbe?.attached ?? 'n/a'}, cache ${short(second.seam?.cacheRaw, 160)}), 0 page errors (${second.logEntries.length} non-JS console/log entries)`
     })
   }
+
+  await results.check('lw-8', 'collapsing and reopening the sidebar restores the stored width instead of the native 280 px default', async () => {
+    const persisted = state.layout.draggedWidth ?? null
+    assert(typeof persisted === 'number' && persisted > 0, 'no dragged width was recorded (lw-3/lw-4 failed first); the collapse/reopen restore cannot be asserted')
+    // The shell exposes different controls per platform/presentation: the frame's
+    // `shell.leading` opener for a fully hidden sidebar (macOS), the collapsed rail's
+    // own toggle otherwise. Accept the first visible one from an ordered candidate list.
+    const controlCentre = async (selectors) => page.eval((sels) => {
+      for (const sel of sels) {
+        for (const button of document.querySelectorAll(sel)) {
+          const rect = button.getBoundingClientRect()
+          if (rect.width > 0 && rect.height > 0) {
+            return { selector: sel, x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+          }
+        }
+      }
+      return null
+    }, selectors)
+    const waitCollapsed = async (expected) => {
+      const deadline = Date.now() + 8000
+      let collapsed = null
+      while (Date.now() < deadline) {
+        const facts = await readSidebarShell(page)
+        if (facts !== null) {
+          collapsed = facts.collapsed
+          if (collapsed === expected) return true
+        }
+        await sleep(150)
+      }
+      return false
+    }
+    // Collapse through the shell's own toggle, then reopen through the shell's
+    // opener (frame `shell.leading` on macOS, the collapsed rail's own toggle
+    // otherwise); both are normal user actions and the shell writes 0 -> 280 on
+    // that cycle, so a stored-width result can only come from the feature's restore.
+    const toggle = await controlCentre(['[data-sidebar-toggle]'])
+    assert(toggle !== null, 'the shell sidebar toggle [data-sidebar-toggle] is missing')
+    await page.clickAt(toggle.x, toggle.y)
+    assert(await waitCollapsed(true), 'the sidebar did not collapse after clicking the shell toggle')
+    const openerSelectors = ['[data-sidebar-opener]', '[data-sidebar-toggle]']
+    let opener = await controlCentre(openerSelectors)
+    assert(opener !== null, 'the collapsed sidebar exposes neither [data-sidebar-opener] nor a rail [data-sidebar-toggle]')
+    // The 56 px rail expands on hover with a transition, so the button can move
+    // between press and release; settle the pointer first and re-measure before clicking.
+    await page.mouse({ type: 'mouseMoved', x: opener.x, y: opener.y })
+    await sleep(350)
+    opener = await controlCentre(openerSelectors)
+    assert(opener !== null, 'the collapsed sidebar control disappeared after the hover settle')
+    await page.clickAt(opener.x, opener.y)
+    let reopenedBy = `real pointer click on ${opener.selector}`
+    if (!(await waitCollapsed(false))) {
+      // Deterministic fallback for this rail transition: activate the same control
+      // with a DOM click so the restore behavior under test is still exercised. The
+      // row detail records the fallback honestly.
+      const clicked = await page.eval((sels) => {
+        for (const sel of sels) {
+          for (const element of document.querySelectorAll(sel)) {
+            const rect = element.getBoundingClientRect()
+            if (rect.width > 0 && rect.height > 0) {
+              element.click()
+              return sel
+            }
+          }
+        }
+        return null
+      }, openerSelectors)
+      reopenedBy = clicked === null ? 'no visible shell control' : `DOM click fallback on ${clicked}`
+    }
+    assert(await waitCollapsed(false), `the sidebar did not reopen after activating the shell opener (${reopenedBy})`)
+    const reopened = await waitSidebarWidth(page, persisted, { tolerance: 1, timeout: 8000, label: 'stored sidebar width after reopening' })
+    const facts = await readSidebarShell(page)
+    assert(facts !== null && facts.collapsed === false, 'the sidebar reported collapsed again after reopening')
+    // The restore is a store write, not a drag: it must not persist the native 280.
+    await sleep(900)
+    const seam = await page.eval(probeLayout.sidebarWidthState).catch(() => null)
+    const cache = seam === null ? null : parseSidebarWidthCache(seam.cacheRaw)
+    if (cache !== null && cache.sidebarWidth !== null) {
+      assertNear(cache.sidebarWidth, persisted, 1, 'reopening must not persist the native 280 px default over the stored width')
+    }
+    state.layout.reopen = { collapsed: true, reopened, via: reopenedBy, cacheRaw: seam?.cacheRaw ?? null }
+    return `collapsed via ${toggle.selector}, reopened via ${opener.selector} (${reopenedBy}) at the stored ${reopened}px (the native 280 px default was not accepted), cache ${short(seam?.cacheRaw, 120)}`
+  })
 
   await results.check('lw-7', 'cleanup restores the pre-run width through the same drag and reports the residuals honestly', async () => {
     const pre = state.layout.preWidth
@@ -11107,6 +11219,7 @@ async function run() {
   if (state.mode === 'layout') {
     log(`layout baseline: pre-run sidebar ${state.layout?.preWidth ?? 'n/a'}px; dragged ${state.layout?.draggedWidth ?? 'n/a'}px; injected/served client ${state.clientSource.length} bytes; host route ${state.sidebarWidthShared === true ? 'LIVE (200)' : 'absent pre-restart'}`)
     log(`layout flicker: oracle canvas ${state.layout?.oracleId ?? 'n/a'}; ${state.layout?.flicker?.ro?.length ?? 0} in-frame resize sample(s); per-step samples ${state.layout?.steps?.length ?? 0}`)
+    log(`layout reopen: collapsed->reopened at ${state.layout?.reopen?.reopened ?? 'n/a'}px via ${state.layout?.reopen?.via ?? 'n/a'}; cache ${short(state.layout?.reopen?.cacheRaw ?? null, 160)}`)
     log(`layout evidence: ${state.layoutEvidence ? state.layoutEvidence.join(', ') : 'none'}`)
     log(`layout cleanup: ${state.layoutCleanup ? short(JSON.stringify(state.layoutCleanup), 1800) : 'not run'}`)
     if (page !== null && Array.isArray(page.sidebarWidthRouteWrites)) {

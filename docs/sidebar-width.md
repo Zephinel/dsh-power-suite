@@ -40,9 +40,12 @@ $DSH_HOME/dsh-power-suite/sidebar-width.json
 
 - `sidebarWidth` is an integer inside the shell's own range, **264–420 px**, or
   `null` when no width has been stored yet.
-- A missing, unreadable, malformed, unknown-version, or out-of-range document
-  reads as the default (unset) document. A broken preference file cannot disable
-  the feature.
+- A missing, empty, malformed, unknown-version, or out-of-range document reads
+  as the default (unset) document, so a broken preference file cannot disable the
+  feature. A document that exists but cannot be **read** (IO/permission failure)
+  is different: the store throws its typed read failure, the route answers `500
+  store-read-failed`, and the file is never overwritten by a blind write — the
+  last known width is retried instead of being silently replaced.
 - Writes are atomic (temporary sibling + rename, `0600`), serialized on one
   promise chain, and the in-memory value is published only after the rename.
   There is no revision or operation log: this is one scalar preference and the
@@ -81,9 +84,11 @@ The browser keeps a per-origin `localStorage` cache under
 `pending: true` means the local width has not been confirmed by the Host yet.
 
 1. **Boot.** The cached width is read synchronously and applied through the
-   shell's own layout action before first paint, so a repeat visit does not flash
-   the default width. It is applied only when the current preference is not the
-   collapsed `0`.
+   shell's own layout action as soon as the layout store seat is attached (the
+   attach is retried briefly because the shell plugin may load after this one, so
+   a slow shell can show the default for a frame), which normally keeps a repeat
+   visit from flashing the default width. It is applied only when the current
+   preference is not the collapsed `0`.
 2. **Initial sync.** One sync runs asynchronously after attach: a pending cache
    is POSTed, otherwise the Host is GET; a Host width is adopted and cached. When
    the Host has no width, the local width is POSTed to seed the document. A
@@ -121,9 +126,12 @@ plugin's disposer.
 If no compatible store can be attached, the feature stays **inert**: it reads and
 writes nothing, reports `attached: false` through its test seam, and the sidebar
 keeps the shell's in-memory behavior. After attaching, a render-frame self-check
-on a wide viewport (where the rendered sidebar column should equal the applied
-preference, ±1 px) drops back to inert without throwing when they disagree, so a
-shell change surfaces as a missing feature rather than a wrong width.
+compares the rendered sidebar column with the applied preference on a wide,
+unfolded viewport (±1 px, confirmed over three consecutive frames; the
+folded-landscape centered presentation and the collapsed/narrow states are
+skipped). A confirmed mismatch marks the seat unreachable: the feature stops
+writing, reports `attached: false`, and the shell keeps its in-memory behavior, so
+a shell change surfaces as a missing feature rather than a wrong width.
 
 ## Interactions
 
@@ -132,8 +140,11 @@ shell change surfaces as a missing feature rather than a wrong width.
 A drag is still handled entirely by the shell; the feature only observes the
 store. Each drag frame updates the shell's width, and 300 ms after the last change
 the final value is cached and POSTed. After a reload the cached (or Host) width is
-applied before the first paint, so a stored 320 px sidebar does not flash at
-280 px and then jump.
+applied as soon as the layout seat is attached (attach is retried if the shell
+loads later), so a stored 320 px sidebar does not normally flash at 280 px and
+then jump. Async Host answers are discarded when a newer local drag or write has
+landed in the meantime, and every sync fetch times out after eight seconds so one
+stalled request cannot wedge syncing.
 
 ### Collapsing and reopening
 
@@ -204,9 +215,10 @@ node test/browser/sidebar.e2e.mjs --layout
   worktree's `client.js` injected, performs a real CDP drag of the sidebar handle,
   and checks the flicker oracle (stable canvas identity, an observed backing-store
   resize, and non-blank pixels at every drag sample), the post-drag cache and seam
-  probe, persistence across a reload, the Host route and a second fresh browser
-  profile adopting the width, with an explicit SKIP row while the Host route is
-  absent before the service restart.
+  probe, persistence across a reload, the collapse→reopen restore (the stored width
+  must win over the native 280 px default), the Host route and a second fresh
+  browser profile adopting the width, with an explicit SKIP row while the Host
+  route is absent before the service restart.
 
 Both `node --test` suites run under `npm test` (`node --test test/*.test.js`).
 These commands are the feature's evidence path; the measured acceptance is
@@ -216,23 +228,34 @@ summarized below and recorded in full in [verification.md](verification.md).
 
 - Environment: Node **v24.22.3**, headless Chrome **157.0.8103.79**, viewport
   **1728×900**, throwaway profile; injected `src/client.js` md5
-  **`40e53d31744576696332e8ca73914e20`** (1,218,053 chars / 1,223,244 bytes).
-- `npm test`: **336/336 pass**, including the Host suite (**17/17**) and
-  browser-helper suite (**8/8**); `npm run check`: **exit 0** (`entryCount` 88).
-- `node test/browser/sidebar.e2e.mjs --layout`: **exit 0, PASS 10 / SKIP 1 /
-  FAIL 0**, 0 page errors, 0 real network failures, **11.9 s**. Drag 280→320 px:
-  handle/column measured at 280 px, both atmosphere canvases painted (258×34,
-  258×32), the flicker oracle observed **9 per-step + 20 in-frame** backing-store
-  resizes with **0 blank samples** (0/10 per-step, 0/22 in-frame), the cache held
+  **`7fff81b238fab5bea798c833ec0e9984`** (1,223,099 chars / 1,228,290 bytes).
+- `npm test`: **337/337 pass**, including the Host suite (**17/17**) and
+  browser-helper suite (**9/9**); `npm run check`: **exit 0** (`entryCount` 88).
+- `node test/browser/sidebar.e2e.mjs --layout`: **exit 0, PASS 11 / SKIP 1 /
+  FAIL 0**, 0 page errors, 0 real network failures, **9.3 s**. The mode forces
+  `prefers-reduced-motion: no-preference` so the flicker oracle always runs the
+  animated renderer. Drag 280→320 px: handle 8 px at x=280 and column 280 px,
+  both atmosphere canvases painted (258×34, 258×32), the flicker oracle observed
+  **9 per-step + 20 in-frame** backing-store resizes with **0 blank samples**
+  (0/10 per-step, 0/22 in-frame), the cache held
   `{"version":1,"sidebarWidth":320,"pending":true}`, a reload restored 320 px,
-  and cleanup returned the width to 280 px.
+  the collapse→reopen cycle (`lw-8`) reopened at the stored 320 px through a real
+  pointer click on the shell toggle instead of the native 280 px, and cleanup
+  returned the width to 280 px.
 - `lw-6` is an explicit **SKIP**: `GET /api/power-suite.sidebar-width` answered
   **404** because the running Host predates the merged plugin, so the Host
   round-trip and second-profile adoption are a post-restart re-run; the
   per-origin cache is authoritative until then.
-- Negative control: the same mode against the pre-fix client **fails `lw-3`** on
-  blank samples while every other row stays green, so the oracle discriminates.
-  `--smoke`: **4/4 pass**, exit 0, **5.5 s**.
+- Negative control: the same mode against the fixed client with **only the
+  synchronous resize repaint reverted** fails `lw-3` on blank samples (drag steps
+  1/8/9, PASS 10 / SKIP 1 / FAIL 1) while every feature row stays green, so the
+  oracle discriminates. `--smoke`: **4/4 pass**, exit 0, **2.2 s**.
+- A post-review hardening round added: local-write generation guards (Host
+  answers older than the newest drag/write are discarded), an **8 s** timeout on
+  every sync fetch, a three-consecutive-frame self-check that marks an
+  unavailable seat unreachable (inert) while skipping the folded-landscape
+  centered presentation, and the `lw-8` collapse→reopen acceptance (plus a pure
+  reopen decision and its unit test).
 
 ## Limitations
 

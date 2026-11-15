@@ -170,8 +170,10 @@ only, so the suite stores one scalar preference and serves it to every
 browser/profile on the same `$DSH_HOME`. The Host document is
 `$DSH_HOME/dsh-power-suite/sidebar-width.json`, schema version 1,
 `{ version, sidebarWidth }`, with `sidebarWidth` an integer in the shell's
-264–420 px clamp or `null` when unset; a missing, unreadable, malformed,
-unknown-version, or out-of-range file reads as the unset document. The store
+264–420 px clamp or `null` when unset; a missing, empty, malformed,
+unknown-version, or out-of-range file reads as the unset document (an existing
+but unreadable file is the typed `SIDEBAR_WIDTH_READ_FAILED` → `500`
+`store-read-failed` path instead, and is never overwritten blindly). The store
 loads single-flight (a non-ENOENT read failure resets the cached promise and
 throws typed `SIDEBAR_WIDTH_READ_FAILED` so a later call retries) and writes
 atomically (temporary sibling + rename, `0600`, serialized chain, value published
@@ -183,11 +185,15 @@ non-JSON, `413` too large, `400` malformed body or invalid field, `500`
 `store-read-failed` / `500` `store-failed`), every response `no-store`. The
 browser half keeps a per-origin `localStorage` cache
 `power-suite.sidebar-width` (`{ version, sidebarWidth, pending }`, `pending` =
-not yet confirmed by the Host), applies it **before first paint**, runs one
+not yet confirmed by the Host), applies it as soon as the layout store seat is
+attached (the attach is retried briefly), runs one
 initial sync (POST when pending, otherwise GET; a `null` Host width is seeded
 with the local value), debounces drag-store changes **300 ms** into a cache write
 + POST, and re-syncs on `focus`/`visibilitychange` and a **30 s** interval while
-pending. On a wide viewport the collapsed `0` is never persisted or adopted,
+pending. A monotonically increasing local-write generation drops Host responses
+that arrive after a newer drag/write, and every sync fetch carries an **8 s**
+timeout, so a slow or stalled route cannot roll the live width back or wedge the
+sync flags. On a wide viewport the collapsed `0` is never persisted or adopted,
 and a `0 → positive` transition that is not a drag re-applies the persisted width
 instead of the native 280 px; the shell's narrow-viewport rail/drawer states
 change only a presentation override, never the preference. Remote widths are

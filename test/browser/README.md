@@ -605,12 +605,13 @@ verifies one is open and leaves it untouched), and it restores the pre-run width
 | # | Check | Oracle |
 |---|-------|--------|
 | `smoke-1..4` | Pipeline | Injected worktree client ran; card mounted; a current Session is open and untouched (layout mode does **not** run `ensureBlankSession`, so no Session is created); 1728x900 screenshot round-trip |
-| `lw-1` | Drag handle + width measurement | native `[data-side="sidebar"]` handle visible (a collapsed sidebar is recovered through the shell's own Expand control first), its centre sits on the sidebar column's right edge (±1 px), and the rendered `_sidebarCol` grid track is measured (e.g. 280 px, grid `280px 1448px 0px`) |
+| `lw-1` | Drag handle + width measurement | native `[data-side="sidebar"]` handle visible (a collapsed sidebar is recovered through the shell's own `[data-sidebar-opener]` control, with the Expand/Open aria-labels as fallback, first), its centre sits on the sidebar column's right edge (±1 px), and the rendered `_sidebarCol` grid track is measured (e.g. 280 px, grid `280px 1448px 0px`) |
 | `lw-2` | Live atmosphere on the current row | every `.psd-atmos-canvas` is measured; at least one canvas on a `[data-psd-current-workspace="true"]` or `[data-psd-current-session="true"]` row is visible with a non-empty drawing buffer and non-zero 7×7 `getImageData` grid sum; its `data-psd-atmos-motion`/`data-psd-atmos-running` renderer state is asserted |
-| `lw-3` | **Flicker oracle** (real drag) | real CDP drag of the handle across 10 steps, ±40 px in the direction that stays inside 264..420 px. (a) the current-row canvas **element identity** is unchanged in every step sample; (b) **≥1 backing-store resize** is observed during the drag (per-step canvas `width/height` change and/or in-frame resize samples); (c) **0 blank bitmap samples**: every per-step sample must have a non-zero 7×7 pixel-grid sum, and a second, deterministic oracle samples the bitmap from a `ResizeObserver` registered *after* the client's own observer — same resize-notification task, before the browser paints — so a resize that is not repainted synchronously is caught even in the frame where it clears the canvas. PASS = 10 step samples, 0 blank samples, ≥1 resize, stable identity. Per-step and in-frame data is written to `.tmp-work/sidebar-width/e2e/layout-drag-samples-*.json` |
+| `lw-3` | **Flicker oracle** (real drag) | real CDP drag of the handle across 10 steps, ±40 px in the direction that stays inside 264..420 px. The mode forces `prefers-reduced-motion: no-preference` first, and the selected oracle canvas must be an **animated, running** current-row canvas: reduced motion already repainted synchronously in the pre-fix client, so without that guard the oracle could silently stop discriminating. (a) the current-row canvas **element identity** is unchanged in every step sample; (b) **≥1 backing-store resize** is observed during the drag (per-step canvas `width/height` change and/or in-frame resize samples); (c) **0 blank bitmap samples**: every per-step sample must have a non-zero 7×7 pixel-grid sum, and a second, deterministic oracle samples the bitmap from a `ResizeObserver` registered *after* the client's own observer — same resize-notification task, before the browser paints — so a resize that is not repainted synchronously is caught even in the frame where it clears the canvas. PASS = 10 step samples, 0 blank samples, ≥1 resize, stable identity. Per-step and in-frame data is written to `.tmp-work/sidebar-width/e2e/layout-drag-samples-*.json` |
 | `lw-4` | Cache + client seam after the drag | `localStorage['power-suite.sidebar-width']` exists and parses as `{version:1, sidebarWidth, pending}`; `sidebarWidth` equals the rendered dragged width (±1); `pending` is a boolean. `__POWER_SUITE_TEST_HOOKS__.sidebarWidth.probe()` reports `attached:true`, `storeWidth`/`desiredWidth` equal to the rendered width (±1) and the same parsed cache (a missing seam is a FAIL, never a fake PASS) |
-| `lw-5` | Reload persistence | `Page.reload()` with the injected client; the rendered sidebar width returns to the dragged width (±1, polled up to 15 s) and the seam reports `attached:true` with the same `storeWidth`; the cache survives the reload. (The "no 280 flash" pre-paint application is covered by the client unit tests, not observable after the fact here) |
+| `lw-5` | Reload persistence | `Page.reload()` with the injected client; the rendered sidebar width returns to the dragged width (±1, polled up to 15 s) and the seam reports `attached:true` with the same `storeWidth`; the cache survives the reload. (The boot apply runs as soon as the layout store seat is reachable — the client retries attach briefly — so it is not a guaranteed first-paint write; the decision itself is unit-tested) |
 | `lw-6` | Host route + cross-device adoption | same-origin authenticated `GET /api/power-suite.sidebar-width`. **200**: `{version:1, sidebarWidth}` must equal the dragged width (±1), then a **second fresh `--user-data-dir`** profile (same injected client, empty cache) must adopt the Host width on load (`probe().attached:true`, cache records it, 0 page errors in that profile). **404**: explicit **SKIP** row — “Host route loads after the DSH Web service restart” — the running Host process predates the merged route and the per-origin browser cache is authoritative (covered by `lw-4`/`lw-5`) |
+| `lw-8` | Collapse → reopen restores the stored width | after the drag, the shell's own `[data-sidebar-toggle]` collapses the sidebar (asserting `data-sidebar-collapsed`), then `[data-sidebar-opener]` reopens it; the rendered width must return to the **stored dragged width** (±1) instead of the shell's native 280 px default, and the cache must not have been overwritten with 280. This closes the headline "reopening restores the persisted width" behavior end to end |
 | `lw-7` | Cleanup restores the pre-run width + residual report | the width is dragged back to the pre-run width through the same handle; the rendered width must equal the pre-run width (±1). If the Host route is live the Host document is restored to its pre-run value (direct `POST` fallback if the debounced client write did not land) and the residual document is asserted; the throwaway-profile cache and Host document are printed honestly. Pre-restart the route is 404, no Host document is written, and only the throwaway profile's `localStorage` is written (deleted with the profile) |
 
 The expected pre-restart `sidebar-width` route probes (client boot GET/POST, the drag save,
@@ -639,6 +640,9 @@ failure or fatal error; `2` for usage errors.
 - Browser-side writes are confined to the throwaway Chrome profile: the feature's
   `power-suite.sidebar-width` cache (and the client's own boot/drag sync probes), removed
   with the temporary `--user-data-dir` when Chrome is terminated.
+- `lw-8` collapses and reopens the sidebar once through the shell's own
+  `[data-sidebar-toggle]` / `[data-sidebar-opener]` controls in the throwaway page (a normal
+  user gesture); it never touches the user's profile or page state.
 - Host-side writes while the route is absent: **none** (the route returns 404, so the
   client's documented sync probes fail and stay `pending` in the per-origin cache).
 - Once the Host route is live the feature writes the width document at boot (first-writer
@@ -672,7 +676,11 @@ failure or fatal error; `2` for usage errors.
   direction is chosen to stay inside it. The pre-run width is the rendered grid track, not
   an assumed default, so a user-configured width is restored exactly (and reported).
 - The reload assertion covers the restored final width and the seam, not the absence of a
-  first-paint default flash (the client boot ordering is unit-tested).
+  brief default-width frame before the layout store seat attaches; attach is retried rather
+  than guaranteed pre-paint, and the boot decision itself is unit-tested.
+- The `lw-8` reopen assertion needs the shell's toggle/opener controls; the pinned
+  `dsh-client-ui-sidebar@0.2.2-rc.1` renders `[data-sidebar-toggle]` and
+  `[data-sidebar-opener]`, so a shell build without them fails the row loudly.
 - The expected pre-restart route probes also appear as Chrome's non-JS console
   "Failed to load resource: 404" log entries; they are printed with the non-JS console/log
   count (reported for triage, not counted as page errors, and not part of the exit gate).
@@ -698,8 +706,11 @@ failure or fatal error; `2` for usage errors.
   one existing nested subagent Session (real row clicks, no typing) to make them current,
   then switch back to a main Session for the native current-row checks; these are existing
   Sessions only and are never edited.
-- The `--live` mode is read-only: no pin/unpin, no settings change, only the card's own
-  "View all" view-state click.
+- The `--live` mode is read-only apart from the shipped client's own background behavior:
+  no pin/unpin, no settings change, only the card's own "View all" view-state click. Once
+  the sidebar-width Host route is live, the shipped client's boot sync can **seed**
+  `$DSH_HOME/dsh-power-suite/sidebar-width.json` from the rendered width on each page load
+  (first-writer seed); this is the feature's documented behavior, not a harness write.
 - Expected pre-restart console noise: while the Host route is absent, the client's
   documented GET/POST probes return 404. `--pin` classifies those network entries
   separately (reported, not counted as real failures); the untouched full-mode check
@@ -1138,7 +1149,8 @@ bottom 232/232), annotation S2/S5/S8 **7/0/0 each** (9.3/8.2/12.5 s,
   profiles of the same Host, not a second physical device.
 - The card pin writes user data: a hard crash after a pin click can leave the two logged
   ids in the cache/Host; the run prints them and the documented cleanup is unpinning via
-  the card. `--live` is read-only.
+  the card. `--live` is read-only except for the shipped client's own boot sync, which can
+  seed the sidebar-width Host document once that route is live.
 - Headless Chrome on one display/zoom level and the GUI's current UI language (English
   labels observed; ZH copy is unit-tested only). Chrome normalizes
   `corner-shape: round` to `superellipse(1)`, so the R1 oracle compares against a synthetic

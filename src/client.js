@@ -23636,6 +23636,12 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
     /** Viewport below which the shell auto-collapses the sidebar (its own breakpoint). */
     const SIDEBAR_WIDTH_CHECK_VIEWPORT_MIN = 1024
 
+    /** One sync fetch may not wedge the state machine forever. */
+    const SIDEBAR_WIDTH_FETCH_TIMEOUT_MS = 8000
+
+    /** Consecutive mismatching self-check frames before the seam is declared unreachable. */
+    const SIDEBAR_WIDTH_SELF_CHECK_LIMIT = 3
+
     /** Live attach state read by the browser E2E probe (reads only, never writes). */
     const sidebarWidthRuntime = {
       attached: false,
@@ -23761,6 +23767,21 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         return false
       }
       return Math.round(facts.currentWidth) !== facts.remoteWidth
+    }
+
+    /**
+     * Decide whether a `0 -> positive` shell toggle must re-apply the durable
+     * width. The native toggle writes the contract default (280) on reopen, but
+     * a persisted preference wins; a real drag is never fought.
+     * @param {{ preferenceWidth?: unknown, width?: unknown, dragging?: unknown }} input - reopen facts.
+     * @returns {number | null} width to re-apply, or null for no write.
+     */
+    function sidebarWidthReopenRestore(input) {
+      const facts = input !== null && typeof input === 'object' ? input : {}
+      if (facts.dragging === true) return null
+      if (!isValidSidebarWidth(facts.preferenceWidth)) return null
+      if (typeof facts.width !== 'number' || !Number.isFinite(facts.width) || facts.width <= 0) return null
+      return Math.round(facts.width) === facts.preferenceWidth ? null : facts.preferenceWidth
     }
     //#endregion
 
@@ -23934,6 +23955,12 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         let attachGiveUpTimer = 0
         let slotsUnsubscribe = null
         let storeUnsubscribe = null
+        /** Local write generation: async Host responses older than the newest local intent are dropped. */
+        let localGeneration = 0
+        /** Set when the render-frame self-check proves the attached seat is not the rendered store. */
+        let seamUnreachable = false
+        /** Consecutive self-check mismatch frames; a transient layout frame must not latch. */
+        let selfCheckMismatches = 0
 
         sidebarWidthRuntime.attached = false
         sidebarWidthRuntime.storeWidth = null
@@ -23962,7 +23989,7 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
          * @returns {void}
          */
         const applyStoreWidth = (width) => {
-          if (instance === null || disposed) return
+          if (instance === null || disposed || seamUnreachable) return
           const clamped = clampSidebarWidth(width)
           if (clamped === null) return
           const current = sidebarWidthStoreValue(instance)
@@ -23973,6 +24000,7 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
             // A failed write leaves the previous preference in place.
           } finally {
             applyingRemote = false
+            localGeneration += 1
             lastObservedWidth = clamped
             sidebarWidthRuntime.storeWidth = clamped
           }
@@ -23993,15 +24021,28 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         }
 
         /**
+         * A bounded fetch signal so one stalled request cannot wedge the sync
+         * flags until reload.
+         * @returns {AbortSignal | undefined} the timeout signal when supported.
+         */
+        const sidebarWidthFetchSignal = () => {
+          if (typeof AbortSignal === 'object' && AbortSignal !== null && typeof AbortSignal.timeout === 'function') {
+            return AbortSignal.timeout(SIDEBAR_WIDTH_FETCH_TIMEOUT_MS)
+          }
+          return undefined
+        }
+
+        /**
          * One POST of a local width. Marks the cache pending before the request
          * so a crash/reload still knows the Host may be behind.
          * @param {number} width - positive width inside the range.
          * @returns {Promise<boolean>} whether the Host confirmed the write.
          */
         const saveSidebarWidth = async (width) => {
-          if (disposed || typeof width !== 'number' || !Number.isFinite(width) || width <= 0) return false
+          if (disposed || seamUnreachable || typeof width !== 'number' || !Number.isFinite(width) || width <= 0) return false
           const clamped = clampSidebarWidth(width)
           if (clamped === null) return false
+          const generation = localGeneration
           writeSidebarWidthCache({ sidebarWidth: clamped, pending: true })
           sidebarWidthRuntime.desiredWidth = clamped
           sidebarWidthRuntime.syncState = 'pending'
@@ -24009,12 +24050,14 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
           saveInFlight = true
           let payload = null
           try {
+            const signal = sidebarWidthFetchSignal()
             const response = await fetch(appUrl(SIDEBAR_WIDTH_ROUTE), {
               method: 'POST',
               credentials: 'same-origin',
               cache: 'no-store',
               headers: { 'content-type': 'application/json', accept: 'application/json' },
-              body: JSON.stringify({ sidebarWidth: clamped })
+              body: JSON.stringify({ sidebarWidth: clamped }),
+              ...(signal === undefined ? {} : { signal })
             })
             if (response.ok) payload = normalizeSidebarWidthPayload(await response.json())
           } catch {
@@ -24022,6 +24065,9 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
           } finally {
             saveInFlight = false
           }
+          // A newer drag/local intent owns the state now: this response is stale,
+          // so it must not confirm the width or clear the pending flag.
+          if (disposed || generation !== localGeneration) return false
           if (payload !== null && payload.ok) {
             const confirmed = isValidSidebarWidth(payload.sidebarWidth) ? payload.sidebarWidth : clamped
             lastPersisted = confirmed
@@ -24042,10 +24088,12 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
          */
         const fetchSidebarWidth = async () => {
           try {
+            const signal = sidebarWidthFetchSignal()
             const response = await fetch(appUrl(SIDEBAR_WIDTH_ROUTE), {
               credentials: 'same-origin',
               cache: 'no-store',
-              headers: { accept: 'application/json' }
+              headers: { accept: 'application/json' },
+              ...(signal === undefined ? {} : { signal })
             })
             if (!response.ok) return null
             const payload = normalizeSidebarWidthPayload(await response.json())
@@ -24059,7 +24107,8 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         const syncSidebarWidth = async () => {
           // A queued debounce or an in-flight write is newer than anything the
           // Host could answer with: never let a read race a local width.
-          if (disposed || instance === null || syncInFlight || saveInFlight || pendingWidth !== null) return
+          if (disposed || seamUnreachable || instance === null || syncInFlight || saveInFlight || pendingWidth !== null) return
+          const generation = localGeneration
           syncInFlight = true
           try {
             const cache = readSidebarWidthCache()
@@ -24068,6 +24117,9 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
               return
             }
             const payload = await fetchSidebarWidth()
+            // Re-validate after the await: a drag may have landed while the GET
+            // was in flight, and that local intent must win over the stale answer.
+            if (disposed || seamUnreachable || generation !== localGeneration || pendingWidth !== null || saveInFlight) return
             if (payload === null) {
               sidebarWidthRuntime.syncState = 'error'
               writeSidebarWidthCache({ sidebarWidth: cache.sidebarWidth, pending: true })
@@ -24110,9 +24162,10 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
          * @returns {void}
          */
         const scheduleSave = (width) => {
-          if (disposed || typeof width !== 'number' || !Number.isFinite(width) || width <= 0) return
+          if (disposed || seamUnreachable || typeof width !== 'number' || !Number.isFinite(width) || width <= 0) return
           const clamped = clampSidebarWidth(width)
           if (clamped === null) return
+          localGeneration += 1
           pendingWidth = clamped
           sidebarWidthRuntime.desiredWidth = clamped
           if (saveTimer !== 0) clearTimeout(saveTimer)
@@ -24120,7 +24173,7 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
             saveTimer = 0
             const target = pendingWidth
             pendingWidth = null
-            if (disposed || target === null) return
+            if (disposed || seamUnreachable || target === null) return
             if (target === lastPersisted && !readSidebarWidthCache().pending) return
             void saveSidebarWidth(target)
           }, SIDEBAR_WIDTH_SAVE_DEBOUNCE_MS)
@@ -24128,7 +24181,7 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
 
         /** Capture one store change: drags persist, collapse is ignored, reopen restores. */
         const onStoreChange = () => {
-          if (disposed || instance === null) return
+          if (disposed || seamUnreachable || instance === null) return
           const width = sidebarWidthStoreValue(instance)
           if (width === null) return
           const previous = lastObservedWidth
@@ -24138,11 +24191,15 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
           // Collapsed is a transient UI state, never a preference.
           if (width <= 0) return
           if (previous !== null && previous > 0 && Math.round(previous) === Math.round(width)) return
-          if (previous === 0 && !sidebarWidthDragging()) {
+          if (previous === 0) {
             // Native re-open writes the shell default (280); re-apply the durable
             // preference instead so a collapse/expand cycle keeps the width.
-            const restore = preferenceWidth()
-            if (restore !== null && restore !== Math.round(width)) {
+            const restore = sidebarWidthReopenRestore({
+              preferenceWidth: preferenceWidth(),
+              width,
+              dragging: sidebarWidthDragging()
+            })
+            if (restore !== null) {
               applyStoreWidth(restore)
               sidebarWidthRuntime.desiredWidth = restore
               void syncSidebarWidth()
@@ -24167,25 +24224,74 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         }
 
         /**
+         * Whether the shell places the sidebar at half the viewport (folded
+         * landscape). The rendered column then legitimately differs from the
+         * preference, so the frame self-check must skip that presentation.
+         * @returns {boolean} whether the shell uses the centered presentation.
+         */
+        const sidebarWidthCentered = () => {
+          try {
+            if (typeof matchMedia !== 'function') return false
+            return matchMedia('(device-posture: folded) and (orientation: landscape)').matches
+          } catch {
+            return false
+          }
+        }
+
+        /**
+         * Stop writing once the self-check proves the attached store is not the
+         * one the frame renders: the probe reports `attached: false`, the E2E
+         * fails loudly, and the shell keeps its in-memory behavior instead of the
+         * feature writing into a detached store.
+         * @returns {void}
+         */
+        const markSeamUnreachable = () => {
+          seamUnreachable = true
+          sidebarWidthRuntime.attached = false
+          pendingWidth = null
+          if (saveTimer !== 0) {
+            clearTimeout(saveTimer)
+            saveTimer = 0
+          }
+          if (retryTimer !== 0) {
+            clearInterval(retryTimer)
+            retryTimer = 0
+          }
+        }
+
+        /**
          * Dev guard: after the first apply, verify the rendered column matches
-         * the applied preference. A mismatch drops `attached` so the E2E fails
-         * loudly instead of silently rendering the wrong width.
+         * the applied preference. A confirmed mismatch (not a transient layout
+         * frame, not the folded-landscape centered presentation, not a collapse)
+         * marks the seam unreachable so the E2E fails loudly instead of silently
+         * rendering the wrong width.
          * @returns {void}
          */
         const scheduleSelfCheck = () => {
           if (typeof window !== 'object' || window === null || typeof window.requestAnimationFrame !== 'function') return
           selfCheckFrames = 0
+          selfCheckMismatches = 0
           const step = () => {
             selfCheckRaf = 0
-            if (disposed || instance === null) return
+            if (disposed || instance === null || seamUnreachable) return
             selfCheckFrames += 1
             const preference = sidebarWidthStoreValue(instance)
             const viewport = typeof window.innerWidth === 'number' ? window.innerWidth : 0
             const column = sidebarWidthColumn()
             if (column !== null && preference !== null
-              && preference > 0 && viewport >= SIDEBAR_WIDTH_CHECK_VIEWPORT_MIN && !sidebarWidthDragging()) {
+              && preference > 0 && viewport >= SIDEBAR_WIDTH_CHECK_VIEWPORT_MIN
+              && !sidebarWidthDragging() && !sidebarWidthCentered()) {
               const measured = Math.round(column.getBoundingClientRect().width)
-              if (Math.abs(measured - Math.round(preference)) > 1) sidebarWidthRuntime.attached = false
+              if (Math.abs(measured - Math.round(preference)) <= 1) {
+                selfCheckMismatches = 0
+                return
+              }
+              selfCheckMismatches += 1
+              if (selfCheckMismatches >= SIDEBAR_WIDTH_SELF_CHECK_LIMIT) {
+                markSeamUnreachable()
+                return
+              }
+              selfCheckRaf = window.requestAnimationFrame(step)
               return
             }
             // The frame may not have rendered yet; retry for ~2 s, then stop silently.
@@ -24562,6 +24668,7 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         normalizeSidebarWidthPayload,
         sidebarWidthBootstrap,
         shouldAdoptSidebarWidth,
+        sidebarWidthReopenRestore,
         probe: sidebarWidthProbe
       }
     }
