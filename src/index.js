@@ -14,6 +14,7 @@ import { installSessionPins } from './features/session-pins/host.js'
 import { installSessionActivity } from './features/session-activity/host.js'
 import { installSessionArtifacts } from './features/session-artifacts/host.js'
 import { installSettings } from './features/settings/host.js'
+import { installUpdateCheck } from './features/update-check/host.js'
 import { installWorkspacePresets } from './features/workspace-presets/host.js'
 
 /** Stable Loader identity. */
@@ -50,4 +51,5 @@ export function apply(ctx) {
   installReadAcks(ctx)
   installSessionPins(ctx)
   installSessionActivity(ctx)
+  installUpdateCheck(ctx)
 }

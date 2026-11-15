@@ -4,4 +4,4 @@
 # plugin whose inventory grows with the suite.
 - insert:
     - id: power-suite
-      name: '@rexxin/dsh-power-suite'
+      name: '@zephinel/dsh-power-suite'

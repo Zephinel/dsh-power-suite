@@ -1,7 +1,14 @@
 {
-  "name": "@rexxin/dsh-power-suite",
-  "version": "0.3.0",
+  "name": "@zephinel/dsh-power-suite",
+  "version": "0.1.0",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zephinel/dsh-power-suite.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "description": "One DeepSeek Harness Web plugin that adds session artifacts, per-Workspace default agent presets, composer prompt history, interrupted-session recovery, and their settings.",
   "main": "./src/index.js",
@@ -18,6 +25,7 @@
     "cordis.patch.yml",
     "locale",
     "docs",
+    "release-notes",
     "icon.png",
     "README.md",
     "CHANGELOG.md",
@@ -47,7 +55,10 @@
   "scripts": {
     "check": "node scripts/check.mjs && npm run pack:check",
     "test": "node --test test/*.test.js",
-    "pack:check": "npm pack --dry-run --json"
+    "pack:check": "npm pack --dry-run --json",
+    "check:release-notes": "node scripts/check-release-notes.mjs",
+    "check:docs-links": "node scripts/check-docs-links.mjs",
+    "check:publish-manifest": "node scripts/check-publish-manifest.mjs"
   },
   "keywords": [
     "deepseek-harness",

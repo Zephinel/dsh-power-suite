@@ -31,7 +31,7 @@
  */
 
 window.__ModuleLoader__.load({
-  id: '@rexxin/dsh-power-suite',
+  id: '@zephinel/dsh-power-suite',
   factory: (require) => {
     const React = require('react')
     const ReactDOM = require('react-dom')
@@ -74,7 +74,7 @@ window.__ModuleLoader__.load({
     const PREVIEW_ROUTE = 'api/session-artifacts.preview'
 
     /** The bundle's npm package name: configuration slot key and settings identity. */
-    const PACKAGE_NAME = '@rexxin/dsh-power-suite'
+    const PACKAGE_NAME = '@zephinel/dsh-power-suite'
 
     //#region copy
     const EN = {
@@ -22356,6 +22356,680 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
     }
     //#endregion
 
+    //#region feature: update check
+    /**
+     * Update check: one prompt per page load when the Host reports a newer
+     * stable release than the running package.
+     *
+     * The Host route owns the registry and release-note reads; the browser only
+     * validates that answer, keeps this browser's "later" / "do not remind"
+     * state, and renders the card. The card is an additive `shell.overlay` slot
+     * entry: this region never inserts DOM into the native sidebar or any other
+     * React-managed shell subtree (a sidebar insertion loop was the boot-hang
+     * root cause of the previous design).
+     *
+     * Every decision helper below is pure (no DOM, no timers, no storage), so
+     * `test/update-check-prompt.test.js` drives them through the test seam.
+     */
+
+    /** Copy namespace for the update prompt. */
+    const UPDATE_NS = 'powerSuiteUpdate'
+
+    /** Host route answering one cached registry check. */
+    const UPDATE_ROUTE = '/api/power-suite.update'
+
+    /** Slot cell identity of the prompt overlay. */
+    const UPDATE_SLOT_ID = 'power-suite.update-prompt'
+
+    /** `localStorage` key holding this browser's prompt state. */
+    const UPDATE_STORAGE_KEY = 'power-suite.update-prompt'
+
+    /** Delay before the single check each page load runs (ms). */
+    const UPDATE_PROMPT_DELAY_MS = 1500
+
+    /** Upper bound for the one Host check request; dispose aborts it immediately. */
+    const UPDATE_CHECK_TIMEOUT_MS = 8000
+
+    /** Highest number of release-note highlights the prompt shows. */
+    const UPDATE_HIGHLIGHTS_MAX = 6
+
+    /** "Later" clicks after which the prompt offers "do not remind". */
+    const UPDATE_LATER_LIMIT = 3
+
+    /** Schema version of the stored state; other versions read as empty. */
+    const UPDATE_STATE_SCHEMA = 1
+
+    /**
+     * Short package name used by the English title. It matches `locale/en.json`'s
+     * `meta.title`; the Chinese dictionary carries its localized name
+     * (`locale/zh.json`) inside the title itself instead of branching on locale.
+     */
+    const UPDATE_PACKAGE_SHORT = 'DSH Power Suite'
+
+    /** Localised copy for the update prompt. */
+    const UPDATE_EN = {
+      'title': 'A new version of {name} is available',
+      'update': 'Update',
+      'later': 'Later',
+      'details': 'Details',
+      'hideDetails': 'Hide details',
+      'dontRemind': 'Do not remind me again',
+      'highlights': 'What’s new',
+      'noHighlights': 'This version has no published highlights. Open the plugin details for the full notes.'
+    }
+    const UPDATE_ZH = {
+      'title': 'DSH 增强套件 有新版本可用',
+      'update': '更新',
+      'later': '下次再说',
+      'details': '查看更新内容',
+      'hideDetails': '收起',
+      'dontRemind': '不再提醒',
+      'highlights': '更新要点',
+      'noHighlights': '该版本未提供更新要点，可在插件详情页查看完整说明。'
+    }
+
+    /**
+     * Parse a stable `major.minor.patch` version. Pre-release and build suffixes
+     * never name an update target (plan §4.3).
+     * @param {unknown} value - candidate version.
+     * @returns {{ major: number, minor: number, patch: number } | null} parsed parts, or null.
+     */
+    function parseStableVersion(value) {
+      if (typeof value !== 'string') return null
+      // Mirrored (not shared) from the Host half in
+      // src/features/update-check/version.js; keep the rules identical
+      // (trim + three safe integers). The test seam cross-checks both tables.
+      const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value.trim())
+      if (match === null) return null
+      const version = {
+        major: Number.parseInt(match[1], 10),
+        minor: Number.parseInt(match[2], 10),
+        patch: Number.parseInt(match[3], 10)
+      }
+      if (!Number.isSafeInteger(version.major)
+        || !Number.isSafeInteger(version.minor)
+        || !Number.isSafeInteger(version.patch)) return null
+      return version
+    }
+
+    /**
+     * Whether `latest` is a stable version strictly newer than `current`.
+     * @param {unknown} latest - candidate newer version.
+     * @param {unknown} current - running version.
+     * @returns {boolean} true only when both parse and `latest > current`.
+     */
+    function isNewerStableVersion(latest, current) {
+      const newer = parseStableVersion(latest)
+      const running = parseStableVersion(current)
+      if (newer === null || running === null) return false
+      if (newer.major !== running.major) return newer.major > running.major
+      if (newer.minor !== running.minor) return newer.minor > running.minor
+      return newer.patch > running.patch
+    }
+
+    /**
+     * Keep only non-empty text highlights, capped at the prompt limit.
+     * @param {unknown} value - candidate highlight list.
+     * @returns {string[]} usable highlights.
+     */
+    function normalizeUpdateHighlights(value) {
+      if (!Array.isArray(value)) return []
+      const highlights = []
+      for (const point of value) {
+        if (typeof point !== 'string') continue
+        const text = point.trim()
+        if (text.length === 0) continue
+        highlights.push(text)
+        if (highlights.length === UPDATE_HIGHLIGHTS_MAX) break
+      }
+      return highlights
+    }
+
+    /**
+     * Validate one Host update answer. Anything unusable reads as "no prompt":
+     * a failed route, a prerelease target, or a missing running version all
+     * stay silent (plan §4.5).
+     * @param {unknown} raw - parsed JSON body of {@link UPDATE_ROUTE}.
+     * @returns {{ current: string, latest: string, updateAvailable: true, highlights: string[] } | null} normalized view.
+     */
+    function normalizeUpdatePayload(raw) {
+      if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null
+      if (raw.updateAvailable !== true) return null
+      if (typeof raw.current !== 'string') return null
+      if (typeof raw.latest !== 'string' || parseStableVersion(raw.latest) === null) return null
+      return {
+        current: raw.current,
+        latest: raw.latest,
+        updateAvailable: true,
+        highlights: normalizeUpdateHighlights(raw.highlights)
+      }
+    }
+
+    /**
+     * Later clicks counted for one version; a different version restarts the count.
+     * @param {object} state - persisted prompt state.
+     * @param {string} version - version the prompt is about.
+     * @returns {number} clicks recorded for that version.
+     */
+    function laterClicksFor(state, version) {
+      if (state === null || typeof state !== 'object') return 0
+      if (state.laterVersion !== version) return 0
+      return typeof state.laterClicks === 'number' && Number.isSafeInteger(state.laterClicks) && state.laterClicks >= 0
+        ? state.laterClicks
+        : 0
+    }
+
+    /**
+     * Decide what one update answer does to the prompt (plan §4.4).
+     * @param {object | null} view - Host answer; normalized or raw.
+     * @param {object} state - persisted prompt state.
+     * @returns {{ action: 'none', state: object }
+     *   | { action: 'prompt', state: object, prompt: { current: string, latest: string, highlights: string[] }, canSilence: boolean }} decision.
+     */
+    function decideUpdatePrompt(view, state) {
+      const current = state !== null && typeof state === 'object' ? state : {}
+      if (view === null || typeof view !== 'object' || Array.isArray(view)) return { action: 'none', state: current }
+      const running = typeof view.current === 'string' ? view.current : ''
+      // An unreadable placeholder or a prerelease running version never prompts
+      // and never clears the recorded cycle.
+      if (parseStableVersion(running) === null || running === '0.0.0') return { action: 'none', state: current }
+      const latest = typeof view.latest === 'string' ? view.latest : ''
+      // `latest: null` means the registry read failed: keep the cycle so a
+      // network blip does not lose a silence or a later-click count.
+      if (parseStableVersion(latest) === null) return { action: 'none', state: current }
+      // A route that clearly answered "already current" retires the cycle.
+      if (!isNewerStableVersion(latest, running)) return { action: 'none', state: {} }
+      if (view.updateAvailable !== true) return { action: 'none', state: current }
+      if (current.silencedVersion === latest) return { action: 'none', state: current }
+      return {
+        action: 'prompt',
+        state: current,
+        prompt: { current: running, latest, highlights: normalizeUpdateHighlights(view.highlights) },
+        canSilence: offersSilence(current, latest)
+      }
+    }
+
+    /**
+     * Record one "later" click for the version the prompt showed.
+     * @param {object} state - persisted prompt state.
+     * @param {string} version - version whose prompt was dismissed.
+     * @returns {object} the next state.
+     */
+    function noteUpdatePromptLater(state, version) {
+      const base = state !== null && typeof state === 'object' ? state : {}
+      return { ...base, laterVersion: version, laterClicks: laterClicksFor(base, version) + 1 }
+    }
+
+    /**
+     * Silence the exact version the user asked to stop hearing about; a newer
+     * version prompts again.
+     * @param {object} state - persisted prompt state.
+     * @param {string} version - version to silence.
+     * @returns {{ silencedVersion: string }} the next state.
+     */
+    function silenceUpdatePromptVersion(state, version) {
+      return { silencedVersion: version }
+    }
+
+    /**
+     * Whether the prompt should offer its "do not remind" action.
+     * @param {object} state - persisted prompt state.
+     * @param {string} version - version the prompt is about.
+     * @returns {boolean} true from the configured later-click count on.
+     */
+    function offersSilence(state, version) {
+      return laterClicksFor(state, version) >= UPDATE_LATER_LIMIT
+    }
+
+    /**
+     * Parse one stored state document. Corrupt, foreign, or future documents
+     * reset to empty instead of throwing or migrating.
+     * @param {string | null | undefined} raw - `localStorage` value.
+     * @returns {{ laterVersion?: string, laterClicks?: number, silencedVersion?: string }} usable state.
+     */
+    function parseUpdatePromptState(raw) {
+      if (typeof raw !== 'string' || raw.length === 0) return {}
+      let parsed
+      try {
+        parsed = JSON.parse(raw)
+      } catch {
+        return {}
+      }
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+      if (parsed.schema !== UPDATE_STATE_SCHEMA) return {}
+      const state = {}
+      if (parseStableVersion(parsed.laterVersion) !== null
+        && typeof parsed.laterClicks === 'number'
+        && Number.isSafeInteger(parsed.laterClicks)
+        && parsed.laterClicks >= 0) {
+        state.laterVersion = parsed.laterVersion
+        state.laterClicks = parsed.laterClicks
+      }
+      if (parseStableVersion(parsed.silencedVersion) !== null) state.silencedVersion = parsed.silencedVersion
+      return state
+    }
+
+    /**
+     * Serialize the persisted state, always tagged with the schema version.
+     * @param {object} state - prompt state.
+     * @returns {string} the JSON document written to `localStorage`.
+     */
+    function serializeUpdatePromptState(state) {
+      const source = state !== null && typeof state === 'object' ? state : {}
+      const payload = { schema: UPDATE_STATE_SCHEMA }
+      if (parseStableVersion(source.laterVersion) !== null) {
+        payload.laterVersion = source.laterVersion
+        payload.laterClicks = laterClicksFor(source, source.laterVersion)
+      }
+      if (parseStableVersion(source.silencedVersion) !== null) payload.silencedVersion = source.silencedVersion
+      return JSON.stringify(payload)
+    }
+
+    /**
+     * Stylesheet for the prompt card. Every selector uses the `psu-` prefix and
+     * colors come from shell theme tokens only (light/dark follow automatically),
+     * with a forced-colors fallback at the end.
+     */
+    const UPDATE_CSS = `
+.psu-card{position:fixed;right:20px;bottom:20px;z-index:70;display:flex;flex-direction:column;gap:10px;box-sizing:border-box;width:min(360px,calc(100vw - 40px));padding:14px;border:0;border-radius:var(--dsw-radius-lg,10px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-elevation-prominent,var(--dsw-shadow-lv3,none));pointer-events:auto}
+.psu-head{display:flex;align-items:flex-start;gap:10px;min-width:0}
+.psu-mark{display:inline-flex;flex:none;align-items:center;justify-content:center;width:22px;height:22px;color:var(--dsw-alias-state-business-primary)}
+.psu-mark svg{display:block}
+.psu-titles{display:flex;flex:1;flex-direction:column;gap:1px;min-width:0}
+.psu-title{overflow-wrap:anywhere;font-size:13px;font-weight:600;line-height:1.35}
+.psu-versions{color:var(--dsw-alias-label-secondary);font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11px;line-height:1.35}
+.psu-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.psu-primary,.psu-secondary,.psu-link{box-sizing:border-box;height:28px;padding:0 10px;border:0;border-radius:var(--dsw-radius-md,8px);font:inherit;font-size:12px;line-height:1;cursor:pointer}
+.psu-primary{background:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-label-primary-foreground)}
+.psu-secondary{background:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);color:var(--dsw-alias-label-primary)}
+.psu-link{height:24px;padding:0 4px;background:transparent;color:var(--dsw-alias-state-business-primary)}
+.psu-silence{color:var(--dsw-alias-label-secondary)}
+.psu-primary:hover{background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 86%,var(--dsw-alias-label-primary))}
+.psu-secondary:hover{background:color-mix(in srgb,var(--dsw-alias-label-primary) 18%,transparent)}
+.psu-link:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.psu-primary:focus-visible,.psu-secondary:focus-visible,.psu-link:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.psu-details{display:flex;flex-direction:column;gap:6px;padding-top:2px}
+.psu-details::before{display:block;flex:none;height:1px;border-radius:1px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 10%,transparent);content:""}
+.psu-details-title{font-size:12px;font-weight:600}
+.psu-points{display:flex;flex-direction:column;gap:4px;margin:0;padding:0;list-style:none}
+.psu-points li{position:relative;padding-left:12px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.45;overflow-wrap:anywhere}
+.psu-points li::before{position:absolute;top:.55em;left:2px;width:4px;height:4px;border-radius:50%;background:var(--dsw-alias-state-business-primary);content:""}
+.psu-empty{margin:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.45}
+@media (forced-colors:active){.psu-card{background:Canvas;color:ButtonText}}
+`
+
+    /** Stable hidden snapshot so the overlay never re-renders without a change. */
+    const UPDATE_HIDDEN = { kind: 'hidden' }
+
+    /** The page's update prompt controller; the `shell.overlay` entry renders it. */
+    let updatePromptController = null
+
+    /**
+     * Resolve this page's `localStorage`; restricted contexts can throw on access.
+     * @returns {object | null} browser storage, or null when it is unavailable.
+     */
+    function resolveUpdateStorage() {
+      try {
+        return typeof localStorage === 'undefined' ? null : localStorage
+      } catch {
+        return null
+      }
+    }
+
+    /**
+     * Create the page's update prompt controller: the one delayed check, the
+     * browser-local state, and the snapshot the overlay entry renders.
+     * @param {object} ctx - client root context.
+     * @returns {{ store: { getSnapshot: Function, subscribe: Function }, actions: object, dispose: Function }} the controller.
+     */
+    function createUpdatePromptController(ctx) {
+      const storage = resolveUpdateStorage()
+      let memoryState = {}
+      let memoryOnly = storage === null
+      let snapshot = UPDATE_HIDDEN
+      const listeners = new Set()
+      let disposed = false
+      /** Bumped by every user decision so a late check cannot reopen the card. */
+      let actionRevision = 0
+      /** Scheduled delayed check (timer id), 0 when none is pending. */
+      let checkTimer = 0
+      /** In-flight check request, aborted when the page unloads or a user settles. */
+      let checkAbort = null
+      let pluginNavigation = null
+
+      /** Notify the overlay subscribers. */
+      const publish = (next) => {
+        if (next === snapshot) return
+        snapshot = next
+        for (const listener of [...listeners]) {
+          try {
+            listener()
+          } catch {
+            // A subscriber throw cannot break the controller.
+          }
+        }
+      }
+
+      /** @returns {{ laterVersion?: string, laterClicks?: number, silencedVersion?: string }} the persisted state. */
+      const readState = () => {
+        if (memoryOnly || storage === null) return memoryState
+        try {
+          return parseUpdatePromptState(storage.getItem(UPDATE_STORAGE_KEY))
+        } catch {
+          // Once access fails, this page keeps the cycle in memory for good: a
+          // later read must not resurrect an older stored document.
+          memoryOnly = true
+          return memoryState
+        }
+      }
+
+      /** @param {object} state - state to persist. */
+      const writeState = (state) => {
+        memoryState = state
+        if (memoryOnly || storage === null) return
+        try {
+          storage.setItem(UPDATE_STORAGE_KEY, serializeUpdatePromptState(state))
+        } catch {
+          // A full or read-only storage keeps this page's cycle in memory.
+          memoryOnly = true
+        }
+      }
+
+      /** Invalidate any in-flight check after a user decision; that state is authoritative. */
+      const settle = () => {
+        actionRevision += 1
+      }
+
+      /**
+       * Open this bundle's Plugins detail page.
+       * @returns {boolean} whether navigation started; false keeps the card open.
+       */
+      const openPluginDetails = () => {
+        if (pluginNavigation === null || typeof pluginNavigation.openBundle !== 'function') return false
+        pluginNavigation.openBundle(PACKAGE_NAME)
+        return true
+      }
+
+      /**
+       * Active DSH locale id, used to ask for the matching release-notes variant.
+       * @returns {string} the locale id, or `en` when the locale service is absent.
+       */
+      const activeLanguage = () => {
+        try {
+          const locale = ctx.locale.getLocale()
+          const active = locale !== null && typeof locale === 'object' ? locale.active : undefined
+          return typeof active === 'string' && active.length > 0 ? active : 'en'
+        } catch {
+          return 'en'
+        }
+      }
+
+      /**
+       * Run the one update check this page load performs: ask the Host, decide,
+       * and publish the snapshot. Every failure stays silent (no error UI).
+       * @returns {Promise<void>} resolves once the decision is published.
+       */
+      const runCheck = async () => {
+        if (disposed) return
+        const revisionAtStart = actionRevision
+        const abort = new AbortController()
+        checkAbort = abort
+        const timeout = setTimeout(() => abort.abort(), UPDATE_CHECK_TIMEOUT_MS)
+        try {
+          const response = await fetch(appUrl(`${UPDATE_ROUTE}?lang=${encodeURIComponent(activeLanguage())}`), {
+            cache: 'no-store',
+            signal: abort.signal
+          })
+          if (response === null || typeof response !== 'object' || response.ok !== true) return
+          const payload = await response.json()
+          // A user action while the check was in flight wins; its state is authoritative.
+          if (disposed || revisionAtStart !== actionRevision) return
+          const view = normalizeUpdatePayload(payload)
+          // A definitive "no update" answer normally fails normalization (the
+          // Host then reports updateAvailable: false), but the decision still
+          // needs it to retire the recorded cycle, so the raw answer is the
+          // fallback. `decideUpdatePrompt` re-validates whatever it receives.
+          const decision = decideUpdatePrompt(view !== null ? view : payload, readState())
+          writeState(decision.state)
+          if (decision.action !== 'prompt') {
+            publish(UPDATE_HIDDEN)
+            return
+          }
+          publish({
+            kind: 'shown',
+            current: decision.prompt.current,
+            latest: decision.prompt.latest,
+            highlights: decision.prompt.highlights,
+            expanded: false,
+            canSilence: decision.canSilence
+          })
+        } catch {
+          // Offline, aborted, 404, malformed JSON: stay silent and do not retry
+          // on this page.
+        } finally {
+          clearTimeout(timeout)
+          if (checkAbort === abort) checkAbort = null
+        }
+      }
+
+      // Optional Plugins-panel navigation: the Update action opens this bundle's
+      // detail page; without that service the card stays open (no silent close).
+      try {
+        ctx.inject(['pluginNavigation'], (scoped) => {
+          if (disposed || scoped === null || scoped === undefined) return
+          pluginNavigation = typeof scoped.pluginNavigation === 'object' && scoped.pluginNavigation !== null
+            ? scoped.pluginNavigation
+            : null
+          if (typeof scoped.effect === 'function') {
+            scoped.effect(() => () => { pluginNavigation = null })
+          }
+        })
+      } catch {
+        // A host without dynamic injection keeps the Update action inert.
+      }
+
+      const actions = {
+        update: () => {
+          if (snapshot.kind !== 'shown') return
+          // Without the Plugins panel there is nowhere to go: keep the card open
+          // rather than closing it silently, and never write a silence.
+          if (!openPluginDetails()) return
+          settle()
+          publish(UPDATE_HIDDEN)
+        },
+        later: () => {
+          if (snapshot.kind !== 'shown') return
+          settle()
+          writeState(noteUpdatePromptLater(readState(), snapshot.latest))
+          publish(UPDATE_HIDDEN)
+        },
+        silence: () => {
+          if (snapshot.kind !== 'shown') return
+          settle()
+          writeState(silenceUpdatePromptVersion(readState(), snapshot.latest))
+          publish(UPDATE_HIDDEN)
+        },
+        toggleDetails: () => {
+          if (snapshot.kind !== 'shown') return
+          publish({ ...snapshot, expanded: !snapshot.expanded })
+        }
+      }
+
+      const store = {
+        getSnapshot: () => snapshot,
+        subscribe: (listener) => {
+          listeners.add(listener)
+          return () => { listeners.delete(listener) }
+        }
+      }
+
+      /** Stop the scheduled check, drop listeners, release the navigation service. */
+      const dispose = () => {
+        disposed = true
+        if (checkTimer !== 0) {
+          clearTimeout(checkTimer)
+          checkTimer = 0
+        }
+        if (checkAbort !== null) {
+          checkAbort.abort()
+          checkAbort = null
+        }
+        listeners.clear()
+        pluginNavigation = null
+      }
+
+      // One check per page load; no polling while the page stays open.
+      checkTimer = setTimeout(() => {
+        checkTimer = 0
+        void runCheck()
+      }, UPDATE_PROMPT_DELAY_MS)
+
+      return { store, actions, dispose }
+    }
+
+    /**
+     * The update prompt card. Subscribes to the page controller and renders one
+     * card in `shell.overlay`; Escape or a click outside the card settles it
+     * exactly like "later".
+     * @param {object} props - slot props plus the bound translator, controller, and title name.
+     * @returns {object | null} the card, or null while nothing is shown.
+     */
+    function UpdatePrompt(props) {
+      const { t, controller, name } = props
+      const snapshot = React.useSyncExternalStore(
+        controller.store.subscribe,
+        controller.store.getSnapshot,
+        controller.store.getSnapshot
+      )
+      const actions = controller.actions
+      const cardRef = React.useRef(null)
+      const shown = snapshot.kind === 'shown'
+
+      React.useEffect(() => {
+        if (!shown) return undefined
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape') return
+          event.stopPropagation()
+          actions.later()
+        }
+        const onPointerDown = (event) => {
+          const target = event.target
+          if (target === null || target === undefined) return
+          const card = cardRef.current
+          if (card !== null && card !== undefined && card.contains(target)) return
+          actions.later()
+        }
+        document.addEventListener('keydown', onKeyDown, true)
+        document.addEventListener('pointerdown', onPointerDown, true)
+        return () => {
+          document.removeEventListener('keydown', onKeyDown, true)
+          document.removeEventListener('pointerdown', onPointerDown, true)
+        }
+      }, [shown, actions])
+
+      if (!shown) return null
+      const title = t('title', { name })
+      return React.createElement('div', {
+        className: 'psu-card',
+        ref: cardRef,
+        role: 'region',
+        'aria-label': title,
+        'data-psu-card': '',
+        'data-psu-version': snapshot.latest
+      },
+      React.createElement('div', { className: 'psu-head' },
+        React.createElement('span', { className: 'psu-mark', 'aria-hidden': 'true' },
+          React.createElement('svg', {
+            width: 18,
+            height: 18,
+            viewBox: '0 0 24 24',
+            focusable: 'false'
+          },
+          React.createElement('rect', { x: 3, y: 4, width: 18, height: 5, rx: 2, fill: 'currentColor', opacity: 0.9 }),
+          React.createElement('rect', { x: 3, y: 10.5, width: 18, height: 5, rx: 2, fill: 'currentColor', opacity: 0.55 }),
+          React.createElement('rect', { x: 3, y: 17, width: 12, height: 3.5, rx: 1.75, fill: 'currentColor', opacity: 0.3 }))),
+        React.createElement('div', { className: 'psu-titles' },
+          React.createElement('strong', { className: 'psu-title' }, title),
+          React.createElement('span', { className: 'psu-versions', 'data-psu-versions': '' },
+            `${snapshot.current} → ${snapshot.latest}`))),
+      React.createElement('div', { className: 'psu-actions' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'psu-primary',
+          'data-psu-action': 'update',
+          onClick: actions.update
+        }, t('update')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psu-secondary',
+          'data-psu-action': 'later',
+          onClick: actions.later
+        }, t('later')),
+        React.createElement('button', {
+          type: 'button',
+          className: 'psu-link',
+          'data-psu-action': 'details',
+          'aria-expanded': snapshot.expanded,
+          onClick: actions.toggleDetails
+        }, t(snapshot.expanded ? 'hideDetails' : 'details')),
+        snapshot.canSilence
+          ? React.createElement('button', {
+            type: 'button',
+            className: 'psu-link psu-silence',
+            'data-psu-action': 'dont-remind',
+            onClick: actions.silence
+          }, t('dontRemind'))
+          : null),
+      snapshot.expanded
+        ? React.createElement('div', { className: 'psu-details', 'data-psu-details': '' },
+          React.createElement('span', { className: 'psu-details-title' }, t('highlights')),
+          snapshot.highlights.length === 0
+            ? React.createElement('p', { className: 'psu-empty' }, t('noHighlights'))
+            : React.createElement('ul', { className: 'psu-points' },
+              snapshot.highlights.map((point, index) => React.createElement('li', { key: `${index}:${point}` }, point))))
+        : null)
+    }
+
+    /**
+     * Install the update prompt: dictionaries, stylesheet, the page controller
+     * lifecycle, and the additive `shell.overlay` entry. Nothing is inserted into
+     * the native sidebar or any other React-managed shell subtree.
+     * @param {object} ctx - client root context.
+     * @returns {void}
+     */
+    function installUpdatePrompt(ctx) {
+      const t = ctx.locale.bind(UPDATE_NS)
+      ctx.effect(() => ctx.locale.register(UPDATE_NS, { en: UPDATE_EN, zh: UPDATE_ZH }), 'power-suite: update check dictionaries')
+      ctx.effect(() => {
+        const tag = document.createElement('style')
+        tag.dataset.powerSuiteCss = 'update-check'
+        tag.textContent = UPDATE_CSS
+        document.head.appendChild(tag)
+        return () => { tag.remove() }
+      }, 'power-suite: update check styles')
+      ctx.effect(() => {
+        const controller = createUpdatePromptController(ctx)
+        updatePromptController = controller
+        return () => {
+          controller.dispose()
+          if (updatePromptController === controller) updatePromptController = null
+        }
+      }, 'power-suite: update check prompt')
+      ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+        name: 'shell.overlay',
+        id: UPDATE_SLOT_ID,
+        locale: UPDATE_NS
+      }, (props) => (updatePromptController === null
+        ? null
+        : React.createElement(UpdatePrompt, {
+          ...props,
+          t,
+          controller: updatePromptController,
+          name: UPDATE_PACKAGE_SHORT
+        })))), 'power-suite: update prompt overlay')
+    }
+    //#endregion
+
     //#region plugin
     /**
      * Register dictionaries, the page type, and its Session-scoped body.
@@ -22404,6 +23078,7 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       installQuickLook(ctx)
       installSettingsPage(ctx)
       installComposerImageGallery(ctx)
+      installUpdatePrompt(ctx)
       installUiAnnotation(ctx)
     }
 
@@ -22571,6 +23246,20 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         dwReadPinCache,
         dwWritePinCache,
         dwPinPanelRows
+      }
+      // The update prompt's pure state machine: payload validation, the
+      // prompt/no-prompt decision, and the per-version later/silence state.
+      globalThis.__POWER_SUITE_TEST_HOOKS__.updateCheck = {
+        parseUpdatePromptState,
+        serializeUpdatePromptState,
+        decideUpdatePrompt,
+        noteUpdatePromptLater,
+        silenceUpdatePromptVersion,
+        offersSilence,
+        normalizeUpdatePayload,
+        parseStableVersion,
+        isNewerStableVersion,
+        UPDATE_STORAGE_KEY
       }
     }
 

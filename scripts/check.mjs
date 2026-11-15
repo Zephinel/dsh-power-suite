@@ -3,7 +3,9 @@
  * Repository gate:
  *   1. syntax-check every checked-in JavaScript module under src/;
  *   2. validate the bundle manifest, exports, icon, locale, and cordis patch;
- *   3. run the node:test suites.
+ *   3. validate local Markdown links (docs/, README, CHANGELOG, PRODUCT, skills);
+ *   4. run the node:test suites;
+ *   5. require reviewed release-notes for the package version.
  *
  * Run with `npm run check`. CI runs the same script.
  */
@@ -27,18 +29,6 @@ function collectJavaScript(directory) {
     const path = join(directory, entry.name)
     if (entry.isDirectory()) files.push(...collectJavaScript(path))
     else if (entry.isFile() && entry.name.endsWith('.js')) files.push(path)
-  }
-  return files
-}
-
-/** Collect every Markdown file below a directory. */
-function collectMarkdown(directory) {
-  if (!existsSync(directory)) return []
-  const files = []
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    const path = join(directory, entry.name)
-    if (entry.isDirectory()) files.push(...collectMarkdown(path))
-    else if (entry.isFile() && entry.name.endsWith('.md')) files.push(path)
   }
   return files
 }
@@ -71,7 +61,7 @@ for (const entry of pkg.files ?? []) {
   if (entry.includes('*')) continue
   requirePath(entry, 'files[]')
 }
-if (pkg.name !== '@rexxin/dsh-power-suite') failures.push('package name changed unexpectedly')
+if (pkg.name !== '@zephinel/dsh-power-suite') failures.push('package name changed unexpectedly')
 if (pkg.dsh?.client?.platform !== 'web') failures.push('dsh.client.platform must be "web"')
 for (const file of ['locale/en.json', 'locale/zh.json']) {
   try {
@@ -83,22 +73,12 @@ for (const file of ['locale/en.json', 'locale/zh.json']) {
 if (!existsSync(resolve(root, 'README.md'))) failures.push('README.md is missing')
 if (!existsSync(resolve(root, 'CHANGELOG.md'))) failures.push('CHANGELOG.md is missing')
 
-// 3. Local Markdown links and images must resolve.
-const markdownFiles = [
-  ...collectMarkdown(resolve(root, 'docs')),
-  resolve(root, 'README.md'),
-  resolve(root, 'CHANGELOG.md'),
-  resolve(root, 'PRODUCT.md')
-]
-for (const file of markdownFiles) {
-  const text = readFileSync(file, 'utf8')
-  for (const match of text.matchAll(/!?\[[^\]]*\]\(([^)]+)\)/g)) {
-    const target = match[1].trim().replace(/^<|>$/g, '').split('#')[0]
-    if (target === '' || /^(https?:|mailto:|data:)/.test(target)) continue
-    if (!existsSync(resolve(dirname(file), decodeURIComponent(target)))) {
-      failures.push(`${file.slice(root.length + 1)} links to missing ${target}`)
-    }
-  }
+// 3. Local Markdown links and images must resolve. Kept in its own script so
+// the CI docs-only fast path can run the same check without the full gate.
+try {
+  run(['scripts/check-docs-links.mjs'])
+} catch {
+  failures.push('docs link check failed: scripts/check-docs-links.mjs')
 }
 
 // 4. Tests.
@@ -108,6 +88,15 @@ const tests = statSync(testDirectory).isDirectory()
   : []
 if (tests.length === 0) failures.push('no node:test files found under test/')
 else run(['--test', ...tests])
+
+// 5. Release-notes gate: the release must commit reviewed highlights for the
+// package version, because the in-app update prompt reads them from the
+// tag-pinned raw URL (see scripts/check-release-notes.mjs).
+try {
+  run(['scripts/check-release-notes.mjs'])
+} catch {
+  failures.push('release-notes gate failed: scripts/check-release-notes.mjs')
+}
 
 if (failures.length > 0) {
   console.error('\ncheck failed:')

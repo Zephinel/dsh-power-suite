@@ -233,7 +233,7 @@ if (ui === undefined) {
     const withoutFlag = loadClientModule({ hooksFlag: false })
     assert.equal(withoutFlag.hooks, undefined, 'the seam never creates the global the browser does not define')
     assert.equal(withoutFlag.hooks?.uiAnnotation?.resolveNodeCandidate, undefined, 'the resolver is not leaked on the production path')
-    assert.equal(withoutFlag.registration?.id, '@rexxin/dsh-power-suite')
+    assert.equal(withoutFlag.registration?.id, '@zephinel/dsh-power-suite')
     assert.equal(typeof withoutFlag.registration.factory, 'function')
     assert.equal(typeof withoutFlag.factory.apply, 'function')
     assert.equal(Array.isArray(withoutFlag.factory.inject), true)

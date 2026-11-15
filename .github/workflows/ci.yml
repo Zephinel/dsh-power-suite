@@ -1,0 +1,126 @@
+# Continuous integration.
+#
+# Design notes:
+# - `verify` runs on every PR and main push. The job always runs, so a required
+#   status check can never be left pending by a path-filtered run; a cheap
+#   `changes` job classifies docs-only changes, which skip the full gate. This
+#   repository has no docs-only check scripts (no `check:docs-*`), so a
+#   docs-only run is a fast no-op.
+# - Concurrency: PR pushes cancel superseded runs; main pushes use a per-SHA
+#   group so every commit on main runs to completion (a release commit must not
+#   skip gates).
+# - No browser job: `test/browser/*.e2e.mjs` drives a real running DSH Web GUI
+#   with a real Chrome and a real profile, so it stays a local pre-release check
+#   instead of a GitHub runner gate (see docs/development.md and the release
+#   skill).
+# - Caches: only actions/setup-node's npm cache (lockfile keyed). The package
+#   has no build step and no generated artifacts to cache.
+#
+# Owner setup (GitHub settings, not code): require the `verify` status check on
+# main/branches and restrict `v*` tag creation to maintainers.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # main: unique group per SHA -> every main commit finishes. PRs: shared group
+  # per branch -> only the latest push runs.
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || '' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: change classification
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Classify the change
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          docs_only=false
+          range=""
+          case "$EVENT_NAME" in
+            pull_request)
+              if git fetch --depth=1 origin "$BASE_REF" >/dev/null 2>&1; then
+                range="FETCH_HEAD HEAD"
+              fi
+              ;;
+            push)
+              if [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+                if git fetch --depth=1 origin "$BEFORE_SHA" >/dev/null 2>&1; then
+                  range="$BEFORE_SHA HEAD"
+                fi
+              fi
+              ;;
+            *) range="" ;;
+          esac
+          files=""
+          if [ -n "$range" ]; then
+            files="$(git diff --name-only $range 2>/dev/null || true)"
+          fi
+          if [ -n "$files" ]; then
+            docs_only=true
+            while IFS= read -r file; do
+              case "$file" in
+                CHANGELOG.md|PRODUCT.md|docs/*|.agents/*) ;;
+                *) docs_only=false ;;
+              esac
+            done <<< "$files"
+          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "docs-only: $docs_only"
+
+  verify:
+    name: verify (${{ matrix.node }})
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Set up Node ${{ matrix.node }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - name: Install dependencies
+        if: env.DOCS_ONLY != 'true'
+        run: npm ci
+      - name: Local gate
+        if: env.DOCS_ONLY != 'true'
+        run: npm run check
+      - name: Generated files are committed
+        if: env.DOCS_ONLY != 'true'
+        run: git diff --exit-code
+      - name: Docs-only link gate
+        if: env.DOCS_ONLY == 'true'
+        # A docs-only change skips the Node gate but still runs the one check a
+        # documentation change can break: local Markdown links and images.
+        run: npm run check:docs-links

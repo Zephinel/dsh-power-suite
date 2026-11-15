@@ -19,7 +19,7 @@ node test/browser/annotation.e2e.mjs
 3. Sets a 1728x900 CSS viewport (`Emulation.setDeviceMetricsOverride`).
 4. Injects this worktree's `src/client.js` with `Page.addScriptToEvaluateOnNewDocument`: the
    script wraps `window.__ModuleLoader__.load` and replaces only the
-   `@rexxin/dsh-power-suite` registration factory, so the real DSH shell loads our browser code
+   `@zephinel/dsh-power-suite` registration factory, so the real DSH shell loads our browser code
    with a real context, real session and real composer. It also sets
    `window.__POWER_SUITE_TEST_HOOKS__ = {}` (test seam) and asserts
    `window.__psInjectedFactoryRan === true` before doing anything else.
@@ -1005,3 +1005,21 @@ bottom 232/232), annotation S2/S5/S8 **7/0/0 each** (9.3/8.2/12.5 s,
   control rather than the literal keyword.
 - `--live` requires the linked checkout to be merged to the branch tip; it proves the
   served client, not the worktree-only code, and does not restart the service.
+
+## Update prompt harness
+
+`update-prompt.e2e.mjs` is the local-only acceptance harness for the in-app
+update notice (`docs/update-check.md`). It is not wired into CI: it needs the
+running DSH Web GUI and a token URL, like the suites above.
+
+```bash
+node test/browser/update-prompt.e2e.mjs
+```
+
+It opens the real GUI in a throwaway headless Chrome, stubs only
+`GET /api/power-suite.update` through the CDP Fetch domain, and drives the
+installed client card: appearance/geometry/version line, highlights
+expand/collapse, later persistence, the three-later "do not remind" step,
+per-version silence, update navigation to the plugin manager surface, and the
+silent no-update/failed-route paths (21 checks). It never writes the profile,
+the Host, or the running plugin.

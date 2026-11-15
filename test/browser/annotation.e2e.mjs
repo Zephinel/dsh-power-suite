@@ -9,7 +9,7 @@
  * dependencies), opens the REAL running DSH Web GUI with a fresh token URL, and injects this
  * worktree's `src/client.js` into the live page with `Page.addScriptToEvaluateOnNewDocument`:
  * the injected script wraps `window.__ModuleLoader__.load` so the shell's
- * `@rexxin/dsh-power-suite` registration is loaded from this worktree instead of the installed
+ * `@zephinel/dsh-power-suite` registration is loaded from this worktree instead of the installed
  * checkout. The installed plugin, the profile and the launchd service stay untouched.
  *
  * It then drives the page with real CDP input (`Input.dispatchMouseEvent` /
@@ -880,7 +880,7 @@ class Page {
 
 const INJECT_SCRIPT = `(() => {
   const init = (source) => {
-    const ID = '@rexxin/dsh-power-suite'
+    const ID = '@zephinel/dsh-power-suite'
     let store, loadImpl, swappedRegistration = null, evaluated = false, evaluating = false
     const captureFacade = { load(reg) { swappedRegistration = reg } }
     function applyRegistration(reg) {

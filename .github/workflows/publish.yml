@@ -1,0 +1,131 @@
+# Publish a tagged release to npm with Trusted Publishing (OIDC + provenance).
+#
+# One-time npm setup (package owner, needs account 2FA) — either the CLI:
+#
+#   npm login
+#   npm trust github @zephinel/dsh-power-suite --file publish.yml \
+#     --repo Zephinel/dsh-power-suite --allow-publish --yes
+#
+# or npmjs.com → the package → Settings → Trusted Publishing → GitHub Actions
+# (repository Zephinel/dsh-power-suite, workflow publish.yml).
+#
+# Release: bump the version (the first public release is 0.1.0), prepare
+# CHANGELOG.md and release-notes/<version>{,.en}.md, commit, then push a
+# matching tag:
+#
+#   git tag -a v0.1.0 -m "0.1.0 — <UTC date>"
+#   git push origin v0.1.0
+#
+# The job fails if the tag does not match package.json, if `npm run check` or
+# `npm run pack:check` fails, if CHANGELOG.md has no section for the version, or
+# if release-notes/<version>.md has no reviewed Highlights bullets, so a
+# mistyped, undocumented or un-reviewed tag cannot publish.
+name: publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Check that the tag matches package.json
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match package version v${version}"
+            exit 1
+          fi
+          echo "publishing ${version}"
+
+      - name: Publish manifest gate
+        # Fail immediately on metadata npm publish cannot accept (still-private
+        # package, wrong name/repository/publishConfig, missing release-notes
+        # files entry) instead of failing later at `npm publish`.
+        run: node scripts/check-publish-manifest.mjs
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Local gate
+        run: npm run check
+
+      - name: Packaged manifest
+        run: npm run pack:check
+
+      - name: CHANGELOG has a section for this version
+        # Two accepted shapes: a dated release heading "## [<version>] - <date>",
+        # or the version still carried by the Unreleased section (the repository
+        # keeps "Planned as version ..." there until the release is cut). A tag
+        # must never publish without a changelog record.
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if grep -qE "^## \[${version}([^]]*)\]" CHANGELOG.md; then
+            echo "changelog section ok: ${version}"
+            exit 0
+          fi
+          if awk -v version="$version" '
+            /^## \[Unreleased\]/ { in_unreleased = 1; next }
+            in_unreleased && /^## / { in_unreleased = 0 }
+            in_unreleased && index($0, version) { found = 1 }
+            END { exit(found ? 0 : 1) }
+          ' CHANGELOG.md; then
+            echo "changelog: ${version} is carried by the Unreleased section"
+            exit 0
+          fi
+          echo "::error::CHANGELOG.md has no section for ${version} (expected \"## [${version}]\" or an Unreleased section naming it)"
+          exit 1
+
+      - name: Reviewed release notes exist for this version
+        # The update prompt reads these Highlights from the tag-pinned raw file;
+        # the file must be reviewed and committed before the tag is pushed.
+        run: npm run check:release-notes
+
+      - name: Publish with provenance
+        run: npm publish --access public --tag latest --provenance
+
+      - name: Verify the published version and dist-tag
+        # Registry propagation can take several minutes (packument caches lag
+        # even after `npm publish` succeeds). Poll the cheap dist-tags/version
+        # endpoints directly with a long bound instead of trusting a cached
+        # `npm view`, so a slow registry is not mistaken for a failed publish.
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          encoded="$(node -p "require('./package.json').name.replace('/', '%2F')")"
+          # 30 x (5 s + 5 s + 10 s sleep) is bounded to 10 minutes even when the
+          # registry accepts the connection but never answers.
+          for attempt in $(seq 1 30); do
+            tags="$(curl -fsS --max-time 5 "https://registry.npmjs.org/-/package/${encoded}/dist-tags" 2>/dev/null || true)"
+            status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "https://registry.npmjs.org/${encoded}/${version}" 2>/dev/null || true)"
+            if [ "$status" = "200" ] && printf '%s' "$tags" | grep -Fq "\"latest\":\"${version}\""; then
+              echo "registry: ${version} (latest; version endpoint 200)"
+              exit 0
+            fi
+            echo "registry not settled yet (version endpoint ${status:-none}; tags: ${tags:-none}); retrying"
+            sleep 10
+          done
+          echo "::error::registry verification failed after 10 minutes: expected ${version}; last tags=${tags:-none} status=${status:-none}"
+          exit 1
