@@ -5427,14 +5427,16 @@ function dwAtmosphereMount(host) {
   }
   const resize = () => {
     const rect = canvas.getBoundingClientRect()
-    if (rect.width <= 0 || rect.height <= 0) return
+    if (rect.width <= 0 || rect.height <= 0) return false
     const dpr = Math.min(window.devicePixelRatio || 1, 1.25)
     const width = Math.max(2, Math.round(rect.width * dpr))
     const height = Math.max(2, Math.round(rect.height * dpr))
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width
-      canvas.height = height
-    }
+    if (canvas.width === width && canvas.height === height) return false
+    // Assigning width/height resets the bitmap: the caller must repaint in the
+    // same task, before the browser paints the blank backing store.
+    canvas.width = width
+    canvas.height = height
+    return true
   }
   const draw = () => {
     if (disposed) return
@@ -5515,11 +5517,16 @@ function dwAtmosphereMount(host) {
     }
   }
   const onMotion = () => start()
-  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { resize(); if (motionQuery.matches) draw() }) : null
+  // A real size change clears the backing store; repaint synchronously in the
+  // same task (before the browser paints), regardless of reduced motion. The
+  // 33 ms animation throttle above only governs steady-state frames.
+  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (resize()) draw() }) : null
   if (observer !== null) observer.observe(canvas)
   document.addEventListener('visibilitychange', onVisibility)
   motionQuery.addEventListener('change', onMotion)
   resize()
+  // Paint once synchronously at mount so the first frame is never blank.
+  draw()
   start()
   return {
     destroy: () => {
@@ -23586,6 +23593,724 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
     }
     //#endregion
 
+    //#region feature: sidebar width
+    //
+    // Durable, Host-synced left sidebar width.
+    //
+    // The shell keeps the sidebar width only in memory (`layoutInfo.sidebar`,
+    // transient by design: closing the sidebar forgets the dragged width). This
+    // feature mirrors that private store, caches the width per origin, and syncs
+    // it through the Host's authenticated `/api` document so paired devices
+    // agree. It renders no UI and owns no copy.
+    //
+    // Attach seam: the layout plugin registers its AppFrame into the built-in
+    // `root` slot and seats a store handle on that registration whose `create()`
+    // is overridden to return the one live store instance the frame renders. The
+    // public StoredEntry face exposes that seat as `entry.store`, so
+    // `ctx.slots.entries('root')` reaches exactly the store the drag handle
+    // writes. When the seat shape changes the feature stays inert
+    // (`probe().attached === false`) instead of guessing.
+
+    /** Host route serving and storing the durable sidebar-width document. */
+    const SIDEBAR_WIDTH_ROUTE = 'api/power-suite.sidebar-width'
+
+    /** Per-origin browser cache of the last known width and sync state. */
+    const SIDEBAR_WIDTH_STORAGE_KEY = 'power-suite.sidebar-width'
+
+    /** Width bounds; mirrors the shell's `clampWidth(px, 264, 420)` contract. */
+    const SIDEBAR_WIDTH_MIN = 264
+    const SIDEBAR_WIDTH_MAX = 420
+
+    /** Debounce for persisting one drag gesture (300 ms after the last change). */
+    const SIDEBAR_WIDTH_SAVE_DEBOUNCE_MS = 300
+
+    /** Retry cadence while a local width is not yet confirmed by the Host. */
+    const SIDEBAR_WIDTH_SYNC_INTERVAL_MS = 30000
+
+    /** Attachment retry delays; a quiet give-up follows the last one. */
+    const SIDEBAR_WIDTH_ATTACH_DELAYS_MS = [0, 250, 1000, 2000]
+
+    /** Drop the attachment watchers after this delay; the feature stays inert. */
+    const SIDEBAR_WIDTH_ATTACH_GIVE_UP_MS = 5000
+
+    /** Viewport below which the shell auto-collapses the sidebar (its own breakpoint). */
+    const SIDEBAR_WIDTH_CHECK_VIEWPORT_MIN = 1024
+
+    /** Live attach state read by the browser E2E probe (reads only, never writes). */
+    const sidebarWidthRuntime = {
+      attached: false,
+      storeWidth: null,
+      desiredWidth: null,
+      syncState: 'idle',
+      cache: { sidebarWidth: null, pending: false }
+    }
+
+    //#region feature: sidebar width — pure decisions
+
+    /**
+     * Clamp one candidate width into the shell's sidebar range.
+     * @param {unknown} value - candidate width in px.
+     * @returns {number | null} integer px inside the range, or null when not a finite number.
+     */
+    function clampSidebarWidth(value) {
+      if (typeof value !== 'number' || !Number.isFinite(value)) return null
+      return Math.min(SIDEBAR_WIDTH_MAX, Math.max(SIDEBAR_WIDTH_MIN, Math.round(value)))
+    }
+
+    /**
+     * Whether one value is already a persistable sidebar width.
+     * @param {unknown} value - candidate width.
+     * @returns {boolean} integer inside [264, 420].
+     */
+    function isValidSidebarWidth(value) {
+      return typeof value === 'number' && Number.isInteger(value)
+        && value >= SIDEBAR_WIDTH_MIN && value <= SIDEBAR_WIDTH_MAX
+    }
+
+    /**
+     * The empty browser-cache document.
+     * @returns {{ sidebarWidth: number | null, pending: boolean }} defaults.
+     */
+    function emptySidebarWidthCache() {
+      return { sidebarWidth: null, pending: false }
+    }
+
+    /**
+     * Parse the browser-cache document. Malformed text, an unknown version and
+     * an out-of-range or non-integer width all read as the default document.
+     * @param {unknown} text - localStorage payload.
+     * @returns {{ sidebarWidth: number | null, pending: boolean }} parsed cache.
+     */
+    function parseSidebarWidthCache(text) {
+      if (typeof text !== 'string' || text.length === 0) return emptySidebarWidthCache()
+      let parsed = null
+      try {
+        parsed = JSON.parse(text)
+      } catch {
+        return emptySidebarWidthCache()
+      }
+      if (parsed === null || typeof parsed !== 'object' || parsed.version !== 1) return emptySidebarWidthCache()
+      return {
+        sidebarWidth: isValidSidebarWidth(parsed.sidebarWidth) ? parsed.sidebarWidth : null,
+        pending: parsed.pending === true
+      }
+    }
+
+    /**
+     * Serialize the browser-cache document (always version 1).
+     * @param {unknown} cache - `{ sidebarWidth, pending }`.
+     * @returns {string} JSON text.
+     */
+    function serializeSidebarWidthCache(cache) {
+      const source = cache !== null && typeof cache === 'object' ? cache : {}
+      return JSON.stringify({
+        version: 1,
+        sidebarWidth: isValidSidebarWidth(source.sidebarWidth) ? source.sidebarWidth : null,
+        pending: source.pending === true
+      })
+    }
+
+    /**
+     * Validate one Host GET/POST response body. A `null` width is a valid
+     * "nothing stored yet" document; a wrong version, a missing field or an
+     * out-of-range/non-integer width is a protocol failure.
+     * @param {unknown} payload - decoded JSON body.
+     * @returns {{ ok: boolean, sidebarWidth: number | null }} normalized payload.
+     */
+    function normalizeSidebarWidthPayload(payload) {
+      const invalid = { ok: false, sidebarWidth: null }
+      if (payload === null || typeof payload !== 'object') return invalid
+      if (payload.version !== 1) return invalid
+      if (!Object.hasOwn(payload, 'sidebarWidth')) return invalid
+      if (payload.sidebarWidth === null) return { ok: true, sidebarWidth: null }
+      if (!isValidSidebarWidth(payload.sidebarWidth)) return invalid
+      return { ok: true, sidebarWidth: payload.sidebarWidth }
+    }
+
+    /**
+     * Decide whether boot should re-apply the cached width over the shell's
+     * in-memory default. A collapsed sidebar stays collapsed and a live drag is
+     * never fought; only a valid cached width that differs from the live
+     * preference is written.
+     * @param {{ cacheWidth?: unknown, currentWidth?: unknown, dragging?: unknown }} input - boot facts.
+     * @returns {{ apply: number | null }} width to apply, or null for no write.
+     */
+    function sidebarWidthBootstrap(input) {
+      const facts = input !== null && typeof input === 'object' ? input : {}
+      if (facts.dragging === true) return { apply: null }
+      if (!isValidSidebarWidth(facts.cacheWidth)) return { apply: null }
+      if (typeof facts.currentWidth !== 'number' || !Number.isFinite(facts.currentWidth) || facts.currentWidth <= 0) {
+        return { apply: null }
+      }
+      return { apply: Math.round(facts.currentWidth) === facts.cacheWidth ? null : facts.cacheWidth }
+    }
+
+    /**
+     * Decide whether one remote width may overwrite the live preference.
+     * Adopting while collapsed would expand the sidebar against the user and
+     * adopting during a drag would fight the pointer; an unchanged width is a
+     * no-op. Unadopted remote widths are still remembered by the caller.
+     * @param {{ currentWidth?: unknown, remoteWidth?: unknown, dragging?: unknown }} input - adoption facts.
+     * @returns {boolean} whether the remote width may be applied now.
+     */
+    function shouldAdoptSidebarWidth(input) {
+      const facts = input !== null && typeof input === 'object' ? input : {}
+      if (facts.dragging === true) return false
+      if (!isValidSidebarWidth(facts.remoteWidth)) return false
+      if (typeof facts.currentWidth !== 'number' || !Number.isFinite(facts.currentWidth) || facts.currentWidth <= 0) {
+        return false
+      }
+      return Math.round(facts.currentWidth) !== facts.remoteWidth
+    }
+    //#endregion
+
+    //#region feature: sidebar width — cache and store seam
+
+    /**
+     * Read the browser cache without throwing (private mode, storage disabled).
+     * @returns {{ sidebarWidth: number | null, pending: boolean }} parsed cache.
+     */
+    function readSidebarWidthCache() {
+      let text = null
+      try {
+        if (typeof localStorage === 'object' && localStorage !== null) {
+          text = localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)
+        }
+      } catch {
+        text = null
+      }
+      sidebarWidthRuntime.cache = parseSidebarWidthCache(text)
+      return sidebarWidthRuntime.cache
+    }
+
+    /**
+     * Write the browser cache without throwing. The Host document is
+     * authoritative; a blocked localStorage only costs the boot fast path.
+     * @param {{ sidebarWidth?: number | null, pending?: boolean }} cache - next document.
+     * @returns {{ sidebarWidth: number | null, pending: boolean }} the written document.
+     */
+    function writeSidebarWidthCache(cache) {
+      const source = cache !== null && typeof cache === 'object' ? cache : {}
+      const next = {
+        sidebarWidth: isValidSidebarWidth(source.sidebarWidth) ? source.sidebarWidth : null,
+        pending: source.pending === true
+      }
+      sidebarWidthRuntime.cache = next
+      try {
+        if (typeof localStorage === 'object' && localStorage !== null) {
+          localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, serializeSidebarWidthCache(next))
+        }
+      } catch {
+        // Best effort only.
+      }
+      return next
+    }
+
+    /**
+     * The live shell layout store instance seated on the built-in `root` slot.
+     * The layout plugin passes a store handle whose `create()` is overridden to
+     * return the one instance the frame renders, so this reaches the same store
+     * the drag handle writes.
+     * @param {object} ctx - client root context.
+     * @returns {object | null} layout store instance, or null before/without the seat.
+     */
+    function sidebarWidthLayoutStore(ctx) {
+      if (ctx === null || typeof ctx !== 'object') return null
+      const slots = ctx.slots
+      if (slots === null || typeof slots !== 'object' || typeof slots.entries !== 'function') return null
+      let entries = null
+      try {
+        entries = slots.entries('root')
+      } catch {
+        return null
+      }
+      if (!Array.isArray(entries)) return null
+      for (const entry of entries) {
+        const handle = entry?.store
+        if (handle === null || typeof handle !== 'object' || typeof handle.create !== 'function') continue
+        let instance = null
+        try {
+          instance = handle.create()
+        } catch {
+          instance = null
+        }
+        if (instance === null || typeof instance !== 'object') continue
+        const snapshot = typeof instance.getSnapshot === 'function' ? instance.getSnapshot() : null
+        if (snapshot === null || typeof snapshot !== 'object') continue
+        if (snapshot.layoutInfo === null || typeof snapshot.layoutInfo !== 'object') continue
+        if (instance.actions === null || typeof instance.actions !== 'object') continue
+        if (typeof instance.actions.setSidebar !== 'function') continue
+        if (typeof instance.subscribe !== 'function') continue
+        return instance
+      }
+      return null
+    }
+
+    /**
+     * Read the current preference (0 = collapsed) from a layout store instance.
+     * @param {object | null} instance - layout store instance.
+     * @returns {number | null} sidebar preference, or null when unavailable.
+     */
+    function sidebarWidthStoreValue(instance) {
+      if (instance === null || typeof instance !== 'object' || typeof instance.getSnapshot !== 'function') return null
+      let snapshot = null
+      try {
+        snapshot = instance.getSnapshot()
+      } catch {
+        snapshot = null
+      }
+      const value = snapshot?.layoutInfo?.sidebar
+      return typeof value === 'number' && Number.isFinite(value) ? value : null
+    }
+
+    /**
+     * Whether the user is currently dragging a shell resize handle. The frame
+     * and the handles publish `data-dragging` while a pointer is captured.
+     * @returns {boolean} whether a drag is in progress.
+     */
+    function sidebarWidthDragging() {
+      try {
+        if (typeof document === 'object' && document !== null && typeof document.querySelector === 'function') {
+          return document.querySelector('[data-dragging]') !== null
+        }
+      } catch {
+        return false
+      }
+      return false
+    }
+
+    /**
+     * Read the live feature state for the browser E2E. Reads only.
+     * @returns {{ attached: boolean, storeWidth: number | null, desiredWidth: number | null, syncState: string, cache: { sidebarWidth: number | null, pending: boolean } }} the probe.
+     */
+    function sidebarWidthProbe() {
+      return {
+        attached: sidebarWidthRuntime.attached === true,
+        storeWidth: sidebarWidthRuntime.storeWidth,
+        desiredWidth: sidebarWidthRuntime.desiredWidth,
+        syncState: sidebarWidthRuntime.syncState,
+        cache: readSidebarWidthCache()
+      }
+    }
+    //#endregion
+
+    //#region feature: sidebar width — install
+
+    /**
+     * Install the persisted, Host-synced sidebar width.
+     *
+     * Lifecycle: read the cache, attach to the shell's layout store (retried
+     * because the layout plugin may load after this one), re-apply the cached
+     * width before the first paint, then sync with the Host once. Every later
+     * gesture is captured from the store subscription, debounced and written
+     * through the Host; focus/visibility plus a 30 s interval retry while a
+     * write is pending. All listeners, timers and subscriptions live in the
+     * `ctx.effect` disposer. When the layout seat cannot be reached the feature
+     * stays inert (no cache writes, no network).
+     * @param {object} ctx - client root context.
+     * @returns {void}
+     */
+    function installSidebarWidth(ctx) {
+      ctx.effect(() => {
+        /** Set once the disposer ran. */
+        let disposed = false
+        /** Layout store instance once attached. */
+        let instance = null
+        /** Last preference observed on the store (px; 0 = collapsed). */
+        let lastObservedWidth = null
+        /** Last width this feature wrote/adopted, used to skip duplicate writes. */
+        let lastPersisted = null
+        /** Set while this feature writes the store (never captured as a user drag). */
+        let applyingRemote = false
+        /** Debounced drag width not yet sent. */
+        let pendingWidth = null
+        let saveTimer = 0
+        let retryTimer = 0
+        let syncInFlight = false
+        let saveInFlight = false
+        let selfCheckRaf = 0
+        let selfCheckFrames = 0
+        let attachTimers = []
+        let attachGiveUpTimer = 0
+        let slotsUnsubscribe = null
+        let storeUnsubscribe = null
+
+        sidebarWidthRuntime.attached = false
+        sidebarWidthRuntime.storeWidth = null
+        sidebarWidthRuntime.syncState = 'idle'
+        const initialCache = readSidebarWidthCache()
+        lastPersisted = initialCache.sidebarWidth
+        sidebarWidthRuntime.desiredWidth = initialCache.sidebarWidth
+
+        /**
+         * The durable width this feature wants the sidebar to show.
+         * @returns {number | null} persisted/desired width, or null when unknown.
+         */
+        const preferenceWidth = () => {
+          if (isValidSidebarWidth(sidebarWidthRuntime.desiredWidth)) return sidebarWidthRuntime.desiredWidth
+          if (isValidSidebarWidth(lastPersisted)) return lastPersisted
+          const cache = readSidebarWidthCache()
+          if (isValidSidebarWidth(cache.sidebarWidth)) return cache.sidebarWidth
+          // Nothing durable is known yet: the live preference is the only width
+          // worth seeding the Host document with.
+          return isValidSidebarWidth(lastObservedWidth) ? lastObservedWidth : null
+        }
+
+        /**
+         * Write one width through the shell's own action (the drag handle's path).
+         * @param {number} width - candidate width.
+         * @returns {void}
+         */
+        const applyStoreWidth = (width) => {
+          if (instance === null || disposed) return
+          const clamped = clampSidebarWidth(width)
+          if (clamped === null) return
+          const current = sidebarWidthStoreValue(instance)
+          applyingRemote = true
+          try {
+            if (current === null || Math.round(current) !== clamped) instance.actions.setSidebar(clamped)
+          } catch {
+            // A failed write leaves the previous preference in place.
+          } finally {
+            applyingRemote = false
+            lastObservedWidth = clamped
+            sidebarWidthRuntime.storeWidth = clamped
+          }
+        }
+
+        /** Re-arm or drop the retry interval from the current sync/cache state. */
+        const armRetryInterval = () => {
+          const cache = readSidebarWidthCache()
+          const needsRetry = !disposed && (sidebarWidthRuntime.syncState !== 'idle' || cache.pending)
+          if (needsRetry) {
+            if (retryTimer === 0) {
+              retryTimer = setInterval(() => { void syncSidebarWidth() }, SIDEBAR_WIDTH_SYNC_INTERVAL_MS)
+            }
+          } else if (retryTimer !== 0) {
+            clearInterval(retryTimer)
+            retryTimer = 0
+          }
+        }
+
+        /**
+         * One POST of a local width. Marks the cache pending before the request
+         * so a crash/reload still knows the Host may be behind.
+         * @param {number} width - positive width inside the range.
+         * @returns {Promise<boolean>} whether the Host confirmed the write.
+         */
+        const saveSidebarWidth = async (width) => {
+          if (disposed || typeof width !== 'number' || !Number.isFinite(width) || width <= 0) return false
+          const clamped = clampSidebarWidth(width)
+          if (clamped === null) return false
+          writeSidebarWidthCache({ sidebarWidth: clamped, pending: true })
+          sidebarWidthRuntime.desiredWidth = clamped
+          sidebarWidthRuntime.syncState = 'pending'
+          armRetryInterval()
+          saveInFlight = true
+          let payload = null
+          try {
+            const response = await fetch(appUrl(SIDEBAR_WIDTH_ROUTE), {
+              method: 'POST',
+              credentials: 'same-origin',
+              cache: 'no-store',
+              headers: { 'content-type': 'application/json', accept: 'application/json' },
+              body: JSON.stringify({ sidebarWidth: clamped })
+            })
+            if (response.ok) payload = normalizeSidebarWidthPayload(await response.json())
+          } catch {
+            payload = null
+          } finally {
+            saveInFlight = false
+          }
+          if (payload !== null && payload.ok) {
+            const confirmed = isValidSidebarWidth(payload.sidebarWidth) ? payload.sidebarWidth : clamped
+            lastPersisted = confirmed
+            sidebarWidthRuntime.desiredWidth = confirmed
+            writeSidebarWidthCache({ sidebarWidth: confirmed, pending: false })
+            sidebarWidthRuntime.syncState = 'idle'
+            armRetryInterval()
+            return true
+          }
+          sidebarWidthRuntime.syncState = 'error'
+          armRetryInterval()
+          return false
+        }
+
+        /**
+         * One GET of the Host document.
+         * @returns {Promise<{ ok: boolean, sidebarWidth: number | null } | null>} payload, or null on network/protocol failure.
+         */
+        const fetchSidebarWidth = async () => {
+          try {
+            const response = await fetch(appUrl(SIDEBAR_WIDTH_ROUTE), {
+              credentials: 'same-origin',
+              cache: 'no-store',
+              headers: { accept: 'application/json' }
+            })
+            if (!response.ok) return null
+            const payload = normalizeSidebarWidthPayload(await response.json())
+            return payload.ok ? payload : null
+          } catch {
+            return null
+          }
+        }
+
+        /** Run one sync pass: finish a pending local write, else read the Host. */
+        const syncSidebarWidth = async () => {
+          // A queued debounce or an in-flight write is newer than anything the
+          // Host could answer with: never let a read race a local width.
+          if (disposed || instance === null || syncInFlight || saveInFlight || pendingWidth !== null) return
+          syncInFlight = true
+          try {
+            const cache = readSidebarWidthCache()
+            if (cache.pending && cache.sidebarWidth !== null) {
+              await saveSidebarWidth(cache.sidebarWidth)
+              return
+            }
+            const payload = await fetchSidebarWidth()
+            if (payload === null) {
+              sidebarWidthRuntime.syncState = 'error'
+              writeSidebarWidthCache({ sidebarWidth: cache.sidebarWidth, pending: true })
+              armRetryInterval()
+              return
+            }
+            if (payload.sidebarWidth !== null) {
+              const remote = payload.sidebarWidth
+              if (shouldAdoptSidebarWidth({
+                currentWidth: sidebarWidthStoreValue(instance),
+                remoteWidth: remote,
+                dragging: sidebarWidthDragging()
+              })) {
+                applyStoreWidth(remote)
+              }
+              lastPersisted = remote
+              sidebarWidthRuntime.desiredWidth = remote
+              writeSidebarWidthCache({ sidebarWidth: remote, pending: false })
+              sidebarWidthRuntime.syncState = 'idle'
+              armRetryInterval()
+              return
+            }
+            // The Host has no width yet: the first writer seeds the document.
+            const local = preferenceWidth()
+            if (local !== null) {
+              await saveSidebarWidth(local)
+              return
+            }
+            writeSidebarWidthCache({ sidebarWidth: null, pending: false })
+            sidebarWidthRuntime.syncState = 'idle'
+            armRetryInterval()
+          } finally {
+            syncInFlight = false
+          }
+        }
+
+        /**
+         * Debounce one drag result, then persist it.
+         * @param {number} width - positive width observed on the store.
+         * @returns {void}
+         */
+        const scheduleSave = (width) => {
+          if (disposed || typeof width !== 'number' || !Number.isFinite(width) || width <= 0) return
+          const clamped = clampSidebarWidth(width)
+          if (clamped === null) return
+          pendingWidth = clamped
+          sidebarWidthRuntime.desiredWidth = clamped
+          if (saveTimer !== 0) clearTimeout(saveTimer)
+          saveTimer = setTimeout(() => {
+            saveTimer = 0
+            const target = pendingWidth
+            pendingWidth = null
+            if (disposed || target === null) return
+            if (target === lastPersisted && !readSidebarWidthCache().pending) return
+            void saveSidebarWidth(target)
+          }, SIDEBAR_WIDTH_SAVE_DEBOUNCE_MS)
+        }
+
+        /** Capture one store change: drags persist, collapse is ignored, reopen restores. */
+        const onStoreChange = () => {
+          if (disposed || instance === null) return
+          const width = sidebarWidthStoreValue(instance)
+          if (width === null) return
+          const previous = lastObservedWidth
+          lastObservedWidth = width
+          sidebarWidthRuntime.storeWidth = width
+          if (applyingRemote) return
+          // Collapsed is a transient UI state, never a preference.
+          if (width <= 0) return
+          if (previous !== null && previous > 0 && Math.round(previous) === Math.round(width)) return
+          if (previous === 0 && !sidebarWidthDragging()) {
+            // Native re-open writes the shell default (280); re-apply the durable
+            // preference instead so a collapse/expand cycle keeps the width.
+            const restore = preferenceWidth()
+            if (restore !== null && restore !== Math.round(width)) {
+              applyStoreWidth(restore)
+              sidebarWidthRuntime.desiredWidth = restore
+              void syncSidebarWidth()
+              return
+            }
+          }
+          scheduleSave(width)
+        }
+
+        /**
+         * The sidebar slot outlet anchor, whose parent is the sidebar grid column.
+         * @returns {Element | null} the measured column element, or null while unmounted.
+         */
+        const sidebarWidthColumn = () => {
+          try {
+            if (typeof document !== 'object' || document === null || typeof document.querySelector !== 'function') return null
+            const anchor = document.querySelector('[data-slot="sidebar"]')
+            return anchor === null ? null : anchor.parentElement
+          } catch {
+            return null
+          }
+        }
+
+        /**
+         * Dev guard: after the first apply, verify the rendered column matches
+         * the applied preference. A mismatch drops `attached` so the E2E fails
+         * loudly instead of silently rendering the wrong width.
+         * @returns {void}
+         */
+        const scheduleSelfCheck = () => {
+          if (typeof window !== 'object' || window === null || typeof window.requestAnimationFrame !== 'function') return
+          selfCheckFrames = 0
+          const step = () => {
+            selfCheckRaf = 0
+            if (disposed || instance === null) return
+            selfCheckFrames += 1
+            const preference = sidebarWidthStoreValue(instance)
+            const viewport = typeof window.innerWidth === 'number' ? window.innerWidth : 0
+            const column = sidebarWidthColumn()
+            if (column !== null && preference !== null
+              && preference > 0 && viewport >= SIDEBAR_WIDTH_CHECK_VIEWPORT_MIN && !sidebarWidthDragging()) {
+              const measured = Math.round(column.getBoundingClientRect().width)
+              if (Math.abs(measured - Math.round(preference)) > 1) sidebarWidthRuntime.attached = false
+              return
+            }
+            // The frame may not have rendered yet; retry for ~2 s, then stop silently.
+            if (selfCheckFrames < 120) selfCheckRaf = window.requestAnimationFrame(step)
+          }
+          selfCheckRaf = window.requestAnimationFrame(step)
+        }
+
+        /** Read the fresh cache, re-apply the boot width, and start syncing. */
+        const onAttached = () => {
+          sidebarWidthRuntime.attached = true
+          lastObservedWidth = sidebarWidthStoreValue(instance)
+          sidebarWidthRuntime.storeWidth = lastObservedWidth
+          const cache = readSidebarWidthCache()
+          lastPersisted = cache.sidebarWidth
+          if (isValidSidebarWidth(cache.sidebarWidth)) sidebarWidthRuntime.desiredWidth = cache.sidebarWidth
+          const boot = sidebarWidthBootstrap({
+            cacheWidth: cache.sidebarWidth,
+            currentWidth: lastObservedWidth,
+            dragging: sidebarWidthDragging()
+          })
+          if (boot.apply !== null) applyStoreWidth(boot.apply)
+          storeUnsubscribe = typeof instance.subscribe === 'function'
+            ? instance.subscribe(() => onStoreChange())
+            : null
+          scheduleSelfCheck()
+          void syncSidebarWidth()
+        }
+
+        /** Release the attachment watchers (slot subscription + retry timers). */
+        const stopAttachWatchers = () => {
+          for (const timer of attachTimers) clearTimeout(timer)
+          attachTimers = []
+          if (attachGiveUpTimer !== 0) {
+            clearTimeout(attachGiveUpTimer)
+            attachGiveUpTimer = 0
+          }
+          if (slotsUnsubscribe !== null) {
+            try {
+              slotsUnsubscribe()
+            } catch {
+              // A failing unsubscribe must not wedge the disposer.
+            }
+            slotsUnsubscribe = null
+          }
+        }
+
+        /** Try once to reach the layout store; arm retries when it is not there yet. */
+        const attach = () => {
+          if (disposed || instance !== null) return
+          const found = sidebarWidthLayoutStore(ctx)
+          if (found === null) return
+          instance = found
+          stopAttachWatchers()
+          onAttached()
+        }
+
+        /** Arm the retry watchers for a layout store that loads after this plugin. */
+        const armAttachWatchers = () => {
+          try {
+            slotsUnsubscribe = typeof ctx.slots.subscribe === 'function' ? ctx.slots.subscribe('root', () => attach()) : null
+          } catch {
+            slotsUnsubscribe = null
+          }
+          for (const delay of SIDEBAR_WIDTH_ATTACH_DELAYS_MS) {
+            attachTimers.push(setTimeout(() => attach(), delay))
+          }
+          attachGiveUpTimer = setTimeout(() => {
+            attachGiveUpTimer = 0
+            if (instance !== null) return
+            // No seat: stay inert (no cache writes, no network), report through probe().
+            stopAttachWatchers()
+          }, SIDEBAR_WIDTH_ATTACH_GIVE_UP_MS)
+        }
+
+        const onFocus = () => { void syncSidebarWidth() }
+        const onVisibility = () => {
+          let state = 'visible'
+          try {
+            state = typeof document === 'object' && document !== null ? String(document.visibilityState) : 'visible'
+          } catch {
+            state = 'visible'
+          }
+          if (state !== 'hidden') void syncSidebarWidth()
+        }
+
+        window.addEventListener('focus', onFocus)
+        document.addEventListener('visibilitychange', onVisibility)
+        attach()
+        if (instance === null) armAttachWatchers()
+
+        return () => {
+          disposed = true
+          stopAttachWatchers()
+          if (saveTimer !== 0) clearTimeout(saveTimer)
+          saveTimer = 0
+          if (retryTimer !== 0) clearInterval(retryTimer)
+          retryTimer = 0
+          if (selfCheckRaf !== 0) {
+            try {
+              window.cancelAnimationFrame(selfCheckRaf)
+            } catch {
+              // Ignore a missing frame handle.
+            }
+            selfCheckRaf = 0
+          }
+          if (storeUnsubscribe !== null) {
+            try {
+              storeUnsubscribe()
+            } catch {
+              // A failing unsubscribe must not wedge the disposer.
+            }
+            storeUnsubscribe = null
+          }
+          window.removeEventListener('focus', onFocus)
+          document.removeEventListener('visibilitychange', onVisibility)
+          instance = null
+          sidebarWidthRuntime.attached = false
+          sidebarWidthRuntime.syncState = 'idle'
+        }
+      }, 'power-suite: sidebar width persistence')
+    }
+    //#endregion
+    //#endregion
+
     //#region plugin
     /**
      * Register dictionaries, the page type, and its Session-scoped body.
@@ -23636,6 +24361,7 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       installComposerImageGallery(ctx)
       installUpdatePrompt(ctx)
       installUiAnnotation(ctx)
+      installSidebarWidth(ctx)
     }
 
     // Test seam: `test/helpers/client-module.mjs` materializes this factory under a
@@ -23821,6 +24547,22 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         parseStableVersion,
         isNewerStableVersion,
         UPDATE_STORAGE_KEY
+      }
+      // Sidebar width: pure clamp/cache/payload/bootstrap/adopt decisions plus the
+      // attach probe the browser E2E reads. `sidebarWidthProbe` is read-only.
+      globalThis.__POWER_SUITE_TEST_HOOKS__.sidebarWidth = {
+        SIDEBAR_WIDTH_ROUTE,
+        SIDEBAR_WIDTH_STORAGE_KEY,
+        SIDEBAR_WIDTH_MIN,
+        SIDEBAR_WIDTH_MAX,
+        clampSidebarWidth,
+        isValidSidebarWidth,
+        parseSidebarWidthCache,
+        serializeSidebarWidthCache,
+        normalizeSidebarWidthPayload,
+        sidebarWidthBootstrap,
+        shouldAdoptSidebarWidth,
+        probe: sidebarWidthProbe
       }
     }
 

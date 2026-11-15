@@ -14,6 +14,7 @@ import { installSessionPins } from './features/session-pins/host.js'
 import { installSessionActivity } from './features/session-activity/host.js'
 import { installSessionArtifacts } from './features/session-artifacts/host.js'
 import { installSettings } from './features/settings/host.js'
+import { installSidebarWidth } from './features/sidebar-width/host.js'
 import { installUpdateCheck } from './features/update-check/host.js'
 import { installWorkspacePresets } from './features/workspace-presets/host.js'
 
@@ -50,6 +51,7 @@ export function apply(ctx) {
   installSettings(ctx)
   installReadAcks(ctx)
   installSessionPins(ctx)
+  installSidebarWidth(ctx)
   installSessionActivity(ctx)
   installUpdateCheck(ctx)
 }
