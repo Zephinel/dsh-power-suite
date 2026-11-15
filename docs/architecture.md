@@ -15,6 +15,7 @@ src/index.js            Host entry (Node)
 │                                        POST /api/power-suite.continue
 ├─ features/settings/host.js             GET/POST /api/power-suite.settings
 ├─ features/read-acks/host.js            GET/POST /api/power-suite.read-acks
+├─ features/session-pins/host.js         GET/POST /api/power-suite.session-pins
 ├─ features/session-activity/host.js     GET  /api/power-suite.session-activity
 ├─ features/update-check/host.js         GET  /api/power-suite.update
 └─ ctx.effect(...)                       every registration lives with the plugin
@@ -25,7 +26,7 @@ src/client.js           Browser entry (DSH module loader)
 ├─ Workspace preset context-menu submenu
 ├─ Composer prompt-history keys + right-edge history rail
 ├─ Draft attachment memory seat (invisible)
-├─ Dynamic Workspaces buckets + running & recent Sessions card
+├─ Dynamic Workspaces buckets + running & recent card (pin, row menu, pending notices)
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
 ├─ UI element annotation mode (launcher, right rail, floating-surface picking, marks/detail card, note popover, composer reference chips, batch collection)
 ├─ Plugins-page settings section
@@ -135,6 +136,30 @@ per-id max with a TOCTOU window). Read state is derived at render
 read-error behavior is covered by unit/`chmod` tests only — it was not
 live-forced against a real unreadable file, and the client's 401/403 retry
 classification has no node test (browser-bundle code).
+
+### Session pins
+
+A durable Host document (`$DSH_HOME/dsh-power-suite/session-pins.json`, schema
+version 1, `{ version, rev, pinned }`) holds the pinned main-Session ids of the
+Running & recent card, so every browser/profile using that `$DSH_HOME` — i.e.
+every paired device — converges on one pinned set. Ids are sanitized (non-empty
+strings ≤200 chars, deduped, insertion order preserved), the list is capped at
+**500** (the oldest pin drops first), and operations are applied in arrival
+order (**last write wins per Session**); pinning an already pinned id or
+unpinning an absent one is a no-op, and `rev` bumps only on a real change. The
+store writes atomically (temporary sibling + rename, `0600`), reads a
+missing/empty/corrupt/version-mismatched document as empty, and its failures are
+typed (`SESSION_PINS_READ_FAILED` for a non-ENOENT read). One authenticated route
+pair serves it: `GET /api/power-suite.session-pins` → the document;
+`POST /api/power-suite.session-pins` with `application/json` (≤64 KiB of UTF-8
+bytes) and at most 200 `{op:"pin"|"unpin", id}` operations → the updated
+document. Errors are no-store: `415` for a non-JSON content type, `413` above
+the body cap, `400` for a malformed body, and `500 { code: "store-read-failed" }`
+/ `500 { code: "store-failed" }` when the document cannot be read/written. The
+browser keeps a versioned `localStorage` cache/queue (optimistic first paint and
+offline/local-only use), GETs the document on mount/focus/visibility/every 30 s,
+migrates cached pins on first contact and POSTs queued operations; a missing
+route or transport failure degrades to local-only, never an error state.
 
 ### Session activity ledger
 
@@ -372,7 +397,47 @@ indicator uses the brand `deepseek-fill` glyph. Read state is derived from the
 Host-shared baseline (`baseline >= activity - 1000 ms`), not from running status.
 Rows carry a hover/focus-revealed **Continue** (interrupted only; opens the
 Session and then sends the continuation) and, on parent rows, **New session**
-(creates a blank Session in the row's cwd and opens it). While UI-element
+(creates a blank Session in the row's cwd and opens it). Main parent rows also
+carry the card's **title-left pin button**, the only pin owner: the pin is the
+card's own Host-shared state (see *Session pins* above), deliberately
+independent of the native sidebar pin list, and its slot is collapsed at rest —
+hover/focus expands the slot first and then fades the in/out button (220 ms
+expand/collapse, 160 ms fades, instant under reduced motion) while pinned rows
+keep the filled business-primary marker and its space permanently plus a subtle
+violet tint (a single row-level layer; the body pill stays transparent). Pinned
+main Sessions sort first (newest activity first) and never retire with the
+finished-Session retention window; unpin re-derives the row under the ordinary
+rules from its original end time. Top-level rows (the current rainbow row included)
+expose the native Session actions behind a "…" trigger in the 48 px time slot:
+the row keeps its time at rest, and hover/focus (or an open menu) hides the time
+and reveals the trigger, restoring it on leave. The trigger paints no hover
+background (only the keyboard `focus-visible` ring; on the rainbow row it gets
+the same `brightness(1.2)` suppression as the other current-row controls), and
+nested subagent rows have no trigger. The trigger opens the card's **own
+popup** built from
+`ctx.contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })`:
+Rename, Fork, Copy Session ID, Show in Finder, and Archive keep their native
+behavior, the **Pin/Unpin contribution is filtered out** (the pin button owns
+pinning), and the popup renders labels only — no icons and no shortcut hints —
+with arrow/Home/End navigation and Escape/outside/scroll/resize dismissal.
+Pending-interaction notices are a client-only addition beside the card: the seat
+subscribes to `props.useSessionStatus` (the same
+`SessionStatus.pendingInteraction` the native composer cards use), derives up to
+three waiting Sessions other than the one open in the main view (kinds
+`question`, `plan-review`, `approval`; blank, subagent, archived, and current
+Sessions filtered out), and renders a fixed 320 px stack inside the card's
+existing overlay-panel portal, with a "+N more" line beyond three. Placement
+prefers the card's right edge, flips to its left edge when it does not fit, and
+clamps to an 8 px viewport inset, re-measuring on resize, scroll, sidebar
+expansion, and card height changes. The stack registers no Host route and writes
+no store, its styles ride the feature's existing `<style>` block, and no nodes
+are inserted into the native sidebar tree for it. Each notice only opens its
+Session — the native composer card remains the answering surface — and a notice
+disappears on the next render once the Session becomes current, the interaction
+settles, or it is archived (one notice per Session, because
+`pendingInteraction` is one per Session).
+
+While UI-element
 annotation mode is active the hover card is pinned for pointer/selection
 (`data-psd-hovercard`, `data-psd-pinned`, `pointer-events: auto`, z-index 120)
 and clears on the annotation mode-state event or mode exit. The card body hides
@@ -698,7 +763,7 @@ re-open a card the user just dismissed.
 | `contextMenus.register` (`workspace`) | Default agent preset submenu |
 | `conversation.input.overlay` | Renderless prompt-history keyboard seat, draft-attachment memory seat, and the annotation mode's Session bridge seat (Session id, input actions, and the Session's cwd/workspace label mirrored from the slot's `useSessions` hook) |
 | `conversation.input.dock` | Session hooks for the body-portaled prompt-history rail |
-| `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation, the UI element annotation launcher/rail/popover, and the update notice card (`power-suite.update-prompt`) |
+| `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation (card, buckets, pin button, row "…" menu, pending-interaction notices), the UI element annotation launcher/rail/popover, and the update notice card (`power-suite.update-prompt`) |
 | `plugins.bundle.config` | Plugin settings page |
 | `sidebar.session.row.leading` | Interrupted-session badge plus the hover/focus inline Continue triangle |
 
@@ -719,6 +784,15 @@ re-open a card the user just dismissed.
   sidebar/native tree, never performs an install, and its only persisted state
   is the browser-local `power-suite.update-prompt` document. The Host route that
   feeds it is read-only and cached in-process.
+- The Dynamic Workspaces pin state has exactly one durable owner (the
+  `session-pins` Host document) and one UI owner (the card's title-left pin
+  button): the row "…" menu renders native action contributions but always
+  filters the Pin/Unpin entry, and the card never reads or writes the native
+  sidebar pin list.
+- The Dynamic Workspaces row menu and pending-interaction notices are
+  browser-only surfaces: the menu resolves native contributions without
+  registering any of its own, and the notices never answer an interaction and
+  add no Host route/store.
 - The UI element annotation mode stays browser-only: it adds no Host route,
   service, Session-log write, or profile change. Its v2 records are browser
   `localStorage` memory (capped at 100, never synced); the two modifiers,

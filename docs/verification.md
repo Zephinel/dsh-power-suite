@@ -2152,3 +2152,119 @@ before it):
 - Publish-manifest gate shapes: `private: true` exit 1 / field deleted exit 0 /
   `private: false` exit 0.
 - Live GUI harness: `node test/browser/update-prompt.e2e.mjs` → **21/21**.
+
+## 2026-11-15 — Running & recent 行操作与待回答问题提醒（feat/running-panel-ux）
+
+Branch `feat/running-panel-ux` (HEAD `5f4df3e`, on top of `db62343` and
+`0ad41a0`). Two additions to the Running & recent card; the plugin-owned card
+pin is **kept** (restored) and remains the single pin owner.
+
+- **Card pin (kept/restored)** — the card's title-left pin button is the only
+  pin owner. It keeps/maintains the card-owned Host-shared document
+  (`$DSH_HOME/dsh-power-suite/session-pins.json`, `{version, rev, pinned}`, max
+  500 ids, atomic writes, `rev` on real change) served by the authenticated
+  `GET|POST /api/power-suite.session-pins` route, with the versioned
+  `localStorage` cache/queue for first paint/offline use. The title-left button
+  keeps the two-phase hover reveal (slot expands, then the button fades in;
+  leaving reverses; instant under reduced motion), pinned rows keep the filled
+  marker + its space and a single-layer violet tint, pinned rows sort first
+  (newest activity first) and never retire with the finished-Session window,
+  and unpin re-derives the row from its original end time. The card never reads
+  or writes the native sidebar pin list; blank/archived/subagent/unknown ids are
+  ignored. The restored Host feature and its tests are part of this tree.
+- **Row "…" menu (new)** — every top-level row (the current rainbow row
+  included) keeps its time visible at rest and carries a "…" trigger in the
+  48 px time slot. Row hover or keyboard `focus-within` hides the time and shows
+  the trigger; the swap **stays while the row's menu is open**
+  (`data-menu-open`), and leaving the row restores the time. The trigger paints
+  **no hover background**: hovering it leaves `background-color: rgba(0,0,0,0)`
+  (the global "…" hover block was removed; only the keyboard `focus-visible`
+  ring remains), and on the rainbow row it gets the same `brightness(1.2)`
+  suppression as the New session/pin/Continue controls. Subagent rows have no
+  trigger. The trigger opens the card's **own popup** (`data-psd-menu`) built
+  from
+  `ctx.contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })`:
+  Rename, Fork, Copy Session ID, Show in Finder, and Archive keep their native
+  behavior and labels, the **Pin/Unpin contribution is filtered out** (the pin
+  button owns pinning), and the popup shows **labels only** — no action icons and
+  no keyboard-shortcut hints. It is a 224 px card-styled surface (theme tokens),
+  supports arrow/Home/End navigation (skipping disabled items), closes on
+  Escape / outside pointer press / scroll / resize, and shows a loading
+  placeholder while the contributions resolve. The swap is desktop
+  hover/focus driven.
+- **Pending-interaction notices (new)** — client-only derivation from
+  `props.useSessionStatus` / `SessionStatus.pendingInteraction` for
+  `question`, `plan-review`, and `approval` in Sessions other than the one open
+  in the main view (blank, subagent, and archived Sessions filtered out). A
+  fixed 320 px stack renders beside the card (prefers the right edge, flips to
+  the left edge, clamps to an 8 px viewport inset; re-measured on resize,
+  scroll, sidebar expansion, and card height), newest activity first, up to 3
+  cards plus a "+N more" line. Each card shows the kind glyph/label, the
+  Session title, the first question text (or reason/tool-name fallback), and a
+  "{count} questions" line for multi-question batches. Clicking opens that
+  Session — preview only, the native composer card remains the answering
+  surface — and a notice disappears on the next render when the Session becomes
+  current, the interaction settles, or it is archived. No Host route, no extra
+  sidebar DOM, styles in the feature's existing `<style>` block; one notice per
+  Session.
+- **Docs / tests updated to this truth** — `docs/dynamic-workspaces.md`
+  (restored `Pinned Sessions` plus new `Row actions` and
+  `Pending interaction notices`, limits, manual checks), `docs/architecture.md`
+  (session-pins Host document/route/store, client-only menu/notice surfaces),
+  `docs/limitations.md` (card-pin `$DSH_HOME` sharing, label-only popup,
+  preview-only notices), `docs/overview.md`, `README.md`, `CHANGELOG.md`;
+  `test/browser/sidebar.e2e.mjs` keeps the restored `--pin` scenarios and
+  route/cache/DOM probes; full-mode `b2-3` now also asserts the uniform
+  time→"…" highlight swap (time visible at rest is covered by the at-rest
+  geometry probe; hover hides the time and shows the trigger; the trigger paints
+  no hover background; leaving restores the time; subagent rows have none), and
+  `--pin` `r3-10` asserts the current rainbow row at rest (time visible, trigger
+  hidden), its hover swap, and its hover-free suppression in the atmosphere
+  control list; `test/browser/README.md` documents the new row-menu/notice
+  surfaces and their evidence.
+
+Automated gates (measured by the Lead on this tree, 2026-11-15):
+
+- `npm test`: **311/311 pass**, 0 fail, **17 test files** — includes the 15
+  restored Host `test/session-pins.test.js` cases, the 12 restored
+  `test/dynamic-workspaces-pin.test.js` card-pin cases, the new
+  `test/dynamic-workspaces-panel.test.js` notice/placement cases, and the
+  update-check suites.
+- `npm run check`: **PASS — 22 modules, 17 test files**;
+  `docs links ok: 21 Markdown files`;
+  `release-notes: ok (0.1.0; 6 highlight(s), 6 English)`; `npm pack` OK
+  (entryCount 85).
+- `node --check test/browser/sidebar.e2e.mjs`: pass.
+
+Live row-menu probe (Lead, real running GUI + throwaway headless Chrome):
+**15/15 checks**, 0 page errors — at rest the time is visible and the "…"
+trigger hidden; on row hover the time hides, the trigger shows, and the
+restored title-left pin slot animates in (button visible); the trigger paints
+no hover background (`transparent`); the card-owned popup opens, keeps the
+time/trigger swap while open, and lists Rename / Fork session / Copy Session
+ID / Show in Finder / Archive session with **no Pin/Unpin entry**; Escape
+closes it and leaving the row restores the time. The current rainbow row
+follows the same rule and keeps its rainbow; 0 page errors.
+
+Live notice-component probe (Lead, real GUI with the test-hook seam and the
+real `DwPendingNotices` component mounted with synthetic notices — question /
+plan / approval plus a 2-question batch and a 2-card overflow): **13/13
+checks**, 0 page exceptions/console errors — stack rendered with
+`role="status"` and computed width **320 px**; three cards with kinds
+question/plan/approval in order; Session titles, headlines and the "2 questions"
+meta line; overflow line "+2 more"; every card carries its kind glyph; clicking
+the plan card reports `session-plan` through the component's `onOpen`;
+disposing the probe removes the stack.
+
+**Evidence gap (honest):** no real pending question/approval was triggered in
+the running GUI, so the end-to-end
+`SessionStatus.pendingInteraction` → auto-show/auto-hide path is covered only by
+unit tests (`dwPendingNotices`, current/archived filters) and code review; the
+live notice probe used **synthetic** data, and placement was verified in unit
+logic rather than against a live moving sidebar. The row-menu probe is live
+real-DOM/real-popup evidence but is a Lead throwaway probe, not part of the
+committed E2E suite: the committed suite asserts the uniform time↔"…" highlight
+swap and its no-hover-background behavior (full-mode `b2-3`, `--pin` `r3-10`)
+but not the popup action list or the absent Pin entry; the Pin filtering is
+documented from the source and the live probe. The restored `--pin` E2E
+scenarios/probes were not part of the recorded gate list above.

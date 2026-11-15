@@ -136,6 +136,41 @@
   rows intentionally have **no** New session action (their action/disclosure
   columns are empty spacers so times still align); an interrupted child keeps
   only Continue in the action slot. Hover never shifts the grid.
+- **The row "…" menu is the card's own popup.** Every top-level row (including
+  the current rainbow row) keeps its time at rest; hover/focus hides the time
+  and shows the trigger, and the swap stays while the menu is open. It is a
+  desktop hover/focus affordance, and subagent rows have no trigger. The
+  trigger paints **no hover background** — only the keyboard `focus-visible`
+  ring remains — and on the rainbow row it gets the same `brightness(1.2)`
+  suppression as the other current-row controls. The popup shows **labels
+  only** — no action icons and no keyboard-shortcut hints. Its entries are the
+  shell's native Session action contributions, so an action a Host build does
+  not contribute is simply absent, and the **Pin/Unpin entry is always filtered
+  out**: pinning is owned by the title-left pin button, so the menu can never
+  unpin or pin a Session.
+- **The pending-interaction notice stack is preview-only.** It shows at most
+  three waiting Sessions (question, plan review, approval) and a "+N more"
+  line; it never answers anything, so answering still happens in that
+  Session's native composer card after the notice opens the Session. It exists
+  only while another Session is waiting and the sidebar/panel is visible:
+  collapsing the sidebar to rail mode hides it with the card. Only those three
+  interaction kinds are listed, and because `pendingInteraction` is one per
+  Session a multi-question batch still produces exactly one notice. The notice
+  position is fixed and re-measured, but it cannot be dismissed on its own
+  (answering/settling, opening the Session, or archiving it removes it), and
+  its list is limited to Sessions that are in the Session catalog — a waiting
+  Session the catalog no longer lists gets no notice.
+- **The card pin is shared per `$DSH_HOME`, not per profile.** The Host document
+  `$DSH_HOME/dsh-power-suite/session-pins.json` is served by the suite's own
+  `GET|POST /api/power-suite.session-pins` route, so every browser and profile
+  using that home converges on one pinned set; `--profile` is only a config
+  layer, so profile isolation is **not** provided. The route needs a plugin Host
+  recompose (reload the plugin / restart the Host process) after upgrading;
+  before that (or on transport failure) the card keeps working from its
+  versioned `localStorage` cache/queue and retries on the next sync cycle.
+  Operations are last-write-wins per Session, the document is bounded at **500**
+  ids (oldest dropped first), and a client's optimistic cache can be up to one
+  sync cycle ahead of another browser (GET on mount/focus/visibility/30 s).
 - **Continue sends a real continuation request.** The interrupted-row Continue
   action reuses the suite's continuation flow and actually asks the Host to
   resume that Session; it is a retry, so a persistent cause (missing credential,

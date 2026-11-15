@@ -23,8 +23,11 @@
  *       gradient mask.
  *   B2  hover highlight geometry: full-row hover surface like the native rows, fixed-size control highlights
  *       (22 px New session button, 24 px chevron) on the same columns in every row;
- *       revealing the actions moves no column, and the main-row New session action
- *       still creates and opens a blank Session.
+ *       revealing the actions moves no column, the main-row New session action
+ *       still creates and opens a blank Session, and the 48 px time slot swaps to
+ *       the "…" row-menu trigger on highlight (every top-level row including the
+ *       current rainbow one; the trigger paints no hover background) and back on
+ *       leaving.
  *   B3  plugin input focus uses the shared rainbow track glow (prompt-history search
  *       field), with no solid-color focus border left behind.
  *   B4  the current Session row gets the rainbow smoke glow painted on the bottom face
@@ -2429,12 +2432,35 @@ async function runLayoutChecks({ page, results, state }) {
     return `parent New session ${parentAction.width}x${parentAction.height} at x=${parentAction.left}; child action buttons 0 in its reserved 22px slot; header toggle ${headerToggle.rect.width}x30`
   })
 
-  await results.check('b2-3', 'hover-revealing the row actions moves no fixed column (two-phase pin reveal slides only the hovered title)', async () => {
+  await results.check('b2-3', 'the time↔"…" row-menu swap follows highlight on every top-level row and paints no hover background', async () => {
     await page.moveTo(900, 500)
     await sleep(250)
     const before = await page.eval(probe.panelGeometry)
     const parentIndex = state.geometry.rows.findIndex((row) => row.kind === 'parent')
     const hoveredIndex = before.rows.findIndex((row) => row.kind === 'parent')
+    const parentRowIndex = before.rows.slice(0, hoveredIndex).filter((row) => row.kind === 'parent').length
+    const menuFactsOf = (rowIndex) => page.eval((index) => {
+      const row = [...document.querySelectorAll('.psd-run')][index]
+      if (row === undefined) return null
+      const styleOf = (node) => (node === null ? null : getComputedStyle(node))
+      const time = row.querySelector('.psd-run-time')
+      const more = row.querySelector('.psd-run-more')
+      return {
+        current: row.classList.contains('psd-run-current'),
+        timeOpacity: time === null ? null : styleOf(time).opacity,
+        morePresent: more !== null,
+        moreOpacity: more === null ? null : styleOf(more).opacity,
+        moreVisibility: more === null ? null : styleOf(more).visibility,
+        morePointerEvents: more === null ? null : styleOf(more).pointerEvents,
+      }
+    }, rowIndex)
+    // At rest every top-level row keeps its time and hides the "…" trigger.
+    const rest = await menuFactsOf(parentRowIndex)
+    assert(rest !== null, 'the resting parent row was not found for the row-menu check')
+    assert(rest.morePresent, 'every top-level row must render the "…" trigger')
+    assertEqual(rest.timeOpacity, '1', `a resting top-level row must keep its time (opacity ${rest.timeOpacity})`)
+    assertEqual(rest.moreOpacity, '0', `the "…" trigger must be hidden at rest (opacity ${rest.moreOpacity})`)
+    assertEqual(rest.moreVisibility, 'hidden', `the "…" trigger must be hidden at rest (${rest.moreVisibility})`)
     await hoverRow(page, parentIndex)
     await sleep(650)
     const during = await page.eval(probe.panelGeometry)
@@ -2469,10 +2495,43 @@ async function runLayoutChecks({ page, results, state }) {
         assertNear(now.title[0], was.title[0], 0.5, `row ${index} title left edge moved on hover (${was.title[0]} -> ${now.title[0]})`)
       }
     }
+    // Uniform row-menu rule: on highlight the time hides and the "…" trigger appears
+    // (same for the current rainbow row); the swap is kept while the menu is open.
+    const hoveredMenu = await menuFactsOf(parentRowIndex)
+    assert(hoveredMenu !== null, 'the hovered parent row disappeared during the row-menu check')
+    assertEqual(hoveredMenu.timeOpacity, '0', `a highlighted top-level row must hide its time (opacity ${hoveredMenu.timeOpacity})`)
+    assertEqual(hoveredMenu.moreOpacity, '1', `the "…" trigger must reveal on highlight (opacity ${hoveredMenu.moreOpacity})`)
+    assertEqual(hoveredMenu.moreVisibility, 'visible', `the "…" trigger must be visible on highlight (${hoveredMenu.moreVisibility})`)
+    assertEqual(hoveredMenu.morePointerEvents, 'auto', `the "…" trigger must be interactive on highlight (${hoveredMenu.morePointerEvents})`)
+    // Hovering the trigger paints no hover background; the rainbow row keeps only its
+    // brightness(1.2) suppression.
+    const trigger = await hoverCardControl(page, 'parent', state.geometry.rows[parentIndex].title, '.psd-run-more')
+    assertEqual(trigger.background, 'rgba(0, 0, 0, 0)', `the "…" trigger must paint no hover background (${trigger.background})`)
+    if (hoveredMenu.current) {
+      assertEqual(trigger.filter, 'brightness(1.2)', `the rainbow row's "…" trigger hover must keep its brightness suppression (filter ${trigger.filter})`)
+    } else {
+      assertEqual(trigger.filter, 'none', `an ordinary row's "…" trigger must not carry the atmosphere lift (filter ${trigger.filter})`)
+    }
+    assertEqual(await page.eval(() => document.querySelectorAll('.psd-child .psd-run-more').length), 0,
+      'subagent rows must not render the "…" trigger')
     await page.moveTo(900, 500)
     await sleep(500)
+    const restored = await page.eval((title) => {
+      const row = [...document.querySelectorAll('.psd-run')]
+        .find((element) => ((element.querySelector('.psd-run-title')?.innerText ?? '').trim()) === title)
+      if (row === undefined) return null
+      const time = row.querySelector('.psd-run-time')
+      const more = row.querySelector('.psd-run-more')
+      return {
+        timeOpacity: time === null ? null : getComputedStyle(time).opacity,
+        moreVisibility: more === null ? null : getComputedStyle(more).visibility,
+      }
+    }, state.geometry.rows[parentIndex].title)
+    assert(restored !== null, `the hovered row "${short(state.geometry.rows[parentIndex].title, 40)}" disappeared after the pointer left`)
+    assertEqual(restored.timeOpacity, '1', `the time must return after the pointer leaves (opacity ${restored.timeOpacity})`)
+    assertEqual(restored.moreVisibility, 'hidden', `the "…" trigger must hide after the pointer leaves (${restored.moreVisibility})`)
     const hoveredMargin = Number(before.rows[hoveredIndex].titleMarginLeft ?? before.rows[hoveredIndex].titleShift ?? 0)
-    return `columns fixed (time ${before.rows[0].time.rect.right}, action ${before.rows[0].actions.rect.right}, disclosure ${before.rows[0].toggle.right}); hovered title slid ${before.rows[hoveredIndex].title.rect.left} -> ${during.rows[hoveredIndex].title.rect.left} = 25 − rest marginLeft ${hoveredMargin} (two-phase reveal), other titles static`
+    return `rest: time visible / "…" hidden; hover: time hidden / "…" visible and no hover background${hoveredMenu.current ? ' (rainbow row keeps its brightness(1.2) suppression)' : ''}; columns fixed (time ${before.rows[0].time.rect.right}, action ${before.rows[0].actions.rect.right}, disclosure ${before.rows[0].toggle.right}); hovered title slid ${before.rows[hoveredIndex].title.rect.left} -> ${during.rows[hoveredIndex].title.rect.left} = 25 − rest marginLeft ${hoveredMargin} (two-phase reveal); subagent rows have no trigger; leaving restores the time`
   })
 
   await results.check('b2-5', 'the interrupted Continue triangle sits immediately after the badge and never moves the time column', async () => {
@@ -9098,6 +9157,26 @@ async function runPinChecks({ page, results, state }) {
       `the current-Session card row is not a parent atmosphere row (${short(JSON.stringify(current), 220)})`)
     assertEqual(current.hovered, false, 'the current card row must not be hovered for the resting brightness assertion')
     const currentTitle = current.title
+    // The current rainbow row follows the same row-menu rule as every top-level row:
+    // at rest the time is visible and the "…" trigger hidden; hover swaps them.
+    const currentMenu = await page.eval(() => {
+      const row = document.querySelector('.psd-run-current')
+      if (row === null) return null
+      const styleOf = (node) => (node === null ? null : getComputedStyle(node))
+      const time = row.querySelector('.psd-run-time')
+      const more = row.querySelector('.psd-run-more')
+      return {
+        timeOpacity: time === null ? null : styleOf(time).opacity,
+        morePresent: more !== null,
+        moreOpacity: more === null ? null : styleOf(more).opacity,
+        moreVisibility: more === null ? null : styleOf(more).visibility,
+      }
+    })
+    assert(currentMenu !== null, 'the current atmosphere row disappeared before the row-menu check')
+    assert(currentMenu.morePresent, 'the current rainbow row must render the "…" trigger')
+    assertEqual(currentMenu.timeOpacity, '1', `the current rainbow row must keep its time at rest (opacity ${currentMenu.timeOpacity})`)
+    assertEqual(currentMenu.moreOpacity, '0', `the current rainbow row's trigger must be hidden at rest (opacity ${currentMenu.moreOpacity})`)
+    assertEqual(currentMenu.moreVisibility, 'hidden', `the current rainbow row's trigger must be hidden at rest (${currentMenu.moreVisibility})`)
     // Fix #3: the affordance is a content brightness lift, not a background.
     assertContentBrightness(current, 'brightness(1.15)', 'current card row at rest', { expectTransition: true })
     await hoverCardRowByTitle(page, 'parent', currentTitle)
@@ -9118,10 +9197,26 @@ async function runPinChecks({ page, results, state }) {
     assertEqual(hovered.pin.opacity, '1', `the pin control must still reveal on hover over the atmosphere row (opacity ${hovered.pin.opacity})`)
     assertEqual(hovered.pin.visibility, 'visible', `the pin control must be visible on hover over the atmosphere row (${hovered.pin.visibility})`)
     assertContentBrightness(hovered, 'brightness(1.5)', 'hovered current card row', { expectTransition: true })
+    const currentMenuHover = await page.eval(() => {
+      const row = document.querySelector('.psd-run-current')
+      if (row === null) return null
+      const styleOf = (node) => (node === null ? null : getComputedStyle(node))
+      const time = row.querySelector('.psd-run-time')
+      const more = row.querySelector('.psd-run-more')
+      return {
+        timeOpacity: time === null ? null : styleOf(time).opacity,
+        moreOpacity: more === null ? null : styleOf(more).opacity,
+        moreVisibility: more === null ? null : styleOf(more).visibility,
+      }
+    })
+    assert(currentMenuHover !== null, 'the current rainbow row disappeared during the hover row-menu check')
+    assertEqual(currentMenuHover.timeOpacity, '0', `the highlighted current row must hide its time (opacity ${currentMenuHover.timeOpacity})`)
+    assertEqual(currentMenuHover.moreOpacity, '1', `the "…" trigger must show on the highlighted current row (opacity ${currentMenuHover.moreOpacity})`)
+    assertEqual(currentMenuHover.moreVisibility, 'visible', `the "…" trigger must be visible on the highlighted current row (${currentMenuHover.moreVisibility})`)
     // Fix #4: trailing controls on an atmosphere row keep a transparent background and
     // brighten their icon (extra brightness(1.2)) instead of painting the hover block.
     const controlChecks = []
-    for (const selector of ['.psd-row-action', '.psd-run-toggle', '.psd-run-pin']) {
+    for (const selector of ['.psd-row-action', '.psd-run-toggle', '.psd-run-pin', '.psd-run-more']) {
       let control = null
       try {
         control = await hoverCardControl(page, 'parent', currentTitle, selector)
@@ -9233,7 +9328,7 @@ async function runPinChecks({ page, results, state }) {
         `the child Continue overlay on an atmosphere row must brighten its icon on hover (filter ${control.filter})`)
       continueNote = `child Continue ${control.background} + ${control.filter}`
     }
-    return `parent "${short(currentTitle, 30)}": atmosphere + transparent body on hover, pin revealed/works, pinned tint suppressed; controls ${controlChecks.join(', ')}; ordinary "${short(ordinary.title, 26)}" hover ${ordinaryHovered.mainBackground} (control ${ordinaryControl.background}/${ordinaryControl.filter}); child "${short(childCurrent.title, 26)}" body transparent with atmosphere; ${continueNote}`
+    return `parent "${short(currentTitle, 30)}": atmosphere + transparent body on hover, "…" trigger hidden at rest / shown on highlight (hover-free), pin revealed/works, pinned tint suppressed; controls ${controlChecks.join(', ')}; ordinary "${short(ordinary.title, 26)}" hover ${ordinaryHovered.mainBackground} (control ${ordinaryControl.background}/${ordinaryControl.filter}); child "${short(childCurrent.title, 26)}" body transparent with atmosphere; ${continueNote}`
   })
 
   await results.check('r3-11', 'native current Session/Workspace atmosphere rows keep only the rainbow surface (no stacked hover background)', async () => {

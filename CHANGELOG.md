@@ -88,6 +88,35 @@ and no dated release heading is added until the release is cut.
   highlight layer — the body pill inside the row no longer paints a second
   tint); subagent child rows keep no pin control, and blank, archived, or
   unknown Session ids cannot be pinned.
+- **Running & recent row menu** — top-level card rows expose the shell's
+  Session actions behind a "…" trigger in the 48 px time slot: every top-level
+  row (the current rainbow row included) keeps its time at rest, and row
+  hover/keyboard focus hides the time and shows the trigger — the swap stays
+  while the menu is open and leaving restores the time. The trigger paints no
+  hover background: only the keyboard `focus-visible` ring remains, and on the
+  rainbow row it gets the same `brightness(1.2)` suppression as the other
+  current-row controls. The popup is the card's own surface built from
+  `ctx.contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })`,
+  so Rename, Fork, Copy Session ID, Show in Finder, and Archive keep their
+  native behavior and labels; the **Pin/Unpin entry is filtered out** (the
+  title-left pin button is the only pin owner), and the popup shows labels only
+  — no icons and no shortcut hints. It supports arrow/Home/End navigation and
+  closes on Escape, an outside pointer press, scroll or resize. Subagent rows
+  have no trigger.
+- **Running & recent pending-interaction notices** — when a Session other than
+  the one open in the main view is waiting on `ask_user_question` (question or
+  plan review) or an approval (`SessionStatus.pendingInteraction`), a fixed
+  320 px stack appears beside the Running & recent card (prefers the card's
+  right edge, flips left when it does not fit, and clamps into the viewport).
+  Each card shows the kind glyph and label, the Session title, the first
+  question or reason (or the tool name), and a "{count} questions" line for
+  multi-question batches; up to three cards are shown, with a "+N more" line
+  for the rest, newest activity first. Clicking a card opens that Session — the
+  stack is **preview only**, the native composer card still answers — and a
+  notice disappears automatically when the Session becomes current, the
+  interaction settles, or the Session is archived. The stack is client-only
+  (no Host route, no sidebar nodes of its own, styles in the feature's
+  existing `<style>` block).
 - **Prompt history** — the configured modifier + ↑/↓ recalls prompts already
   sent in this Session; plain arrows keep their original behavior. A vertical
   rail at the conversation's right edge, below the native turn rail and
@@ -326,6 +355,17 @@ and no dated release heading is added until the release is cut.
 
 ### Changed
 
+- **Running & recent row-menu affordance** — the 48 px time column is now also
+  the row-actions slot for **every top-level row**: at rest the row keeps its
+  time, and hover/focus hides the time and shows the "…" trigger; the swap
+  stays while the menu is open (`data-menu-open`) and leaving restores the
+  time. The trigger has **no hover highlight** — hovering it keeps a
+  transparent background (the global "…" hover block is gone, only the keyboard
+  focus ring remains) and on the rainbow row it gets the same `brightness(1.2)`
+  icon lift as the other current-row controls. Subagent rows keep the time slot
+  and have no trigger. The trigger opens a card-owned popup rendering the
+  native Session action contributions (labels only) without the Pin/Unpin
+  entry, while the restored title-left pin button remains the pin owner.
 - **Running & recent row layout** — rows and the header share one fixed trailing
   grid: title (right-edge gradient fade while clipped) → **time 48 px**
   (right-aligned, tabular numerals) → **New session action 22 px**

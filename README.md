@@ -11,7 +11,7 @@ shows one plugin whose inventory grows with the suite.
 |---|---|
 | [Session artifacts](docs/session-artifacts.md) | An **Artifacts** card in the right Sidebar's Start page listing the current Session's created and delivered files **and the images/files the user attached to their prompts**, with 40 px image thumbnails, an All/Generated/Provided dropdown filter in the panel header, native open, download, copy content (text verbatim; images as a real clipboard picture in a secure context, with an HTML-image fallback on plain HTTP), and LAN link copy. |
 | [Workspace presets](docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions created in that Workspace. |
-| [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with a fixed trailing grid (time → New session action → disclosure; subagent rows have no New session), Host-shared read marks, event-sourced Host last-activity times, a breathing rainbow glow on the current row's bottom edge and its owning Workspace row, a native-style row hover card carrying status plus the native **Session statistics / Token usage / Context usage** figures, nested subagent Sessions, and configurable retention windows. |
+| [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with a fixed trailing grid (time → New session action → disclosure; subagent rows have no New session), a card-owned **Host-shared pin** (title-left pin button with two-phase hover reveal; pinned rows lead newest-activity-first and never retire, with a subtle violet single-layer tint), a **"…" row menu** on top-level rows that renders the shell's native Session actions without the Pin/Unpin entry (labels only, no icons or shortcut hints; every top-level row swaps its time for the trigger on hover/focus and restores it on leave, with no hover highlight on the trigger), a preview-only **pending-interaction notice stack** beside the card for Sessions waiting on a question, plan review, or approval (clicking opens the Session; answering stays in the native composer card), Host-shared read marks, event-sourced Host last-activity times, a breathing rainbow glow on the current row's bottom edge and its owning Workspace row, a native-style row hover card carrying status plus the native **Session statistics / Token usage / Context usage** figures, nested subagent Sessions, and configurable retention windows. |
 | [Prompt history](docs/prompt-history.md) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; a right-edge rail lists them newest first with a hover full-text preview, an inline search, and click-to-copy. Plain arrows keep their original behavior. |
 | [Draft attachments](docs/draft-attachments.md) | Attachments in a draft (pasted images, dropped or picked files) survive switching Sessions and coming back, for the page lifetime; the shell only persists the draft text. |
 | [Interrupted sessions](docs/interrupted-sessions.md) | Sessions that did not finish — restart/crash, any provider/model/network error (quota, timeout, rate limit), an output limit, or an imported unknown cancellation — carry an amber mark left of the title, a hover-revealed inline Continue triangle in the status cell (title shifts right, no hover mask), and a play-shaped composer submit control; deliberate cancellations and completed turns stay unmarked. State is Host-owned and cross-device: a Host SSE stream invalidates open pages immediately on turn boundaries, with polling as fallback. |
@@ -36,10 +36,16 @@ Highlights of the first release:
   **Running & recent** card above the native header lists running and recently
   finished Sessions as single-line rows, nests delegated subagent Sessions under
   their parent, marks unread completions green until opened, and shows status
-  plus the native Session statistics / token / context figures on hover. Read
-  marks and last-activity times are Host-shared, the current row carries a
-  rainbow atmosphere, and both retention windows are settings on the bundle's
-  Plugins page.
+  plus the native Session statistics / token / context figures on hover. A
+  title-left pin button (Host-shared, with a two-phase reveal) keeps main
+  Sessions pinned first and past the retention window, while a "…" row menu offers the shell's
+  Rename/Fork/Copy Session ID/Show in Finder/Archive actions without Pin. Every
+  top-level row (the current rainbow row included) keeps its time at rest and
+  swaps it for the "…" trigger on hover/focus; the trigger has no hover
+  highlight, and leaving restores the time. Sessions waiting on a question, plan review, or approval raise a
+  preview-only notice beside the card. Read marks and last-activity times are
+  Host-shared, the current row carries a rainbow atmosphere, and both retention
+  windows are settings on the bundle's Plugins page.
 - **Prompt history** — the configured modifier + ↑/↓ recalls prompts already sent
   in this Session; a right-edge rail lists them oldest first with a full-text
   hover preview, an inline search, per-prompt timestamps, and click-to-copy.

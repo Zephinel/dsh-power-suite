@@ -530,7 +530,7 @@ HTTP failure predicate) and adds:
 | `r3-7` | Reload persistence | after a reload the card restores both pins pinned-first in order from the authoritative source: the local cache/queue always (pre-restart), plus the Host document when `pinShared === true` (both run ids checked); cache retains both ids; children still render |
 | `r3-8` | Cross-device proof (second fresh profile) | only when `pinShared === true`: a second fresh throwaway Chrome profile (new `--user-data-dir`, separate CDP, same injected client) has an empty cache, adopts the Host document (`pinShared=true`, effective ids include both run ids), shows both rows pinned in the same A<B order, and the Host document lists both ids; second-profile page errors must be 0. When `pinShared === false`: **explicit SKIP** row |
 | `r3-9` | Unpin restores the normal card | unpin both via the UI: DOM pin/tint gone, localised Pin label, unpinned row returns to the head of the normal queue immediately, effective ids empty, cache effective set (confirmed + queued ops replayed) no longer paints them; card pinned count back to the baseline (0); Host document no longer lists the run ids when `pinShared === true`; children still render; residual cache/queue and Host document printed honestly |
-| `r3-10` | Atmosphere card rows keep only the rainbow (no stacked highlight), brighten their content and their trailing controls | real CDP pointer: a current parent card row at rest → every non-atmosphere content child has `filter: brightness(1.15)` with the 140 ms filter transition, `.psd-atmos` + canvas present, row/body backgrounds transparent; hovered → every content child `brightness(1.5)`, `.psd-run-main` background still `rgba(0,0,0,0)` (no hover pill), pin control still reveals (`opacity:1`/`visible`); hovering each trailing control (New session `.psd-row-action`, disclosure `.psd-run-toggle`, pin `.psd-run-pin`) → control background `rgba(0,0,0,0)` and `filter: brightness(1.2)` (no rounded hover block inside the rainbow, the pin still works); pinning the current row adds no violet tint (row/main stay transparent) and the check unpins again; an ordinary card row keeps its hover pill (non-transparent, measured `rgba(38,49,72,0.06)`) and has `filter:none` at rest and on hover, and its New session control keeps its normal hover block with `filter:none`; a nested subagent row opened like a user becomes current with `brightness(1.15)` at rest / `brightness(1.5)` on hover and `.psd-child-main` background transparent with the atmosphere present; an interrupted child Continue overlay is asserted too when reachable |
+| `r3-10` | Atmosphere card rows keep only the rainbow (no stacked highlight), brighten their content and their trailing controls | real CDP pointer: a current parent card row at rest → every non-atmosphere content child has `filter: brightness(1.15)` with the 140 ms filter transition, `.psd-atmos` + canvas present, row/body backgrounds transparent; at rest the time is visible with the `"…"` trigger present but hidden, and on hover the time hides and the trigger shows (`opacity:1`/`visible`); hovered → every content child `brightness(1.5)`, `.psd-run-main` background still `rgba(0,0,0,0)` (no hover pill), pin control still reveals (`opacity:1`/`visible`); hovering each trailing control (New session `.psd-row-action`, disclosure `.psd-run-toggle`, pin `.psd-run-pin`, row-menu trigger `.psd-run-more`) → control background `rgba(0,0,0,0)` and `filter: brightness(1.2)` (no rounded hover block inside the rainbow, the pin still works and the `"…"` trigger stays hover-free); pinning the current row adds no violet tint (row/main stay transparent) and the check unpins again; an ordinary card row keeps its hover pill (non-transparent, measured `rgba(38,49,72,0.06)`) and has `filter:none` at rest and on hover, and its New session control keeps its normal hover block with `filter:none`; a nested subagent row opened like a user becomes current with `brightness(1.15)` at rest / `brightness(1.5)` on hover and `.psd-child-main` background transparent with the atmosphere present; an interrupted child Continue overlay is asserted too when reachable |
 | `r3-11` | Native current Session/Workspace rows keep only the rainbow and brighten content + action buttons | the native sidebar current Session row (revealed like a user) and `[data-psd-current-workspace="true"]` row at rest: non-atmosphere content children `filter: brightness(1.15)` with the filter transition; hovered with a real pointer: `brightness(1.5)`, computed background `rgba(0,0,0,0)` each, atmosphere wrapper + canvas present, and their hover-revealed action buttons keep a `rgba(0,0,0,0)` background with `filter: brightness(1.2)`; an ordinary native session row still shows its native hover background with `filter:none` (control also unfiltered). If the open Session is a subagent (no native sidebar row), the check first switches back to a main card row like a user |
 | `r3-12` | Atmosphere brightness respects reduced motion | with `prefers-reduced-motion: reduce`, the current card row's content children keep the static `brightness(1.15)` lift while the filter transition is disabled (`transition-property:none` / `0s`); media emulation is reset afterwards |
 | `r3-13` | Card rows match the native Workspace project row height | measured in the same page like a user: the native `[data-row-key^="workspace:"]` project-row height is the reference (asserted equality, not hardcoded); every `.psd-run` and `.psd-child` height equals it; `.psd-run-main`/`.psd-child-main` height equals their row height with `box-sizing:border-box` and pill top/bottom matching the row (±1) so the highlight fills the row; titles/times stay vertically centred (±1), titles stay single-line (`white-space:nowrap`, no vertical wrap/clip); native session rows explicitly keep the shell's own 32 px height; the taller rows still scroll inside the clamped card body when it overflows (else the five-row/View-all behavior is covered by the expansion log + full-mode checks) |
@@ -542,6 +542,38 @@ R1/R2 checks are unchanged from the original delivery (`r1-1`/`r1-2` perfect-cir
 `r2-1`..`r2-4` native hover figures, same-Session label alignment, 244 px native frame,
 blank Session none). `r2-2` accepts a running Session's real projection drift between the
 two hover reads when the label structure stays identical, and logs the drift.
+
+### New Running & recent surfaces (row menu + pending notices)
+
+The committed `--pin` suite still targets the restored card-owned pin (Host
+document/cache, two-phase reveal, pinned-first ordering) plus the hover/figure
+checks. Two newer surfaces are documented here but are **not exercised by a
+committed scenario yet**:
+
+- **Row "…" menu** — every top-level card row (the current rainbow row
+  included) keeps its time visible at rest and carries a "…" trigger in the
+  48 px time slot. Row hover/focus hides the time and shows the trigger; the
+  swap stays while the menu is open (`data-menu-open`), and leaving restores the
+  time. The trigger paints **no hover background** (only the keyboard
+  `focus-visible` ring remains; on the rainbow row it gets the same
+  `brightness(1.2)` suppression as the New session/pin/Continue controls), and
+  subagent rows have no trigger. The trigger opens the card's own popup
+  (`data-psd-menu`) built from the native Session action contributions via
+  `contextMenus.resolve`: Rename / Fork / Copy Session ID / Show in Finder /
+  Archive keep their native behavior, the **Pin/Unpin entry is filtered out**
+  (the restored title-left pin button is the only pin owner), and the popup
+  shows labels only — no icons and no shortcut hints. Full-mode `b2-3` asserts
+  the uniform highlight swap and no-hover-background rule; the popup actions and
+  the absent Pin entry were verified by Lead live probes on the real GUI, not by
+  this harness.
+- **Pending-interaction notices** — a fixed 320 px stack beside the card for
+  Sessions waiting on `ask_user_question` (question / plan review) or an
+  approval, up to three cards plus "+N more", preview-only (clicking opens the
+  Session; the native composer card answers). Unit-tested (derivation,
+  current/archived filtering, cap/overflow, placement clamping) and live-probed
+  with the real component + synthetic data (13/13 checks); the end-to-end
+  `SessionStatus.pendingInteraction` show/hide path was not live-triggered in
+  this round.
 
 ### `--live` checks (shipped install, no client injection)
 
@@ -952,6 +984,21 @@ bottom 232/232), annotation S2/S5/S8 **7/0/0 each** (9.3/8.2/12.5 s,
 
 ### Known limitations (`--pin` / `--live`)
 
+- The custom row "…" popup is **label-only**: it shows no action icons and no
+  keyboard-shortcut hints, and its entries are the native Session action
+  contributions — an action a Host build does not contribute is simply absent.
+  The **Pin/Unpin entry is always filtered out** by design (the title-left pin
+  button owns pinning). The trigger itself paints **no hover background** (only
+  the keyboard `focus-visible` ring): every top-level row (the current rainbow
+  row included) keeps its time at rest and swaps it for the trigger on
+  hover/focus or while the menu is open, restoring it on leave; nested subagent
+  rows have no trigger.
+- The pending-interaction notice stack is preview-only: it lists at most three
+  waiting Sessions, adds a "+N more" line, and never answers an interaction; it
+  is hidden with the card in rail mode and contributes one notice per Session.
+  It is unit-tested and live-probed with synthetic data, but the real
+  `SessionStatus.pendingInteraction` show/hide lifecycle is not part of a
+  committed E2E scenario.
 - Host sharing and cross-device visibility require the DSH Web service restart that loads
   the new Host route; before that `pinShared === false` and those two checks are explicit
   SKIPs (the UI works local-only with the cache/queue, which the reload check covers).

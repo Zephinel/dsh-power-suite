@@ -293,9 +293,38 @@ rows, it stays for the retention window, and then it leaves the card. This is th
 (see *Pinned Sessions* below) — a pinned main Session stays first and never
 retires with time.
 
+## Row actions
+
+The 48 px time column doubles as the row-actions slot on **every top-level
+row**, including the current rainbow row. At rest the slot shows the relative
+time; row hover or keyboard `focus-within` hides the time and shows a "…"
+trigger in the same slot, and that swap **stays while the row's menu is open**
+(`data-menu-open`) — leaving the row restores the time. The trigger paints
+**no hover background**: hovering it leaves the background transparent (the
+global "…" hover block was removed; only the keyboard `focus-visible` ring
+remains), and on the rainbow row it follows the same suppression as the other
+current-row controls (transparent background with a `brightness(1.2)` icon
+lift). Clicking the trigger opens the card's **own Session menu popup**. The
+popup is built from the shell's native Session action contributions
+(`ctx.contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })`),
+so Rename, Fork, Copy Session ID, Show in Finder, and Archive keep their native
+behavior and labels, but the **Pin/Unpin entry is filtered out**: pinning belongs
+to the card's title-left pin button (see *Pinned Sessions*), so the menu never
+offers a second pin affordance. The popup is 224 px wide, uses the theme's
+surface/elevation tokens, shows **labels only** — no action icons and no
+keyboard-shortcut hints (documented limitation) — and offers the same keyboard
+navigation and dismissal as a native menu (arrow keys/Home/End move between
+enabled items, Escape or an outside pointer press closes it, scroll and resize
+close it). While the action contributions are still resolving it shows a small
+loading placeholder, and clicking the trigger again closes the popup. **Subagent
+child rows have no trigger.** The swap is hover/focus driven (desktop), and the
+New session button and the inline interrupted Continue triangle remain the
+separate trailing controls described above.
+
 ## Pinned Sessions
 
-Main Sessions can be pinned from their row in the Running & recent card. The pin
+Main Sessions can be pinned from their row in the Running & recent card with the
+title-left pin button (the row "…" menu intentionally omits Pin/Unpin). The pin
 is the **card's own** state, deliberately independent of the native sidebar's
 project-organisation pin (`WorkspaceSnapshot.pinnedSessionIds`): reading that
 set was rejected on live feedback because the Host already carried six old
@@ -397,6 +426,40 @@ restarted with the merged linked checkout. Until then the card is local-only.
   and the filled glyph carries the state. So "why is this at the top" stays
   readable after the pointer leaves without stacking two rounded surfaces.
   Columns, indentation, child rows, and the card width are untouched.
+
+## Pending interaction notices
+
+When a Session **other than the one open in the main view** is blocked waiting
+for a human — a question or plan review from `ask_user_question`, or an
+approval — the client's `SessionStatus.pendingInteraction` makes a fixed notice
+stack appear beside the Running & recent card. It is a preview surface: the
+stack never answers anything, the native composer card remains the only
+answering surface, and clicking a notice just opens that Session.
+
+- **Trigger kinds**: the three interaction kinds are `question`, plan review
+  (`plan-review`), and `approval`. Each notice shows the kind (with its own
+  glyph and label), the Session title, and the first question text (for a
+  question), the plan-review question, or the approval reason — falling back to
+  the tool name when the interaction carries no text. A multi-question batch
+  adds a `{count} questions` line.
+- **Placement**: the stack is 320 px wide and prefers the card's **right edge**
+  (native-tooltip style, outside the sidebar); when it does not fit it flips to
+  the card's left edge, then clamps to an 8 px viewport inset on both axes. It
+  is fixed-positioned (the sidebar's scroll container cannot clip it) and
+  re-measured on resize, scroll, sidebar expansion, and card height changes.
+- **Stack and overflow**: up to **3** notice cards, newest activity first; the
+  rest collapse into a "+N more" line. Only the cards take the pointer; the
+  stack never steals focus and has no hover preview of its own.
+- **Auto-hide**: notices are re-derived every render from the same status
+  snapshot the native composer cards use, so a notice disappears as soon as the
+  Session becomes the one open in the main view, the interaction settles
+  (answered, cancelled, or approved), or the Session is archived. Blank and
+  subagent Sessions never get a notice. Because `pendingInteraction` is one per
+  Session, a Session contributes at most one notice even when it has a
+  multi-question batch.
+- **Hidden with the panel**: the stack is rendered through the card's existing
+  overlay panel and inherits its visibility, so collapsing the sidebar into rail
+  mode hides the notices too (no separate sidebar DOM, no Host route).
 
 ## Session figures in the hover card
 
@@ -1111,7 +1174,40 @@ The native **View options** menu picks how Sessions are grouped:
   hover, so those row actions are not reachable there (the Workspace's own New
   Session still is). New session sits on the reserved fixed-width column and
   Continue is inline immediately after the interrupted badge, so revealing
-  either never changes the row layout or row height.
+  either never changes the row layout or row height. The "…" Session-menu
+  trigger follows the same highlight rule on **every top-level row**: at rest
+  the time is visible, and hover/focus (or an open menu) hides it and shows the
+  trigger; leaving restores the time. The trigger paints **no hover
+  background** — hovering it keeps `background: rgba(0,0,0,0)` and only the
+  keyboard `focus-visible` ring remains; on the rainbow row it gets the same
+  `brightness(1.2)` suppression as the other current-row controls. Subagent
+  rows have no trigger, and a touch-only device cannot open it. Its popup is
+  the card's own surface (not the native popup): it shows **labels only** — no
+  icons, no shortcut hints — and always filters out the native Pin/Unpin
+  contribution, so pinning stays on the title-left pin button.
+- **The pending-interaction notice stack is preview-only.** It shows at most
+  three waiting Sessions (question, plan review, approval) and a "+N more"
+  line; it never answers anything, so answering still happens in that
+  Session's native composer card after the notice opens the Session. It exists
+  only while another Session is waiting and the sidebar/panel is visible:
+  collapsing the sidebar to rail mode hides it with the card. Only those three
+  interaction kinds are listed, and because `pendingInteraction` is one per
+  Session a multi-question batch still produces exactly one notice. The notice
+  position is fixed and re-measured, but it cannot be dismissed on its own
+  (answering/settling, opening the Session, or archiving it removes it), and
+  its list is limited to Sessions that are in the Session catalog — a waiting
+  Session the catalog no longer lists gets no notice.
+- **The card pin is shared per `$DSH_HOME`, not per profile.** The Host
+  document (`$DSH_HOME/dsh-power-suite/session-pins.json`) is served by the
+  suite's own `GET|POST /api/power-suite.session-pins` route, so every browser
+  and profile using that home converges on one pinned set; `--profile` is only a
+  config layer, so profile isolation is **not** provided. The route needs a
+  plugin Host recompose (reload the plugin / restart the Host process) after
+  upgrading; before that (or on transport failure) the card keeps working from
+  its versioned `localStorage` cache/queue and retries on the next sync cycle.
+  Concurrent writers are last-write-wins per Session, and the document is
+  bounded at 500 ids (oldest dropped first), so a very large pin set can lose
+  its newest pin.
 - **Continue sends a real continuation.** The row's Continue action reuses the
   interrupted-session continuation flow, so pressing it actually asks the Host to
   resume that Session (it opens the Session first and then continues). The badge
@@ -1181,6 +1277,14 @@ running parents); borderless floating cards; title-case bucket labels and
 typography; the rainbow focus ring on the prompt-history search field; fold
 persistence across reloads including the pre-hydration bucket cache and live
 drift correction; annotation-mode pinning; and zero page errors.
+
+The card-owned pin store (`test/session-pins.test.js`), the pin ordering
+(`test/dynamic-workspaces-pin.test.js`), and the Running & recent panel/notice
+helpers (`test/dynamic-workspaces-panel.test.js`) cover the pure state; the row
+"…" menu with Pin absent and the notice component were additionally probed live
+(recorded in [verification.md](verification.md)). The committed harness keeps
+its `--pin` acceptance mode (card-owned pin, Host route/cache probes) and does
+not yet exercise the new menu/notice surfaces.
 
 Manual checks on the running DSH Web GUI:
 
@@ -1273,5 +1377,22 @@ Manual checks on the running DSH Web GUI:
     the card or the bucket headers, and no row is lost.
 16. Run `npm run check`; it stays green (syntax, package manifest, Markdown
     links, and the node tests).
+17. Hover any top-level card row (the current rainbow row behaves the same):
+    its time is hidden and a "…" trigger appears in the 48 px slot; the trigger
+    paints no hover background (on the rainbow row it only gets the
+    `brightness(1.2)` icon lift, and the keyboard focus ring remains). Click it
+    to open the card's own Session menu (Rename, Fork, Copy Session ID, Show in
+    Finder, Archive — **no Pin/Unpin**), use arrow keys/Home/End to move, and
+    close it with Escape or an outside click; while the menu is open the swap
+    stays, and leaving restores the time. Subagent rows have no trigger.
+18. Pin a main Session with its title-left pin button, then unpin it: hover or
+    focus shows the outline pin, the slot expands before the pin fades in,
+    pinned rows keep the filled marker and violet tint, the row leads the card
+    newest-activity-first and never retires with time; unpin returns it to the
+    ordinary queue. If another Session is waiting on a question, plan review,
+    or approval, a notice card appears beside the card (up to three, then
+    "+N more"); clicking one opens that Session, and answering/approving it,
+    opening it, or archiving it removes the notice automatically. The stack
+    never answers anything itself.
 
 See [verification.md](verification.md) for the recorded evidence.
