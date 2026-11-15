@@ -1770,3 +1770,36 @@ regressions plus doc/test inaccuracies, all fixed in this round:
   `gapHeadToSlot` guard is inert since the pin slot moved into the head (harness
   gap noted above), and forward Tab from a row's title button skips the pin
   (pin slot precedes the title in DOM order).
+
+### Round-2 shipped-install verification (final merge `787e124`)
+
+The fix+review commits were merged into `feat/dynamic-workspaces` and the live
+GUI was re-probed **without injection** (throwaway headless Chrome, fresh
+profile, dark theme; no service restart or profile change):
+
+- Served CSS is the merged code: the public client bundle contains the new
+  instant-width interrupted Continue slot (`transition: opacity 120ms`), the
+  shared-wrapper hide rule is absent, the card focus rule is gated on
+  `html[data-input-modality='keyboard']`, the restored card-current control
+  suppression is present, and the reduced-motion reset is present.
+- Card ordinary row, shipped: rest title `49 px` / first-character centre
+  `56 px`; hover title `71 px`, row surface `rgba(255,255,255,.08)` on the full
+  `240 px` row, body transparent; pin slot `0 → 16 + 9 px`.
+- Current rainbow card row + New session action, shipped: hovering the action
+  keeps row/body/action background `rgba(0,0,0,0)` with
+  `filter: brightness(1.2)` (restored suppression, live).
+- Focus gating, shipped: focusing the row title button with the shell's
+  `pointer` modality leaves the row transparent; with `keyboard` modality the
+  row paints `rgba(255,255,255,.08)`.
+- Reduced motion, shipped: pin slot, pin, title button and native Continue slot
+  all report `transition: none`.
+- Page errors: 0 for every shipped run.
+- The shared Host currently lists **no** interrupted Session row, so the native
+  hover/marquee path was re-checked with a static replica built from the
+  **served** style tags, live panel markup and live tokens: the foreign
+  leading-slot mark stays visible while native status nodes are hidden; hover
+  gives leading cell `16 → 38 px`; the marquee range measured on `pointerenter`
+  is `466 px`, equal to the settled range (the pre-fix animated rule measured the
+  rest range `444 px`, 22 px short).
+- The shipped-install reviewer's only MINOR was the pre-existing reduced-motion
+  gap, fixed above; its other NITs are the documented pre-existing ones.
