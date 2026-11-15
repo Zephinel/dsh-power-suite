@@ -16,6 +16,7 @@ src/index.js            Host entry (Node)
 ├─ features/settings/host.js             GET/POST /api/power-suite.settings
 ├─ features/read-acks/host.js            GET/POST /api/power-suite.read-acks
 ├─ features/session-pins/host.js         GET/POST /api/power-suite.session-pins
+├─ features/sidebar-width/host.js        GET/POST /api/power-suite.sidebar-width
 ├─ features/session-activity/host.js     GET  /api/power-suite.session-activity
 ├─ features/update-check/host.js         GET  /api/power-suite.update
 └─ ctx.effect(...)                       every registration lives with the plugin
@@ -27,6 +28,7 @@ src/client.js           Browser entry (DSH module loader)
 ├─ Composer prompt-history keys + right-edge history rail
 ├─ Draft attachment memory seat (invisible)
 ├─ Dynamic Workspaces buckets + running & recent card (pin, row menu, pending notices)
+├─ Sidebar width persistence (Host-synced width; synchronous atmosphere repaint on resize)
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
 ├─ UI element annotation mode (launcher, right rail, floating-surface picking, marks/detail card, note popover, composer reference chips, batch collection)
 ├─ Plugins-page settings section
@@ -160,6 +162,44 @@ browser keeps a versioned `localStorage` cache/queue (optimistic first paint and
 offline/local-only use), GETs the document on mount/focus/visibility/every 30 s,
 migrates cached pins on first contact and POSTs queued operations; a missing
 route or transport failure degrades to local-only, never an error state.
+
+### Sidebar width
+
+The shell (`dsh-client-ui-layout`) keeps the left sidebar width in page memory
+only, so the suite stores one scalar preference and serves it to every
+browser/profile on the same `$DSH_HOME`. The Host document is
+`$DSH_HOME/dsh-power-suite/sidebar-width.json`, schema version 1,
+`{ version, sidebarWidth }`, with `sidebarWidth` an integer in the shell's
+264–420 px clamp or `null` when unset; a missing, unreadable, malformed,
+unknown-version, or out-of-range file reads as the unset document. The store
+loads single-flight (a non-ENOENT read failure resets the cached promise and
+throws typed `SIDEBAR_WIDTH_READ_FAILED` so a later call retries) and writes
+atomically (temporary sibling + rename, `0600`, serialized chain, value published
+only after the rename). There is no rev/ops log — one scalar, last write wins.
+One authenticated route pair serves it: `GET /api/power-suite.sidebar-width` →
+`{ version: 1, sidebarWidth }`; `POST` with `application/json` (≤1024 UTF-8
+bytes) and exactly one field `sidebarWidth` → the stored document (`415`
+non-JSON, `413` too large, `400` malformed body or invalid field, `500`
+`store-read-failed` / `500` `store-failed`), every response `no-store`. The
+browser half keeps a per-origin `localStorage` cache
+`power-suite.sidebar-width` (`{ version, sidebarWidth, pending }`, `pending` =
+not yet confirmed by the Host), applies it **before first paint**, runs one
+initial sync (POST when pending, otherwise GET; a `null` Host width is seeded
+with the local value), debounces drag-store changes **300 ms** into a cache write
++ POST, and re-syncs on `focus`/`visibilitychange` and a **30 s** interval while
+pending. On a wide viewport the collapsed `0` is never persisted or adopted,
+and a `0 → positive` transition that is not a drag re-applies the persisted width
+instead of the native 280 px; the shell's narrow-viewport rail/drawer states
+change only a presentation override, never the preference. Remote widths are
+adopted only while expanded and not dragging
+(remembered otherwise), last write wins, and there is no merge UI. The feature
+attaches to the layout plugin's shared store handle seated on its `root` slot
+registration (`entry.store` → `create()` / `getSnapshot().layoutInfo.sidebar` /
+`actions.setSidebar` / `subscribe`), retries the attach briefly, and stays inert
+(reports `attached: false`) when the pinned
+`@deepseek-ai/dsh-client-ui-layout@0.2.2-rc.1` seat shape is absent; it
+contributes no slot, copy, or settings row. See
+[sidebar-width.md](sidebar-width.md).
 
 ### Session activity ledger
 
@@ -800,6 +840,10 @@ re-open a card the user just dismissed.
   `localStorage` memory (capped at 100, never synced); the two modifiers,
   launcher position, rail-collapsed flag, and records document are the only
   persisted browser state.
+- The left sidebar width has one durable owner (the `sidebar-width` Host
+  document) and one write path (the shell's own `actions.setSidebar`): the
+  feature never persists the collapsed `0`, never patches the shell package, and
+  degrades to inert when the pinned layout-store seat is unavailable.
 
 ## Verification
 

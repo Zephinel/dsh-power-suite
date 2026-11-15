@@ -2280,3 +2280,92 @@ swap and its no-hover-background behavior (full-mode `b2-3`, `--pin` `r3-10`)
 but not the popup action list or the absent Pin entry; the Pin filtering is
 documented from the source and the live probe. The restored `--pin` E2E
 scenarios/probes were not part of the recorded gate list above.
+
+## 2026-11-15 — Sidebar width persistence + atmosphere flicker fix (`sidebar-width-persistence`)
+
+Branch `sidebar-width-persistence` (based on `feat/dynamic-workspaces` @
+`ca71885`). Two changes: the left sidebar's dragged width is now a durable,
+Host-owned preference synced across paired browsers
+(`src/features/sidebar-width/` plus a new `#region feature: sidebar width` in
+`src/client.js`), and the Dynamic Workspaces rainbow-atmosphere renderer
+repaints synchronously after a real backing-store resize (and once at mount),
+which fixes the rainbow flicker while the sidebar handle is dragged. Docs: new
+[sidebar-width.md](sidebar-width.md); `README.md`, `docs/overview.md`,
+`docs/architecture.md`, `docs/limitations.md`, `docs/dynamic-workspaces.md`, and
+`CHANGELOG.md` updated in the same round.
+
+### Environment (2026-11-15)
+
+- Node **v24.22.3**; headless Chrome **157.0.8103.79**; viewport **1728×900**;
+  throwaway `--user-data-dir`; one harness at a time; GUI token redacted.
+- Injected/served client: `src/client.js` md5
+  **`40e53d31744576696332e8ca73914e20`** (1,218,053 chars / 1,223,244 bytes).
+
+### Automated gates (local, 2026-11-15)
+
+- `npm test`: **336 tests, 336 passed, 0 failed** — including the new
+  `test/sidebar-width.test.js` (**17/17**, Host store + route) and
+  `test/sidebar-width-client.test.js` (**8/8**, browser seam helpers).
+- `npm run check`: **exit 0** — syntax, package manifest, docs links, the full
+  test suite, the release-notes gate, and `npm pack --dry-run`
+  (`entryCount` **88**).
+- `node scripts/check-docs-links.mjs`: **ok, 22 Markdown files**.
+
+### Live acceptance — `node test/browser/sidebar.e2e.mjs --layout`
+
+Exit **0**; **PASS 10 / SKIP 1 / FAIL 0**; **0 page errors**; **0 real network
+failures**; **11.9 s**. Log:
+`.tmp-work/sidebar-width/e2e/layout-acceptance-2026-11-15.log`. The mode opens
+the running GUI in a throwaway headless Chrome, injects this worktree's client,
+drives the native sidebar handle with real CDP pointer input, and never creates
+or types into a Session.
+
+- `smoke-1..4` **PASS** — pipeline: injected client evaluated in the live page,
+  card mounted, the current Session left untouched (0 transcript messages,
+  0-char draft; no Session created), 1728×900 screenshot round-trip.
+- `lw-1` **PASS** — drag handle 8 px wide at x=280; sidebar column 280 px
+  (grid `280px 1448px 0px`).
+- `lw-2` **PASS** — live atmosphere canvases on the current Workspace/Session
+  rows: workspace 258×34 painted=32606, session 258×32 painted=32630, animated.
+- `lw-3` **PASS (flicker oracle)** — real CDP drag 280→320 px (+40 px over
+  10 steps); canvas element identity stable in all 10 samples; **9 per-step +
+  20 in-frame backing-store resizes** observed; **0 blank bitmap samples**
+  (0/10 per-step, 0/22 in-frame).
+- `lw-4` **PASS** — post-drag cache
+  `{"version":1,"sidebarWidth":320,"pending":true}`; seam `attached=true`,
+  `storeWidth=320`, `desiredWidth=320`.
+- `lw-5` **PASS** — a page reload restores 320 px and the seam re-attaches
+  (`storeWidth=320`).
+- `lw-6` **SKIP** — `GET /api/power-suite.sidebar-width` returned **404** (the
+  running Host process predates the merged plugin). The row is the explicit
+  "Host route loads after the DSH Web service restart" SKIP; **8**
+  sidebar-width route probes were classified as expected rather than real
+  network failures, and the per-origin browser cache is authoritative until the
+  restart (covered by `lw-4`/`lw-5`).
+- `lw-7` **PASS** — cleanup dragged 320→280 px (pre-run 280 px); the Host route
+  is absent so no Host document was written; residual report has 0 issues.
+
+### Negative control and smoke regression (2026-11-15)
+
+- The same `--layout` mode against the pre-fix client copy
+  (`.tmp-work/sidebar-width/e2e/client-no-fix.js`) makes `lw-3` **FAIL** on
+  blank bitmap samples (drag steps 2–4 for both canvases,
+  `PASS 9 / SKIP 1 / FAIL 1`) while every other row stays green — the flicker
+  oracle discriminates the missing synchronous resize repaint.
+- `node test/browser/sidebar.e2e.mjs --smoke`: **exit 0**, **4/4 PASS**, 0 page
+  errors, **5.5 s**.
+
+### Evidence limits (state honestly)
+
+- The `lw-6` 200 branch — Host document round-trip, second fresh-profile
+  cross-device adoption, and the Host-restore step — is implemented and covered
+  by the Node store/route tests, but **not exercised live**: the running Host
+  route answers 404 until the DSH Web service restarts to load the new Host
+  half. A post-restart re-run is the remaining acceptance step.
+- The flicker oracle samples per drag step plus a post-registration
+  `ResizeObserver` in the same resize task; it does not inspect every animation
+  frame (the negative control shows the sampling still discriminates).
+- One throwaway Chrome profile per run; no second real device was paired. The
+  shell's narrow-viewport rail/drawer behavior is documented from
+  `@deepseek-ai/dsh-client-ui-layout@0.2.2-rc.1` and the client code, not from a
+  live narrow-viewport run.

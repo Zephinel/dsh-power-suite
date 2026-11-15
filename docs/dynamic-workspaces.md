@@ -811,6 +811,19 @@ native sidebar Session row of the open Session:
   loop, and the renderer/canvas/listeners are destroyed as soon as the row stops
   being highlighted. There is no rainbow border, ring or outer glow, and no
   layout shift (the wrapper is absolutely positioned).
+- **Resize repaint**: resizing the row used to leave the canvas blank for a
+  frame. Assigning `canvas.width`/`canvas.height` clears the backing store, and
+  the row's box changes size on every frame while the left sidebar's handle is
+  dragged, so the `ResizeObserver` cleared the canvas each frame while the
+  animation loop repainted only on its **33 ms** throttle — the rainbow appeared
+  to strobe (the reported sidebar-drag flicker). The renderer now reports whether
+  a resize actually changed the backing store, repaints synchronously in the
+  observer callback after that real change (same task, before the browser paints,
+  independent of reduced motion), and paints one frame synchronously at mount
+  before the animation loop starts. Steady-state animation keeps the 33 ms
+  throttle; only real resizes force an immediate repaint, so dragging the sidebar
+  no longer flickers the highlight. See [sidebar-width.md](sidebar-width.md) for
+  the width persistence this interacts with.
 - **No stacked highlight**: an atmosphere row keeps only the rainbow surface.
   The ordinary full-row hover surface (card parent and child rows) and the native
   sidebar rows' own hover/selected background are suppressed while the

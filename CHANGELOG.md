@@ -353,6 +353,22 @@ and no dated release heading is added until the release is cut.
   itself when the route proves there is no update, and the feature stays silent
   on any failure. It becomes visible to 0.1.0 installs only after 0.2.0 is
   published. See [docs/update-check.md](docs/update-check.md).
+- **Sidebar width persistence and atmosphere repaint** — the native left
+  sidebar's dragged width is now a Host-owned preference instead of page memory:
+  `$DSH_HOME/dsh-power-suite/sidebar-width.json` (schema 1,
+  `{ version, sidebarWidth }`, integer 264–420 px or `null`) is served by
+  `GET/POST /api/power-suite.sidebar-width`, and the browser keeps a per-origin
+  `localStorage` cache (`power-suite.sidebar-width`, `pending` flag) that it
+  applies before first paint, debounces drag changes into a 300 ms POST, and
+  re-syncs on focus/visibility (plus a 30 s retry while pending). The width
+  survives reloads, new tabs, and a Host restart; every browser/profile on the
+  same `$DSH_HOME` shares one last-write-wins value; collapsing never stores `0`
+  and reopening re-applies the stored width instead of the native 280 px default.
+  The rainbow-atmosphere Canvas renderer now reports a real backing-store resize
+  and repaints synchronously after it (same task, before paint, independent of
+  reduced motion) and paints once at mount, instead of waiting for its 33 ms
+  animation throttle, so dragging the sidebar no longer blanks or strobes the
+  current-Session highlight. See [docs/sidebar-width.md](docs/sidebar-width.md).
 
 ### Changed
 

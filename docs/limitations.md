@@ -105,6 +105,43 @@
   is the overlay card itself. The old sidebar-card design is retired — see
   [update-check.md](update-check.md).
 
+## Sidebar width
+
+- **The layout-store seat is private.** The feature attaches to the shared
+  layout-store handle that
+  `@deepseek-ai/dsh-client-ui-layout@0.2.2-rc.1` seats on its `root` slot
+  registration; that seat is not a public width API. If a DSH upgrade changes
+  the package version or the seat shape (no `.store` handle, `create()`,
+  `layoutInfo`, or `actions.setSidebar`), the feature stays inert instead of
+  patching the shell, and the sidebar returns to the shell's in-memory behavior.
+  A DSH update that ships a new layout package needs the feature re-checked.
+- **Before the Host restarts, the browser cache is the authority.** The route
+  exists only after the plugin's Host half is reloaded. Until then the page is
+  local-only per origin: the cache still applies on boot and survives a reload,
+  but nothing is shared with other devices and the write stays pending until a
+  later sync succeeds. A missing route (404) is treated as "not ready yet", not
+  as an error state.
+- **The cache is per origin.** `localStorage` is scoped to scheme + host + port,
+  so two addresses for the same Host (an IP versus a hostname, or HTTP versus
+  HTTPS) each keep their own cache. They converge through the Host document on
+  later syncs; a page that has never had the route available can show a
+  different width until it does.
+- **Last write wins, with no conflict UI.** The document is one scalar;
+  concurrent writes from two devices resolve to whichever POST reaches the Host
+  last. There is no merge, revision history, or prompt, a remote width is not
+  adopted mid-drag or while collapsed (it is applied on the next clean
+  transition), and a tab that keeps dragging while another device writes can
+  overwrite the newer value.
+- **Collapsed is never persisted.** On a wide viewport the shell writes the
+  transient `0` preference when the sidebar closes; the document keeps the last
+  expanded width and reopening re-applies it instead of the native 280 px. In the
+  shell's narrow-viewport mode only a presentation override changes (auto-collapse
+  to the rail below 1024 px, drawer below 768 px), so the stored width is
+  untouched; the drawer renders no drag handle, so the width cannot be changed on
+  such a screen. `0` is never written from any of those states.
+- **No setting and no UI.** The feature contributes no settings row, menu entry,
+  badge, or copy; the width changes only by dragging the native handle.
+
 ## Dynamic workspaces
 
 - **Expanded sidebar only.** In rail mode the card is hidden (kept mounted with
