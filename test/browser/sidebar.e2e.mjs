@@ -2432,7 +2432,7 @@ async function runLayoutChecks({ page, results, state }) {
     return `parent New session ${parentAction.width}x${parentAction.height} at x=${parentAction.left}; child action buttons 0 in its reserved 22px slot; header toggle ${headerToggle.rect.width}x30`
   })
 
-  await results.check('b2-3', 'the time↔"…" row-menu swap follows highlight on every top-level row and paints no hover background', async () => {
+  await results.check('b2-3', 'the time↔"…" row-menu swap follows highlight on every top-level row; only the rainbow row suppresses the trigger hover paint', async () => {
     await page.moveTo(900, 500)
     await sleep(250)
     const before = await page.eval(probe.panelGeometry)
@@ -2460,7 +2460,7 @@ async function runLayoutChecks({ page, results, state }) {
     assert(rest.morePresent, 'every top-level row must render the "…" trigger')
     assertEqual(rest.timeOpacity, '1', `a resting top-level row must keep its time (opacity ${rest.timeOpacity})`)
     assertEqual(rest.moreOpacity, '0', `the "…" trigger must be hidden at rest (opacity ${rest.moreOpacity})`)
-    assertEqual(rest.moreVisibility, 'hidden', `the "…" trigger must be hidden at rest (${rest.moreVisibility})`)
+    assertEqual(rest.moreVisibility, 'visible', `the "…" trigger stays focusable; only its opacity hides it (${rest.moreVisibility})`)
     await hoverRow(page, parentIndex)
     await sleep(650)
     const during = await page.eval(probe.panelGeometry)
@@ -2503,13 +2503,14 @@ async function runLayoutChecks({ page, results, state }) {
     assertEqual(hoveredMenu.moreOpacity, '1', `the "…" trigger must reveal on highlight (opacity ${hoveredMenu.moreOpacity})`)
     assertEqual(hoveredMenu.moreVisibility, 'visible', `the "…" trigger must be visible on highlight (${hoveredMenu.moreVisibility})`)
     assertEqual(hoveredMenu.morePointerEvents, 'auto', `the "…" trigger must be interactive on highlight (${hoveredMenu.morePointerEvents})`)
-    // Hovering the trigger paints no hover background; the rainbow row keeps only its
-    // brightness(1.2) suppression.
+    // Ordinary rows paint the same soft hover background as their New session
+    // control; the rainbow row suppresses it and keeps only brightness(1.2).
     const trigger = await hoverCardControl(page, 'parent', state.geometry.rows[parentIndex].title, '.psd-run-more')
-    assertEqual(trigger.background, 'rgba(0, 0, 0, 0)', `the "…" trigger must paint no hover background (${trigger.background})`)
     if (hoveredMenu.current) {
+      assertEqual(trigger.background, 'rgba(0, 0, 0, 0)', `the rainbow row's "…" trigger must paint no hover background (${trigger.background})`)
       assertEqual(trigger.filter, 'brightness(1.2)', `the rainbow row's "…" trigger hover must keep its brightness suppression (filter ${trigger.filter})`)
     } else {
+      assert(trigger.background !== 'rgba(0, 0, 0, 0)', `an ordinary row's "…" trigger must keep its soft hover background (${trigger.background})`)
       assertEqual(trigger.filter, 'none', `an ordinary row's "…" trigger must not carry the atmosphere lift (filter ${trigger.filter})`)
     }
     assertEqual(await page.eval(() => document.querySelectorAll('.psd-child .psd-run-more').length), 0,
@@ -2529,9 +2530,9 @@ async function runLayoutChecks({ page, results, state }) {
     }, state.geometry.rows[parentIndex].title)
     assert(restored !== null, `the hovered row "${short(state.geometry.rows[parentIndex].title, 40)}" disappeared after the pointer left`)
     assertEqual(restored.timeOpacity, '1', `the time must return after the pointer leaves (opacity ${restored.timeOpacity})`)
-    assertEqual(restored.moreVisibility, 'hidden', `the "…" trigger must hide after the pointer leaves (${restored.moreVisibility})`)
+    assertEqual(restored.timeOpacity, '1', `the time must return after the pointer leaves (opacity ${restored.timeOpacity})`)
     const hoveredMargin = Number(before.rows[hoveredIndex].titleMarginLeft ?? before.rows[hoveredIndex].titleShift ?? 0)
-    return `rest: time visible / "…" hidden; hover: time hidden / "…" visible and no hover background${hoveredMenu.current ? ' (rainbow row keeps its brightness(1.2) suppression)' : ''}; columns fixed (time ${before.rows[0].time.rect.right}, action ${before.rows[0].actions.rect.right}, disclosure ${before.rows[0].toggle.right}); hovered title slid ${before.rows[hoveredIndex].title.rect.left} -> ${during.rows[hoveredIndex].title.rect.left} = 25 − rest marginLeft ${hoveredMargin} (two-phase reveal); subagent rows have no trigger; leaving restores the time`
+    return `rest: time visible / "…" hidden; hover: time hidden / "…" visible with the ordinary hover paint${hoveredMenu.current ? ' suppressed on the rainbow row (brightness(1.2))' : ''}; columns fixed (time ${before.rows[0].time.rect.right}, action ${before.rows[0].actions.rect.right}, disclosure ${before.rows[0].toggle.right}); hovered title slid ${before.rows[hoveredIndex].title.rect.left} -> ${during.rows[hoveredIndex].title.rect.left} = 25 − rest marginLeft ${hoveredMargin} (two-phase reveal); subagent rows have no trigger; leaving restores the time`
   })
 
   await results.check('b2-5', 'the interrupted Continue triangle sits immediately after the badge and never moves the time column', async () => {

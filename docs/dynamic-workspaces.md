@@ -299,20 +299,21 @@ The 48 px time column doubles as the row-actions slot on **every top-level
 row**, including the current rainbow row. At rest the slot shows the relative
 time; row hover or keyboard `focus-within` hides the time and shows a "…"
 trigger in the same slot, and that swap **stays while the row's menu is open**
-(`data-menu-open`) — leaving the row restores the time. The trigger paints
-**no hover background**: hovering it leaves the background transparent (the
-global "…" hover block was removed; only the keyboard `focus-visible` ring
-remains), and on the rainbow row it follows the same suppression as the other
-current-row controls (transparent background with a `brightness(1.2)` icon
-lift). Clicking the trigger opens the card's **own Session menu popup**. The
+(`data-menu-open`) — leaving the row restores the time. On ordinary rows the
+trigger paints the same soft hover background as the sibling New-session
+control; only the **rainbow row** suppresses it, following the atmosphere
+control rule (transparent background with a `brightness(1.2)` icon lift). A
+keyboard `focus-visible` ring stays in both cases. Clicking the trigger opens
+the card's **own Session menu popup**. The
 popup is built from the shell's native Session action contributions
 (`ctx.contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })`),
 so Rename, Fork, Copy Session ID, Show in Finder, and Archive keep their native
 behavior and labels, but the **Pin/Unpin entry is filtered out**: pinning belongs
 to the card's title-left pin button (see *Pinned Sessions*), so the menu never
 offers a second pin affordance. The popup is 224 px wide, uses the theme's
-surface/elevation tokens, shows **labels only** — no action icons and no
-keyboard-shortcut hints (documented limitation) — and offers the same keyboard
+surface/elevation tokens, shows the native labels with a compact local glyph for
+each action, does **not** reproduce the native keyboard-shortcut hints (a
+documented limitation), and offers the same keyboard
 navigation and dismissal as a native menu (arrow keys/Home/End move between
 enabled items, Escape or an outside pointer press closes it, scroll and resize
 close it). While the action contributions are still resolving it shows a small
@@ -446,8 +447,10 @@ answering surface, and clicking a notice just opens that Session.
 - **Placement**: the stack is 320 px wide and prefers the card's **right edge**
   (native-tooltip style, outside the sidebar); when it does not fit it flips to
   the card's left edge, then clamps to an 8 px viewport inset on both axes. It
-  is fixed-positioned (the sidebar's scroll container cannot clip it) and
-  re-measured on resize, scroll, sidebar expansion, and card height changes.
+  is fixed-positioned (the sidebar's scroll container cannot clip it), and the
+  top edge is clamped using the estimated stack height so all three cards stay
+  inside the viewport; it is re-measured on resize, scroll, sidebar expansion,
+  and card height changes.
 - **Stack and overflow**: up to **3** notice cards, newest activity first; the
   rest collapse into a "+N more" line. Only the cards take the pointer; the
   stack never steals focus and has no hover preview of its own.

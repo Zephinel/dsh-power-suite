@@ -4720,6 +4720,29 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** Most pending notices shown at once; the rest collapse into a "+N" line. */
     const DW_NOTICE_LIMIT = 3
 
+    /** Row-menu action glyphs (24 viewBox) by native action suffix. The shell's
+     *  menu renders icons through its own keyed slot; this popup maps the five
+     *  card actions to compact local paths instead (labels stay native). */
+    const DW_MENU_ICONS = {
+      rename: 'M15.7 2.3a1 1 0 0 1 1.4 0l2.6 2.6a1 1 0 0 1 0 1.4L8.4 17.6 3 19l1.4-5.4L15.7 2.3ZM4.9 15.1l-.3 1.1 1.1-.3 8.8-8.8-0.8-.8-8.8 8.8Z',
+      fork: 'M7 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm10 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm-10 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0-2v2h8v-2H7Zm8-7v4a2 2 0 0 1-2 2h-2V8h2V6h2Z',
+      copy: 'M6.9998 6V3C6.9998 2.44772 7.44752 2 7.9998 2H19.9998C20.5521 2 20.9998 2.44772 20.9998 3V17C20.9998 17.5523 20.5521 18 19.9998 18H16.9998V20.9991C16.9998 21.5519 16.5499 22 15.993 22H4.00666C3.45059 22 3 21.5554 3 20.9991L3.0026 7.00087C3.0027 6.44811 3.45264 6 4.00942 6H6.9998ZM5.00242 8L5.00019 20H14.9998V8H5.00242ZM8.9998 6H16.9998V16H18.9998V4H8.9998V6Z',
+      reveal: 'M3 5C3 4.44772 3.44772 4 4 4H20C20.5523 4 21 4.44772 21 5V19C21 19.5523 20.5523 20 20 20H4C3.44772 20 3 19.5523 3 19V5ZM5 6V18H19V6H5ZM9 13H7V11H9V9H11V11H13V13H11V15H9V13Z',
+      archive: 'M4 3H20C20.5523 3 21 3.44772 21 4V7H19V5H5V7H3V4C3 3.44772 3.44772 3 4 3ZM19 9H21V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9H5V19H19V9ZM8 11H16V13H8V11Z'
+    }
+
+    /** Map one native action id to its local glyph path. */
+    function dwMenuItemIcon(view) {
+      const actionKey = String(view !== null && typeof view === 'object' ? view.id ?? '' : '').split('/').pop()
+      if (actionKey === '') return null
+      if (actionKey === 'archive' || actionKey === 'unarchive') return DW_MENU_ICONS.archive
+      if (actionKey === 'reveal' || actionKey === 'finder') return DW_MENU_ICONS.reveal
+      if (actionKey === 'rename') return DW_MENU_ICONS.rename
+      if (actionKey === 'fork') return DW_MENU_ICONS.fork
+      if (actionKey === 'copy') return DW_MENU_ICONS.copy
+      return null
+    }
+
     /** Pending-notice glyph paths (24 viewBox): question mark and shield; the plan
      *  notice reuses the existing file glyph. */
     const DW_NOTICE_QUESTION_PATH = 'M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM11 15V17H13V15H11ZM11 7V13H13V7H11Z'
@@ -5012,6 +5035,7 @@ html[data-input-modality='keyboard'] .psd-run:focus-within:not(:has(.psd-run-tog
 .psd-run-more{appearance:none;position:absolute;top:50%;right:0;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease),background-color 120ms var(--ds-ease-in-out,ease)}
 .psd-run[data-menuable='true']:hover .psd-run-time,.psd-run[data-menuable='true']:focus-within .psd-run-time,.psd-run[data-menu-open='true'] .psd-run-time{opacity:0}
 .psd-run[data-menuable='true']:hover .psd-run-more,.psd-run[data-menuable='true']:focus-within .psd-run-more,.psd-run[data-menu-open='true'] .psd-run-more{opacity:1;pointer-events:auto;transition:opacity 120ms var(--ds-ease-in-out,ease),background-color 120ms var(--ds-ease-in-out,ease)}
+.psd-run-more:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-run-more:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
 /* The head is gap-less: the collapsed Continue slot is 0 px wide, so a flex
@@ -5086,6 +5110,8 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-child-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
 .psd-menu{position:fixed;z-index:1200;box-sizing:border-box;padding:4px;border-radius:var(--dsw-radius-lg,14px);background:var(--dsw-alias-bg-layer-2,#2c2c2e);color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);display:flex;flex-direction:column;gap:1px}
+.psd-menu-icon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-right:8px;color:var(--dsw-alias-label-secondary)}
+.psd-menu-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .psd-menu-item{appearance:none;display:flex;align-items:center;width:100%;min-height:32px;padding:0 10px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:inherit;font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer}
 .psd-menu-item:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .psd-menu-item:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px;background:var(--dsw-alias-interactive-bg-hover)}
@@ -6389,15 +6415,20 @@ function dwClearNativeAtmospheres() {
      * @param {{ left: number, right: number, top: number }} panelRect - card bounds.
      * @param {number} viewportWidth - viewport width in CSS px.
      * @param {number} viewportHeight - viewport height in CSS px.
+     * @param {number} [stackHeight] - estimated stack height in CSS px; the top is
+     *   clamped so the card bottom also stays inside the viewport.
      * @returns {{ left: number, top: number, width: number }} fixed card box.
      */
-    function dwNoticePlacement(panelRect, viewportWidth, viewportHeight) {
+    function dwNoticePlacement(panelRect, viewportWidth, viewportHeight, stackHeight) {
       const gap = 8
       const width = Math.min(DW_HOVERCARD_WIDTH, Math.max(240, viewportWidth - gap * 2))
+      const height = typeof stackHeight === 'number' && Number.isFinite(stackHeight) && stackHeight > 0
+        ? stackHeight
+        : 80
       let left = Math.round(panelRect.right + gap)
       if (left + width > viewportWidth - gap) left = Math.round(panelRect.left - width - gap)
       if (left < gap) left = gap
-      const top = Math.round(Math.max(gap, Math.min(panelRect.top + gap, viewportHeight - gap - 80)))
+      const top = Math.round(Math.max(gap, Math.min(panelRect.top + gap, viewportHeight - gap - height)))
       return { left, top, width }
     }
 
@@ -7296,7 +7327,8 @@ function dwClearNativeAtmospheres() {
         const update = () => {
           const panel = panelRootRef.current
           if (!(panel instanceof HTMLElement)) return
-          const next = dwNoticePlacement(panel.getBoundingClientRect(), window.innerWidth, window.innerHeight)
+          const stackHeight = 12 + Math.min(notices.length, 3) * 68 + (noticeOverflow > 0 ? 18 : 0)
+          const next = dwNoticePlacement(panel.getBoundingClientRect(), window.innerWidth, window.innerHeight, stackHeight)
           setNoticeStyle((current) => (current !== null
             && current.left === next.left && current.top === next.top && current.width === next.width
             ? current
@@ -7929,6 +7961,7 @@ function dwClearNativeAtmospheres() {
         if (view.separatorBefore === true && index > 0) {
           rows.push(React.createElement('div', { key: `sep-${view.id}`, className: 'psd-menu-sep', role: 'separator' }))
         }
+        const iconPath = dwMenuItemIcon(view)
         rows.push(React.createElement('button', {
           key: view.id,
           type: 'button',
@@ -7941,7 +7974,9 @@ function dwClearNativeAtmospheres() {
             else itemRefs.current.set(view.id, element)
           },
           onClick: () => onSelect(view.id)
-        }, view.label))
+        },
+        iconPath === null ? null : React.createElement('span', { className: 'psd-menu-icon', 'aria-hidden': true }, RemixGlyph(iconPath, 14)),
+        React.createElement('span', { className: 'psd-menu-label' }, view.label)))
       })
       return React.createElement('div', { ref: rootRef, className: 'psd-menu', 'data-psd-menu': '', role: 'menu', 'aria-label': t('menu.aria'), style }, rows)
     }

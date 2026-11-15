@@ -2177,17 +2177,16 @@ pin is **kept** (restored) and remains the single pin owner.
   48 px time slot. Row hover or keyboard `focus-within` hides the time and shows
   the trigger; the swap **stays while the row's menu is open**
   (`data-menu-open`), and leaving the row restores the time. The trigger paints
-  **no hover background**: hovering it leaves `background-color: rgba(0,0,0,0)`
-  (the global "…" hover block was removed; only the keyboard `focus-visible`
-  ring remains), and on the rainbow row it gets the same `brightness(1.2)`
-  suppression as the New session/pin/Continue controls. Subagent rows have no
-  trigger. The trigger opens the card's **own popup** (`data-psd-menu`) built
+  the ordinary soft hover background (the same paint the New session control
+  uses) and a keyboard `focus-visible` ring; only the **rainbow row** suppresses
+  the background, with the same `brightness(1.2)` lift as the New session / pin /
+  Continue controls. Subagent rows have no trigger. The trigger opens the card's **own popup** (`data-psd-menu`) built
   from
   `ctx.contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })`:
   Rename, Fork, Copy Session ID, Show in Finder, and Archive keep their native
   behavior and labels, the **Pin/Unpin contribution is filtered out** (the pin
-  button owns pinning), and the popup shows **labels only** — no action icons and
-  no keyboard-shortcut hints. It is a 224 px card-styled surface (theme tokens),
+  button owns pinning), and the popup shows the native labels with a compact
+  local glyph for each action but **no native shortcut hints**. It is a 224 px card-styled surface (theme tokens),
   supports arrow/Home/End navigation (skipping disabled items), closes on
   Escape / outside pointer press / scroll / resize, and shows a loading
   placeholder while the contributions resolve. The swap is desktop

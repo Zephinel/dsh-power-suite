@@ -164,4 +164,7 @@ test('notice placement prefers the card right edge and clamps into the viewport'
   assert.ok(narrow.left >= 8)
   const top = plain(place({ left: 16, right: 280, top: 2000 }, 1440, 900))
   assert.equal(top.top, 900 - 8 - 80)
+  const stacked = plain(place({ left: 16, right: 280, top: 2000 }, 1440, 900, 216))
+  assert.equal(stacked.top, 900 - 8 - 216, 'a three-notice stack is clamped so its bottom edge stays in view')
+  assert.ok(stacked.top + 216 <= 900 - 8)
 })

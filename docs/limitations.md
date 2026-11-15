@@ -140,10 +140,10 @@
   the current rainbow row) keeps its time at rest; hover/focus hides the time
   and shows the trigger, and the swap stays while the menu is open. It is a
   desktop hover/focus affordance, and subagent rows have no trigger. The
-  trigger paints **no hover background** — only the keyboard `focus-visible`
-  ring remains — and on the rainbow row it gets the same `brightness(1.2)`
-  suppression as the other current-row controls. The popup shows **labels
-  only** — no action icons and no keyboard-shortcut hints. Its entries are the
+  trigger paints the ordinary soft hover background; only the rainbow row
+  suppresses it (transparent background + `brightness(1.2)`), like its other
+  controls. The popup shows the native labels with a compact local glyph per
+  action but does **not** reproduce the native keyboard-shortcut hints. Its entries are the
   shell's native Session action contributions, so an action a Host build does
   not contribute is simply absent, and the **Pin/Unpin entry is always filtered
   out**: pinning is owned by the title-left pin button, so the menu can never
