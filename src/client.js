@@ -4858,7 +4858,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'notice.kind.approval': 'Approval',
       'notice.questions': '{count} questions',
       'notice.overflow': '+{count} more',
-      'notice.aria': '{title} is waiting: {kind}',
+      'notice.live': '{count} Sessions are waiting for your answer',
       'notice.region': 'Sessions waiting for your answer',
       'menu.aria': 'Session actions',
       'panel.done': 'done',
@@ -4929,7 +4929,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'notice.kind.approval': '权限请求',
       'notice.questions': '{count} 个问题',
       'notice.overflow': '还有 {count} 个',
-      'notice.aria': '{title} 正在等待：{kind}',
+      'notice.live': '{count} 个 Session 正在等待你的回答',
       'notice.region': '正在等你回答的 Session',
       'menu.aria': '会话操作',
       'panel.done': '已完成',
@@ -5119,6 +5119,7 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-menu-sep{flex:none;height:1px;margin:4px 6px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 10%,transparent)}
 .psd-menu-loading{min-height:36px;padding:10px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px}
 .psd-notices{position:fixed;z-index:999;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.psd-notices-live{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .psd-notice{appearance:none;display:flex;align-items:flex-start;gap:9px;box-sizing:border-box;width:100%;padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,14px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;text-align:left;cursor:pointer;pointer-events:auto}
 .psd-notice:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .psd-notice:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
@@ -7346,7 +7347,7 @@ function dwClearNativeAtmospheres() {
           window.removeEventListener('scroll', update, true)
           if (observer !== null) observer.disconnect()
         }
-      }, [noticeKey, expanded])
+      }, [noticeKey, noticeOverflow, expanded])
       const canExpand = rows.length > DW_PANEL_LIMIT
       const anyRunning = rows.some((row) => row.state === 'running')
       const isRead = (sessionId, updatedAt) => dwIsAcked(acked, sessionId, updatedAt)
@@ -7695,7 +7696,6 @@ function dwClearNativeAtmospheres() {
                 menuEnabled ? React.createElement('button', {
                   type: 'button',
                   className: 'psd-run-more',
-                  'data-psd-more': '',
                   'aria-haspopup': 'menu',
                   'aria-expanded': menuOpen ? 'true' : undefined,
                   'aria-label': t('row.more', { title: row.title }),
@@ -7907,9 +7907,19 @@ function dwClearNativeAtmospheres() {
           }
         }
         const onKeyDown = (event) => {
+          // Only act while focus is inside this popup; after Tab moves focus out
+          // (or onto another surface) the menu must not steal arrow keys.
+          const root = rootRef.current
+          if (root === null || root === undefined || !root.contains(document.activeElement)) return
           if (event.key === 'Escape') {
             event.preventDefault()
             event.stopPropagation()
+            onClose()
+            return
+          }
+          if (event.key === 'Tab') {
+            // Native menus dismiss on Tab and return focus to their trigger.
+            event.preventDefault()
             onClose()
             return
           }
@@ -7921,11 +7931,11 @@ function dwClearNativeAtmospheres() {
           if (items.length === 0) return
           event.preventDefault()
           const index = items.indexOf(document.activeElement)
-          const next = event.key === 'Home'
-            ? 0
-            : (event.key === 'End'
-                ? items.length - 1
-                : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length)
+          let next
+          if (event.key === 'Home') next = 0
+          else if (event.key === 'End') next = items.length - 1
+          else if (event.key === 'ArrowDown') next = index < 0 ? 0 : (index + 1) % items.length
+          else next = index < 0 ? items.length - 1 : (index - 1 + items.length) % items.length
           items[next].focus()
         }
         const onPointerDown = (event) => {
@@ -8008,7 +8018,6 @@ function dwClearNativeAtmospheres() {
         className: 'psd-notice',
         'data-kind': notice.kind,
         'data-psd-notice': notice.sessionId,
-        'aria-label': t('notice.aria', { title: notice.title, kind: t(`notice.kind.${notice.kind}`) }),
         onClick: () => onOpen(notice.sessionId)
       },
       React.createElement('span', { className: 'psd-notice-icon', 'aria-hidden': true }, glyphFor(notice.kind)),
@@ -8029,6 +8038,11 @@ function dwClearNativeAtmospheres() {
         'aria-label': t('notice.region'),
         style
       },
+      React.createElement('span', {
+        className: 'psd-notices-live',
+        role: 'status',
+        'aria-live': 'polite'
+      }, t('notice.live', { count: notices.length + (overflow > 0 ? overflow : 0) })),
       cards,
       overflow > 0
         ? React.createElement('div', { className: 'psd-notices-overflow' }, t('notice.overflow', { count: overflow }))
@@ -8165,7 +8179,6 @@ function dwClearNativeAtmospheres() {
         setSessionMenu({
           token,
           sessionId: row.id,
-          title: row.title,
           trigger: element instanceof HTMLElement ? element : null,
           point: rect === null ? { x: 0, y: 0 } : { x: Math.round(rect.left), y: Math.round(rect.bottom) },
           views: readViews(),

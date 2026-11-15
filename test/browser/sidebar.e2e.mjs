@@ -9177,7 +9177,7 @@ async function runPinChecks({ page, results, state }) {
     assert(currentMenu.morePresent, 'the current rainbow row must render the "…" trigger')
     assertEqual(currentMenu.timeOpacity, '1', `the current rainbow row must keep its time at rest (opacity ${currentMenu.timeOpacity})`)
     assertEqual(currentMenu.moreOpacity, '0', `the current rainbow row's trigger must be hidden at rest (opacity ${currentMenu.moreOpacity})`)
-    assertEqual(currentMenu.moreVisibility, 'hidden', `the current rainbow row's trigger must be hidden at rest (${currentMenu.moreVisibility})`)
+    assertEqual(currentMenu.moreVisibility, 'visible', `the current rainbow row's trigger must stay focusable; only its opacity hides it (${currentMenu.moreVisibility})`)
     // Fix #3: the affordance is a content brightness lift, not a background.
     assertContentBrightness(current, 'brightness(1.15)', 'current card row at rest', { expectTransition: true })
     await hoverCardRowByTitle(page, 'parent', currentTitle)

@@ -2239,14 +2239,18 @@ Automated gates (measured by the Lead on this tree, 2026-11-15):
 Live row-menu probes (Lead, real running GUI + throwaway headless Chrome):
 **16/16 checks** plus a focused action probe, 0 page errors — at rest the time is
 visible and the "…"
-trigger hidden; on row hover the time hides, the trigger shows, and the
+trigger opacity-hidden but focusable; on row hover the time hides, the trigger
+shows, and the
 restored title-left pin slot animates in (button visible); the trigger keeps the
 ordinary soft hover paint (the rainbow row leaves it transparent); the
 card-owned popup opens, keeps the
 time/trigger swap while open, and lists Rename / Fork session / Copy Session
 ID / Show in Finder / Archive session with **no Pin/Unpin entry**; Escape
 closes it and leaving the row restores the time; a second real click on the
-trigger toggles the menu closed. The focused action probe opened the menu and
+trigger toggles the menu closed; a keyboard probe moved focus with ArrowDown
+(Rename → Fork session) and closed the popup on Tab, returning focus to the
+trigger (the trigger is opacity-hidden but focusable, and key handling only runs
+while focus is inside the popup). The focused action probe opened the menu and
 clicked **Copy Session ID**: the spy on `navigator.clipboard.writeText` recorded
 the Session id, the menu closed, and focus returned to the `…` trigger. The
 current rainbow row follows the same rule and keeps its rainbow.
