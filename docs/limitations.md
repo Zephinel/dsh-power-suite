@@ -2,9 +2,10 @@
 
 ## Packaging
 
-- The package is a local `link:` bundle in a DSH profile; it is not published to
-  npm and has no build pipeline. Host and browser entries are the checked-in
-  ES modules under `src/`.
+- This checkout is installed as a local `link:` bundle in a DSH profile. The
+  package has never been published; the first npm release is planned as 0.1.0
+  (see [CHANGELOG.md](../CHANGELOG.md)). There is no build pipeline: the Host
+  and browser entries are the checked-in ES modules under `src/`.
 - Only the Web platform is supported (`dsh.client.platform: "web"`). The TUI
   and other clients do not load the browser half.
 - The browser half injects DSH client packages by name; a Host composition that
@@ -72,6 +73,37 @@
   browser, proxy buffering, stream failure) the fallback can lag by one poll
   interval. Each open tab holds one long-lived SSE connection and there is no
   event replay, so a reconnect performs a full known-record refresh.
+
+## Update notice
+
+- **Silent until the package is published.** There is no npm release yet, so
+  the registry read fails and the notice never renders. The first release is
+  0.1.0 and is its own `latest`, so even after publishing, installs of 0.1.0 see
+  no prompt until a newer stable version (0.2.0) is published. A blocked
+  `registry.npmjs.org` or `raw.githubusercontent.com` also means silence, not an
+  error.
+- **It never updates anything.** **更新** only opens the bundle's Plugin detail
+  page through `pluginNavigation.openBundle`; DSH's plugin manager performs the
+  install. A `link:` install runs the local checkout and normally already has
+  the newest code, so it gets no prompt and its Plugin page has no upgrade
+  action.
+- **State is per browser.** The per-version "later" count and the silenced
+  version live in `localStorage['power-suite.update-prompt']`; another browser
+  or device prompts independently, clearing site data starts over, and there is
+  no cross-device "already seen/silenced" sync.
+- **Only the Highlights section is shown.** The card renders at most six bullets
+  parsed from `release-notes/<version>.md`'s `## Highlights` (`.en.md` for the
+  `en` locale, falling back to the default file). Missing notes mean the version
+  prompt still appears but the card says no highlights were published; the
+  repository must stay public for the tag-pinned raw URL to resolve.
+- **One check per page load.** The browser checks once, on load; a version
+  published while a page stays open is seen on the next load, and there is no
+  manual "check now" control or settings switch. Only stable `x.y.z` versions
+  are compared — a pre-release `latest` tag shows nothing.
+- **The card does not touch the sidebar.** It is a bottom-right `shell.overlay`
+  seat, so it cannot duplicate or reorder native sidebar rows; its only footprint
+  is the overlay card itself. The old sidebar-card design is retired — see
+  [update-check.md](update-check.md).
 
 ## Dynamic workspaces
 

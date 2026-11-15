@@ -20,7 +20,9 @@ npm run pack:check
   the DSH bundle patch points at a real file;
 - the pure-logic test suite (`node --test test/*.test.js`).
 
-Current evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round):
+Baseline evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round — the
+current checkout's counts after the 2026-11-15 update-notice round are recorded
+in the implementation-round section below):
 
 - `npm test`: **229 tests, 229 passed, 0 failed, 0 skipped** after the 0.3.0
   Project-view removal (the 24 project-view tests were deleted with the page),
@@ -1920,3 +1922,209 @@ expectation is backed by the reviewer's forced-`:hover` static proof rather than
 a run), the F6 live check cannot reproduce the decorator's stale-native-running
 branch on the shared Host (covered by the static replica), and `b2-5` still uses
 a synthetic head stand-in for the Continue slot.
+
+## 2026-11-15 — 更新提醒（实现轮）
+
+Implementation round of the update notice (Host route + browser prompt), the
+release-notes pipeline, and the repository rename to
+`@zephinel/dsh-power-suite`. Automated gates were recorded with the docs round;
+the Lead added the real-machine evidence on the same day.
+
+### Automated gates (local, 2026-11-15)
+
+Run from the repository root after the Host, browser, and release files landed:
+
+```bash
+npm test
+npm run check
+```
+
+- `npm test`: **307 tests, 307 passed, 0 failed, 0 skipped** (16 test files),
+  including the new `test/update-check.test.js` (**22** Host tests) and
+  `test/update-check-prompt.test.js` (**14** browser-state tests through the
+  client factory seam).
+- `npm run check`: **passed** — syntax checks, package-manifest checks, the
+  full test suite, the release-notes gate, and `npm run pack:check`
+  (`entryCount` 85; package `@zephinel/dsh-power-suite@0.1.0`).
+- `npm run check:release-notes` (also inside `npm run check` and the publish
+  workflow): **ok** — `release-notes/0.1.0.md` has 6 Highlights and
+  `release-notes/0.1.0.en.md` has 6.
+- `git diff --check`: clean.
+- Local Markdown links (validated by `npm run check`): every `docs/`,
+  `README.md`, and `CHANGELOG.md` link resolves, including the new
+  [update-check.md](update-check.md),
+  [release-notes/README.md](../release-notes/README.md), and
+  [.agents/skills/release-power-suite/SKILL.md](../.agents/skills/release-power-suite/SKILL.md).
+- Publish workflow CHANGELOG gate: simulated locally with the same `awk`
+  predicate — the `[Unreleased]` section names `0.1.0`, so a `v0.1.0` tag
+  passes while the section is still under Unreleased (no dated heading exists
+  yet, by decision).
+
+### Files changed in the implementation round
+
+- **Host:** `src/features/update-check/{version,release-notes,checker,host}.js`
+  (new), `src/index.js` (installer call), `test/update-check.test.js` (new).
+- **Browser:** `src/client.js` (`#region feature: update check`),
+  `test/update-check-prompt.test.js` (new).
+- **Release:** `release-notes/{README.md,0.1.0.md,0.1.0.en.md}` (new),
+  `scripts/check-release-notes.mjs` (new), `scripts/check.mjs` (release-notes
+  gate + `@zephinel` name assertion), `.github/workflows/ci.yml` (replaces
+  `check.yml`), `.github/workflows/publish.yml` (new), `package.json` /
+  `package-lock.json` (name, version 0.1.0, repository, publishConfig, files,
+  scripts), `.agents/skills/release-power-suite/SKILL.md` (new).
+- **Rename:** `cordis.patch.yml`, the client loader id, `test/browser/*`, and
+  `test/ui-annotation.test.js`.
+- **Docs:** `README.md`, `CHANGELOG.md`, new
+  [update-check.md](update-check.md), `docs/overview.md`,
+  `docs/architecture.md`, `docs/limitations.md`, `docs/development.md`, and
+  this record.
+
+### Real-machine evidence (Lead, 2026-11-15)
+
+The running DSH Web GUI on this machine was migrated to the renamed bundle and
+verified; no Host restart was needed (`plugin_manager remove_bundle` +
+`install_bundle` applied live).
+
+**Profile migration**
+- `dsh --profile web --dump-config`: no `@rexxin/dsh-power-suite` occurrence;
+  the `power-suite` row is `name: '@zephinel/dsh-power-suite'`.
+- `~/.dsh/profiles/web/package.json` has the `@zephinel/dsh-power-suite`
+  dependency (link) and bundle entry; `node_modules/@zephinel/dsh-power-suite`
+  exists and `@rexxin` is gone.
+
+**Host route (cookie-authenticated, live Host)**
+- `GET /api/power-suite.update?lang=zh` → **200**, `cache-control: no-store`,
+  `content-type: application/json`:
+  `{"current":"0.1.0","latest":null,"updateAvailable":false,"highlights":[]}`
+  (31 ms first call, 10 ms cached repeat).
+- `GET /api/power-suite.update?lang=en` → **200** with the same body (1.38 s
+  first call).
+- Unauthenticated request → **401** (Connection fence intact).
+- The real registry was read: the package is unpublished, so `latest` is `null`
+  and the failure TTL applies; the route never answered 5xx.
+
+**Browser prompt — `test/browser/update-prompt.e2e.mjs` (21/21 checks after the review fixes)**
+The harness opens the real GUI in a throwaway headless Chrome, stubs only
+`GET /api/power-suite.update` through the CDP Fetch domain, and drives the
+installed client code:
+- card appears bottom-right after the page-load delay, `role=region`,
+  `0.1.0 → 0.2.0`, update + later actions, exactly one route request per load;
+- 查看更新内容 expands the highlights and toggles to collapse;
+- 下次再说 hides the card and stores `{laterVersion:"0.2.0",laterClicks:1}`;
+- three later clicks expose 不再提醒; silencing stores only
+  `{silencedVersion:"0.2.0"}` and the card stays hidden on reload;
+- 更新 closes the card and opens the plugin manager surface, proven with a real
+  surface marker (absent before the click);
+- a no-update answer is silent and resets the stored cycle to `{"schema":1}`;
+- a failed registry answer (`latest: null`) is silent and keeps the state;
+- no page exception and no error-level console message in any scenario.
+
+Escape / outside click share the same `later` action; the harness covered the
+action path, not the two gestures directly (code-reviewed only).
+
+**Not verified (gaps)**
+- The real "newer published version" path cannot run before 0.2.0 is
+  published; the prompt UI used injected payloads only.
+- Sidebar DOM mutation counting was not run live; the client-state regression
+  test encodes the hard rule (the region must not contain `insertBefore` or
+  `document.body` and only adds a `<head>` style tag), and the live probe
+  reported no boot or page errors.
+- Dynamic Workspaces / interrupted badge / prompt-history rail / Artifacts /
+  annotation were not exercised scenario-by-scenario on the migrated GUI; the
+  page booted with the renamed bundle and reported no page errors.
+- CI has not run on GitHub (the repository has no remote yet).
+
+### Evidence limits (state honestly)
+
+- npm's real "newer version" end-to-end path cannot be exercised before 0.2.0
+  is published; the card UI is verified with injected fake payloads.
+- Right after the 0.1.0 release, `updateAvailable` is always false because the
+  running version equals npm `latest`; no live prompt is expected on this
+  checkout.
+- The current install is a `link:` bundle: its Plugin detail page has no
+  upgrade action, so **更新** is verified as navigation only.
+- Per-browser `localStorage` state was not exercised across multiple
+  browsers/devices (one throwaway Chrome profile was used).
+- No real screen-reader audit; Escape/outside-click were code-reviewed, and
+  the harness drove the equivalent later action.
+- The GitHub workflows have not run on GitHub before the first push; only
+  their syntax/steps were reviewed locally.
+
+## 2026-11-15 — 更新提醒 review 修复（`feat/update-reminder`）
+
+Two independent review axes (Standards / Spec) covered the implementation round.
+Neither found a BLOCKER; every MAJOR/MINOR/NIT finding was fixed before the
+feature branch was committed.
+
+### Fixed
+
+- **Publish readiness is gated before npm:** new
+  `scripts/check-publish-manifest.mjs` runs in `publish.yml` right after the
+  tag/version check and rejects a still-`private` package, a wrong
+  name/repository/`publishConfig`, or a missing `release-notes` files entry. It
+  is deliberately not part of `npm run check` (development installs stay
+  private); the release skill runs it during release preparation.
+- **One CHANGELOG timing policy:** release entries stay under
+  `## [Unreleased]` through publish (`publish.yml` accepts the version named
+  there) and move to `## [<version>] - <UTC date>` in the post-publish docs
+  follow-up. `docs/development.md` and the release skill now say the same thing.
+- **Docs match the card:** the docs no longer claim a motion/reduced-motion
+  treatment (the card has no animation) and describe the implemented layered
+  inline-SVG brand mark, which the card now renders with theme tokens.
+- **The browser check is abortable:** the controller owns an `AbortController`
+  per check (8 s bound) and `dispose()` aborts it, so a reload/unload cannot
+  leave a hanging request.
+- **Version tables are pinned:** `version.js` and the mirrored client parser now
+  use identical rules (trim + safe integers), and a cross-half test compares
+  both tables on the same inputs.
+- **The checker reuses its documented helpers:** `createUpdateChecker` consumes
+  `installedVersion`/`releaseNotesRepository` instead of re-deriving them, and
+  the private `readManifest` is no longer exported.
+- **Client test quality:** the source-level test keeps the real invariants
+  (`shell.overlay`, no `insertBefore`, no `document.body`, no
+  `MutationObserver`), drops brittle style-literal assertions, and ends the
+  region at the next feature marker.
+- **CI parity and docs gate:** `verify` runs Node 22 and 24 again; a docs-only
+  change runs `npm run check:docs-links` instead of skipping documentation
+  validation. Link validation moved to `scripts/check-docs-links.mjs` and now
+  also covers `.agents/skills/**`.
+- **Stronger live oracle:** `test/browser/update-prompt.e2e.mjs` accumulates page
+  errors across every load and proves the Update action with a real plugin
+  manager surface marker (`[data-plugin-detail]`/`[data-plugin-rows]`) that must
+  be absent before the click. The release skill lists the suite and
+  `test/browser/README.md` documents it.
+- **README install:** published releases can be installed from npm
+  (`plugin_manager action=install_bundle target=@zephinel/dsh-power-suite`); the
+  local `link:` checkout remains the development path.
+- **Publish poll bound:** `publish.yml` polls for at most 10 minutes even when
+  the registry accepts connections but never answers (30 × 5 s endpoint
+  timeouts + 10 s sleeps).
+- **Release skill self-contained:** it no longer references the gitignored
+  `.tmp-work/` plan; `release-notes/README.md` wording matches the card
+  (查看更新内容, inline details section); `scripts/check.mjs` documents all five
+  gate steps.
+
+### Verification after the fixes (2026-11-15, `feat/update-reminder`)
+
+- `npm test`: **308/308 passed** (16 files; Host 22 + client 15, including the
+  new mirrored-version-table test).
+- `npm run check`: **passed** — 22 modules, 16 test files, `docs links ok: 21
+  Markdown files`, `release-notes: ok (0.1.0; 6 highlight(s), 6 English)`, pack
+  `entryCount 85`.
+- `node scripts/check-publish-manifest.mjs`: **exit 1 by design** on this tree
+  (`package.json still has "private": true`); it must pass after the release
+  preparation removes `private`.
+- Live GUI harness: `node test/browser/update-prompt.e2e.mjs` → **21/21**
+  checks, including the stricter navigation oracle (surface absent → Update
+  click → plugin manager surface present) and the cumulative page-error oracle
+  (no exception or error-level console message across every scenario load).
+- Both workflow YAML files parse (Ruby Psych) and `git diff --check` is clean.
+
+### Evidence limits
+
+- The publish manifest gate is proven to fail on the private development tree;
+  its passing path can only be exercised during release preparation (remove
+  `private`, then run it).
+- The CI matrix (Node 22/24), docs-only link path and publish gates have not run
+  on GitHub yet — the repository still has no remote; the first push will be the
+  first real workflow run.

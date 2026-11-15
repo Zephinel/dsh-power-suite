@@ -6,15 +6,171 @@ All notable changes to this repository are documented here. The format follows
 
 ## [Unreleased]
 
-Planned as version 0.3.0; the release date is still pending. No dated release
-heading is added until the release is cut.
+First public release, planned as version **0.1.0**. This package has never been
+published: the earlier development snapshots — `0.1.0` (2026-11-09), `0.1.1`
+(2026-11-11), and an undated `0.2.0` — were internal only, never tagged and
+never released, and their history is consolidated into this single
+first-release section together with the current work. The date is not claimed
+and no dated release heading is added until the release is cut.
 
 ### Added
 
-- UI element annotation (expanded in this round): a floating launcher toggles a
-  client-only annotation mode that makes room for a responsive right rail by
-  shrinking the shell frame's `padding-right` (`clamp(188px, 11.6vw, 236px)`, no
-  CSS transform) and falls back to an overlay rail on narrow viewports. Hover
+- **Dynamic Workspaces** — the native Workspaces browser is augmented, never
+  replaced: it gains **Active Projects** and **Inactive Projects** buckets that
+  follow running and recently active Sessions, reorder live in both directions,
+  fold independently with persisted state, and hide in rail mode. The plugin
+  inserts sibling nodes and inline flex order only, so native search, context
+  menus, the add-workspace flow, drag reordering, chevron folds, dialogs,
+  Session rows, the New Session button, and modified clicks keep working, and
+  unloading restores the surface. A Workspace is Active while one of its
+  Sessions is running or was active inside the configurable Active-project
+  retention window. Above the native header a **Running & recent** card lists
+  running Sessions with the shell's own status dot and observed durations, keeps
+  recently finished Sessions for the same window, nests recent direct subagent
+  Sessions under their parent behind a disclosure chevron (indented under a
+  guide line, each opening its own Session), and opens a Session from any row.
+  Both windows are Host-wide settings — finished Sessions 1/2/6/12/24 hours
+  (default 2) and Active projects 1/3/7/14/30 days (default 7) — edited on the
+  bundle's Plugins page; version-1 settings files migrate to the default
+  windows, and running Sessions ignore both windows. Workspace default agent
+  presets remain reachable from the Workspace context menu.
+- **Running & recent native figures** — for the hovered Session (parent or
+  nested subagent row) the hover card appends **Session statistics**
+  (`{turns} turns {steps} steps`, LLM time, tool time, average TTFT, TPS in the
+  native duration/speed recipes), **Token usage** (exact grouped total = billed
+  input + output, honest cache-hit percentage that never rounds a partial hit to
+  100, uncached/cached/cache-write/output exact counts), and **Context usage**
+  (`{percent} of context used`, `~used / window`, and `~`-prefixed System
+  prompt / Tool definitions / Messages composition rows). Values come from the
+  existing `sessions` inject's `projectionsBySession` — live Sessions are
+  push-seeded and need no request; a cold (persisted) Session gets exactly one
+  deduplicated `refreshProjections` read on first hover, and the card fills the
+  figures in as they land with no loading state. Each section is omitted
+  entirely when its data is absent, so an empty Session keeps the plain card.
+  The card grows to 320 px and clamps at `min(560px, 100vh - 16px)`; subagent
+  cards gain a compact Session-title line. While a **live** Session's card
+  stays open the figures keep refreshing in place from the pushed projection
+  frames (the panel's 1 s clock re-reads the live snapshot; no extra polling or
+  network). The **native sidebar session hover card** renders the same Session
+  statistics, Token usage, and context sections through the shell's
+  `sidebar.session.row.hover` slot, reusing the same strings, formatter
+  recipes, live projections, and one-shot cold projection read, and contributing
+  no nodes for a Session without figures (the native card is not restyled,
+  widened, or reordered). The running-card hover status dot is a **perfect
+  circle** (`corner-shape: round`, because the shell's global
+  `superellipse(1.5)` painted the dot as a squircle).
+- **Running & recent pinning** — main Session rows in the card carry a
+  hover-revealed **Pin** control that keeps that main Session on top of
+  **Running & recent** past the finished-retention window. The slot collapses
+  when the button is hidden (the title sits next to the leading glyph); hover or
+  keyboard focus expands the slot before the button fades in, and leaving fades
+  the button out before the slot collapses (220 ms expand/collapse, 160 ms
+  fades; pinned rows keep the marker and its space permanently). The pin is the
+  card's **own** state, deliberately independent of the native sidebar's
+  project-organisation pin (never read, written, or surfaced here), and it is
+  **Host-shared for cross-device use**: a new authenticated
+  `GET|POST /api/power-suite.session-pins` route persists a bounded document
+  (`$DSH_HOME/dsh-power-suite/session-pins.json`, `{version, rev, pinned}`, max
+  500 ids with the oldest dropped first, atomic writes, last write wins, `rev`
+  bumping only on a real change) that every browser and device using the same
+  `$DSH_HOME` converges on. The client keeps a versioned `localStorage` cache
+  (`{version, rev, pinned, pending, migrated}`) with a queued-operation replay
+  for instant first paint, optimistic toggles and offline/local-only use, GETs
+  the Host document on mount/focus/visibility/every 30 s, merges cached pins
+  into the Host on first contact (so pre-route pins are not lost) and POSTs
+  queued pin/unpin operations; when the route is absent the card runs local-only
+  until the Host is restarted with the route, with no UI breakage. Pinned main
+  Sessions sort first, newest activity first, and never retire with time: a
+  pinned finished Session stays listed with its original
+  title/Workspace/path and last-activity time (no re-timing), unpin immediately
+  returns the row to the ordinary queue under the normal retention rules, and
+  pinned rows show a filled violet pin glyph plus a subtle violet tint (a single
+  highlight layer — the body pill inside the row no longer paints a second
+  tint); subagent child rows keep no pin control, and blank, archived, or
+  unknown Session ids cannot be pinned.
+- **Prompt history** — the configured modifier + ↑/↓ recalls prompts already
+  sent in this Session; plain arrows keep their original behavior. A vertical
+  rail at the conversation's right edge, below the native turn rail and
+  separated by a short divider, lists the current Session's sent prompts as
+  **native-style tick marks** in reading order — the oldest prompt is the top
+  tick and the newest sits at the bottom, and the rail keeps the newest tick in
+  view when the list loads or grows. Hover or keyboard focus shows the full
+  prompt in a native-style card to the left, click copies it silently into the
+  composer draft, and a pinned search button below the marks reveals a floating
+  substring filter (the search card opens directly below the magnifier or flips
+  to its left when there is no room above the composer; it dismisses on a blank
+  outside click or Escape). A long history caps the rail at
+  `min(available band, 420 px)`, scrolls its ticks behind 24 px fade masks with
+  hidden scrollbars, and keeps the search button pinned at the foot. The route
+  returns `{ seq, text, at }` for every prompt, where `at` is the Session event
+  time in epoch milliseconds or `null` when the event has no usable time; the
+  rail and hover card show the times, and a Host that predates the field has
+  them hidden instead of rendered empty. The rail appears only while the
+  Session has sent prompts, and requests are generation-scoped so a slow
+  Session cannot write into another Session.
+- **Session artifacts** — an **Artifacts** card in the right Sidebar's Start
+  page lists the current Session's created and delivered files **and the
+  images/files the user attached to their prompts**. The provided rows come
+  from the image and file blocks of human `user/message` events (source kind
+  `user` only), deduped by attachment id with the newest occurrence winning and
+  a 1-based prompt ordinal, served by the verified
+  `GET|HEAD /api/session-artifacts.attachment` route with the same
+  no-store/nosniff/sandbox-CSP headers. Every image artifact shows a 40 px
+  rounded lazy thumbnail, and the panel header carries an All/Generated/
+  Provided source-filter dropdown with per-option counts. Rows support
+  in-browser open, download, **Copy content**, and LAN link copy: text-like
+  artifacts are fetched through their inline URL and copied verbatim; images
+  use a three-step chain — a real PNG clipboard item in a secure context
+  (HTTPS/localhost), the legacy HTML-image clipboard on insecure origins (hidden
+  `<img>` + `execCommand('copy')`, so rich editors paste the picture while
+  plain-text targets may get nothing/alt), and only then the inline image URL as
+  text; other binaries have no content action, and a successful copy shows the
+  row's check acknowledgement for 1.6 s.
+- **Hover Quick Look** — a shared hover preview for Artifacts rows (generated
+  files plus provided images and text-like attachments) and the native
+  Workspace files tree: Markdown, syntax-highlighted code, images, audio/video,
+  PDF, and HTML, with drag-to-resize, animated file switching, safe hover
+  traversal, outside-click dismissal, and a remembered or user-resized size.
+  The card opens at a 570 x 360 default with an explicit content height and no
+  dependency on a finished animation, so content is visible on the first hover.
+  Provided images and media render through the verified attachment route,
+  text-like provided files are fetched read-only and clipped at 64 KiB with a
+  truncation note, and other provided types show the unavailable state.
+- **Draft attachment memory** — browser-owned attachments in a draft (pasted
+  images, dropped or picked files) are remembered per Session and re-introduced
+  through the composer's own paste intake when the Session is shown again, so
+  switching away and back no longer restores the text while silently dropping
+  the files. The cache is page-lifetime (8 Sessions / 20 files), clears on send
+  and on explicit removal of every restored attachment, and never attempts
+  persistence; the shell persists only the draft's text and reference chips.
+- **Interrupted sessions** — Sessions whose last turn did not finish are marked
+  in the sidebar and can be continued. Detection covers **every unfinished turn
+  ending**, not only Host restarts/crashes: any `turn/end` reason `error`
+  (quota/usage limit, request timeout, transport/network failure, rate limit,
+  malformed response, missing credential), `max-tokens`, `interrupted`, and
+  `aborted` with the `disposed` or legacy cause mark the Session as unfinished;
+  deliberate endings (`completed`, `blocked`, `forked`, user/parent/hook
+  cancellation) stay unmarked. An **amber mark** sits left of the title, and
+  hovering the row keeps the shell's normal hover surface (title visible) while
+  revealing an inline **Continue** triangle in the status cell (the native
+  status cell widens with `width: auto` so the title slides right instead of
+  being masked). Opening that Session turns the composer's send control into a
+  **play triangle**; continuing is **implicit** — it resumes through a non-human
+  context source instead of inserting a visible "Continue the interrupted
+  task." user prompt, the continuation row is hidden, prompt history ignores it,
+  and a missing Session controller leaves the badge in place. State is
+  Host-owned and cross-device: a Host **SSE stream**
+  (`GET /api/power-suite.interrupted-events`) pushes
+  `turn/start`/`turn/end` invalidations (`{sessionId, parentSession, event}`) to
+  every connected browser page, so badges/Continue/triangle state update
+  immediately instead of waiting for the 20 s poll; the stream has a 25 s
+  heartbeat, `retry: 10000`, one cleanup-safe connection per tab, no event
+  replay, and polling/focus/visibility/reconnect cues remain the fallback when
+  EventSource or the stream is unavailable.
+- **UI element annotation** — a floating launcher toggles a client-only
+  annotation mode that makes room for a responsive right rail by shrinking the
+  shell frame's `padding-right` (`clamp(188px, 11.6vw, 236px)`, no CSS
+  transform) and falls back to an overlay rail on narrow viewports. Hover
   outlines the candidate element; the picker treats **floating surfaces**
   (body-level DSH hover preview cards, and this plugin's own hover card while
   annotation mode pins it) as selectable targets *and* lets the Parent/Child
@@ -22,9 +178,9 @@ heading is added until the release is cut.
   raised above native hover cards (inline `z-index:150`, exact value/priority
   restored on exit) and a 60 ms mutation-triggered hover recompute for surfaces
   that appear while the pointer is stationary. A click selects the element and
-  opens the requirement popover: element name, locator summary, live
-  resolution status, ancestor level up/down, requirement textarea, and
-  **Mark requirement** / **Update requirement**, **Delete annotation** (5 s undo
+  opens the requirement popover: element name, locator summary, live resolution
+  status, ancestor level up/down, requirement textarea, and **Mark
+  requirement** / **Update requirement**, **Delete annotation** (5 s undo
   toast), and **Quick reference** actions. Every annotation is stored as a
   **v2 record** capturing a uniquely verified CSS selector, ≤3 sanitized
   ancestors, surface/ephemeral flags, Session id plus Workspace cwd/label, a
@@ -39,13 +195,13 @@ heading is added until the release is cut.
   surface/ephemeral marker, and **Copy locator** / **Relocate** / **Open in
   composer** actions. References are inserted as **native composer inline
   reference chips** through the shell's input-trigger seam (dynamic
-  `conversation` + `inputTriggers` injection; an `@` source with current-Session
-  candidates, no empty group): one chip for a single reference and one grouped
-  `UI annotations × N` chip for a batch, serialized at send time through the
-  existing reference/batch serializers (deleted members are skipped with an
-  honest removed-count line, and a missing single record invalidates the chip so
-  the send is blocked), with a plain-text fallback plus explanation when the
-  chip services are unavailable. Multi-select is now a **batch group** flow:
+  `conversation` + `inputTriggers` injection; an `@` source with
+  current-Session candidates, no empty group): one chip for a single reference
+  and one grouped `UI annotations × N` chip for a batch, serialized at send time
+  through the existing reference/batch serializers (deleted members are skipped
+  with an honest removed-count line, and a missing single record invalidates the
+  chip so the send is blocked), with a plain-text fallback plus explanation when
+  the chip services are unavailable. Multi-select is a **batch group** flow:
   after the selection settles a single batch popover opens with the selected
   items and ONE shared Requirement; committing saves one group containing every
   selected element (each keeps its locator/metadata, no per-item requirements),
@@ -53,11 +209,11 @@ heading is added until the release is cut.
   one request (shared requirement + numbered references with honest status
   lines). The persisted document is v3 (singles + groups, tolerant v2 migration,
   cap counts singles + group items, visible refusal) and the right rail's
-  collection view is redesigned into a real managed **annotation sidebar**
-  (widened to `clamp(320px, 24vw, 420px)`, status/settings views stay compact):
-  an **Annotations** header with a total badge and subtitle, **All / Singles /
-  Groups** filters with live counts, a unified scrollable list of single rows and
-  group cards (count badge, collapse/expand, shared-requirement editing,
+  collection view is a real managed **annotation sidebar** (widened to
+  `clamp(320px, 24vw, 420px)`, status/settings views stay compact): an
+  **Annotations** header with a total badge and subtitle, **All / Singles /
+  Groups** filters with live counts, a unified scrollable list of single rows
+  and group cards (count badge, collapse/expand, shared-requirement editing,
   always-visible edit/delete/insert actions), per-item metadata (Selector,
   Page/Area, Session/Workspace, updated time), empty/filter-empty states, and a
   footer with **Add annotation** and **Cancel Annotation** at equal widths (the
@@ -70,475 +226,454 @@ heading is added until the release is cut.
   (reduced-motion instant). Leaving the mode (header X, Cancel Annotation or the
   final Esc step) asks for confirmation and then clears all annotation records,
   so a re-entry starts empty; a group keeps ONE ordinal shared by all of its
-  items (page marks show the group's number, never an incrementing sequence). Page
-  pointer events are consumed in the capture phase so native controls cannot
-  act while annotating; the configurable multi-select modifier toggles selection
-  or starts a marquee, and the configurable pass-through modifier restores real
-  native mouse and context-menu behavior without synthesizing clicks. Plugin
-  text inputs (annotation note fields, prompt-history search, settings choices)
-  use the shared rainbow track focus ring instead of solid focus borders; the
-  launcher position, rail-collapsed state, and two modifiers persist in browser
-  `localStorage`, while annotation records use their own v3 document (singles + groups). The
-  browser-only feature adds no Host route, service, or profile change, cleans up
-  every listener, layout marker, and DOM node on exit and HMR, and ships a pure
-  test seam plus live-page CDP acceptance harness (seam generation 66; see
-  [verification.md](docs/verification.md) for the honest per-scenario record —
-  the known late-run headless S6/S8 stalls mean no single all-green full-suite
-  run is claimed).
-
-### Added
-
-- UI element annotation precision: picking is now **leaf-first** (DevTools-inspect
-  style) on ordinary pages and inside floating surfaces — hover and click target
-  the deepest eligible element under the pointer (titles, subtitles, timestamps,
-  token counters, inline SVG icons/paths, then rows/buttons), walking up only for
-  the plugin's own UI, structural tags, or zero-size nodes, and never escaping a
-  floating surface's root. The popover's Parent/Child controls walk the full
-  hovered ancestor chain (Child back to the deepest element, Parent up to the
-  surface/page container), and the whole surface stays selectable via its
-  background/padding or Parent. Selection outlines and popover anchoring use the
-  picked live element so any leaf keeps correct geometry; records keep honest
-  locators/status for weak (e.g. SVG) targets. Limits (bare text nodes resolve to
-  their parent element, CSS pseudo-elements aren't elements, `pointer-events:none`
-  targets fall back to the nearest ancestor) are documented.
-
-### Added
-
-- Native session figures in the Running & recent row hover card: for the hovered
-  Session (parent or nested subagent row) the card appends **Session statistics**
-  (`{turns} turns {steps} steps`, LLM time, tool time, average TTFT, TPS in the
-  native duration/speed recipes), **Token usage** (exact grouped total =
-  billed input + output, honest cache-hit percentage that never rounds a partial
-  hit to 100, uncached/cached/cache-write/output exact counts), and **Context
-  usage** (`{percent} of context used`, `~used / window`, and `~`-prefixed
-  System prompt / Tool definitions / Messages composition rows). Values come from
-  the existing `sessions` inject's `projectionsBySession` — live Sessions are
-  push-seeded and need no request; a cold (persisted) Session gets exactly one
-  deduplicated `refreshProjections` read on first hover, and the card fills the
-  figures in as they land with no loading state. Each section is omitted entirely
-  when its data is absent, so an empty Session keeps the plain card. The card
-  grows to 320 px (still flush on the sidebar edge with the same native tooltip
-  chrome) and clamps at `min(560px, 100vh - 16px)`; subagent cards gain a compact
-  Session-title line. While a **live** Session's card stays open the figures
-  keep refreshing in place from the pushed projection frames (the panel's 1 s
-  clock re-reads the live snapshot; no extra polling or network); a cold/persisted
-  Session still gets exactly one deduplicated `refreshProjections` read. No Host
-  route, new inject, or package dependency.
-- Interrupted-state SSE stream: `GET /api/power-suite.interrupted-events`
-  pushes `turn/start`/`turn/end` invalidations (`{sessionId, parentSession,
-  event}`) to every connected browser page, so cross-device badges/Continue/
-  triangle state updates immediately instead of waiting for the 20 s poll. The
-  stream has a 25 s heartbeat, `retry: 10000`, one cleanup-safe connection per
-  tab, no event replay, and the existing poll/focus/visibility/reconnect cues
-  remain the fallback when EventSource or the stream is unavailable.
-
-### Added
-
-- Running & recent pinning, shared native hover figures, and a circular status
-  dot: **main Session rows** in the Running & recent card now carry a
-  hover-revealed **Pin** control (hidden in a collapsed slot so the title sits
-  next to the leading glyph; hovering expands the slot first and then fades the
-  button in, and leaving fades it out before the slot collapses) that keeps that
-  main Session
-  on top of **Running & recent** past the finished-retention window. The pin is
-  the card's **own** state, deliberately independent of the native sidebar's
-  project-organisation pin (never read, written, or surfaced here — the live
-  Host's six old sidebar pins would otherwise flood the running panel), and it is
-  **Host-shared for cross-device use**: a new authenticated
-  `GET|POST /api/power-suite.session-pins` route persists a bounded document
-  (`$DSH_HOME/dsh-power-suite/session-pins.json`, `{version, rev, pinned}`, max
-  500 ids with the oldest dropped first, atomic writes, last write wins, `rev`
-  bumping only on a real change) that every browser and device using the same
-  `$DSH_HOME` converges on. The client keeps a versioned `localStorage` cache
-  (`{version, rev, pinned, pending, migrated}`) with a queued-operation replay
-  for instant first paint, optimistic toggles and offline/local-only use, GETs
-  the Host document on mount/focus/visibility/every 30 s, merges cached pins into
-  the Host on first contact (so pre-route pins are not lost) and POSTs queued
-  pin/unpin operations; when the route is absent the card simply runs local-only
-  until the Host is restarted with the route, with no UI breakage. The default
-  card content is unchanged — the ordinary running/recent rows including running
-  subagent children — and no row is prefilled or tinted. Pinned main Sessions
-  sort first, newest activity first, and never retire with time: a pinned
-  finished Session stays listed with its original title/Workspace/path and
-  last-activity time (no re-timing), unpin immediately returns the row to the
-  ordinary queue under the normal retention rules, and pinned rows show a filled
-  violet pin glyph plus a subtle violet tint; subagent child rows keep no pin
-  control, and blank, archived, or unknown Session ids cannot be pinned.
-  The **native sidebar session hover card** now renders the same **Session
-  statistics**, **Token usage**, and **context** sections as the card's hover
-  card through the shell's `sidebar.session.row.hover` slot, reusing the same
-  strings, formatter recipes, live projections, and one-shot cold projection
-  read, and contributing
-  no nodes for a Session without figures (the native card is not restyled,
-  widened, or reordered). The running-card hover status dot is now a **perfect
-  circle**: the shell's global `corner-shape: superellipse(1.5)` painted the
-  `border-radius: 50%` dot as a squircle, so it sets `corner-shape: round`.
+  items (page marks show the group's number, never an incrementing sequence).
+  Page pointer events are consumed in the capture phase so native controls
+  cannot act while annotating; the configurable multi-select modifier toggles
+  selection or starts a marquee, and the configurable pass-through modifier
+  restores real native mouse and context-menu behavior without synthesizing
+  clicks. The annotation note fields, the prompt-history search field, and the
+  settings choices use the shared rainbow track focus ring instead of solid
+  focus borders; the launcher position, rail-collapsed state, and two modifiers
+  persist in browser `localStorage`, while annotation records use their own v3
+  document. The browser-only feature adds no Host route, service, or profile
+  change, cleans up every listener, layout marker, and DOM node on exit and
+  HMR, and ships a pure test seam plus a live-page CDP acceptance harness (seam
+  generation 66; see [verification.md](docs/verification.md) for the honest
+  per-scenario record — the known late-run headless S6/S8 stalls mean no single
+  all-green full-suite run is claimed).
+- **UI element annotation precision** — picking is **leaf-first**
+  (DevTools-inspect style) on ordinary pages and inside floating surfaces:
+  hover and click target the deepest eligible element under the pointer
+  (titles, subtitles, timestamps, token counters, inline SVG icons/paths, then
+  rows/buttons), walking up only for the plugin's own UI, structural tags, or
+  zero-size nodes, and never escaping a floating surface's root. The popover's
+  Parent/Child controls walk the full hovered ancestor chain (Child back to the
+  deepest element, Parent up to the surface/page container), and the whole
+  surface stays selectable via its background/padding or Parent. Selection
+  outlines and popover anchoring use the picked live element so any leaf keeps
+  correct geometry; records keep honest locators/status for weak (e.g. SVG)
+  targets. Limits (bare text nodes resolve to their parent element, CSS
+  pseudo-elements aren't elements, `pointer-events:none` targets fall back to
+  the nearest ancestor) are documented.
+- **Workspace default presets** — a Workspace context-menu submenu sets the
+  default agent preset for new Sessions created in that Workspace.
+- **Settings** — the bundle's Plugins page carries its own configuration
+  section: the prompt-history modifier (⌘/Ctrl, ⌥/Alt, Ctrl, Shift, or Off) and
+  the two Dynamic Workspaces retention windows, under the **Prompt history** and
+  **Active & recent** groups. The section hides the page's auto-rendered package
+  README document while mounted and restores it on unmount; settings are
+  Host-owned (schema version 2) and shared by every browser on its next load.
+- **Host-shared read acknowledgements** — a durable
+  `$DSH_HOME/dsh-power-suite/read-acks.json` document (schema v1, sanitized,
+  per-id max-merge, 1000-entry cap, atomic writes) is served by an authenticated
+  `GET/POST /api/power-suite.read-acks` route; every browser using the same
+  `$DSH_HOME` syncs the same baselines (local cache + 30 s/focus/visibility
+  sync, one-time migration of old local marks, 250 ms debounced push). Read
+  state is derived as `baseline >= activity - 1000 ms`, so a transient status
+  flag can no longer resurrect a stale green dot. Profiles sharing a home
+  **share the file with no profile isolation and no read-merge across writers**
+  (the design assumes one Host process plus overlapping HMR), and the old
+  per-browser `localStorage['dsh-power-suite.acked-sessions']` document is now
+  only the fast/offline cache, migrated to the Host on first use.
+- **Event-sourced activity ledger** — the Host subscribes to committed
+  `session/event` times under an explicit `ACTIVITY_EVENT_TYPES` allowlist
+  covering known activity-bearing families (turns, steps, messages/attempts,
+  tools incl. PTC dispatch, jobs, commands, compaction, subagent state,
+  goal/todo, approvals and selection actions, workspace/deliverable/schedule
+  changes, team traffic, image/offload, feedback, inbox splice, LLM retry,
+  tool-workflow progress); the explicit `NON_ACTIVITY_EVENT_TYPES` metadata
+  (request headers/context, titles and their LLM requests, end seeds, delivery
+  acknowledgements, web search requests), seed variants, and unknown
+  future/plugin types never count. It persists
+  `$DSH_HOME/dsh-power-suite/session-activity.json`
+  (`{version:1, sessions:{id:lastActivityAt}}`, max-merge, 5000-Session cap,
+  debounced atomic writes) and seeds a one-time projection-cache baseline for
+  pre-install Sessions (never overwriting newer live events; header `createdAt`
+  when there is no cache document). Writes are **best-effort
+  read-merge-writes**: sequential external writes are preserved, but
+  interleaving writers can lose one side (TOCTOU; no cross-process lock).
+  `flush()` awaits the full serialized chain and drains during-write events;
+  `dispose()` stops the debounce, flushes, awaits the chain and is idempotent.
+  A read-only `GET /api/power-suite.session-activity` keeps the
+  `{sessions}` contract and serves the live ledger (no per-request document
+  scan, no-store) after a bounded `waitForSeeded(5000 ms)`; the client merges
+  activity per-id monotonically and prunes only against a non-empty catalog, so
+  partial/empty responses cannot drop known activity. Activity is exact only
+  for allowlisted events the Host observed; pre-install Sessions rely on the
+  baseline approximation, and the native sidebar keeps catalog times. The card
+  folds activity in via `max(catalog updatedAt, activity)` for retention,
+  ordering, relative times, bucket recency, child rows, and read-baseline
+  raising: a turn that ran for hours keeps its real activity time and stays in
+  the recent window instead of vanishing when it stops.
+- **Update notice (new)** — an in-app card when a newer stable version of the
+  bundle is published on npm. The Host answers
+  `GET /api/power-suite.update?lang=<locale id>` with
+  `{ current, latest, updateAvailable, highlights }`, reading the npm `latest`
+  dist-tag and the release notes pinned to the published `v<latest>` tag;
+  the browser checks once per page load after a 1.5 s delay and renders a fixed
+  bottom-right `shell.overlay` card (never a sidebar node) with the version
+  line, up to six `## Highlights`, **更新**, **下次再说**, and
+  **查看更新内容 / 收起**. **更新** calls
+  `pluginNavigation.openBundle('@zephinel/dsh-power-suite')` to open the
+  Plugin detail page — DSH's plugin manager performs the update — and does not
+  write silence state; **下次再说** counts per version and after three clicks
+  exposes **不再提醒**, which silences only the current version; Escape or an
+  outside click is "later". State is browser-local
+  (`localStorage['power-suite.update-prompt']`, schema 1), the prompt clears
+  itself when the route proves there is no update, and the feature stays silent
+  on any failure. It becomes visible to 0.1.0 installs only after 0.2.0 is
+  published. See [docs/update-check.md](docs/update-check.md).
 
 ### Changed
 
-- Running & recent default-state alignment: the title's first character is now
-  centred on the child status-dot column (a measured per-row offset from the
-  first glyph's advance width plus a 2 px right bias so the ink reads visually
-  centred), so the tree line, pin column, child dots and the first character
-  share one centre line; hover/focus/pinned states keep the expanded 71 px
-  column.
-
-- Prompt-history rail order reversed to reading order: the oldest prompt is the
-  top tick and the newest sits at the bottom, and the rail keeps the newest tick
-  in view when the list loads or grows.
-
-- Power Suite floating surfaces are borderless: the annotation launcher and its
-  count badge, the annotation rail (docked and overlay), the exit-confirmation
-  dialog, the feedback and undo toasts, and the Running & recent panel card no
-  longer paint an outer border (the popovers, detail card and note editor were
-  already borderless); the launcher is a perfect circle (`corner-shape: round`)
-  and every borderless surface uses a ring-free soft shadow, so the elevation
-  token's 0.5 px hairline cannot read as a border in either theme; separation
-  comes from background and shadow, inner controls keep their own borders.
-
-- Annotation mode no longer swallows composer interaction: the current Session's
-  composer stays natively clickable/typable while the mode is active (it is also
-  no longer an annotation target), so an inserted reference chip can be edited
-  and sent; the sidebar footer primary becomes **Insert all into composer** when
-  the collection is non-empty and no page selection is pending (previously it
-  only repeated the "select elements" hint); the multi-selection batch popover is
-  draggable by its header and both popovers clamp with their measured size so
-  their buttons stay inside the window; Active/Inactive Projects headings now
-  match the native Workspaces heading (14 px / 400).
-
-- The pin control's reveal is two-phase and space-saving: the slot collapses
-  when the button is hidden (the title sits next to the leading glyph), hover or
-  keyboard focus expands the slot before the button fades in, and leaving fades
-  the button out before the title expands back (220 ms slot expand/collapse,
-  160 ms fades, gentle easing); pinned rows keep the marker and its space
-  permanently.
-
-- Pinned-row highlight is a single layer: the pinned row keeps its subtle violet
-  row tint but the body pill inside it no longer paints a second tint (the two
-  rounded surfaces read as a double highlight); the filled pin glyph still marks
-  the state, and ordinary hover feedback on the row is unchanged.
-
-- Running & recent leading glyphs and pin column aligned: every main row's
-  leading glyph now sits in a fixed 16 px cell (14 px state dots centred, the
-  read-row sparkle enlarged from 14 px to 16 px), the nested-child tree trunk is
-  centred under that cell, and the pin control is centred on the child
-  status-dot column with equal 9 px gaps on both sides instead of the previous
-  asymmetric spacing.
-
-- Running & recent row height follows the native Workspace list: every card row
-  (main and nested child, ordinary and current) is now 34 px tall, the measured
-  height of the native Workspace project rows, so the card and the Workspace
-  list below share one row rhythm; the body pill fills the row and typography /
-  columns are unchanged.
-
-- Current-Session rainbow atmosphere rows no longer receive the ordinary
-  row-body hover pill (card parent and child rows) or the native sidebar row's
-  own hover/selected background while the atmosphere is painted: the extra
-  rounded highlight stacked inside the rainbow rectangle read as a misaligned
-  second highlight. The suppression applies to the running-panel current row,
-  its nested child row, and the native sidebar current Session and Workspace
-  rows; the affordance is now a brightness lift on the row's own text/icons
-  (`filter: brightness(1.15)` while highlighted, `1.5` on hover/focus, 140 ms,
-  disabled under reduced motion) instead of a background layer. The row's
-  trailing controls (New session, disclosure, pin, Continue, and the native
-  sidebar action buttons) follow the same rule: on an atmosphere row they never
-  paint their own hover background and just brighten one extra step. Keyboard
-  focus rings and the hover opacity rise are unchanged.
-
-- UI element annotation launcher placement: the round launcher floats only while
-  the mode is off; activating the mode fades/scales it out in place (no docked
-  or flying copy in the rail header), and a full exit (header X, Cancel
-  Annotation, or the final Esc step) restores it with a fade/scale animation at
-  the remembered floating position (drag and position persistence are
-  idle-only; reduced-motion users get the instant state).
-
-- Running & recent identity glyphs swapped: the panel header's all-complete
-  indicator now paints the DeepSeek brand glyph (`deepseek-fill`) and an
-  acknowledged finished parent row paints the sparkling-line glyph. Sizes,
-  scales, colours, glyph columns, the running pulse dot, the unread green dot,
-  and the nested subagent robot glyph are unchanged, as is all state logic.
-- Running & recent card layout: rows and the header share one fixed trailing grid
-  — title (right-edge gradient fade while clipped) → **time 48 px**
+- **Running & recent row layout** — rows and the header share one fixed trailing
+  grid: title (right-edge gradient fade while clipped) → **time 48 px**
   (right-aligned, tabular numerals) → **New session action 22 px**
-  (hover/focus-revealed) → **disclosure chevron 24 px** — so parent and nested
+  (hover/focus-revealed) → **disclosure chevron 24 px**, so parent and nested
   subagent rows right-align their times on one column and no title can push the
   controls; a flexible spacer between the content-paced title control and the
-  trailing grid keeps that grid right-anchored at **every card/sidebar width**
-  (short titles no longer leave the time floating mid-row). Nested subagent rows
-  no longer offer the New session action (their action/disclosure columns are
-  empty spacers; an interrupted child keeps only Continue in the action slot),
-  and the header joins the same grid. Rows get a clear vertical gap (5 px
-  between items, 4 px parent→first child, 5 px child↔child) so the current-row
-  atmosphere never touches its neighbours while the 1 px subagent trunk and its
-  last-child end mask stay coherent and hover actions remain reachable across
-  the gaps. The row-body highlight pill stays content-paced with roomy text
-  insets (parent `4px 10px 4px 14px`, child `3px 8px 3px 10px`; the title text
-  sits ≥8 px inside the pill's right edge and the fade mask clips inside that
-  padding) while the action/chevron highlights keep fixed 22×22 / 24×26
-  geometry on one column.
-- Running & recent current-highlight: the animated conic rainbow ring is replaced
-  by a vivid animated rainbow **atmosphere painted inside the row's own
-  rounded-rectangle highlight**, with the row's real content (title, time,
-  leading glyph, actions) layered above it under a faint contrast scrim. The
+  trailing grid keeps that grid right-anchored at every card/sidebar width.
+  Every row (main and nested child, ordinary and current) is 34 px tall — the
+  measured height of the native Workspace project rows — and gets a clear
+  vertical gap (5 px between items, 4 px parent→first child, 5 px
+  child↔child) so the current-row atmosphere never touches its neighbours while
+  the 1 px subagent trunk and its last-child end mask stay coherent. The title's
+  first character is centred on the child status-dot column through a measured
+  per-row offset (first-glyph advance width + a 2 px right bias), so the tree
+  line, pin column, child dots and first character share one centre line; every
+  main row's leading glyph sits in a fixed 16 px cell (14 px state dots centred,
+  the read-row sparkle enlarged to 16 px), the child-tree trunk is centred under
+  that cell, and the pin control is centred on the child status-dot column with
+  equal 9 px gaps on both sides.
+- **Running & recent row actions** — rows gained a fixed trailing cluster with
+  **New session** (a blank Session in the row's own directory, falling back to
+  the Workspace New Session) and, for interrupted rows, an amber warning badge
+  plus a **Continue** action that reuses the interrupted-session continuation
+  flow. Slots are reserved and revealed on hover/keyboard focus without layout
+  shift, and the row's hover card anchors to the activity panel's right edge so
+  it never covers the row or its buttons.
+- **Current-Session rainbow atmosphere** — the animated conic rainbow ring that
+  marked the open Session is replaced by a vivid animated rainbow
+  **atmosphere painted inside the row's own rounded-rectangle highlight**, with
+  the row's real content layered above it under a faint contrast scrim. The
   renderer uses source-over saturated blobs (vibrance 1.72, intensity .64,
-  `saturate(1.5)` plus per-theme multiply/screen blending and a lightened scrim)
-  so the pill reads as saturated rainbow gas rather than a grey wash; measured
-  blob-core saturation is ~0.40–0.43 (static ~0.30–0.34 under reduced motion)
-  and the harness pins that baseline. It
-  applies to the current Session's card row (parent and nested child rows), the
-  owning native Workspace row, and the native sidebar Session row of the open
-  Session (`data-psd-current-session`), is clipped to each row's own radius, is
-  `pointer-events: none`, changes no column/geometry/layout, animates only the
-  highlighted rows (hover raises it slightly), and draws a static rainbow fill
-  under `prefers-reduced-motion`. Opening a Session from the card, the sidebar,
-  or anywhere else moves the highlight together with the
-  Activity/Workspace/Session association.
-- Running & recent hover card: the row detail card now matches the live native
+  `saturate(1.5)` plus per-theme multiply/screen blending and a lightened
+  scrim) so the pill reads as saturated rainbow gas rather than a grey wash
+  (measured blob-core saturation ~0.40–0.43, static ~0.30–0.34 under reduced
+  motion). It applies to the current Session's card row (parent and nested
+  child rows), the owning native Workspace row, and the native sidebar Session
+  row of the open Session (`data-psd-current-session`), is clipped to each
+  row's own radius, is `pointer-events: none`, changes no column/geometry,
+  animates only the highlighted rows, and draws a static rainbow fill under
+  `prefers-reduced-motion`. Opening a Session from the card, the sidebar, or
+  anywhere else moves the highlight with the
+  Activity/Workspace/Session association. Atmosphere rows no longer receive the
+  ordinary row-body hover pill or the native sidebar row's own hover/selected
+  background (the extra rounded highlight read as a misaligned second
+  highlight): the affordance is a brightness lift on the row's own text/icons
+  (`filter: brightness(1.15)`, `1.5` on keyboard hover/focus, 140 ms, disabled
+  under reduced motion), with the same rule for trailing controls (New session,
+  disclosure, pin, Continue, native sidebar actions) and keyboard focus rings
+  unchanged.
+- **Running & recent identity glyphs** — the panel header's all-complete
+  indicator paints the DeepSeek brand glyph (`deepseek-fill`) and an
+  acknowledged finished parent row paints the sparkling-line glyph; sizes,
+  scales, colours, glyph columns, the running pulse dot, the unread green dot,
+  and the nested subagent robot glyph are unchanged, as is all state logic. The
+  card header's leading indicator has the blue pulsing business-primary dot
+  while any listed Session is running and the white sparkling-line icon when
+  everything is complete, both centred on the row glyph column.
+- **Running & recent row hover card** — the card now matches the live native
   sidebar session hover-card oracle (left edge flush with the sidebar's right
   edge, top aligned to the row, borderless, 16 px radius, 12×16 padding and
   native title/secondary type), grows to 320 px for the figure rows, and clamps
-  to `min(560px, 100vh - 16px)`. **All plugin tooltip-like floating cards** (the
-  row card, Artifact Quick Look, prompt-history preview/search cards, and the
-  annotation requirement popover/detail card/expanded note editor) now paint the
-  native hover-card surface — a fixed `#2C2C2E` (`--dsw-hovercard-bg`) in both
-  light and dark themes rather than the theme-flipping tooltip token, with no
-  border and the shell's native panel elevation. The panel's plugin chrome also
+  to `min(560px, 100vh - 16px)`. **All plugin tooltip-like floating cards**
+  (the row card, Artifact Quick Look, prompt-history preview/search cards, and
+  the annotation requirement popover/detail card/expanded note editor) paint
+  the native hover-card surface — a fixed `#2C2C2E` (`--dsw-hovercard-bg`) in
+  both light and dark themes rather than the theme-flipping tooltip token, with
+  no border and the shell's native panel elevation. The panel's plugin chrome
   inherits the shell font family/size/weight and shows title-case **Active
   Projects** / **Inactive Projects** bucket labels instead of uppercase.
-- Running & recent fold persistence: the Active/Inactive bucket fold state is
-  restored on the **first observable paint** using a persisted bucket
-  classification cache and then corrected by live data, so a collapsed bucket no
-  longer paints expanded for the hydration window; native section re-renders
-  cannot clobber a fold.
-- Plugin input focus treatment: a shared animated rainbow track focus ring
+- **Theme-following surfaces and light-mode readability** — Dynamic Workspaces
+  session hovercards follow the active theme: light mode uses a white surface
+  with the light label tokens (title `#0f1115`, secondary `#61666b`, tertiary
+  `#81858c`) for the plugin's `.psd-hovercard`/`.psp-*`/`.dsa-quicklook` cards
+  plus a minimal scoped override for the native shell session-info hover card,
+  while dark mode stays byte-identical (`#2C2C2E` + white). The native override
+  depends on shell module class hashes and degrades gracefully to the native
+  dark card. The native Workspace session-info hover card uses the plugin
+  card's 320 px width in both themes (scoped shell-hash override with graceful
+  fallback). Rainbow atmosphere rows are readable in light mode through a
+  brighter pastel canvas, a white readability veil instead of the dark scrim,
+  and lifted secondary text/icons on highlighted rows (card title
+  5.51:1→14.72:1, time/icons 1.08:1→4.52:1, native Workspace worst text
+  15.45:1), with the sidebar E2E pinning the light thresholds; dark mode is
+  unchanged. Running-panel icons match the native Workspace icon weight in
+  light mode (row actions, disclosure/chevrons, status and child glyphs lifted
+  from `label-tertiary` #81858c to `label-secondary` #61666b; brand/sparkle
+  stays `label-primary`). The reported dark document-preview panel was found
+  shell-owned and not reproducible (the plugin defines no `--dsw-*` variables;
+  only the shell diff sub-palette is low-contrast) and is documented as a
+  shell-side limitation with no broad override.
+- **Prompt-history rail matches the native turn rail** — right-aligned 20 x 2 px
+  tick marks on the native column (60 % width at rest, growing on hover, brand
+  hairline on keyboard focus), a horizontal 32 x 1 px divider, a native-style
+  line-clamped preview card, and a pinned 20 x 22 px magnifier whose centre sits
+  on the visible resting tick column (the toggle overhangs the rail edge by
+  4 px); copying a prompt is silent (the confirmation chip, check icon, and
+  animation are gone while the exact draft text and composer focus remain). The
+  rail's order was reversed to reading order (oldest top, newest bottom) and it
+  keeps the newest tick in view.
+- **Borderless floating surfaces** — the annotation launcher and its count
+  badge, the annotation rail (docked and overlay), the exit-confirmation dialog,
+  the feedback and undo toasts, and the Running & recent panel card no longer
+  paint an outer border; the launcher is a perfect circle
+  (`corner-shape: round`) and every borderless surface uses a ring-free soft
+  shadow, so the elevation token's 0.5 px hairline cannot read as a border in
+  either theme; separation comes from background and shadow, inner controls
+  keep their own borders.
+- **Plugin input focus treatment** — a shared animated rainbow track focus ring
   replaces solid-color focus outlines/borders on plugin text inputs (annotation
   note fields, prompt-history search field, settings choice pills); it fades in
   in 140 ms, rotates and hue-drifts, keeps a static ring under reduced motion,
   and falls back to the system `Highlight` outline under forced colors. The ring
-  is parameterised and the prompt-history **search card** paints a deliberately
+  is parameterised and the prompt-history search card paints a deliberately
   calmer variant around the whole floating card when its input is focused
-  (opacity 0.58, desaturated 2.5 px glow, 1.5 px track, slower 4.6 s/20 s
-  drift; the inner input itself is ringless) so it reads as a soft accent; the
-  other inputs keep the shared stronger defaults.
-- Interrupted-session detection now covers **every unfinished turn ending**, not
-  only Host restarts/crashes: any `turn/end` reason `error` (quota/usage limit,
-  request timeout, transport/network failure, rate limit, malformed response,
-  missing credential), `max-tokens`, `interrupted`, and `aborted` with the
-  `disposed` or legacy cause mark the Session as unfinished. Deliberate endings
-  (`completed`, `blocked`, `forked`, user/parent/hook cancellation) stay
-  unmarked. The existing amber badge, hover Continue action and play-shaped
-  composer control therefore appear for timeout/error sessions too; Continue
-  retries the task (a persistent cause can fail again and re-mark it).
-- UI element annotation audit fixes: user notes are normalized with
-  `normalizeUserNote` (CRLF→LF, NUL/C0 control characters except tab/newline
-  removed, spaces/line breaks preserved, **no redaction and no silent
-  truncation**) and inserted verbatim (multi-line notes can exceed single-line
-  layouts); hover uses a lazy element-only candidate chain with descriptors
-  built only for the chosen element and ≤2 context ancestors (0 `textContent`
-  reads on hover); the whole
-  prompt-history rail family is hidden in annotation mode; selector escaping uses
-  `globalThis.CSS` with a leading-digit hex fallback (`#123abc` → `#\31 23abc`);
-  pinned popovers re-clamp on resize while keeping their dragged offset; the
-  marquee adds at most the 24 most specific intersecting candidates.
-- Read-mark and activity robustness: read-acks `load()` is single-flight with
-  forward-merge publication (`mergeAcked(state, parsed)`), so a stale concurrent
-  load cannot clobber a newer record; non-ENOENT reads reset the cached promise
-  and throw typed `READ_ACKS_READ_FAILED`, GET/POST answer no-store `500
-  { code: "store-read-failed" }`, empty is never cached, `record()` awaits the
-  same load in the serialized chain and `get()` returns current. A non-ENOENT
-  activity-ledger load keeps memory, resets its promise, throws typed
-  `ACTIVITY_READ_FAILED` (no empty rewrite; writes abort while unreadable; ENOENT
-  stays empty); the Host `ensureLoaded()` resets/rethrows, `ensureSeeded()`
-  resets the seed promise with the existing 30 s backoff, and the route serves
-  **`200` snapshot/empty, never 500** — after recovery the next GET after the
-  backoff retries load+seed and returns recovered entries, while during the
-  backoff a GET may serve current/empty memory. `401/403` join
-  network/5xx/429 as retryable ack-push failures (other permanent 4xx still drop
-  only that batch); the read-acks `localStorage` migration runs per mount.
-  Read-error behavior is unit/`chmod`-tested only and the concurrency proof is
-  store-level stress (20 rounds of 4 concurrent get + 3 record), **not** a real
-  multi-process Host; client 401/403 classification has no browser node harness.
-  Ack flush/sync failures are caught and bounded-logged; failed read-acks writes
-  clean up their temp sibling; the seed-backoff test uses relative timing/poll-wait.
-- Activity seed failure: an already-pending seed that times out keeps the 30 s
-  immediate-serve backoff while background seeding continues; a failed/rejected
-  seed may set that backoff but the Host resets the seed promise so a later
-  request retries load+seed — seeded history can appear after recovery (during
-  the backoff a GET may serve current/empty memory `200`). Selection families no
-  longer list PTC mode (`ptc-mode` is a message-source key; `tool/ptc-dispatch`
-  remains activity).
+  (opacity 0.58, desaturated 2.5 px glow, 1.5 px track, slower 4.6 s/20 s drift;
+  the inner input itself is ringless). The rainbow ring now hugs the wrapped
+  control's border box on all four edges (the inline-level baseline gap that
+  exposed the control's bottom border is fixed).
+- **UI element annotation settings** — the rail header's settings gear/settings
+  view is replaced by an **info (i) icon** that opens a small borderless
+  hovercard-style popover with the two modifier rows; each row is a **custom
+  segmented control** (`role=radiogroup` with four `role=radio` segments
+  Alt/Ctrl/Meta/Shift, roving tabindex, arrow/Home/End/Enter/Space selection,
+  persistence + inline conflict feedback, glass track, primary-accent checked
+  segment, rainbow focus ring on the checked radio). The old settings
+  view/Back path and the dropdown/listbox implementation (and its seam helpers)
+  are removed — no native `<select>` or OS menu remains. Segments show the
+  modifier-key symbols (`⌥ Alt`, `⌃ Ctrl`, `⌘ Meta`, `⇧ Shift`) with full
+  localized aria-labels, equal widths, and no truncation; document-level Esc
+  closes the menu first, then the popover, with the mode staying on.
+- **UI element annotation composer interaction** — the current Session's
+  composer stays natively clickable/typable while the mode is active (and is no
+  longer an annotation target), so an inserted reference chip can be edited and
+  sent; the sidebar footer primary becomes **Insert all into composer** when the
+  collection is non-empty and no page selection is pending; the multi-selection
+  batch popover is draggable by its header and both popovers clamp with their
+  measured size so their buttons stay inside the window; Active/Inactive
+  Projects headings match the native Workspaces heading (14 px / 400).
+- **UI element annotation launcher placement** — the round launcher floats only
+  while the mode is off; activating the mode fades/scales it out in place (no
+  docked or flying copy in the rail header), and a full exit (header X, Cancel
+  Annotation, or the final Esc step) restores it with a fade/scale animation at
+  the remembered floating position (drag and position persistence are idle-only;
+  reduced-motion users get the instant state).
+- **Artifacts source filter** — the filter is a custom dropdown in the panel
+  header immediately left of Refresh: a `filter-line` funnel trigger with the
+  current option label/count and a rotating caret opens a themed, right-aligned
+  `menu`/`menuitemradio` popup listing All/Generated/Provided with their counts
+  and a check on the selected option (focus moves to the selected option on
+  open; outside press or Escape closes; Escape returns focus to the trigger).
+- **Plugins-page settings section** — the bundle's Plugins page shows only the
+  suite's real controls while its settings section is mounted: the
+  auto-rendered package README document above the configuration is hidden and
+  restored on unmount, and the section carries the **Prompt history** group plus
+  the **Active & recent** group with the two retention rows.
+- **Running & recent fold persistence** — the Active/Inactive bucket fold state
+  is restored on the first observable paint using a persisted bucket
+  classification cache and then corrected by live data, so a collapsed bucket
+  no longer paints expanded for the hydration window; native section
+  re-renders cannot clobber a fold.
 
-- UI element annotation follow-ups: hovering a composer annotation reference
-  chip (single or grouped) now shows the custom annotation detail tooltip —
-  requirement, locator, captured position box, Session/Workspace, live status,
-  or the group count/list — while clicking keeps its existing behavior; chat-flow
-  element picks now anchor to the shell's real chat attributes
+### Fixed
+
+- **Interrupted-session refresh and timing** — badges repull automatically after
+  a Host restart (Connection generation reset), on focus/visibility/online, and
+  on a 20 s poll instead of waiting for a Session click; parent Sessions whose
+  delegated subagent was interrupted after the parent's last completed turn are
+  marked interrupted, including nested delegations (a live child remains live
+  work); subagent interruption timing uses the child's turn start as well as its
+  last event, covering children that go silent before a Host restart. After a
+  reconnect, an interrupted Session no longer keeps the native green "running"
+  spinner until opened — the plugin decorates rows whose native status is stale,
+  replacing the spinner with the amber mark. Forced badge refreshes keep the
+  current ready value until the new answer arrives (no flash through `loading`);
+  the Host interruption cache uses per-Session event epochs so a slow log read
+  cannot overwrite a newer turn event. Continue validates JSON content type,
+  current interruption/running state, and per-Session in-flight admission;
+  duplicates are rejected instead of queued.
+- **Sidebar interrupted hover geometry** — hovering an interrupted native
+  Session row keeps the shell's normal hover surface and its title visible (the
+  shell still replaces the time with the trailing hover actions, as on any
+  Session row) and reveals the inline Continue triangle right after the warning
+  mark; the obsolete opaque `::before` hover mask (a leftover from the retired
+  trailing-edge CTA) is gone. The mask's positional `span:first-child` z-index
+  rule used to catch the injected rainbow-atmosphere wrapper on the current
+  Session row, which turned the background layer into an in-flow pill that
+  pushed the badge right and collapsed the title; the native status cell now
+  widens with `width: auto` so the triangle fits and the title slides right
+  instead.
+- **Running & recent card geometry and hover fixes** — collapsing the
+  Continue/pin slots no longer leaves flex gaps behind: the head is gap-less and
+  the leading glyph cell carries the rest spacing, so an interrupted row's
+  title sits at the first-character-centred rest column again and slides right
+  only when hovered/focused (the pinned column stays at the documented
+  9 + 16 + 9 px; the glyph-to-title gap is the 9 px cell margin plus the ~12 px
+  centring shift). The hover surface now covers the whole row like the native
+  sidebar rows instead of a content-paced inner pill that lit only the title;
+  the row body stays transparent so no second nested pill appears, pinned rows
+  keep their violet tint under the hover layer, and atmosphere rows keep their
+  transparent surface.
+- **Sidebar review follow-ups** — the interrupted row's leading cell no longer
+  hides other plugins' leading-slot marks (schedule clock, liveshare fork) —
+  only the native status dots are hidden while the stale-spinner decorator is
+  active; the inline Continue triangle expands the native status cell instantly
+  instead of animating its width, so the shell's title marquee measures the
+  narrowed cell and no longer stops short; the card's keyboard focus surface is
+  gated on `html[data-input-modality="keyboard"]`, so a mouse click cannot leave
+  a stuck row surface; atmosphere-row control suppression is restored, scoped
+  with child combinators to the current row's own controls, and gated the same
+  way (nested child rows keep their normal hover block); pointer focus no
+  longer leaves the atmosphere rows' `brightness(1.5)` lift or the native
+  Continue triangle stuck after a mouse click; the card's Continue slot honours
+  reduced motion; the dead trailing-edge Continue component is removed; docs no
+  longer claim the time stays visible on native hover.
+- **Read acknowledgements and activity-ledger robustness** — read-acks `load()`
+  is single-flight with forward-merge publication (`mergeAcked(state,
+  parsed)`), so a stale concurrent load cannot clobber a newer record;
+  non-ENOENT reads reset the cached promise and throw typed
+  `READ_ACKS_READ_FAILED`, GET/POST answer no-store `500 { code:
+  "store-read-failed" }`, empty is never cached, `record()` awaits the same load
+  in the serialized chain and `get()` returns current. A non-ENOENT
+  activity-ledger load keeps memory, resets its promise, throws typed
+  `ACTIVITY_READ_FAILED` (no empty rewrite; writes abort while unreadable;
+  ENOENT stays empty); the Host `ensureLoaded()` resets/rethrows,
+  `ensureSeeded()` resets the seed promise with the existing 30 s backoff, and
+  the route serves **`200` snapshot/empty, never 500** — after recovery the
+  next GET after the backoff retries load+seed and returns recovered entries,
+  while during the backoff a GET may serve current/empty memory. Ack pushes are
+  chunked (≤200 entries/~48 KiB, one in flight), body reads are capped at 64 KiB
+  of UTF-8 bytes, client requests time out after 8 s, and `401/403` join
+  network/5xx/408/425/429 as retryable ack-push failures (other permanent 4xx
+  drop only that batch immediately; local and pending maps each capped at
+  1000). The activity route uses an 8 s `AbortController` timeout and the
+  client awaits pending ack pushes before fetching it. Ack flush/sync failures
+  are caught and bounded-logged, failed read-acks writes clean up their temp
+  sibling, and the read-acks `localStorage` migration runs per mount. Read-error
+  behavior is unit/`chmod`-tested only and the concurrency proof is store-level
+  stress (20 rounds of 4 concurrent get + 3 record), **not** a real
+  multi-process Host; client 401/403 classification has no browser node
+  harness.
+- **Activity seed recovery** — an already-pending seed that times out keeps the
+  30 s immediate-serve backoff while background seeding continues; a
+  failed/rejected seed may set that backoff but the Host resets the seed promise
+  so a later request retries load+seed, and seeded history can appear after
+  recovery (during the backoff a GET may serve current/empty memory `200`).
+  Selection families no longer list PTC mode (`ptc-mode` is a message-source
+  key; `tool/ptc-dispatch` remains activity).
+- **UI element annotation resolution and identity** — resolution is two-phase:
+  per-candidate hit sets are collected and the first unique candidate (highest
+  stability tier/score) wins, so a non-unique high-tier candidate (e.g. a
+  duplicated `aria-label`) no longer short-circuits to Ambiguous when a
+  lower-tier structural/anchor candidate resolves uniquely; Ambiguous is
+  reserved for genuinely all-non-unique candidates, and weak XPath/text-position
+  ambiguity no longer terminates the text-quote fallback. CSS-module/hashed
+  class names are filtered by a word-like/generated-pattern heuristic, and
+  record identity uses the verified unique selector. Candidate resolution gains
+  an ordered stability ladder (data/ids/aria > role+name > label/role > class >
+  tag/nth) and a length penalty; text-bearing leaf records additionally capture
+  a bounded absolute XPath, a normalized text quote (exact + prefix/suffix), a
+  container-relative text position, and a `document.querySelector(...)` JS path.
+  Resolution falls back **CSS → text quote (position hint) → text position →
+  XPath last** (full XPath only with a live node, never fabricated), with a
+  `via` hint in the popover, detail card, and rail row and **Copy locator** /
+  **Copy XPath** / **Copy JS path** actions (live-node-first → saved-anchor →
+  honest-unavailable). Capture-time text-quote disambiguation is
+  occurrence-aware, bounded, uniqueness-verified, and drops misleading quotes;
+  one rendered-text pipeline (`<br>`/block boundaries → space + rendered→raw
+  offset map) keeps the text comparison honest; fallback resolution keeps a
+  single validation boundary (tag/digest/accessible name/proximity), scored
+  approximate matching (exact unique context resolves, small edits report
+  Content changed, ties Matches several), status/node caching keyed by
+  `(record id, DOM revision)` with bounded scans (400 elements / 32 candidates)
+  and a 400-entry node cache, and a **weak-identity gate** so icon-only/
+  tag-only records cannot falsely resolve via structural fallbacks (no wrong
+  marks/copies; they report Changed honestly).
+- **UI element annotation descendant anchors and weak identity** — non-leaf
+  targets with meaningful descendant text capture a first-text-leaf rendered
+  quote/position plus `anchorTarget:'descendant'`, the leaf tag, the ancestor
+  tag chain and a stable-attribute signature; when CSS candidates go stale the
+  resolver falls back to the descendant text anchor and climbs to the closest
+  ancestor matching tag+signature (unique → Resolved, same-text/same-signature
+  decoys → Matches several with no mark, none → honest continue;
+  floating/ephemeral surfaces excluded). The recorded scope is authoritative: a
+  unique in-scope target resolves even when an identical out-of-scope duplicate
+  exists (the Workspaces-row vs Running & recent-title case no longer reports a
+  false "Matches several"), multiple distinct in-scope targets are **terminal
+  ambiguous**, and an empty/missing scope still re-anchors through the bounded
+  document fallback. Weak-identity structural outcomes keep the four statuses
+  but add `confidence:'weak'|'strong'` and present
+  "Unverifiable · weak identity" / "无法验证 · 弱身份" instead of Content
+  changed; a stale `uniqueVerified` selector no longer counts as identity
+  unless it still resolves to a single connected/visible element, structural
+  fallback hits must pass a quote assertion plus captured-ancestor
+  corroboration before Resolved, weak-identity records without a quote are
+  **Missing** (no mark or live-node copy on a same-tag look-alike), and removed
+  floating/ephemeral targets report **Missing** instead of Changed after reload.
+  Approximate matching recall mirrors the Hypothesis `matchQuote` bounds; the
+  capture scope-climb duplicate probe uses the rendered-text pipeline, fallback
+  scans/cache misses are instrumented for a test-only probe (repeat resolution
+  on unchanged DOM adds zero scans; host mutation re-resolves once), and docs
+  recommend host apps expose stable `data-testid`/`data-*`/accessible names for
+  position-sensitive elements.
+- **UI element annotation follow-ups** — hovering a composer annotation
+  reference chip (single or grouped) shows the custom annotation detail
+  tooltip — requirement, locator, captured position box, Session/Workspace,
+  live status, or the group count/list — while clicking keeps its existing
+  behavior; chat-flow element picks anchor to the shell's real chat attributes
   (`data-chat-node-key`/`data-chat-anchor-key`/`data-chat-group-key`/
   `data-chat-turn`/`data-chat-flow-key`), so leaf targets in a
   streaming/virtualized chat resolve across re-renders instead of reporting a
-  stale positional locator (the four statuses stay truthful, and annotations
-  captured before this change are not silently remapped — re-annotate them);
-  hovering or focusing a single/grouped annotation chip shows an own 16 px ×
-  that removes exactly that reference chip through the composer editor in one
-  undo step (other chips and text preserved, never sent), while the chip hover
-  tooltip stays read-only; the requirement popover keeps its Delete action in the
-  Requirement caption row (marked state only) so the footer holds exactly the two
-  primary buttons on one non-wrapping row, with a wider caption→textarea gap; and
-  the rainbow input focus ring now hugs the wrapped control's border box on all
-  four edges (the inline-level baseline gap that exposed the control's bottom
-  border is fixed).
-
-- UI element annotation transient surfaces: selecting an element inside a
+  stale positional locator (annotations captured before this change are not
+  silently remapped — re-annotate them); hovering or focusing a single/grouped
+  annotation chip shows an own 16 px × that removes exactly that reference chip
+  through the composer editor in one undo step (other chips and text preserved,
+  never sent), while the chip hover tooltip stays read-only; the requirement
+  popover keeps its Delete action in the Requirement caption row (marked state
+  only) so the footer holds exactly the two primary buttons on one non-wrapping
+  row; the weak "Unverifiable · weak identity" label regained E2E coverage,
+  role+name got its own selector-stability tier, and the matchQuote
+  recall/role+name/length-penalty behavior is pinned by unit tests.
+- **UI element annotation transient surfaces** — selecting an element inside a
   hover-triggered floating surface (e.g. the subagent hover dropdown) no longer
-  loses its target when the pointer moves into the requirement popover — the
+  loses its target when the pointer moves into the requirement popover: the
   surface is pinned open for as long as that popover is active (pointer-leave
-  close events are suppressed for the pinned subtree and released on close/
-  selection clear/mode exit), so the status stays Resolved while editing and the
-  transient hint now explains the keep-open-then-may-disappear behavior. If a
-  surface still closes (timer/scroll/keyboard path), the status changes honestly
-  but the locator summary stays the captured string instead of switching to a
-  look-alike element's label.
-
-- UI element annotation anchors: text-bearing leaf captures now also record a
-  bounded absolute `xpath`, a normalized `textQuote` (exact + prefix/suffix),
-  a container-relative `textPosition`, and a `document.querySelector(...)`
-  `jsPath`; resolution falls back **CSS → XPath → text quote → text position**
-  when the primary candidates go stale, and the popover/detail card show which
-  strategy resolved the target (`via` hint) without changing the four honest
-  statuses. Selector candidates get explicit stability tiers (stable
-  data/ids/aria > semantic role/label > stable classes > positional paths), and
-  the detail/popover actions gain **Copy XPath** and **Copy JS path** (clipboard
-  + toast, honest unavailable state when no anchor exists). Records captured
-  before this change keep working without the new anchors.
-
-- UI element annotation selector stability (P0, from the reference-coding
-  round): resolution is now two-phase — per-candidate hit sets are collected and
-  the first unique candidate (highest stability tier/score) wins, so a
-  non-unique high-tier candidate (e.g. a duplicated `aria-label`) no longer
-  short-circuits to Ambiguous when a lower-tier structural/anchor candidate
-  resolves uniquely; Ambiguous is reserved for genuinely all-non-unique
-  candidates, and weak XPath/text-position ambiguity no longer terminates the
-  text-quote fallback. CSS-module/hashed class names are filtered by a
-  word-like/generated-pattern heuristic, and record identity uses the verified
-  unique selector.
-
-- UI element annotation anchor hardening (P1/P2, reference-coding round):
-  capture-time text-quote disambiguation (occurrence-aware context, bounded,
-  uniqueness-verified, misleading quotes dropped), one rendered-text pipeline
-  (`<br>`/block boundaries → space + rendered→raw offset map), fallback order
-  **CSS → text quote (position hint) → text position → XPath last** with a
-  single validation boundary (tag/digest/accessible name/proximity), scored
-  approximate matching (0.7/0.15/0.15; exact unique context resolves, small
-  edits report Content changed, ties Matches several, approximate hits capped
-  below Resolved), fallback status/node cache keyed by `(record id, DOM
-  revision)` with bounded scans (400 elements / 32 candidates) and a 400-entry
-  node cache, whitespace-only text separators preserved, and a **weak-identity
-  gate** so icon-only/tag-only records cannot falsely resolve via structural
-  fallbacks (no wrong marks/copies; they report Changed honestly). Copy
-  locator/XPath/JS path is now available in the popover, detail card and rail
-  row with live-node-first → saved-anchor → honest-unavailable semantics and
-  optimized vs full XPath (full only with a live node, never fabricated).
-
-- UI element annotation descendant anchors + confidence: non-leaf targets with
-  meaningful descendant text now capture a first-text-leaf rendered quote/
-  position plus `anchorTarget:'descendant'`, the leaf tag, the ancestor tag chain
-  and a stable-attribute signature; when CSS candidates go stale the resolver
-  falls back to the descendant text anchor and climbs to the closest ancestor
-  matching tag+signature (unique → Resolved, same-text/same-signature decoys →
-  Matches several with no mark, none → honest continue; floating/ephemeral
-  surfaces deliberately excluded). Weak-identity structural outcomes keep the
-  four statuses but add `confidence:'weak'|'strong'` and present
-  "Unverifiable · weak identity" / "无法验证 · 弱身份" instead of Content changed.
-  The capture scope-climb duplicate probe now uses the rendered-text pipeline
-  (no second text口径), fallback scans/cache misses are instrumented for a
-  test-only probe (repeat resolution on unchanged DOM adds zero scans; host
-  mutation re-resolves once), and docs recommend host apps expose stable
-  `data-testid`/`data-*`/accessible names for position-sensitive elements.
-
-- UI element annotation captured-scope authority: for descendant text anchors
-  the recorded scope (`textPosition.container`) is now authoritative — a unique
-  in-scope target resolves even when an identical out-of-scope duplicate exists
-  (the Workspaces-row vs Running & recent-title case no longer reports a false
-  "Matches several"); multiple distinct in-scope targets are **terminal
-  ambiguous** and later text-position/XPath fallbacks cannot override them,
-  while an empty/missing scope still re-anchors through the bounded document
-  fallback. The fallback-node resolver mirrors the same decision so ambiguous
-  records do not expose a non-authoritative live node for copy.
-
-- UI element annotation structural-identity honesty (reference-aligned):
-  a stale `uniqueVerified` selector no longer counts as identity unless it still
-  resolves to a single connected/visible element; structural (CSS/XPath)
-  fallback hits must pass a Hypothesis-style quote assertion plus
-  captured-ancestor corroboration before Resolved, and weak-identity records
-  without a quote are **Missing** — no mark or live-node copy on a same-tag
-  look-alike. Removed floating/ephemeral targets now report **Missing** instead
-  of Changed after reload, matching the documented transient contract.
-  Reference-alignment subset: approximate matching recall now mirrors
-  Hypothesis `matchQuote` bounds (maxErrors ≈ len/2, distance-faded hint,
-  broader scan), selector candidates add a role+name composite and a length
-  penalty, and the docs correct the identity/transient/order claims.
-
-- UI element annotation NIT follow-ups: ephemeral/floating surface-gone now
-  reports **Missing** for every outcome through a single
-  `annotationEphemeralOutcome` gate (still-present surfaces keep honest
-  outcomes; the conservative transient-Changed policy is documented), the weak
-  "Unverifiable · weak identity" label regained E2E coverage, role+name got its
-  own selector-stability tier (data/id/aria > role+name > label/role > class >
-  tag/nth), and the matchQuote recall / role+name / length-penalty behavior is
-  pinned by unit tests. Deferred reference-conformance limitations moved into
-  the user docs.
-
-- UI element annotation settings: the rail header's settings gear/settings view
-  is replaced by an **info (i) icon** that opens a small **borderless
-  hovercard-style popover** (background `#2C2C2E`, border 0, lv3 shadow) with
-  the two modifier rows — pass-through and multi-select — each using a
-  **custom dropdown** (combobox trigger + fixed listbox, checkmark, full
-  keyboard support, ARIA combobox/listbox/option, outside/Esc close, no native
-  select or OS menu). Conflict feedback appears inline; the popover renders
-  inline in the rail/overlay stacking context (above the raised annotation
-  layer) and document-level Esc closes the menu first, then the popover, with
-  the mode staying on. The old settings view/Back path is removed.
-
-- UI element annotation modifier settings are now **custom segmented controls**
-  inside the info-icon borderless popover: two `role=radiogroup` rows with four
-  `role=radio` segments (Alt/Ctrl/Meta/Shift), roving tabindex, arrow/Home/End/
-  Enter/Space selection, persistence + inline conflict feedback, glass track and
-  primary-accent checked segment, rainbow focus ring on the checked radio; the
-  dropdown/listbox implementation (and its seam helpers) is removed. No native
-  `<select>` or OS menu remains.
-
-- UI element annotation segmented controls now show the modifier-key symbols
-  (`⌥ Alt`, `⌃ Ctrl`, `⌘ Meta`, `⇧ Shift`) with full localized aria-labels,
-  equal widths and no truncation.
-- Dynamic-workspaces rainbow atmosphere rows are readable in light mode: a
-  brighter pastel canvas (saturate/brightness lift, lower wrapper opacity), a
-  white readability veil instead of the dark scrim, and lifted secondary
-  text/icons on highlighted rows (card title 5.51:1→14.72:1, time/icons
-  1.08:1→4.52:1, native Workspace worst text 15.45:1); dark mode unchanged and
-  the sidebar E2E pins the light thresholds/theme-aware atmosphere facts. The
-  reported dark document-preview panel was found shell-owned/not reproducible
-  (plugin defines no `--dsw-*` variables; native light preview tokens are
-  correct; only the shell diff sub-palette is low-contrast) — documented as a
-  shell-side limitation, no broad override added.
-
-- Dynamic-workspaces session hovercards now follow the active theme: light mode
-  uses a white surface with the light label tokens (title `#0f1115`, secondary
-  `#61666b`, tertiary `#81858c`) for the plugin's `.psd-hovercard`/`.psp-*`/
-  `.dsa-quicklook` cards and a minimal scoped override for the native shell
-  session-info hover card; dark mode is byte-identical (`#2C2C2E` + white).
-  Running & recent row titles are aligned to the native Workspace title token in
-  light mode (dark rows unchanged), so the panel reads as dark/readable as the
-  Workspace rows. The native override depends on shell module class hashes and
-  degrades gracefully to the native dark card; the exact markdown preview modal
-  was not deterministically reproducible.
-
-- Dynamic-workspaces running-panel icons now match the native Workspace icon
-  weight in light mode (row actions, disclosure/chevrons, status glyph and child
-  glyphs lifted from `label-tertiary` #81858c to `label-secondary` #61666b;
-  brand/sparkle stays `label-primary`; dark unchanged), and the native Workspace
-  session-info hover card now uses the plugin card's 320 px width in both themes
-  (scoped shell-hash override with graceful fallback) so figure labels/values no
-  longer truncate early.
+  close events are suppressed for the pinned subtree and released on
+  close/selection clear/mode exit), the status stays Resolved while editing,
+  and the transient hint explains the keep-open-then-may-disappear behavior. If
+  a surface still closes (timer/scroll/keyboard path), the status changes
+  honestly but the locator summary stays the captured string instead of
+  switching to a look-alike element's label.
+- **Hover Quick Look fixes** — the Quick Look no longer opens as an empty card:
+  it always receives an explicit height (570 x 360 default, clamped to the
+  viewport, with a remembered or user-resized size still winning) and its
+  content layer no longer depends on an inline opacity style or a finished
+  animation, so generated Markdown/code/image content is visible on the first
+  hover. Single-quoted code strings highlight correctly, the preview cache is
+  bounded with a TTL, and sidebar/chat observers are scoped to relevant
+  mutations.
+- **Raw artifact media type and CSP** — raw artifact media type comes from the
+  real path and every raw response uses the native sandbox/default-src-none CSP;
+  the implicit continuation context and correlated turn-trigger row are hidden
+  in Chat.
+- **UI element annotation NITs** — ephemeral/floating surface-gone now reports
+  **Missing** for every outcome through a single `annotationEphemeralOutcome`
+  gate (still-present surfaces keep honest outcomes; the conservative
+  transient-Changed policy is documented), deferred reference-conformance
+  limitations moved into the user docs, and the selector/popover copy states
+  were corrected.
 
 ### Removed
 
@@ -548,366 +683,23 @@ heading is added until the release is cut.
   tests, `docs/project-view.md`, the five `docs/assets/project-*.png`
   screenshots, and the `GET /api/power-suite.project` route. Clicking a
   Workspace's title in the sidebar performs the native expand/collapse again,
-  and the default agent preset stays available from the Workspace context
-  menu. Removing the page needs no data migration: it persisted no state.
+  and the default agent preset stays available from the Workspace context menu.
+  Removing the page needs no data migration: it persisted no state.
 
-### Fixed
+### Documentation
 
-- Sidebar interrupted-session hover: hovering an interrupted native Session row
-  keeps the shell's normal hover surface and its title visible (the shell still
-  replaces the time with the trailing hover actions, as on any Session row), and
-  reveals the inline Continue triangle right after the warning mark. The obsolete
-  opaque `::before` hover mask (a leftover from the retired trailing-edge CTA) is gone.
-  The mask's positional `span:first-child` z-index rule used to catch the
-  injected rainbow-atmosphere wrapper on the current Session row, which turned
-  the background layer into an in-flow pill that pushed the badge right and
-  collapsed the title; the native status cell now widens with `width: auto` so
-  the triangle fits and the title slides right instead.
-- Running & recent card row geometry: collapsing the Continue/pin slots no
-  longer leaves flex gaps behind. The head is gap-less and the leading glyph
-  cell carries the rest spacing, so an interrupted row's title sits at the
-  first-character-centred rest column again and slides right only when the row
-  is hovered/focused (the pinned column stays at the documented 9 + 16 + 9 px);
-  the same change removes the extra collapsed-slot gaps, so the visual
-  glyph-to-title gap drops from ~30 px to the intended 9 px cell margin plus the
-  per-row first-character centring shift (~12 px; a native idle row uses a plain
-  6 px gap because its title is not first-character-centred).
-- Running & recent card hover highlight: the hover surface now covers the whole
-  row like the native sidebar rows instead of a content-paced inner pill that
-  lit only the title; the row body stays transparent so no second nested pill
-  appears, pinned rows keep their violet tint under the hover layer, and
-  atmosphere rows keep their transparent surface.
-- Sidebar review follow-ups: the interrupted row's leading cell no longer hides
-  other plugins' leading-slot marks (schedule clock, liveshare fork) — only the
-  native status dots are hidden while the stale-spinner decorator is active; the
-  inline Continue triangle expands the native status cell instantly instead of
-  animating its width, so the shell's title marquee measures the narrowed cell
-  and no longer stops short; the card's keyboard focus surface is gated on
-  `html[data-input-modality="keyboard"]` like the shell, so a mouse click on a
-  control cannot leave a stuck row surface; the card atmosphere-row control
-  suppression dropped in an earlier merge is restored (transparent + brightness
-  instead of a blurred hover block inside the rainbow) and scoped to the current
-  row's own controls (nested child rows keep their own hover block); pointer
-  focus no longer leaves the atmosphere rows' `brightness(1.5)` lift or the
-  native Continue triangle stuck after a mouse click; the card's Continue slot
-  also honours reduced motion; the dead trailing-edge Continue component is
-  removed; docs no longer claim the time stays visible on native hover.
-
-## [0.2.0] — undated development snapshot
-
-> **No release was tagged for 0.2.0 and no release date is claimed.** The package
-> version was 0.2.0 while the features below (Dynamic Workspaces, prompt history,
-> artifacts, project view, Host-shared read marks, the activity ledger, and the
-> project-page work) were developed and merged; it was never cut as a tagged
-> release. The next planned release is **0.3.0**, still unreleased/undated (see
-> `[Unreleased]`). No git tags exist in this repository.
-
-### Added
-
-- Dynamic Workspaces: the native sidebar Workspaces browser gains **Active
-  Projects** and **Inactive Projects** buckets plus a **Running & recent** card
-  above the native header. A Workspace is Active while one of its Sessions is
-  running or was active inside the configurable Active-project retention window;
-  buckets reorder live in both directions, fold independently with persisted
-  state, and hide in rail mode. The card lists running Sessions with the shell's own status dot and
-  observed durations, keeps recently finished Sessions for the same window,
-  nests recent direct subagent Sessions under their parent behind a disclosure
-  chevron (indented under a guide line, each opening its own Session), and opens
-  a Session from any row.
-- Prompt-history rail: a vertical rail at the conversation's right edge, below
-  the native turn rail and separated from it by a short divider, lists the
-  current Session's sent prompts newest first as tick marks. Hover or keyboard
-  focus shows the full prompt in a card to the left, click copies it silently
-  into the composer draft, and a search button below the marks reveals a
-  floating substring filter. The rail appears only while the Session
-  has sent prompts.
-- Artifacts for user-provided attachments: the Artifacts card now also lists the
-  images and files the human attached to their prompts (human `user/message`
-  image/file blocks only, deduped by attachment id with the newest occurrence
-  winning and a 1-based prompt ordinal), served by the new verified
-  `GET|HEAD /api/session-artifacts.attachment` route with the same
-  no-store/nosniff/sandbox-CSP headers. Every image artifact shows a 40 px
-  rounded lazy thumbnail, and the panel header carries an All/Generated/Provided
-  source-filter dropdown with per-option counts.
-- Copy content row action: each Artifacts row gains a Copy content button
-  between Download and Copy link. Text-like artifacts are fetched through their
-  inline URL and copied verbatim. Images use a three-step chain: a real PNG
-  clipboard item in a secure context (HTTPS/localhost), the legacy HTML-image
-  clipboard on insecure origins (hidden `<img>` + `execCommand('copy')`, so
-  rich editors paste the picture while plain-text targets may get nothing/alt),
-  and only then the inline image URL as text. Other binaries have no content
-  action. A successful copy shows the row's check acknowledgement for 1.6 s.
-- Draft attachment memory: browser-owned attachments in a draft (pasted images,
-  dropped or picked files) are remembered per Session and re-introduced through
-  the composer's own paste intake when the Session is shown again, so switching
-  away and back no longer restores the text while silently dropping the files.
-  The cache is page-lifetime (8 Sessions / 20 files), clears on send and on
-  explicit removal of every restored attachment, and never attempts
-  persistence.
-- Per-prompt timestamps: `GET /api/prompt-history.list` now returns
-  `{ seq, text, at }` for every prompt, where `at` is the Session event time in
-  epoch milliseconds or `null` when the event has no usable time. The rail shows
-  mark and hover-card times from it; the keyboard recall is unchanged.
-- Configurable Dynamic Workspaces windows: the settings document moves to schema
-  version 2 with two new Host-backed fields — Finished Session retention
-  (`recentSessionMinutes`, 1/2/6/12/24 hours, default 2 hours) and Active
-  project retention (`activeProjectDays`, 1/3/7/14/30 days, default 7 days) —
-  edited under a new **Active & recent** group on the bundle's Plugins page.
-  Version-1 files migrate to the default windows, and running Sessions ignore
-  both windows.
-
-- Project view: a standalone page covering the content area right of the left
-  Workspaces sidebar, opened by clicking a Workspace's title/folder area in the
-  sidebar (a window `power-suite:open-project` event handled by a
-  `shell.overlay` seat, `power-suite.project-page`), that turns the Workspace into
-  a project dashboard. The left sidebar stays visible and interactive, so
-  clicking another Workspace switches the page in place; Esc/back closes it. Overview carries the project header, four stat cards
-  (running Sessions, completed today, total runs, average completed duration),
-  a Session preview, the honest grouping/archiving explainer, and a recent
-  activity feed; Sessions offers status chips and title search; Runs lists turns
-  newest first with status filters, session filter, include-jobs toggle, search,
-  expandable nested job rows, live elapsed time, and Show-more paging; Settings
-  edits the Workspace default preset and shows the grouping windows read-only
-  plus path actions. It carries its own top bar (back/close, title, Active
-  badge, refresh) over the four tabs; Esc (menu-first) or the back control
-  closes it and restores the conversation, Session, draft, selected view, and
-  sidebars untouched. The native chevron fold, row
-  context menu, New Session button, Session rows, drags, and modified clicks keep
-  their behavior. The new authenticated `GET /api/power-suite.project` route
-  serves one snapshot (workspaceId or sessionId, newest 20 Sessions, 25 s cache
-  with `refresh=1`, `no-store`), and the pure folds live in
-  `src/features/project-view/fold.js`.
-
-- Host-shared read acknowledgements: a durable
-  `$DSH_HOME/dsh-power-suite/read-acks.json` document (schema v1, sanitized,
-  per-id max-merge, 1000-entry cap, atomic writes) is served by an authenticated
-  `GET/POST /api/power-suite.read-acks` route; every browser using the same
-  `$DSH_HOME` syncs the same baselines (local cache + 30 s/focus/visibility
-  sync, one-time migration of old local marks, 250 ms debounced push). Profiles
-  sharing a home **share the file with no profile isolation and no read-merge
-  across writers**, so concurrent profiles/HMR generations can overwrite each
-  other's baselines; the design assumes one Host process plus overlapping HMR.
-  Read state is derived as `baseline >= activity - 1000 ms`, so a transient
-  status flag can no longer resurrect a stale green dot.
-- Event-sourced activity ledger for the activity card: the Host subscribes to
-  committed `session/event` times under an explicit `ACTIVITY_EVENT_TYPES`
-  allowlist covering known activity-bearing families (turns, steps,
-  messages/attempts, tools incl. PTC dispatch, jobs, commands, compaction, subagent state,
-  goal/todo, approvals and selection actions, workspace/deliverable/schedule
-  changes, team traffic, image/offload, feedback, inbox splice, LLM retry,
-  tool-workflow progress); the explicit `NON_ACTIVITY_EVENT_TYPES` metadata
-  (request headers/context, titles and their LLM requests, end seeds, delivery
-  acknowledgements, web search requests), seed variants, and unknown
-  future/plugin types never count; `hook/invoked`/`hook/result` are allowed for
-  forward compatibility although this kernel emits none, and `ptc-mode` is not a
-  Session event. It persists
-  `$DSH_HOME/dsh-power-suite/session-activity.json`
-  (`{version:1, sessions:{id:lastActivityAt}}`, max-merge, 5000-Session cap,
-  debounced atomic writes) and seeds a one-time projection-cache baseline for
-  pre-install Sessions (never overwriting newer live events; header `createdAt`
-  when there is no cache document). Writes are **best-effort read-merge-writes**:
-  sequential external writes are preserved, but interleaving writers can lose
-  one side (TOCTOU; no cross-process lock). `flush()` awaits the full serialized
-  chain and drains during-write events; `dispose()` stops the debounce, flushes,
-  awaits the chain and is idempotent (Host cleanup disposes the listener first,
-  then returns `ledger.dispose()`); an abrupt crash before the 750 ms flush can
-  lose that window (no fsync), and a failed disk write keeps the map in memory
-  without durability (flush/dispose still resolve). A read-only
-  `GET /api/power-suite.session-activity` keeps the same `{sessions}` contract
-  and serves the live ledger (no per-request document scan, no-store) after a
-  bounded `waitForSeeded(5000 ms)` — fast for an existing ledger; a first cold
-  request may wait up to 5 s for a still-pending seed. If that wait times out,
-  the route serves the current map for a 30 s backoff while background seeding
-  continues (a late success clears it; a permanently hung listing can wait again
-  after each window). A seed that **fails/rejects** is swallowed and settles with
-  no backoff or retry, so seeded history never appears for that process (until a
-  Host recompose/restart); the route never 500s. Baseline cache/header times are
-  clamped to now+60 s while live event times are trusted. The client merges
-  activity per-id monotonically and prunes only against a non-empty catalog, so
-  partial/empty responses cannot drop known activity; a genuine clear does not
-  take effect while the catalog still lists the Session (it applies on reload or
-  after the Session leaves the catalog). The card folds the map in via
-  `max(catalog updatedAt, activity)` for retention,
-  ordering, relative times, bucket recency, child rows, and read-baseline
-  raising. Activity is exact only for allowlisted events the Host observed
-  (including long, interrupted, and failed turn ends); pre-install Sessions rely
-  on the baseline approximation, and the native sidebar keeps catalog times.
-- Current-chat rainbow ring: the card marks the Session open in the main view
-  with a 2 px conic-gradient ring plus soft glow (`@property` rotation + hue
-  drift, static under reduced motion), `pointer-events: none`, no layout shift,
-  and the same highlight on nested child rows.
-
-### Fixed
-
-- Hover Quick Look no longer opens as an empty card: it always receives an
-  explicit height (570 x 360 default, clamped to the viewport, with a remembered
-  or user-resized size still winning) and its content layer no longer depends on
-  an inline opacity style or a finished animation, so generated Markdown/code/
-  image content is visible on the first hover.
-- Provided attachments now have a Quick Look: provided images and media render
-  through the verified attachment route, text-like provided files are fetched
-  read-only and clipped at 64 KiB with a truncation note, other provided types
-  show the unavailable state, and the card's Open/Download use the attachment
-  URLs.
-- While the Project page is open it now hides the body-portaled prompt-history
-  rail (pin, divider, hover preview card, search card, magnifier) via the root
-  marker `data-power-suite-project-page="true"`; closing with Esc/back or
-  unmounting removes the marker and restores the rail immediately. The page also
-  keeps exactly one Refresh control in its top bar (the tab-bar and
-  project-header-card refresh buttons were removed; the More menu keeps Refresh
-  and Copy project path).
-- Running & recent read marks now persist per browser in
-  `localStorage['dsh-power-suite.acked-sessions']` (`{version: 1, acked: {id:
-  updatedAt}}`, guarded read/write). Opening a finished Session raises its
-  acknowledgement baseline; a running-but-not-open Session clears it only when
-  `updatedAt` advanced more than 1000 ms past the baseline, so transient running
-  flags no longer resurrect the green unread dot — acks survive HMR and reloads,
-  are shared by rows and subagent children, are pruned only against a non-empty
-  catalog, and the retention window still removes completed rows. *(Superseded by
-  the Host-shared read acknowledgements above: this per-browser document is now
-  only the fast/offline cache and is migrated to the Host on first use.)*
-
-- Independent-review follow-up fixes: the canonical measured-turn rule
-  (`isMeasuredTurn`) now governs run rows/counts, per-Session `runCount`,
-  `limits.totalRunsMeasured`, and `computeStats`, so a fork seed's synthetic
-  `turn/end` without a `turn/start` classifies as **stopped**, reports **0
-  runs**, and synthetic boundaries never inflate stats; the project snapshot
-  cache TTL is 25 s with archived-subset-hash + `focusSessionId` identity and
-  per-Session warnings carry a bounded error identity; read-acks POST failures
-  return no-store `500 { code: "store-failed" }`, the body cap is 64 KiB of
-  UTF-8 bytes, client requests time out after 8 s, pushes are chunked
-  (≤200 entries/~48 KiB, one in flight) where network/5xx/408/425/429 stay
-  queued and other permanent non-retryable 4xx drop only that batch immediately
-  (local and pending maps each capped at 1000; pending entries dropped by the cap
-  remain in the local map and re-migrate later); the activity route uses an 8 s
-  AbortController timeout and the client **awaits** pending ack pushes before
-  fetching it; the Project page's first Escape closes an open menu and the second
-  closes the page, and header `openWorkspace` promises have rejection guards.
-
-### Changed
-
-- The Project page's geometry was corrected to cover only the content area right
-  of the left Workspaces sidebar (left = the sidebar's docked box right edge,
-  width = viewport width minus that edge, full height), measured and re-measured
-  through sidebar/right-sidebar toggles and window resize. The sidebar stays visible and interactive,
-  so another Workspace switches the page in place; the page still covers the
-  composer, right sidebar, and history rails, and `aria-modal` was dropped.
-- The Running & recent card gained row actions: a fixed trailing cluster with
-  **New session** (blank Session in the row's own directory, falling back to the
-  Workspace New Session) and, for interrupted rows, an amber warning badge plus a
-  **Continue** action that reuses the interrupted-session continuation flow.
-  Slots are reserved and revealed on hover/keyboard focus without layout shift;
-  the row's hover card now anchors to the activity panel's right edge so it never
-  covers the row or its buttons.
-- The shipped Workspaces browser is augmented rather than replaced: the plugin
-  inserts sibling nodes and inline flex order only, so native search, context
-  menus, add-workspace flow, drag reordering, and dialogs keep working, and
-  unloading restores the surface.
-- The browser tolerates a Host that predates the timestamp field: rail and
-  hover-card times are hidden instead of rendering empty, and the shared
-  human-only prompt definition and 500-prompt cap stay the same on both
-  surfaces.
-- Prompt-history rail now matches the native turn rail: right-aligned 20 x 2 px
-  tick marks on the native column (60 % width at rest, growing on hover, brand
-  hairline on keyboard focus), a horizontal 32 x 1 px divider, a native-style
-  line-clamped preview card, and a pinned 20 x 22 px magnifier whose centre sits
-  on the visible resting tick column (the toggle overhangs the rail edge by
-  4 px). The search card opens directly below the magnifier with
-  its right edge on the column, or flips to the magnifier's left (8 px away)
-  when there is no room above the composer; it has no close button and dismisses
-  on a blank outside click or Escape. A long history caps the rail at
-  `min(available band, 420 px)`, scrolls its ticks behind 24 px fade masks with
-  hidden scrollbars, and keeps the search button pinned at the foot.
-- Dynamic Workspaces card header: the leading indicator now has two states — a
-  blue pulsing business-primary dot while any listed Session is running, and the
-  white `sparkling-line` icon when everything is complete — both centred on the
-  row glyph column.
-- The bundle's Plugins page shows only the suite's real controls while its
-  settings section is mounted: the auto-rendered package README document above
-  the configuration is hidden and restored on unmount, and the section now
-  carries the **Prompt history** group plus the **Active & recent** group with
-  the two retention rows.
-- The Artifacts source filter is a custom dropdown in the panel header,
-  immediately left of Refresh: a `filter-line` funnel trigger with the current
-  option label/count and a rotating caret opens a themed, right-aligned
-  `menu`/`menuitemradio` popup listing All/Generated/Provided with their counts
-  and a check on the selected option (focus moves to the selected option on
-  open; outside press or Escape closes; Escape returns focus to the trigger).
-  The segmented pill bar and its markup are gone.
-- Prompt-history rail polish: copying a prompt is now silent (the confirmation
-  chip, check icon, and animation are gone while the exact draft text and
-  composer focus remain), and the pinned search magnifier is centred on the
-  visible resting tick column — the 20 x 22 px toggle overhangs the rail edge by
-  4 px so its centre equals `railRight - 6`.
-- Dynamic Workspaces card refinement: Session rows are single-line (glyph,
-  title, time) with disclosure chevrons at the far right; the Workspace title
-  and path, Status, absolute Last active time, and running subagent count moved
-  into a native-style hover card that does not capture the pointer. The leading
-  glyph has three states — shell loading indicator while running, green done dot
-  for an unread completion, and a white session-type icon (RemixIcon
-  `deepseek-fill` for main rows, `robot-2-line` for subagent rows) once the
-  Session has been opened and the completion acknowledged; a new run re-enables
-  the green dot, and acknowledgements are page-local. The hover card's title is
-  the Workspace name with the full wrapped path, rows carry no native tooltips,
-  the card body hides its scrollbar, and the row body and disclosure arrow
-  highlight independently. The header toggle, **View all**, and header chevron
-  share one 30 px height and corner radius; bucket chevrons sit at the far
-  right; the subagent connector trunk is centered under the parent's status
-  indicator and stops at the last child's tick.
-
-## [0.1.1] - 2026-11-11
-
-### Fixed
-
-- Interrupted-session badges now repull automatically after a Host restart
-  (Connection generation reset), on focus/visibility/online, and on a 20 s poll
-  instead of waiting for a Session click.
-- Parent Sessions whose delegated subagent was interrupted after the parent's
-  last completed turn are now marked interrupted, including nested
-  delegations; a live child remains live work.
-- After a reconnect, an interrupted Session no longer keeps the native green
-  "running" spinner until opened: the plugin decorates rows whose native status
-  is stale, replacing the spinner with the amber interruption mark.
-- Forced badge refreshes keep the current ready value until the new answer
-  arrives; they no longer flash every interrupted mark through `loading`.
-- The Host interruption cache uses per-Session event epochs so a slow log read
-  cannot overwrite a newer turn event; prompt history requests are generation-
-  scoped so a slow Session cannot write into another Session.
-- Subagent interruption timing now uses the child's turn start as well as its
-  last event, covering children that go silent before a Host restart.
-- Continue validates JSON content type, current interruption/running state, and
-  per-Session in-flight admission; duplicates are rejected instead of queued.
-- Raw artifact media type comes from the real path and every raw response uses
-  the native sandbox/default-src-none CSP; the implicit continuation context and
-  correlated turn-trigger row are hidden in Chat.
-- Quick Look fixes: single-quoted code strings highlight correctly, the preview
-  cache is bounded with a TTL, and sidebar/chat observers are scoped to relevant
-  mutations.
-- CI now covers Node 22 and 24, `npm run check` includes the pack gate, and the
-  package/version/CHANGELOG are synced at 0.1.1.
-- **Continue** is now implicit: it resumes through a non-human context source
-  instead of inserting a visible "Continue the interrupted task." user prompt.
-  The continuation row is hidden, prompt history ignores it, and a missing
-  Session controller leaves the badge in place.
-
-### Changed
-
-- Standardized the repository around a single root package: source under
-  `src/`, feature docs under `docs/`, reusable checks under `scripts/`, a git
-  history, a license/notice pair, and CI.
-- Hover previews now follow the native shell more closely: Markdown rendering,
-  syntax highlighting, image/media/PDF/HTML previews, drag-to-resize, safe
-  hover traversal, outside-click dismissal, and animated file switching.
-
-## [0.1.0] - 2026-11-09
-
-### Added
-
-- Session artifacts panel with Open, Download, and Copy-link actions.
-- Per-Workspace default agent preset context-menu routing.
-- Composer prompt history for the configured modifier (⌘/Ctrl, ⌥/Alt, Ctrl,
-  Shift, or Off).
-- Interrupted-session detection, sidebar badge, Continue action, and composer
-  play control.
-- Plugin settings page for the shortcut modifier.
-- Shared hover Quick Look for artifacts and the native Workspace files tree.
+- Added [docs/update-check.md](docs/update-check.md): user-facing behavior, the
+  `GET /api/power-suite.update?lang=` contract, cache TTLs, version rules, the
+  browser prompt state, the tag-pinned release-notes source, and limitations.
+- Added `release-notes/<version>.md` + `.en.md` files and their format rules,
+  plus `scripts/check-release-notes.mjs` and the `check:release-notes` gate
+  (also run from `npm run check` and the publish workflow), so the in-app update
+  notice can only read reviewed, tag-pinned Highlights.
+- Added the tag-triggered `publish.yml` publish workflow (Trusted Publishing)
+  and replaced `check.yml` with `ci.yml` (docs-only fast path + verify job), and
+  added the `.agents/skills/release-power-suite` release procedure.
+- Consolidated the never-published `[0.1.0] - 2026-11-09`, `[0.1.1] -
+  2026-11-11`, and `[0.2.0] — undated development snapshot` sections into this
+  single first-release section, and reframed the README around the planned
+  first public release (0.1.0) instead of the old 0.2.0/0.3.0 snapshot
+  narrative.

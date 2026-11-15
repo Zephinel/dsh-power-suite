@@ -16,6 +16,7 @@ src/index.js            Host entry (Node)
 ├─ features/settings/host.js             GET/POST /api/power-suite.settings
 ├─ features/read-acks/host.js            GET/POST /api/power-suite.read-acks
 ├─ features/session-activity/host.js     GET  /api/power-suite.session-activity
+├─ features/update-check/host.js         GET  /api/power-suite.update
 └─ ctx.effect(...)                       every registration lives with the plugin
 
 src/client.js           Browser entry (DSH module loader)
@@ -28,6 +29,7 @@ src/client.js           Browser entry (DSH module loader)
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
 ├─ UI element annotation mode (launcher, right rail, floating-surface picking, marks/detail card, note popover, composer reference chips, batch collection)
 ├─ Plugins-page settings section
+├─ Update notice (bottom-right `shell.overlay` card: npm `latest` + tag-pinned Highlights)
 └─ Shared hover Quick Look for generated/provided Artifacts rows and native Workspace file rows
 ```
 
@@ -269,6 +271,31 @@ authenticated SSE stream that invalidates affected browser caches on
 `turn/start`/`turn/end` (`{sessionId, parentSession, event}`), with a 25 s
 heartbeat and the 20 s browser poll as fallback.
 
+### Update check and release notes
+
+The update notice's Host half answers
+`GET /api/power-suite.update?lang=<locale id>` through
+`ctx.connection.fetch.register` (`no-store`, never 5xx). It reads the running
+`package.json` version, requests the npm `latest` dist-tag derived from the
+package name (`https://registry.npmjs.org/@zephinel%2Fdsh-power-suite/latest`,
+5 s `AbortSignal.timeout`), compares only stable `x.y.z` versions, and returns
+`{ current, latest, updateAvailable, highlights }` — `current: "0.0.0"` when the
+running version is unreadable, `latest: null` on a registry failure,
+`highlights: []` when the notes cannot be read. The route registers no service,
+writes no file, and logs nothing to a Session log; it is cached in the Host
+process, not per browser.
+
+Highlights are **pinned to the published tag**, not read from npm metadata: the
+`repository` field yields
+`https://raw.githubusercontent.com/Zephinel/dsh-power-suite/v<latest>/release-notes/<latest>.md`
+(or `<latest>.en.md` for the `en` variant, falling back to the default file). A
+pure parser takes the bullet list of the `## Highlights` section up to the next
+heading, strips inline Markdown, and caps the result at six items. The registry
+read and the per-language notes are cached for **6 h** on success and **5 min**
+on failure (`latest: null`), with one shared promise per in-flight language so a
+burst of pages cannot duplicate network reads. The repository must stay public
+for notes to resolve; version prompts still work without them.
+
 ## Browser half
 
 `src/client.js` is loaded by `window.__ModuleLoader__.load`. Its `apply`
@@ -281,7 +308,7 @@ The client talks to the Host only over the authenticated routes above; it never
 imports Host code. Feature copy is registered through per-feature locale
 namespaces (`sessionArtifacts`, `workspacePresets`, `dynamicWorkspaces`,
 `powerSuitePromptHistoryPreview`, `powerSuiteInterrupted`, `powerSuiteSettings`,
-`powerSuiteAnnotation`) so the en/zh dictionaries stay
+`powerSuiteAnnotation`, `powerSuiteUpdate`) so the en/zh dictionaries stay
 aligned. The client entry also injects the shell's `sessions` listing service for
 the prompt-history preview's parent-Session rows.
 
@@ -623,6 +650,45 @@ modifiers), `power-suite.ui-annotation.launcher` (position),
 `power-suite.ui-annotation.rail-collapsed`, and the v2 records document. See
 [ui-annotation.md](ui-annotation.md).
 
+### Update notice
+
+A browser-only feature: the Host route above does the version math and notes
+fetch, the client only decides whether and how to show the prompt. After `apply`
+the controller waits **1.5 s**, fetches
+`appUrl('/api/power-suite.update?lang=' + encodeURIComponent(activeLocale))`
+with `cache: 'no-store'`, and checks **at most once per page load** — no
+polling, no re-fetch on language switch. The active locale comes from the shell
+locale service (falling back to `en`); the `highlights` the Host returns are
+rendered as-is.
+
+The prompt is a `shell.overlay` seat registered as
+`{ name: 'shell.overlay', id: 'power-suite.update-prompt' }` — a
+`position: fixed` card in the bottom-right corner inside the React-owned
+overlay tree. It **never inserts a node into the sidebar, the native
+`[role="tree"]`, or any other shell-owned DOM** (that sidebar-card approach was
+the cause of the earlier boot deadlock and is retired), so it also has no
+`MutationObserver`, no `insertBefore`, and no layout writes. The card is
+`z-index: 70`, carries a layered inline-SVG brand mark, uses theme tokens only
+(forced-colors fallback), has no animation, and closes on Escape or an outside
+`pointerdown` as "later". Its actions are the Host contract's only consumer: the controller keeps
+a small state machine (`hidden | shown`) and exposes
+`getSnapshot`/`subscribe`, and `installUpdatePrompt` wires the locale
+dictionary (`powerSuiteUpdate`) and the style tag
+(`data-power-suite-css="update-check"`).
+
+The only persisted client state is
+`localStorage['power-suite.update-prompt']`
+(`{ schema: 1, laterVersion, laterClicks, silencedVersion }`). "Later" counts
+per version, three "later" clicks make **不再提醒** available, and silencing
+affects only the current `latest`; when the route proves there is no update the
+state is cleared, while `latest: null` keeps it (a registry hiccup must not
+erase a silence). Corrupt/unknown storage is treated as empty, and unavailable
+`localStorage` keeps the state in memory for the page. The **更新** action calls
+the optional `pluginNavigation.openBundle('@zephinel/dsh-power-suite')` inject
+(no plugin navigation keeps the card open); the plugin never installs anything
+itself. A user action invalidates any in-flight check, so a late response cannot
+re-open a card the user just dismissed.
+
 ### Slots used
 
 | Slot | Purpose |
@@ -632,7 +698,7 @@ modifiers), `power-suite.ui-annotation.launcher` (position),
 | `contextMenus.register` (`workspace`) | Default agent preset submenu |
 | `conversation.input.overlay` | Renderless prompt-history keyboard seat, draft-attachment memory seat, and the annotation mode's Session bridge seat (Session id, input actions, and the Session's cwd/workspace label mirrored from the slot's `useSessions` hook) |
 | `conversation.input.dock` | Session hooks for the body-portaled prompt-history rail |
-| `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation and the UI element annotation launcher/rail/popover |
+| `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation, the UI element annotation launcher/rail/popover, and the update notice card (`power-suite.update-prompt`) |
 | `plugins.bundle.config` | Plugin settings page |
 | `sidebar.session.row.leading` | Interrupted-session badge plus the hover/focus inline Continue triangle |
 
@@ -649,6 +715,10 @@ modifiers), `power-suite.ui-annotation.launcher` (position),
   artifact row or a fake interrupted state.
 - Pure state derivation lives in feature modules and is covered by
   `node:test`; UI wiring stays in `src/client.js`.
+- The update notice is a `shell.overlay` seat: it never inserts nodes into the
+  sidebar/native tree, never performs an install, and its only persisted state
+  is the browser-local `power-suite.update-prompt` document. The Host route that
+  feeds it is read-only and cached in-process.
 - The UI element annotation mode stays browser-only: it adds no Host route,
   service, Session-log write, or profile change. Its v2 records are browser
   `localStorage` memory (capped at 100, never synced); the two modifiers,

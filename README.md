@@ -3,7 +3,7 @@
 One installable plugin for the DeepSeek Harness Web GUI that adds a small suite
 of workday improvements around the conversation.
 
-The installable unit is a single bundle, `@rexxin/dsh-power-suite` (Loader row
+The installable unit is a single bundle, `@zephinel/dsh-power-suite` (Loader row
 `power-suite`). Its features are modules inside the package, so the Plugin list
 shows one plugin whose inventory grows with the suite.
 
@@ -15,69 +15,69 @@ shows one plugin whose inventory grows with the suite.
 | [Prompt history](docs/prompt-history.md) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; a right-edge rail lists them newest first with a hover full-text preview, an inline search, and click-to-copy. Plain arrows keep their original behavior. |
 | [Draft attachments](docs/draft-attachments.md) | Attachments in a draft (pasted images, dropped or picked files) survive switching Sessions and coming back, for the page lifetime; the shell only persists the draft text. |
 | [Interrupted sessions](docs/interrupted-sessions.md) | Sessions that did not finish — restart/crash, any provider/model/network error (quota, timeout, rate limit), an output limit, or an imported unknown cancellation — carry an amber mark left of the title, a hover-revealed inline Continue triangle in the status cell (title shifts right, no hover mask), and a play-shaped composer submit control; deliberate cancellations and completed turns stay unmarked. State is Host-owned and cross-device: a Host SSE stream invalidates open pages immediately on turn boundaries, with polling as fallback. |
+| [Update notice](docs/update-check.md) | Once per page load the bundle asks its Host route whether npm has a newer stable release; when one exists, a fixed bottom-right card (`shell.overlay`, no sidebar DOM) shows the version change and up to six release highlights, with **更新** (opens the bundle's Plugin page so DSH performs the update), **下次再说** (counted per version; after three, **不再提醒** silences that version), and expand/collapse. No auto-update, no cross-device state, and it stays silent until the package is published. |
 | [UI element annotation](docs/ui-annotation.md) | A floating launcher toggles a point-and-click annotation mode in which the page makes room for a narrow right rail instead of being covered. Hovering outlines the element a click would select — including floating surfaces such as native hover preview cards, which can also be drilled into — and each annotation becomes a persisted v2 record (verified unique selector, Session/Workspace identity, position) shown as a page marker with a requirement badge and a hover detail card. References are inserted as **native composer inline reference chips** (single or one grouped batch) without sending, and the right rail's collection view edits, previews, reorders, and batch-inserts annotations — with multi-select, marquee, ancestor adjustment, and a hold-to-pass-through modifier. |
 | [Settings](docs/settings.md) | The bundle's Plugins page carries its own configuration section: the prompt-history modifier plus the two Dynamic Workspaces retention windows (finished Sessions and Active projects). |
 
-New in 0.3.0 (unreleased; planned version, no release date or tag yet):
+First public release: 0.1.0 (planned). The package has never been published
+before: the `0.1.0` (2026-11-09), `0.1.1` (2026-11-11), and undated `0.2.0`
+development snapshots were internal only — never tagged, never released — and
+their history is consolidated into this first release (see
+[CHANGELOG.md](CHANGELOG.md)). The release is cut by pushing the `v0.1.0` tag
+once the bilingual [release notes](release-notes/README.md) are approved; until
+then npm has no `latest` version for the package and the in-app update notice
+stays silent.
 
+Highlights of the first release:
+
+- **Dynamic Workspaces** — the shipped Workspaces browser is augmented, never
+  replaced: Active/Inactive buckets follow the running and recent Sessions live,
+  fold independently with persisted state, and hide in rail mode, while a
+  **Running & recent** card above the native header lists running and recently
+  finished Sessions as single-line rows, nests delegated subagent Sessions under
+  their parent, marks unread completions green until opened, and shows status
+  plus the native Session statistics / token / context figures on hover. Read
+  marks and last-activity times are Host-shared, the current row carries a
+  rainbow atmosphere, and both retention windows are settings on the bundle's
+  Plugins page.
+- **Prompt history** — the configured modifier + ↑/↓ recalls prompts already sent
+  in this Session; a right-edge rail lists them oldest first with a full-text
+  hover preview, an inline search, per-prompt timestamps, and click-to-copy.
+  Draft attachment memory keeps pasted/dropped files across Session switches for
+  the page lifetime.
+- **Session artifacts** — the right Sidebar's Start page carries an **Artifacts**
+  card listing the current Session's created and delivered files **and the
+  images/files you attached to your prompts**, de-duplicated by attachment id
+  with 40 px lazy thumbnails, an All/Generated/Provided dropdown filter, open,
+  download, copy content (text verbatim; images as a real clipboard picture in a
+  secure context), LAN-link copy, and a hover Quick Look.
+- **Interrupted sessions** — Sessions whose last turn did not finish (restart/
+  crash, any provider/model/network error, an output limit, or an imported
+  unknown cancellation) carry an amber title mark, a hover-revealed inline
+  Continue triangle, and a play-shaped composer submit control; Continue is
+  implicit and Host-owned, and an SSE stream keeps every tab in sync.
 - **UI element annotation** — a round launcher toggles a point-and-click
-  annotation mode in which the page makes room for a narrow right rail instead
-  of being covered: hovering outlines the element a click would select
+  annotation mode in which the page makes room for a responsive right rail
+  instead of being covered: hovering outlines the element a click would select
   (including floating surfaces such as native hover preview cards, which can be
   drilled into), and a compact popover records the requested change. Each
-  annotation becomes a persisted v2 record with a page marker, a numbered
-  requirement badge, and a hover detail card, and references are inserted as
-  native composer inline reference chips — one per reference or one grouped
-  batch chip — through the shell's own input-trigger seam, without sending.
-  Selection is isolated from the page (clicking a native control never triggers
-  it), the multi-select modifier toggles elements or draws a marquee, holding
-  the pass-through modifier restores real native left and right clicks, and the
-  rail's collection view edits, previews, reorders, and batch-inserts
-  annotations with a 5 s delete-undo, de-duplication, and stale/ambiguous
-  status markers.
-
-New in 0.2.0 (development snapshot — never tagged or released; undated):
-
-> The package carried version 0.2.0 while this work landed; no release tag was
-> cut. The next planned release is **0.3.0**, still unreleased/undated.
-
-- **Session artifacts for provided attachments** — the Artifacts card now also
-  lists the images and files the human attached to their prompts, de-duplicated
-  by attachment id (newest wins) and served by a verified attachment route, with
-  40 px lazy thumbnails, a client-side All/Generated/Provided dropdown filter in
-  the panel header, and the same open/download/copy-content/copy-link actions
-  adapted to the attachment store (Copy image writes a real PNG item on HTTPS/
-  localhost and uses the legacy HTML-image clipboard on plain HTTP).
-- **Dynamic Workspaces** — the shipped sidebar is augmented, never replaced:
-  Active/Inactive buckets follow the running and recent Sessions live, fold
-  independently with persisted state, and hide in rail mode, while a **Running &
-  recent** card above the native header lists running and recently finished
-  Sessions as single-line rows, nests delegated subagent Sessions under their
-  parent, marks unread completions green until the Session is opened, opens any
-  row, and shows workspace/status/last-active detail on hover. Both retention
-  windows (finished Sessions 1–24 h, default 2 h; Active projects 1–30 days,
-  default 7) are settings on the bundle's Plugins page.
-- **Prompt history preview** — a vertical rail at the conversation's right edge
-  shows the current Session's prompts newest first as tick marks, with the full
-  prompt on hover, an inline search, and click-to-copy into the draft.
-- **Draft attachment memory** — attachments in a draft survive switching
-  Sessions and coming back for the page lifetime, even though the shell only
-  persists the draft's text and reference chips.
-- **Shared card read marks** — the activity card's acknowledgements are stored
-  by the Host in `read-acks.json` and synced to every browser using the same
-  DSH home
-  (with a local cache and a 1 s derived-read tolerance), so a reload or another
-  browser no longer resurrects stale green dots.
-- **Event-sourced activity times on the card** — the Host keeps a durable
-  ledger built from committed `session/event` times (with a one-time baseline for
-  pre-install Sessions), so a turn that ran for hours keeps its real activity
-  time and stays in the recent window instead of vanishing when it stops.
-- **Current-chat rainbow ring** — the card marks the Session the main
-  conversation currently shows with an animated rainbow ring (static under
-  reduced motion) that follows every way of opening a Session.
-- **Per-prompt timestamps** — the prompt-history route now returns each prompt's
-  Session event time (`at`, or `null` when the log has none), so the rail and its
-  hover card can show times while the keyboard recall keeps working unchanged.
+  annotation becomes a persisted record with a page marker, a numbered
+  requirement badge, and a hover detail card; references are inserted as native
+  composer inline reference chips — one per reference or one grouped batch —
+  without sending, and multi-select, marquee, and a pass-through modifier are
+  included.
+- **Update notice (new)** — the Host reads the npm `latest` dist-tag and the
+  tag-pinned release notes; every page load checks at most once and shows a
+  bottom-right card when a newer stable version exists, with the version change,
+  up to six Highlights, **更新** (opens the Plugin page; DSH performs the
+  update), **下次再说** (counted per version; after three, **不再提醒** silences
+  that version), and Escape/outside-click as "later". State is per browser; the
+  card inserts no sidebar DOM and stays silent while 0.1.0 is the latest
+  version.
+- **Workspace presets and settings** — a Workspace context-menu submenu sets the
+  default agent preset for new Sessions in that Workspace, and the bundle's
+  Plugins page carries the prompt-history modifier plus the two Dynamic
+  Workspaces retention windows.
 
 The same plugin adds a shared **hover preview** to Artifacts rows (generated
 files plus provided images and text-like attachments) and the native Workspace
@@ -93,11 +93,22 @@ its content is visible on the first hover.
 
 ## Install
 
-The package is installed into the active DSH profile as a local `link:` bundle:
+The bundle is `@zephinel/dsh-power-suite` (Loader row `power-suite`). Install a
+published release from npm:
+
+```text
+plugin_manager action=install_bundle target=@zephinel/dsh-power-suite
+```
+
+For development, install the checkout as a local `link:` bundle instead:
 
 ```text
 plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-suite
 ```
+
+The profile keeps a local checkout as a `link:` dependency, so an edited
+checkout is the code the Host runs after a reload. Removing the bundle removes
+the plugin.
 
 Changes are profile-wide and survive restarts. After changing Host code, reload
 the plugin (or restart the Host process); after changing browser code, reload
@@ -115,9 +126,10 @@ the Web page.
 │   └── features/<name>/     # Host-side feature modules
 ├── locale/                  # plugin display metadata (en, zh)
 ├── docs/                    # architecture, guides, per-feature reference
-├── scripts/check.mjs        # syntax + package-manifest check
+├── release-notes/           # tag-pinned Highlights read by the update notice
+├── scripts/check.mjs        # syntax + package-manifest + release-notes checks
 ├── test/                    # node:test pure-logic tests
-└── .github/workflows/       # CI
+└── .github/workflows/       # CI (verify + tag-triggered publish)
 ```
 
 ## Development
@@ -126,21 +138,25 @@ No build step is required: the package exports its ES modules directly.
 
 ```bash
 npm test               # node --test test/*.test.js
-npm run check          # syntax + manifest + tests
+npm run check          # syntax + manifest + release-notes gate + tests + pack:check
 npm run pack:check     # inspect the published file list
+npm run check:release-notes  # validate the release-notes Highlights for the package version
 ```
 
 See [docs/development.md](docs/development.md) for the local install/reload loop
-and [docs/architecture.md](docs/architecture.md) for the Host/Client contracts.
+and the release flow, and [docs/architecture.md](docs/architecture.md) for the
+Host/Client contracts.
 
 ## Documentation
 
 - [Architecture](docs/architecture.md) — Host and browser halves, routes, slots, settings.
 - [Usage](docs/usage.md) — what each feature does in the UI.
-- [Development](docs/development.md) — install, reload, tests, adding a feature.
+- [Update notice](docs/update-check.md) — behavior, route contract, cache rules, prompt state, release-notes source.
+- [Development](docs/development.md) — install, reload, tests, release flow, adding a feature.
 - [Verification](docs/verification.md) — the checks and evidence for this checkout.
 - [Limitations](docs/limitations.md) — known bounds and unsupported cases.
 - [Feature reference](docs/overview.md) — the feature inventory and addition recipe.
+- [Release notes](release-notes/README.md) — the tag-pinned Highlights format used by the update notice.
 
 ## License
 
