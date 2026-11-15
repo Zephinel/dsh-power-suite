@@ -741,7 +741,7 @@ native sidebar Session row of the open Session:
   being highlighted. There is no rainbow border, ring or outer glow, and no
   layout shift (the wrapper is absolutely positioned).
 - **No stacked highlight**: an atmosphere row keeps only the rainbow surface.
-  The ordinary row-body hover pill (card parent and child rows) and the native
+  The ordinary full-row hover surface (card parent and child rows) and the native
   sidebar rows' own hover/selected background are suppressed while the
   atmosphere is present, because a second rounded highlight painted inside the
   rainbow rectangle reads as a misaligned double highlight (user feedback). The

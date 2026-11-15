@@ -9,14 +9,14 @@ message.
 
 - An **amber warning mark** sits left of the Session title, in the row's status
   cell, and stays visible by default.
-- **Hovering** the row keeps the shell's normal hover surface — the title and
-  time stay visible and the native trailing actions appear as on any Session row
-  — and reveals an inline **Continue** triangle immediately right of the warning
-  mark. The native status cell widens to hold the mark plus the triangle, so the
-  title slides right by the triangle's width instead of being covered by a mask
-  (the old opaque hover mask was left over from the retired trailing-edge CTA and
-  erased the title/time). The mark, the triangle and the native actions use theme
-  tokens, so they follow light and dark mode.
+- **Hovering** the row keeps the shell's normal hover surface — the title stays
+  visible and the native trailing actions replace the time, exactly as on any
+  Session row — and reveals an inline **Continue** triangle immediately right of
+  the warning mark. The native status cell widens to hold the mark plus the
+  triangle, so the title slides right by the triangle's width instead of being
+  covered by a mask (the old opaque hover mask was left over from the retired
+  trailing-edge CTA and erased the title and time). The mark, the triangle and
+  the native actions use theme tokens, so they follow light and dark mode.
 - Opening that Session turns the composer's send control into a **play triangle**
   (`play-fill`). Pressing it with an empty draft continues the unfinished task;
   typing a draft first sends that draft normally instead.
@@ -81,7 +81,9 @@ Browser:
   right; no opaque hover mask is painted.
 - A row decorator covers rows whose native status still says running: it inserts
   the warning into the native leading span (skipping the injected rainbow
-  atmosphere wrapper) and hides the stale spinner.
+  atmosphere wrapper) and hides the stale spinner. This decorator path shows the
+  warning only — the inline Continue triangle is part of the idle-row leading
+  seat — so a stale-running row continues from the composer's play control.
 - `conversation.input.overlay` — a renderless seat for the open Conversation
   that marks the shell, swaps the submit glyph, and starts the Host continuation
   route; it no longer submits a draft prompt.

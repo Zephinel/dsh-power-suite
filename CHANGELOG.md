@@ -554,9 +554,10 @@ heading is added until the release is cut.
 ### Fixed
 
 - Sidebar interrupted-session hover: hovering an interrupted native Session row
-  keeps the shell's normal hover surface and its title/time visible, and reveals
-  the inline Continue triangle right after the warning mark. The obsolete opaque
-  `::before` hover mask (a leftover from the retired trailing-edge CTA) is gone.
+  keeps the shell's normal hover surface and its title visible (the shell still
+  replaces the time with the trailing hover actions, as on any Session row), and
+  reveals the inline Continue triangle right after the warning mark. The obsolete
+  opaque `::before` hover mask (a leftover from the retired trailing-edge CTA) is gone.
   The mask's positional `span:first-child` z-index rule used to catch the
   injected rainbow-atmosphere wrapper on the current Session row, which turned
   the background layer into an in-flow pill that pushed the badge right and
@@ -573,6 +574,18 @@ heading is added until the release is cut.
   lit only the title; the row body stays transparent so no second nested pill
   appears, pinned rows keep their violet tint under the hover layer, and
   atmosphere rows keep their transparent surface.
+- Sidebar review follow-ups: the interrupted row's leading cell no longer hides
+  other plugins' leading-slot marks (schedule clock, liveshare fork) — only the
+  native status dots are hidden while the stale-spinner decorator is active; the
+  inline Continue triangle expands the native status cell instantly instead of
+  animating its width, so the shell's title marquee measures the narrowed cell
+  and no longer stops short; the card's keyboard focus surface is gated on
+  `html[data-input-modality="keyboard"]` like the shell, so a mouse click on a
+  control cannot leave a stuck row surface; the card atmosphere-row control
+  suppression dropped in an earlier merge is restored (transparent + brightness
+  instead of a blurred hover block inside the rainbow); the dead trailing-edge
+  Continue component is removed; docs no longer claim the time stays visible on
+  native hover.
 
 ## [0.2.0] — undated development snapshot
 

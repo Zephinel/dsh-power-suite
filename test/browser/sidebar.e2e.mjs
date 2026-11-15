@@ -2484,10 +2484,16 @@ async function runLayoutChecks({ page, results, state }) {
       const head = row.querySelector('.psd-run-head')
       if (!time || !main || !head) return null
       const before = time.getBoundingClientRect()
-      // The real inline button only renders for an interrupted Session; probe the
-      // shipped CSS contract with a detached stand-in, then remove it.
+      // The real inline button only renders for an interrupted Session. Probe the
+      // shipped CSS contract with a stand-in that mirrors the real row head order:
+      // a 16 px leading cell holding the badge, then the 22 px Continue slot
+      // (badge and triangle separated by the leading cell's 9 px rest margin), then
+      // the untouched real head content. Everything is removed again.
       const badge = document.createElement('span')
       badge.className = 'psd-interrupted'
+      const probeGlyph = document.createElement('span')
+      probeGlyph.className = 'psd-run-glyph-cell'
+      probeGlyph.appendChild(badge)
       const slot = document.createElement('span')
       slot.className = 'psd-continue-slot'
       slot.style.width = '22px'
@@ -2497,14 +2503,15 @@ async function runLayoutChecks({ page, results, state }) {
       button.type = 'button'
       button.className = 'psd-continue-inline'
       slot.appendChild(button)
-      head.appendChild(badge)
-      head.appendChild(slot)
+      head.insertBefore(probeGlyph, head.firstChild)
+      head.insertBefore(slot, probeGlyph.nextSibling)
+      const glyphRect = probeGlyph.getBoundingClientRect()
       const badgeRect = badge.getBoundingClientRect()
       const probeRect = button.getBoundingClientRect()
       const timeRect = time.getBoundingClientRect()
       const mainRect = main.getBoundingClientRect()
-      badge.remove()
-      button.remove()
+      probeGlyph.remove()
+      slot.remove()
       const after = time.getBoundingClientRect()
       return {
         rowRight: Math.round(row.getBoundingClientRect().right),
@@ -2514,6 +2521,7 @@ async function runLayoutChecks({ page, results, state }) {
         probeHeight: Math.round(probeRect.height),
         badgeLeft: Math.round(badgeRect.left),
         badgeRight: Math.round(badgeRect.right),
+        glyphRight: Math.round(glyphRect.right),
         timeLeft: Math.round(timeRect.left),
         mainLeft: Math.round(mainRect.left),
         timeShift: Math.round(after.left - before.left),
@@ -2522,10 +2530,12 @@ async function runLayoutChecks({ page, results, state }) {
     assert(measured, 'no parent card row to probe the inline Continue button against')
     assertEqual(measured.probeWidth, 22, 'inline Continue width')
     assertEqual(measured.probeHeight, 22, 'inline Continue height')
-    assertNear(measured.probeLeft, measured.badgeRight, 2, `inline Continue left edge (${measured.probeLeft}) must sit immediately after the interrupted badge right edge (${measured.badgeRight})`)
+    assert(measured.probeLeft >= measured.badgeRight - 0.5, `inline Continue must not overlap the interrupted badge (triangle left ${measured.probeLeft}, badge right ${measured.badgeRight})`)
+    assertNear(measured.probeLeft, measured.glyphRight + 9, 1.5, `inline Continue must start after the leading cell's 9 px rest gap (triangle left ${measured.probeLeft}, leading cell right ${measured.glyphRight})`)
+    assertNear(measured.probeLeft - measured.badgeRight, 10, 2, `inline Continue must sit immediately after the interrupted badge (gap ${measured.probeLeft - measured.badgeRight})`)
     assert(measured.probeRight < measured.timeLeft, `inline Continue (right ${measured.probeRight}) must stay left of the time column (${measured.timeLeft})`)
     assertEqual(measured.timeShift, 0, 'inline Continue must not move the time column')
-    return `inline Continue 22x22 at ${measured.probeLeft}-${measured.probeRight} immediately after badge ${measured.badgeLeft}-${measured.badgeRight}; time column ${measured.timeLeft} unmoved`
+    return `inline Continue 22x22 at ${measured.probeLeft}-${measured.probeRight} after badge ${measured.badgeLeft}-${measured.badgeRight} (leading cell right ${measured.glyphRight}); time column ${measured.timeLeft} unmoved`
   })
 
   await results.check('b2-4', 'the main-row New session action still creates and opens a blank Session', async () => {
@@ -3900,7 +3910,7 @@ async function runInterruptedChecks({ page, results, state }) {
     const record = hook ? hook.record(key.replace(/^session:/, '')) : null
     if (row === null) return { missing: true, record }
     const badges = [...row.querySelectorAll('.dps-row-interrupted')]
-    const lead = row.firstElementChild
+    const lead = [...row.children].find((child) => !child.hasAttribute('data-psd-atmos')) ?? null
     const peerSvgs = lead === null ? [] : [...lead.querySelectorAll('svg')].filter((svg) => svg.closest('.dps-row-interrupted') === null)
     return {
       record,
@@ -9147,6 +9157,8 @@ async function runPinChecks({ page, results, state }) {
     const pinnedHovered = await page.eval(probePin.currentCardRow)
     assertEqual(pinnedHovered.mainBackground, 'rgba(0, 0, 0, 0)',
       `a pinned+hovered current row must not paint the hover pill under the rainbow (${pinnedHovered.mainBackground})`)
+    assertEqual(pinnedHovered.rowBackground, 'rgba(0, 0, 0, 0)',
+      `a pinned+hovered current row must keep its transparent surface under the rainbow (row background ${pinnedHovered.rowBackground})`)
     await clickRowPin(page, currentTitle, 'unpin')
     state.pinned = state.pinned.filter((entry) => entry.id !== resolved.id)
     await resetPointer(page)
@@ -9203,6 +9215,8 @@ async function runPinChecks({ page, results, state }) {
     assertEqual(childHovered.atmos.present, true, 'the current child row must keep its rainbow atmosphere')
     assertEqual(childHovered.mainBackground, 'rgba(0, 0, 0, 0)',
       `the current child body must not stack the ordinary hover pill inside the rainbow (background ${childHovered.mainBackground})`)
+    assertEqual(childHovered.rowBackground, 'rgba(0, 0, 0, 0)',
+      `the current child row must keep its transparent surface under the rainbow (row background ${childHovered.rowBackground})`)
     assertContentBrightness(childHovered, 'brightness(1.5)', 'hovered current child row', { expectTransition: true })
     let continueNote = 'no interrupted child Continue control was reachable'
     const childControls = await page.eval(probePin.cardRowControls, 'child', childCurrent.title).catch(() => null)

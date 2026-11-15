@@ -1711,3 +1711,62 @@ Checks:
   row stays `rgba(0, 0, 0, 0)` on hover. Reviewer's other finding (stale in-harness
   `gapHeadToSlot`/`headChildCount` guards from the earlier markup move) is
   pre-existing and left untouched, as recorded above.
+
+## Sidebar hover fixes — independent review round 2 (2026-11-15, same branch)
+
+Two independent reviews ran against the merged `cd26c73` (one code/regression
+review with static Chrome replicas, one shipped-install live-GUI verification
+with a throwaway Chrome and no client injection). The shipped-install review
+returned **PASS on all four reports** against the installed code (byte-identical
+client, 0 runtime errors, light/dark, keyboard focus), and confirmed the native
+time is replaced by the shell's hover actions (not by a plugin mask) and the
+native title marquee is shell behaviour. The code review returned two real
+regressions plus doc/test inaccuracies, all fixed in this round:
+
+- **Leading-cell cleanup hid other plugins' marks.** The rule that removes the
+  stale native spinner also matched every non-plugin child of the shared
+  `sidebar.session.row.leading` `display:contents` slot wrapper, so the
+  ui-schedule clock mark and the experimental-liveshare fork mark disappeared on
+  an interrupted row. Now only native status nodes rendered directly under the
+  leading cell are hidden; the wrapper and its other children are untouched.
+  Static replica: injected foreign mark `display:flex`/visible while the native
+  dot is `display:none` (`/tmp/ps-probe/probe10.mjs`, B1).
+- **Animated leading-cell width broke the shell's title marquee.** The shell
+  measures `scrollWidth - clientWidth` once on `pointerenter`; animating the
+  cell 16→38 px left the range 22 px short (and titles just above the shell's
+  8 px reveal threshold never marqueed). The Continue slot now snaps to 22 px
+  (only its opacity fades), so the measured range equals the settled range.
+  Static replica with the shipped CSS: pointerenter range `466 px` = settled
+  `466 px` (the previous animated rule measured `444 px` = rest, 22 px short);
+  lead 38 px at enter.
+- **Click-focus left a stuck card surface.** The new full-row focus surface was
+  not keyboard-gated; the shell paints focus surfaces only for
+  `html[data-input-modality="keyboard"]`. The card's focus halves (generic,
+  pinned, atmosphere suppression) now carry the same gate; programmatic focus
+  without the attribute keeps the row transparent, with it the row paints.
+- **Card atmosphere-row control suppression restored.** `235cd42` dropped the
+  card-current control rule while the docs and the pin-mode E2E still require
+  transparent + `brightness(1.2)`; restored for `.psd-row-action`,
+  `.psd-run-toggle`, `.psd-run-pin` and `.psd-continue-inline` on current card
+  rows. Static replica: card current row + atmosphere, hovering the New session
+  action → row/body `rgba(0,0,0,0)`, action background `rgba(0,0,0,0)` with
+  `filter: brightness(1.2)`.
+- **Reduced motion.** The pre-existing reduced-motion reset lost to the
+  hover/focus transition rules (`(0,2,0)` vs `(0,3,0)`), and the new native
+  Continue slot added a width/opacity transition. Both are now disabled under
+  `prefers-reduced-motion: reduce`; static emulation reports `transition: none`
+  for pin slot, pin, open, atmosphere and the native Continue slot.
+- **Docs/tests corrected.** The CHANGELOG and interrupted-sessions docs no
+  longer claim the time stays visible on native hover (the shell swaps it for
+  the hover actions); the stale-running decorator path is documented as
+  badge-only (the composer play control continues it); the manual-check wording
+  for the card hover surface is full-row; `b2-5` now probes the real head order
+  (badge inside the 16 px cell, triangle behind the leading cell's 9 px rest
+  gap) instead of appended stand-ins; the F6 probe picks the native leading cell
+  the way production does (skipping the atmosphere wrapper); the pin-mode
+  atmosphere checks also assert the row surface, not only the transparent body.
+  The dead trailing-edge `InterruptedContinueAction` component was removed.
+- Reviewer NITs left as documented pre-existing behaviour: the pin-mode
+  `gapHeadToSlot` guard is inert since the pin slot moved into the head (harness
+  gap noted above), and forward Tab from a row's title button skips the pin
+  (pin slot precedes the title in DOM order).

@@ -4243,17 +4243,29 @@ window.__ModuleLoader__.load({
 [data-row-key^="session:"][data-power-suite-interrupted]{position:relative}
 [data-row-key^="session:"][data-power-suite-interrupted]>span:has(.dps-row-interrupted){width:auto;justify-content:flex-start}
 .dps-row-interrupted{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;color:var(--dsw-alias-state-warn-primary);pointer-events:none;flex:none}
-.dps-row-continue-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:0;height:22px;margin:0;overflow:hidden;opacity:0;pointer-events:none;transition:width 200ms var(--ds-ease-in-out,ease) 160ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
+/* The leading cell's width snaps rather than animates: the shell's title
+   marquee measures scrollWidth - clientWidth once on pointerenter, so an
+   animated cell would leave the marquee 22 px short (and a title whose rest
+   overflow is just above the shell's 8 px threshold would not marquee at all).
+   Only the triangle's opacity animates. */
+.dps-row-continue-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:0;height:22px;margin:0;overflow:hidden;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
 [data-row-key^="session:"][data-power-suite-interrupted]:hover .dps-row-continue-slot,
-[data-row-key^="session:"][data-power-suite-interrupted]:focus-within .dps-row-continue-slot{width:22px;opacity:1;pointer-events:auto;transition:width 200ms var(--ds-ease-in-out,ease) 0ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
+[data-row-key^="session:"][data-power-suite-interrupted]:focus-within .dps-row-continue-slot{width:22px;opacity:1;pointer-events:auto;transition:opacity 120ms var(--ds-ease-in-out,ease)}
+@media (prefers-reduced-motion: reduce){
+  [data-row-key^="session:"][data-power-suite-interrupted] .dps-row-continue-slot,
+  [data-row-key^="session:"][data-power-suite-interrupted]:hover .dps-row-continue-slot,
+  [data-row-key^="session:"][data-power-suite-interrupted]:focus-within .dps-row-continue-slot{transition:none}
+}
 .dps-row-continue{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;flex:none;opacity:1;pointer-events:auto}
 .dps-row-continue svg{display:block;flex:none}
 .dps-row-continue:hover{background:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);color:var(--dsw-alias-label-primary)}
 .dps-row-continue:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
-/* The leading seat is mounted through a display:contents slot wrapper, so the
-   stale spinner is a descendant rather than a direct child. Keep only the plugin's
-   own mark and Continue slot in that cell. */
-[data-row-key^="session:"][data-power-suite-interrupted]>span:has(.dps-row-interrupted) span[data-slot]>*:not(.dps-row-interrupted):not(.dps-row-continue-slot),
+/* Hide only the native status dots that render directly under this cell while
+   the native row still believes it is running (the decorator inserts the warning
+   in their place). The idle leading seat is mounted through a display:contents
+   slot wrapper shared with other plugins (e.g. the schedule clock mark and the
+   liveshare fork mark), so the wrapper and everything inside it must stay
+   untouched. */
 [data-row-key^="session:"][data-power-suite-interrupted]>span:has(.dps-row-interrupted)>*:not(.dps-row-interrupted):not(.dps-row-continue-slot):not(span[data-slot]){display:none!important}
 body:not([data-ds-dark-theme]) [data-psd-current-workspace='true'] .dps-row-interrupted,
 body:not([data-ds-dark-theme]) [data-psd-current-session='true'] .dps-row-interrupted{color:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 72%,var(--dsw-alias-label-primary))}
@@ -4398,34 +4410,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
               requestContinue(sessionId)
             }
           }, React.createElement(RemixIcon, { path: REMIX_PLAY_FILL, size: 14 }))))
-    }
-
-    /**
-     * Hover-only Continue action at the trailing edge of an interrupted Session
-     * row. The row's own action area is hidden until hover, so this CTA appears
-     * only then; the row mask keeps the underlying title clear.
-     * @param {object} props - row action seat props plus the injected locale seat.
-     * @returns {object | null} the action, when the Session was interrupted.
-     */
-    function InterruptedContinueAction(props) {
-      const { sessionId, t } = props
-      const record = useInterruptedRecord(sessionId, false)
-      const interrupted = interruptedIndicatorActive(record)
-      if (!interrupted) return null
-      // Icon-only play triangle (user request): no visible text; the accessible
-      // name/tooltip keep the label. Same click contract: continue in place,
-      // never open/navigate the row.
-      return React.createElement('button', {
-        type: 'button',
-        className: 'dps-row-continue',
-        title: t('continue.aria'),
-        'aria-label': t('continue.aria'),
-        onClick: (event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          requestContinue(sessionId)
-        }
-      }, React.createElement(RemixIcon, { path: REMIX_PLAY_FILL, size: 14 }))
     }
 
     /**
@@ -4984,8 +4968,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-run-main{appearance:none;display:flex;flex:0 1 auto;box-sizing:border-box;min-width:0;min-height:var(--psd-row-h,34px);max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:0;padding:4px 10px 4px 14px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 /* The hover surface covers the whole row like the native sidebar rows (user
    request); the old content-paced inner pill highlighted only the title. The
-   disclosure keeps its own 24 px block: hovering it suppresses the row surface. */
-.psd-run:hover:not(:has(.psd-run-toggle:hover)),.psd-run:focus-within:not(:has(.psd-run-toggle:focus)){background-color:var(--dsw-alias-interactive-bg-hover)}
+   disclosure keeps its own 24 px block: hovering it suppresses the row surface.
+   Keyboard focus mirrors the shell's own rule, which paints focus surfaces only
+   for the keyboard modality, so a mouse click on a row control cannot leave a
+   stuck surface behind after the pointer leaves. */
+.psd-run:hover:not(:has(.psd-run-toggle:hover)){background-color:var(--dsw-alias-interactive-bg-hover)}
+html[data-input-modality='keyboard'] .psd-run:focus-within:not(:has(.psd-run-toggle:focus)){background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-run-open{appearance:none;display:flex;flex:1 1 auto;min-width:0;max-width:100%;align-items:center;padding:0;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;margin-left:var(--psd-title-shift,0px);transition:margin-left 220ms cubic-bezier(.4,0,.2,1)}
 .psd-run-open:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px;border-radius:var(--dsw-radius-sm,6px)}
 .psd-run-spacer,.psd-child-spacer{flex:1 1 auto;min-width:0}
@@ -5031,9 +5019,19 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
    specificity (0,5,0) beats (0,4,0) and layers the hover token over the tint. The
    atmosphere suppression below stays at the same specificity and is declared later,
    so a pinned current row still keeps its transparent surface. */
-.psd-run[data-pinned='true']:hover:not(:has(.psd-run-toggle:hover)),
-.psd-run[data-pinned='true']:focus-within:not(:has(.psd-run-toggle:focus)){background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,var(--dsw-alias-interactive-bg-hover))}
-@media (prefers-reduced-motion: reduce){.psd-run-pin,.psd-run-pin-slot,.psd-run-open{transition:none}}
+.psd-run[data-pinned='true']:hover:not(:has(.psd-run-toggle:hover)){background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,var(--dsw-alias-interactive-bg-hover))}
+html[data-input-modality='keyboard'] .psd-run[data-pinned='true']:focus-within:not(:has(.psd-run-toggle:focus)){background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,var(--dsw-alias-interactive-bg-hover))}
+@media (prefers-reduced-motion: reduce){
+  .psd-run-pin,.psd-run-pin-slot,.psd-run-open{transition:none}
+  .psd-run:hover .psd-run-pin,.psd-run:focus-within .psd-run-pin,
+  .psd-run:hover .psd-run-pin-slot,.psd-run:focus-within .psd-run-pin-slot,
+  .psd-run:hover .psd-run-open,.psd-run:focus-within .psd-run-open,
+  .psd-run[data-pinned='true'] .psd-run-pin,
+  .psd-run[data-pinned='true'] .psd-run-pin-slot,
+  .psd-run[data-pinned='true'] .psd-run-open,
+  .psd-run[data-pinned='true']:hover .psd-run-pin,
+  .psd-run[data-pinned='true']:focus-within .psd-run-pin{transition:none}
+}
 .psd-run-toggle{appearance:none;position:relative;z-index:1;flex:none;width:var(--psd-chevron-col,24px);height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .psd-run-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-run-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
@@ -5043,7 +5041,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 .psd-children{position:relative;display:flex;flex-direction:column;gap:5px;margin:4px 0 6px 28.5px;padding-left:9px;border-left:1px solid var(--dsw-alias-border-l2)}
 .psd-child{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:var(--psd-row-h,34px);padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:18px;text-align:left;cursor:pointer}
 .psd-child-main{appearance:none;display:flex;flex:0 1 auto;box-sizing:border-box;min-width:0;min-height:var(--psd-row-h,34px);max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:7px;padding:3px 8px 3px 10.5px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.psd-child:hover,.psd-child:focus-within{background-color:var(--dsw-alias-interactive-bg-hover)}
+.psd-child:hover{background-color:var(--dsw-alias-interactive-bg-hover)}
+html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-child::before{content:'';position:absolute;left:-10px;top:50%;width:14px;height:1px;background:var(--dsw-alias-border-l2);pointer-events:none}
 .psd-child:last-child::after{content:'';position:absolute;left:-10px;top:calc(50% + 1px);bottom:-1px;width:2px;background:var(--dsw-alias-bg-layer-1);pointer-events:none}
 .psd-child-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
@@ -5208,9 +5207,9 @@ body:not([data-ds-dark-theme]) .psd-child-current .psd-interrupted{color:color-m
    guard, so the suppression must carry the same structural guards to win on
    atmosphere rows (a plain .psd-run-current:hover would lose to 0,4,0). */
 .psd-run.psd-run-current:hover:not(:has(.psd-run-toggle:hover)),
-.psd-run.psd-run-current:focus-within:not(:has(.psd-run-toggle:focus)),
-.psd-child.psd-child-current:hover,
-.psd-child.psd-child-current:focus-within{background-color:transparent}
+.psd-child.psd-child-current:hover{background-color:transparent}
+html[data-input-modality='keyboard'] .psd-run.psd-run-current:focus-within:not(:has(.psd-run-toggle:focus)),
+html[data-input-modality='keyboard'] .psd-child.psd-child-current:focus-within{background-color:transparent}
 .psd-run.psd-run-current[data-pinned='true']{background-color:transparent}
 [data-psd-current-workspace='true'],[data-psd-current-session='true']{background-color:transparent!important}
 /* With no surface highlight to paint, the row's affordance becomes a brightness
@@ -5229,6 +5228,14 @@ body:not([data-ds-dark-theme]) .psd-child-current .psd-interrupted{color:color-m
    control under the pointer brightens one small extra step. Native sidebar
    rows' action buttons get the same treatment. */
 [data-psd-current-session='true'] button:hover,[data-psd-current-session='true'] [role='button']:hover,[data-psd-current-workspace='true'] button:hover,[data-psd-current-workspace='true'] [role='button']:hover{background-color:transparent!important;filter:brightness(1.2)}
+/* The card's own current rows need the same rule: the card lives in the sidebar
+   column but outside the native session row, so the native selectors above never
+   match it. This half was dropped by 235cd42 while the docs and the pin-mode E2E
+   still require transparent + brightness(1.2). */
+.psd-run-current .psd-row-action:hover,.psd-run-current .psd-run-toggle:hover,
+.psd-run-current .psd-run-pin:hover,.psd-run-current .psd-continue-inline:hover,
+.psd-run-current[data-pinned='true'] .psd-run-pin:hover,
+.psd-child-current .psd-row-action:hover,.psd-child-current .psd-continue-inline:hover{background-color:transparent;filter:brightness(1.2)}
 body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.5) brightness(1.14)}
 body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(16,18,22,.12),rgba(16,18,22,.22))}
 /* Light-mode readability (user fix). The multiply canvas over the light surface
