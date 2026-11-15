@@ -715,6 +715,17 @@ and no dated release heading is added until the release is cut.
   transient-Changed policy is documented), deferred reference-conformance
   limitations moved into the user docs, and the selector/popover copy states
   were corrected.
+- **Interrupted-state consistency for the card and stale-running native rows** —
+  the interrupted mark/Continue decision now follows the Host interruption
+  record alone instead of the shell's combined running flag, so a parent Session
+  whose own turn stopped on a provider transport/timeout error while delegated
+  subagent children still run keeps its amber mark, inline Continue and relative
+  last-activity time in the **Running & recent** card (interrupted child rows
+  show the amber glyph) instead of appearing as an unstoppable running row.
+  Native sidebar rows the shell still renders as running now get both the amber
+  badge and the hover Continue CTA, wired to the same continuation handshake as
+  idle rows, and every mark/CTA disappears once the continuation turn is running
+  (`running: true`). No Host route, payload or state shape changed.
 
 ### Removed
 

@@ -42,7 +42,9 @@ finish:
 - the last turn is still open and its Agent is **not** running (a raw crash tail
   before recovery).
 
-A running Session is never marked. Deliberate endings are not marked: a
+A Session whose own Agent is running is never marked; a delegated child that is
+still running does not count as the Session's own running state (see the
+delegated-subagent sections below). Deliberate endings are not marked: a
 completed turn, a user/parent/hook cancellation (`aborted` with those causes), a
 `blocked` turn (a pre-step hook rejected it), a `forked` synthetic boundary, or
 a Session with no turns.
@@ -79,11 +81,13 @@ Browser:
   plus the hover/focus-revealed inline Continue triangle. The native status cell
   is `width: auto` for this row, so the 22 px triangle fits and the title slides
   right; no opaque hover mask is painted.
-- A row decorator covers rows whose native status still says running: it inserts
-  the warning into the native leading span (skipping the injected rainbow
-  atmosphere wrapper) and hides the stale spinner. This decorator path shows the
-  warning only — the inline Continue triangle is part of the idle-row leading
-  seat — so a stale-running row continues from the composer's play control.
+- A row decorator covers rows whose native status still says running: it places
+  the warning **and** its hover Continue CTA in the native leading span
+  (skipping the injected rainbow atmosphere wrapper) and hides the stale
+  spinner. The CTA runs the same Continue handshake as the idle-row seat — it
+  opens the Session when needed and lets the composer seat send the continuation
+  — so a stale-running row can be continued from its own row, not only from the
+  composer's play control.
 - `conversation.input.overlay` — a renderless seat for the open Conversation
   that marks the shell, swaps the submit glyph, and starts the Host continuation
   route; it no longer submits a draft prompt.
@@ -155,9 +159,10 @@ survive until that row was clicked.
 
 - A row whose native status still says **running** (the shell shows a green
   spinner and does not render the custom leading slot) is decorated directly:
-  the decoration inserts the amber warning into the native leading span and
-  hides the stale spinner, so the interrupted mark is visible immediately after
-  a reconnect instead of only after opening the Session.
+  the decoration inserts the amber warning and its hover Continue CTA into the
+  native leading span and hides the stale spinner, so the interrupted mark (and
+  the row-level Continue) is visible immediately after a reconnect instead of
+  only after opening the Session.
 - The browser listens for the client Connection's `connection/reset` event,
   which fires whenever a new Host generation is established, and immediately
   repulls every known/watched Session. Window focus, `visibilitychange`,
@@ -187,6 +192,34 @@ The route folds known child Sessions (`header.parentSession`) too:
 Nested delegations are followed recursively; a subagent Session is never shown
 as its own row in the sidebar.
 
+## When the Session's own turn is interrupted while delegated subagents still run
+
+A parent Session can stop on its own turn — for example on a provider transport
+or timeout error recorded in its `turn/end` — while the subagent Sessions it
+delegated are still running. The Host interruption record is the authority for
+the mark here: the shell's combined running flag is also true while a delegated
+child runs, so gating the mark on it left such a Session looking simply running.
+
+- **Card row.** The Session stays in the card's running group — the delegated
+  children really are still running — but its own row shows the amber
+  interrupted mark and the inline **Continue** action, and its time column shows
+  the relative last-activity time instead of a running duration. Nested child
+  rows whose own record is interrupted show the same amber glyph.
+- **Native sidebar row.** When the shell still renders the row as running (for
+  example after a failed turn before the shell's next status update), the row
+  now gets both the amber badge and the hover **Continue** CTA, wired to the same
+  continuation handshake as an idle row. Rows the shell already renders as idle
+  keep the existing badge plus inline triangle.
+- **After Continue.** Once the continuation turn runs, the record reports
+  `running: true` and the mark/CTA disappear while the composer keeps its play
+  control. The decision is therefore: the record is ready, `interrupted` is true
+  and the record's `running` is not true; the shell's combined running flag is
+  not an input.
+
+The failure that prompted this behavior was a model-provider transport/timeout
+failure recorded in `turn/end`, not a DSH Web service restart; the service stayed
+healthy. [limitations.md](limitations.md) records the refresh-window caveat and
+the duplicate-Continue rejection.
 
 ## Implicit continuation
 
