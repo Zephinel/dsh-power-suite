@@ -5009,9 +5009,10 @@ html[data-input-modality='keyboard'] .psd-run:focus-within:not(:has(.psd-run-tog
 .psd-run-timeslot{position:relative;flex:none;width:var(--psd-time-col,48px);height:20px}
 .psd-run-time{position:absolute;top:0;right:0;left:0;text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:20px;font-variant-numeric:tabular-nums;transition:opacity 120ms var(--ds-ease-in-out,ease)}
 .psd-run-more{appearance:none;position:absolute;top:50%;right:0;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;opacity:0;visibility:hidden;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease),visibility 0s linear 120ms,background-color 120ms var(--ds-ease-in-out,ease)}
+.psd-run[data-menu-always='true'] .psd-run-time{opacity:0}
+.psd-run[data-menu-always='true'] .psd-run-more{opacity:1;visibility:visible;pointer-events:auto;transition:opacity 120ms var(--ds-ease-in-out,ease),visibility 0s linear 0s,background-color 120ms var(--ds-ease-in-out,ease)}
 .psd-run[data-menuable='true']:hover .psd-run-time,.psd-run[data-menuable='true']:focus-within .psd-run-time,.psd-run[data-menu-open='true'] .psd-run-time{opacity:0}
 .psd-run[data-menuable='true']:hover .psd-run-more,.psd-run[data-menuable='true']:focus-within .psd-run-more,.psd-run[data-menu-open='true'] .psd-run-more{opacity:1;visibility:visible;pointer-events:auto;transition:opacity 120ms var(--ds-ease-in-out,ease),visibility 0s linear 0s,background-color 120ms var(--ds-ease-in-out,ease)}
-.psd-run-more:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .psd-run-more:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
 /* The head is gap-less: the collapsed Continue slot is 0 px wide, so a flex
@@ -5300,6 +5301,7 @@ html[data-input-modality='keyboard'] .psd-child-current:focus-within > *:not(.ps
    blocks of nested child rows that sit inside the current parent. */
 .psd-run-current > .psd-run-main .psd-run-pin:hover,
 .psd-run-current > .psd-run-main .psd-continue-inline:hover,
+.psd-run-current > .psd-run-timeslot .psd-run-more:hover,
 .psd-run-current > .psd-run-actions .psd-row-action:hover,
 .psd-run-current > .psd-run-toggle:hover,
 .psd-child-current > .psd-child-main .psd-continue-inline:hover,
@@ -7583,8 +7585,7 @@ function dwClearNativeAtmospheres() {
             const interrupted = rowInterrupted(row.id, running)
             const pinned = isPinned(row)
             const current = isCurrent(row.id)
-            const menuable = !current
-            const menuOpen = menuable && typeof menuSessionId === 'string' && menuSessionId === row.id
+            const menuOpen = typeof menuSessionId === 'string' && menuSessionId === row.id
             // Fixed trailing columns, left to right: time 48 px, action 22 px,
             // disclosure 24 px, each separated by the 2 px row gap. Every parent
             // and child row reserves all three (child rows keep the action and
@@ -7601,7 +7602,8 @@ function dwClearNativeAtmospheres() {
               'data-state': row.state,
               'data-pinned': pinned ? 'true' : undefined,
               'data-menu-open': menuOpen ? 'true' : undefined,
-              'data-menuable': menuable ? 'true' : undefined,
+              'data-menuable': 'true',
+              'data-menu-always': current ? 'true' : undefined,
               'aria-current': isCurrent(row.id) ? 'true' : undefined,
               'data-actions': interrupted ? 'continue+new' : 'new',
               onClick: (event) => {
@@ -7658,7 +7660,7 @@ function dwClearNativeAtmospheres() {
               React.createElement('span', { key: 'spacer', className: 'psd-run-spacer', 'aria-hidden': true }),
               React.createElement('span', { key: 'time', className: 'psd-run-timeslot' },
                 React.createElement('span', { className: 'psd-run-time' }, time),
-                menuable ? React.createElement('button', {
+                React.createElement('button', {
                   type: 'button',
                   className: 'psd-run-more',
                   'data-psd-more': '',
@@ -7674,7 +7676,7 @@ function dwClearNativeAtmospheres() {
                   onPointerDown: (event) => event.stopPropagation()
                 }, DW_MORE_ICON === null
                   ? RemixGlyph(DW_MORE_PATH, 14)
-                  : React.createElement(DW_MORE_ICON, { size: 14 })) : null),
+                  : React.createElement(DW_MORE_ICON, { size: 14 }))),
               React.createElement(DwRowActionSlot, {
                 t,
                 interruptedT,
