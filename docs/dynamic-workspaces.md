@@ -304,8 +304,10 @@ trigger paints the same soft hover background as the sibling New-session
 control; only the **rainbow row** suppresses it, following the atmosphere
 control rule (transparent background with a `brightness(1.2)` icon lift). A
 keyboard `focus-visible` ring stays in both cases. Clicking the trigger opens
-the card's **own Session menu popup**. The
-popup is built from the shell's native Session action contributions
+the card's **own Session menu popup**. This card menu is an additional
+surface: the native Workspace Session row keeps its own native "…" menu
+(native rows are never modified by this feature). The popup is built from the
+shell's native Session action contributions
 (`ctx.contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })`),
 so Rename, Fork, Copy Session ID, Show in Finder, and Archive keep their native
 behavior and labels, but the **Pin/Unpin entry is filtered out**: pinning belongs
