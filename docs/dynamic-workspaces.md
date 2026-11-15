@@ -749,9 +749,10 @@ native sidebar Session row of the open Session:
   and the hover opacity rise remain. Because the row has no surface highlight,
   the atmosphere row's **text and icons are brightened instead**: while
   highlighted the content sits at `filter: brightness(1.15)`, and hovering or
-  focusing the row lifts it to `brightness(1.5)` (140 ms transition, off under
-  reduced motion) — the brightness lives on the real text/SVG content, never on a
-  background layer. The row's own trailing controls (New session, disclosure,
+  keyboard-focusing the row lifts it to `brightness(1.5)` (140 ms transition, off
+  under reduced motion) — the brightness lives on the real text/SVG content,
+  never on a background layer. Pointer focus (a mouse click on a row control)
+  does not lift it, matching the shell's keyboard-gated focus surfaces. The row's own trailing controls (New session, disclosure,
   pin, Continue, and the native sidebar rows' action buttons) follow the same
   rule: while the row is an atmosphere row they never paint their own hover
   background; the hovered control just brightens one extra step.

@@ -1803,3 +1803,78 @@ profile, dark theme; no service restart or profile change):
   rest range `444 px`, 22 px short).
 - The shipped-install reviewer's only MINOR was the pre-existing reduced-motion
   gap, fixed above; its other NITs are the documented pre-existing ones.
+
+## Sidebar hover fixes — independent delta review round 3 (2026-11-15, same branch)
+
+A fresh independent delta review of `f3d1a54` (read-only, static Chrome replicas
+of the shipped CSS plus shell-source inspection) confirmed the round-2 deltas
+(leading-slot safety, instant-width marquee, keyboard background gating, restored
+control suppression, docs) but found remaining issues, all fixed in this round:
+
+- **`b4-15` was stale (MAJOR, test-only).** The E2E still expected an
+  atmosphere-row New-session action to paint the interactive hover block and have
+  no filter — that was measured before the transparent + brightness design was
+  documented; with the restored suppression it is a guaranteed red check. The
+  test now expects `background-color: rgba(0,0,0,0)` and
+  `filter: brightness(1.2)` in both themes while keeping its colour/geometry
+  assertions.
+- **Suppression leaked into nested child rows (MINOR).** `.psd-children` renders
+  inside the parent `.psd-run` row, so the descendant selectors also suppressed a
+  nested child's controls. The restored rule is now scoped with child combinators
+  to the current row's own controls (main pin/Continue, action slot, disclosure);
+  a child row inside a current parent keeps its normal hover block (static proof:
+  child action `rgba(255,255,255,.08)` / filter `none`, child row surface painted).
+- **Atmosphere brightness lift was not keyboard-gated (MINOR).** A mouse click on
+  a current-row control could leave the row at `brightness(1.5)`; the focus half
+  now matches the background gating (`html[data-input-modality='keyboard']`).
+  Static proof: pointer focus `brightness(1.15)`, keyboard focus
+  `brightness(1.5)`.
+- **Native Continue reveal was not keyboard-gated (MINOR).** The focus half of
+  the reveal now requires keyboard modality, so mouse focus on the row's leading
+  button cannot leave the cell widened/triangle visible. Static proof: pointer
+  focus keeps the slot at `0 px`, keyboard focus reveals `22 px`.
+- **Card Continue slot missing from the reduced-motion reset (MINOR).** The
+  `.psd-continue-slot` width/margin transition is now disabled under
+  `prefers-reduced-motion: reduce` (static: `transition: none`).
+- **NITs:** the redundant pinned pin-hover selector was dropped; the F6 check
+  title/comment now states it covers the stale plugin-record branch (the
+  decorator's stale-native-running branch is covered by the static replica), and
+  the `b2-5` badge→triangle gap tolerance was tightened to 1 px.
+- The reviewer re-confirmed root causes and the round-2 fixes independently; no
+  BLOCKER remained and the product CSS matched the docs.
+
+### Round-3 delta shipped verification (final state after `6558fc4`)
+
+The independent shipped-install delta review of `f3d1a54` (no client injection,
+fresh throwaway Chrome, live GUI + replicas built from the served style tags)
+returned **CLEAN for the four original reports and all five round-2 delta fixes**:
+native interrupted hover (leading 16→38, triangle 22 px, title visible, no mask),
+current+interrupted atmosphere absolute z0 full-row with visible title, card
+interrupted rest 49/56 → hover 95 with Continue 22+2 and pin 16+9, full-row card
+hover with transparent body, leading-slot safety (foreign marks visible, stale
+native dots hidden), instant-width marquee (pointerenter range equals settled
+range; the 22 px shortfall is gone), keyboard-gated focus surface (pointer
+transparent, keyboard painted), current-row controls transparent +
+`brightness(1.2)`, reduced motion `transition: none` for pin slot/pin/open/
+atmosphere/native Continue, dark and light themes, 0 page errors. It also
+confirmed the served bundle contains the final-only CSS markers (combined-loader
+hash comparison inconclusive because of the module boundary).
+
+Its two residual notes were addressed in `6558fc4`: the card inline
+`.psd-continue-slot` reduced-motion gap it re-found independently is now covered
+by the reduced-motion reset (static: `transition: none`), and its NIT on the
+"native-like glyph gap" wording is corrected above/documentation-wide (the
+contract is the 9 px leading margin + first-character centring shift ≈12 px, not
+the native row's plain 6 px).
+
+The same round-3 state was re-reviewed by a second, independent code reviewer
+(fresh context, read-only): it independently reproduced the leading-slot safety,
+instant-width marquee, keyboard background gating, restored suppression and the
+docs/tests state as correct, and its findings are exactly the six items fixed in
+this round — the stale `b4-15` (MAJOR, test-only: a guaranteed red check against
+the documented behaviour), the nested-child suppression leak, the ungated
+atmosphere brightness lift and native Continue focus reveal, the missing card
+Continue reduced-motion reset, and the F6/b2-5 NITs. The reviewer's static
+proofs (forced `:hover`/focus with the shipped CSS) are the basis for the
+updated assertions; the full sidebar E2E is still not executed because it
+creates sessions and pins on the shared Host.

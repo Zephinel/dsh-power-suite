@@ -2532,7 +2532,7 @@ async function runLayoutChecks({ page, results, state }) {
     assertEqual(measured.probeHeight, 22, 'inline Continue height')
     assert(measured.probeLeft >= measured.badgeRight - 0.5, `inline Continue must not overlap the interrupted badge (triangle left ${measured.probeLeft}, badge right ${measured.badgeRight})`)
     assertNear(measured.probeLeft, measured.glyphRight + 9, 1.5, `inline Continue must start after the leading cell's 9 px rest gap (triangle left ${measured.probeLeft}, leading cell right ${measured.glyphRight})`)
-    assertNear(measured.probeLeft - measured.badgeRight, 10, 2, `inline Continue must sit immediately after the interrupted badge (gap ${measured.probeLeft - measured.badgeRight})`)
+    assertNear(measured.probeLeft - measured.badgeRight, 10, 1, `inline Continue must sit immediately after the interrupted badge (9 px cell rest gap + 1 px badge centring; gap ${measured.probeLeft - measured.badgeRight})`)
     assert(measured.probeRight < measured.timeLeft, `inline Continue (right ${measured.probeRight}) must stay left of the time column (${measured.timeLeft})`)
     assertEqual(measured.timeShift, 0, 'inline Continue must not move the time column')
     return `inline Continue 22x22 at ${measured.probeLeft}-${measured.probeRight} after badge ${measured.badgeLeft}-${measured.badgeRight} (leading cell right ${measured.glyphRight}); time column ${measured.timeLeft} unmoved`
@@ -3137,13 +3137,14 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       assert(lightBase.currentAction, 'no current card row with a New-session action to measure (light)')
       assertEqual(lightBase.currentAction.color, expectedRest.light, `light: the highlighted row action must start on the secondary label before hover, got ${lightBase.currentAction.color}`)
       assertEqual(lightBase.currentAction.background, 'rgba(0, 0, 0, 0)', `light: the action must start with a transparent background, got ${lightBase.currentAction.background}`)
-      assertEqual(lightBase.currentAction.filter, 'none', `light: the action must not carry a filter at rest (this base has no atmosphere action filter), got ${lightBase.currentAction.filter}`)
+      assertEqual(lightBase.currentAction.filter, 'none', `light: the action itself must not carry a filter at rest (the row-level atmosphere lift sits on the row's children, not on the button), got ${lightBase.currentAction.filter}`)
       await hover(lightBase.currentAction.rect)
       const lightHover = await measure()
       assertEqual(lightHover.currentAction.color, expectedPrimary.light, `light: the highlighted row New-session action must darken to the primary label on hover (like the pin), got ${lightHover.currentAction.color}`)
       assertEqual(lightHover.currentAction.glyph, expectedPrimary.light, `light: the + glyph itself must inherit the darkened hover colour, got ${lightHover.currentAction.glyph}`)
       assert(sameRect(lightBase.currentAction.rect, lightHover.currentAction.rect), `light: the action geometry must not move on hover (${JSON.stringify(lightBase.currentAction.rect)} vs ${JSON.stringify(lightHover.currentAction.rect)})`)
-      assertEqual(lightHover.currentAction.background, lightBase.hoverBackground, `light: hover background must stay the pre-existing interactive hover token (${lightBase.hoverBackground}), got ${lightHover.currentAction.background}`)
+      assertEqual(lightHover.currentAction.background, 'rgba(0, 0, 0, 0)', `light: an atmosphere-row action must not paint its own hover block inside the rainbow (transparent; the row lifts brightness instead), got ${lightHover.currentAction.background}`)
+      assertEqual(lightHover.currentAction.filter, 'brightness(1.2)', `light: an atmosphere-row action hover must brighten one step instead of painting a block (filter ${lightHover.currentAction.filter})`)
       // Keyboard focus: primary label through real focus-visible, no pointer involved.
       const lightFocus = await focusActionViaKeyboard()
       assert(lightFocus.currentAction && lightFocus.currentAction.focusVisible, 'light: the + action did not match :focus-visible after a real Tab-keyboard focus')
@@ -3183,7 +3184,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       const darkHover = await measure()
       assertEqual(darkHover.currentAction.color, expectedPrimary.dark, `dark: the highlighted row New-session action must darken to the primary label on hover, got ${darkHover.currentAction.color}`)
       assert(sameRect(darkBase.currentAction.rect, darkHover.currentAction.rect), 'dark: the action geometry must not move on hover')
-      assertEqual(darkHover.currentAction.filter, 'none', `dark: the action must not carry a filter on hover (${darkHover.currentAction.filter})`)
+      assertEqual(darkHover.currentAction.filter, 'brightness(1.2)', `dark: an atmosphere-row action hover must brighten one step instead of painting a block (filter ${darkHover.currentAction.filter})`)
       if (state.shotsEnabled && darkBase.currentRow) await writeEvidenceShot(page, '21-action-hover-dark', { left: darkBase.currentRow.left - 12, top: darkBase.currentRow.top - 6, width: darkBase.currentRow.width + 24, height: darkBase.currentRow.height + 12 })
       await moveAway()
       return `light ${lightBase.currentAction.color} -> hover ${lightHover.currentAction.color} / focus ${lightFocus.currentAction.color} (glyph ${lightHover.currentAction.glyph}, rect stable, bg ${lightHover.currentAction.background}, filter none); dark ${darkBase.currentAction.color} -> ${darkHover.currentAction.color}; non-current hover ${otherRest === null ? 'n/a' : otherRest + ' -> primary'}; ${notes.join('; ')}`
@@ -3953,7 +3954,11 @@ async function runInterruptedChecks({ page, results, state }) {
     const runningLike = rows.find((row) => (row.innerText || '').includes('Running'))
     return (runningLike ?? rows[0])?.getAttribute('data-row-key') ?? null
   })
-  await results.check('f6-1', 'interrupted badge and running/loading state are mutually exclusive (incl. after Continue)', async () => {
+  // Note: this sample drives the plugin record with a stale `running: true`, which
+  // is the "no badge while the record claims running" branch. The decorator's
+  // stale-NATIVE-running branch (record idle, shell still renders its spinner) is
+  // covered by the verification-doc static replica, not by this live-data check.
+  await results.check('f6-1', 'a running plugin record never renders a badge and leaves the native spinner alone (incl. after Continue)', async () => {
     const key = await pickRow()
     assert(key, 'no native Session row to seed an interrupted record on')
     try {

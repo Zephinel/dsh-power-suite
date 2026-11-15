@@ -568,7 +568,10 @@ heading is added until the release is cut.
   cell carries the rest spacing, so an interrupted row's title sits at the
   first-character-centred rest column again and slides right only when the row
   is hovered/focused (the pinned column stays at the documented 9 + 16 + 9 px);
-  the same change restores the native-like glyph-to-title gap.
+  the same change removes the extra collapsed-slot gaps, so the visual
+  glyph-to-title gap drops from ~30 px to the intended 9 px cell margin plus the
+  per-row first-character centring shift (~12 px; a native idle row uses a plain
+  6 px gap because its title is not first-character-centred).
 - Running & recent card hover highlight: the hover surface now covers the whole
   row like the native sidebar rows instead of a content-paced inner pill that
   lit only the title; the row body stays transparent so no second nested pill
@@ -583,9 +586,12 @@ heading is added until the release is cut.
   `html[data-input-modality="keyboard"]` like the shell, so a mouse click on a
   control cannot leave a stuck row surface; the card atmosphere-row control
   suppression dropped in an earlier merge is restored (transparent + brightness
-  instead of a blurred hover block inside the rainbow); the dead trailing-edge
-  Continue component is removed; docs no longer claim the time stays visible on
-  native hover.
+  instead of a blurred hover block inside the rainbow) and scoped to the current
+  row's own controls (nested child rows keep their own hover block); pointer
+  focus no longer leaves the atmosphere rows' `brightness(1.5)` lift or the
+  native Continue triangle stuck after a mouse click; the card's Continue slot
+  also honours reduced motion; the dead trailing-edge Continue component is
+  removed; docs no longer claim the time stays visible on native hover.
 
 ## [0.2.0] — undated development snapshot
 

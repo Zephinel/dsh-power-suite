@@ -4250,7 +4250,7 @@ window.__ModuleLoader__.load({
    Only the triangle's opacity animates. */
 .dps-row-continue-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:0;height:22px;margin:0;overflow:hidden;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
 [data-row-key^="session:"][data-power-suite-interrupted]:hover .dps-row-continue-slot,
-[data-row-key^="session:"][data-power-suite-interrupted]:focus-within .dps-row-continue-slot{width:22px;opacity:1;pointer-events:auto;transition:opacity 120ms var(--ds-ease-in-out,ease)}
+html[data-input-modality='keyboard'] [data-row-key^="session:"][data-power-suite-interrupted]:focus-within .dps-row-continue-slot{width:22px;opacity:1;pointer-events:auto}
 @media (prefers-reduced-motion: reduce){
   [data-row-key^="session:"][data-power-suite-interrupted] .dps-row-continue-slot,
   [data-row-key^="session:"][data-power-suite-interrupted]:hover .dps-row-continue-slot,
@@ -5153,7 +5153,12 @@ body:not([data-ds-dark-theme]) .psd-child-current .psd-interrupted{color:color-m
 .psd-row-action:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-row-action[data-variant='continue']{color:var(--dsw-alias-state-warn-primary)}
 .psd-interrupted{flex:none;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary)}
-@media (prefers-reduced-motion: reduce){.psd-run-actions,.psd-row-continue{transition:none}}
+@media (prefers-reduced-motion: reduce){
+  .psd-run-actions,.psd-row-continue{transition:none}
+  .psd-continue-slot,.psd-child .psd-continue-slot,
+  .psd-run:hover .psd-continue-slot,.psd-run:focus-within .psd-continue-slot,
+  .psd-child:hover .psd-continue-slot,.psd-child:focus-within .psd-continue-slot{transition:none}
+}
 .psd-group-header{flex:none;display:block;margin:3px 0 0}
 .psd-group-header[data-group='inactive']{margin-top:10px;padding-top:3px;border-top:0.5px solid var(--dsw-alias-border-l1)}
 .psd-group-toggle{appearance:none;display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;padding:4px 8px 4px 10px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:14px;line-height:20px;font-weight:400;text-align:left;cursor:pointer}
@@ -5219,7 +5224,11 @@ html[data-input-modality='keyboard'] .psd-child.psd-child-current:focus-within{b
    the real text and SVG glyphs uniformly in both themes (white text clamps,
    grey icons/numbers gain contrast on the rainbow). */
 .psd-run-current > *:not(.psd-atmos),.psd-child-current > *:not(.psd-atmos),[data-psd-current-session='true'] > *:not([data-psd-atmos]),[data-psd-current-workspace='true'] > *:not([data-psd-atmos]){filter:brightness(1.15);transition:filter 140ms var(--ds-ease-in-out,ease)}
-.psd-run-current:hover > *:not(.psd-atmos),.psd-run-current:focus-within > *:not(.psd-atmos),.psd-child-current:hover > *:not(.psd-atmos),.psd-child-current:focus-within > *:not(.psd-atmos),[data-psd-current-session='true']:hover > *:not([data-psd-atmos]),[data-psd-current-workspace='true']:hover > *:not([data-psd-atmos]){filter:brightness(1.5)}
+.psd-run-current:hover > *:not(.psd-atmos),.psd-child-current:hover > *:not(.psd-atmos),[data-psd-current-session='true']:hover > *:not([data-psd-atmos]),[data-psd-current-workspace='true']:hover > *:not([data-psd-atmos]){filter:brightness(1.5)}
+/* The focus half is keyboard-only, like the shell's own focus surfaces: a mouse
+   click on a current-row control must not leave the whole row brightened. */
+html[data-input-modality='keyboard'] .psd-run-current:focus-within > *:not(.psd-atmos),
+html[data-input-modality='keyboard'] .psd-child-current:focus-within > *:not(.psd-atmos){filter:brightness(1.5)}
 @media (prefers-reduced-motion: reduce){.psd-run-current > *:not(.psd-atmos),.psd-child-current > *:not(.psd-atmos),[data-psd-current-session='true'] > *:not([data-psd-atmos]),[data-psd-current-workspace='true'] > *:not([data-psd-atmos]){transition:none}}
 /* The trailing controls on an atmosphere row follow the same rule: New session,
    disclosure, pin and Continue must not paint their own hover background inside
@@ -5231,11 +5240,16 @@ html[data-input-modality='keyboard'] .psd-child.psd-child-current:focus-within{b
 /* The card's own current rows need the same rule: the card lives in the sidebar
    column but outside the native session row, so the native selectors above never
    match it. This half was dropped by 235cd42 while the docs and the pin-mode E2E
-   still require transparent + brightness(1.2). */
-.psd-run-current .psd-row-action:hover,.psd-run-current .psd-run-toggle:hover,
-.psd-run-current .psd-run-pin:hover,.psd-run-current .psd-continue-inline:hover,
-.psd-run-current[data-pinned='true'] .psd-run-pin:hover,
-.psd-child-current .psd-row-action:hover,.psd-child-current .psd-continue-inline:hover{background-color:transparent;filter:brightness(1.2)}
+   still require transparent + brightness(1.2). Scope it to the current row's own
+   controls with child combinators: .psd-children renders inside the parent
+   .psd-run row, so a plain descendant selector would also suppress the hover
+   blocks of nested child rows that sit inside the current parent. */
+.psd-run-current > .psd-run-main .psd-run-pin:hover,
+.psd-run-current > .psd-run-main .psd-continue-inline:hover,
+.psd-run-current > .psd-run-actions .psd-row-action:hover,
+.psd-run-current > .psd-run-toggle:hover,
+.psd-child-current > .psd-child-main .psd-continue-inline:hover,
+.psd-child-current > .psd-run-actions .psd-row-action:hover{background-color:transparent;filter:brightness(1.2)}
 body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.5) brightness(1.14)}
 body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(16,18,22,.12),rgba(16,18,22,.22))}
 /* Light-mode readability (user fix). The multiply canvas over the light surface
