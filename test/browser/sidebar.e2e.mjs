@@ -77,13 +77,23 @@
  * typing) to make them current, then switch back to a main Session for the native
  * current-row checks. The `--live` mode is read-only: it loads the shipped GUI in two
  * fresh throwaway profiles WITHOUT injecting this worktree's client, to prove the merged
- * install serves the normal card (ordinary rows + children, zero prefilled pins).
+ * install serves the normal card (ordinary rows + children, zero prefilled pins). The
+ * `--interrupted` mode accepts the interrupted-state consistency fix: through the
+ * documented `__POWER_SUITE_TEST_HOOKS__.interruptedSessions` seam it seeds one
+ * interrupted-idle record on Sessions the live GUI renders as running, then asserts the
+ * card row shows the amber mark + Continue + relative time (iw-1), the stale-running
+ * native row reveals the badge and the hover Continue CTA (iw-2, real CDP pointer, never
+ * clicked), the composer shows the play control (iw-3), clearing the record restores every
+ * surface (iw-4), and real Host-interrupted rows are consistent with their rendered
+ * marks (iw-5). It creates no Session and types nothing; every controlled record is
+ * cleared in a `finally` block.
  *
  * Usage:
  *   node test/browser/sidebar.e2e.mjs                 # full run (screenshots into .tmp-work/)
  *   node test/browser/sidebar.e2e.mjs --smoke         # pipeline smoke only
  *   node test/browser/sidebar.e2e.mjs --pin           # pin / hover-dot / native-figure acceptance
  *   node test/browser/sidebar.e2e.mjs --live          # shipped-install check, no client injection
+ *   node test/browser/sidebar.e2e.mjs --interrupted   # interrupted-state consistency acceptance (controlled seam)
  *   node test/browser/sidebar.e2e.mjs --no-shots      # skip screenshots
  *   node test/browser/sidebar.e2e.mjs --client path/to/client.js
  *   node test/browser/sidebar.e2e.mjs --keep-open     # leave Chrome running for inspection
@@ -121,6 +131,15 @@ const VIEWPORT = { width: 1728, height: 900 }
 // rule only while testing the pinned card on this worktree (which predates it).
 const ANNOTATION_PIN_CSS =
   "html[data-psa-active='true'] [data-psd-hovercard]{pointer-events:auto;z-index:120!important}"
+
+// --interrupted mode: the live Host route that reports one Session's last-turn state and
+// the gitignored evidence directory for the controlled-seam logs/screenshots.
+const INTERRUPTED_ROUTE_PATH = '/api/power-suite.interrupted'
+const INTERRUPTED_EVIDENCE_DIR = path.join(WORKTREE, '.tmp-work', 'interrupted-state', 'e2e')
+// Localized Continue labels from the plugin's interrupted dictionaries (en / zh). The
+// composer play control and the row CTAs use the same `continue.aria` string.
+const INTERRUPTED_CONTINUE_LABEL = /^(Continue the unfinished task|继续未完成的任务)$/
+const INTERRUPTED_BADGE_LABEL = /^(Task did not finish|任务未完成)$/
 
 // ---------------------------------------------------------------------------------------------
 // small utilities
@@ -176,6 +195,7 @@ function parseArgs(argv) {
     if (arg === '--smoke') opts.mode = 'smoke'
     else if (arg === '--pin') opts.mode = 'pin'
     else if (arg === '--live') opts.mode = 'live'
+    else if (arg === '--interrupted') opts.mode = 'interrupted'
     else if (arg === '--no-shots') opts.shots = false
     else if (arg === '--keep-open') opts.keepOpen = true
     else if (arg === '--headful') opts.headful = true
@@ -184,7 +204,7 @@ function parseArgs(argv) {
     else if (arg === '--url') opts.url = argv[++i]
     else if (arg.startsWith('--url=')) opts.url = arg.slice('--url='.length)
     else if (arg === '--help' || arg === '-h') {
-      console.log('usage: node test/browser/sidebar.e2e.mjs [--smoke] [--pin] [--live] [--no-shots] [--client path] [--keep-open] [--headful] [--url TOKEN_URL]')
+      console.log('usage: node test/browser/sidebar.e2e.mjs [--smoke] [--pin] [--live] [--interrupted] [--no-shots] [--client path] [--keep-open] [--headful] [--url TOKEN_URL]')
       process.exit(0)
     } else {
       throw new Error(`unknown argument: ${arg}`)
@@ -2027,7 +2047,7 @@ function sectionRows(sections, title, titleMatch) {
 // Checks
 // ---------------------------------------------------------------------------------------------
 
-async function runSmoke({ page, results, state }) {
+async function runSmoke({ page, results, state, opts }) {
   log('\n=== Smoke: pipeline ===')
   await results.check('smoke-1', 'app loaded and plugin factory injected from this worktree', async () => {
     await page.waitForFn(probe.appReady, [], { timeout: 60000, label: 'app ready' })
@@ -2054,11 +2074,35 @@ async function runSmoke({ page, results, state }) {
     assertEqual(details.panels, 1, 'expected exactly one running card')
     return 'card inside the native Workspaces browser root'
   })
-  await results.check('smoke-3', 'blank Session open/verified (never typed into)', async () => {
-    const blank = await ensureBlankSession(page)
-    state.sessionId = blank.sessionId
-    return `blank Session ${blank.sessionId}, 0 messages, empty draft`
-  })
+  if (opts !== undefined && opts.mode === 'interrupted') {
+    // `--interrupted` needs the Session the shell already restored (the composer seat and
+    // the native current row are keyed by it). It never types and must not create a
+    // Session: `ensureBlankSession` can open a new blank Session on the Host and switch
+    // the live GUI, so this mode leaves the restored Session untouched.
+    await results.check('smoke-3', 'a current Session is open; --interrupted leaves it untouched (never creates or types into a Session)', async () => {
+      await page.waitForFn(() => !!document.querySelector('[data-conversation-session]'), [], { timeout: 15000, label: 'restored current Session' }).catch(() => {})
+      const current = await page.eval(() => {
+        const session = document.querySelector('[data-conversation-session]')
+        const editor = document.querySelector('[data-lexical-editor="true"]')
+        return {
+          sessionId: session === null ? null : session.getAttribute('data-conversation-session'),
+          hasComposer: editor !== null,
+          messages: document.querySelectorAll('[data-conversation-message]').length,
+          draftLength: editor === null ? 0 : (editor.innerText || '').trim().length,
+        }
+      })
+      assert(current.sessionId !== null,
+        'no Session is open in the live GUI. The interrupted composer seat and the native current row need one; start or keep a Session open and rerun (--interrupted never creates or types into Sessions).')
+      state.sessionId = current.sessionId
+      return `current Session ${current.sessionId} (${current.messages} transcript message(s), draft ${current.draftLength} char(s), composer ${current.hasComposer ? 'present' : 'absent'}) — untouched`
+    })
+  } else {
+    await results.check('smoke-3', 'blank Session open/verified (never typed into)', async () => {
+      const blank = await ensureBlankSession(page)
+      state.sessionId = blank.sessionId
+      return `blank Session ${blank.sessionId}, 0 messages, empty draft`
+    })
+  }
   await results.check('smoke-4', 'screenshot round-trip produces 1728x900 PNG', async () => {
     const buffer = Buffer.from(await page.screenshotBase64(), 'base64')
     assert(buffer.length > 20000, `screenshot too small: ${buffer.length} bytes`)
@@ -3971,7 +4015,10 @@ async function runInterruptedChecks({ page, results, state }) {
     if (row === null) return { missing: true, record }
     const badges = [...row.querySelectorAll('.dps-row-interrupted')]
     const lead = [...row.children].find((child) => !child.hasAttribute('data-psd-atmos')) ?? null
-    const peerSvgs = lead === null ? [] : [...lead.querySelectorAll('svg')].filter((svg) => svg.closest('.dps-row-interrupted') === null)
+    // Exclude the interrupted Continue CTA's play glyph too: since the stale-running
+    // consistency fix, an interrupted-idle record on a row the shell still renders as
+    // running legitimately shows the warning badge AND the Continue slot side by side.
+    const peerSvgs = lead === null ? [] : [...lead.querySelectorAll('svg')].filter((svg) => svg.closest('.dps-row-interrupted') === null && svg.closest('.dps-row-continue-slot') === null)
     return {
       record,
       interruptedAttr: row.hasAttribute('data-power-suite-interrupted'),
@@ -4015,8 +4062,11 @@ async function runInterruptedChecks({ page, results, state }) {
   })
   // Note: this sample drives the plugin record with a stale `running: true`, which
   // is the "no badge while the record claims running" branch. The decorator's
-  // stale-NATIVE-running branch (record idle, shell still renders its spinner) is
-  // covered by the verification-doc static replica, not by this live-data check.
+  // stale-NATIVE-running branch (record idle, shell still renders its spinner) is now
+  // implemented and covered by the `--interrupted` mode's iw-2, not by this live-data
+  // check (full mode does not run that mode). The leading-indicator count excludes the
+  // interrupted Continue CTA's play glyph (`.dps-row-continue-slot`): the fix
+  // legitimately shows the warning badge and that CTA together on a stale-running row.
   await results.check('f6-1', 'a running plugin record never renders a badge and leaves the native spinner alone (incl. after Continue)', async () => {
     const key = await pickRow()
     assert(key, 'no native Session row to seed an interrupted record on')
@@ -4078,6 +4128,9 @@ async function runInterruptedChecks({ page, results, state }) {
     const rows = await page.eval(() => (globalThis.__POWER_SUITE_TEST_HOOKS__?.dynamicWorkspacesLive?.snapshot() ?? { rows: [] }).rows)
     const target = rows.find((row) => row.state !== 'running') ?? rows[0] ?? null
     assert(target, 'no running-panel row available to seed an interrupted record on')
+    // The fixed client now also renders the card Continue CTA on a row the card shows
+    // as running (the `--interrupted` mode's iw-1 covers that); this full-mode sample
+    // keeps its historical idle-row focus so its icon-only assertions stay unchanged.
     const panelSurfaceAvailable = target.state !== 'running'
     const nativeKey = await page.eval(() => {
       const row = [...document.querySelectorAll('[data-row-key^="session:"]')].find((node) => (node.innerText || '').trim().length > 0)
@@ -4099,9 +4152,10 @@ async function runInterruptedChecks({ page, results, state }) {
         assert(panelButton.aria && panelButton.title, `running-panel Continue must keep its accessible label/tooltip (aria "${panelButton.aria}", title "${panelButton.title}")`)
         assertEqual(panelButton.svgs, 1, `running-panel Continue must render exactly one play glyph, got ${panelButton.svgs}`)
       } else {
-        // Every visible card row is currently running, and the interrupted CTA is
-        // deliberately suppressed while running. The native Workspace-row surface
-        // still exercises the same icon-only action below; record the gap honestly.
+        // Every visible card row is currently running. The fixed client renders the card
+        // continuation there too (covered by `--interrupted` iw-1); this full-mode sample
+        // keeps its historical idle-row focus, and the native Workspace-row surface below
+        // still exercises the same icon-only action.
         await seedFor(nativeId)
       }
       const nativeRowRect = await page.eval((key) => {
@@ -4181,7 +4235,7 @@ async function runInterruptedChecks({ page, results, state }) {
         await writeEvidenceShot(page, '31-continue-panel-light', { left: panelRowRect.left - 10, top: panelRowRect.top - 4, width: panelRowRect.width + 20, height: panelRowRect.height + 8 })
       }
       const panelDetail = panelButton === null
-        ? 'panel surface skipped: every visible card row is running, so the interrupted CTA is correctly suppressed there'
+        ? 'panel surface not sampled: every visible card row is running; the card CTA on a running row is covered by the --interrupted mode (iw-1), so this full-mode row only asserts the native surface below'
         : `panel button: text "${panelButton.text}", aria "${panelButton.aria}", ${panelButton.svgs} glyph`
       return `${panelDetail}; native button: ${nativeButton.rect.width}x${nativeButton.rect.height}, text "${nativeButton.text}", aria "${nativeButton.aria}", click prevented=${!click.notPrevented}, continue POST ${click.callsImmediate}`
     } finally {
@@ -9982,6 +10036,799 @@ async function runLiveChecks({ url, results, state }) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// --interrupted mode: interrupted-state consistency (controlled seam + real Host state)
+// ---------------------------------------------------------------------------------------------
+
+/** Page-side probes for the `--interrupted` checks (plain serializable functions). */
+const probeIw = {
+  /**
+   * One read of every surface the fix touches: card rows (amber mark / Continue / time),
+   * native Session rows (badge, injected Continue slot, hover reveal, stale spinner) and
+   * the composer play control, plus the controlled-seam records.
+   * @returns {object} serializable view facts.
+   */
+  view: () => {
+    const text = (element) => (element === null || element === undefined ? null : (element.innerText || element.textContent || '').trim())
+    const hooks = globalThis.__POWER_SUITE_TEST_HOOKS__
+    const snapshot = hooks?.dynamicWorkspacesLive?.snapshot?.() ?? null
+    const cardRows = [...document.querySelectorAll('.psd-run, .psd-child')].map((row) => {
+      const main = row.classList.contains('psd-run')
+      const glyphCell = row.querySelector(main ? '.psd-run-glyph-cell' : '.psd-child-glyph')
+      const glyph = glyphCell === null ? null : glyphCell.querySelector('.psd-interrupted')
+      const titleNode = row.querySelector(main ? '.psd-run-title' : '.psd-child-title')
+      const timeNode = row.querySelector(main ? '.psd-run-time' : '.psd-child-time')
+      return {
+        kind: main ? 'main' : 'child',
+        title: text(titleNode),
+        state: row.getAttribute('data-state'),
+        actions: row.getAttribute('data-actions'),
+        current: row.getAttribute('aria-current'),
+        interruptedGlyph: glyph !== null,
+        interruptedAria: glyph === null ? null : glyph.getAttribute('aria-label'),
+        interruptedColor: glyph === null ? null : getComputedStyle(glyph).color,
+        continueSlot: row.querySelector('.psd-continue-slot') !== null,
+        continueButton: row.querySelector('.psd-continue-inline') !== null,
+        timeText: text(timeNode),
+      }
+    })
+    const nativeRows = [...document.querySelectorAll('[data-row-key^="session:"]')].map((row) => {
+      const key = row.getAttribute('data-row-key')
+      const sessionId = key === null ? null : key.replace(/^session:/, '')
+      const leading = [...row.children].find((child) => !child.hasAttribute('data-psd-atmos')) ?? null
+      const badges = [...row.querySelectorAll('.dps-row-interrupted')]
+      const slot = row.querySelector('.dps-row-continue-slot')
+      const slotStyle = slot === null ? null : getComputedStyle(slot)
+      const button = row.querySelector('.dps-row-continue')
+      const buttonBox = button === null ? null : button.getBoundingClientRect()
+      return {
+        key,
+        id: sessionId,
+        text: (text(row) ?? '').slice(0, 80),
+        hovered: row.matches(':hover'),
+        interruptedAttr: row.hasAttribute('data-power-suite-interrupted'),
+        badges: badges.length,
+        badgeAria: badges.length === 0 ? null : badges[0].getAttribute('aria-label'),
+        badgeOutsideAtmos: badges.length > 0 && badges.every((badge) => badge.closest('[data-psd-atmos]') === null),
+        dynamicBadges: row.querySelectorAll('[data-dynamic-badge="true"]').length,
+        slots: row.querySelectorAll('.dps-row-continue-slot').length,
+        dynamicSlots: row.querySelectorAll('[data-dynamic-continue="true"]').length,
+        buttons: row.querySelectorAll('.dps-row-continue').length,
+        slot: slotStyle === null ? null : {
+          width: Number.parseFloat(slotStyle.width),
+          opacity: slotStyle.opacity,
+          pointerEvents: slotStyle.pointerEvents,
+        },
+        button: button === null || buttonBox === null ? null : {
+          width: Math.round(buttonBox.width),
+          height: Math.round(buttonBox.height),
+          aria: button.getAttribute('aria-label'),
+          title: button.getAttribute('title'),
+          svgs: button.querySelectorAll('svg').length,
+        },
+        leadingRunning: leading !== null && leading.querySelector('svg[data-state="ongoing"], [class*="spinner"]') !== null,
+        leadingHasSlot: leading !== null && leading.querySelector('[data-slot="sidebar.session.row.leading"]') !== null,
+      }
+    })
+    const scope = document.querySelector('[data-conversation-region="composer"]')
+    const primary = scope === null ? null : scope.querySelector('button[class$="_primary"]')
+    const pseudo = primary === null ? null : getComputedStyle(primary, '::before')
+    return {
+      hooks: hooks ? Object.keys(hooks) : null,
+      hasInterruptedSeam: hooks !== undefined && hooks !== null && typeof hooks.interruptedSessions === 'object' && hooks.interruptedSessions !== null,
+      snapshotRows: snapshot?.rows ?? null,
+      currentSession: document.querySelector('[data-conversation-session]') === null ? null : document.querySelector('[data-conversation-session]').getAttribute('data-conversation-session'),
+      htmlInterrupted: document.documentElement.getAttribute('data-power-suite-interrupted'),
+      cardRows,
+      nativeRows,
+      composer: primary === null ? null : {
+        aria: primary.getAttribute('aria-label'),
+        title: primary.getAttribute('title'),
+        disabled: primary.disabled === true,
+        svgDisplay: primary.querySelector('svg') === null ? null : getComputedStyle(primary.querySelector('svg')).display,
+        pseudoContent: pseudo?.content ?? null,
+        pseudoMask: pseudo?.maskImage ?? pseudo?.webkitMaskImage ?? null,
+        pseudoWidth: pseudo?.width ?? null,
+        pseudoHeight: pseudo?.height ?? null,
+      },
+    }
+  },
+
+  /** Resolve the shell colour tokens used by the interrupted mark (warn vs label). */
+  tokens: () => {
+    const resolve = (value) => {
+      const element = document.createElement('span')
+      element.style.color = value
+      document.body.appendChild(element)
+      const color = getComputedStyle(element).color
+      element.remove()
+      return color
+    }
+    return {
+      warn: resolve('var(--dsw-alias-state-warn-primary)'),
+      label: resolve('var(--dsw-alias-label-primary)'),
+      warnMix: resolve('color-mix(in srgb, var(--dsw-alias-state-warn-primary) 72%, var(--dsw-alias-label-primary))'),
+    }
+  },
+
+  /** Read the controlled-seam records for `ids`. */
+  records: (ids) => {
+    const hook = globalThis.__POWER_SUITE_TEST_HOOKS__?.interruptedSessions
+    if (hook === undefined || hook === null) return { unavailable: true }
+    const records = {}
+    for (const id of ids) records[id] = hook.record(id) ?? null
+    return { unavailable: false, records }
+  },
+
+  /** Seed one controlled interrupted record through the documented seam. */
+  set: (payload) => {
+    const hook = globalThis.__POWER_SUITE_TEST_HOOKS__?.interruptedSessions
+    if (hook === undefined || hook === null) return { unavailable: true }
+    return { unavailable: false, record: hook.set(payload.id, payload.patch) }
+  },
+
+  /** Clear every given controlled record through the documented seam. */
+  clear: (ids) => {
+    const hook = globalThis.__POWER_SUITE_TEST_HOOKS__?.interruptedSessions
+    if (hook === undefined || hook === null) return { unavailable: true }
+    for (const id of ids) hook.clear(id)
+    return { unavailable: false, cleared: ids.length }
+  },
+
+  /** Scroll one native Session row into view and return its geometry + a hover point. */
+  nativeRowPoint: (id) => {
+    const row = document.querySelector(`[data-row-key="session:${id}"]`)
+    if (row === null) return null
+    row.scrollIntoView({ block: 'center' })
+    const rect = row.getBoundingClientRect()
+    return {
+      left: Math.round(rect.left),
+      top: Math.round(rect.top),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      hoverX: Math.round(rect.left + 60),
+      hoverY: Math.round(rect.top + Math.round(rect.height / 2)),
+    }
+  },
+
+  /** Query the live Host interrupted route for the given Session ids (same-origin fetch). */
+  hostStates: async (ids) => {
+    const states = {}
+    for (const id of ids) {
+      try {
+        const response = await fetch(`/api/power-suite.interrupted?sessionId=${encodeURIComponent(id)}`, {
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: { accept: 'application/json' },
+        })
+        let payload = null
+        try {
+          payload = await response.json()
+        } catch {
+          payload = null
+        }
+        states[id] = { status: response.status, payload }
+      } catch (error) {
+        states[id] = { status: null, error: String((error && error.message) || error) }
+      }
+    }
+    return states
+  },
+}
+
+/**
+ * @param {object} page - Page wrapper.
+ * @returns {Promise<object | null>} the interrupted view facts (never throws).
+ */
+async function readInterruptedView(page) {
+  try {
+    return await page.eval(probeIw.view)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Poll the interrupted view until `predicate` accepts it.
+ * @param {object} page - Page wrapper.
+ * @param {Function} predicate - receives the view facts.
+ * @param {object} [options] - timeout/interval/label.
+ * @returns {Promise<object>} the matching view facts.
+ */
+async function waitInterruptedView(page, predicate, { timeout = 6000, interval = 150, label = 'interrupted view state' } = {}) {
+  const deadline = Date.now() + timeout
+  let last = null
+  while (Date.now() < deadline) {
+    const view = await readInterruptedView(page)
+    if (view !== null) {
+      last = view
+      if (predicate(view)) return view
+    }
+    await sleep(interval)
+  }
+  throw new Error(`timed out after ${timeout}ms waiting for ${label} (last view ${short(JSON.stringify(last === null ? null : { htmlInterrupted: last.htmlInterrupted, cardRows: last.cardRows, nativeRows: last.nativeRows.map((row) => ({ id: row.id, attr: row.interruptedAttr, badges: row.badges, slots: row.slots, dynamicSlots: row.dynamicSlots })) }), 900)})`)
+}
+
+/**
+ * @param {object} view - interrupted view facts.
+ * @param {string} title - exact rendered card-row title.
+ * @returns {object | null} the rendered card row.
+ */
+function cardRowByTitle(view, title) {
+  if (view === null || title === null || title === undefined) return null
+  return view.cardRows.find((row) => row.title === title) ?? null
+}
+
+/**
+ * @param {object} view - interrupted view facts.
+ * @param {string} sessionId - Session id.
+ * @returns {object | null} the rendered native row.
+ */
+function nativeRowById(view, sessionId) {
+  if (view === null || sessionId === null || sessionId === undefined) return null
+  return view.nativeRows.find((row) => row.id === sessionId) ?? null
+}
+
+/**
+ * Build the title -> Session id map from the card's live seam and projection bridge.
+ * @param {object} view - interrupted view facts.
+ * @param {object | null} bridge - `probe.projectionBridge()` result.
+ * @returns {{ byTitle: Map<string, string>, unique: (title: string) => string | null }} id lookup.
+ */
+function buildInterruptedIdMap(view, bridge) {
+  const candidateLists = [[], view?.snapshotRows ?? []]
+  if (bridge !== null && bridge.ok === true) {
+    candidateLists.push(bridge.rows ?? [], bridge.children ?? [], bridge.domRows ?? [])
+  }
+  const titles = new Map()
+  for (const list of candidateLists) {
+    for (const row of list) {
+      if (row === null || typeof row !== 'object') continue
+      if (typeof row.title !== 'string' || row.title.length === 0) continue
+      if (typeof row.id !== 'string' || row.id.length === 0) continue
+      if (!titles.has(row.title)) titles.set(row.title, new Set())
+      titles.get(row.title).add(row.id)
+    }
+  }
+  const byTitle = new Map()
+  for (const [title, ids] of titles) {
+    if (ids.size === 1) byTitle.set(title, [...ids][0])
+  }
+  return {
+    byTitle,
+    unique: (title) => (byTitle.has(title) ? byTitle.get(title) : null),
+  }
+}
+
+/**
+ * Pick the card row the fix must turn into the interrupted presentation: a row the card
+ * renders as running (the combined running state is what used to suppress the mark).
+ * @param {object} view - interrupted view facts.
+ * @param {object} idMap - title/id map.
+ * @returns {{ kind: string, title: string, id: string, state: string } | null} the target.
+ */
+function pickCardRunningTarget(view, idMap) {
+  const running = view.cardRows.filter((row) => row.state === 'running')
+  const ordered = [
+    ...running.filter((row) => row.current === 'true'),
+    ...running.filter((row) => row.kind === 'main'),
+    ...running,
+  ]
+  for (const row of ordered) {
+    const id = idMap.unique(row.title)
+    if (id === null) continue
+    return { kind: row.kind, title: row.title, id, state: row.state }
+  }
+  return null
+}
+
+/**
+ * Pick a native Session row the shell still renders as running (its leading cell shows
+ * the shell spinner and no custom leading slot) — the stale-running branch of the fix.
+ * @param {object} view - interrupted view facts.
+ * @param {string | null} preferredId - Session id to prefer (the card target).
+ * @returns {object | null} the native row facts.
+ */
+function pickNativeStaleRunningTarget(view, preferredId) {
+  const candidates = view.nativeRows.filter((row) => row.leadingRunning === true && row.leadingHasSlot === false)
+  if (preferredId !== null) {
+    const preferred = candidates.find((row) => row.id === preferredId)
+    if (preferred !== undefined) return preferred
+  }
+  return candidates[0] ?? null
+}
+
+/**
+ * Write one optional screenshot into the gitignored `--interrupted` evidence directory.
+ * @returns {Promise<string | null>} the file path, or null when disabled/failed.
+ */
+async function writeInterruptedShot(page, name, clip, state) {
+  if (state.shotsEnabled !== true || clip === null || clip === undefined) return null
+  try {
+    await mkdir(INTERRUPTED_EVIDENCE_DIR, { recursive: true })
+    const x = Math.max(0, Math.round(clip.left))
+    const y = Math.max(0, Math.round(clip.top))
+    const width = Math.min(Math.round(clip.width), VIEWPORT.width - x)
+    const height = Math.min(Math.round(clip.height), VIEWPORT.height - y)
+    if (width < 8 || height < 8) return null
+    const file = path.join(INTERRUPTED_EVIDENCE_DIR, `${name}.png`)
+    await page.screenshot(file, { x, y, width, height })
+    log(`wrote ${file}`)
+    state.interruptedEvidence = [...(state.interruptedEvidence ?? []), file]
+    return file
+  } catch (error) {
+    log(`warning: interrupted screenshot ${name} failed: ${short((error && error.message) || String(error), 200)}`)
+    return null
+  }
+}
+
+/**
+ * Write one JSON evidence file (controlled-seam view snapshots) into the gitignored
+ * `--interrupted` evidence directory. The token is never included.
+ * @returns {Promise<string | null>} the file path, or null when the write failed.
+ */
+async function writeInterruptedEvidence(state, name, data) {
+  try {
+    await mkdir(INTERRUPTED_EVIDENCE_DIR, { recursive: true })
+    const stamp = new Date().toISOString().replace(/[:.]/gu, '-')
+    const file = path.join(INTERRUPTED_EVIDENCE_DIR, `interrupted-${name}-${stamp}.json`)
+    await writeFile(file, `${JSON.stringify({ at: new Date().toISOString(), ...data }, null, 2)}\n`, 'utf8')
+    log(`wrote ${file}`)
+    state.interruptedEvidence = [...(state.interruptedEvidence ?? []), file]
+    return file
+  } catch (error) {
+    log(`warning: could not write interrupted evidence ${name}: ${short((error && error.message) || String(error), 200)}`)
+    return null
+  }
+}
+
+/**
+ * Assert the amber interrupted mark: the `.psd-interrupted` glyph is the warn-coloured
+ * warning icon with the localized badge label. The current-row theme recipe mixes the
+ * warn token with the label colour, so that variant is accepted there.
+ * @param {object} row - rendered card row facts.
+ * @param {object | null} tokens - resolved shell colour tokens.
+ * @param {string} label - row description for failure messages.
+ * @returns {string} measured summary.
+ */
+function assertInterruptedGlyph(row, tokens, label) {
+  assert(row.interruptedGlyph === true, `${label}: the card row renders no amber .psd-interrupted glyph`)
+  assert(INTERRUPTED_BADGE_LABEL.test(row.interruptedAria ?? ''), `${label}: the interrupted glyph must carry the localized Badge label (got ${JSON.stringify(row.interruptedAria)})`)
+  if (tokens !== null && row.interruptedColor !== null) {
+    const currentRow = row.current === 'true'
+    const colours = currentRow ? [tokens.warn, tokens.warnMix] : [tokens.warn]
+    assert(colours.includes(row.interruptedColor),
+      `${label}: the interrupted glyph must use the warn token (got ${row.interruptedColor}; expected ${currentRow ? `${tokens.warn} or ${tokens.warnMix}` : tokens.warn})`)
+    assert(row.interruptedColor !== tokens.label, `${label}: the interrupted glyph must not fall back to the label colour`)
+  }
+  return `.psd-interrupted "${row.interruptedAria}" ${row.interruptedColor}`
+}
+
+/**
+ * Assert the card row's Continue affordance: the row exposes the continue action, and a
+ * main row renders the hover-revealed `.psd-continue-slot` / `.psd-continue-inline`
+ * button carrying the localized continue label and one play glyph.
+ * @param {object} row - rendered card row facts.
+ * @param {string} label - row description for failure messages.
+ * @returns {string} measured summary.
+ */
+function assertInterruptedCardAction(row, label) {
+  assert((row.actions ?? '').split(/[+,]/u).includes('continue'), `${label}: the card row must expose the continue action (data-actions ${JSON.stringify(row.actions)})`)
+  if (row.kind !== 'main') return `data-actions ${row.actions}`
+  assert(row.continueSlot === true, `${label}: the main card row must render the .psd-continue-slot affordance`)
+  assert(row.continueButton === true, `${label}: the main card row must render the .psd-continue-inline Continue button`)
+  return `data-actions ${row.actions} + .psd-continue-slot/.psd-continue-inline`
+}
+
+/**
+ * `--interrupted`: accept the interrupted-state consistency fix through the documented
+ * controlled seam and the live Host route.
+ * @param {object} input - `{ page, results, state }`.
+ * @returns {Promise<void>}
+ */
+async function runInterruptedModeChecks({ page, results, state }) {
+  log('\n=== --interrupted: interrupted-state consistency (card / native row / composer) ===')
+  state.mode = 'interrupted'
+  state.interrupted = { controlled: [], cardTarget: null, nativeTarget: null, currentSession: state.sessionId ?? null }
+  const tokens = await page.eval(probeIw.tokens).catch(() => null)
+  state.interrupted.tokens = tokens
+
+  await results.check('iw-net', 'CDP Network domain enabled (real network-failure oracle)', async () => {
+    assert(page.networkEnabled === true, `Network.enable failed: ${page.networkError || 'unknown error'}`)
+    return 'Network domain enabled; same-origin API/document failures are counted (the interrupted route must answer 200)'
+  })
+
+  // Expand the card's five-row default like a user, then read every surface.
+  await ensurePanelRows(page)
+  await resetPointer(page)
+  const bridge = await page.eval(probe.projectionBridge).catch(() => null)
+  const baselineView = await waitInterruptedView(page, (view) => view.hasInterruptedSeam === true && view.cardRows.length > 0, { timeout: 15000, label: 'interrupted seam + card rows' })
+  const idMap = buildInterruptedIdMap(baselineView, bridge)
+  const cardTarget = pickCardRunningTarget(baselineView, idMap)
+  const nativeTarget = pickNativeStaleRunningTarget(baselineView, cardTarget === null ? null : cardTarget.id)
+  state.interrupted.cardTarget = cardTarget
+  state.interrupted.nativeTarget = nativeTarget === null ? null : { id: nativeTarget.id, key: nativeTarget.key }
+  state.interrupted.currentSession = baselineView.currentSession ?? state.sessionId ?? null
+  state.interrupted.baseline = {
+    cardRow: cardTarget === null ? null : cardRowByTitle(baselineView, cardTarget.title),
+    nativeRow: nativeTarget === null ? null : nativeTarget,
+    composer: baselineView.composer,
+    htmlInterrupted: baselineView.htmlInterrupted,
+  }
+  const seamState = await page.eval(() => {
+    const hooks = globalThis.__POWER_SUITE_TEST_HOOKS__
+    return {
+      interruptedSessions: hooks !== undefined && hooks !== null && hooks.interruptedSessions !== undefined && hooks.interruptedSessions !== null ? Object.keys(hooks.interruptedSessions) : null,
+      interruptedState: hooks !== undefined && hooks !== null && hooks.interruptedState !== undefined && hooks.interruptedState !== null ? Object.keys(hooks.interruptedState) : null,
+    }
+  }).catch(() => null)
+  state.interrupted.seams = seamState
+  log(`interrupted seams: ${short(JSON.stringify(seamState), 220)}`)
+  log(`interrupted baseline: current Session ${state.interrupted.currentSession ?? 'n/a'}; card running target ${cardTarget === null ? 'none' : `${cardTarget.kind} "${short(cardTarget.title, 60)}" (${cardTarget.id})`}; native stale-running target ${nativeTarget === null ? 'none' : nativeTarget.id}; composer ${short(JSON.stringify(baselineView.composer), 220)}`)
+  await writeInterruptedEvidence(state, 'baseline', { view: baselineView, cardTarget, nativeTarget })
+
+  if (cardTarget === null) {
+    const reason = 'no card row is rendered as running in this live data state, so the "interrupted mark beats the combined running state" scenario cannot be produced without fabricating activity; the mode creates no Session and types nothing. Start or keep a running Session and rerun.'
+    await results.skip('iw-1', 'card interrupted mark beats the combined running state', reason)
+    await results.skip('iw-2', 'native stale-running row shows the badge and the hover Continue CTA', reason)
+    state.interrupted.skipped = true
+  }
+
+  if (cardTarget !== null) {
+    await results.check('iw-1', 'card interrupted mark beats the combined running state (amber glyph + Continue + relative time)', async () => {
+      assert(cardTarget.kind === 'main' || cardTarget.kind === 'child', 'card target has no row kind')
+      const seeded = await page.eval(probeIw.set, { id: cardTarget.id, patch: { interrupted: true, running: false } })
+      assert(seeded.unavailable !== true, 'the interrupted test seam is unavailable (window.__POWER_SUITE_TEST_HOOKS__.interruptedSessions)')
+      state.interrupted.controlled.push(cardTarget.id)
+      const view = await waitInterruptedView(page,
+        (next) => {
+          const row = cardRowByTitle(next, cardTarget.title)
+          return row !== null && row.interruptedGlyph === true && (row.actions ?? '').includes('continue') && (row.kind !== 'main' || row.continueButton === true)
+        },
+        { timeout: 8000, label: `card interrupted mark on "${short(cardTarget.title, 50)}"` })
+      const row = cardRowByTitle(view, cardTarget.title)
+      assert(row !== null, `the card row "${short(cardTarget.title, 50)}" disappeared`)
+      const glyphDetail = assertInterruptedGlyph(row, tokens, `${row.kind} card row "${short(row.title, 50)}"`)
+      const actionDetail = assertInterruptedCardAction(row, `${row.kind} card row "${short(row.title, 50)}"`)
+      let timeDetail = `child rows always show the relative last-activity time (${JSON.stringify(row.timeText)})`
+      if (row.kind === 'main') {
+        const relativePattern = /^(now|\d+min|\d+h|\d+d|刚刚|\d+分钟|\d+小时|\d+天)$/u
+        const durationPattern = /^(\d+s|\d+m \d+s|\d+h \d+m|\d+秒|\d+分\d+秒|\d+时\d+分)$/u
+        assert(relativePattern.test(row.timeText ?? ''), `main card row: the interrupted time must be a relative last-activity label, got ${JSON.stringify(row.timeText)}`)
+        assert(!durationPattern.test(row.timeText ?? ''), `main card row: the interrupted time must not be a running duration, got ${JSON.stringify(row.timeText)}`)
+        timeDetail = `time ${JSON.stringify(row.timeText)} (relative, not a running duration)`
+      }
+      const records = await page.eval(probeIw.records, [cardTarget.id])
+      assert(records.unavailable !== true, 'the interrupted test seam is unavailable')
+      const record = records.records[cardTarget.id]
+      assert(record !== null && record !== undefined && record.status === 'ready' && record.interrupted === true && record.running === false,
+        `the controlled record must stay interrupted-idle (got ${short(JSON.stringify(record), 240)})`)
+      if (state.shotsEnabled) {
+        const rect = await page.eval((title) => {
+          const row = [...document.querySelectorAll('.psd-run, .psd-child')]
+            .find((node) => ((node.querySelector('.psd-run-title, .psd-child-title')?.innerText ?? '').trim()) === title)
+          if (row === null) return null
+          const box = row.getBoundingClientRect()
+          return { left: Math.round(box.left) - 8, top: Math.round(box.top) - 8, width: Math.round(box.width) + 16, height: Math.round(box.height) + 16 }
+        }, cardTarget.title)
+        await writeInterruptedShot(page, 'iw1-card-interrupted', rect, state)
+      }
+      return `${row.kind} row "${short(row.title, 60)}" (data-state=${row.state}, combined running): ${glyphDetail}; ${actionDetail}; ${timeDetail}; record ${record.status}/interrupted=${record.interrupted}/running=${record.running}`
+    })
+
+    if (nativeTarget === null) {
+      await results.skip('iw-2', 'native stale-running row shows the badge and the hover Continue CTA', 'no native Session row is rendered as running (stale spinner) in this live data state, so the decoration branch cannot be exercised; the card-side iw-1 still covers the controlled record.')
+    } else {
+      await results.check('iw-2', 'native stale-running row shows the badge and the hover Continue CTA (real pointer, never clicked)', async () => {
+        if (nativeTarget.id !== cardTarget.id) {
+          await page.eval(probeIw.set, { id: nativeTarget.id, patch: { interrupted: true, running: false } })
+          state.interrupted.controlled.push(nativeTarget.id)
+        }
+        state.interrupted.nativeTarget = { id: nativeTarget.id, key: nativeTarget.key }
+        const seededView = await waitInterruptedView(page,
+          (next) => {
+            const row = nativeRowById(next, nativeTarget.id)
+            return row !== null && row.interruptedAttr === true && row.badges >= 1 && row.dynamicBadges >= 1 && row.dynamicSlots >= 1
+          },
+          { timeout: 8000, label: `native interrupted badge + injected Continue slot on ${nativeTarget.id}` })
+        const seededRow = nativeRowById(seededView, nativeTarget.id)
+        assert(seededRow !== null, `the native row for ${nativeTarget.id} disappeared`)
+        assert(seededRow.badgeOutsideAtmos === true, 'the interrupted badge must sit in the native leading cell, never inside the atmosphere layer')
+        assert(INTERRUPTED_BADGE_LABEL.test(seededRow.badgeAria ?? ''), `the native badge must carry the localized interrupted label (got ${JSON.stringify(seededRow.badgeAria)})`)
+        assert(seededRow.buttons >= 1, 'the injected Continue slot must contain the .dps-row-continue button')
+        const point = await page.eval(probeIw.nativeRowPoint, nativeTarget.id)
+        assert(point !== null, `the native row for ${nativeTarget.id} is not in the DOM`)
+        assert(point.hoverY > 4 && point.hoverY < VIEWPORT.height - 4, `the native row for ${nativeTarget.id} is outside the viewport (y=${point.hoverY})`)
+        await page.moveTo(900, 500)
+        await sleep(220)
+        // Real CDP pointer hover: the fix's reveal rule needs :hover. Never click.
+        await page.moveTo(point.hoverX, point.hoverY)
+        await sleep(420)
+        const hoveredView = await waitInterruptedView(page,
+          (next) => {
+            const row = nativeRowById(next, nativeTarget.id)
+            return row !== null && row.hovered === true && row.slot !== null && row.slot.opacity === '1'
+          },
+          { timeout: 5000, label: `native Continue CTA reveal on ${nativeTarget.id}` })
+        const hovered = nativeRowById(hoveredView, nativeTarget.id)
+        assert(hovered !== null, `the native row for ${nativeTarget.id} disappeared on hover`)
+        assert(hovered.hovered === true, 'the real pointer must hover the native Session row')
+        assert(hovered.slot !== null, 'the native row has no .dps-row-continue-slot on hover')
+        assertNear(hovered.slot.width, 22, 0.5, 'the hover Continue slot must reveal to 22 px')
+        assertEqual(hovered.slot.opacity, '1', 'the hover Continue slot must be fully visible (opacity 1)')
+        assertEqual(hovered.slot.pointerEvents, 'auto', 'the hover Continue slot must accept the pointer (pointer-events auto)')
+        assert(hovered.button !== null, 'the hovered Continue slot has no .dps-row-continue button')
+        assertNear(hovered.button.width, 22, 0.5, 'the native Continue button must fill the 22 px slot')
+        assertNear(hovered.button.height, 22, 0.5, 'the native Continue button must be a 22 px hit target')
+        assert(INTERRUPTED_CONTINUE_LABEL.test(hovered.button.aria ?? ''), `the native Continue button must carry the localized label (got ${JSON.stringify(hovered.button.aria)})`)
+        assertEqual(hovered.button.svgs, 1, 'the native Continue button must render exactly one play glyph')
+        assert(hovered.interruptedAttr === true, 'the hovered native row must keep the interrupted marker attribute')
+        assert(hovered.dynamicSlots >= 1, 'the Continue slot must be the decoration-injected one (data-dynamic-continue=true), proving the stale-running branch ran')
+        if (state.shotsEnabled) {
+          await writeInterruptedShot(page, 'iw2-native-hover-continue', {
+            left: point.left - 10,
+            top: point.top - 6,
+            width: point.width + 20,
+            height: point.height + 12,
+          }, state)
+        }
+        await page.moveTo(900, 500)
+        await sleep(200)
+        return `native row ${nativeTarget.id} (${short(nativeTarget.text, 50)}): badge ${seededRow.badges} + ${seededRow.dynamicBadges} dynamic, Continue slot ${hovered.slot.width}px/opacity ${hovered.slot.opacity}/${hovered.slot.pointerEvents}, button ${hovered.button.width}x${hovered.button.height} "${hovered.button.aria}" 1 glyph; hover via real CDP pointer, never clicked`
+      })
+    }
+  }
+
+  await results.check('iw-3', 'composer shows the play (Continue) state for the controlled interrupted current Session', async () => {
+    const currentSession = state.interrupted.currentSession
+    assert(typeof currentSession === 'string' && currentSession.length > 0, 'no current Session is open (the composer seat needs one)')
+    const seeded = await page.eval(probeIw.set, { id: currentSession, patch: { interrupted: true, running: false } })
+    assert(seeded.unavailable !== true, 'the interrupted test seam is unavailable')
+    if (!state.interrupted.controlled.includes(currentSession)) state.interrupted.controlled.push(currentSession)
+    const view = await waitInterruptedView(page, (next) => next.htmlInterrupted === 'true' && next.composer !== null && next.composer.svgDisplay === 'none', {
+      timeout: 8000,
+      label: 'composer play state for the interrupted current Session',
+    })
+    assertEqual(view.htmlInterrupted, 'true', 'html[data-power-suite-interrupted="true"] must mark the interrupted composer state')
+    assert(view.composer !== null, 'the composer primary submit control is missing')
+    assertEqual(view.composer.disabled, false, 'the interrupted composer submit control must be enabled (the shell disables an empty draft)')
+    assert(INTERRUPTED_CONTINUE_LABEL.test(view.composer.aria ?? ''), `the composer submit control must be relabelled Continue (got ${JSON.stringify(view.composer.aria)})`)
+    assert(INTERRUPTED_CONTINUE_LABEL.test(view.composer.title ?? ''), `the composer submit control must carry the Continue tooltip (got ${JSON.stringify(view.composer.title)})`)
+    assertEqual(view.composer.svgDisplay, 'none', 'the shell send glyph must be hidden while the play control is shown')
+    assert(view.composer.pseudoMask !== null && view.composer.pseudoMask !== 'none', `the play triangle must be painted through the ::before mask (got ${JSON.stringify(view.composer.pseudoMask)})`)
+    assertNear(Number.parseFloat(view.composer.pseudoWidth), 16, 0.5, 'the play triangle mask must be 16 px wide')
+    assertNear(Number.parseFloat(view.composer.pseudoHeight), 16, 0.5, 'the play triangle mask must be 16 px tall')
+    if (state.shotsEnabled) {
+      const rect = await page.eval(() => {
+        const scope = document.querySelector('[data-conversation-region="composer"]')
+        if (scope === null) return null
+        const box = scope.getBoundingClientRect()
+        const send = scope.querySelector('button[class$="_primary"]')
+        const sendBox = send === null ? null : send.getBoundingClientRect()
+        const anchor = sendBox ?? box
+        return {
+          left: Math.round(anchor.left) - 90,
+          top: Math.round(anchor.top) - 20,
+          width: Math.round(anchor.width) + 120,
+          height: Math.round(anchor.height) + 40,
+        }
+      })
+      await writeInterruptedShot(page, 'iw3-composer-play', rect, state)
+    }
+    return `current Session ${currentSession}: html marker true, composer "${view.composer.aria}" enabled=${!view.composer.disabled}, shell svg ${view.composer.svgDisplay}, play mask ${view.composer.pseudoWidth}x${view.composer.pseudoHeight}`
+  })
+
+  await results.check('iw-4', 'clearing the controlled records restores the card, native row and composer surfaces', async () => {
+    const controlled = [...state.interrupted.controlled]
+    assert(controlled.length > 0, 'no controlled record was seeded (iw-1/iw-2/iw-3 failed or skipped first)')
+    const cleared = await page.eval(probeIw.clear, controlled)
+    assert(cleared.unavailable !== true, 'the interrupted test seam is unavailable')
+    const view = await waitInterruptedView(page,
+      (next) => {
+        if (next.htmlInterrupted !== null) return false
+        const recordsGone = controlled.every((id) => {
+          const row = nativeRowById(next, id)
+          return row === null || (row.interruptedAttr === false && row.badges === 0 && row.dynamicBadges === 0 && row.dynamicSlots === 0)
+        })
+        const cardGone = cardTarget === null || (() => {
+          const row = cardRowByTitle(next, cardTarget.title)
+          return row === null || (row.interruptedGlyph === false && row.continueSlot === false)
+        })()
+        const composerGone = next.composer === null || (next.composer.svgDisplay !== 'none' && next.composer.pseudoMask === 'none')
+        return recordsGone && cardGone && composerGone
+      },
+      { timeout: 8000, label: 'cleared interrupted surfaces' })
+    const records = await page.eval(probeIw.records, controlled)
+    assert(records.unavailable !== true, 'the interrupted test seam is unavailable')
+    // The client may re-fetch a row's real Host record right after the clear; that is the
+    // authoritative behavior, so only a still-interrupted-idle record is a residual.
+    const stillActive = []
+    const refetched = []
+    for (const id of controlled) {
+      const record = records.records[id]
+      if (record === null || record === undefined) continue
+      refetched.push(id)
+      if (record.status === 'ready' && record.interrupted === true && record.running !== true) stillActive.push({ id, record })
+    }
+    assertEqual(stillActive.length, 0, `controlled interrupted-idle record(s) survived the clear: ${short(JSON.stringify(stillActive), 600)}`)
+    assertEqual(view.htmlInterrupted, null, 'the html interrupted marker must be removed after clear')
+    for (const id of controlled) {
+      const row = nativeRowById(view, id)
+      if (row === null) continue
+      assertEqual(row.interruptedAttr, false, `native row ${id} must drop the interrupted marker after clear`)
+      assertEqual(row.badges, 0, `native row ${id} must not keep an interrupted badge after clear`)
+      assertEqual(row.dynamicBadges, 0, `native row ${id} must not keep an injected badge after clear`)
+      assertEqual(row.dynamicSlots, 0, `native row ${id} must not keep an injected Continue slot after clear`)
+    }
+    if (cardTarget !== null) {
+      const row = cardRowByTitle(view, cardTarget.title)
+      if (row !== null) {
+        assertEqual(row.interruptedGlyph, false, 'the card row must drop the interrupted glyph after clear')
+        assertEqual(row.continueSlot, false, 'the card row must drop the Continue affordance after clear')
+        const baselineActions = state.interrupted.baseline.cardRow?.actions ?? null
+        if (baselineActions !== null) assertEqual(row.actions, baselineActions, 'the card row action attribute must return to its baseline after clear')
+      }
+    }
+    assert(view.composer !== null, 'the composer primary submit control is missing after clear')
+    assertEqual(view.composer.svgDisplay, 'block', 'the shell send glyph must be visible again after clear')
+    assertEqual(view.composer.pseudoMask, 'none', 'the play triangle mask must be gone after clear')
+    // The seat's attribute restore relies on the shell's next render; report any residual
+    // label honestly instead of asserting an ownership the fix does not claim.
+    const composerResidual = {
+      aria: view.composer.aria,
+      title: view.composer.title,
+      baselineAria: state.interrupted.baseline.composer?.aria ?? null,
+    }
+    await writeInterruptedEvidence(state, 'after-clear', { view, controlled, composerResidual })
+    return `cleared ${controlled.length} controlled record(s); no interrupted marker/badge/injected slot on their native rows or the card row; html marker removed; composer shell glyph restored (${composerResidual.aria === composerResidual.baselineAria ? 'label back to baseline' : `label residual "${composerResidual.aria}" until the shell rerenders`}); ${refetched.length} record(s) re-fetched from the Host with the real state afterwards (the authoritative behavior)`
+  })
+
+  const realState = await collectInterruptedRealState(page)
+  state.interrupted.realStateRows = realState.interruptedIdle
+  await writeInterruptedEvidence(state, 'real-state', {
+    hostStates: realState.hostStates,
+    checks: realState.checks,
+    problems: realState.problems,
+    ids: realState.ids,
+  })
+  if (realState.interruptedIdle === 0) {
+    await results.skip('iw-5', 'real-state consistency: Host-interrupted visible Sessions render the interrupted mark/CTA',
+      `no Session the card/native sidebar renders is interrupted-idle in this live data state (checked ${realState.ids.length} visible Session(s) against GET ${INTERRUPTED_ROUTE_PATH}); the controlled iw-1/iw-2 rows cover the fix.`)
+  } else {
+    await results.check('iw-5', 'real-state consistency: Host-interrupted visible Sessions render the interrupted mark/CTA', async () => {
+      assertEqual(realState.problems.length, 0, `Host-interrupted visible Session(s) without the rendered interrupted mark: ${short(JSON.stringify(realState.problems), 700)}`)
+      return `Host route checked ${realState.ids.length} visible Session(s); ${realState.interruptedIdle} interrupted-idle: ${short(JSON.stringify(realState.checks), 900)}`
+    })
+  }
+}
+
+/**
+ * Collect the real-state consistency facts for every Session the card/native sidebar
+ * renders: query the Host interrupted route and verify each genuinely interrupted-idle
+ * Session renders the interrupted mark (card glyph / native badge) on a rendered surface.
+ * @param {object} page - Page wrapper.
+ * @returns {Promise<object>} `{ ids, hostStates, checks, problems, interruptedIdle }`.
+ */
+async function collectInterruptedRealState(page) {
+  const view = await waitInterruptedView(page, (next) => next.hasInterruptedSeam === true, { timeout: 5000, label: 'interrupted view for real-state consistency' })
+  const bridge = await page.eval(probe.projectionBridge).catch(() => null)
+  const idMap = buildInterruptedIdMap(view, bridge)
+  const currentSession = view.currentSession ?? null
+  const rendered = []
+  for (const row of view.cardRows) {
+    const id = idMap.unique(row.title)
+    if (id === null) continue
+    rendered.push({ surface: 'card', kind: row.kind, id, title: row.title })
+  }
+  for (const row of view.nativeRows) {
+    if (typeof row.id !== 'string' || row.id.length === 0) continue
+    rendered.push({ surface: 'native', kind: 'native', id: row.id, title: row.text })
+  }
+  if (typeof currentSession === 'string' && currentSession.length > 0 && !rendered.some((entry) => entry.id === currentSession)) {
+    rendered.push({ surface: 'composer', kind: 'composer', id: currentSession, title: `current Session ${currentSession}` })
+  }
+  const ids = [...new Set(rendered.map((entry) => entry.id))]
+  assert(ids.length > 0, 'the card/native sidebar renders no identifiable Session row in this live data state')
+  const hostStates = await page.eval(probeIw.hostStates, ids)
+  const checks = []
+  const problems = []
+  let interruptedIdle = 0
+  for (const id of ids) {
+    const hostState = hostStates[id]
+    if (hostState === undefined || hostState.status !== 200 || hostState.payload === null || typeof hostState.payload !== 'object') {
+      problems.push(`${id.slice(0, 12)}...: Host route ${hostState === undefined ? 'not probed' : hostState.status ?? hostState.error ?? 'no response'}`)
+      continue
+    }
+    const isInterruptedIdle = hostState.payload.interrupted === true && hostState.payload.running === false
+    if (!isInterruptedIdle) continue
+    interruptedIdle += 1
+    const marks = []
+    for (const entry of rendered.filter((candidate) => candidate.id === id)) {
+      if (entry.surface === 'card') {
+        const row = cardRowByTitle(view, entry.title)
+        if (row === null) continue
+        marks.push({
+          surface: `card-${row.kind}`,
+          mark: row.interruptedGlyph === true,
+          action: (row.actions ?? '').includes('continue'),
+          detail: `card ${row.kind} glyph=${row.interruptedGlyph} actions=${JSON.stringify(row.actions)}`,
+        })
+      } else if (entry.surface === 'native') {
+        const row = nativeRowById(view, id)
+        if (row === null) continue
+        marks.push({
+          surface: 'native',
+          mark: row.badges > 0 || row.dynamicBadges > 0,
+          action: row.slots > 0 || row.dynamicSlots > 0 || row.leadingHasSlot === true,
+          detail: `native attr=${row.interruptedAttr} badges=${row.badges}+${row.dynamicBadges} slots=${row.slots}+${row.dynamicSlots}`,
+        })
+      } else if (entry.surface === 'composer' && view.htmlInterrupted === 'true') {
+        marks.push({ surface: 'composer', mark: true, action: true, detail: `composer html marker ${view.htmlInterrupted}` })
+      }
+    }
+    if (marks.length === 0) {
+      problems.push(`${id.slice(0, 12)}...: Host says interrupted-idle but no rendered surface was identifiable`)
+      continue
+    }
+    if (!marks.some((mark) => mark.mark === true)) {
+      problems.push(`${id.slice(0, 12)}...: Host says interrupted-idle but no rendered surface shows the interrupted mark (${marks.map((mark) => mark.detail).join('; ')})`)
+      continue
+    }
+    const withAction = marks.filter((mark) => mark.action === true)
+    checks.push(`${id.slice(0, 12)}... interrupted-idle -> ${marks.map((mark) => mark.detail).join('; ')}${withAction.length > 0 ? '' : ' (mark only on the rendered surface(s))'}`)
+  }
+  return { ids, hostStates, checks, problems, interruptedIdle }
+}
+
+/**
+ * Clear every controlled interrupted record after `--interrupted` and report the residual
+ * records/markers honestly. Idempotent (iw-4 already clears on the happy path).
+ * @param {object} page - Page wrapper.
+ * @param {object} state - harness state with `interrupted`.
+ * @returns {Promise<void>}
+ */
+async function cleanupInterruptedMode(page, state) {
+  if (state.mode !== 'interrupted') return
+  const controlled = [...(state.interrupted?.controlled ?? [])]
+  const issues = []
+  try {
+    if (controlled.length > 0) {
+      const cleared = await page.eval(probeIw.clear, controlled)
+      if (cleared.unavailable === true) issues.push('interrupted test seam unavailable during cleanup')
+    }
+    await sleep(500)
+    const records = controlled.length === 0 ? { unavailable: false, records: {} } : await page.eval(probeIw.records, controlled)
+    const residualRecords = controlled.filter((id) => {
+      const record = records.unavailable === true ? null : records.records[id]
+      return record !== null && record !== undefined && record.status === 'ready' && record.interrupted === true && record.running !== true
+    })
+    const view = await readInterruptedView(page)
+    const markerResidual = view === null ? null : view.nativeRows
+      .filter((row) => controlled.includes(row.id) && (row.badges > 0 || row.interruptedAttr === true || row.slots > 0))
+      .map((row) => row.id)
+    const cardResidual = view === null || state.interrupted?.cardTarget === null || state.interrupted?.cardTarget === undefined
+      ? null
+      : (() => {
+          const row = cardRowByTitle(view, state.interrupted.cardTarget.title)
+          return row !== null && (row.interruptedGlyph === true || row.continueSlot === true) ? row.title : null
+        })()
+    state.interruptedCleanup = {
+      controlled,
+      residualRecords,
+      markerResidual,
+      cardResidual,
+      htmlInterrupted: view === null ? null : view.htmlInterrupted,
+      issues,
+    }
+    log(`cleanup: controlled records ${short(JSON.stringify(controlled), 300)}; residual records ${short(JSON.stringify(residualRecords), 200)}; residual native markers ${short(JSON.stringify(markerResidual), 200)}; residual card mark ${short(JSON.stringify(cardResidual), 120)}; html marker ${view === null ? 'unreadable' : view.htmlInterrupted === null ? 'absent' : view.htmlInterrupted}; issues ${issues.length}`)
+    if (issues.length > 0) log(`cleanup issues: ${short(issues.join('; '), 500)}`)
+  } catch (error) {
+    issues.push(`cleanup failed: ${(error && error.message) || String(error)}`)
+    state.interruptedCleanup = { controlled, issues }
+    log(`cleanup: ${short((error && error.message) || String(error), 500)}`)
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------------------------
 
@@ -10017,10 +10864,10 @@ async function run() {
     chrome = await launchChrome(opts)
     log(`chrome: headless pid ${chrome.proc.pid}, CDP port ${chrome.port}`)
     const cdp = await CdpConnection.connect(chrome.wsUrl)
-    page = await Page.open(cdp, url, injectorSource(clientSource), { trackNetwork: opts.mode === 'pin' })
+    page = await Page.open(cdp, url, injectorSource(clientSource), { trackNetwork: opts.mode === 'pin' || opts.mode === 'interrupted' })
     log('page: opened, waiting for the DSH shell…')
 
-    await runSmoke({ page, results, state })
+    await runSmoke({ page, results, state, opts })
     await ensureAppReady(page)
     if (opts.mode === 'full') {
       log('\n=== Acceptance checks ===')
@@ -10045,6 +10892,14 @@ async function run() {
         await runPinChecks({ page, results, state })
       } finally {
         await cleanupPinnedSessions(page, state)
+      }
+    } else if (opts.mode === 'interrupted') {
+      try {
+        await runInterruptedModeChecks({ page, results, state })
+      } finally {
+        // Clear every controlled record even when a check failed mid-run, then report
+        // the residual marker/record state honestly.
+        await cleanupInterruptedMode(page, state)
       }
     }
   } catch (error) {
@@ -10104,6 +10959,12 @@ async function run() {
   }
   if (state.live === true) {
     log(`live install: non-injected shipped GUI in two fresh profiles; page errors across profiles ${(state.livePageErrors ?? []).length}`)
+  }
+  if (state.mode === 'interrupted') {
+    log(`interrupted targets: card ${state.interrupted?.cardTarget ? `${state.interrupted.cardTarget.kind} "${short(state.interrupted.cardTarget.title, 60)}" (${state.interrupted.cardTarget.id})` : 'n/a'}; native ${state.interrupted?.nativeTarget ? `${state.interrupted.nativeTarget.id}` : 'n/a'}; current Session ${state.interrupted?.currentSession ?? state.sessionId ?? 'n/a'}`)
+    log(`interrupted controlled records: ${short(JSON.stringify(state.interrupted?.controlled ?? []), 400)}`)
+    log(`interrupted cleanup: ${state.interruptedCleanup ? short(JSON.stringify(state.interruptedCleanup), 1600) : 'not run'}`)
+    log(`interrupted real-state rows: ${state.interrupted?.realStateRows === undefined ? 'n/a' : state.interrupted.realStateRows}`)
   }
   if (state.screenshots.length > 0) log(`screenshots: ${state.screenshots.join(', ')}`)
   log(`elapsed: ${((Date.now() - started) / 1000).toFixed(1)}s`)
