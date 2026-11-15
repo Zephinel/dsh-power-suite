@@ -4070,6 +4070,20 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Whether one "Running & recent" card row must render the interrupted mark.
+     *
+     * Deliberately record-only: the card's own `running` flag is the combined state
+     * (own shell status OR running delegated subagent children), so gating the mark
+     * on it hid a Session whose own turn was interrupted while its children kept
+     * running. The record's own `running` already excludes the post-Continue phase.
+     * @param {object | null} record - Host interruption record.
+     * @returns {boolean} whether the card row shows the mark and its Continue CTA.
+     */
+    function interruptedCardMark(record) {
+      return interruptedIndicatorActive(record)
+    }
+
+    /**
      * Locally settle a record after an action the Host has not observed yet.
      * @param {string} sessionId - Session identity.
      * @param {boolean} interrupted - next interruption flag.
@@ -7447,8 +7461,28 @@ function dwClearNativeAtmospheres() {
         // subagent children still run stays in the running group by derivation,
         // but its own row must present the interrupted truth. The record's own
         // `running` already excludes the post-Continue phase.
-        return interruptedIndicatorActive(interruptedRecord(sessionId))
+        return interruptedCardMark(interruptedRecord(sessionId))
       }, [])
+      // A new local turn can start while a stale interrupted-idle record is cached: the
+      // record refreshes on the Host SSE boundary, the 20 s poll and the focus/online
+      // cues, but nothing pushes it when this browser sends a new prompt. Force one
+      // authoritative refresh when a listed row transitions to running so the card does
+      // not keep the old interrupted mark on live work.
+      const runningKey = visible.map((row) => `${row.id}:${row.state === 'running' ? 'r' : 'i'}`).join('|')
+      const runningTransitions = React.useRef(new Map())
+      React.useEffect(() => {
+        const previous = runningTransitions.current
+        for (const row of visible) {
+          const running = row.state === 'running'
+          if (previous.get(row.id) === false && running && interruptedIndicatorActive(interruptedRecord(row.id))) {
+            refreshInterrupted(row.id)
+          }
+          previous.set(row.id, running)
+        }
+        for (const id of [...previous.keys()]) {
+          if (!visible.some((row) => row.id === id)) previous.delete(id)
+        }
+      }, [runningKey])
       const interruptedTitle = (sessionId) => {
         const record = interruptedRecord(sessionId)
         return record !== null && record.subagent === true ? interruptedT('badge.title.subagent') : interruptedT('badge.title')
@@ -23891,7 +23925,8 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       // Interrupted-state decision seam: the one Host-record rule shared by the
       // native row decoration, the card rows and the composer seat.
       globalThis.__POWER_SUITE_TEST_HOOKS__.interruptedState = {
-        interruptedIndicatorActive
+        interruptedIndicatorActive,
+        interruptedCardMark
       }
       // The update prompt's pure state machine: payload validation, the
       // prompt/no-prompt decision, and the per-version later/silence state.

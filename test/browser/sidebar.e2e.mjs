@@ -10669,7 +10669,8 @@ async function runInterruptedModeChecks({ page, results, state }) {
       }
     }
     assert(view.composer !== null, 'the composer primary submit control is missing after clear')
-    assertEqual(view.composer.svgDisplay, 'block', 'the shell send glyph must be visible again after clear')
+    const baselineSvgDisplay = state.interrupted.baseline.composer?.svgDisplay ?? null
+    assertEqual(view.composer.svgDisplay, baselineSvgDisplay === null ? 'block' : baselineSvgDisplay, 'the shell send glyph must return to its baseline display after clear')
     assertEqual(view.composer.pseudoMask, 'none', 'the play triangle mask must be gone after clear')
     // The seat's attribute restore relies on the shell's next render; report any residual
     // label honestly instead of asserting an ownership the fix does not claim.

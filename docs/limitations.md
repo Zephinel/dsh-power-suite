@@ -80,6 +80,13 @@
   fetch (SSE turn boundary, focus/visibility/online, or the 20 s fallback poll).
   Running children keep the row in the card's running group even though its own
   row is marked.
+- **A new local turn can briefly outrun the record.** When this browser sends a
+  new prompt while a stale interrupted-idle record is cached, the card forces one
+  authoritative refresh as soon as the row transitions to running, so the stale
+  mark normally disappears before the reply starts; until that refresh lands
+  (one request round trip) the row can still show the mark and its Continue CTA.
+  Clicking Continue then is rejected by the Host (`session-busy`) and surfaces
+  the existing error notice.
 - **Continue can race the continuation turn.** A Continue clicked on a row whose
   continuation has just started can be rejected by the Host as `session-busy`
   (duplicate admission is rejected, not queued); the browser surfaces this

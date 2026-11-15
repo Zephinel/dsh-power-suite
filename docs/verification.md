@@ -2300,8 +2300,8 @@ the mark. The incident was a provider transport failure recorded in `turn/end`,
 
 - Node **v24.22.3**; headless Chrome **157.0.8103.79**; viewport **1728×900**;
   throwaway `--user-data-dir`; GUI token redacted.
-- Fixed client `src/client.js` md5 **`a111f7ec00cf2344b9423a2de907b8fb`**
-  (1,191,308 chars / 1,196,493 bytes); pre-fix negative-control client md5
+- Fixed client `src/client.js` md5 **`926ef1bde9a8abee966bf91b46482616`**
+  (1,193,131 chars / 1,198,316 bytes); pre-fix negative-control client md5
   **`d90e20fb70930094ee3dca6467663c76`**.
 
 ### Automated gates (local, 2026-11-15)
@@ -2316,8 +2316,8 @@ the mark. The incident was a provider transport failure recorded in `turn/end`,
 ### Live acceptance — `node test/browser/sidebar.e2e.mjs --interrupted`
 
 Exit **0**; **PASS 9 / SKIP 1 / FAIL 0**; **0 page errors**; **0 real network
-failures**; **5.3 s**. Log:
-`.tmp-work/interrupted-state/e2e/interrupted-acceptance-final-client.log`. The
+failures**; **5.1 s**. Log:
+`.tmp-work/interrupted-state/e2e/interrupted-acceptance-final2.log`. The
 mode injects this worktree's client into the running GUI and seeds controlled
 Host interruption records through the plugin's documented test seam
 (`__POWER_SUITE_TEST_HOOKS__.interruptedSessions`); it never provokes a real
@@ -2362,8 +2362,8 @@ amber mark/Continue/relative time (8 s timeout; it kept `state=running`,
 `actions=new`, time "8s") and the native stale-running row never gets the badge
 or injected Continue slot — while `iw-3`/`iw-4` PASS and `iw-5` SKIPs
 (**PASS 7 / SKIP 1 / FAIL 2**, 0 page errors, 0 real network failures,
-**19.9 s**, log
-`.tmp-work/interrupted-state/e2e/interrupted-negative-control-final.log`). The
+**20.0 s**, log
+`.tmp-work/interrupted-state/e2e/interrupted-negative-control-final2.log`). The
 two rows are therefore discriminating, not vacuous.
 
 ### Smoke regression

@@ -78,4 +78,16 @@ if (seam === undefined) {
     assert.equal(active(record({ interrupted: false })), false)
     assert.equal(active(record({ interrupted: false, running: true })), false)
   })
+
+  test('the card row decision is record-only: a running shell row cannot suppress a settled interrupted record', () => {
+    const cardMark = seam.interruptedCardMark
+    assert.equal(typeof cardMark, 'function')
+    // The card's own `running` flag is combined (own status OR running subagent
+    // children) and is deliberately not an input: dropping the shell gate is the fix.
+    assert.equal(cardMark.length, 1, 'the card decision takes only the Host record')
+    assert.equal(cardMark(record()), true, 'an interrupted-idle record marks the card row')
+    assert.equal(cardMark(record({ running: true })), false, 'the post-Continue phase hides the mark')
+    assert.equal(cardMark(record({ status: 'loading' })), false)
+    assert.equal(cardMark(null), false)
+  })
 }

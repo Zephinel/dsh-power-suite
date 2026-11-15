@@ -215,6 +215,10 @@ child runs, so gating the mark on it left such a Session looking simply running.
   control. The decision is therefore: the record is ready, `interrupted` is true
   and the record's `running` is not true; the shell's combined running flag is
   not an input.
+- **Live turns.** When this browser starts a new turn while a stale
+  interrupted-idle record is cached, the card forces one authoritative Host
+  refresh at the running transition, so the stale mark clears on active work
+  instead of waiting for the next poll/SSE boundary.
 
 The failure that prompted this behavior was a model-provider transport/timeout
 failure recorded in `turn/end`, not a DSH Web service restart; the service stayed
