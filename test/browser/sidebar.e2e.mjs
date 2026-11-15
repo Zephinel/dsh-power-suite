@@ -2530,7 +2530,6 @@ async function runLayoutChecks({ page, results, state }) {
     }, state.geometry.rows[parentIndex].title)
     assert(restored !== null, `the hovered row "${short(state.geometry.rows[parentIndex].title, 40)}" disappeared after the pointer left`)
     assertEqual(restored.timeOpacity, '1', `the time must return after the pointer leaves (opacity ${restored.timeOpacity})`)
-    assertEqual(restored.timeOpacity, '1', `the time must return after the pointer leaves (opacity ${restored.timeOpacity})`)
     const hoveredMargin = Number(before.rows[hoveredIndex].titleMarginLeft ?? before.rows[hoveredIndex].titleShift ?? 0)
     return `rest: time visible / "…" hidden; hover: time hidden / "…" visible with the ordinary hover paint${hoveredMenu.current ? ' suppressed on the rainbow row (brightness(1.2))' : ''}; columns fixed (time ${before.rows[0].time.rect.right}, action ${before.rows[0].actions.rect.right}, disclosure ${before.rows[0].toggle.right}); hovered title slid ${before.rows[hoveredIndex].title.rect.left} -> ${during.rows[hoveredIndex].title.rect.left} = 25 − rest marginLeft ${hoveredMargin} (two-phase reveal); subagent rows have no trigger; leaving restores the time`
   })

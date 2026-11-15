@@ -41,8 +41,8 @@ Highlights of the first release:
   Sessions pinned first and past the retention window, while a "…" row menu offers the shell's
   Rename/Fork/Copy Session ID/Show in Finder/Archive actions without Pin. Every
   top-level row (the current rainbow row included) keeps its time at rest and
-  swaps it for the "…" trigger on hover/focus; the trigger has no hover
-  highlight, and leaving restores the time. Sessions waiting on a question, plan review, or approval raise a
+  swaps it for the "…" trigger on hover/focus; the trigger keeps the ordinary
+  hover paint (only the rainbow row suppresses it), and leaving restores the time. Sessions waiting on a question, plan review, or approval raise a
   preview-only notice beside the card. Read marks and last-activity times are
   Host-shared, the current row carries a rainbow atmosphere, and both retention
   windows are settings on the bundle's Plugins page.

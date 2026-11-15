@@ -92,9 +92,9 @@ and no dated release heading is added until the release is cut.
   Session actions behind a "…" trigger in the 48 px time slot: every top-level
   row (the current rainbow row included) keeps its time at rest, and row
   hover/keyboard focus hides the time and shows the trigger — the swap stays
-  while the menu is open and leaving restores the time. The trigger paints no
-  hover background: only the keyboard `focus-visible` ring remains, and on the
-  rainbow row it gets the same `brightness(1.2)` suppression as the other
+  while the menu is open and leaving restores the time. The trigger keeps the
+  ordinary soft hover paint (plus the keyboard `focus-visible` ring); only the
+  rainbow row suppresses it, with the same `brightness(1.2)` lift as the other
   current-row controls. The popup is the card's own surface built from
   `ctx.contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })`,
   so Rename, Fork, Copy Session ID, Show in Finder, and Archive keep their

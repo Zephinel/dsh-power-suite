@@ -2210,8 +2210,9 @@ pin is **kept** (restored) and remains the single pin owner.
   (restored `Pinned Sessions` plus new `Row actions` and
   `Pending interaction notices`, limits, manual checks), `docs/architecture.md`
   (session-pins Host document/route/store, client-only menu/notice surfaces),
-  `docs/limitations.md` (card-pin `$DSH_HOME` sharing, label-only popup,
-  preview-only notices), `docs/overview.md`, `README.md`, `CHANGELOG.md`;
+  `docs/limitations.md` (card-pin `$DSH_HOME` sharing, custom popup with local
+  glyphs but no shortcut hints, preview-only notices), `docs/overview.md`,
+  `README.md`, `CHANGELOG.md`;
   `test/browser/sidebar.e2e.mjs` keeps the restored `--pin` scenarios and
   route/cache/DOM probes; full-mode `b2-3` now also asserts the uniform
   time→"…" highlight swap (time visible at rest is covered by the at-rest

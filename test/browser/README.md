@@ -554,15 +554,16 @@ committed scenario yet**:
   included) keeps its time visible at rest and carries a "…" trigger in the
   48 px time slot. Row hover/focus hides the time and shows the trigger; the
   swap stays while the menu is open (`data-menu-open`), and leaving restores the
-  time. The trigger paints **no hover background** (only the keyboard
-  `focus-visible` ring remains; on the rainbow row it gets the same
-  `brightness(1.2)` suppression as the New session/pin/Continue controls), and
-  subagent rows have no trigger. The trigger opens the card's own popup
+  time. The trigger keeps the ordinary soft hover paint (plus the keyboard
+  `focus-visible` ring); only the rainbow row suppresses it, with the same
+  `brightness(1.2)` lift as the New session/pin/Continue controls, and subagent
+  rows have no trigger. The trigger opens the card's own popup
   (`data-psd-menu`) built from the native Session action contributions via
   `contextMenus.resolve`: Rename / Fork / Copy Session ID / Show in Finder /
   Archive keep their native behavior, the **Pin/Unpin entry is filtered out**
   (the restored title-left pin button is the only pin owner), and the popup
-  shows labels only — no icons and no shortcut hints. Full-mode `b2-3` asserts
+  shows the native labels with a compact local glyph per action but no native
+  shortcut hints. Full-mode `b2-3` asserts
   the uniform highlight swap and no-hover-background rule; the popup actions and
   the absent Pin entry were verified by Lead live probes on the real GUI, not by
   this harness.
@@ -984,15 +985,16 @@ bottom 232/232), annotation S2/S5/S8 **7/0/0 each** (9.3/8.2/12.5 s,
 
 ### Known limitations (`--pin` / `--live`)
 
-- The custom row "…" popup is **label-only**: it shows no action icons and no
-  keyboard-shortcut hints, and its entries are the native Session action
-  contributions — an action a Host build does not contribute is simply absent.
-  The **Pin/Unpin entry is always filtered out** by design (the title-left pin
-  button owns pinning). The trigger itself paints **no hover background** (only
-  the keyboard `focus-visible` ring): every top-level row (the current rainbow
-  row included) keeps its time at rest and swaps it for the trigger on
-  hover/focus or while the menu is open, restoring it on leave; nested subagent
-  rows have no trigger.
+- The custom row "…" popup shows the native action labels plus a compact local
+  glyph, but **does not reproduce the native keyboard-shortcut hints**; its
+  entries are the native Session action contributions — an action a Host build
+  does not contribute is simply absent. The **Pin/Unpin entry is always filtered
+  out** by design (the title-left pin button owns pinning). The trigger keeps the
+  ordinary soft hover paint (plus the keyboard `focus-visible` ring); only the
+  rainbow row suppresses it. Every top-level row (the current rainbow row
+  included) keeps its time at rest and swaps it for the trigger on hover/focus
+  or while the menu is open, restoring it on leave; nested subagent rows have no
+  trigger.
 - The pending-interaction notice stack is preview-only: it lists at most three
   waiting Sessions, adds a "+N more" line, and never answers an interaction; it
   is hidden with the card in rail mode and contributes one notice per Session.
