@@ -2128,3 +2128,27 @@ feature branch was committed.
 - The CI matrix (Node 22/24), docs-only link path and publish gates have not run
   on GitHub yet — the repository still has no remote; the first push will be the
   first real workflow run.
+
+## 2026-11-15 — 复验修复（第二轮，`feat/update-reminder`）
+
+Both re-reviews confirmed all 12 Standards and 9 Spec findings FIXED; each axis
+raised new doc/gate findings, closed in the follow-up commit:
+
+- **The publish-manifest gate now matches the documented release step:** it
+  rejects only an explicit `"private": true`, so deleting the field (what the
+  release skill and `docs/development.md` instruct) passes; an optional manifest
+  path is accepted as a test seam. Shapes verified: `private: true` → exit 1,
+  field deleted → exit 0, `private: false` → exit 0.
+- **Comment/doc drift:** the `ci.yml` header describes the docs-only link gate,
+  the client's abort comment matches the actual `settle()`/`dispose()` behavior,
+  the e2e header says 21 checks, and `docs/update-check.md` states that the
+  parser has no cap while the Host check caps the card at six.
+
+Verification after the follow-up (branch `feat/update-reminder`, tree clean
+before it):
+
+- `npm test`: **308/308 passed**; `npm run check`: **passed** (docs links 21,
+  release-notes 6+6, pack 85 entries).
+- Publish-manifest gate shapes: `private: true` exit 1 / field deleted exit 0 /
+  `private: false` exit 0.
+- Live GUI harness: `node test/browser/update-prompt.e2e.mjs` → **21/21**.

@@ -171,7 +171,8 @@ https://raw.githubusercontent.com/Zephinel/dsh-power-suite/v<latest>/release-not
   normalized); a non-GitHub repository has no highlights.
 - The parser reads only the `## Highlights` section (up to the next heading),
   keeps its bullet list from `-`/`*`/`+` items, strips inline Markdown
-  (links, bold/italic, code ticks), and caps the result at six items.
+  (links, bold/italic, code ticks), and returns all of them; the Host check
+  caps the card at six items (the parser itself does not cap).
 - For `en` the `.en.md` variant is preferred and the default file is the
   fallback; any other locale reads the default file. A missing notes file, a
   missing `## Highlights` section, or a failed fetch yields `[]` — the version

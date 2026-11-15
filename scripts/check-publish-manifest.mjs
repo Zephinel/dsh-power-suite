@@ -9,13 +9,21 @@
  * `publish.yml` runs it right after the tag/version check so a tag pushed from an
  * unpreparable tree fails immediately with an explicit message instead of at the
  * `npm publish` step.
+ *
+ * Usage: `node scripts/check-publish-manifest.mjs [path/to/package.json]`. The
+ * optional manifest path is a test seam; release preparation removes the
+ * `"private": true` field (deleting it, not setting `false`), so only an
+ * explicit `true` is rejected here.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+const manifestPath = process.argv[2] === undefined
+  ? resolve(root, 'package.json')
+  : resolve(process.argv[2])
+const pkg = JSON.parse(readFileSync(manifestPath, 'utf8'))
 
 /** The only package identity this repository publishes. */
 const EXPECTED_NAME = '@zephinel/dsh-power-suite'
@@ -24,8 +32,8 @@ const EXPECTED_NAME = '@zephinel/dsh-power-suite'
 const EXPECTED_REPOSITORY = /^git\+https:\/\/github\.com\/Zephinel\/dsh-power-suite\.git$/u
 
 const failures = []
-if (pkg.private !== false) {
-  failures.push('package.json still has "private": true (remove it before tagging)')
+if (pkg.private === true) {
+  failures.push('package.json sets "private": true (delete the field before tagging)')
 }
 if (pkg.name !== EXPECTED_NAME) {
   failures.push(`package.json name must be ${EXPECTED_NAME} (found ${String(pkg.name)})`)

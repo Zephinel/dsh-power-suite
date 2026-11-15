@@ -13,7 +13,7 @@
  * keeps serving its own route; the running profile, settings and Sessions are
  * never written.
  *
- * Covered checks (20):
+ * Covered checks (21):
  * - the card appears bottom-right after the 1.5 s page-load delay, with
  *   role=region, the `current → latest` version line and the update/later
  *   actions;

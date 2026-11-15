@@ -1,11 +1,11 @@
 # Continuous integration.
 #
 # Design notes:
-# - `verify` runs on every PR and main push. The job always runs, so a required
-#   status check can never be left pending by a path-filtered run; a cheap
-#   `changes` job classifies docs-only changes, which skip the full gate. This
-#   repository has no docs-only check scripts (no `check:docs-*`), so a
-#   docs-only run is a fast no-op.
+# - `verify` runs on every PR and main push on Node 22 and 24. The job always
+#   runs, so a required status check can never be left pending by a path-filtered
+#   run; a cheap `changes` job classifies docs-only changes, which skip the full
+#   gate but still run `npm run check:docs-links` (the one gate a documentation
+#   change can break).
 # - Concurrency: PR pushes cancel superseded runs; main pushes use a per-SHA
 #   group so every commit on main runs to completion (a release commit must not
 #   skip gates).

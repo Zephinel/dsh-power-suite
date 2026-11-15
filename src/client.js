@@ -22693,7 +22693,7 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       let actionRevision = 0
       /** Scheduled delayed check (timer id), 0 when none is pending. */
       let checkTimer = 0
-      /** In-flight check request, aborted when the page unloads or a user settles. */
+      /** In-flight check request; a user decision invalidates its result and dispose() aborts it. */
       let checkAbort = null
       let pluginNavigation = null
 
