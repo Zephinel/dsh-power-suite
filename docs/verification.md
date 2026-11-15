@@ -1878,3 +1878,45 @@ Continue reduced-motion reset, and the F6/b2-5 NITs. The reviewer's static
 proofs (forced `:hover`/focus with the shipped CSS) are the basis for the
 updated assertions; the full sidebar E2E is still not executed because it
 creates sessions and pins on the shared Host.
+
+### Round-3 shipped verification (final merge `72ac1ab`)
+
+Re-probed the live GUI **without injection** after merging the round-3 fixes
+(throwaway headless Chrome, dark theme, real mouse; no service restart):
+
+- Served CSS is the final code: every final-only marker present — native Continue
+  slot opacity-only transition (width snaps), direct-child-only stale-dot hide,
+  absent old shared-wrapper hide and old `::before` mask, keyboard-gated card
+  focus and brightness lift, keyboard-gated native Continue focus reveal, scoped
+  card-current control suppression (`.psd-run-current > .psd-run-actions
+  .psd-row-action:hover`), full-row hover, gap-less head + 9 px glyph margin,
+  atmosphere absolute z0, reduced-motion resets including `.psd-continue-slot`.
+- Card ordinary row, shipped: rest title `49 px` / first-char centre `56 px`;
+  hover title `71 px`, full `240 px` row surface `rgba(255,255,255,.08)`, body
+  transparent, pin `0 → 16 + 9 px` visible.
+- Current rainbow card row + New session action, shipped: row/body/action
+  backgrounds `rgba(0,0,0,0)` with `filter: brightness(1.2)`.
+- Focus, shipped: pointer-modality focus leaves the row transparent; keyboard
+  modality paints `rgba(255,255,255,.08)`.
+- Reduced motion, shipped: pin slot/pin/title button/native Continue
+  `transition: none`; the static served-CSS check also covers the card
+  `.psd-continue-slot` (`transition: none`) and the scoped child-row behaviour
+  (nested child controls keep their normal hover block; child row surface paints).
+- Static replica from the **served** style tags (live Host currently lists no
+  interrupted Session row): leading cell `16 → 38 px`, Continue `22 px`, title
+  visible, no mask; marquee range at pointerenter `466 px` = settled `466 px`
+  (rest `444 px`); foreign leading-slot marks visible while native status nodes
+  are hidden; brightness gating `1.15 → 1.5` only under keyboard modality;
+  native Continue reveal `0 → 22 px` only under keyboard modality.
+- Page errors: 0 in every shipped run.
+- The second shipped-install delta review of the previous merge (`f3d1a54`)
+  independently returned CLEAN for the four reports and the five round-2 delta
+  fixes, and its two residual notes (card Continue reduced motion, "native-like
+  glyph gap" wording) are addressed in `72ac1ab`.
+
+Remaining gaps are harness/evidence limitations, not code defects: the full
+sidebar E2E is not executed (it mutates the shared Host, so the updated `b4-15`
+expectation is backed by the reviewer's forced-`:hover` static proof rather than
+a run), the F6 live check cannot reproduce the decorator's stale-native-running
+branch on the shared Host (covered by the static replica), and `b2-5` still uses
+a synthetic head stand-in for the Continue slot.
