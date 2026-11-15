@@ -410,16 +410,17 @@ finished-Session retention window; unpin re-derives the row under the ordinary
 rules from its original end time. Top-level rows (the current rainbow row included)
 expose the native Session actions behind a "…" trigger in the 48 px time slot:
 the row keeps its time at rest, and hover/focus (or an open menu) hides the time
-and reveals the trigger, restoring it on leave. The trigger paints no hover
-background (only the keyboard `focus-visible` ring; on the rainbow row it gets
-the same `brightness(1.2)` suppression as the other current-row controls), and
-nested subagent rows have no trigger. The trigger opens the card's **own
+and reveals the trigger, restoring it on leave. The trigger keeps the ordinary
+soft hover paint (plus the keyboard `focus-visible` ring); only the rainbow row
+suppresses it (transparent + the same `brightness(1.2)` lift as the other
+current-row controls). Nested subagent rows have no trigger. The trigger opens the card's **own
 popup** built from
 `ctx.contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })`:
 Rename, Fork, Copy Session ID, Show in Finder, and Archive keep their native
 behavior, the **Pin/Unpin contribution is filtered out** (the pin button owns
-pinning), and the popup renders labels only — no icons and no shortcut hints —
-with arrow/Home/End navigation and Escape/outside/scroll/resize dismissal.
+pinning), and the popup shows the native labels with a compact local glyph per
+action but does **not** reproduce the native shortcut hints; it keeps
+arrow/Home/End navigation and Escape/outside/scroll/resize dismissal.
 Pending-interaction notices are a client-only addition beside the card: the seat
 subscribes to `props.useSessionStatus` (the same
 `SessionStatus.pendingInteraction` the native composer cards use), derives up to

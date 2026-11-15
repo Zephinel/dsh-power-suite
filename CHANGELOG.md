@@ -99,8 +99,9 @@ and no dated release heading is added until the release is cut.
   `ctx.contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })`,
   so Rename, Fork, Copy Session ID, Show in Finder, and Archive keep their
   native behavior and labels; the **Pin/Unpin entry is filtered out** (the
-  title-left pin button is the only pin owner), and the popup shows labels only
-  — no icons and no shortcut hints. It supports arrow/Home/End navigation and
+  title-left pin button is the only pin owner), and the popup shows the native
+  labels with a compact local glyph per action but no native shortcut hints. It
+  supports arrow/Home/End navigation and
   closes on Escape, an outside pointer press, scroll or resize. Subagent rows
   have no trigger.
 - **Running & recent pending-interaction notices** — when a Session other than
@@ -359,12 +360,12 @@ and no dated release heading is added until the release is cut.
   the row-actions slot for **every top-level row**: at rest the row keeps its
   time, and hover/focus hides the time and shows the "…" trigger; the swap
   stays while the menu is open (`data-menu-open`) and leaving restores the
-  time. The trigger has **no hover highlight** — hovering it keeps a
-  transparent background (the global "…" hover block is gone, only the keyboard
-  focus ring remains) and on the rainbow row it gets the same `brightness(1.2)`
-  icon lift as the other current-row controls. Subagent rows keep the time slot
-  and have no trigger. The trigger opens a card-owned popup rendering the
-  native Session action contributions (labels only) without the Pin/Unpin
+  time. The trigger keeps the ordinary soft hover paint (plus the keyboard focus
+  ring); only the rainbow row suppresses it (transparent background + the same
+  `brightness(1.2)` icon lift as the other current-row controls). Subagent rows
+  keep the time slot and have no trigger. The trigger opens a card-owned popup
+  rendering the native Session action contributions (native labels plus local
+  action glyphs) without the Pin/Unpin
   entry, while the restored title-left pin button remains the pin owner.
 - **Running & recent row layout** — rows and the header share one fixed trailing
   grid: title (right-edge gradient fade while clipped) → **time 48 px**

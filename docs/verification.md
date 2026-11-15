@@ -2155,8 +2155,8 @@ before it):
 
 ## 2026-11-15 — Running & recent 行操作与待回答问题提醒（feat/running-panel-ux）
 
-Branch `feat/running-panel-ux` (HEAD `5f4df3e`, on top of `db62343` and
-`0ad41a0`). Two additions to the Running & recent card; the plugin-owned card
+Branch `feat/running-panel-ux` (branch tip, on top of `db62343`/`0ad41a0` and
+the review-fix commits). Two additions to the Running & recent card; the plugin-owned card
 pin is **kept** (restored) and remains the single pin owner.
 
 - **Card pin (kept/restored)** — the card's title-left pin button is the only
@@ -2215,8 +2215,9 @@ pin is **kept** (restored) and remains the single pin owner.
   `test/browser/sidebar.e2e.mjs` keeps the restored `--pin` scenarios and
   route/cache/DOM probes; full-mode `b2-3` now also asserts the uniform
   time→"…" highlight swap (time visible at rest is covered by the at-rest
-  geometry probe; hover hides the time and shows the trigger; the trigger paints
-  no hover background; leaving restores the time; subagent rows have none), and
+  geometry probe; hover hides the time and shows the trigger; the trigger keeps
+  the ordinary soft hover paint (the rainbow row suppresses it); leaving restores
+  the time; subagent rows have none), and
   `--pin` `r3-10` asserts the current rainbow row at rest (time visible, trigger
   hidden), its hover swap, and its hover-free suppression in the atmosphere
   control list; `test/browser/README.md` documents the new row-menu/notice
@@ -2239,8 +2240,9 @@ Live row-menu probes (Lead, real running GUI + throwaway headless Chrome):
 **16/16 checks** plus a focused action probe, 0 page errors — at rest the time is
 visible and the "…"
 trigger hidden; on row hover the time hides, the trigger shows, and the
-restored title-left pin slot animates in (button visible); the trigger paints
-no hover background (`transparent`); the card-owned popup opens, keeps the
+restored title-left pin slot animates in (button visible); the trigger keeps the
+ordinary soft hover paint (the rainbow row leaves it transparent); the
+card-owned popup opens, keeps the
 time/trigger swap while open, and lists Rename / Fork session / Copy Session
 ID / Show in Finder / Archive session with **no Pin/Unpin entry**; Escape
 closes it and leaving the row restores the time; a second real click on the

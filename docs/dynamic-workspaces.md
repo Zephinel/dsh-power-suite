@@ -1183,14 +1183,14 @@ The native **View options** menu picks how Sessions are grouped:
   either never changes the row layout or row height. The "…" Session-menu
   trigger follows the same highlight rule on **every top-level row**: at rest
   the time is visible, and hover/focus (or an open menu) hides it and shows the
-  trigger; leaving restores the time. The trigger paints **no hover
-  background** — hovering it keeps `background: rgba(0,0,0,0)` and only the
-  keyboard `focus-visible` ring remains; on the rainbow row it gets the same
-  `brightness(1.2)` suppression as the other current-row controls. Subagent
-  rows have no trigger, and a touch-only device cannot open it. Its popup is
-  the card's own surface (not the native popup): it shows **labels only** — no
-  icons, no shortcut hints — and always filters out the native Pin/Unpin
-  contribution, so pinning stays on the title-left pin button.
+  trigger; leaving restores the time. On ordinary rows the trigger keeps the
+  ordinary soft hover paint (plus the keyboard `focus-visible` ring); only the
+  rainbow row suppresses it (transparent + the same `brightness(1.2)` lift as
+  the other current-row controls). Subagent rows have no trigger, and a
+  touch-only device cannot open it. Its popup is the card's own surface (not the
+  native popup): it shows the native labels with a compact local glyph per
+  action but no native shortcut hints, and always filters out the native
+  Pin/Unpin contribution, so pinning stays on the title-left pin button.
 - **The pending-interaction notice stack is preview-only.** It shows at most
   three waiting Sessions (question, plan review, approval) and a "+N more"
   line; it never answers anything, so answering still happens in that
@@ -1385,8 +1385,8 @@ Manual checks on the running DSH Web GUI:
     links, and the node tests).
 17. Hover any top-level card row (the current rainbow row behaves the same):
     its time is hidden and a "…" trigger appears in the 48 px slot; the trigger
-    paints no hover background (on the rainbow row it only gets the
-    `brightness(1.2)` icon lift, and the keyboard focus ring remains). Click it
+    keeps the ordinary soft hover paint (the rainbow row suppresses it and keeps
+    only the `brightness(1.2)` icon lift; the keyboard focus ring remains). Click it
     to open the card's own Session menu (Rename, Fork, Copy Session ID, Show in
     Finder, Archive — **no Pin/Unpin**), use arrow keys/Home/End to move, and
     close it with Escape or an outside click; while the menu is open the swap

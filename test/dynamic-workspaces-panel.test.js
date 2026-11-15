@@ -20,28 +20,12 @@ const client = loadClientModule()
 const plain = (value) => structuredClone(value)
 const production = loadClientModule({ hooksFlag: false })
 const panel = client.hooks?.dynamicWorkspacesPanel
-const stats = client.hooks?.dynamicWorkspacesStats
 
 /** Fixed clock used by every fixture (2025-10-09T08:53:20Z). */
 const NOW = 1_760_000_000_000
 
 /** Functions the seam must expose. */
 const SEAM_KEYS = ['dwNoticePlacement', 'dwPendingNotices']
-
-/**
- * Build a translate seat from one dictionary map exactly like the locale
- * service: `t(key, params)` substitutes `{name}` placeholders.
- * @param {Record<string, string>} templates - copy dictionary.
- * @returns {Function} translate function.
- */
-function translate(templates) {
-  return (key, params) => {
-    const template = templates[key]
-    assert.notEqual(template, undefined, `missing dictionary key ${key}`)
-    if (params === undefined || params === null) return template
-    return template.replace(/\{(\w+)\}/g, (match, name) => String(params[name]))
-  }
-}
 
 /**
  * Read one helper off the panel seam with a clear failure.
@@ -164,7 +148,7 @@ test('notice placement prefers the card right edge and clamps into the viewport'
   assert.ok(narrow.left >= 8)
   const top = plain(place({ left: 16, right: 280, top: 2000 }, 1440, 900))
   assert.equal(top.top, 900 - 8 - 80)
-  const stacked = plain(place({ left: 16, right: 280, top: 2000 }, 1440, 900, 216))
-  assert.equal(stacked.top, 900 - 8 - 216, 'a three-notice stack is clamped so its bottom edge stays in view')
-  assert.ok(stacked.top + 216 <= 900 - 8)
+  const stacked = plain(place({ left: 16, right: 280, top: 2000 }, 1440, 900, 300))
+  assert.equal(stacked.top, 900 - 8 - 300, 'a three-notice stack is clamped so its bottom edge stays in view')
+  assert.ok(stacked.top + 300 <= 900 - 8)
 })

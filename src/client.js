@@ -5116,7 +5116,6 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-menu-item:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .psd-menu-item:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px;background:var(--dsw-alias-interactive-bg-hover)}
 .psd-menu-item:disabled{color:var(--dsw-alias-label-tertiary);cursor:default}
-.psd-menu-danger{color:var(--dsw-alias-state-warn-primary,#f5a524)}
 .psd-menu-sep{flex:none;height:1px;margin:4px 6px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 10%,transparent)}
 .psd-menu-loading{min-height:36px;padding:10px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px}
 .psd-notices{position:fixed;z-index:999;display:flex;flex-direction:column;gap:6px;pointer-events:none}
@@ -7327,7 +7326,7 @@ function dwClearNativeAtmospheres() {
         const update = () => {
           const panel = panelRootRef.current
           if (!(panel instanceof HTMLElement)) return
-          const stackHeight = 12 + Math.min(notices.length, 3) * 68 + (noticeOverflow > 0 ? 18 : 0)
+          const stackHeight = 12 + Math.min(notices.length, 3) * 96 + (noticeOverflow > 0 ? 18 : 0)
           const next = dwNoticePlacement(panel.getBoundingClientRect(), window.innerWidth, window.innerHeight, stackHeight)
           setNoticeStyle((current) => (current !== null
             && current.left === next.left && current.top === next.top && current.width === next.width
@@ -7936,6 +7935,9 @@ function dwClearNativeAtmospheres() {
           // handler (which toggles the menu) instead of closing on pointerdown.
           const trigger = menu.trigger
           if (trigger !== null && trigger !== undefined && trigger.contains(event.target)) return
+          // Keep the browser from moving focus to the pressed element; close()
+          // restores focus to the trigger.
+          event.preventDefault()
           onClose()
         }
         document.addEventListener('keydown', onKeyDown, true)
@@ -7967,7 +7969,7 @@ function dwClearNativeAtmospheres() {
           type: 'button',
           role: 'menuitem',
           'data-menu-action': view.id,
-          className: view.danger === true ? 'psd-menu-item psd-menu-danger' : 'psd-menu-item',
+          className: 'psd-menu-item',
           disabled: view.disabled === true,
           ref: (element) => {
             if (element === null) itemRefs.current.delete(view.id)
@@ -23792,7 +23794,6 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesPanel = {
         dwPendingNotices,
         dwNoticePlacement,
-        DW_NOTICE_LIMIT,
       }
       // The update prompt's pure state machine: payload validation, the
       // prompt/no-prompt decision, and the per-version later/silence state.
