@@ -493,6 +493,7 @@ node test/browser/sidebar.e2e.mjs --smoke          pipeline + blank-Session smok
 node test/browser/sidebar.e2e.mjs --pin            pipeline smoke + R1/R2/R3 acceptance checks (card-owned pin)
 node test/browser/sidebar.e2e.mjs --live           shipped-install check (NO client injection, read-only, two profiles)
 node test/browser/sidebar.e2e.mjs --layout         sidebar-width drag/persistence/Host-sync acceptance (restores the width)
+node test/browser/sidebar.e2e.mjs --interrupted    interrupted-state consistency acceptance (controlled seam, live route)
 node test/browser/sidebar.e2e.mjs --no-shots       no screenshots
 node test/browser/sidebar.e2e.mjs --client PATH    inject a different client.js
 node test/browser/sidebar.e2e.mjs --keep-open      leave Chrome running for inspection
@@ -687,6 +688,106 @@ failure or fatal error; `2` for usage errors.
 - The live GUI is being used while the harness runs; the mode only watches the current
   rows' canvas element identity, and live card re-sorts do not affect the native
   Workspace/Session rows used as the oracle.
+### `--interrupted` checks (interrupted-state consistency fix)
+
+`--interrupted` is the live-GUI acceptance mode for the interrupted-state consistency fix:
+the card's own row must show the interrupted truth even when the card still renders the
+Session as running (a parent whose own turn was interrupted while delegated subagent
+children keep running), the native sidebar row that the shell still renders as running must
+get both the warning badge **and** the hover Continue CTA, and the composer play control
+must stay consistent. It runs the four pipeline smoke checks, enables the CDP `Network`
+domain (same-origin failure predicate) and seeds **controlled** interrupted records through
+the documented `__POWER_SUITE_TEST_HOOKS__.interruptedSessions` seam — no Session is
+created, opened or typed into, and every controlled record is cleared in a `finally` block.
+
+| # | Check | Oracle |
+|---|-------|--------|
+| `smoke-1..4` | Pipeline | Injected worktree client ran; card mounted; a current Session is open and untouched (this mode does **not** run `ensureBlankSession`, so no Session is created); 1728x900 screenshot round-trip |
+| `iw-net` | Network oracle ready | `Network.enable` succeeded; the client's own `GET /api/power-suite.interrupted` probes and the real-state queries are counted (they answer 200 on this Host) |
+| `iw-1` | Card mark beats the combined running state | picks a card row the card renders as **running** (prefers the current row, then a main row, then a child row), seeds `{interrupted:true, running:false}` and asserts: amber `.psd-interrupted` glyph (warn token `--dsw-alias-state-warn-primary`, localized "Task did not finish" label), the continue action (`data-actions` contains `continue`; a main row also renders `.psd-continue-slot` + `.psd-continue-inline` with the localized Continue label), and the time column is a **relative last-activity label, never a running duration**. The controlled record stays interrupted-idle. A screenshot (`iw1-card-interrupted.png`) and the baseline view JSON are written |
+| `iw-2` | Native stale-running row: badge **and** hover Continue CTA | picks a native Session row the shell still renders as running (spinner in the leading cell, no custom `sidebar.session.row.leading` slot), seeds the controlled record and asserts: `data-power-suite-interrupted` on the row, a `.dps-row-interrupted` badge **in the native leading cell (never inside `[data-psd-atmos]`)** with the localized label, a decoration-injected `.dps-row-continue-slot[data-dynamic-continue="true"]` with a `.dps-row-continue` button, and on **real CDP pointer hover** (move + settle, **never a click**) the slot reaches `width 22 px / opacity 1 / pointer-events auto` with a 22×22 button, the localized label and exactly one play glyph. Screenshot `iw2-native-hover-continue.png` |
+| `iw-3` | Composer play state | seeds the controlled record on the **current** Session and asserts `html[data-power-suite-interrupted="true"]`, the composer primary submit control is enabled, relabelled/titled "Continue the unfinished task" (localized), its shell send glyph is `display:none`, and the 16×16 play triangle is painted through the `::before` mask. Screenshot `iw3-composer-play.png` |
+| `iw-4` | Clear restores every surface | `clear()` on every controlled id: no `.psd-interrupted`/`.psd-continue-slot`/continue action on the card row (its `data-actions` returns to the captured baseline), no marker/badge/injected slot on the native rows, the html marker is gone and the composer shell glyph is visible again with no play mask. The client may re-fetch the row's real Host record right after the clear — that is the authoritative behavior; only a still-interrupted-idle record counts as a residual. The mode reports the composer label residual honestly (the shell owns restoring its own label on the next render) |
+| `iw-5` | Real-state consistency | for every Session the card/native sidebar **actually renders**, queries the live Host route `/api/power-suite.interrupted`; each `interrupted:true && running:false` Session must render the interrupted mark (card glyph / native badge) on its rendered surface. **Explicit SKIP** when no rendered Session is interrupted-idle in the live data state (the controlled iw-1/iw-2 rows still cover the fix) |
+
+Exit contract: **0** only when every row is PASS or an explicit SKIP, with **0 page errors**
+and **0 real network failures**; `1` for any failed row, page error, real network failure or
+fatal error; `2` for usage errors.
+
+Negative control (recorded): the same mode run against the **pre-fix client** copied from the
+main checkout (`d90e20fb70930094ee3dca6467663c76`) fails exactly the two fixed scenarios —
+`iw-1` (running card row gets no amber mark, no Continue CTA and keeps its running duration)
+and `iw-2` (the stale-running native row gets no injected Continue slot) — while `iw-3` and
+`iw-4` stay green; `iw-5` is the same explicit SKIP. Log:
+`.tmp-work/interrupted-state/e2e/interrupted-negative-control-final.log` (gitignored).
+
+Recorded evidence (2026-11-15, worktree `interrupted-state-fix`): fixed client
+`src/client.js` md5 **926ef1bde9a8abee966bf91b46482616** (1,193,131 chars / 1,198,316 bytes), pre-fix control
+client copied from the main checkout md5 **d90e20fb70930094ee3dca6467663c76**
+(`.tmp-work/interrupted-state/e2e/client-prefix.js`), Node **v24.22.3**, Chrome
+**157.0.8103.79**, headless 1728×900 against the live GUI. Logs/screenshots under
+`.tmp-work/interrupted-state/e2e/` (gitignored).
+
+| Run | Command | Result |
+|-----|---------|--------|
+| Acceptance | `node test/browser/sidebar.e2e.mjs --interrupted` | **PASS 9 / SKIP 1 / FAIL 0**, **0 page errors**, **0 real network failures**, 5.1 s, exit 0 (`interrupted-acceptance-final2.log`): seams `interruptedSessions {set,clear,record,sync}` + `interruptedState {interruptedIndicatorActive, interruptedCardMark}` present; iw-1 on the card's combined-running main row: `.psd-interrupted` "Task did not finish" `rgb(245, 158, 11)` (warn token), `data-actions="continue+new"` + `.psd-continue-slot`/`.psd-continue-inline`, time `"now"` relative; iw-2 on native row `session-4bdf12eb-…`: badge 1 + 1 decoration-injected, Continue slot **22 px / opacity 1 / pointer-events auto**, button **22×22**, one play glyph, hover by real CDP pointer and **never clicked**; iw-3 composer html marker + "Continue the unfinished task" + 16×16 play mask; iw-4 cleared 2 controlled records, 0 residual records/markers, html marker absent, composer label residual reported honestly; iw-5 explicit **SKIP** (10 visible Sessions checked against `GET /api/power-suite.interrupted`, none interrupted-idle in this data state) |
+| Negative control | `node test/browser/sidebar.e2e.mjs --interrupted --client .tmp-work/interrupted-state/e2e/client-prefix.js` | **FAIL exactly iw-1 and iw-2** (running card row gets no amber mark/CTA and keeps the running duration; stale-running native row gets no injected Continue slot), iw-3/iw-4 **PASS**, iw-5 **SKIP**, 0 page errors, 0 real network failures, exit 1, 19.7 s (`interrupted-negative-control-final.log`) — the two fixed oracles are discriminating |
+| Pipeline regression | `node test/browser/sidebar.e2e.mjs --smoke` | **4/4 PASS**, 0 page errors, 2.1 s, exit 0 (`smoke-regression-2026-11-15.log`) — the mode plumbing did not break the existing pipeline |
+
+Full mode was **not** run this round (per the task); the `f6-1`/`f6-2` edits above are static
+for the next full run and were not exercised.
+
+### Side effects and cleanup (`--interrupted`)
+
+- Creates/opens/edits **no Session** and types nothing: smoke-3 only verifies the Session
+  the shell restored and records its id (transcript/draft untouched); the mode only hovers
+  rows with a real pointer and never clicks.
+- The only state it drives is the plugin's in-page interrupted store through the documented
+  test seam (`{interrupted:true, running:false}` on one running card row + the current
+  Session). Every seeded id is cleared by `iw-4` and again in the `finally` cleanup, which
+  prints the residual records, native markers, card mark and html marker; the recorded run
+  leaves 0 records/markers.
+- The client may re-fetch real Host records after the clear (authoritative), and the
+  composer's `aria-label`/`title` set by the seat can survive until the shell re-renders:
+  both are reported honestly, not asserted away.
+- No Host write: no Continue request is sent, no settings change, no localStorage document
+  is written by the harness; the throwaway Chrome profile is removed with the temporary
+  `--user-data-dir`.
+- Exit 0 requires every row PASS (SKIPs allowed), 0 page errors and 0 real network
+  failures.
+
+### Full-mode oracle follow-up (`f6-1` / `f6-2`)
+
+The fix legitimately puts a play SVG inside the native `.dps-row-continue-slot`, next to
+the warning badge, for an interrupted-idle record on a row the shell still renders as
+running. The untouched full-mode `f6-1` sampler counted every leading-cell SVG as a second
+indicator, so its `peerSvgs` filter now excludes SVGs whose `closest('.dps-row-continue-slot')`
+matches (the badge is still filtered through `.dps-row-interrupted`), and its comment now
+points the stale-native-running branch at `--interrupted` `iw-2`. The `f6-2` wording that
+called the card Continue CTA "deliberately suppressed while running" was refreshed: the
+fixed client renders it on running card rows too (covered by `--interrupted` `iw-1`), so
+that full-mode row keeps its historical idle-row focus without claiming suppression. No
+other oracle changed. Full mode was **not** run this round (per the task); these are
+static edits for the next full run.
+
+### Known limitations (`--interrupted`)
+
+- The controlled records are seeded through the test seam only when
+  `window.__POWER_SUITE_TEST_HOOKS__` exists (the harness init script creates it before the
+  injected client loads). A missing seam makes `iw-1..iw-4` FAIL with that exact reason.
+- `iw-1` needs a card row the card renders as **running** and `iw-2` needs a native row the
+  shell still renders as running (stale spinner). In a data state with neither (nothing
+  running at all), those rows are explicit SKIPs with the reason; the mode never
+  fabricates activity and never creates a Session to manufacture one.
+- The live GUI is being used while the harness runs, so the card can re-sort between the
+  seed and the assertion; the checks poll the DOM/title and the seam record, and re-read the
+  view once for the post-clear assertions.
+- `iw-5` is only executed when the live data contains a genuinely interrupted-idle Session
+  on a rendered surface; otherwise it is an explicit SKIP. It never invents real state.
+- The composer label restoration is shell-owned (the seat only sets it while interrupted);
+  `iw-4` reports a residual label honestly instead of asserting it.
+- The negative control proves the two fixed oracles are discriminating; it intentionally
+  exits 1 and is not part of a green acceptance run.
 
 ### Side effects and cleanup (`--pin` / `--live`)
 

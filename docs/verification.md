@@ -2389,3 +2389,121 @@ collapse→reopen restore got a pure decision + unit test (`lw-8`).
   shell's narrow-viewport rail/drawer behavior is documented from
   `@deepseek-ai/dsh-client-ui-layout@0.2.2-rc.1` and the client code, not from a
   live narrow-viewport run.
+## 2026-11-15 — Interrupted-state consistency (card + stale-running native rows, `interrupted-state-fix`)
+
+Branch `interrupted-state-fix` (based on `feat/dynamic-workspaces` @ `ca71885`).
+Fixes the user-reported inconsistency after a turn ended with `Connection
+error.`: the **Running & recent** card gated the interrupted mark on the shell's
+combined running flag, so a Session whose own turn stopped on a model-provider
+`TRANSPORT`/`TIMEOUT` failure while its delegated subagent children were still
+running stayed in the running group with no mark or Continue; and a native
+sidebar row the shell still rendered as running showed the amber badge but no
+hover Continue CTA. The Host interruption record is now the single authority for
+the mark. The incident was a provider transport failure recorded in `turn/end`,
+**not** a DSH Web service restart — the service was healthy throughout. Docs:
+[interrupted-sessions.md](interrupted-sessions.md),
+[limitations.md](limitations.md), and `CHANGELOG.md` updated in the same round.
+
+### Environment (2026-11-15)
+
+- Node **v24.22.3**; headless Chrome **157.0.8103.79**; viewport **1728×900**;
+  throwaway `--user-data-dir`; GUI token redacted.
+- Fixed client `src/client.js` md5 **`926ef1bde9a8abee966bf91b46482616`**
+  (1,193,131 chars / 1,198,316 bytes); pre-fix negative-control client md5
+  **`d90e20fb70930094ee3dca6467663c76`**.
+
+### Automated gates (local, 2026-11-15)
+
+- `npm test`: **316 tests, 316 passed, 0 failed** — 311 baseline plus the new
+  `test/interrupted-state.test.js` (**5/5**: the record-only
+  `interruptedIndicatorActive` rule, including the post-Continue `running: true`
+  phase, non-ready records, and the inert production path).
+- `npm run check`: **exit 0** (`entryCount` 85).
+- `node scripts/check-docs-links.mjs`: ok, **21 Markdown files**.
+
+### Live acceptance — `node test/browser/sidebar.e2e.mjs --interrupted`
+
+Exit **0**; **PASS 9 / SKIP 1 / FAIL 0**; **0 page errors**; **0 real network
+failures**; **5.1 s**. Log:
+`.tmp-work/interrupted-state/e2e/interrupted-acceptance-final2.log`. The
+mode injects this worktree's client into the running GUI and seeds controlled
+Host interruption records through the plugin's documented test seam
+(`__POWER_SUITE_TEST_HOOKS__.interruptedSessions`); it never provokes a real
+provider failure, creates a Session, or sends a continuation, and clears every
+seeded record in `finally`.
+
+- `smoke-1..4` **PASS** — pipeline: injected client evaluated in the live page,
+  card mounted, the current Session left untouched (0 transcript messages,
+  0-char draft; no Session created), 1728×900 screenshot round-trip.
+- `iw-net` **PASS** — CDP Network domain enabled; same-origin API/document
+  failures are counted (the interrupted route must answer 200).
+- `iw-1` **PASS** — a card row the derivation renders as running
+  (`data-state=running`, combined running) with a controlled
+  `{interrupted:true, running:false}` record shows the amber `.psd-interrupted`
+  glyph ("Task did not finish", rgb(245, 158, 11)), the
+  `data-actions="continue+new"` Continue action
+  (`.psd-continue-slot`/`.psd-continue-inline`), and time "now" — a relative
+  last-activity label, not a running duration.
+- `iw-2` **PASS** — native stale-running row ("Running / 1 subagent running",
+  time "1h") shows the amber badge (1 badge + 1 dynamic decoration) and a real
+  CDP pointer hover reveals the Continue slot at 22 px, opacity 1,
+  pointer-events auto, with a 22×22 "Continue the unfinished task" button. The
+  button was never clicked (no real continuation).
+- `iw-3` **PASS** — composer play state for the controlled interrupted current
+  Session: `html[data-power-suite-interrupted=true]`, "Continue the unfinished
+  task" enabled, 16×16 play mask.
+- `iw-4` **PASS** — clearing the controlled records restores the card, native
+  rows and composer (no interrupted marker/badge/injected slot left; HTML
+  marker removed; composer shell glyph restored).
+- `iw-5` **SKIP** — no Session the card/native sidebar rendered was
+  interrupted-idle in the live data state (12 visible Sessions checked against
+  `GET /api/power-suite.interrupted`); the consistency assert path is
+  implemented and the controlled `iw-1`/`iw-2` rows cover the fix.
+- Cleanup: 2 controlled records cleared, 0 residual records/markers, 0 issues.
+
+### Negative control (2026-11-15)
+
+The same `--interrupted` mode against a pre-fix client copy
+(`.tmp-work/interrupted-state/e2e/client-prefix.js`, md5 `d90e20fb…`) exits **1**
+and **FAILs exactly `iw-1` and `iw-2`** — the running card row never shows the
+amber mark/Continue/relative time (8 s timeout; it kept `state=running`,
+`actions=new`, time "8s") and the native stale-running row never gets the badge
+or injected Continue slot — while `iw-3`/`iw-4` PASS and `iw-5` SKIPs
+(**PASS 7 / SKIP 1 / FAIL 2**, 0 page errors, 0 real network failures,
+**20.0 s**, log
+`.tmp-work/interrupted-state/e2e/interrupted-negative-control-final2.log`). The
+two rows are therefore discriminating, not vacuous.
+
+### Smoke regression
+
+`node test/browser/sidebar.e2e.mjs --smoke`: **4/4 PASS**, 0 page errors,
+**2.1 s** (log `.tmp-work/interrupted-state/e2e/smoke-regression-2026-11-15.log`).
+
+### Evidence limits (state honestly)
+
+- `iw-5` is a **SKIP**: no real interrupted-idle Session was rendered during the
+  run, so the reported scenario was reproduced with controlled records through
+  the documented test seam rather than by provoking a live provider failure. The
+  user's original failure was a provider `TRANSPORT`/`TIMEOUT` `turn/end`; no
+  DSH Web restart was involved.
+- The mode asserts rendered state only: it never clicks the Continue CTA and
+  never sends a continuation, so the Host `session-busy` rejection of a
+  duplicate Continue is covered by the existing Host route tests, not by this
+  live run.
+- One throwaway Chrome profile per run; no second device and no real
+  interrupted provider failure were exercised.
+
+### Merged-build confirmation (`feat/dynamic-workspaces` @ merge of `sidebar-width-persistence` + `interrupted-state-fix`)
+
+The two feature branches were merged into `feat/dynamic-workspaces` with the
+conflicts resolved by keeping both feature documentation sections and both live
+E2E modes in `test/browser/sidebar.e2e.mjs` (a single shared smoke check covers
+`--layout` and `--interrupted`; the CDP Network oracle and the summary output
+cover both). Merged tree: `npm test` **343/343 pass**, `npm run check`
+**exit 0**, docs links **22 files ok**, merged `src/client.js` md5
+**`c91e97be04aef561d7c267e9092b0f2f`** (1,229,656 chars / 1,234,847 bytes).
+Re-run on the merged client: `--layout` **PASS 11 / SKIP 1 / FAIL 0**,
+`--interrupted` **PASS 9 / SKIP 1 / FAIL 0**, `--smoke` **4/4 PASS**, 0 page
+errors and 0 real network failures in every run (logs under
+`.tmp-work/merge-verify/`). The Host-side sidebar-width route still needs the
+DSH Web service restart to load; the pre-restart SKIP is unchanged.

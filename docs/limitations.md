@@ -73,6 +73,29 @@
   browser, proxy buffering, stream failure) the fallback can lag by one poll
   interval. Each open tab holds one long-lived SSE connection and there is no
   event replay, so a reconnect performs a full known-record refresh.
+- **The mark follows the Host record, not the shell's running flag.** Because
+  the record is authoritative, the mark/Continue CTA can lead the shell's own
+  running flag by one refresh interval: after a turn stops while the shell still
+  renders the row as running, the interrupted state appears on the next Host
+  fetch (SSE turn boundary, focus/visibility/online, or the 20 s fallback poll).
+  Running children keep the row in the card's running group even though its own
+  row is marked.
+- **A new local turn can briefly outrun the record.** When this browser sends a
+  new prompt while a stale interrupted-idle record is cached, the card forces one
+  authoritative refresh as soon as the row transitions to running, so the stale
+  mark normally disappears before the reply starts; until that refresh lands
+  (one request round trip) the row can still show the mark and its Continue CTA.
+  Clicking Continue then is rejected by the Host (`session-busy`) and surfaces
+  the existing error notice.
+- **Continue can race the continuation turn.** A Continue clicked on a row whose
+  continuation has just started can be rejected by the Host as `session-busy`
+  (duplicate admission is rejected, not queued); the browser surfaces this
+  through the existing error notice and refreshes the interruption state instead
+  of starting a second turn.
+- **The card hover card is unchanged.** The Dynamic Workspaces row hover card
+  still reports the shell's status line and running duration for a row whose own
+  turn was interrupted while delegated children run; the interrupted truth is on
+  the row's glyph, Continue action and time column only.
 
 ## Update notice
 

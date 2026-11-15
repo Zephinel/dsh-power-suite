@@ -4070,6 +4070,20 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Whether one "Running & recent" card row must render the interrupted mark.
+     *
+     * Deliberately record-only: the card's own `running` flag is the combined state
+     * (own shell status OR running delegated subagent children), so gating the mark
+     * on it hid a Session whose own turn was interrupted while its children kept
+     * running. The record's own `running` already excludes the post-Continue phase.
+     * @param {object | null} record - Host interruption record.
+     * @returns {boolean} whether the card row shows the mark and its Continue CTA.
+     */
+    function interruptedCardMark(record) {
+      return interruptedIndicatorActive(record)
+    }
+
+    /**
      * Locally settle a record after an action the Host has not observed yet.
      * @param {string} sessionId - Session identity.
      * @param {boolean} interrupted - next interruption flag.
@@ -4275,10 +4289,12 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     //#endregion
 
     /**
-     * Build one standalone warning icon element for dynamically decorated rows.
+     * Build one standalone inline Remix icon for dynamically decorated rows
+     * (the same 14 px markup the React slot path renders).
+     * @param {string} path - Remix icon path data.
      * @returns {SVGElement} the icon.
      */
-    function interruptedDecorBadgeIcon() {
+    function interruptedDecorIcon(path) {
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
       svg.setAttribute('viewBox', '0 0 24 24')
       svg.setAttribute('width', '14')
@@ -4286,9 +4302,53 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       svg.setAttribute('fill', 'currentColor')
       svg.setAttribute('aria-hidden', 'true')
       const shape = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-      shape.setAttribute('d', REMIX_WARNING_FILL)
+      shape.setAttribute('d', path)
       svg.appendChild(shape)
       return svg
+    }
+
+    /**
+     * Build one standalone warning icon element for dynamically decorated rows.
+     * @returns {SVGElement} the icon.
+     */
+    function interruptedDecorBadgeIcon() {
+      return interruptedDecorIcon(REMIX_WARNING_FILL)
+    }
+
+    /**
+     * Build the dynamic Continue CTA for a native row the shell still renders as
+     * running.
+     *
+     * It mirrors the `InterruptedBadge` slot markup (`span.dps-row-continue-slot`
+     * around `button.dps-row-continue`) so the existing reveal CSS applies on
+     * both paths, and its click goes through the shared {@link requestContinue}
+     * handshake: this decoration never sends a continuation itself.
+     * @param {Function} t - interrupted-feature translate.
+     * @param {string} sessionId - Session identity.
+     * @returns {HTMLSpanElement} the Continue slot.
+     */
+    function interruptedDecorContinueSlot(t, sessionId) {
+      const slot = document.createElement('span')
+      slot.className = 'dps-row-continue-slot'
+      slot.setAttribute('data-dynamic-continue', 'true')
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'dps-row-continue'
+      button.title = t('continue.aria')
+      button.setAttribute('aria-label', t('continue.aria'))
+      button.appendChild(interruptedDecorIcon(REMIX_PLAY_FILL))
+      button.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        // Resolve the Session from the live row at click time: a native row element
+        // is the shell's to reuse, so the captured id is only the fallback.
+        const row = button.closest('[data-row-key^="session:"]')
+        const key = row === null ? '' : row.getAttribute('data-row-key') ?? ''
+        const target = key.startsWith('session:') ? key.slice('session:'.length) : ''
+        requestContinue(target.length > 0 ? target : sessionId)
+      })
+      slot.appendChild(button)
+      return slot
     }
 
     /**
@@ -4314,10 +4374,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      *
      * The shell only renders the custom leading slot for idle rows; a row that
      * the native client still believes is running renders its own green spinner
-     * and no leading slot. This decoration places the warning badge in that
-     * native leading span and hides the stale spinner, so the interrupted state
-     * is visible immediately after a reconnect rather than after opening the
-     * Session.
+     * and no leading slot. This decoration places the warning badge AND its hover
+     * Continue CTA in that native leading span and hides the stale spinner, so the
+     * interrupted state is visible immediately after a reconnect rather than after
+     * opening the Session. Both injected parts carry their own marker attributes
+     * so the slot path's markup is never mistaken for this decoration.
      * @returns {void}
      */
     function syncInterruptedRows() {
@@ -4329,33 +4390,54 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const interrupted = interruptedIndicatorActive(record)
         if (interrupted !== true) {
           row.removeAttribute('data-power-suite-interrupted')
-          for (const badge of row.querySelectorAll('.dps-row-interrupted[data-dynamic-badge="true"]')) badge.remove()
+          for (const element of row.querySelectorAll('[data-dynamic-badge="true"], [data-dynamic-continue="true"]')) element.remove()
           continue
         }
         row.setAttribute('data-power-suite-interrupted', '')
         // The rainbow-atmosphere wrapper is injected as the row's first child; the
-        // stale-spinner badge must land in the native leading cell instead, never
-        // inside the atmosphere layer.
+        // stale-spinner badge and its Continue CTA must land in the native leading
+        // cell instead, never inside the atmosphere layer.
         const leading = [...row.children].find((child) => !child.hasAttribute('data-psd-atmos')) ?? null
         if (leading === null) continue
-        const badges = [...row.querySelectorAll('.dps-row-interrupted')]
-        const persistent = badges.find((badge) => badge.getAttribute('data-dynamic-badge') !== 'true')
+        // A row the shell renders as idle mounts the custom leading slot, which
+        // owns the same badge + Continue pair. Keep that pair and drop dynamic
+        // leftovers from an earlier running render (a row can move from running to
+        // idle between two syncs).
+        const persistent = [...row.querySelectorAll('.dps-row-interrupted')]
+          .find((badge) => badge.getAttribute('data-dynamic-badge') !== 'true')
         if (persistent !== undefined) {
-          for (const badge of badges) {
-            if (badge !== persistent) badge.remove()
-          }
+          for (const element of row.querySelectorAll('[data-dynamic-badge="true"], [data-dynamic-continue="true"]')) element.remove()
           continue
         }
-        let badge = badges[0]
-        if (badge === undefined) {
+        let badge = leading.querySelector('.dps-row-interrupted[data-dynamic-badge="true"]')
+        if (badge === null) {
           badge = document.createElement('span')
           badge.className = 'dps-row-interrupted'
           badge.setAttribute('data-dynamic-badge', 'true')
           badge.setAttribute('role', 'img')
-          badge.setAttribute('aria-label', t('badge.aria'))
-          badge.title = record.subagent === true ? t('badge.title.subagent') : t('badge.title')
           badge.appendChild(interruptedDecorBadgeIcon())
           leading.insertBefore(badge, leading.firstChild)
+        }
+        for (const duplicate of [...leading.querySelectorAll('.dps-row-interrupted[data-dynamic-badge="true"]')]) {
+          if (duplicate !== badge) duplicate.remove()
+        }
+        const badgeAria = t('badge.aria')
+        if (badge.getAttribute('aria-label') !== badgeAria) badge.setAttribute('aria-label', badgeAria)
+        const badgeTitle = record.subagent === true ? t('badge.title.subagent') : t('badge.title')
+        if (badge.getAttribute('title') !== badgeTitle) badge.setAttribute('title', badgeTitle)
+        const continueLabel = t('continue.aria')
+        let slot = leading.querySelector('.dps-row-continue-slot[data-dynamic-continue="true"]')
+        if (slot === null) {
+          slot = interruptedDecorContinueSlot(t, sessionId)
+          leading.insertBefore(slot, badge.nextSibling)
+        }
+        for (const duplicate of [...leading.querySelectorAll('.dps-row-continue-slot[data-dynamic-continue="true"]')]) {
+          if (duplicate !== slot) duplicate.remove()
+        }
+        const button = slot.querySelector('.dps-row-continue')
+        if (button !== null) {
+          if (button.getAttribute('title') !== continueLabel) button.title = continueLabel
+          if (button.getAttribute('aria-label') !== continueLabel) button.setAttribute('aria-label', continueLabel)
         }
       }
       for (const row of document.querySelectorAll('[data-row-key^="session:"][data-power-suite-interrupted]')) {
@@ -4365,7 +4447,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         const record = interruptedStore.records.get(sessionId)
         if (interruptedIndicatorActive(record)) continue
         row.removeAttribute('data-power-suite-interrupted')
-        for (const badge of row.querySelectorAll('.dps-row-interrupted[data-dynamic-badge="true"]')) badge.remove()
+        for (const element of row.querySelectorAll('[data-dynamic-badge="true"], [data-dynamic-continue="true"]')) element.remove()
       }
     }
 
@@ -7380,12 +7462,34 @@ function dwClearNativeAtmospheres() {
           for (const dispose of unwatch) dispose()
         }
       }, [interruptedKey])
-      const rowInterrupted = React.useCallback((sessionId, running) => {
-        // Never show the interrupted mark (or its Continue CTA) while the row is
-        // running/loading, even when the Host still reports the previous turn as
-        // interrupted; the card row passes its live shell state.
-        return running !== true && interruptedIndicatorActive(interruptedRecord(sessionId))
+      const rowInterrupted = React.useCallback((sessionId) => {
+        // The Host record alone decides, never the card row's combined shell
+        // running state: a parent whose own turn was interrupted while delegated
+        // subagent children still run stays in the running group by derivation,
+        // but its own row must present the interrupted truth. The record's own
+        // `running` already excludes the post-Continue phase.
+        return interruptedCardMark(interruptedRecord(sessionId))
       }, [])
+      // A new local turn can start while a stale interrupted-idle record is cached: the
+      // record refreshes on the Host SSE boundary, the 20 s poll and the focus/online
+      // cues, but nothing pushes it when this browser sends a new prompt. Force one
+      // authoritative refresh when a listed row transitions to running so the card does
+      // not keep the old interrupted mark on live work.
+      const runningKey = visible.map((row) => `${row.id}:${row.state === 'running' ? 'r' : 'i'}`).join('|')
+      const runningTransitions = React.useRef(new Map())
+      React.useEffect(() => {
+        const previous = runningTransitions.current
+        for (const row of visible) {
+          const running = row.state === 'running'
+          if (previous.get(row.id) === false && running && interruptedIndicatorActive(interruptedRecord(row.id))) {
+            refreshInterrupted(row.id)
+          }
+          previous.set(row.id, running)
+        }
+        for (const id of [...previous.keys()]) {
+          if (!visible.some((row) => row.id === id)) previous.delete(id)
+        }
+      }, [runningKey])
       const interruptedTitle = (sessionId) => {
         const record = interruptedRecord(sessionId)
         return record !== null && record.subagent === true ? interruptedT('badge.title.subagent') : interruptedT('badge.title')
@@ -7615,8 +7719,12 @@ function dwClearNativeAtmospheres() {
         } else {
           for (const row of visible) {
             const running = row.state === 'running'
+            const interrupted = rowInterrupted(row.id)
             const duration = durations.get(row.id)
-            const time = running
+            // An interrupted row shows its last activity, never a running
+            // duration: its own turn already stopped even when delegated subagent
+            // children keep the row in the running group.
+            const time = running && !interrupted
               ? (duration === undefined || duration.observed !== true
                   ? dwFormatRelative(now - row.updatedAt, t)
                   : dwFormatDuration(now - duration.at, t))
@@ -7624,7 +7732,6 @@ function dwClearNativeAtmospheres() {
             const rowChildren = childrenByParent.get(row.id) ?? []
             const collapsed = collapsedParents.has(row.id)
             const hasChildren = rowChildren.length > 0
-            const interrupted = rowInterrupted(row.id, running)
             const pinned = isPinned(row)
             const menuOpen = menuEnabled && typeof menuSessionId === 'string' && menuSessionId === row.id
             // Fixed trailing columns, left to right: time 48 px, action 22 px,
@@ -7746,7 +7853,7 @@ function dwClearNativeAtmospheres() {
                   workspaceId: child.workspaceId ?? row.workspaceId ?? null,
                   cwd: child.cwd ?? row.cwd ?? null
                 }
-                const childInterrupted = rowInterrupted(child.id, child.state === 'running')
+                const childInterrupted = rowInterrupted(child.id)
                 const childCurrent = isCurrent(child.id)
                 return React.createElement('div', {
                   key: child.id,
@@ -7773,12 +7880,19 @@ function dwClearNativeAtmospheres() {
                   onBlur: hideHover
                 },
                 React.createElement('span', { className: 'psd-child-glyph' },
-                  child.state === 'running'
-                    ? React.createElement(StateDot, { state: 'ongoing', size: 10 })
-                    : !isRead(child.id, child.updatedAt)
-                      ? React.createElement(StateDot, { state: 'done', size: 10 })
-                      : React.createElement('span', { className: 'psd-child-brand', 'aria-hidden': true },
-                        RemixGlyph(DW_ROBOT_2_LINE, 12))),
+                  childInterrupted
+                    ? React.createElement('span', {
+                      className: 'psd-interrupted',
+                      role: 'img',
+                      'aria-label': interruptedT('badge.aria'),
+                      title: interruptedTitle(child.id)
+                    }, RemixGlyph(REMIX_WARNING_FILL, 12))
+                    : child.state === 'running'
+                      ? React.createElement(StateDot, { state: 'ongoing', size: 10 })
+                      : !isRead(child.id, child.updatedAt)
+                        ? React.createElement(StateDot, { state: 'done', size: 10 })
+                        : React.createElement('span', { className: 'psd-child-brand', 'aria-hidden': true },
+                          RemixGlyph(DW_ROBOT_2_LINE, 12))),
                 React.createElement('span', { className: 'psd-child-title' }, child.title)),
                 React.createElement('span', { key: 'spacer', className: 'psd-child-spacer', 'aria-hidden': true }),
                 React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t)),
@@ -24639,6 +24753,12 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesPanel = {
         dwPendingNotices,
         dwNoticePlacement,
+      }
+      // Interrupted-state decision seam: the one Host-record rule shared by the
+      // native row decoration, the card rows and the composer seat.
+      globalThis.__POWER_SUITE_TEST_HOOKS__.interruptedState = {
+        interruptedIndicatorActive,
+        interruptedCardMark
       }
       // The update prompt's pure state machine: payload validation, the
       // prompt/no-prompt decision, and the per-version later/silence state.
