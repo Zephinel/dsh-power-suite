@@ -53,8 +53,10 @@
  *       single-image native lightbox unchanged).
  *
  * Side effects: one blank Session is created through the native New Session button per
- * run and one more through the card's main-row New session action (b2-4; both blank and
- * never typed into); two tiny generated PNGs are pasted into (and removed again from)
+ * injected run (full / pin / smoke) and one more through the card's main-row New session
+ * action (b2-4; both blank and never typed into); the `--layout` mode is the exception —
+ * it needs only the Session the shell already restored, creates none and never types;
+ * two tiny generated PNGs are pasted into (and removed again from)
  * that blank Session's composer for the gallery checks; one existing Session row is opened
  * (from the card) to exercise the
  * current-highlight marker; `localStorage` for the throwaway profile is modified
@@ -77,13 +79,24 @@
  * typing) to make them current, then switch back to a main Session for the native
  * current-row checks. The `--live` mode is read-only: it loads the shipped GUI in two
  * fresh throwaway profiles WITHOUT injecting this worktree's client, to prove the merged
- * install serves the normal card (ordinary rows + children, zero prefilled pins).
+ * install serves the normal card (ordinary rows + children, zero prefilled pins). The
+ * `--layout` mode drags the native sidebar resize handle with real CDP pointer input and
+ * checks the persisted/synced sidebar width: handle + measured width (lw-1), live
+ * atmosphere canvas on the current row (lw-2), the flicker oracle over a ~10-step drag
+ * (lw-3: stable canvas element identity, ≥1 backing-store resize, 0 blank bitmap
+ * samples), the localStorage cache + seam `probe()` after the drag (lw-4), reload
+ * persistence (lw-5), the Host route + second-fresh-profile cross-device adoption (lw-6,
+ * explicit SKIP while the running Host predates the merged route), and the restore of
+ * the pre-run width through the same drag (lw-7). It restores the pre-run width in a
+ * `finally` block and reports the residual browser cache / Host document honestly; while
+ * the Host route is absent only the throwaway profile's localStorage is written.
  *
  * Usage:
  *   node test/browser/sidebar.e2e.mjs                 # full run (screenshots into .tmp-work/)
  *   node test/browser/sidebar.e2e.mjs --smoke         # pipeline smoke only
  *   node test/browser/sidebar.e2e.mjs --pin           # pin / hover-dot / native-figure acceptance
  *   node test/browser/sidebar.e2e.mjs --live          # shipped-install check, no client injection
+ *   node test/browser/sidebar.e2e.mjs --layout        # sidebar-width drag flicker + persistence + Host sync
  *   node test/browser/sidebar.e2e.mjs --no-shots      # skip screenshots
  *   node test/browser/sidebar.e2e.mjs --client path/to/client.js
  *   node test/browser/sidebar.e2e.mjs --keep-open     # leave Chrome running for inspection
@@ -121,6 +134,19 @@ const VIEWPORT = { width: 1728, height: 900 }
 // rule only while testing the pinned card on this worktree (which predates it).
 const ANNOTATION_PIN_CSS =
   "html[data-psa-active='true'] [data-psd-hovercard]{pointer-events:auto;z-index:120!important}"
+
+// --layout mode: persisted, Host-synced sidebar width. The route is owned by the
+// `src/features/sidebar-width/` Host half; `SIDEBAR_WIDTH_ROUTE_PATH` is the pathname the
+// CDP network oracle classifies separately while the running Host predates it (pre-restart
+// 404 probes are the documented missing-route state, never real network failures).
+const SIDEBAR_WIDTH_ROUTE_PATH = '/api/power-suite.sidebar-width'
+const SIDEBAR_WIDTH_STORAGE_KEY = 'power-suite.sidebar-width'
+const SIDEBAR_WIDTH_MIN = 264
+const SIDEBAR_WIDTH_MAX = 420
+const SIDEBAR_DRAG_TOTAL_PX = 40
+const SIDEBAR_DRAG_STEPS = 10
+const SIDEBAR_DRAG_STEP_SETTLE_MS = 26
+const LAYOUT_EVIDENCE_DIR = path.join(WORKTREE, '.tmp-work', 'sidebar-width', 'e2e')
 
 // ---------------------------------------------------------------------------------------------
 // small utilities
@@ -176,6 +202,7 @@ function parseArgs(argv) {
     if (arg === '--smoke') opts.mode = 'smoke'
     else if (arg === '--pin') opts.mode = 'pin'
     else if (arg === '--live') opts.mode = 'live'
+    else if (arg === '--layout') opts.mode = 'layout'
     else if (arg === '--no-shots') opts.shots = false
     else if (arg === '--keep-open') opts.keepOpen = true
     else if (arg === '--headful') opts.headful = true
@@ -184,7 +211,7 @@ function parseArgs(argv) {
     else if (arg === '--url') opts.url = argv[++i]
     else if (arg.startsWith('--url=')) opts.url = arg.slice('--url='.length)
     else if (arg === '--help' || arg === '-h') {
-      console.log('usage: node test/browser/sidebar.e2e.mjs [--smoke] [--pin] [--live] [--no-shots] [--client path] [--keep-open] [--headful] [--url TOKEN_URL]')
+      console.log('usage: node test/browser/sidebar.e2e.mjs [--smoke] [--pin] [--live] [--layout] [--no-shots] [--client path] [--keep-open] [--headful] [--url TOKEN_URL]')
       process.exit(0)
     } else {
       throw new Error(`unknown argument: ${arg}`)
@@ -640,6 +667,8 @@ class Page {
     this.networkError = null
     this.networkFailures = []
     this.pinRouteFailures = []
+    this.sidebarWidthRouteFailures = []
+    this.sidebarWidthRouteWrites = []
     this.shellProbeFailures = []
     this.ignoredNetworkNoise = 0
     this._networkRequests = new Map()
@@ -659,6 +688,13 @@ class Page {
         const write = { at: Date.now(), postData: String(params.request.postData ?? '') }
         this.pinRouteWrites.push(write)
         log(`pin route POST ${write.postData}`)
+      }
+      // `--layout` writes only the sidebar width; log every POST so a residual Host
+      // document change (route live) is attributable to an action in the run log.
+      if (pathname === SIDEBAR_WIDTH_ROUTE_PATH && params.request.method === 'POST') {
+        const write = { at: Date.now(), postData: String(params.request.postData ?? '') }
+        this.sidebarWidthRouteWrites.push(write)
+        log(`sidebar-width route POST ${write.postData}`)
       }
     }))
     this._subscriptions.push(this.cdp.on('Network.responseReceived', (params, eventSession) => {
@@ -686,6 +722,7 @@ class Page {
         // restarted with the merged plugin; its 404s are reported separately (a SKIP
         // reason), never swallowed as a product network failure.
         if (pathname === '/api/power-suite.session-pins') this.pinRouteFailures.push(`HTTP ${response.status} ${type} ${redact(response.url)}`)
+        else if (pathname === SIDEBAR_WIDTH_ROUTE_PATH) this.sidebarWidthRouteFailures.push(`HTTP ${response.status} ${type} ${redact(response.url)}`)
         else if (pathname === '/api/changes.summary' && response.status === 404) this.shellProbeFailures.push(`HTTP ${response.status} ${type} ${redact(response.url)}`)
         else this.networkFailures.push(`HTTP ${response.status} ${type} ${redact(response.url)}`)
       }
@@ -714,6 +751,7 @@ class Page {
         requestPath = ''
       }
       if (requestPath === '/api/power-suite.session-pins') this.pinRouteFailures.push(failure)
+      else if (requestPath === SIDEBAR_WIDTH_ROUTE_PATH) this.sidebarWidthRouteFailures.push(failure)
       else if (requestPath === '/api/changes.summary') this.shellProbeFailures.push(failure)
       else this.networkFailures.push(failure)
     }))
@@ -2027,7 +2065,7 @@ function sectionRows(sections, title, titleMatch) {
 // Checks
 // ---------------------------------------------------------------------------------------------
 
-async function runSmoke({ page, results, state }) {
+async function runSmoke({ page, results, state, opts }) {
   log('\n=== Smoke: pipeline ===')
   await results.check('smoke-1', 'app loaded and plugin factory injected from this worktree', async () => {
     await page.waitForFn(probe.appReady, [], { timeout: 60000, label: 'app ready' })
@@ -2054,11 +2092,35 @@ async function runSmoke({ page, results, state }) {
     assertEqual(details.panels, 1, 'expected exactly one running card')
     return 'card inside the native Workspaces browser root'
   })
-  await results.check('smoke-3', 'blank Session open/verified (never typed into)', async () => {
-    const blank = await ensureBlankSession(page)
-    state.sessionId = blank.sessionId
-    return `blank Session ${blank.sessionId}, 0 messages, empty draft`
-  })
+  if (opts !== undefined && opts.mode === 'layout') {
+    // `--layout` only needs A current Session (the rainbow atmosphere marks its rows);
+    // it never types, and it must not create a Session — `ensureBlankSession` can open a
+    // new blank Session on the Host and switch the live GUI, which this mode avoids.
+    await results.check('smoke-3', 'a current Session is open; --layout leaves it untouched (never creates or types into a Session)', async () => {
+      // The shell restores the last-viewed Session asynchronously after the shell mounts.
+      await page.waitForFn(() => !!document.querySelector('[data-conversation-session]'), [], { timeout: 15000, label: 'restored current Session' }).catch(() => {})
+      const current = await page.eval(() => {
+        const session = document.querySelector('[data-conversation-session]')
+        const editor = document.querySelector('[data-lexical-editor="true"]')
+        return {
+          sessionId: session === null ? null : session.getAttribute('data-conversation-session'),
+          hasComposer: editor !== null,
+          messages: document.querySelectorAll('[data-conversation-message]').length,
+          draftLength: editor === null ? 0 : (editor.innerText || '').trim().length,
+        }
+      })
+      assert(current.sessionId !== null,
+        'no Session is open in the live GUI. The current-row rainbow atmosphere needs one; start or keep a Session open and rerun (--layout never creates or types into Sessions).')
+      state.sessionId = current.sessionId
+      return `current Session ${current.sessionId} (${current.messages} transcript message(s), draft ${current.draftLength} char(s), composer ${current.hasComposer ? 'present' : 'absent'}) — untouched`
+    })
+  } else {
+    await results.check('smoke-3', 'blank Session open/verified (never typed into)', async () => {
+      const blank = await ensureBlankSession(page)
+      state.sessionId = blank.sessionId
+      return `blank Session ${blank.sessionId}, 0 messages, empty draft`
+    })
+  }
   await results.check('smoke-4', 'screenshot round-trip produces 1728x900 PNG', async () => {
     const buffer = Buffer.from(await page.screenshotBase64(), 'base64')
     assert(buffer.length > 20000, `screenshot too small: ${buffer.length} bytes`)
@@ -9982,6 +10044,928 @@ async function runLiveChecks({ url, results, state }) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// --layout mode: persisted, Host-synced sidebar width + the drag flicker oracle
+// ---------------------------------------------------------------------------------------------
+
+/** Page-side probes for the `--layout` checks (plain serializable functions). */
+const probeLayout = {
+  /**
+   * Sidebar shell facts: grid track, drag handle, collapsed/dragging state and the
+   * per-origin sidebar-width cache. The column width (not the 0x0 slot anchor) is the
+   * rendered width the shell stores as `layoutInfo.sidebar`.
+   */
+  sidebarShell: () => {
+    const box = (element) => {
+      if (element === null || element === undefined) return null
+      const rect = element.getBoundingClientRect()
+      return {
+        left: Math.round(rect.left),
+        top: Math.round(rect.top),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        right: Math.round(rect.right),
+        bottom: Math.round(rect.bottom),
+      }
+    }
+    const column = document.querySelector('[class*="_sidebarCol"]')
+    const handle = document.querySelector('[data-side="sidebar"]')
+    const frame = document.querySelector('[class*="_frame"]')
+    let cacheRaw = null
+    try {
+      cacheRaw = window.localStorage.getItem('power-suite.sidebar-width')
+    } catch {
+      cacheRaw = null
+    }
+    return {
+      column: box(column),
+      handle: box(handle),
+      handleLeftStyle: handle === null ? null : handle.style.left,
+      frame: box(frame),
+      grid: frame === null ? null : getComputedStyle(frame).gridTemplateColumns,
+      collapsed: document.querySelector('[data-sidebar-collapsed]') !== null,
+      dragging: document.querySelector('[data-dragging]') !== null,
+      cacheRaw,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+    }
+  },
+
+  /** Painted-pixel + current-row facts for every atmosphere canvas on the page. */
+  canvasPaint: () => {
+    const pixelGrid = (canvas) => {
+      if (!canvas.isConnected || canvas.width <= 0 || canvas.height <= 0) return 0
+      let context = null
+      try {
+        context = canvas.getContext('2d', { willReadFrequently: true })
+      } catch {
+        context = null
+      }
+      if (context === null) return 0
+      let sum = 0
+      for (let gy = 0; gy < 7; gy += 1) {
+        for (let gx = 0; gx < 7; gx += 1) {
+          const x = Math.min(canvas.width - 1, Math.max(0, Math.round(((gx + 0.5) * canvas.width) / 7)))
+          const y = Math.min(canvas.height - 1, Math.max(0, Math.round(((gy + 0.5) * canvas.height) / 7)))
+          const data = context.getImageData(x, y, 1, 1).data
+          sum += data[0] + data[1] + data[2] + data[3]
+        }
+      }
+      return sum
+    }
+    return [...document.querySelectorAll('.psd-atmos-canvas')].map((canvas) => {
+      const wrapper = canvas.parentElement
+      const row = wrapper === null ? null : wrapper.parentElement
+      const rect = canvas.getBoundingClientRect()
+      return {
+        wrapper: wrapper === null ? null : wrapper.getAttribute('data-psd-atmos'),
+        rowKey: row === null ? null : row.getAttribute('data-row-key'),
+        currentWorkspace: row !== null && row.getAttribute('data-psd-current-workspace') === 'true',
+        currentSession: row !== null && row.getAttribute('data-psd-current-session') === 'true',
+        running: wrapper === null ? null : wrapper.getAttribute('data-psd-atmos-running'),
+        motion: wrapper === null ? null : wrapper.getAttribute('data-psd-atmos-motion'),
+        width: canvas.width,
+        height: canvas.height,
+        painted: pixelGrid(canvas),
+        rect: {
+          left: Math.round(rect.left),
+          top: Math.round(rect.top),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        },
+        visible: rect.width > 0 && rect.height > 0,
+      }
+    })
+  },
+
+  /** Browser cache raw value + the client's documented `sidebarWidth.probe()` seam read. */
+  sidebarWidthState: () => {
+    let cacheRaw = null
+    try {
+      cacheRaw = window.localStorage.getItem('power-suite.sidebar-width')
+    } catch {
+      cacheRaw = null
+    }
+    const hooks = globalThis.__POWER_SUITE_TEST_HOOKS__
+    const seam = hooks !== null && typeof hooks === 'object' ? hooks.sidebarWidth : undefined
+    let probeState = null
+    let seamError = null
+    if (seam !== undefined && seam !== null && typeof seam.probe === 'function') {
+      try {
+        probeState = seam.probe()
+      } catch (error) {
+        seamError = String((error && error.message) || error)
+      }
+    }
+    return {
+      cacheRaw,
+      seamPresent: seam !== undefined && seam !== null,
+      seamKeys: seam !== undefined && seam !== null && typeof seam === 'object' ? Object.keys(seam) : null,
+      probe: probeState,
+      seamError,
+    }
+  },
+
+  /** Same-origin authenticated GET of the Host sidebar-width document. */
+  hostSidebarWidth: async () => {
+    try {
+      const response = await fetch('/api/power-suite.sidebar-width', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { accept: 'application/json' },
+      })
+      let payload = null
+      try {
+        payload = await response.json()
+      } catch {
+        payload = null
+      }
+      return { ok: response.ok, status: response.status, payload }
+    } catch (error) {
+      return { ok: false, status: null, error: String((error && error.message) || error) }
+    }
+  },
+
+  /** Same-origin authenticated POST of one width (cleanup restore only). */
+  postHostSidebarWidth: async (width) => {
+    try {
+      const response = await fetch('/api/power-suite.sidebar-width', {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { accept: 'application/json', 'content-type': 'application/json' },
+        body: JSON.stringify({ sidebarWidth: width }),
+      })
+      let payload = null
+      try {
+        payload = await response.json()
+      } catch {
+        payload = null
+      }
+      return { ok: response.ok, status: response.status, payload }
+    } catch (error) {
+      return { ok: false, status: null, error: String((error && error.message) || error) }
+    }
+  },
+
+  /**
+   * Arm the flicker instrumentation: tag every atmosphere canvas with a stable id and
+   * register a ResizeObserver on it AFTER the client's own observer. The client's
+   * observer (registered first, so notified first in the same batch) runs
+   * `resize(); draw()`; this callback samples the bitmap in the same resize-notification
+   * task, which is exactly the before-the-browser-paints contract of the fix. A blank
+   * sample here means a resized canvas was left unpainted until a later animation tick.
+   */
+  armFlicker: () => {
+    const pixelGrid = (canvas) => {
+      if (!canvas.isConnected || canvas.width <= 0 || canvas.height <= 0) return 0
+      let context = null
+      try {
+        context = canvas.getContext('2d', { willReadFrequently: true })
+      } catch {
+        context = null
+      }
+      if (context === null) return 0
+      let sum = 0
+      for (let gy = 0; gy < 7; gy += 1) {
+        for (let gx = 0; gx < 7; gx += 1) {
+          const x = Math.min(canvas.width - 1, Math.max(0, Math.round(((gx + 0.5) * canvas.width) / 7)))
+          const y = Math.min(canvas.height - 1, Math.max(0, Math.round(((gy + 0.5) * canvas.height) / 7)))
+          const data = context.getImageData(x, y, 1, 1).data
+          sum += data[0] + data[1] + data[2] + data[3]
+        }
+      }
+      return sum
+    }
+    const state = { armAt: Math.round(performance.now()), canvases: [], ro: [], observers: [] }
+    globalThis.__psdLwFlicker = state
+    let index = 0
+    for (const canvas of document.querySelectorAll('.psd-atmos-canvas')) {
+      const id = `atmos-${index}`
+      index += 1
+      canvas.setAttribute('data-psd-e2e-atmos', id)
+      const wrapper = canvas.parentElement
+      const row = wrapper === null ? null : wrapper.parentElement
+      const record = {
+        id,
+        element: canvas,
+        lastWidth: canvas.width,
+        lastHeight: canvas.height,
+      }
+      state.canvases.push({
+        id,
+        wrapper: wrapper === null ? null : wrapper.getAttribute('data-psd-atmos'),
+        rowKey: row === null ? null : row.getAttribute('data-row-key'),
+        currentWorkspace: row !== null && row.getAttribute('data-psd-current-workspace') === 'true',
+        currentSession: row !== null && row.getAttribute('data-psd-current-session') === 'true',
+        width: canvas.width,
+        height: canvas.height,
+      })
+      if (typeof ResizeObserver === 'function') {
+        const observer = new ResizeObserver(() => {
+          const width = canvas.width
+          const height = canvas.height
+          const resized = width !== record.lastWidth || height !== record.lastHeight
+          record.lastWidth = width
+          record.lastHeight = height
+          state.ro.push({
+            at: Math.round(performance.now()),
+            id,
+            resized,
+            width,
+            height,
+            painted: pixelGrid(canvas),
+            connected: canvas.isConnected,
+          })
+        })
+        observer.observe(canvas)
+        state.observers.push(observer)
+      }
+    }
+    return { armAt: state.armAt, canvases: state.canvases, count: state.canvases.length }
+  },
+
+  /** One per-drag-step sample of the rendered width + every atmosphere canvas bitmap. */
+  flickerStep: (tag) => {
+    const pixelGrid = (canvas) => {
+      if (!canvas.isConnected || canvas.width <= 0 || canvas.height <= 0) return 0
+      let context = null
+      try {
+        context = canvas.getContext('2d', { willReadFrequently: true })
+      } catch {
+        context = null
+      }
+      if (context === null) return 0
+      let sum = 0
+      for (let gy = 0; gy < 7; gy += 1) {
+        for (let gx = 0; gx < 7; gx += 1) {
+          const x = Math.min(canvas.width - 1, Math.max(0, Math.round(((gx + 0.5) * canvas.width) / 7)))
+          const y = Math.min(canvas.height - 1, Math.max(0, Math.round(((gy + 0.5) * canvas.height) / 7)))
+          const data = context.getImageData(x, y, 1, 1).data
+          sum += data[0] + data[1] + data[2] + data[3]
+        }
+      }
+      return sum
+    }
+    const state = globalThis.__psdLwFlicker
+    const column = document.querySelector('[class*="_sidebarCol"]')
+    const columnWidth = column === null ? null : Math.round(column.getBoundingClientRect().width)
+    return {
+      tag,
+      at: Math.round(performance.now()),
+      dragging: document.querySelector('[data-dragging]') !== null,
+      columnWidth,
+      canvases: [...document.querySelectorAll('.psd-atmos-canvas')].map((canvas) => ({
+        id: canvas.getAttribute('data-psd-e2e-atmos'),
+        width: canvas.width,
+        height: canvas.height,
+        painted: pixelGrid(canvas),
+        connected: canvas.isConnected,
+      })),
+      roCount: state === undefined || state === null ? 0 : state.ro.length,
+    }
+  },
+
+  /** The in-frame resize samples collected by the armed observers. */
+  flickerSummary: () => {
+    const state = globalThis.__psdLwFlicker
+    if (state === undefined || state === null) return { ok: false, ro: [], canvases: [] }
+    return { ok: true, armAt: state.armAt, canvases: state.canvases, ro: state.ro }
+  },
+
+  /** Disconnect the observers and drop the instrumentation markers. */
+  disarmFlicker: () => {
+    const state = globalThis.__psdLwFlicker
+    if (state === undefined || state === null) return false
+    for (const observer of state.observers ?? []) {
+      try {
+        observer.disconnect()
+      } catch {
+        // A disconnected observer is fine.
+      }
+    }
+    for (const canvas of document.querySelectorAll('.psd-atmos-canvas')) canvas.removeAttribute('data-psd-e2e-atmos')
+    globalThis.__psdLwFlicker = null
+    return true
+  },
+}
+
+/**
+ * Parse the client's sidebar-width cache document
+ * (`power-suite.sidebar-width`: `{version:1, sidebarWidth, pending}`).
+ * @param {string | null} raw - localStorage value.
+ * @returns {{ version: 1, sidebarWidth: number | null, pending: boolean } | null} parsed document, or null when absent/malformed.
+ */
+function parseSidebarWidthCache(raw) {
+  if (typeof raw !== 'string' || raw.length === 0) return null
+  let parsed = null
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return null
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  if (parsed.version !== 1) return null
+  if (parsed.sidebarWidth !== null && !(Number.isInteger(parsed.sidebarWidth) && parsed.sidebarWidth >= SIDEBAR_WIDTH_MIN && parsed.sidebarWidth <= SIDEBAR_WIDTH_MAX)) return null
+  if (typeof parsed.pending !== 'boolean') return null
+  return { version: 1, sidebarWidth: parsed.sidebarWidth, pending: parsed.pending }
+}
+
+/**
+ * @param {object | null} facts - `probeLayout.sidebarShell` result.
+ * @returns {number | null} the rendered sidebar column width in px.
+ */
+function sidebarWidthOf(facts) {
+  if (facts === null || facts === undefined) return null
+  if (facts.column !== null && facts.column !== undefined && facts.column.width > 0) return facts.column.width
+  if (facts.handle !== null && facts.handle !== undefined) return Math.round(facts.handle.left + facts.handle.width / 2)
+  return null
+}
+
+/**
+ * @returns {Promise<object | null>} sidebar shell facts (never throws).
+ */
+async function readSidebarShell(page) {
+  try {
+    return await page.eval(probeLayout.sidebarShell)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Poll the rendered sidebar width until it matches `expected`.
+ * @param {object} page - Page wrapper.
+ * @param {number | null} expected - target width; null returns the current width after the timeout.
+ * @param {object} [options] - tolerance/timeout/label.
+ * @returns {Promise<number | null>} the matching width, or the last rendered width when `expected` is null.
+ */
+async function waitSidebarWidth(page, expected, { tolerance = 1, timeout = 8000, label = 'sidebar width' } = {}) {
+  const deadline = Date.now() + timeout
+  let last = null
+  while (Date.now() < deadline) {
+    const facts = await readSidebarShell(page)
+    const width = sidebarWidthOf(facts)
+    if (width !== null) {
+      last = width
+      if (expected !== null && Math.abs(width - expected) <= tolerance) return width
+    }
+    if (Date.now() + 200 >= deadline) break
+    await sleep(200)
+  }
+  if (expected === null) return last
+  throw new Error(`timed out after ${timeout}ms waiting for ${label} to become ${expected}px ±${tolerance} (last rendered ${last === null ? 'n/a' : `${last}px`})`)
+}
+
+/**
+ * @returns {Promise<{ ok: boolean, status: number | null, payload?: object | null, error?: string }>} the Host document read.
+ */
+async function readHostSidebarWidth(page) {
+  try {
+    return await page.eval(probeLayout.hostSidebarWidth)
+  } catch (error) {
+    return { ok: false, status: null, error: String((error && error.message) || error) }
+  }
+}
+
+/**
+ * @returns {Promise<{ ok: boolean, status: number | null, payload?: object | null, error?: string }>} the Host write result.
+ */
+async function postHostSidebarWidth(page, width) {
+  try {
+    return await page.eval(probeLayout.postHostSidebarWidth, width)
+  } catch (error) {
+    return { ok: false, status: null, error: String((error && error.message) || error) }
+  }
+}
+
+/**
+ * Reveal the current Workspace/Session atmosphere when the native tree starts collapsed.
+ * The atmosphere mounts on the current Workspace row even while the tree is collapsed; a
+ * missing canvas is retried after expanding one collapsed Workspace group like a user.
+ * @returns {Promise<void>}
+ */
+async function ensureLayoutAtmosphere(page) {
+  const canvasCount = () => page.eval(() => document.querySelectorAll('.psd-atmos-canvas').length).catch(() => 0)
+  if ((await canvasCount()) > 0) return
+  try {
+    await page.waitForFn(() => document.querySelectorAll('.psd-atmos-canvas').length > 0, [], { timeout: 12000, label: 'sidebar atmosphere canvas' })
+    return
+  } catch {
+    /* retry after revealing the native rows */
+  }
+  for (let pass = 0; pass < 3; pass += 1) {
+    if (!(await expandNativeWorkspaceRow(page))) break
+    if ((await canvasCount()) > 0) return
+  }
+  await page.waitForFn(() => document.querySelectorAll('.psd-atmos-canvas').length > 0, [], { timeout: 8000, label: 'sidebar atmosphere canvas after expanding a Workspace' }).catch(() => {})
+}
+
+/**
+ * Drag the native sidebar resize handle with real CDP pointer input.
+ * @param {object} page - Page wrapper.
+ * @param {{ fromWidth: number, toWidth: number, steps?: number, settleMs?: number, onStep?: Function, label?: string }} options - gesture facts.
+ * @returns {Promise<object>} gesture log.
+ */
+async function dragSidebarHandle(page, { fromWidth, toWidth, steps = SIDEBAR_DRAG_STEPS, settleMs = SIDEBAR_DRAG_STEP_SETTLE_MS, onStep = null, label = 'sidebar drag' } = {}) {
+  const handle = await page.eval(() => {
+    const element = document.querySelector('[data-side="sidebar"]')
+    if (element === null) return null
+    const rect = element.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return null
+    return {
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(Math.min(rect.bottom - 24, Math.max(rect.top + 24, rect.top + rect.height / 2))),
+    }
+  })
+  assert(handle !== null, `the native sidebar resize handle [data-side="sidebar"] is not present/visible for the ${label}`)
+  const delta = toWidth - fromWidth
+  const path = []
+  await page.mouse({ type: 'mouseMoved', x: handle.x, y: handle.y })
+  await sleep(60)
+  await page.mouse({ type: 'mousePressed', x: handle.x, y: handle.y, button: 'left', clickCount: 1 })
+  await sleep(60)
+  let released = false
+  try {
+    for (let step = 1; step <= steps; step += 1) {
+      const x = handle.x + Math.round((delta * step) / steps)
+      await page.mouse({ type: 'mouseMoved', x, y: handle.y, button: 'left', buttons: 1 })
+      path.push(x)
+      await sleep(settleMs)
+      if (onStep !== null) await onStep(step, x)
+    }
+  } finally {
+    try {
+      await page.mouse({ type: 'mouseReleased', x: handle.x + delta, y: handle.y, button: 'left', clickCount: 1 })
+      released = true
+    } catch (error) {
+      log(`warning: ${label} mouse release failed: ${short((error && error.message) || String(error), 200)}`)
+    }
+    await sleep(280)
+  }
+  return { label, beginX: handle.x, endX: handle.x + delta, y: handle.y, delta, steps, released, path }
+}
+
+/**
+ * @param {Array<{ left: number, top: number, width: number, height: number } | null>} rects - candidate rects.
+ * @returns {{ left: number, top: number, width: number, height: number } | null} padded union clip.
+ */
+function unionRect(rects) {
+  const valid = rects.filter((rect) => rect !== null && rect !== undefined && rect.width > 0 && rect.height > 0)
+  if (valid.length === 0) return null
+  const left = Math.min(...valid.map((rect) => rect.left))
+  const top = Math.min(...valid.map((rect) => rect.top))
+  const right = Math.max(...valid.map((rect) => rect.left + rect.width))
+  const bottom = Math.max(...valid.map((rect) => rect.top + rect.height))
+  return { left: Math.max(0, left - 16), top: Math.max(0, top - 16), width: right - left + 32, height: bottom - top + 32 }
+}
+
+/**
+ * Write one optional screenshot into the gitignored `--layout` evidence directory.
+ * @returns {Promise<string | null>} the file path, or null when disabled/failed.
+ */
+async function writeLayoutShot(page, name, clip, state) {
+  if (state.shotsEnabled !== true || clip === null || clip === undefined) return null
+  try {
+    await mkdir(LAYOUT_EVIDENCE_DIR, { recursive: true })
+    const x = Math.max(0, Math.round(clip.left))
+    const y = Math.max(0, Math.round(clip.top))
+    const width = Math.min(Math.round(clip.width), VIEWPORT.width - x)
+    const height = Math.min(Math.round(clip.height), VIEWPORT.height - y)
+    if (width < 8 || height < 8) return null
+    const file = path.join(LAYOUT_EVIDENCE_DIR, `${name}.png`)
+    await page.screenshot(file, { x, y, width, height })
+    log(`wrote ${file}`)
+    state.layoutEvidence = [...(state.layoutEvidence ?? []), file]
+    return file
+  } catch (error) {
+    log(`warning: layout screenshot ${name} failed: ${short((error && error.message) || String(error), 200)}`)
+    return null
+  }
+}
+
+/**
+ * Write one JSON evidence file (drag steps / in-frame samples) into the gitignored
+ * `--layout` evidence directory. The token is never included.
+ * @returns {Promise<string | null>} the file path, or null when the write failed.
+ */
+async function writeLayoutEvidence(state, name, data) {
+  try {
+    await mkdir(LAYOUT_EVIDENCE_DIR, { recursive: true })
+    const stamp = new Date().toISOString().replace(/[:.]/gu, '-')
+    const file = path.join(LAYOUT_EVIDENCE_DIR, `layout-${name}-${stamp}.json`)
+    await writeFile(file, `${JSON.stringify({ at: new Date().toISOString(), ...data }, null, 2)}\n`, 'utf8')
+    log(`wrote ${file}`)
+    state.layoutEvidence = [...(state.layoutEvidence ?? []), file]
+    return file
+  } catch (error) {
+    log(`warning: could not write layout evidence ${name}: ${short((error && error.message) || String(error), 200)}`)
+    return null
+  }
+}
+
+/**
+ * `--layout`: drive the native sidebar resize handle with real CDP input and verify the
+ * persisted, Host-synced width plus the drag flicker fix.
+ * @param {object} input - `{ page, results, state }`.
+ * @returns {Promise<void>}
+ */
+async function runLayoutWidthChecks({ page, results, state }) {
+  log('\n=== --layout: sidebar width drag flicker + persistence + Host sync ===')
+  state.mode = 'layout'
+  state.layout = { startedAt: Date.now() }
+  state.sidebarWidthShared = null
+
+  await results.check('lw-1', 'native sidebar drag handle present; current sidebar column width measured', async () => {
+    await page.waitForFn(() => document.querySelector('[class*="_sidebarCol"]') !== null, [], { timeout: 20000, label: 'sidebar column' })
+    let facts = await readSidebarShell(page)
+    if (facts === null || facts.handle === null) {
+      // A fresh profile starts expanded; recover a collapsed sidebar through the shell's
+      // own control (a normal user action) before declaring the handle missing.
+      const expand = await page.eval(() => {
+        const labels = ['Expand sidebar', '展开侧边栏', '展开边栏']
+        const button = [...document.querySelectorAll('button')].find((element) => labels.includes((element.getAttribute('aria-label') ?? '').trim()))
+        if (button === null) return null
+        const rect = button.getBoundingClientRect()
+        if (rect.width <= 0 || rect.height <= 0) return null
+        return {
+          label: button.getAttribute('aria-label'),
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.top + rect.height / 2),
+        }
+      })
+      if (expand !== null) {
+        await page.clickAt(expand.x, expand.y)
+        await sleep(500)
+        facts = await readSidebarShell(page)
+      }
+    }
+    assert(facts !== null, 'the sidebar shell facts could not be read')
+    assert(facts.handle !== null, 'the native sidebar resize handle [data-side="sidebar"] is missing (collapsed sidebar or narrow viewport)')
+    assert(facts.collapsed === false, 'the sidebar is collapsed; the resize handle is only rendered while it is expanded')
+    const width = sidebarWidthOf(facts)
+    assert(width !== null && width > 0, 'the rendered sidebar column width could not be measured')
+    const handleCentre = Math.round(facts.handle.left + facts.handle.width / 2)
+    assertNear(handleCentre, width, 1, `the drag handle must sit on the sidebar column's right edge (handle centre ${handleCentre}px vs column ${width}px)`)
+    state.layout.preWidth = width
+    state.layout.preGrid = facts.grid
+    state.layout.preCache = facts.cacheRaw
+    const preCache = parseSidebarWidthCache(facts.cacheRaw)
+    return `handle ${facts.handle.width}px wide at x=${handleCentre}, column ${width}px, grid "${short(facts.grid, 60)}", pre-run cache ${preCache === null ? 'absent' : short(facts.cacheRaw, 120)}`
+  })
+
+  // Pre-run Host document: read as early as possible. With the route live the client
+  // seeds the document at boot, so this is the earliest observable pre-run value.
+  state.layout.hostBaseline = await readHostSidebarWidth(page)
+  log(`layout baseline: pre-run width ${state.layout.preWidth ?? 'n/a'}px; host route ${state.layout.hostBaseline.ok === true || state.layout.hostBaseline.status === 200 ? `200 ${short(JSON.stringify(state.layout.hostBaseline.payload), 160)}` : `unavailable (${state.layout.hostBaseline.status ?? state.layout.hostBaseline.error ?? 'unknown'})`}`)
+
+  await results.check('lw-2', 'the current Workspace row and/or native current Session row carries a live atmosphere canvas', async () => {
+    await ensureLayoutAtmosphere(page)
+    const facts = await page.eval(probeLayout.canvasPaint)
+    const live = facts.filter((canvas) => canvas.visible && canvas.width > 0 && canvas.height > 0 && canvas.painted > 0)
+    assert(live.length > 0, `no live .psd-atmos-canvas with painted pixels in the sidebar (${facts.length} canvas node(s); the current-row rainbow is not mounted)`)
+    const current = live.filter((canvas) => (canvas.currentWorkspace === true && canvas.wrapper === 'workspace') || (canvas.currentSession === true && canvas.wrapper === 'session'))
+    assert(current.length > 0,
+      `no painted atmosphere canvas on a current Workspace/Session row (live canvases: ${short(JSON.stringify(live.map((canvas) => ({ wrapper: canvas.wrapper, rowKey: canvas.rowKey, currentWorkspace: canvas.currentWorkspace, currentSession: canvas.currentSession }))), 320)})`)
+    for (const canvas of current) {
+      assert(canvas.motion === 'animated' || canvas.motion === 'static', `the current-row atmosphere canvas must report its motion state (got ${canvas.motion})`)
+      assert(canvas.running === 'true' || canvas.running === 'false', `the current-row atmosphere canvas must report its renderer state (got ${canvas.running})`)
+    }
+    state.layout.atmosphere = current.map((canvas) => ({ wrapper: canvas.wrapper, rowKey: canvas.rowKey, width: canvas.width, height: canvas.height, painted: canvas.painted, motion: canvas.motion }))
+    for (const canvas of current) {
+      await writeLayoutShot(page, `layout-atmosphere-${canvas.wrapper}-before-drag`, unionRect([canvas.rect]), state)
+    }
+    return current.map((canvas) => `${canvas.wrapper} canvas ${canvas.width}x${canvas.height} painted=${canvas.painted} motion=${canvas.motion}`).join('; ')
+  })
+
+  await results.check('lw-3', 'flicker oracle: a real ~10-step drag keeps the canvas element, resizes its backing store and never samples a blank bitmap', async () => {
+    const pre = state.layout.preWidth
+    assert(typeof pre === 'number' && pre > 0, 'the pre-run sidebar width was not measured (lw-1 failed first)')
+    await ensureLayoutAtmosphere(page)
+    await page.eval(probeLayout.disarmFlicker).catch(() => false)
+    const armed = await page.eval(probeLayout.armFlicker)
+    state.layout.armed = armed
+    assert(armed.count > 0, 'no atmosphere canvas exists to sample (the current-row rainbow is not mounted)')
+    const oracle = armed.canvases.find((canvas) => canvas.currentWorkspace === true) ?? armed.canvases.find((canvas) => canvas.currentSession === true) ?? null
+    assert(oracle !== null, `no atmosphere canvas on a current Workspace/Session row (armed: ${short(JSON.stringify(armed.canvases), 300)})`)
+    state.layout.oracleId = oracle.id
+    // Choose the ±40 px direction that stays inside the shell's 264..420 drag range.
+    let delta = SIDEBAR_DRAG_TOTAL_PX
+    if (pre + delta > SIDEBAR_WIDTH_MAX) delta = -SIDEBAR_DRAG_TOTAL_PX
+    if (pre + delta < SIDEBAR_WIDTH_MIN) delta = Math.min(SIDEBAR_DRAG_TOTAL_PX, SIDEBAR_WIDTH_MAX - pre)
+    assert(delta !== 0 && pre + delta >= SIDEBAR_WIDTH_MIN && pre + delta <= SIDEBAR_WIDTH_MAX,
+      `cannot choose a ±${SIDEBAR_DRAG_TOTAL_PX}px drag direction from ${pre}px inside the shell's ${SIDEBAR_WIDTH_MIN}..${SIDEBAR_WIDTH_MAX} range`)
+    const target = pre + delta
+    const steps = []
+    const gesture = await dragSidebarHandle(page, {
+      fromWidth: pre,
+      toWidth: target,
+      steps: SIDEBAR_DRAG_STEPS,
+      onStep: async (step) => {
+        steps.push(await page.eval(probeLayout.flickerStep, `step-${step}`))
+      },
+    })
+    await sleep(260)
+    const summary = await page.eval(probeLayout.flickerSummary)
+    state.layout.steps = steps
+    state.layout.gesture = gesture
+    state.layout.flicker = summary
+    await writeLayoutEvidence(state, 'drag-samples', {
+      preWidth: pre,
+      targetWidth: target,
+      delta,
+      gesture,
+      perStep: steps,
+      inFrameResizeSamples: summary.ro,
+      armedCanvases: summary.canvases,
+    })
+    const settled = await waitSidebarWidth(page, target, { tolerance: 1, timeout: 6000, label: 'sidebar width after the drag' })
+    state.layout.draggedWidth = settled
+    assertEqual(steps.length, SIDEBAR_DRAG_STEPS, `expected ${SIDEBAR_DRAG_STEPS} sampled drag steps`)
+    for (const sample of steps) {
+      const entry = sample.canvases.find((canvas) => canvas.id === oracle.id)
+      assert(entry !== undefined, `the current-row atmosphere canvas ${oracle.id} disappeared during the drag (step ${sample.tag})`)
+      assertEqual(entry.connected, true, `the current-row atmosphere canvas was detached during the drag (step ${sample.tag})`)
+      assert(entry.width > 0 && entry.height > 0, `the current-row atmosphere canvas lost its drawing buffer during the drag (step ${sample.tag}: ${entry.width}x${entry.height})`)
+    }
+    const resizeSteps = []
+    let previous = null
+    for (const sample of steps) {
+      const entry = sample.canvases.find((canvas) => canvas.id === oracle.id)
+      if (previous !== null && entry !== undefined && (entry.width !== previous.width || entry.height !== previous.height)) {
+        resizeSteps.push(`${sample.tag}:${previous.width}x${previous.height}->${entry.width}x${entry.height}`)
+      }
+      if (entry !== undefined) previous = entry
+    }
+    const inFrameResizes = (summary.ro ?? []).filter((sample) => sample.resized === true)
+    assert(resizeSteps.length >= 1 || inFrameResizes.length >= 1,
+      `no atmosphere backing-store resize was observed during the ${SIDEBAR_DRAG_STEPS}-step drag (canvas stayed ${previous === null ? 'unmeasured' : `${previous.width}x${previous.height}`}; ${(summary.ro ?? []).length} in-frame sample(s))`)
+    const blankStepSamples = []
+    for (const sample of steps) {
+      for (const canvas of sample.canvases) {
+        if (canvas.connected === true && canvas.width > 0 && canvas.height > 0 && canvas.painted === 0) {
+          blankStepSamples.push({ tag: sample.tag, id: canvas.id, width: canvas.width, height: canvas.height })
+        }
+      }
+    }
+    assertEqual(blankStepSamples.length, 0, `blank atmosphere bitmap sample(s) during the drag (${short(JSON.stringify(blankStepSamples.slice(0, 6)), 400)})`)
+    const blankFrameSamples = (summary.ro ?? []).filter((sample) => sample.connected === true && sample.width > 0 && sample.height > 0 && sample.painted === 0)
+    assertEqual(blankFrameSamples.length, 0,
+      `the atmosphere canvas stayed blank right after a backing-store resize (missing synchronous repaint; ${short(JSON.stringify(blankFrameSamples.slice(0, 6)), 400)})`)
+    const nonBlankFrame = (summary.ro ?? []).filter((sample) => sample.connected === true && sample.painted > 0)
+    assert(nonBlankFrame.length >= 1, 'no in-frame atmosphere pixel sample was collected (the ResizeObserver instrumentation did not observe a canvas)')
+    const oracleWrapper = `${oracle.wrapper} on ${oracle.currentWorkspace === true ? 'the current Workspace row' : 'the current Session row'}`
+    return `dragged ${pre}px -> ${settled}px (${delta > 0 ? '+' : ''}${delta}px over ${steps.length} CDP steps); canvas ${oracle.id} (${oracleWrapper}) identity stable; ${resizeSteps.length} per-step backing-store resize(s) + ${inFrameResizes.length} in-frame resize sample(s); 0 blank of ${steps.length} per-step and ${(summary.ro ?? []).length} in-frame bitmap samples`
+  })
+
+  await results.check('lw-4', 'the dragged width is cached in localStorage and the client seam reports the attached, same width', async () => {
+    const expected = state.layout.draggedWidth ?? null
+    let width = expected
+    if (width === null) {
+      const facts = await readSidebarShell(page)
+      width = sidebarWidthOf(facts)
+    } else {
+      width = await waitSidebarWidth(page, expected, { tolerance: 1, timeout: 4000, label: 'dragged sidebar width' })
+    }
+    assert(typeof width === 'number' && width > 0, 'the rendered sidebar width could not be measured after the drag (lw-3 failed first)')
+    // The client debounces the save by 300 ms; poll for the cache write.
+    let stateFacts = null
+    let cache = null
+    const deadline = Date.now() + 7000
+    while (Date.now() < deadline) {
+      stateFacts = await page.eval(probeLayout.sidebarWidthState)
+      cache = parseSidebarWidthCache(stateFacts.cacheRaw)
+      if (cache !== null && cache.sidebarWidth !== null && Math.abs(cache.sidebarWidth - width) <= 1) break
+      await sleep(200)
+    }
+    assert(cache !== null, `localStorage['${SIDEBAR_WIDTH_STORAGE_KEY}'] is missing or malformed after the drag (raw ${short(stateFacts?.cacheRaw, 240)})`)
+    assert(cache.sidebarWidth !== null, `the cached sidebar width is null after a real drag (raw ${short(stateFacts?.cacheRaw, 240)})`)
+    assertNear(cache.sidebarWidth, width, 1, `the cached sidebar width must match the rendered width (cache ${cache.sidebarWidth}px vs rendered ${width}px)`)
+    assertEqual(typeof cache.pending, 'boolean', `the cache "pending" flag must be a boolean (got ${typeof cache.pending})`)
+    stateFacts = await page.eval(probeLayout.sidebarWidthState)
+    assert(stateFacts.seamPresent === true, `the sidebar-width test seam is missing (__POWER_SUITE_TEST_HOOKS__.sidebarWidth absent; hooks ${short(JSON.stringify(stateFacts.seamKeys), 200)})`)
+    assert(stateFacts.probe !== null && typeof stateFacts.probe === 'object', `the sidebar-width seam probe() failed (${short(stateFacts.seamError ?? 'returned nothing', 240)})`)
+    const probeState = stateFacts.probe
+    assertEqual(probeState.attached, true, 'the client feature is not attached to the shell layout store (probe().attached is false)')
+    assert(Number.isFinite(probeState.storeWidth) && Math.abs(probeState.storeWidth - width) <= 1,
+      `probe().storeWidth must equal the rendered width (probe ${probeState.storeWidth}px vs rendered ${width}px)`)
+    assert(probeState.desiredWidth === null || (Number.isFinite(probeState.desiredWidth) && Math.abs(probeState.desiredWidth - width) <= 1),
+      `probe().desiredWidth must equal the rendered width (probe ${probeState.desiredWidth}px vs rendered ${width}px)`)
+    assert(probeState.cache !== null && typeof probeState.cache === 'object', 'probe().cache is missing')
+    assertNear(probeState.cache.sidebarWidth, width, 1, `probe().cache.sidebarWidth must equal the rendered width (probe cache ${probeState.cache.sidebarWidth}px)`)
+    state.layout.cacheAfterDrag = { raw: stateFacts.cacheRaw, parsed: cache }
+    state.layout.seamAfterDrag = probeState
+    return `cache ${short(stateFacts.cacheRaw, 160)}; probe attached=${probeState.attached} storeWidth=${probeState.storeWidth} desiredWidth=${probeState.desiredWidth} syncState=${probeState.syncState}`
+  })
+
+  await results.check('lw-5', 'a page reload restores the dragged width and the client re-attaches', async () => {
+    const expected = state.layout.draggedWidth
+    assert(typeof expected === 'number' && expected > 0, 'no dragged width was recorded (lw-3/lw-4 failed first); reload persistence cannot be asserted')
+    await reloadFresh(page)
+    await ensureAppReady(page)
+    const restored = await waitSidebarWidth(page, expected, { tolerance: 1, timeout: 15000, label: 'sidebar width after reload' })
+    // Let the boot apply/sync settle before reading the seam.
+    await sleep(600)
+    const stateFacts = await page.eval(probeLayout.sidebarWidthState)
+    assert(stateFacts.seamPresent === true, 'the sidebar-width test seam is missing after the reload')
+    assert(stateFacts.probe !== null && typeof stateFacts.probe === 'object', `the sidebar-width probe() is missing after the reload (${short(stateFacts.seamError ?? 'unknown', 200)})`)
+    assertEqual(stateFacts.probe.attached, true, 'the client feature did not re-attach to the layout store after the reload')
+    assert(Number.isFinite(stateFacts.probe.storeWidth) && Math.abs(stateFacts.probe.storeWidth - restored) <= 1,
+      `probe().storeWidth after reload must match the restored width (probe ${stateFacts.probe.storeWidth}px vs rendered ${restored}px)`)
+    const cache = parseSidebarWidthCache(stateFacts.cacheRaw)
+    assert(cache !== null && cache.sidebarWidth !== null, `the width cache did not survive the reload (raw ${short(stateFacts.cacheRaw, 200)})`)
+    assertNear(cache.sidebarWidth, restored, 1, 'the cached width after reload must stay the dragged width')
+    await writeLayoutShot(page, 'layout-atmosphere-after-reload', unionRect((await page.eval(probeLayout.canvasPaint)).map((canvas) => canvas.rect)), state)
+    state.layout.afterReload = { restored, probe: stateFacts.probe, cache }
+    return `reload: sidebar ${restored}px; probe attached=${stateFacts.probe.attached} storeWidth=${stateFacts.probe.storeWidth} syncState=${stateFacts.probe.syncState}; cache ${short(stateFacts.cacheRaw, 160)}`
+  })
+
+  const hostProbe = await readHostSidebarWidth(page)
+  state.layout.host = hostProbe
+  if (hostProbe.status === 404) {
+    state.sidebarWidthShared = false
+    await results.skip('lw-6', 'the Host route round-trips the dragged width and a second fresh profile adopts it',
+      'Host route loads after the DSH Web service restart — GET /api/power-suite.sidebar-width returned 404 (the running Host process predates the merged plugin). Until the restart the per-origin browser cache is authoritative (covered by lw-4/lw-5); the route round-trip and second-profile cross-device adoption are re-checked on the post-restart run.')
+  } else {
+    await results.check('lw-6', 'the Host route round-trips the dragged width and a second fresh profile adopts it', async () => {
+      const dragged = state.layout.draggedWidth ?? null
+      assert(typeof dragged === 'number' && dragged > 0, 'no dragged width was recorded (lw-3 failed first); the Host round-trip cannot be asserted')
+      // The debounced Host write may still be in flight; poll briefly for the pushed value.
+      let host = hostProbe
+      const deadline = Date.now() + 5000
+      while (Date.now() < deadline) {
+        if (host.ok === true && host.payload !== null && typeof host.payload === 'object' && Number.isInteger(host.payload.sidebarWidth) && Math.abs(host.payload.sidebarWidth - dragged) <= 1) break
+        await sleep(250)
+        host = await readHostSidebarWidth(page)
+      }
+      assert(host.status === 200 && host.ok === true,
+        `GET ${SIDEBAR_WIDTH_ROUTE_PATH} must return 200 once the route is live (got ${host.status ?? host.error ?? 'no response'}: ${short(JSON.stringify(host.payload), 160)})`)
+      assert(host.payload !== null && typeof host.payload === 'object', `GET ${SIDEBAR_WIDTH_ROUTE_PATH} returned no JSON document`)
+      assertEqual(host.payload.version, 1, `the Host document must be version 1 (got ${host.payload.version})`)
+      assert(Number.isInteger(host.payload.sidebarWidth), `the Host document must carry an integer sidebarWidth (got ${JSON.stringify(host.payload.sidebarWidth)})`)
+      assertNear(host.payload.sidebarWidth, dragged, 1, `the Host document width must equal the dragged width (Host ${host.payload.sidebarWidth}px vs dragged ${dragged}px)`)
+      state.sidebarWidthShared = true
+      state.layout.host = host
+      const second = await withSecondProfile(state.guiUrl, state.clientSource, async (secondPage) => {
+        let adopted = null
+        let lastWidth = null
+        const secondDeadline = Date.now() + 20000
+        while (Date.now() < secondDeadline) {
+          const facts = await readSidebarShell(secondPage)
+          const width = sidebarWidthOf(facts)
+          if (width !== null) lastWidth = width
+          if (width !== null && Math.abs(width - dragged) <= 1) {
+            adopted = { width }
+            break
+          }
+          await sleep(250)
+        }
+        const seamFacts = await secondPage.eval(probeLayout.sidebarWidthState).catch(() => null)
+        return {
+          adopted,
+          lastWidth,
+          seam: seamFacts,
+          pageErrors: [...secondPage.pageErrors],
+          logEntries: [...secondPage.logEntries],
+        }
+      })
+      assert(second.adopted !== null,
+        `the second fresh profile did not adopt the Host width ${dragged}px ±1 (last rendered ${second.lastWidth ?? 'n/a'}px; cache ${short(second.seam?.cacheRaw, 200)}; probe ${short(JSON.stringify(second.seam?.probe), 240)})`)
+      assertEqual(second.pageErrors.length, 0, `the second fresh profile reported page errors: ${short(JSON.stringify(second.pageErrors.slice(0, 4)), 400)}`)
+      const secondProbe = second.seam?.probe ?? null
+      if (secondProbe !== null && typeof secondProbe === 'object') {
+        assertEqual(secondProbe.attached, true, 'the client feature is not attached in the second fresh profile')
+      }
+      const secondCache = second.seam === null ? null : parseSidebarWidthCache(second.seam.cacheRaw)
+      if (secondCache !== null && secondCache.sidebarWidth !== null) {
+        assertNear(secondCache.sidebarWidth, dragged, 1, 'the second profile cache must record the adopted width')
+      }
+      state.layout.secondProfile = { adopted: second.adopted, lastWidth: second.lastWidth, probe: secondProbe, cacheRaw: second.seam?.cacheRaw ?? null, pageErrors: second.pageErrors }
+      return `Host GET 200 ${short(JSON.stringify(host.payload), 120)}; second fresh profile adopted ${second.adopted.width}px (probe attached=${secondProbe?.attached ?? 'n/a'}, cache ${short(second.seam?.cacheRaw, 160)}), 0 page errors (${second.logEntries.length} non-JS console/log entries)`
+    })
+  }
+
+  await results.check('lw-7', 'cleanup restores the pre-run width through the same drag and reports the residuals honestly', async () => {
+    const pre = state.layout.preWidth
+    assert(typeof pre === 'number' && pre > 0, 'the pre-run width is unknown (lw-1 failed first); the restore cannot be verified')
+    let facts = await readSidebarShell(page)
+    let current = sidebarWidthOf(facts)
+    let restored = current
+    const delta = current === null ? 0 : pre - current
+    let restoreGesture = null
+    if (current !== null && Math.abs(delta) > 1) {
+      assert(pre >= SIDEBAR_WIDTH_MIN && pre <= SIDEBAR_WIDTH_MAX, `the pre-run width ${pre}px is outside the shell's ${SIDEBAR_WIDTH_MIN}..${SIDEBAR_WIDTH_MAX} drag range and cannot be restored through the handle`)
+      restoreGesture = await dragSidebarHandle(page, { fromWidth: current, toWidth: pre, steps: SIDEBAR_DRAG_STEPS, settleMs: 20, label: 'sidebar restore drag' })
+      restored = await waitSidebarWidth(page, pre, { tolerance: 1, timeout: 6000, label: 'sidebar width after the restore drag' })
+    }
+    // The restored width is persisted by the client's own 300 ms debounce.
+    await sleep(900)
+    const stateFacts = await page.eval(probeLayout.sidebarWidthState).catch(() => null)
+    const cache = stateFacts === null ? null : parseSidebarWidthCache(stateFacts.cacheRaw)
+    let host = await readHostSidebarWidth(page)
+    const baselinePayload = state.layout.hostBaseline !== null && state.layout.hostBaseline !== undefined && state.layout.hostBaseline.payload !== null && typeof state.layout.hostBaseline.payload === 'object' ? state.layout.hostBaseline.payload : null
+    const baselineHostWidth = baselinePayload !== null && Number.isInteger(baselinePayload.sidebarWidth) ? baselinePayload.sidebarWidth : null
+    const hostWidthOf = (read) => read !== null && read.payload !== null && typeof read.payload === 'object' && Number.isInteger(read.payload.sidebarWidth) ? read.payload.sidebarWidth : null
+    let hostRestore = null
+    if (host.status === 200 && baselineHostWidth !== null && hostWidthOf(host) !== baselineHostWidth) {
+      // Direct-route fallback: restore the pre-run Host document value even if the
+      // debounced client write did not land.
+      hostRestore = await postHostSidebarWidth(page, baselineHostWidth)
+      await sleep(300)
+      host = await readHostSidebarWidth(page)
+    }
+    const hostAfterWidth = hostWidthOf(host)
+    const residualPieces = []
+    if (host.status === 200) {
+      if (baselineHostWidth !== null) {
+        assertEqual(hostAfterWidth, baselineHostWidth, `the Host document was not restored to the pre-run width ${baselineHostWidth}px (got ${hostAfterWidth})`)
+        residualPieces.push(`Host document restored to the pre-run ${baselineHostWidth}px ${hostRestore === null ? '' : `(direct POST fallback ${hostRestore.status})`}`.trim())
+      } else {
+        residualPieces.push(`Host document now ${hostAfterWidth === null ? 'has no width' : `holds the pre-run width ${hostAfterWidth}px`} (it was read as ${short(JSON.stringify(baselinePayload), 120)} after boot; the route's POST contract has no delete, so a boot-seeded document cannot be cleared)`)
+      }
+    } else {
+      residualPieces.push(`Host route unavailable (${host.status ?? host.error ?? 'unknown'}); no Host document was written`)
+    }
+    if (cache !== null) residualPieces.push(`throwaway-profile cache ${short(stateFacts.cacheRaw, 160)}`)
+    state.layoutCleanup = {
+      preWidth: pre,
+      restoredWidth: restored,
+      restoreGesture,
+      cacheRaw: stateFacts === null ? null : stateFacts.cacheRaw,
+      cache,
+      hostBaseline: state.layout.hostBaseline,
+      hostAfter: host,
+      hostRestore,
+    }
+    assertNear(restored, pre, 1, `the sidebar width was not restored to the pre-run ${pre}px (rendered ${restored}px)`)
+    return `restored ${current}px -> ${restored}px (pre-run ${pre}px); ${residualPieces.join('; ')}`
+  })
+}
+
+/**
+ * Restore the pre-run sidebar width after `--layout`, through the same drag, and report
+ * the residual browser cache and Host document honestly. Idempotent: a run that already
+ * restored in lw-7 only re-measures and reports.
+ * @param {object} page - Page wrapper.
+ * @param {object} state - harness state with `layout`.
+ * @returns {Promise<void>}
+ */
+async function cleanupSidebarWidth(page, state) {
+  if (state.mode !== 'layout') return
+  const issues = []
+  let current = null
+  const pre = state.layout?.preWidth ?? null
+  try {
+    const facts = await readSidebarShell(page)
+    current = sidebarWidthOf(facts)
+    if (pre !== null && current !== null && Math.abs(current - pre) > 1) {
+      if (pre < SIDEBAR_WIDTH_MIN || pre > SIDEBAR_WIDTH_MAX) {
+        issues.push(`pre-run width ${pre}px is outside the shell's drag range; not restorable through the handle`)
+      } else {
+        await dragSidebarHandle(page, { fromWidth: current, toWidth: pre, steps: SIDEBAR_DRAG_STEPS, settleMs: 20, label: 'cleanup restore drag' })
+        current = await waitSidebarWidth(page, pre, { tolerance: 1, timeout: 6000, label: 'cleanup restored sidebar width' })
+      }
+    }
+  } catch (error) {
+    issues.push(`restore drag failed: ${(error && error.message) || String(error)}`)
+  }
+  try {
+    await sleep(700)
+    const stateFacts = await page.eval(probeLayout.sidebarWidthState).catch(() => null)
+    const cache = stateFacts === null ? null : parseSidebarWidthCache(stateFacts.cacheRaw)
+    let host = await readHostSidebarWidth(page)
+    const baseline = state.layout?.hostBaseline ?? null
+    const baselineWidth = baseline !== null && baseline.payload !== null && typeof baseline.payload === 'object' && Number.isInteger(baseline.payload.sidebarWidth) ? baseline.payload.sidebarWidth : null
+    const hostWidth = host.payload !== null && typeof host.payload === 'object' && Number.isInteger(host.payload.sidebarWidth) ? host.payload.sidebarWidth : null
+    let hostRestore = null
+    if (host.status === 200 && baselineWidth !== null && hostWidth !== baselineWidth) {
+      hostRestore = await postHostSidebarWidth(page, baselineWidth)
+      await sleep(300)
+      host = await readHostSidebarWidth(page)
+    }
+    const hostAfterWidth = host.payload !== null && typeof host.payload === 'object' && Number.isInteger(host.payload.sidebarWidth) ? host.payload.sidebarWidth : null
+    const widthRestored = pre !== null && current !== null && Math.abs(current - pre) <= 1
+    const hostRestored = host.status !== 200 || baselineWidth === null || hostAfterWidth === baselineWidth
+    state.layoutCleanup = {
+      preWidth: pre,
+      restoredWidth: current,
+      widthRestored,
+      issues,
+      cacheRaw: stateFacts === null ? null : stateFacts.cacheRaw,
+      cache,
+      hostBaseline: baseline,
+      hostAfter: host,
+      hostRestore,
+      hostRestored,
+    }
+    log(`cleanup: sidebar width ${current === null ? 'unreadable' : `${current}px`} (pre-run ${pre === null ? 'n/a' : `${pre}px`}), restored=${widthRestored}; cache ${short(stateFacts?.cacheRaw ?? null, 200)}; host route ${host.status === 200 ? `200 ${short(JSON.stringify(host.payload), 200)} restored=${hostRestored}` : `unavailable (${host.status ?? host.error ?? 'unknown'})`}; issues ${issues.length}`)
+    if (issues.length > 0) log(`cleanup issues: ${short(issues.join('; '), 500)}`)
+  } catch (error) {
+    issues.push(`residual reporting failed: ${(error && error.message) || String(error)}`)
+    state.layoutCleanup = { ...(state.layoutCleanup ?? {}), preWidth: pre, restoredWidth: current, issues }
+    log(`cleanup: residual reporting failed: ${short((error && error.message) || String(error), 400)}`)
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------------------------
 
@@ -10017,10 +11001,10 @@ async function run() {
     chrome = await launchChrome(opts)
     log(`chrome: headless pid ${chrome.proc.pid}, CDP port ${chrome.port}`)
     const cdp = await CdpConnection.connect(chrome.wsUrl)
-    page = await Page.open(cdp, url, injectorSource(clientSource), { trackNetwork: opts.mode === 'pin' })
+    page = await Page.open(cdp, url, injectorSource(clientSource), { trackNetwork: opts.mode === 'pin' || opts.mode === 'layout' })
     log('page: opened, waiting for the DSH shell…')
 
-    await runSmoke({ page, results, state })
+    await runSmoke({ page, results, state, opts })
     await ensureAppReady(page)
     if (opts.mode === 'full') {
       log('\n=== Acceptance checks ===')
@@ -10045,6 +11029,14 @@ async function run() {
         await runPinChecks({ page, results, state })
       } finally {
         await cleanupPinnedSessions(page, state)
+      }
+    } else if (opts.mode === 'layout') {
+      try {
+        await runLayoutWidthChecks({ page, results, state })
+      } finally {
+        // Restore the pre-run sidebar width through the same drag even when a check
+        // failed mid-run, and report the residual cache/Host document honestly.
+        await cleanupSidebarWidth(page, state)
       }
     }
   } catch (error) {
@@ -10085,6 +11077,9 @@ async function run() {
     log(`ignored network noise: ${page.ignoredNetworkNoise ?? 0}`)
     const pinRouteFailures = page.pinRouteFailures ?? []
     log(`card pin-route probe failures (expected while the Host route is absent): ${pinRouteFailures.length}`)
+    const sidebarWidthRouteFailures = page.sidebarWidthRouteFailures ?? []
+    log(`sidebar-width route probe failures (expected while the Host route is absent): ${sidebarWidthRouteFailures.length}`)
+    for (const failure of sidebarWidthRouteFailures.slice(0, 8)) log(`  ! ${failure}`)
     const shellProbeFailures = page.shellProbeFailures ?? []
     log(`shell deliverables changes.summary 404 probes (route not served by this Host build; not feature failures): ${shellProbeFailures.length}`)
     for (const failure of shellProbeFailures.slice(0, 8)) log(`  ! ${failure}`)
@@ -10094,6 +11089,10 @@ async function run() {
     // While the Host route is absent (pinShared=false) its 404s are the documented
     // pre-restart probe; once pinShared=true any pin-route failure is a real defect.
     if (pinRouteFailures.length > 0 && state.pinShared === true) exitCode = exitCode || 1
+    // Same contract for the sidebar-width route: pre-restart 404s are the documented
+    // missing-route state; once the route answers 200 (sidebarWidthShared=true) any
+    // failure on it is a real defect.
+    if (sidebarWidthRouteFailures.length > 0 && state.sidebarWidthShared === true) exitCode = exitCode || 1
   }
   if (state.mode === 'pin') {
     log(`pin baseline: pinShared=${state.pinBaseline?.pinShared ?? 'n/a'}; effective pins ${short(JSON.stringify(state.pinBaseline?.effectiveIds ?? null), 200)}; card pinned rows ${state.pinBaseline?.pinnedRows ?? 'n/a'}; cache ${short(state.pinBaseline?.cacheRaw ?? null, 200)}; host route ${state.pinBaseline?.hostStatus === null ? 'unreachable' : `status ${state.pinBaseline?.hostStatus}`}`)
@@ -10104,6 +11103,15 @@ async function run() {
   }
   if (state.live === true) {
     log(`live install: non-injected shipped GUI in two fresh profiles; page errors across profiles ${(state.livePageErrors ?? []).length}`)
+  }
+  if (state.mode === 'layout') {
+    log(`layout baseline: pre-run sidebar ${state.layout?.preWidth ?? 'n/a'}px; dragged ${state.layout?.draggedWidth ?? 'n/a'}px; injected/served client ${state.clientSource.length} bytes; host route ${state.sidebarWidthShared === true ? 'LIVE (200)' : 'absent pre-restart'}`)
+    log(`layout flicker: oracle canvas ${state.layout?.oracleId ?? 'n/a'}; ${state.layout?.flicker?.ro?.length ?? 0} in-frame resize sample(s); per-step samples ${state.layout?.steps?.length ?? 0}`)
+    log(`layout evidence: ${state.layoutEvidence ? state.layoutEvidence.join(', ') : 'none'}`)
+    log(`layout cleanup: ${state.layoutCleanup ? short(JSON.stringify(state.layoutCleanup), 1800) : 'not run'}`)
+    if (page !== null && Array.isArray(page.sidebarWidthRouteWrites)) {
+      log(`sidebar-width route writes (${page.sidebarWidthRouteWrites.length}): ${short(JSON.stringify(page.sidebarWidthRouteWrites.map((write) => write.postData)), 1200)}`)
+    }
   }
   if (state.screenshots.length > 0) log(`screenshots: ${state.screenshots.join(', ')}`)
   log(`elapsed: ${((Date.now() - started) / 1000).toFixed(1)}s`)

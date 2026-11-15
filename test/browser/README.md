@@ -492,6 +492,7 @@ node test/browser/sidebar.e2e.mjs                  full B1-B6/C2-C4/F4 run, scre
 node test/browser/sidebar.e2e.mjs --smoke          pipeline + blank-Session smoke only
 node test/browser/sidebar.e2e.mjs --pin            pipeline smoke + R1/R2/R3 acceptance checks (card-owned pin)
 node test/browser/sidebar.e2e.mjs --live           shipped-install check (NO client injection, read-only, two profiles)
+node test/browser/sidebar.e2e.mjs --layout         sidebar-width drag/persistence/Host-sync acceptance (restores the width)
 node test/browser/sidebar.e2e.mjs --no-shots       no screenshots
 node test/browser/sidebar.e2e.mjs --client PATH    inject a different client.js
 node test/browser/sidebar.e2e.mjs --keep-open      leave Chrome running for inspection
@@ -588,6 +589,96 @@ profiles, clicks only the card's "View all" control (read-only) and asserts:
 | `live-2` | No prefilled pinned rows (the rejected native-pin state must not come back) | 0 `data-pinned` rows/nodes in a fresh profile; no effective pins in the local cache; ordinary rows + children listed |
 | `live-3` | Two fresh profiles agree | both have 0 pinned rows/nodes, pin controls on every main row, child rows present, empty local pin cache; the ordinary content is reported side by side |
 | `live-4` | No page errors | 0 page exceptions/console errors across both profiles |
+
+### `--layout` checks (persisted, Host-synced sidebar width + flicker oracle)
+
+`--layout` is the live-GUI acceptance mode for the persisted, cross-device sidebar width
+(`src/features/sidebar-width/` Host half + the `//#region feature: sidebar width` client
+half) and for the rainbow-atmosphere flicker fix on the current Workspace / Session rows.
+It runs the four pipeline smoke checks, enables the CDP `Network` domain (the same
+same-origin failure predicate as `--pin`), then drives the native sidebar resize handle with **real
+CDP pointer input** (`Input.dispatchMouseEvent` press / 10 moves / release). The mode never
+creates or types into a Session: it uses the Session the shell already restored (smoke-3
+verifies one is open and leaves it untouched), and it restores the pre-run width in a
+`finally` block.
+
+| # | Check | Oracle |
+|---|-------|--------|
+| `smoke-1..4` | Pipeline | Injected worktree client ran; card mounted; a current Session is open and untouched (layout mode does **not** run `ensureBlankSession`, so no Session is created); 1728x900 screenshot round-trip |
+| `lw-1` | Drag handle + width measurement | native `[data-side="sidebar"]` handle visible (a collapsed sidebar is recovered through the shell's own Expand control first), its centre sits on the sidebar column's right edge (±1 px), and the rendered `_sidebarCol` grid track is measured (e.g. 280 px, grid `280px 1448px 0px`) |
+| `lw-2` | Live atmosphere on the current row | every `.psd-atmos-canvas` is measured; at least one canvas on a `[data-psd-current-workspace="true"]` or `[data-psd-current-session="true"]` row is visible with a non-empty drawing buffer and non-zero 7×7 `getImageData` grid sum; its `data-psd-atmos-motion`/`data-psd-atmos-running` renderer state is asserted |
+| `lw-3` | **Flicker oracle** (real drag) | real CDP drag of the handle across 10 steps, ±40 px in the direction that stays inside 264..420 px. (a) the current-row canvas **element identity** is unchanged in every step sample; (b) **≥1 backing-store resize** is observed during the drag (per-step canvas `width/height` change and/or in-frame resize samples); (c) **0 blank bitmap samples**: every per-step sample must have a non-zero 7×7 pixel-grid sum, and a second, deterministic oracle samples the bitmap from a `ResizeObserver` registered *after* the client's own observer — same resize-notification task, before the browser paints — so a resize that is not repainted synchronously is caught even in the frame where it clears the canvas. PASS = 10 step samples, 0 blank samples, ≥1 resize, stable identity. Per-step and in-frame data is written to `.tmp-work/sidebar-width/e2e/layout-drag-samples-*.json` |
+| `lw-4` | Cache + client seam after the drag | `localStorage['power-suite.sidebar-width']` exists and parses as `{version:1, sidebarWidth, pending}`; `sidebarWidth` equals the rendered dragged width (±1); `pending` is a boolean. `__POWER_SUITE_TEST_HOOKS__.sidebarWidth.probe()` reports `attached:true`, `storeWidth`/`desiredWidth` equal to the rendered width (±1) and the same parsed cache (a missing seam is a FAIL, never a fake PASS) |
+| `lw-5` | Reload persistence | `Page.reload()` with the injected client; the rendered sidebar width returns to the dragged width (±1, polled up to 15 s) and the seam reports `attached:true` with the same `storeWidth`; the cache survives the reload. (The "no 280 flash" pre-paint application is covered by the client unit tests, not observable after the fact here) |
+| `lw-6` | Host route + cross-device adoption | same-origin authenticated `GET /api/power-suite.sidebar-width`. **200**: `{version:1, sidebarWidth}` must equal the dragged width (±1), then a **second fresh `--user-data-dir`** profile (same injected client, empty cache) must adopt the Host width on load (`probe().attached:true`, cache records it, 0 page errors in that profile). **404**: explicit **SKIP** row — “Host route loads after the DSH Web service restart” — the running Host process predates the merged route and the per-origin browser cache is authoritative (covered by `lw-4`/`lw-5`) |
+| `lw-7` | Cleanup restores the pre-run width + residual report | the width is dragged back to the pre-run width through the same handle; the rendered width must equal the pre-run width (±1). If the Host route is live the Host document is restored to its pre-run value (direct `POST` fallback if the debounced client write did not land) and the residual document is asserted; the throwaway-profile cache and Host document are printed honestly. Pre-restart the route is 404, no Host document is written, and only the throwaway profile's `localStorage` is written (deleted with the profile) |
+
+The expected pre-restart `sidebar-width` route probes (client boot GET/POST, the drag save,
+the `lw-6` GET and the cleanup write) are classified **separately** from real network
+failures — exactly like the card's pin-route probes: while the route is absent they are
+reported as `sidebar-width route probe failures (expected…)` and never fail the run; once
+`GET /api/power-suite.sidebar-width` answers 200, any failure on that route is a real
+defect and fails the run.
+
+The flicker oracle is the discriminating check: running the same harness against a client
+copy with the synchronous repaint removed (the pre-fix `ResizeObserver` callback
+`resize(); if (motionQuery.matches) draw()`) makes `lw-3` **FAIL** on blank bitmap samples
+while every other row stays green — a documented negative control, not a hypothetical.
+
+Exit contract: **0** only when every row is PASS (explicit SKIPs allowed) with **0 page
+errors** and **0 real network failures**; `1` for any failed row, page error, real network
+failure or fatal error; `2` for usage errors.
+
+### Side effects and cleanup (`--layout`)
+
+- `--layout` creates **no Session** and types nothing; it only needs the Session the shell
+  restored (smoke-3 asserts one is open and records its id, transcript/draft untouched).
+- The run drags the native sidebar handle by ±40 px once and restores the pre-run width
+  through the same handle in a `finally` block (also on check failures); the pre-run
+  widths are printed. No other setting or file is touched.
+- Browser-side writes are confined to the throwaway Chrome profile: the feature's
+  `power-suite.sidebar-width` cache (and the client's own boot/drag sync probes), removed
+  with the temporary `--user-data-dir` when Chrome is terminated.
+- Host-side writes while the route is absent: **none** (the route returns 404, so the
+  client's documented sync probes fail and stay `pending` in the per-origin cache).
+- Once the Host route is live the feature writes the width document at boot (first-writer
+  seed) and after the drag; the mode prints every POST body
+  (`sidebar-width route POST {"sidebarWidth":…}`), and cleanup restores the **pre-run Host
+  document value** through the client's own write and, if needed, one direct `POST`
+  fallback. A pre-run `null` document cannot be cleared through the route's POST contract
+  (it only accepts 264..420); the seeded document with the pre-run width is reported as the
+  honest residual.
+- Exit 0 requires every row PASS (SKIPs allowed), 0 page errors and 0 real network
+  failures (see the route classification above).
+
+### Known limitations (`--layout`)
+
+- **Pre-restart Host coverage**: while the running Host predates the merged route,
+  `lw-6` is an explicit SKIP and the Host document / second-fresh-profile cross-device
+  assertions exist only for the post-restart run; the 200 branch is implemented against
+  the documented route contract but cannot be exercised against the live Host in this
+  pre-restart environment. The local cache and reload path are exercised pre-restart.
+- **Cross-device proof** is a second fresh Chrome profile of the same Host on this machine,
+  not a second physical device.
+- The flicker oracle uses real input at live frame cadence; the sample cadence (~26 ms per
+  drag step + one CDP round trip) is intentionally short so the pre-fix blank window is
+  observable, and the deterministic in-frame `ResizeObserver` sample removes the timing
+  dependence. The per-step pixel check reads the **raw canvas bitmap** (`getImageData`), not
+  the CSS-filtered composite; a non-zero grid sum means the backing store is painted.
+- The current-row atmosphere needs an open Session: `smoke-3`/`lw-2` fail with an explicit
+  message when the live GUI has no Session open, because the mode never creates or opens
+  one (zero Host side effects).
+- The one-shot drag targets `pre-run ±40 px`; when the shell's range clamps (264..420) the
+  direction is chosen to stay inside it. The pre-run width is the rendered grid track, not
+  an assumed default, so a user-configured width is restored exactly (and reported).
+- The reload assertion covers the restored final width and the seam, not the absence of a
+  first-paint default flash (the client boot ordering is unit-tested).
+- The expected pre-restart route probes also appear as Chrome's non-JS console
+  "Failed to load resource: 404" log entries; they are printed with the non-JS console/log
+  count (reported for triage, not counted as page errors, and not part of the exit gate).
+- The live GUI is being used while the harness runs; the mode only watches the current
+  rows' canvas element identity, and live card re-sorts do not affect the native
+  Workspace/Session rows used as the oracle.
 
 ### Side effects and cleanup (`--pin` / `--live`)
 
