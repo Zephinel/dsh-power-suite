@@ -2631,3 +2631,15 @@ native-popup oracle is discriminating.
   and its cleanup is deferred one microtask so a delegated selection still
   lands after the outer registry aborts. Full harness mode was not re-run in
   this round.
+
+### Merged-build confirmation (2026-11-16, `row-menu-native-popup`)
+
+The row-menu branch was fast-forwarded into `feat/dynamic-workspaces`
+(`d74d6f5` feature, `21d2686` review fixes, `ace9e4b` E2E, `76f5032` docs).
+Merged client `src/client.js` md5 **`2b700ff6db6f8ba500a8e5feadd4079b`**; merged
+tree gates: `npm test` **360/360 pass**, `npm run check` **exit 0**, docs links
+22 files. Re-run on the merged tree: `--row-menu` **PASS 8 / SKIP 0 / FAIL 0**
+(0 page errors, 0 real network failures, 16.4 s) and `--smoke` **4/4 PASS**
+(3.6 s), logs under `.tmp-work/row-menu-merged/`. This is a client-only change:
+the page reload serves the new menu; no Host restart is needed (the
+sidebar-width route stays live).
