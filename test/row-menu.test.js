@@ -218,4 +218,97 @@ if (seam === undefined) {
     const actions = seam.dwRowMenuActions([{ id: RENAME, label: 'Rename' }])
     assert.doesNotThrow(() => actions[0].run())
   })
+
+  test('the delegation resolves the native session target and maps its views', async () => {
+    const { service, calls } = fakeMenuService({
+      views: [
+        { id: PIN, label: 'Pin session', icon: { key: 'workspace.pin' } },
+        { id: RENAME, label: 'Rename', icon: { key: 'workspace.rename' }, commandId: 'session.rename' },
+        { id: ARCHIVE, label: 'Archive', icon: { key: 'workspace.archive' }, separatorBefore: true, afterContent: true }
+      ]
+    })
+    const controller = new AbortController()
+    const actions = await seam.dwRowMenuResolve(service, { sessionId: 'session-1', displayTitle: 'Title' }, controller.signal, 5)
+    assert.deepEqual(plain(calls.resolve), [{ kind: 'session', value: { sessionId: 'session-1', displayTitle: 'Title' } }])
+    assert.deepEqual(plain(actions).map((action) => action.id), [RENAME, ARCHIVE])
+    assert.deepEqual(plain(actions).map((action) => action.commandId ?? null), ['session.rename', null])
+    assert.equal(actions[1].afterContent, true, 'the native footer placement is preserved')
+    assert.equal(calls.dispose, 0, 'an open menu keeps its nested occurrence alive')
+    controller.abort()
+    await Promise.resolve()
+    assert.equal(calls.dispose, 1, 'dismissing disposes the nested occurrence exactly once')
+  })
+
+  test('selection delegates to the nested native select with the original id', async () => {
+    const { service, calls } = fakeMenuService({
+      views: [{ id: RENAME, label: 'Rename', commandId: 'session.rename' }]
+    })
+    const actions = await seam.dwRowMenuResolve(service, { sessionId: 'session-1' }, new AbortController().signal, 5)
+    actions[0].run()
+    assert.deepEqual(calls.select, [RENAME])
+  })
+
+  test('a nested select that refuses execution does not throw through the action', async () => {
+    const { service } = fakeMenuService({ views: [{ id: RENAME, label: 'Rename' }], selectThrows: true })
+    const actions = await seam.dwRowMenuResolve(service, { sessionId: 'session-1' }, new AbortController().signal, 5)
+    assert.doesNotThrow(() => actions[0].run())
+  })
+
+  test('an abort before the nested providers settle resolves empty and disposes once', async () => {
+    const pending = new Promise(() => {})
+    const { service, calls } = fakeMenuService({ views: [{ id: RENAME, label: 'Rename' }], ready: pending })
+    const controller = new AbortController()
+    const pendingResolution = seam.dwRowMenuResolve(service, { sessionId: 'session-1' }, controller.signal, 5)
+    controller.abort()
+    const actions = await pendingResolution
+    assert.deepEqual(plain(actions), [])
+    assert.equal(calls.dispose, 1)
+    controller.abort()
+    controller.abort()
+    await Promise.resolve()
+    assert.equal(calls.dispose, 1, 'release is idempotent and deferred once')
+  })
+
+  test('a slow nested provider cannot empty the menu: already-published views are used after the budget', async () => {
+    const pending = new Promise(() => {})
+    const { service } = fakeMenuService({ views: [{ id: COPY, label: 'Copy Session ID' }], ready: pending })
+    const actions = await seam.dwRowMenuResolve(service, { sessionId: 'session-1' }, new AbortController().signal, 5)
+    assert.deepEqual(plain(actions).map((action) => action.id), [COPY], 'the published views survive an unresolved ready')
+  })
+
+  test('a missing service, invalid value or aborted signal resolves empty without throwing', async () => {
+    const { service } = fakeMenuService({ views: [{ id: RENAME, label: 'Rename' }] })
+    assert.deepEqual(plain(await seam.dwRowMenuResolve(null, { sessionId: 'session-1' }, new AbortController().signal, 5)), [])
+    assert.deepEqual(plain(await seam.dwRowMenuResolve({}, { sessionId: 'session-1' }, new AbortController().signal, 5)), [])
+    assert.deepEqual(plain(await seam.dwRowMenuResolve(service, null, new AbortController().signal, 5)), [])
+    assert.deepEqual(plain(await seam.dwRowMenuResolve(service, { sessionId: '' }, new AbortController().signal, 5)), [])
+    const aborted = new AbortController()
+    aborted.abort()
+    assert.deepEqual(plain(await seam.dwRowMenuResolve(service, { sessionId: 'session-1' }, aborted.signal, 5)), [])
+  })
+}
+
+/**
+ * Build a fake shared menu service + nested resolution for the delegation tests.
+ * @param {{ views?: readonly object[], ready?: Promise<void>, selectThrows?: boolean }} [options] - fake facts.
+ * @returns {{ service: object, calls: { resolve: object[], select: string[], dispose: number } }} fake service and recorded calls.
+ */
+function fakeMenuService(options = {}) {
+  const calls = { resolve: [], select: [], dispose: 0 }
+  const resolution = {
+    ready: options.ready ?? Promise.resolve(),
+    source: { getSnapshot: () => options.views ?? [] },
+    select: (id) => {
+      calls.select.push(id)
+      if (options.selectThrows === true) throw new Error('refused')
+    },
+    dispose: () => { calls.dispose += 1 }
+  }
+  const service = {
+    resolve: (target) => {
+      calls.resolve.push(target)
+      return resolution
+    }
+  }
+  return { service, calls }
 }

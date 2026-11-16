@@ -4870,6 +4870,83 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       return actions
     }
 
+    /** Budget for the nested native resolution to publish its actions. */
+    const DW_ROW_MENU_RESOLVE_BUDGET_MS = 800
+
+    /**
+     * Resolve one card row menu's delegating action list from the native Session target.
+     *
+     * The nested occurrence is owned by this call: it is disposed when the outer
+     * preparation is aborted (dismissal, unload or a newer opening) or when the
+     * resolution fails; a selection disposes it through the outer registry. The
+     * dispose is deferred by one microtask because the outer registry aborts the
+     * provider signal BEFORE it invokes the selected action's `run`, and the nested
+     * `select` would otherwise be refused by the already-aborted nested lifetime.
+     * The nested `ready` wait is bounded so one slow native provider cannot empty the
+     * whole menu (the shared popup would otherwise show nothing).
+     * @param {object | null | undefined} contextMenus - shared menu service.
+     * @param {unknown} value - our captured target value (`{ sessionId, displayTitle }`).
+     * @param {AbortSignal | null | undefined} signal - outer preparation signal.
+     * @param {number} [budgetMs] - bounded wait for the nested providers.
+     * @returns {Promise<object[]>} delegating MenuActions in native order (pin filtered).
+     */
+    function dwRowMenuResolve(contextMenus, value, signal, budgetMs = DW_ROW_MENU_RESOLVE_BUDGET_MS) {
+      const source = value !== null && typeof value === 'object' ? value : {}
+      const sessionId = typeof source.sessionId === 'string' ? source.sessionId : ''
+      if (sessionId.length === 0) return Promise.resolve([])
+      if (contextMenus === null || contextMenus === undefined || typeof contextMenus !== 'object') return Promise.resolve([])
+      if (typeof contextMenus.resolve !== 'function') return Promise.resolve([])
+      const displayTitle = typeof source.displayTitle === 'string' ? source.displayTitle : ''
+      let resolution
+      try {
+        resolution = contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })
+      } catch {
+        return Promise.resolve([])
+      }
+      if (resolution === null || resolution === undefined || typeof resolution !== 'object') return Promise.resolve([])
+      let released = false
+      const release = () => {
+        if (released) return
+        released = true
+        try {
+          if (typeof resolution.dispose === 'function') resolution.dispose()
+        } catch {
+          // A withdrawn occurrence needs no second dispose.
+        }
+      }
+      if (signal === null || signal === undefined || signal.aborted === true) {
+        release()
+        return Promise.resolve([])
+      }
+      signal.addEventListener('abort', () => { queueMicrotask(release) }, { once: true })
+      return (async () => {
+        try {
+          await new Promise((settle) => {
+            let done = false
+            const finish = () => {
+              if (done) return
+              done = true
+              clearTimeout(timer)
+              settle()
+            }
+            const timer = setTimeout(finish, Math.max(1, Number.isFinite(budgetMs) ? budgetMs : DW_ROW_MENU_RESOLVE_BUDGET_MS))
+            Promise.resolve(resolution.ready).then(finish, finish)
+          })
+          if (signal.aborted === true) return []
+          const views = typeof resolution.source?.getSnapshot === 'function' ? resolution.source.getSnapshot() : []
+          return dwRowMenuActions(views, (id) => {
+            try {
+              resolution.select(id)
+            } catch {
+              // A dismissed occurrence refuses selection; the popup is closing.
+            }
+          })
+        } catch {
+          return []
+        }
+      })()
+    }
+
     /** Pending-notice glyph paths (24 viewBox): question mark and shield; the plan
      *  notice reuses the existing file glyph. */
     const DW_NOTICE_QUESTION_PATH = 'M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM11 15V17H13V15H11ZM11 7V13H13V7H11Z'
@@ -8156,7 +8233,18 @@ function dwClearNativeAtmospheres() {
         }
         sync()
         const unsubscribe = active.subscribe(sync)
-        return typeof unsubscribe === 'function' ? unsubscribe : undefined
+        return () => {
+          if (typeof unsubscribe === 'function') unsubscribe()
+          // Teardown while our popup is open would leave it empty (the contribution
+          // is withdrawn with this plugin), so close the shared popup explicitly.
+          try {
+            const current = active.getSnapshot()
+            if (current !== null && typeof current === 'object' && current.kind === DW_ROW_MENU_TARGET
+              && typeof contextMenus.close === 'function') contextMenus.close()
+          } catch {
+            // The service may already be disposed with the plugin.
+          }
+        }
       }, [contextMenus])
       /**
        * Open the shared context-menu popup for one card row.
@@ -9081,59 +9169,7 @@ function dwClearNativeAtmospheres() {
           id: DW_ROW_MENU_PROVIDER,
           target: DW_ROW_MENU_TARGET,
           order: 100,
-          resolve: async (value, signal) => {
-            const source = value !== null && typeof value === 'object' ? value : {}
-            const sessionId = typeof source.sessionId === 'string' ? source.sessionId : ''
-            if (sessionId.length === 0) return []
-            if (typeof contextMenus.resolve !== 'function') return []
-            const displayTitle = typeof source.displayTitle === 'string' ? source.displayTitle : ''
-            let resolution
-            try {
-              resolution = contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })
-            } catch {
-              return []
-            }
-            if (resolution === null || resolution === undefined) return []
-            let released = false
-            const release = () => {
-              if (released) return
-              released = true
-              try {
-                if (typeof resolution.dispose === 'function') resolution.dispose()
-              } catch {
-                // A withdrawn occurrence needs no second dispose.
-              }
-            }
-            if (signal === null || signal === undefined) {
-              release()
-              return []
-            }
-            if (signal.aborted === true) {
-              release()
-              return []
-            }
-            // The outer registry disposes its occurrence (aborting this signal)
-            // BEFORE it invokes the selected action's `run`, and the nested
-            // `select` refuses to run once its lifetime is aborted. Defer only
-            // the disposal by one microtask so the delegated synchronous
-            // `select` still lands; a dismissal without selection disposes the
-            // nested occurrence just as promptly.
-            signal.addEventListener('abort', () => { queueMicrotask(release) }, { once: true })
-            try {
-              await resolution.ready
-              if (signal.aborted === true) return []
-              const views = typeof resolution.source?.getSnapshot === 'function' ? resolution.source.getSnapshot() : []
-              return dwRowMenuActions(views, (id) => {
-                try {
-                  resolution.select(id)
-                } catch {
-                  // A dismissed occurrence refuses selection; the popup is closing.
-                }
-              })
-            } catch {
-              return []
-            }
-          }
+          resolve: (value, signal) => dwRowMenuResolve(contextMenus, value, signal)
         })
       }, 'power-suite: session row menu')
     }
@@ -24685,7 +24721,8 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesRowMenu = {
         DW_ROW_MENU_TARGET,
         dwRowMenuIsPinView,
-        dwRowMenuActions
+        dwRowMenuActions,
+        dwRowMenuResolve
       }
       // Interrupted-state decision seam: the one Host-record rule shared by the
       // native row decoration, the card rows and the composer seat.
