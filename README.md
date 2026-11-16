@@ -30,7 +30,7 @@ dsh web
 
 The suite works inside the native shell instead of beside it: it augments the sidebar, the Files pane and the composer with Host-backed state, and adds one annotation surface that never covers the page. Unloading the plugin restores the native surface.
 
-![The Workspaces browser beside the Running & recent card, with a row hover card showing session statistics, token usage and context usage](assets/readme-overview.webp)
+![The Workspaces browser, the Running & recent panel, the native row menu and a row hover card with session statistics, token usage and context usage](assets/readme-overview.webp)
 
 *All screenshots come from a temporary, isolated DSH instance with demo Sessions and demo artifacts; no personal content is involved.*
 
@@ -71,7 +71,7 @@ Read more: [Prompt history](docs/prompt-history.md), [draft attachments](docs/dr
 
 A round launcher at the bottom-right of the page toggles a point-and-click annotation mode. The page makes room for a narrow right rail instead of being covered.
 
-![Annotating three elements of a real demo-session answer: numbered markers on the page and the annotation rail with the three requirement texts](assets/readme-annotation.webp)
+![Annotating the Running & recent panel in a demo DSH session: compact numbered markers on the panel header, a recent row and its disclosure chevron, with the annotation rail showing the three requirement texts](assets/readme-annotation.webp)
 
 - **Point at the element.** Hovering outlines the element a click would select, including floating surfaces such as native hover preview cards, which can be drilled into. The popover carries the locator summary, live status, parent/child adjustment and the requested change.
 - **The note stays with the page.** Each annotation becomes a persisted record with a page marker, a numbered requirement badge and a hover detail card; edit the requirement, relocate the target, copy the locator, or delete with a 5 s undo.

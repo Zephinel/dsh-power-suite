@@ -85,12 +85,15 @@ load them.
 
    | Output | Group |
    |---|---|
-   | `assets/readme-overview.webp` | Workspaces browser + Running & recent card with row hover figures |
+   | `assets/readme-overview.webp` | 2×2 grid: Workspaces browser, the Running & recent panel, the native row menu and a row hover card |
    | `assets/readme-artifacts.webp` | Artifacts list (ten rows), Quick Look, source filter |
    | `assets/readme-composer.webp` | Main chat window (answer + composer + prompt rail) and the settings section |
-   | `assets/readme-annotation.webp` | Real demo answer annotated with numbered marks + rail requirement texts |
+   | `assets/readme-annotation.webp` | The Running & recent panel annotated in a demo session (compact marks + rail requirements; captured at 1728×1200 so the whole rail fits) |
 
-   After composing and reviewing the images, tear the isolated instance down
+   The annotation raws are captured at a taller 1728×1200 viewport so the
+   whole rail is visible, and the hover-card/row-menu poses get extra padding
+   so their popovers are never clipped. After composing and reviewing the
+   images, tear the isolated instance down
    (`pkill -f "dsh web --port 3199"`; remove `/tmp/ps-readme-home`,
    `/tmp/ps-readme-home-url.txt`) — nothing from the production GUI is touched.
 

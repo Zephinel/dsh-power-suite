@@ -65,11 +65,13 @@ const FRAME = { width: 1600, padding: 28, gap: 18, ...FRAMES[process.env.README_
 const groups = [
   {
     out: 'readme-overview.webp',
-    height: 800,
+    height: 938,
     cells: [
-      // Workspaces browser (tall) beside the Running & recent card + hover figures.
-      { file: 'workspaces.png', x: 28, y: 51, w: 560, h: 698 },
-      { file: 'card-hover.png', x: 606, y: 28, w: 966, h: 744 }
+      // 2x2 grid: the Running & recent panel must be visible next to the tree.
+      { file: 'workspaces.png', x: 28, y: 28, w: 763, h: 432, crop: { x: 0, y: 0, w: 752, h: 426 } },
+      { file: 'card.png', x: 809, y: 28, w: 763, h: 432, crop: { x: 0, y: 0, w: 736, h: 417 } },
+      { file: 'row-menu.png', x: 28, y: 478, w: 763, h: 432, crop: { x: 0, y: 0, w: 954, h: 540 } },
+      { file: 'card-hover.png', x: 809, y: 478, w: 763, h: 432 }
     ]
   },
   {
@@ -92,10 +94,10 @@ const groups = [
   },
   {
     out: 'readme-annotation.webp',
-    height: 860,
+    height: 1128,
     cells: [
       // Real answer from the demo Session with three annotations and the rail requirements.
-      { file: 'annotation-annotated.png', x: 28, y: 28, w: 1544, h: 804 }
+      { file: 'annotation-annotated.png', x: 28, y: 28, w: 1544, h: 1072 }
     ]
   }
 ]

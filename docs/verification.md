@@ -2779,19 +2779,19 @@ Measured with `sips -g pixelWidth -g pixelHeight` and `stat`:
 
 | Asset | Dimensions | Bytes | Sources (raw captures) |
 |---|---|---|---|
-| `assets/readme-overview.webp` | **1600×800** | 69,586 | `workspaces` + `card-hover` |
-| `assets/readme-artifacts.webp` | **1600×880** | 46,346 | `artifacts` (10 stubbed rows) + `artifacts-quicklook` + `artifacts-filter` |
-| `assets/readme-composer.webp` | **1600×611** | 60,876 | `composer-chat` + `settings` |
-| `assets/readme-annotation.webp` | **1600×860** | 90,076 | `annotation-annotated` (real answer, three annotations) |
+| `assets/readme-overview.webp` | **1600×938** | 84,046 | 2×2 grid: `workspaces`, `card` (Running & recent panel), `row-menu`, `card-hover` |
+| `assets/readme-artifacts.webp` | **1600×880** | 46,248 | `artifacts` (10 stubbed rows) + `artifacts-quicklook` + `artifacts-filter` |
+| `assets/readme-composer.webp` | **1600×611** | 60,874 | `composer-chat` + `settings` |
+| `assets/readme-annotation.webp` | **1600×1128** | 71,904 | `annotation-annotated` (real Running & recent panel annotated) |
 
-The four files total **266,884 bytes**; the composer verifies the fixed 1600 px
+The four files total **263,072 bytes**; the composer verifies the fixed 1600 px
 width and each group's fixed height and fails loudly on a missing source. The
 README alt text was checked against the composed images: overview = Workspaces
-browser + Running & recent card with a row hover card (statistics / token /
-context); artifacts = ten-row list + Quick Look + source filter; composer = a
-demo chat window with the release-checklist answer and composer beside the
-settings section; annotation = the real answer annotated with numbered marks
-and the rail requirement texts.
+browser, the Running & recent panel, the native row menu and a row hover card
+(statistics / token / context); artifacts = ten-row list + Quick Look + source
+filter; composer = a demo chat window with the release-checklist answer and
+composer beside the settings section; annotation = the Running & recent panel
+annotated with compact numbered marks and the rail requirement texts.
 
 ### Capture and composition commands (recorded runs)
 
@@ -2801,18 +2801,25 @@ and the rail requirement texts.
   and one practical tip.”; the user message appeared on attempt 1 (`Stop
   generating` submit state, draft cleared), the answer settled at 1322 transcript
   chars / 1 turn / 1 step / 161 tok/s. Raw captures: `composer-chat.png`
-  2920×1800 (open search card “release”, hover full-text preview),
-  `annotation-annotated.png` 3456×1800 (real answer marked #1 heading, #2
-  checklist step, #3 tip; rail requirements) and `annotation-inserted.png`
-  3456×1800 (“@ UI annotations × 3” grouped chip, never sent). The task Session
-  was archived through the native row “…” menu afterwards; **no injected-card or
-  travel fallback was used**.
+  2920×1800 (open search card “release”, hover full-text preview) and, after a
+  final annotation re-shoot at **1728×1200 CSS** (wider ~460 px sidebar,
+  `annotation-annotated.png` / `annotation-inserted.png` **3456×2400**), the
+  **Running & recent panel** annotated with three real records: panel header
+  (`.psd-panel-toggle`, “Running & recent 4”), a top recent row
+  (`button[aria-label^="Open "]`), and the panel disclosure chevron
+  (`.psd-panel-chevron`); requirement texts “Make this header collapse the whole
+  panel and keep the running count visible.”, “Show the elapsed time on the
+  right and keep the status dot for running rows.”, “Make this chevron collapse
+  the panel to just the header row.”; all three rail textareas are visible in
+  the capture. The task Session was archived through the native row “…” menu
+  afterwards; **no injected-card or travel fallback was used**.
 - `node test/browser/sidebar.e2e.mjs --readme-dashboard --url "$(cat /tmp/ps-readme-home-url.txt)"`
-  → **PASS 12 / SKIP 0 / FAIL 0**, 0 page errors, **40.0 s**, exit 0. Ten raws:
-  `workspaces` 560×698, `card` 544×510, `card-hover` 1208×930, `row-menu`
-  748×492, `interrupted-row` 528×116, `interrupted-composer` 1968×260,
-  `artifacts` 1554×1392 (10 rows), `artifacts-quicklook` 1188×768,
-  `artifacts-filter` 456×312, `settings` 1288×994. Light appearance forced via
+  → **PASS 12 / SKIP 0 / FAIL 0**, 0 page errors, **40.6 s**, exit 0. Ten raws
+  (after the final padding fixes): `workspaces` 752×630, `card` 736×432,
+  `card-hover` 1456×1010, `row-menu` 954×550, `interrupted-row` 720×116,
+  `interrupted-composer` 1858×260, `artifacts` 1554×1392 (10 rows),
+  `artifacts-quicklook` 1188×768, `artifacts-filter` 456×312, `settings`
+  1288×994. Light appearance forced via
   CDP; all sidebar/card/prompt text masked to allowlisted demo strings, the
   transcript hidden where it would enter a crop, and every capture's roots,
   clip region and page scanned for `/Users/`, the user name, URLs, `token=`, the
