@@ -4802,27 +4802,72 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** Most pending notices shown at once; the rest collapse into a "+N" line. */
     const DW_NOTICE_LIMIT = 3
 
-    /** Row-menu action glyphs (24 viewBox) by native action suffix. The shell's
-     *  menu renders icons through its own keyed slot; this popup maps the five
-     *  card actions to compact local paths instead (labels stay native). */
-    const DW_MENU_ICONS = {
-      rename: 'M15.7 2.3a1 1 0 0 1 1.4 0l2.6 2.6a1 1 0 0 1 0 1.4L8.4 17.6 3 19l1.4-5.4L15.7 2.3ZM4.9 15.1l-.3 1.1 1.1-.3 8.8-8.8-0.8-.8-8.8 8.8Z',
-      fork: 'M7 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm10 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm-10 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0-2v2h8v-2H7Zm8-7v4a2 2 0 0 1-2 2h-2V8h2V6h2Z',
-      copy: 'M6.9998 6V3C6.9998 2.44772 7.44752 2 7.9998 2H19.9998C20.5521 2 20.9998 2.44772 20.9998 3V17C20.9998 17.5523 20.5521 18 19.9998 18H16.9998V20.9991C16.9998 21.5519 16.5499 22 15.993 22H4.00666C3.45059 22 3 21.5554 3 20.9991L3.0026 7.00087C3.0027 6.44811 3.45264 6 4.00942 6H6.9998ZM5.00242 8L5.00019 20H14.9998V8H5.00242ZM8.9998 6H16.9998V16H18.9998V4H8.9998V6Z',
-      reveal: 'M3 5C3 4.44772 3.44772 4 4 4H20C20.5523 4 21 4.44772 21 5V19C21 19.5523 20.5523 20 20 20H4C3.44772 20 3 19.5523 3 19V5ZM5 6V18H19V6H5ZM9 13H7V11H9V9H11V11H13V13H11V15H9V13Z',
-      archive: 'M4 3H20C20.5523 3 21 3.44772 21 4V7H19V5H5V7H3V4C3 3.44772 3.44772 3 4 3ZM19 9H21V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9H5V19H19V9ZM8 11H16V13H8V11Z'
+    /** Captured-target kind of the card row "…" menu. The card opens the shared
+     *  native context-menu popup against this plugin-owned kind; the contribution
+     *  below then delegates the action list to the native `session` providers. */
+    const DW_ROW_MENU_TARGET = 'powerSuiteSession'
+
+    /** Registration identity of this feature's contribution in the shared menu registry. */
+    const DW_ROW_MENU_PROVIDER = 'power-suite.session-row-menu'
+
+    /**
+     * Whether one native Session action view is a Pin/Unpin entry.
+     *
+     * The card owns pinning through its title-left pin button, so the row menu
+     * keeps filtering these two views out — by the native action id suffix
+     * (`session.pin/pin`, `session.pin/unpin`) or, if a shell build gives the
+     * entry a different id, by its native icon key.
+     * @param {object | null | undefined} view - one native MenuActionView.
+     * @returns {boolean} true for a Pin/Unpin view.
+     */
+    function dwRowMenuIsPinView(view) {
+      if (view === null || view === undefined || typeof view !== 'object') return false
+      const actionKey = String(view.id ?? '').split('/').pop()
+      if (actionKey === 'pin' || actionKey === 'unpin') return true
+      const iconKey = view.icon !== null && typeof view.icon === 'object' ? String(view.icon.key ?? '') : ''
+      return iconKey === 'workspace.pin' || iconKey === 'workspace.unpin'
     }
 
-    /** Map one native action id to its local glyph path. */
-    function dwMenuItemIcon(view) {
-      const actionKey = String(view !== null && typeof view === 'object' ? view.id ?? '' : '').split('/').pop()
-      if (actionKey === '') return null
-      if (actionKey === 'archive' || actionKey === 'unarchive') return DW_MENU_ICONS.archive
-      if (actionKey === 'reveal' || actionKey === 'finder') return DW_MENU_ICONS.reveal
-      if (actionKey === 'rename') return DW_MENU_ICONS.rename
-      if (actionKey === 'fork') return DW_MENU_ICONS.fork
-      if (actionKey === 'copy') return DW_MENU_ICONS.copy
-      return null
+    /**
+     * Map native Session menu views to delegating shared-popup actions.
+     *
+     * The shared popup renders the actions handed to it, so the native
+     * presentation fields (label, icon key, command id for the shortcut hint,
+     * disabled/danger flags, the separator and footer positions, and nested
+     * children) are copied verbatim. Selection is delegated: each mapped
+     * `run` calls the nested native resolution's `select` with the ORIGINAL
+     * (namespaced) view id, so the native behavior and any plugin-contributed
+     * action keep working. Pin/Unpin views are filtered out and invalid entries
+     * are skipped.
+     * @param {readonly object[] | null | undefined} views - native MenuActionViews.
+     * @param {Function} select - nested resolution's `select(id)`.
+     * @returns {object[]} delegating MenuActions in native order.
+     */
+    function dwRowMenuActions(views, select) {
+      if (!Array.isArray(views)) return []
+      const runSelection = typeof select === 'function' ? select : () => {}
+      const actions = []
+      for (const view of views) {
+        if (view === null || view === undefined || typeof view !== 'object') continue
+        if (typeof view.id !== 'string' || view.id.length === 0) continue
+        if (dwRowMenuIsPinView(view)) continue
+        const action = {
+          id: view.id,
+          label: typeof view.label === 'string' ? view.label : '',
+          run: () => runSelection(view.id)
+        }
+        // Only copy presentation fields the native view actually carries; the
+        // popup's own defaults then match a native contribution without them.
+        if (view.commandId !== undefined) action.commandId = view.commandId
+        if (view.icon !== undefined) action.icon = view.icon
+        if (view.disabled !== undefined) action.disabled = view.disabled
+        if (view.danger !== undefined) action.danger = view.danger
+        if (view.separatorBefore !== undefined) action.separatorBefore = view.separatorBefore
+        if (view.afterContent !== undefined) action.afterContent = view.afterContent
+        if (Array.isArray(view.children)) action.children = dwRowMenuActions(view.children, select)
+        actions.push(action)
+      }
+      return actions
     }
 
     /** Pending-notice glyph paths (24 viewBox): question mark and shield; the plan
@@ -4942,7 +4987,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'notice.overflow': '+{count} more',
       'notice.live': '{count} Sessions are waiting for your answer',
       'notice.region': 'Sessions waiting for your answer',
-      'menu.aria': 'Session actions',
       'panel.done': 'done',
       'panel.children': '{count} subagents',
       'panel.expandChildren': 'Show subagents of {title}',
@@ -5013,7 +5057,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'notice.overflow': '还有 {count} 个',
       'notice.live': '{count} 个 Session 正在等待你的回答',
       'notice.region': '正在等你回答的 Session',
-      'menu.aria': '会话操作',
       'panel.done': '已完成',
       'panel.children': '{count} 个子代理',
       'panel.expandChildren': '展开 {title} 的子代理',
@@ -5191,15 +5234,6 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-child-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap}
 .psd-child-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
-.psd-menu{position:fixed;z-index:1200;box-sizing:border-box;padding:4px;border-radius:var(--dsw-radius-lg,14px);background:var(--dsw-alias-bg-layer-2,#2c2c2e);color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);display:flex;flex-direction:column;gap:1px}
-.psd-menu-icon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-right:8px;color:var(--dsw-alias-label-secondary)}
-.psd-menu-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.psd-menu-item{appearance:none;display:flex;align-items:center;width:100%;min-height:32px;padding:0 10px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:inherit;font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer}
-.psd-menu-item:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.psd-menu-item:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px;background:var(--dsw-alias-interactive-bg-hover)}
-.psd-menu-item:disabled{color:var(--dsw-alias-label-tertiary);cursor:default}
-.psd-menu-sep{flex:none;height:1px;margin:4px 6px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 10%,transparent)}
-.psd-menu-loading{min-height:36px;padding:10px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px}
 .psd-notices{position:fixed;z-index:999;display:flex;flex-direction:column;gap:6px;pointer-events:none}
 .psd-notices-live{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .psd-notice{appearance:none;display:flex;align-items:flex-start;gap:9px;box-sizing:border-box;width:100%;padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,14px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;text-align:left;cursor:pointer;pointer-events:auto}
@@ -7810,6 +7844,7 @@ function dwClearNativeAtmospheres() {
                 menuEnabled ? React.createElement('button', {
                   type: 'button',
                   className: 'psd-run-more',
+                  'data-context-menu-trigger': '',
                   'aria-haspopup': 'menu',
                   'aria-expanded': menuOpen ? 'true' : undefined,
                   'aria-label': t('row.more', { title: row.title }),
@@ -7985,136 +8020,6 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
-     * Card-owned Session menu popup.
-     *
-     * Renders the native session action contributions resolved through
-     * `contextMenus.resolve` so Rename/Fork/Copy Session ID/Show in Finder/Archive
-     * keep their native behavior, while the Pin/Unpin entry is filtered out: the
-     * card's title-left pin button is the only pin owner. Labels are native and
-     * localized; like the native popup the list closes on Escape, an outside
-     * pointer press, scroll or resize, and supports arrow/Home/End navigation.
-     * @param {object} props - component props.
-     * @param {object} props.menu - open menu occurrence (point, views, ready).
-     * @param {Function} props.onSelect - run one action id.
-     * @param {Function} props.onClose - dismiss without running an action.
-     * @returns {object | null} the fixed popup, or null while it has no content.
-     */
-    function DwSessionMenu({ menu, onSelect, onClose, t }) {
-      const rootRef = React.useRef(null)
-      const itemRefs = React.useRef(new Map())
-      const allViews = Array.isArray(menu.views) ? menu.views : []
-      const isPinView = (view) => {
-        const actionKey = String(view.id ?? '').split('/').pop()
-        if (actionKey === 'pin' || actionKey === 'unpin') return true
-        const iconKey = view.icon !== null && typeof view.icon === 'object' ? String(view.icon.key ?? '') : ''
-        return iconKey === 'workspace.pin' || iconKey === 'workspace.unpin'
-      }
-      const views = allViews.filter((view) => view !== null && typeof view === 'object' && !isPinView(view))
-      const width = 224
-      const height = 12 + views.length * 33 + 8
-      const x = menu.point !== null && menu.point !== undefined && Number.isFinite(menu.point.x) ? menu.point.x : 8
-      const y = menu.point !== null && menu.point !== undefined && Number.isFinite(menu.point.y) ? menu.point.y : 8
-      const left = Math.round(Math.max(8, Math.min(x, window.innerWidth - width - 8)))
-      const top = Math.round(y + 4 + height > window.innerHeight - 8 ? Math.max(8, y - height - 30) : y + 4)
-      const style = { left, top, width }
-      React.useEffect(() => {
-        const first = views.find((view) => view.disabled !== true)
-        const element = first === undefined ? undefined : itemRefs.current.get(first.id)
-        if (element !== undefined && element !== null) {
-          try {
-            element.focus({ preventScroll: true })
-          } catch {
-            element.focus()
-          }
-        }
-        const onKeyDown = (event) => {
-          // Only act while focus is inside this popup; after Tab moves focus out
-          // (or onto another surface) the menu must not steal arrow keys.
-          const root = rootRef.current
-          if (root === null || root === undefined || !root.contains(document.activeElement)) return
-          if (event.key === 'Escape') {
-            event.preventDefault()
-            event.stopPropagation()
-            onClose()
-            return
-          }
-          if (event.key === 'Tab') {
-            // Native menus dismiss on Tab and return focus to their trigger.
-            event.preventDefault()
-            onClose()
-            return
-          }
-          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Home' && event.key !== 'End') return
-          const items = views
-            .filter((view) => view.disabled !== true)
-            .map((view) => itemRefs.current.get(view.id))
-            .filter((element) => element !== undefined && element !== null)
-          if (items.length === 0) return
-          event.preventDefault()
-          const index = items.indexOf(document.activeElement)
-          let next
-          if (event.key === 'Home') next = 0
-          else if (event.key === 'End') next = items.length - 1
-          else if (event.key === 'ArrowDown') next = index < 0 ? 0 : (index + 1) % items.length
-          else next = index < 0 ? items.length - 1 : (index - 1 + items.length) % items.length
-          items[next].focus()
-        }
-        const onPointerDown = (event) => {
-          const root = rootRef.current
-          if (root !== null && root !== undefined && root.contains(event.target)) return
-          // The trigger is outside the popup: pressing it must reach its click
-          // handler (which toggles the menu) instead of closing on pointerdown.
-          const trigger = menu.trigger
-          if (trigger !== null && trigger !== undefined && trigger.contains(event.target)) return
-          // Keep the browser from moving focus to the pressed element; close()
-          // restores focus to the trigger.
-          event.preventDefault()
-          onClose()
-        }
-        document.addEventListener('keydown', onKeyDown, true)
-        document.addEventListener('pointerdown', onPointerDown, true)
-        window.addEventListener('resize', onClose)
-        window.addEventListener('scroll', onClose, true)
-        return () => {
-          document.removeEventListener('keydown', onKeyDown, true)
-          document.removeEventListener('pointerdown', onPointerDown, true)
-          window.removeEventListener('resize', onClose)
-          window.removeEventListener('scroll', onClose, true)
-        }
-      }, [menu.token, views.length, menu.trigger])
-      if (views.length === 0) {
-        if (menu.ready !== true) {
-          return React.createElement('div', { className: 'psd-menu psd-menu-loading', 'data-psd-menu': '', role: 'menu', 'aria-label': t('menu.aria'), style }, '…')
-        }
-        return null
-      }
-      itemRefs.current = new Map()
-      const rows = []
-      views.forEach((view, index) => {
-        if (view.separatorBefore === true && index > 0) {
-          rows.push(React.createElement('div', { key: `sep-${view.id}`, className: 'psd-menu-sep', role: 'separator' }))
-        }
-        const iconPath = dwMenuItemIcon(view)
-        rows.push(React.createElement('button', {
-          key: view.id,
-          type: 'button',
-          role: 'menuitem',
-          'data-menu-action': view.id,
-          className: 'psd-menu-item',
-          disabled: view.disabled === true,
-          ref: (element) => {
-            if (element === null) itemRefs.current.delete(view.id)
-            else itemRefs.current.set(view.id, element)
-          },
-          onClick: () => onSelect(view.id)
-        },
-        iconPath === null ? null : React.createElement('span', { className: 'psd-menu-icon', 'aria-hidden': true }, RemixGlyph(iconPath, 14)),
-        React.createElement('span', { className: 'psd-menu-label' }, view.label)))
-      })
-      return React.createElement('div', { ref: rootRef, className: 'psd-menu', 'data-psd-menu': '', role: 'menu', 'aria-label': t('menu.aria'), style }, rows)
-    }
-
-    /**
      * Floating stack of pending-interaction notices beside the card.
      *
      * Each card summarises one waiting Session (kind, title, first question) and
@@ -8217,117 +8122,77 @@ function dwClearNativeAtmospheres() {
       const [ackedBaselines, setAckedBaselines] = React.useState(dwReadAckedBaselines)
       const [sessionActivity, setSessionActivity] = React.useState({})
       const [now, setNow] = React.useState(() => Date.now())
-      // The row "..." menu is the native Session menu WITHOUT its Pin/Unpin item:
-      // the card owns pinning through the title-left pin button (restored), so the
-      // menu reuses the native action contributions via `contextMenus.resolve`
-      // and renders them in the card's own popup. Actions keep their native
-      // behavior (Rename / Fork / Copy Session ID / Show in Finder / Archive);
-      // only the pin entry is filtered out.
-      const [sessionMenu, setSessionMenu] = React.useState(null)
-      /** Open menu occurrence: token, resolution, trigger element and subscription. */
-      const sessionMenuRef = React.useRef(null)
-      /** Trigger element of the open menu, for focus restoration. */
-      const sessionMenuTriggerRef = React.useRef(null)
-      const closeSessionMenu = React.useCallback(() => {
-        const current = sessionMenuRef.current
-        const trigger = sessionMenuTriggerRef.current
-        sessionMenuTriggerRef.current = null
-        sessionMenuRef.current = null
-        setSessionMenu(null)
-        if (trigger !== null && trigger !== undefined && typeof trigger.focus === 'function' && trigger.isConnected) {
-          try {
-            trigger.focus({ preventScroll: true })
-          } catch {
-            trigger.focus()
-          }
-        }
-        if (current === null) return
-        if (typeof current.unsubscribe === 'function') {
-          try {
-            current.unsubscribe()
-          } catch {
-            // A already-withdrawn source needs no unsubscribe.
-          }
-        }
-        if (current.resolution !== null && typeof current.resolution.dispose === 'function') {
-          try {
-            current.resolution.dispose()
-          } catch {
-            // A dismissed occurrence needs no second dispose.
-          }
-        }
-      }, [])
-      React.useEffect(() => closeSessionMenu, [closeSessionMenu])
-      const openSessionMenu = React.useCallback((row, element) => {
-        if (contextMenus === null || contextMenus === undefined || typeof contextMenus.resolve !== 'function') return
-        if (sessionMenu !== null && sessionMenu.sessionId === row.id) {
-          closeSessionMenu()
-          return
-        }
-        closeSessionMenu()
-        let resolution = null
-        try {
-          resolution = contextMenus.resolve({ kind: 'session', value: { sessionId: row.id, displayTitle: row.title } })
-        } catch {
-          return
-        }
-        if (resolution === null || resolution === undefined) return
-        const token = {}
-        const readViews = () => {
-          try {
-            const source = resolution.source
-            const views = typeof source?.getSnapshot === 'function' ? source.getSnapshot() : []
-            return Array.isArray(views) ? views : []
-          } catch {
-            return []
-          }
-        }
+      // The row "..." menu is the shared native context-menu popup, opened
+      // against this feature's own captured-target kind. The contribution
+      // registered in `installDynamicWorkspaces` delegates to the native
+      // `session` action providers, so the shared popup supplies the native
+      // icons, shortcut hints, material, placement, focus and dismissal; only
+      // the Pin/Unpin entry is filtered out because the card's title-left pin
+      // button is the only pin owner. `menuSessionId` mirrors the shared popup's
+      // active target so each row can show its open state.
+      const [menuSessionId, setMenuSessionId] = React.useState(null)
+      React.useEffect(() => {
+        if (contextMenus === null || contextMenus === undefined) return undefined
+        const active = contextMenus.active
+        if (active === null || active === undefined
+          || typeof active.subscribe !== 'function'
+          || typeof active.getSnapshot !== 'function') return undefined
         const sync = () => {
-          const current = sessionMenuRef.current
-          if (current === null || current.token !== token) return
-          const views = readViews()
-          setSessionMenu((previous) => (previous !== null && previous.token === token ? { ...previous, views } : previous))
+          let target = null
+          try {
+            target = active.getSnapshot()
+          } catch {
+            target = null
+          }
+          const value = target !== null && typeof target === 'object' && target.kind === DW_ROW_MENU_TARGET
+            ? target.value
+            : null
+          setMenuSessionId(
+            value !== null && typeof value === 'object'
+              && typeof value.sessionId === 'string' && value.sessionId.length > 0
+              ? value.sessionId
+              : null
+          )
         }
-        let unsubscribe
+        sync()
+        const unsubscribe = active.subscribe(sync)
+        return typeof unsubscribe === 'function' ? unsubscribe : undefined
+      }, [contextMenus])
+      /**
+       * Open the shared context-menu popup for one card row.
+       *
+       * The trigger is focused first because the shared popup captures
+       * `document.activeElement` as its focus-restoration target on open. The
+       * popup position is the trigger's left/bottom edge; opening the same row
+       * again within the service's 4 px toggle radius closes it.
+       * @param {object} row - card row carrying `id` and `title`.
+       * @param {Element} element - the row's "..." trigger button.
+       * @returns {void}
+       */
+      const openSessionMenu = React.useCallback((row, element) => {
+        if (row === null || typeof row !== 'object') return
+        if (!(element instanceof HTMLElement)) return
+        const sessionId = typeof row.id === 'string' && row.id.length > 0 ? row.id : ''
+        if (sessionId.length === 0) return
+        if (contextMenus === null || contextMenus === undefined || typeof contextMenus.open !== 'function') return
         try {
-          unsubscribe = typeof resolution.source?.subscribe === 'function' ? resolution.source.subscribe(sync) : undefined
+          element.focus({ preventScroll: true })
         } catch {
-          unsubscribe = undefined
+          element.focus()
         }
-        const rect = element instanceof HTMLElement ? element.getBoundingClientRect() : null
-        sessionMenuTriggerRef.current = element instanceof HTMLElement ? element : null
-        sessionMenuRef.current = { token, resolution, unsubscribe }
-        setSessionMenu({
-          token,
-          sessionId: row.id,
-          trigger: element instanceof HTMLElement ? element : null,
-          point: rect === null ? { x: 0, y: 0 } : { x: Math.round(rect.left), y: Math.round(rect.bottom) },
-          views: readViews(),
-          ready: false
-        })
-        Promise.resolve(resolution.ready).then(() => {
-          const current = sessionMenuRef.current
-          if (current === null || current.token !== token) return
-          const views = readViews()
-          setSessionMenu((previous) => (previous !== null && previous.token === token ? { ...previous, views, ready: true } : previous))
-        }, () => {})
-      }, [contextMenus, sessionMenu, closeSessionMenu])
-      const selectSessionMenuItem = React.useCallback((id) => {
-        const current = sessionMenuRef.current
-        if (current === null || current.resolution === null) {
-          closeSessionMenu()
-          return
-        }
-        // Select BEFORE closing: the resolution's lifetime is aborted by dispose,
-        // and `select` refuses to run once aborted. `select` disposes on its own;
-        // the close afterwards is an idempotent second dispose.
+        const rect = element.getBoundingClientRect()
         try {
-          current.resolution.select(id)
+          contextMenus.open({
+            kind: DW_ROW_MENU_TARGET,
+            value: {
+              sessionId,
+              displayTitle: typeof row.title === 'string' ? row.title : ''
+            }
+          }, { x: Math.round(rect.left), y: Math.round(rect.bottom) })
         } catch {
-          // A withdrawn contribution cannot execute; the menu is already closed.
+          // A withdrawn service leaves the row inert; the next snapshot re-renders it.
         }
-        closeSessionMenu()
-      }, [closeSessionMenu])
+      }, [contextMenus])
 
       const mountsRef = React.useRef(null)
       const latestRef = React.useRef(null)
@@ -9124,8 +8989,8 @@ function dwClearNativeAtmospheres() {
         onNewSession: openNewSession,
         pinnedIds,
         onTogglePin: togglePin,
-        menuSessionId: sessionMenu !== null ? sessionMenu.sessionId : null,
-        menuEnabled: typeof contextMenus === 'object' && contextMenus !== null && typeof contextMenus.resolve === 'function',
+        menuSessionId,
+        menuEnabled: contextMenus !== null && contextMenus !== undefined && typeof contextMenus.open === 'function',
         onOpenSessionMenu: openSessionMenu,
         notices: pendingNotices.notices,
         noticeOverflow: pendingNotices.overflow,
@@ -9173,15 +9038,6 @@ function dwClearNativeAtmospheres() {
           })
         }), mounts.inactiveHeader, 'inactive-header'))
       }
-      if (sessionMenu !== null) {
-        portal.push(ReactDOM.createPortal(React.createElement(DwSessionMenu, {
-          key: 'session-menu',
-          menu: sessionMenu,
-          t,
-          onSelect: selectSessionMenuItem,
-          onClose: closeSessionMenu
-        }), document.body))
-      }
       return React.createElement(React.Fragment, null, portal)
     }
 
@@ -9211,6 +9067,75 @@ function dwClearNativeAtmospheres() {
         contextMenus: ctx.contextMenus,
         interruptedT: ctx.locale.bind(INTERRUPTED_NS)
       }))), 'power-suite: dynamic-workspaces seat')
+      // The card row "..." menu is the shared native context-menu popup. This
+      // contribution serves the plugin-owned captured-target kind the card opens;
+      // it resolves the native `session` target (which collects every provider's
+      // session actions) and delegates the resulting views as delegating actions,
+      // filtered of Pin/Unpin. Selecting one runs the nested native resolution's
+      // `select`, so native and plugin-contributed behavior is preserved while
+      // the native popup supplies icons, shortcut hints, material and dismissal.
+      ctx.effect(() => {
+        const contextMenus = ctx.contextMenus
+        if (contextMenus === null || contextMenus === undefined || typeof contextMenus.register !== 'function') return undefined
+        return contextMenus.register({
+          id: DW_ROW_MENU_PROVIDER,
+          target: DW_ROW_MENU_TARGET,
+          order: 100,
+          resolve: async (value, signal) => {
+            const source = value !== null && typeof value === 'object' ? value : {}
+            const sessionId = typeof source.sessionId === 'string' ? source.sessionId : ''
+            if (sessionId.length === 0) return []
+            if (typeof contextMenus.resolve !== 'function') return []
+            const displayTitle = typeof source.displayTitle === 'string' ? source.displayTitle : ''
+            let resolution
+            try {
+              resolution = contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })
+            } catch {
+              return []
+            }
+            if (resolution === null || resolution === undefined) return []
+            let released = false
+            const release = () => {
+              if (released) return
+              released = true
+              try {
+                if (typeof resolution.dispose === 'function') resolution.dispose()
+              } catch {
+                // A withdrawn occurrence needs no second dispose.
+              }
+            }
+            if (signal === null || signal === undefined) {
+              release()
+              return []
+            }
+            if (signal.aborted === true) {
+              release()
+              return []
+            }
+            // The outer registry disposes its occurrence (aborting this signal)
+            // BEFORE it invokes the selected action's `run`, and the nested
+            // `select` refuses to run once its lifetime is aborted. Defer only
+            // the disposal by one microtask so the delegated synchronous
+            // `select` still lands; a dismissal without selection disposes the
+            // nested occurrence just as promptly.
+            signal.addEventListener('abort', () => { queueMicrotask(release) }, { once: true })
+            try {
+              await resolution.ready
+              if (signal.aborted === true) return []
+              const views = typeof resolution.source?.getSnapshot === 'function' ? resolution.source.getSnapshot() : []
+              return dwRowMenuActions(views, (id) => {
+                try {
+                  resolution.select(id)
+                } catch {
+                  // A dismissed occurrence refuses selection; the popup is closing.
+                }
+              })
+            } catch {
+              return []
+            }
+          }
+        })
+      }, 'power-suite: session row menu')
     }
     //#endregion
 
@@ -24753,6 +24678,14 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesPanel = {
         dwPendingNotices,
         dwNoticePlacement,
+      }
+      // The card row "..." menu: the plugin-owned captured-target kind the shared
+      // popup opens against plus the pure delegation helpers (Pin/Unpin filtering
+      // and native MenuActionView -> delegating MenuAction mapping).
+      globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesRowMenu = {
+        DW_ROW_MENU_TARGET,
+        dwRowMenuIsPinView,
+        dwRowMenuActions
       }
       // Interrupted-state decision seam: the one Host-record rule shared by the
       // native row decoration, the card rows and the composer seat.
