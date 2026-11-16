@@ -5313,16 +5313,15 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
 .psd-notices{position:fixed;inset:0;z-index:999;pointer-events:none}
 .psd-notices-live{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-.psd-notice{position:fixed;appearance:none;display:flex;align-items:flex-start;gap:9px;box-sizing:border-box;width:320px;padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,14px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;text-align:left;cursor:pointer;pointer-events:auto}
-.psd-notice:hover{background-color:var(--dsw-alias-bg-layer-1);background-image:linear-gradient(var(--dsw-alias-interactive-bg-hover),var(--dsw-alias-interactive-bg-hover))}
+.psd-notice{position:fixed;appearance:none;display:flex;align-items:flex-start;gap:9px;box-sizing:border-box;width:320px;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-hovercard-bg,#2c2c2e);color:var(--dsw-static-neutral-bluish-00,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;text-align:left;cursor:pointer;pointer-events:auto}
 .psd-notice:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psd-notice-icon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;color:var(--dsw-alias-state-business-primary)}
 .psd-notice-content{display:flex;flex-direction:column;gap:2px;min-width:0}
 .psd-notice-head{display:flex;align-items:baseline;gap:8px;min-width:0}
-.psd-notice-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;line-height:18px;font-weight:500;color:var(--dsw-alias-label-primary)}
-.psd-notice-kind{flex:none;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}
-.psd-notice-headline{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:17px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
-.psd-notice-meta{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:15px}
+.psd-notice-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;line-height:18px;font-weight:500;color:var(--dsw-static-neutral-bluish-00,#fff)}
+.psd-notice-kind{flex:none;color:var(--dsw-static-neutral-bluish-400,#adb2b8);font-size:11px;line-height:16px}
+.psd-notice-headline{color:var(--dsw-static-neutral-bluish-300,#cfd3d6);font-size:12px;line-height:17px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.psd-notice-meta{color:var(--dsw-static-neutral-bluish-400,#adb2b8);font-size:11px;line-height:15px}
 .psd-notices-overflow{position:fixed;padding:0 4px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;text-align:right;pointer-events:none}
 .psd-hovercard{position:fixed;z-index:1000;box-sizing:border-box;width:${DW_HOVERCARD_WIDTH}px;max-height:min(${DW_HOVERCARD_MAX_HEIGHT}px,calc(100vh - 16px));overflow-x:hidden;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-hovercard-bg,#2c2c2e);color:var(--dsw-static-neutral-bluish-00,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;font-size:12px;line-height:16px;pointer-events:none}
 .psd-hovercard::-webkit-scrollbar{display:none;width:0;height:0}
@@ -5350,7 +5349,8 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 body:not([data-ds-dark-theme]) .psd-hovercard,
 body:not([data-ds-dark-theme]) .psp-rail-card,
 body:not([data-ds-dark-theme]) .psp-search-card,
-body:not([data-ds-dark-theme]) .dsa-quicklook{
+body:not([data-ds-dark-theme]) .dsa-quicklook,
+body:not([data-ds-dark-theme]) .psd-notice{
   --psd-card-divider:var(--dsw-alias-border-l2);
   --dsw-hovercard-bg:var(--dsw-alias-bg-layer-1,#fff);
   --dsw-static-neutral-bluish-00:var(--dsw-alias-label-primary,#0f1115);

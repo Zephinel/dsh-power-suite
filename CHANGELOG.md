@@ -553,9 +553,11 @@ and no dated release heading is added until the release is cut.
   row as fallback) and starts flush at the sidebar column's right edge like the
   Session info card, instead of a fixed card-relative stack that made the
   notice and its Session drift apart. If the row is scrolled out of its
-  container the stack scrolls it into view before placing the notice. Hovering
-  a notice keeps its opaque card layer under the native hover tint so the
-  title/headline no longer show the page text behind it.
+  container the stack scrolls it into view before placing the notice. The card
+  now reuses the Session info card surface (`--dsw-hovercard-bg` + the static
+  label palette, 16 px radius, lv3 shadow, light-theme override) and, like the
+  info card, keeps that surface on hover instead of swapping in a translucent
+  tint, so the title/headline never show the page text behind them.
 - **Interrupted-session refresh and timing** — badges repull automatically after
   a Host restart (Connection generation reset), on focus/visibility/online, and
   on a 20 s poll instead of waiting for a Session click; parent Sessions whose

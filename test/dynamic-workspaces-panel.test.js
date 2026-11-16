@@ -184,14 +184,20 @@ test('each notice is placed at its own Session row height', () => {
   assert.equal(noAnchorRight.left, 1440 - 8 - 320, 'the fallback is clamped inside the viewport')
 })
 
-test('notice cards keep an opaque layer beneath the translucent hover tint', () => {
+test('notice cards reuse the Session info card surface and keep it on hover', () => {
   assert.match(
     client.source,
-    /\.psd-notice:hover\{background-color:var\(--dsw-alias-bg-layer-1\);background-image:linear-gradient\(/,
-    'hover tints the opaque card layer instead of replacing it with a translucent color'
+    /\.psd-notice\{[^}]*background:var\(--dsw-hovercard-bg,#2c2c2e\)/,
+    'the notice borrows the info card surface token instead of the panel layer'
   )
   assert.doesNotMatch(
     client.source,
-    /\.psd-notice:hover\{background:var\(--dsw-alias-interactive-bg-hover\)\}/
+    /\.psd-notice:hover\{[^}]*background/,
+    'hover never swaps the surface (the info card itself has no hover wash)'
+  )
+  assert.match(
+    client.source,
+    /body:not\(\[data-ds-dark-theme\]\) \.psd-notice\b/,
+    'light mode joins the same theme-following popover override as the info card'
   )
 })

@@ -2880,12 +2880,15 @@ No Host route, store or native-surface change.
   centre it (one-frame re-measure) before placing the notice; it does not fight
   a later deliberate user scroll. The fallback stack position is kept only when
   the row cannot be found in the DOM at all.
-- **Hover transparency.** `.psd-notice:hover` replaced the opaque
-  `background: var(--dsw-alias-bg-layer-1)` with the translucent
-  `--dsw-alias-interactive-bg-hover` (measured `rgba(38, 49, 72, 0.06)`), so the
-  page text behind the card showed through while hovering. Hover now keeps
-  `background-color: var(--dsw-alias-bg-layer-1)` and paints the native tint as
-  a `linear-gradient` image over it, so the card stays opaque.
+- **Hover transparency.** `.psd-notice:hover` replaced the card surface with the
+  translucent `--dsw-alias-interactive-bg-hover` (measured
+  `rgba(38, 49, 72, 0.06)`), so the page text behind the card showed through
+  while hovering. The notice now reuses the **Session info card surface** it was
+  meant to mirror — `background: var(--dsw-hovercard-bg, #2c2c2e)`, the static
+  bluish label palette, 16 px radius and 12/16 px padding, and the same
+  light-theme override group as `.psd-hovercard` — with no hover background
+  rule at all, exactly like the info card (only pointer cursor and focus ring
+  differ).
 
 ### Verification
 
@@ -2901,10 +2904,11 @@ No Host route, store or native-surface change.
   interaction, so the probe first picked a real card-row Session id, then
   reloaded with a probe-only client whose `dwPendingNotices` returns one fixture
   notice for that id — the **real `DwPendingNotices` renderer** then drew it:
-  - `sidebarRight 420`, notice `left 420` (flush), row `top 311`, notice
-    `top 311` (**same height as its Session row**, 0 px delta), one notice card;
-  - hover: `backgroundColor rgb(255, 255, 255)` → **alpha 1**, with the native
-    tint as a gradient image over it (no page text bleed-through);
+  - `sidebarRight 420`, notice `left 420` (flush), row `top 272`, notice
+    `top 272` (**same height as its Session row**, 0 px delta), one notice card;
+  - hover: `backgroundColor rgb(255, 255, 255)` → **alpha 1**, `backgroundImage
+    none` (the same info-card surface before and after hover; no page text
+    bleed-through);
   - auto-reveal helper through the same code path: synthetic scroller 160 px
     tall with the row 600 px down → `dwNoticeRevealRow` returned true,
     `scrollTop 0 → 474`, row top moved 608 → 134 (centred in the scroller).

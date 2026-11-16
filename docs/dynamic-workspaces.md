@@ -461,9 +461,12 @@ answering surface, and clicking a notice just opens that Session.
   otherwise outside the visible band), the stack scrolls the row's nearest
   vertical scroller just enough to centre it before placing the notice, with a
   one-frame re-measure; it does not fight a later deliberate user scroll.
-- **Opaque hover**: hovering a notice keeps the card's opaque `bg-layer-1`
-  surface and composites the native hover tint over it, so the title and
-  headline never show the page text behind the card.
+- **Same surface as the Session info card**: the notice reuses the info card's
+  theme-following hover-card recipe — `--dsw-hovercard-bg`, the static
+  bluish label palette (flipped to the light-theme tokens in light mode), the
+  16 px radius, lv3 shadow and 12/16 px padding — and, like the info card, it
+  does not change its background on hover (only the pointer cursor and the
+  focus ring differ), so the content never sits on a translucent wash.
 - **Stack and overflow**: up to **3** notice cards, newest activity first; the
   rest collapse into a "+N more" line. Only the cards take the pointer; the
   stack never steals focus and has no hover preview of its own.
