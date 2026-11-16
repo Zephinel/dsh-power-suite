@@ -30,9 +30,9 @@ dsh web
 
 The suite works inside the native shell instead of beside it: it augments the sidebar, the Files pane and the composer with Host-backed state, and adds one annotation surface that never covers the page. Unloading the plugin restores the native surface.
 
-![Running & recent card, activity buckets, the native row menu and a row hover card](assets/readme-overview.webp)
+![The Workspaces browser beside the Running & recent card, with a row hover card showing session statistics, token usage and context usage](assets/readme-overview.webp)
 
-*All screenshots use demo data — a demo Session, demo artifacts and a demo answer card — so no personal content appears.*
+*All screenshots come from a temporary, isolated DSH instance with demo Sessions and demo artifacts; no personal content is involved.*
 
 - **Running & recent, at the top of the sidebar.** The card lists running and recently finished Sessions, nests delegated subagent rows, raises a preview-only notice when a Session waits on a question, plan review or approval, and paints the current row with its rainbow glow. Hover a row for the native **Session statistics**, **Token usage** and **Context usage** figures.
 - **Native row menus.** A top-level row's "…" menu opens the shell's own shared context-menu popup with the native Session actions (Pin is left out): native material, icons, shortcut hints and footer.
@@ -58,7 +58,7 @@ Read more: [Session artifacts](docs/session-artifacts.md).
 
 The composer keeps the work around the prompt: what you asked before, what you attached, and what happened when a turn did not finish.
 
-![Prompt history rail and search, the interrupted-session composer and the suite settings](assets/readme-composer.webp)
+![A demo DSH chat window with the release-checklist answer and composer beside the suite settings section](assets/readme-composer.webp)
 
 - **Prompt history.** The configured modifier + ↑/↓ recalls prompts already sent in this Session; plain arrows keep their native behavior. A rail at the conversation's right edge lists the same prompts as ticks, oldest first, with timestamps, a full-text hover preview, an inline search and click-to-copy.
 - **Draft attachments survive Session switches.** Pasted, dropped or picked files stay with the draft when you open another Session and come back, for the page lifetime — the shell itself persists only the draft text.
@@ -71,7 +71,7 @@ Read more: [Prompt history](docs/prompt-history.md), [draft attachments](docs/dr
 
 A round launcher at the bottom-right of the page toggles a point-and-click annotation mode. The page makes room for a narrow right rail instead of being covered.
 
-![Annotating three elements of a demo DSH answer card: numbered markers on the page and the annotation rail with the three requirement texts](assets/readme-annotation.webp)
+![Annotating three elements of a real demo-session answer: numbered markers on the page and the annotation rail with the three requirement texts](assets/readme-annotation.webp)
 
 - **Point at the element.** Hovering outlines the element a click would select, including floating surfaces such as native hover preview cards, which can be drilled into. The popover carries the locator summary, live status, parent/child adjustment and the requested change.
 - **The note stays with the page.** Each annotation becomes a persisted record with a page marker, a numbered requirement badge and a hover detail card; edit the requirement, relocate the target, copy the locator, or delete with a 5 s undo.

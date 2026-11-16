@@ -2719,158 +2719,132 @@ the green-CI requirement.
 ## 2026-11-16 — README Bento rewrite + screenshot pipeline (`readme-bento`)
 
 Branch `readme-bento`, based on `release-0.1.0-prep` @ `571de58`. Documentation
-and asset round only: [README.md](../README.md) is rewritten as a Bento landing
-page, a new root `assets/` set is composed from local live-GUI captures, and the
-capture/compose pipeline is documented. No `src/` code, test behavior or
-Host/Client contract changes; the `--readme-shots` capture mode lives in
-`test/browser/sidebar.e2e.mjs` (capture task).
+and image round only: [README.md](../README.md) is rewritten as a Bento landing
+page and a new root `assets/` set is composed from **light-theme captures of a
+temporary, isolated DSH instance** (the production GUI is never captured). No
+`src/` behaviour, test contract or Host/Client surface changes.
 
 ### What changed
 
-- `README.md` — full rewrite, English only: icon header, H1, three badges (npm
+- `README.md` — English landing page: icon header, H1, three badges (npm
   version, MIT license, DSH 0.2.2), a one-line hook, an install/open example, a
-  `[!NOTE]` status block (0.1.0 prepared but not published; no git remote, no CI
-  run), a full table-of-contents row linking every section and a demo-data note;
-  then Overview (Running & recent card, native row menu, sidebar width,
-  Host-shared read state), Session artifacts, Composer (prompt history, draft
-  attachments, interrupted recovery), UI element annotation, a 10-row feature
-  table linking each `docs/<feature>.md`, Install (npm after the release /
+  truthful `[!NOTE]` status block (0.1.0 prepared but not published; no git
+  remote, no CI run), a table of contents covering every section, a demo-data
+  note, and a `Read more` line with the per-feature docs link at the end of each
+  feature section. The former feature table, Install (npm after the release /
   in-app Plugins page / local `link:` checkout), Quick start, Get the code,
-  Prerequisites, Build/test/deploy, Documentation, Contributing and License.
-  Each feature section ends with a `Read more` link to its detailed docs. Every command and claim was checked against `package.json`,
-  `docs/*.md` and `test/browser/README.md`; no invented CI or publish badge.
+  Prerequisites, Build/test/deploy, Documentation, Contributing and License
+  sections are kept and re-ordered for the lifecycle.
 - `assets/readme-overview.webp`, `assets/readme-artifacts.webp`,
-  `assets/readme-composer.webp` and `assets/readme-annotation.webp` — four
-  composed Bento grids on the light README frame (`#f4f3f0`, dark app captures
-  in `#0e0f12` tiles; `README_BENTO_FRAME=dark` is the opt-in alternative;
-  measured sizes and sources in the table below) built by
+  `assets/readme-composer.webp`, `assets/readme-annotation.webp` — four composed
+  Bento grids on a **pale beige canvas** (`#f6f1e6`, warm-white `#fffdf8` tiles,
+  18 px gutter, aspect-matched tiles, no letterboxing) built by
   `npm run build:readme-bento` (`scripts/build-readme-bento.mjs`) from
-  `.tmp-work/readme-shots/raw/` captures plus the refreshed
-  `docs/assets/annotation-*.png` set. `assets` is in `package.json.files` so the
-  npm README can load the images; raw captures and `captures.json` stay
-  gitignored and are never committed.
-- `docs/development.md` — new "README screenshots and the Bento pipeline"
-  section: the `--readme-shots` capture command, the annotation refresh command
-  (and its current fallback), the composer command and its four outputs, the
-  docs-links gate dependency, and the privacy masking/scan rule.
-- `test/browser/README.md` — the `--readme-shots` mode is listed with its own
-  section: output directory, masking/scan contract, stub poses, annotation
-  fallback, runtime and side effects.
+  `.tmp-work/readme-shots/raw/` captures. The composer image is now split as the
+  user asked: the main chat window (answer + composer + prompt rail/search +
+  hover preview) beside the settings view. `assets` stays in
+  `package.json.files` so the npm README can load the images.
+- `test/browser/sidebar.e2e.mjs` — two capture modes targeting an isolated
+  instance: `--readme-chat` (real model task → composer-chat and the annotation
+  workflow raws) and `--readme-dashboard` (Workspaces/card/hover/menus/
+  interrupted/artifacts/settings raws), both light appearances forced, privacy
+  masks + banned-pattern scans, demo stubs only.
+- `docs/development.md` — pipeline section: isolated-instance protocol, the two
+  capture modes, pale-beige frame, split composer group, teardown.
+- `test/browser/README.md` — the two modes and their isolation/privacy contract.
 - `CHANGELOG.md` — `### Documentation` bullet for the rewrite and pipeline.
-- `docs/verification.md` — this section.
 
 ### Environment (2026-11-16)
 
 - Node **v24.22.3**, npm **11.19.1**, pnpm **12.14.0**, Chrome
-  **157.0.8103.79**; headless capture at a 1728×900 CSS viewport.
-- Live DSH Web Host **0.2.2-rc.1** (`dsh --version`); the capture harness uses a
-  throwaway headless Chrome profile and never prints or stores the GUI token.
+  **157.0.8103.79**; captures at a 1728×900 CSS viewport, DPR 2.
+- **Isolated instance**: `DSH_HOME=/tmp/ps-readme-home`,
+  `dsh web --port 3199 --host 127.0.0.1 --no-open`, own sessions/workspaces and
+  credentials copy, the checkout installed as a local `link:` bundle in its web
+  profile. The token URL lives only in a `chmod 600` `/tmp` file (never printed,
+  never written into the repo). The **production GUI was not used or touched**
+  for this round; the temporary instance and its `/tmp` directories were removed
+  after composition.
+- **Demo data** (isolated home only): workspace `ps-readme-workspace` →
+  `/private/tmp/ps-readme-workspace` with six demo Sessions — four short generic
+  model turns (changelog entry, PR-review steps, release-checklist summary, typo
+  commit message), one blank Session, and the archived task Session. The native
+  add-workspace flow opens the browser File System Access directory picker and
+  cannot be driven headlessly, so the planned three demo workspaces reduced to a
+  single demo Workspace (recorded deviation).
 
 ### Composed assets (measured 2026-11-16)
 
 Measured with `sips -g pixelWidth -g pixelHeight` and `stat`:
 
-| Asset | Dimensions | Bytes | Sources (raw capture groups) |
+| Asset | Dimensions | Bytes | Sources (raw captures) |
 |---|---|---|---|
-| `assets/readme-overview.webp` | **1600×828** | 72,454 | `workspaces`, `card`, `row-menu`, `card-hover` raws |
-| `assets/readme-artifacts.webp` | **1600×880** | 48,620 | `artifacts` (10 stubbed rows), `artifacts-quicklook`, `artifacts-filter` raws |
-| `assets/readme-composer.webp` | **1600×652** | 54,772 | `prompt-history`, `interrupted-composer`, `settings` raws |
-| `assets/readme-annotation.webp` | **1600×860** | 50,546 | `annotation-annotated` raw (dummy Session with three real annotations) |
+| `assets/readme-overview.webp` | **1600×800** | 69,586 | `workspaces` + `card-hover` |
+| `assets/readme-artifacts.webp` | **1600×880** | 46,346 | `artifacts` (10 stubbed rows) + `artifacts-quicklook` + `artifacts-filter` |
+| `assets/readme-composer.webp` | **1600×611** | 60,876 | `composer-chat` + `settings` |
+| `assets/readme-annotation.webp` | **1600×860** | 90,076 | `annotation-annotated` (real answer, three annotations) |
 
-The four files total **226,392 bytes** and are the only committed README images.
-Every tile is sized to its source aspect and positioned on a uniform 18 px
-gutter, so no screenshot is letterboxed or touches a neighbour; the annotation
-image is a single full-width capture of the dummy Session workflow.
-The composer verifies the fixed 1600 px width and each group's fixed height, and
-fails loudly on a missing source. The README alt text was read against the
-composed images and matches what is visible: the overview shows the Workspaces
-browser with Active/Inactive buckets, the Running & recent card, the native row
-menu and the expanded row hover card; the artifacts image shows the ten-row
-generated/provided list, Quick Look and the source filter; the composer image
-shows the prompt rail and search card, the interrupted composer strip with its
-play control and the settings section; the annotation image is a dummy DSH page
-whose answer card carries three numbered annotation markers, with the rail
-showing the three requirement texts and the batch insert action.
-No README image references a pre-Bento `docs/assets/*.png` file.
+The four files total **266,884 bytes**; the composer verifies the fixed 1600 px
+width and each group's fixed height and fails loudly on a missing source. The
+README alt text was checked against the composed images: overview = Workspaces
+browser + Running & recent card with a row hover card (statistics / token /
+context); artifacts = ten-row list + Quick Look + source filter; composer = a
+demo chat window with the release-checklist answer and composer beside the
+settings section; annotation = the real answer annotated with numbered marks
+and the rail requirement texts.
 
 ### Capture and composition commands (recorded runs)
 
-- `node test/browser/sidebar.e2e.mjs --readme-shots` — captured again after the
-  user's screenshot review; final run (2026-11-16):
-  **PASS 15 / SKIP 0 / FAIL 0**, **0 page errors**, **228.8 s**, exit 0 (log
-  `.tmp-work/readme-shots/run.log`). It writes **13/13** raw PNG captures plus
-  `captures.json` to `.tmp-work/readme-shots/raw/` (2× device scale for element
-  crops, full-page annotation captures at 3456×1800, 1728×900 CSS viewport,
-  throwaway profile, forced `prefers-color-scheme: dark` because the host had
-  switched to light appearance; worktree client injected with the documented
-  `__POWER_SUITE_TEST_HOOKS__` seam for the interrupted poses). Every crop-region
-  and page scan reported **0 hits**; the non-JS console lines are the known
-  benign `ws://127.0.0.1:9230/ingest` 403 telemetry noise, not page errors.
-  New in this run: `artifacts.png` now stubs **10 rows** so the panel is full, and
-  `annotation-annotated.png` / `annotation-inserted.png` pose a **dummy blank
-  Session** (created through native New Session, previous Session restored, id
-  only in `captures.json`) with a client-injected answer card ("Weekend in
-  Shanghai"); three real annotations are created by clicking the card, their
-  requirement texts are set in the rail textareas, and the second capture shows
-  "Insert all into composer". The injected card's controller did not paint page
-  marks through the rAF derivation in headless Chrome, so the numbered marks are
-  drawn by the plugin's own `.psa-mark` renderer from the same snapshot
-  descriptors — recorded in `captures.json.deviations`; the annotations, rail
-  entries, requirement texts and insertion are real feature state.
-  Other recorded deviations: `card.png` has no pinned row (the live Host pin
-  document is empty and the mode never pins), and `workspaces.png` collapses the
-  Running & recent card for the tall Workspaces crop (restored afterwards).
-- **Annotation docs sources.** `node test/browser/annotation.e2e.mjs
-  --shots-only --assets` currently **exits 1** because the live composer region
-  is pointer pass-through for that harness. The readme mode re-captures the same
-  five privacy-guarded `docs/assets/annotation-*.png` poses itself at 1728×900
-  (forced dark scheme): idle 123,919 B, mode 157,048 B, selection 173,198 B,
-  collection 211,205 B, inserted 210,804 B (`readme-annotation-assets` PASS).
-  The README annotation image does not use these docs assets; it uses the
-  separate `annotation-annotated` dummy-Session capture described above.
+- `node test/browser/sidebar.e2e.mjs --readme-chat --url "$(cat /tmp/ps-readme-home-url.txt)"`
+  → **PASS 1 / SKIP 0 / FAIL 0**, 0 page errors, **43.4 s**, exit 0. Real task:
+  prompt “Write a short release checklist for a web app: five steps, one risk,
+  and one practical tip.”; the user message appeared on attempt 1 (`Stop
+  generating` submit state, draft cleared), the answer settled at 1322 transcript
+  chars / 1 turn / 1 step / 161 tok/s. Raw captures: `composer-chat.png`
+  2920×1800 (open search card “release”, hover full-text preview),
+  `annotation-annotated.png` 3456×1800 (real answer marked #1 heading, #2
+  checklist step, #3 tip; rail requirements) and `annotation-inserted.png`
+  3456×1800 (“@ UI annotations × 3” grouped chip, never sent). The task Session
+  was archived through the native row “…” menu afterwards; **no injected-card or
+  travel fallback was used**.
+- `node test/browser/sidebar.e2e.mjs --readme-dashboard --url "$(cat /tmp/ps-readme-home-url.txt)"`
+  → **PASS 12 / SKIP 0 / FAIL 0**, 0 page errors, **40.0 s**, exit 0. Ten raws:
+  `workspaces` 560×698, `card` 544×510, `card-hover` 1208×930, `row-menu`
+  748×492, `interrupted-row` 528×116, `interrupted-composer` 1968×260,
+  `artifacts` 1554×1392 (10 rows), `artifacts-quicklook` 1188×768,
+  `artifacts-filter` 456×312, `settings` 1288×994. Light appearance forced via
+  CDP; all sidebar/card/prompt text masked to allowlisted demo strings, the
+  transcript hidden where it would enter a crop, and every capture's roots,
+  clip region and page scanned for `/Users/`, the user name, URLs, `token=`, the
+  checkout path and CJK — **0 hits everywhere**.
 - `npm run build:readme-bento` / `node scripts/build-readme-bento.mjs` →
-  composes the four WebPs above; no network, Chrome only.
+  composes the four WebPs above (no network; Chrome only).
 
 ### Final gates (2026-11-16)
 
-- `node scripts/check-docs-links.mjs` → **ok, 22 Markdown files**, exit 0; the
-  four `assets/readme-*.webp` links and every other local link/image resolve.
+- `node scripts/check-docs-links.mjs` → **ok, 22 Markdown files**, exit 0.
 - `npm run check` → **exit 0**: `check passed: 24 modules, 21 test files`;
-  `docs links ok: 22 Markdown files`; `release-notes: ok (0.1.0; 6 highlight(s),
-  6 English)`; Node tests **360/360 passed, 0 failed, 0 skipped**.
+  docs links ok; release-notes ok (0.1.0, 6 + 6); Node tests **360/360 passed**.
 - `npm run pack:check` → exit 0, **`entryCount` 92 / 92 files**, including the
-  four `assets/readme-*.webp` images, `README.md` and the 30 packed
-  `docs/assets/*.png` files. The packed byte total is not pinned (this record
-  ships in the package and changes it).
-- In the earlier docs-first pass the only red gate was the four not-yet-composed
-  asset links; the final values above supersede that state.
+  four `assets/readme-*.webp` images.
+- No product browser re-run was needed (no `src/` change). The previous
+  dark-theme captures and production-derived raws remain only in the gitignored
+  `.tmp-work/readme-shots/raw-production-previous/`; the readonly docs image set
+  under `docs/assets/annotation-*.png` keeps its previously committed state.
 
 ### Evidence limits (state honestly)
 
-- **Capture rerun.** The first screenshot set was rejected during user review
-  (tiles touched or carried empty bands, and the annotation image showed only
-  the rail). The capture mode was extended (dummy-Session annotation workflow,
-  full 10-row artifacts panel) and the pass re-ran to the final PASS 15 result
-  above; the Lead re-composed every grid and visually reviewed all four WebPs.
-  Raw captures and `captures.json` remain gitignored; only composed WebPs ship.
-- **English only.** `README.md` remains the single English landing document; no
-  Chinese README ships this round (the captured GUI is English, so the
-  screenshots and copy match). A Chinese counterpart needs Chinese-UI captures
-  and is out of scope.
-- **Badge resolution.** The npm version badge points at
-  `@zephinel/dsh-power-suite`, which is **not published yet**; shields renders
-  no version until the 0.1.0 release. The GitHub clone target and issue links
-  are the intended publishing target and do not resolve until the first push
-  (the repository has no remote). No CI or publish badge is used.
-- **Raw captures stay out of git.** The privacy evidence (per-crop masking and
-  scan results in `captures.json`) lives under gitignored `.tmp-work/`, so the
-  committed repository cannot re-derive it; the committed artifacts are the
-  four composed images only.
-- **Annotation byte sizes are historical snapshots.** The five
-  `docs/assets/annotation-*.png` files were re-captured in this round at
-  1728×900, so the byte sizes recorded in the earlier annotation acceptance
-  sections are snapshots of the older files; the current sizes are listed under
-  "Capture and composition commands" above.
+- **Single demo Workspace.** The native add-workspace flow uses the browser File
+  System Access directory picker, unreachable headlessly, so the isolated
+  instance has one demo Workspace; the dashboard raws show no Inactive Projects
+  rows and no pinned/running/child rows (the card is a fresh demo state). The
+  interrupted poses use the documented test seam.
+- **English only.** `README.md` stays the single English landing document; the
+  captured GUI is English, matching the copy. A Chinese counterpart needs
+  Chinese-UI captures and is out of scope.
+- **Badge resolution.** The npm version badge points at the package, which is
+  not published yet; it resolves after the 0.1.0 publish.
+- **Raw captures stay out of git.** Only the four composed WebPs ship; the
+  isolated instance's `/tmp` home and token file were removed after composition.
 - **No CI run exists** for this branch (no remote); `npm run check` and the
-  browser suites are local. This is a docs/assets-only change, so no product
-  browser re-run is required.
+  capture passes are local.

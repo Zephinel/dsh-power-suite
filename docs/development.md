@@ -44,29 +44,32 @@ stay local and gitignored; only the composed WebPs under `assets/` are
 committed, and `assets` is part of the published package so the npm README can
 load them.
 
-1. **Capture the raw screenshots** from the live GUI in a throwaway headless
-   Chrome (device scale factor 2, viewport 1728×900):
+1. **Capture the raw screenshots from an isolated DSH instance**, never from
+   the production GUI. The temporary home has its own sessions, workspaces and
+   credentials copy; only the README checkout is installed as a local bundle:
 
    ```bash
-   node test/browser/sidebar.e2e.mjs --readme-shots
+   DSH_HOME=/tmp/ps-readme-home dsh plugin --profile web add <checkout>
+   DSH_HOME=/tmp/ps-readme-home dsh web --port 3199 --host 127.0.0.1 --no-open
+   # keep the printed token URL in a chmod 600 /tmp file; never print or commit it
+   URL="$(cat /tmp/ps-readme-home-url.txt)"
+   node test/browser/sidebar.e2e.mjs --readme-chat      --url "$URL"
+   node test/browser/sidebar.e2e.mjs --readme-dashboard --url "$URL"
    ```
 
-   The mode writes 13 raw captures to `.tmp-work/readme-shots/raw/` plus a
-   `captures.json` manifest that records each file's source selector, crop
-   rectangle, device scale factor, pose, masking state and privacy-scan result.
-   Newer poses include a full ten-row Artifacts panel and a dummy-Session
-   annotation workflow: a blank Session is created through native New Session
-   (previous Session restored, id only in `captures.json`), the native sidebar
-   and header are hidden, a demo answer card is injected client-side, three real
-   annotations are created on it with requirement texts, and both the annotated
-   page and the "Insert all into composer" state are captured full-page. The
-   pass forces `prefers-color-scheme: dark` so the images do not change with the
-   host appearance. It also re-captures the five privacy-guarded
-   `docs/assets/annotation-*.png` poses: the standalone refresh command
-   `node test/browser/annotation.e2e.mjs --shots-only --assets` currently exits
-   1 because the live composer region is pointer pass-through for that harness,
-   so use the readme mode's `readme-annotation-assets` check instead. A capture
-   run takes about two minutes.
+   Both modes force `prefers-color-scheme: light`, use DPR 2 at a 1728×900
+   viewport, and write their raws plus a `captures.json` manifest (source
+   selector, crop rectangle, DPR, pose, masking state, privacy scan) to
+   `.tmp-work/readme-shots/raw/`. `--readme-chat` creates a blank demo Session,
+   sends a short generic prompt (e.g. a release checklist), waits for the real
+   answer, captures the chat window + composer + prompt rail/search + hover
+   preview, then annotates two or three real answer elements, captures the
+   annotated page and the “Insert all into composer” state, and archives the
+   demo Session. `--readme-dashboard` captures Workspaces, the Running & recent
+   card, hover card, row menu, interrupted states, Artifacts (ten stubbed rows),
+   Quick Look, filter and settings. The native add-workspace flow opens the
+   browser File System Access directory picker and cannot run headlessly, so the
+   isolated instance uses a single demo Workspace (`ps-readme-workspace`).
 
 2. **Compose the Bento groups** (Chrome required; no network):
 
@@ -75,24 +78,29 @@ load them.
    ```
 
    `scripts/build-readme-bento.mjs` reads the raw files, builds one HTML grid per
-   group on the light README frame (`#f4f3f0`; set `README_BENTO_FRAME=dark` for
-   the dark alternative), and captures each grid as a 1600 px WebP. It fails
-   loudly on a missing source and verifies that every output has the expected
-   width/height:
+   group on the pale-beige README canvas (`#f6f1e6`, warm-white `#fffdf8` tiles,
+   18 px gutter, aspect-matched tiles), and captures each grid as a 1600 px
+   WebP. It fails loudly on a missing source and verifies that every output has
+   the expected width/height:
 
    | Output | Group |
    |---|---|
-   | `assets/readme-overview.webp` | Workspaces browser, Running & recent card, native row menu, row hover card |
-   | `assets/readme-artifacts.webp` | Artifacts panel, Quick Look, source filter |
-   | `assets/readme-composer.webp` | Prompt-history rail, interrupted composer, suite settings |
-   | `assets/readme-annotation.webp` | Dummy DSH page with three real annotations (numbered marks + rail requirement texts) |
+   | `assets/readme-overview.webp` | Workspaces browser + Running & recent card with row hover figures |
+   | `assets/readme-artifacts.webp` | Artifacts list (ten rows), Quick Look, source filter |
+   | `assets/readme-composer.webp` | Main chat window (answer + composer + prompt rail) and the settings section |
+   | `assets/readme-annotation.webp` | Real demo answer annotated with numbered marks + rail requirement texts |
+
+   After composing and reviewing the images, tear the isolated instance down
+   (`pkill -f "dsh web --port 3199"`; remove `/tmp/ps-readme-home`,
+   `/tmp/ps-readme-home-url.txt`) — nothing from the production GUI is touched.
 
 3. **Run the gates.** `README.md` links the four outputs by relative path, so
    `node scripts/check-docs-links.mjs` (also part of `npm run check`) fails until
    every composed file exists; re-run it after composing.
 
-**Privacy rule.** The captured page loads the user's real Host data, so every
-capture is masked in the page before the screenshot: Session and card rows use
+**Privacy rule.** The isolated instance contains only demo data, but the
+dashboard mode still masks every visible title/path before the screenshot so a
+round cannot depend on that: Session and card rows use
 allowlisted demo titles, Workspace names and paths are replaced, hover-card and
 conversation text uses canned demo lines, and the composer draft is empty. Each
 crop region is then scanned for user paths, user names, URLs, tokens, the
