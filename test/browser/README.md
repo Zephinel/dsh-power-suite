@@ -1361,12 +1361,13 @@ persisted setting.
 node test/browser/sidebar.e2e.mjs --readme-shots
 ```
 
-- **Output** — 11 PNG crops (`workspaces`, `card`, `card-hover`, `row-menu`,
+- **Output** — 13 raw captures (`workspaces`, `card`, `card-hover`, `row-menu`,
   `interrupted-row`, `interrupted-composer`, `artifacts`, `artifacts-quicklook`,
-  `artifacts-filter`, `prompt-history`, `settings`) plus a `captures.json`
-  manifest in `.tmp-work/readme-shots/raw/`. The directory is gitignored; the
-  committed README images are the composed WebPs under `assets/`, built by
-  `npm run build:readme-bento`.
+  `artifacts-filter`, `prompt-history`, `settings`, plus the two full-page
+  annotation workflow captures `annotation-annotated` and `annotation-inserted`)
+  and a `captures.json` manifest in `.tmp-work/readme-shots/raw/`. The directory
+  is gitignored; the committed README images are the composed WebPs under
+  `assets/`, built by `npm run build:readme-bento`.
 - **Device facts** — device scale factor **2** (each crop is 2× its CSS size),
   1728×900 CSS viewport, throwaway headless Chrome profile, this worktree's
   client injected with `window.__POWER_SUITE_TEST_HOOKS__` so the interrupted
@@ -1381,22 +1382,37 @@ node test/browser/sidebar.e2e.mjs --readme-shots
   crop that still leaks is discarded and its pose fails. The GUI token is never
   printed or written.
 - **Stub poses** — the Artifacts poses stub `GET /api/session-artifacts.list`,
-  `.raw` and `.preview` through CDP `Fetch` with demo artifacts only; the Quick
-  Look pose shows a stubbed demo Markdown document; the prompt-history pose
-  masks preview text to canned demo lines. The stubs mirror the real route
-  response shapes; nothing is invented in the Host.
+  `.raw` and `.preview` through CDP `Fetch` with demo artifacts only (the list
+  pose returns ten rows so the panel is full); the Quick Look pose shows a
+  stubbed demo Markdown document; the prompt-history pose masks preview text to
+  canned demo lines. The stubs mirror the real route response shapes; nothing is
+  invented in the Host.
+- **Annotation workflow pose** — creates a blank dummy Session through native
+  New Session (nothing typed or sent; the previous Session is restored and the
+  id is only recorded in `captures.json`), hides the native sidebar/header, and
+  injects a demo answer card client-side ("Weekend in Shanghai"). It enters
+  annotation mode, clicks three elements (heading, itinerary row, primary
+  button), writes realistic requirement texts into the rail textareas via the
+  native value setter, captures the full page, then clicks **Insert all into
+  composer** and captures again. The injected card's controller does not paint
+  page marks through its rAF derivation in headless Chrome, so the numbered
+  marks are drawn by the plugin's own `.psa-mark` renderer from the same
+  snapshot descriptors; annotations, rail entries, texts and insertion are real
+  feature state (recorded in `captures.json.deviations`).
 - **Annotation sources fallback** — `annotation.e2e.mjs --shots-only --assets`
   currently exits 1 because the live composer region is pointer pass-through
   for that harness, so the mode re-captures the five
   `docs/assets/annotation-*.png` poses itself through the same privacy guard at
   1728×900 (the `readme-annotation-assets` row).
-- **Recorded run (2026-11-16)** — exit 0, **PASS 14 / SKIP 0 / FAIL 0**, **0
-  page errors**, **125.9 s**, 11/11 raw files, log
-  `.tmp-work/readme-shots/run.log`; the 36 non-JS console lines are the known
-  benign `ws://127.0.0.1:9230/ingest` 403 telemetry noise. Deviations: no
-  pinned row in `card.png` (the live pin document is empty and this mode never
-  pins), and the Running & recent card is collapsed for the tall
-  `workspaces.png` pose (restored afterwards).
+- **Recorded run (2026-11-16, final after the screenshot review)** — exit 0,
+  **PASS 15 / SKIP 0 / FAIL 0**, **0 page errors**, **228.8 s**, 13/13 raw
+  captures, log `.tmp-work/readme-shots/run.log`; the non-JS console lines are
+  the known benign `ws://127.0.0.1:9230/ingest` 403 telemetry noise. The pass
+  forces `prefers-color-scheme: dark` so the images stay consistent when the
+  host appearance is light. Deviations: no pinned row in `card.png` (the live
+  pin document is empty and this mode never pins), the Running & recent card is
+  collapsed for the tall `workspaces.png` pose (restored afterwards), and the
+  injected-card marks fallback described above.
 - **Side effects** — opens/closes UI, hovers, opens native menus and applies the
   documented seams only; restores the poses it changed (card expanded state,
   menus dismissed, seam records cleared) and never clicks a destructive or

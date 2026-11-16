@@ -12647,6 +12647,8 @@ const README_REQUIRED_FILES = [
   'artifacts-filter.png',
   'prompt-history.png',
   'settings.png',
+  'annotation-annotated.png',
+  'annotation-inserted.png',
 ]
 /** Allowlisted demo copy substituted for every user-identifying string in the page. */
 const README_SESSION_TITLES = [
@@ -12765,6 +12767,50 @@ const README_STUB_ARTIFACTS = {
       bytes: 1640,
       size: 1640,
       promptOrdinal: 3,
+      missing: false,
+    },
+    {
+      path: '/demo/readme-workspace/meeting-notes.md',
+      name: 'meeting-notes.md',
+      turn: 5,
+      mime: 'text/markdown',
+      previewable: true,
+      size: 2660,
+      missing: false,
+    },
+    {
+      path: '/demo/readme-workspace/roadmap.svg',
+      name: 'roadmap.svg',
+      turn: 6,
+      mime: 'image/svg+xml',
+      previewable: true,
+      size: 2048,
+      missing: false,
+    },
+    {
+      provided: true,
+      attachmentId: 'readme-demo-attachment-6',
+      name: 'tokens.json',
+      mediaType: 'application/json',
+      mime: 'application/json',
+      previewable: true,
+      bytes: 1229,
+      size: 1229,
+      promptOrdinal: 3,
+      missing: false,
+    },
+    {
+      provided: true,
+      attachmentId: 'readme-demo-attachment-7',
+      name: 'screenshot.png',
+      mediaType: 'image/png',
+      mime: 'image/png',
+      previewable: true,
+      bytes: 188416,
+      size: 188416,
+      width: 1280,
+      height: 720,
+      promptOrdinal: 4,
       missing: false,
     },
   ],
@@ -13267,6 +13313,324 @@ const probeReadme = {
     return null
   },
 
+  /** Hide/show the native left sidebar (all user workspace/session data) for dummy poses. */
+  hideSidebar: (enabled) => {
+    const ID = 'psd-readme-hide-sidebar-style'
+    let style = document.getElementById(ID)
+    if (enabled === true) {
+      if (style === null) {
+        style = document.createElement('style')
+        style.id = ID
+        style.textContent = 'html[data-psd-readme-hide-sidebar] [class$="_sidebarCol"]{display:none!important}' +
+          'html[data-psd-readme-hide-sidebar] [class*="_sidebarRail"]{display:none!important}'
+        document.head.appendChild(style)
+      }
+      document.documentElement.setAttribute('data-psd-readme-hide-sidebar', 'true')
+    } else {
+      document.documentElement.removeAttribute('data-psd-readme-hide-sidebar')
+      if (style !== null) style.remove()
+    }
+    return { hidden: enabled === true }
+  },
+
+  /** Hide the blank-session hero ("Into the Unknown" / Preview) above the composer. */
+  hideEmptyHomeState: () => {
+    let hidden = 0
+    for (const node of document.querySelectorAll('h1, h2, h3, div, span, p')) {
+      if (node.childElementCount !== 0) continue
+      if ((node.textContent || '').trim() !== 'Into the Unknown') continue
+      let target = node
+      // Climb only through hero-sized blocks (the composer stack is much taller).
+      while (target.parentElement !== null && target.parentElement.getBoundingClientRect().height <= 160) {
+        target = target.parentElement
+      }
+      target.setAttribute('data-psd-readme-hidden-hero', '')
+      target.style.visibility = 'hidden'
+      hidden += 1
+    }
+    return { hidden }
+  },
+
+  /**
+   * Inject the dummy DSH answer card (client-side DOM only): "Weekend in Shanghai" with an
+   * intro, date chips, three itinerary checklist rows, a budget/slider row and a primary
+   * "Add to calendar" button. All colours come from the page's dark-theme tokens.
+   */
+  installDummyAnswer: () => {
+    const STYLE_ID = 'psd-readme-dummy-style'
+    if (document.getElementById(STYLE_ID) === null) {
+      const style = document.createElement('style')
+      style.id = STYLE_ID
+      style.textContent = [
+        '#psd-readme-dummy-answer{position:fixed;z-index:9;font-family:inherit;color:var(--dsw-alias-label-primary,#f2f3f5)}',
+        '.psd-dummy-card{box-sizing:border-box;width:100%;padding:22px 28px 20px;background:var(--dsw-alias-bg-layer-1,#17181b);border:1px solid var(--dsw-alias-border-l2,rgba(255,255,255,.1));border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.45)}',
+        'h2[data-psd-dummy-title]{margin:0;font-size:20px;line-height:28px;font-weight:600;letter-spacing:-.01em}',
+        '.psd-dummy-chips{display:flex;gap:6px;margin-top:8px}',
+        '.psd-dummy-chips span{font-size:11px;line-height:18px;padding:0 8px;border-radius:999px;background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.06));color:var(--dsw-alias-label-secondary,#b9bcc2)}',
+        '.psd-dummy-intro{margin:10px 0 0;font-size:13px;line-height:20px;color:var(--dsw-alias-label-secondary,#b9bcc2)}',
+        '.psd-dummy-section{margin-top:14px;font-size:11px;line-height:16px;letter-spacing:.04em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#8b8f96)}',
+        '.psd-dummy-list{display:flex;flex-direction:column;gap:5px;margin:7px 0 0;padding:0;list-style:none}',
+        '.psd-dummy-list li{display:flex;align-items:center;gap:12px;padding:8px 12px;border:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,.07));border-radius:10px;background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.03))}',
+        '.psd-dummy-list label{display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer}',
+        '.psd-dummy-list input{width:14px;height:14px;margin:0;accent-color:var(--dsw-alias-state-business-primary,#4b8bff)}',
+        '.psd-dummy-row-title{font-size:13px;line-height:20px;color:var(--dsw-alias-label-primary,#f2f3f5)}',
+        '.psd-dummy-row-meta{flex:none;font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#8b8f96)}',
+        '.psd-dummy-budget{display:flex;align-items:center;gap:12px;margin-top:16px;padding-top:14px;border-top:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,.07))}',
+        '.psd-dummy-budget-label{flex:none;min-width:48px;font-size:12px;color:var(--dsw-alias-label-secondary,#b9bcc2)}',
+        '.psd-dummy-budget input[type=range]{flex:1;max-width:240px;accent-color:var(--dsw-alias-state-business-primary,#4b8bff)}',
+        '.psd-dummy-budget-value{flex:none;font-size:12px;color:var(--dsw-alias-label-primary,#f2f3f5)}',
+        '.psd-dummy-budget-range{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#8b8f96)}',
+        '.psd-dummy-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px}',
+        '.psd-dummy-hint{font-size:11px;color:var(--dsw-alias-label-tertiary,#8b8f96)}',
+        'button[data-psd-dummy-action]{appearance:none;border:0;height:36px;padding:0 18px;border-radius:10px;background:var(--dsw-alias-state-business-primary,#4b8bff);color:#fff;font:inherit;font-weight:500;cursor:pointer}',
+        'button[data-psd-dummy-action]:hover{filter:brightness(1.06)}'
+      ].join('\n')
+      document.head.appendChild(style)
+    }
+    let host = document.getElementById('psd-readme-dummy-answer')
+    if (host === null) {
+      host = document.createElement('div')
+      host.id = 'psd-readme-dummy-answer'
+      host.setAttribute('data-psd-readme-dummy', '')
+      document.body.appendChild(host)
+    }
+    const rows = [
+      { title: 'The Bund walk &amp; river ferry', meta: '2 h', checked: true },
+      { title: 'Noodle breakfast in Jing&#39;an', meta: '1 h', checked: false },
+      { title: 'French Concession gallery hop', meta: '3 h', checked: false }
+    ]
+    host.innerHTML = [
+      '<div class="psd-dummy-card">',
+      '<h2 data-psd-dummy-title>Weekend in Shanghai</h2>',
+      '<div class="psd-dummy-chips"><span>Sat 12 Oct</span><span>Sun 13 Oct</span><span>2 days</span></div>',
+      '<p class="psd-dummy-intro">Two unhurried days: the Bund at dusk, a noodle breakfast in Jing&#39;an, and an afternoon in the French Concession.</p>',
+      '<div class="psd-dummy-section">Itinerary</div>',
+      '<ul role="list" class="psd-dummy-list">',
+      ...rows.map((row, index) => [
+        '<li role="listitem" data-psd-dummy-row="' + index + '">',
+        '<label><input type="checkbox"' + (row.checked ? ' checked' : '') + '><span class="psd-dummy-row-title">' + row.title + '</span></label>',
+        '<span class="psd-dummy-row-meta">' + row.meta + '</span>',
+        '</li>'
+      ].join('')),
+      '</ul>',
+      '<div class="psd-dummy-budget">',
+      '<span class="psd-dummy-budget-label">Budget</span>',
+      '<input type="range" min="1200" max="3600" step="100" value="2400" aria-label="Trip budget">',
+      '<span class="psd-dummy-budget-value">¥2,400 total</span>',
+      '<span class="psd-dummy-budget-range">¥1,800–2,800</span>',
+      '</div>',
+      '<div class="psd-dummy-footer">',
+      '<span class="psd-dummy-hint">Draft plan · nothing booked yet</span>',
+      '<button type="button" data-psd-dummy-action>Add to calendar</button>',
+      '</div>',
+      '</div>'
+    ].join('')
+    return { installed: true }
+  },
+
+  /** Place/scale the dummy card inside the annotation-mode content column, above the composer. */
+  positionDummyAnswer: () => {
+    const host = document.getElementById('psd-readme-dummy-answer')
+    if (host === null) return null
+    const rail = document.querySelector('[data-psa-rail]')
+    const composer = document.querySelector('[data-conversation-region="composer"]')
+    const railLeft = rail === null ? innerWidth : Math.round(rail.getBoundingClientRect().left)
+    let composerTop = composer === null ? innerHeight : Math.round(composer.getBoundingClientRect().top)
+    if (composer !== null) {
+      // The composer region includes the (hidden) hero block; the visible composer card is
+      // the opaque rounded element inside it. Keep the dummy card above that card.
+      let cardTop = null
+      for (const element of composer.querySelectorAll('*')) {
+        const rect = element.getBoundingClientRect()
+        if (rect.width < 500 || rect.height < 80) continue
+        const style = getComputedStyle(element)
+        if ((Number.parseFloat(style.borderTopLeftRadius) || 0) < 18) continue
+        const background = style.backgroundColor
+        if (background === 'rgba(0, 0, 0, 0)' || background === 'transparent') continue
+        if (cardTop === null || rect.top < cardTop) cardTop = rect.top
+      }
+      if (cardTop !== null) composerTop = Math.round(cardTop)
+    }
+    const width = Math.min(820, Math.max(640, railLeft - 200))
+    host.style.width = width + 'px'
+    host.style.left = Math.round((railLeft - width) / 2) + 'px'
+    host.style.top = '26px'
+    host.style.transform = 'none'
+    host.style.transformOrigin = 'top center'
+    let rect = host.getBoundingClientRect()
+    const available = Math.max(240, composerTop - 26 - 12)
+    if (rect.height > available) {
+      host.style.transform = 'scale(' + Math.max(0.7, available / rect.height).toFixed(3) + ')'
+      rect = host.getBoundingClientRect()
+    }
+    return {
+      x: Math.round(rect.x),
+      y: Math.round(rect.y),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      railLeft,
+      composerTop
+    }
+  },
+
+  /** Click points for the three annotated dummy-card elements. */
+  dummyTargets: () => {
+    const point = (element) => {
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2), width: Math.round(rect.width), height: Math.round(rect.height) }
+    }
+    const rows = [...document.querySelectorAll('[data-psd-dummy-row]')]
+    return {
+      title: point(document.querySelector('[data-psd-dummy-title]')),
+      row: point(rows[1] ?? rows[0] ?? null),
+      button: point(document.querySelector('[data-psd-dummy-action]'))
+    }
+  },
+
+  /**
+   * Fill the annotation rail requirement textareas through React's native value setter +
+   * input event (one realistic requirement per annotation). Returns the values for
+   * verification.
+   */
+  annotationFillRequirements: (texts) => {
+    const areas = [...document.querySelectorAll('.psa-entry-note')]
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set
+    for (let index = 0; index < areas.length; index += 1) {
+      const text = texts[index] ?? ''
+      setter.call(areas[index], text)
+      areas[index].dispatchEvent(new Event('input', { bubbles: true, composed: true }))
+      areas[index].dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    return { count: areas.length, values: areas.map((area) => area.value) }
+  },
+
+  /** Read back the rail requirement textareas + page-marker badges for verification. */
+  annotationRequirementsState: () => ({
+    values: [...document.querySelectorAll('.psa-entry-note')].map((area) => area.value),
+    badges: [...document.querySelectorAll('.psa-mark-badge')].map((badge) => (badge.innerText || '').trim()),
+    entries: document.querySelectorAll('[data-psa-entry]').length,
+    markers: document.querySelectorAll('.psa-mark').length
+  }),
+
+  /**
+   * Fallback for the README dummy page: paint the page marks through the plugin's own
+   * snapshot store. The controller derives marks from its geometry frames; for the
+   * client-injected card that pass does not run in the headless session, so this pushes
+   * the same mark descriptors (id/index/viewport rect/summary) the geometry frame would
+   * have produced. React then renders the plugin's real `.psa-mark` elements.
+   */
+  fallbackMarkPaint: () => {
+    const hooks = globalThis.__POWER_SUITE_TEST_HOOKS__?.uiAnnotation
+    if (hooks === undefined || hooks === null) return { ok: false, reason: 'annotation seam unavailable' }
+    const layer = document.querySelector('.psa-layer')
+    if (layer === null) return { ok: false, reason: 'annotation layer missing' }
+    const fiberKey = Object.keys(layer).find((name) => name.startsWith('__reactFiber$'))
+    let fiber = fiberKey === undefined ? null : layer[fiberKey]
+    let controller = null
+    let snapshot = null
+    for (let depth = 0; fiber !== null && fiber !== undefined && depth < 20; depth += 1) {
+      const props = fiber.memoizedProps
+      if (props !== null && typeof props === 'object') {
+        if (controller === null && props.controller !== null && typeof props.controller === 'object' && props.controller.store !== undefined) controller = props.controller
+        if (snapshot === null && props.snapshot !== null && typeof props.snapshot === 'object' && props.snapshot.state !== null) snapshot = props.snapshot
+      }
+      fiber = fiber.return
+    }
+    if (controller === null || snapshot === null) return { ok: false, reason: 'controller/snapshot not found on the fiber tree' }
+    const queryAll = (selector) => document.querySelectorAll(selector)
+    const marks = []
+    const collection = Array.isArray(snapshot.state.collection) ? snapshot.state.collection : []
+    let index = 0
+    for (const entry of collection) {
+      index += 1
+      const locator = entry.locator !== null && typeof entry.locator === 'object' ? entry.locator : {}
+      if (locator.surface === 'floating' || locator.ephemeral === true) continue
+      let node = null
+      try {
+        node = hooks.resolveNodeCandidate({
+          candidates: Array.isArray(locator.candidates) ? locator.candidates : [],
+          expectedTag: typeof locator.tag === 'string' ? locator.tag : '',
+          uniqueSelector: typeof locator.uniqueSelector === 'string' ? locator.uniqueSelector : '',
+          queryAll,
+        })
+      } catch (error) {
+        node = null
+      }
+      if (node === null) continue
+      const rect = node.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) continue
+      const excerpt = hooks.annotationMarkerBadgeText(entry.note)
+      marks.push({
+        id: entry.id,
+        index,
+        rect: { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) },
+        stale: false,
+        summary: excerpt.text,
+        empty: excerpt.empty,
+      })
+    }
+    const current = controller.store.getSnapshot()
+    controller.store.set({ ...current, markRects: marks, markerHoverId: null })
+    return { ok: true, count: marks.length, ids: marks.map((mark) => mark.id) }
+  },
+
+  /** Hide the composer's workspace/preset selector row above the input card (dummy-page pose). */
+  hideComposerContextRow: () => {
+    const button = document.querySelector('[data-conversation-region="composer"] [aria-label="Choose workspace"]')
+    if (button === null) return { hidden: 0 }
+    let row = button
+    while (row.parentElement !== null && row.parentElement.getBoundingClientRect().height <= 70) row = row.parentElement
+    row.style.visibility = 'hidden'
+    return { hidden: 1, height: Math.round(row.getBoundingClientRect().height) }
+  },
+
+  /** Annotation-workflow facts (mode, rail, entries, markers, composer chips). */
+  annotationWorkflowState: () => ({
+    active: document.documentElement.getAttribute('data-psa-active'),
+    rail: document.querySelector('[data-psa-rail]') !== null,
+    entries: document.querySelectorAll('[data-psa-entry]').length,
+    markers: document.querySelectorAll('.psa-mark').length,
+    chips: document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-decorator="true"]').length,
+    exitConfirm: document.querySelector('[data-psa-exit-confirm]') !== null,
+    feedback: (document.querySelector('[data-psa-feedback]')?.innerText || '').trim(),
+    session: document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') ?? null
+  }),
+
+  /** Native New Session button centre (largest visible control in the sidebar header). */
+  newSessionPoint: () => {
+    let best = null
+    for (const button of document.querySelectorAll('button')) {
+      const aria = button.getAttribute('aria-label') || ''
+      if (!/^New session$/iu.test(aria)) continue
+      const rect = button.getBoundingClientRect()
+      if (rect.width < 120 || rect.height < 28) continue
+      if (rect.left > 420 || rect.top > 220) continue
+      if (best === null || rect.width * rect.height > best.area) {
+        best = { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2), area: rect.width * rect.height }
+      }
+    }
+    return best === null ? null : { x: best.x, y: best.y }
+  },
+
+  /** Centre of one native Session row (restores the previous Session after the dummy pose). */
+  sessionRowPoint: (sessionId) => {
+    const row = document.querySelector('[data-row-key="session:' + sessionId + '"]')
+    if (row === null) return null
+    row.scrollIntoView({ block: 'center' })
+    const rect = row.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return null
+    return { x: Math.round(rect.left + 80), y: Math.round(rect.top + rect.height / 2) }
+  },
+
+  /** Remove the injected dummy card + styles. */
+  removeDummyAnswer: () => {
+    document.getElementById('psd-readme-dummy-answer')?.remove()
+    document.getElementById('psd-readme-dummy-style')?.remove()
+    return true
+  },
+
   /** Current Session identity + composer state (no transcript text is returned). */
   sessionState: () => {
     const session = document.querySelector('[data-conversation-session]')
@@ -13643,9 +14007,9 @@ async function readmeCapture(page, spec) {
     source: spec.source,
     pose: spec.pose,
     rect: clip,
-    dpr: README_DPR,
-    screenshot: { width: size.width, height: size.height, bytes: buffer.length },
     dpr,
+    screenshot: { width: size.width, height: size.height, bytes: buffer.length },
+    ...(spec.meta === undefined ? {} : spec.meta),
     masked,
     scan: {
       roots: { selectors: spec.scanSelectors, textLength: roots.textLength, hits: roots.hits },
@@ -13777,6 +14141,10 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
   state.readme = { captures: [], deviations: [], file: path.join(README_RAW_DIR, 'captures.json') }
   await rm(README_RAW_DIR, { recursive: true, force: true }).catch(() => {})
   await mkdir(README_RAW_DIR, { recursive: true })
+  // The README Bento frame is dark, so the captures must be the app's dark theme even
+  // when the host machine is in light appearance (headless Chrome reports light then).
+  await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+  await sleep(700)
   await page.eval(probeReadme.installStyle)
   // Hydrate like the rest of the harness: the shell restores its Session and the card rows
   // asynchronously after first paint.
@@ -13816,7 +14184,7 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
           'allowed demo session/workspace names are cycled over 12/15 entries so a single crop never shows a repeated demo name',
         bannedPatterns: README_BANNED_PATTERNS.map(([label]) => label),
         stubRoutes: [
-          'GET /api/session-artifacts.list -> demo 6-row artifact list (3 generated + 3 provided)',
+          'GET /api/session-artifacts.list -> demo 10-row artifact list (5 generated + 5 provided)',
           'GET /api/session-artifacts.preview -> demo release-checklist markdown descriptor',
           'GET|HEAD /api/session-artifacts.raw -> demo markdown / demo svg bytes',
           'GET /api/prompt-history.list -> canned English demo prompts',
@@ -13824,6 +14192,7 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
       },
       captures: state.readme.captures,
       annotationAssets: state.readme.annotationAssets ?? [],
+      dummySessionId: state.readme.dummySessionId ?? null,
       deviations: state.readme.deviations,
     }
     await writeFile(state.readme.file, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
@@ -14204,7 +14573,7 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
       const capture = await readmeCapture(page, {
         name: 'artifacts.png',
         source: 'live GUI Files-header Artifacts overlay (.psfa-view) with CDP Fetch demo stubs',
-        pose: 'Artifacts header + six demo list rows (3 generated + 3 provided), two rows of vertical padding, no footer',
+        pose: 'Artifacts header + ten demo list rows (5 generated + 5 provided), two rows of vertical padding, no footer',
         scanSelectors: ['.psfa-view .dsa-root'],
         pad: 0,
         clip: () => {
@@ -14223,7 +14592,7 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
       })
       state.readme.captures.push(capture)
       await writeManifest()
-      return `${capture.screenshot.width}x${capture.screenshot.height}px, ${content.rows.length} stubbed rows (3 generated / 3 provided, row pitch ${content.rowHeight.toFixed(1)} CSS), masked ${JSON.stringify(capture.masked)}`
+      return `${capture.screenshot.width}x${capture.screenshot.height}px, ${content.rows.length} stubbed rows (5 generated / 5 provided, row pitch ${content.rowHeight.toFixed(1)} CSS), masked ${JSON.stringify(capture.masked)}`
     })
 
     await results.check('readme-artifacts-quicklook', 'artifacts-quicklook.png — Quick Look over the stubbed generated Markdown artifact', async () => {
@@ -14274,10 +14643,20 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
       return `${capture.screenshot.width}x${capture.screenshot.height}px, masked ${JSON.stringify(capture.masked)}`
     }).finally(async () => {
       try {
-        await page.pressEscape()
-        await waitArtifactsClosed(page)
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          if ((await page.count('[data-psfa-overlay]')) === 0) break
+          if ((await page.count('.dsa-filter-menu')) > 0) {
+            await page.pressEscape()
+            await sleep(250)
+            continue
+          }
+          await page.pressEscape()
+          await waitArtifactsClosed(page, { timeout: 3000 })
+        }
         await closeRightSidebar(page)
-        await page.emulateMedia([])
+        // Keep the capture pass dark: clearing emulation would fall back to the host
+        // appearance (light in daytime), and every README capture is dark-theme.
+        await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
       } catch (error) {
         log(`warning: could not close the artifacts overlay/right sidebar: ${short(error?.message || String(error), 200)}`)
       }
@@ -14430,6 +14809,279 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
       })
       await sleep(400)
       return `${assets.length} docs assets refreshed: ${assets.map((shot) => `${shot.file} ${shot.screenshot.width}x${shot.screenshot.height}`).join(', ')}`
+    })
+
+    // ---- Dummy-page annotation workflow (README annotation screenshots) --------------
+    // The user asked for a real annotation interaction on a clean dummy DSH page instead
+    // of a rail with blurred surroundings: a blank new Session, a client-injected dummy
+    // answer card, three real annotations with requirements, then the batch insertion.
+    await results.check('readme-annotation-workflow', 'annotation-annotated.png + annotation-inserted.png — dummy DSH page with real annotation interaction', async () => {
+      // The earlier docs-asset pose leaves annotation mode active with records; exit it
+      // through its own confirm dialog (Clear & exit) instead of reloading, so the page's
+      // animation frames stay live for the marker geometry.
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const workflow = await page.eval(probeReadme.annotationWorkflowState)
+        if (workflow.active !== 'true') break
+        if (workflow.exitConfirm) {
+          await page.eval(() => document.querySelector('[data-psa-exit-clear]')?.click())
+          await sleep(450)
+          continue
+        }
+        await page.pressEscape()
+        await sleep(350)
+      }
+      await page.waitForFn(() => document.documentElement.getAttribute('data-psa-active') !== 'true', [], {
+        timeout: 8000,
+        label: 'annotation mode off before the dummy page workflow',
+      })
+      await page.eval(probeReadme.installStyle)
+      await page.waitForFn(() => document.querySelector('[data-conversation-session]') !== null, [], {
+        timeout: 15000,
+        label: 'restored Session before the annotation workflow',
+      }).catch(() => {})
+      await sleep(1200)
+      let previous = await page.eval(probeReadme.sessionState)
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        await sleep(400)
+        const next = await page.eval(probeReadme.sessionState)
+        if (next.sessionId !== null && next.sessionId === previous.sessionId) {
+          previous = next
+          break
+        }
+        previous = next
+      }
+      assert(previous.sessionId !== null, 'the annotation workflow needs a current Session to return to')
+      state.readme.previousSessionId = previous.sessionId
+      const newSession = await page.eval(probeReadme.newSessionPoint)
+      assert(newSession, 'native New Session control not found')
+      await page.clickAt(newSession.x, newSession.y)
+      await page.waitForFn(
+        (previousId) => {
+          const node = document.querySelector('[data-conversation-session]')
+          return node !== null && node.getAttribute('data-conversation-session') !== previousId
+        },
+        [previous.sessionId],
+        { timeout: 20000, label: 'dummy blank Session opened through the native New Session flow' }
+      )
+      await sleep(1500)
+      const dummy = await page.eval(probeReadme.sessionState)
+      assert(dummy.sessionId !== null && dummy.sessionId !== previous.sessionId, 'the dummy blank Session did not open')
+      assertEqual(dummy.draftLength, 0, 'refusing the dummy pose: the new Session composer draft is not empty')
+      state.readme.dummySessionId = dummy.sessionId
+      await page.eval(probeReadme.hideSidebar, true)
+      const hero = await page.eval(probeReadme.hideEmptyHomeState)
+      await page.eval(probeReadme.hideComposerContextRow)
+      await page.eval(probeReadme.installDummyAnswer)
+      await sleep(400)
+      const launcher = await page.findRect('[data-psa-launcher]')
+      assert(launcher, 'the annotation launcher is missing')
+      await page.clickAt(launcher.x, launcher.y)
+      await page.waitForFn(
+        () => document.documentElement.getAttribute('data-psa-active') === 'true' && document.querySelector('[data-psa-rail]') !== null,
+        [],
+        { timeout: 12000, label: 'annotation mode active for the dummy page' }
+      )
+      await page.waitForFn(
+        () => {
+          const feedback = document.querySelector('[data-psa-feedback]')
+          return feedback === null || (feedback.innerText || '').trim().length === 0
+        },
+        [],
+        { timeout: 6000, label: 'annotation mode toast faded' }
+      ).catch(() => {})
+      await sleep(500)
+      const placed = await page.eval(probeReadme.positionDummyAnswer)
+      assert(placed !== null && placed.width >= 700, `the dummy card could not be placed (${short(JSON.stringify(placed), 220)})`)
+      const targets = await page.eval(probeReadme.dummyTargets)
+      assert(targets.title !== null, 'the dummy card title cannot be clicked for annotation')
+      assert(targets.row !== null, 'the dummy itinerary row cannot be clicked for annotation')
+      assert(targets.button !== null, 'the dummy primary button cannot be clicked for annotation')
+      const requirements = [
+        'Shorten this heading and keep the date chips',
+        'Show walking time on the right of each stop',
+        'Use the primary button style and full width',
+      ]
+      const annotate = async (point, label) => {
+        const before = await page.eval(() => document.querySelectorAll('[data-psa-entry]').length)
+        await page.clickAt(point.x, point.y)
+        await page.waitForFn(() => document.querySelector('[data-psa-popover]') !== null, [], {
+          timeout: 5000,
+          label: `annotation popover for ${label}`,
+        })
+        await sleep(200)
+        const added = await page.eval(() => {
+          const button = document.querySelector('[data-psa-add]')
+          if (button === null) return false
+          button.click()
+          return true
+        })
+        assert(added === true, `the annotation add control is missing (${label})`)
+        await page.waitForFn((expected) => document.querySelectorAll('[data-psa-entry]').length >= expected, [before + 1], {
+          timeout: 6000,
+          label: `annotation entry added for ${label}`,
+        })
+        await sleep(220)
+      }
+      await annotate(targets.title, 'card title')
+      await annotate(targets.row, 'itinerary row')
+      await annotate(targets.button, 'primary button')
+      const filled = await page.eval(probeReadme.annotationFillRequirements, requirements)
+      assertEqual(filled.count, 3, 'the rail must show exactly three requirement textareas for the dummy page')
+      assert(
+        JSON.stringify(filled.values) === JSON.stringify(requirements),
+        `the rail requirement textareas did not take the texts (got ${short(JSON.stringify(filled.values), 300)})`
+      )
+      // Page marks are derived on the controller's geometry frames; for the
+      // client-injected card that derivation does not paint them in this headless session,
+      // so paint the same mark descriptors through the plugin's own snapshot store (React
+      // then renders the plugin's real numbered `.psa-mark` elements). The annotations
+      // themselves are real records created by clicking the card.
+      await page.waitForFn(() => document.querySelectorAll('.psa-mark').length >= 3, [], {
+        timeout: 1500,
+        label: 'three numbered page markers from the geometry frame',
+      }).catch(() => {})
+      if ((await page.count('.psa-mark')) < 3) {
+        const painted = await page.eval(probeReadme.fallbackMarkPaint)
+        assert(
+          painted.ok === true && painted.count === 3,
+          `the page marks could not be painted for the dummy card (${short(JSON.stringify(painted), 300)})`
+        )
+        state.readme.deviations.push(
+          'annotation workflow: the controller geometry pass did not derive page marks for the client-injected dummy card in headless Chrome; the three numbered page marks were painted through the plugin snapshot store (same mark descriptors), while the annotations themselves are real records created by clicking the card'
+        )
+        await sleep(400)
+      }
+      await page.waitForFn(() => document.querySelectorAll('.psa-mark').length >= 3, [], {
+        timeout: 5000,
+        label: 'three numbered page markers for the dummy card',
+      })
+      // Park the pointer over the annotation rail (own UI): clears the page hover outline
+      // and dismisses any stray exit dialog before the capture.
+      const railPark = await page.eval(() => {
+        const rail = document.querySelector('[data-psa-rail]')
+        if (rail === null) return null
+        const rect = rail.getBoundingClientRect()
+        return { x: Math.round(rect.left + 24), y: Math.round(rect.top + 40) }
+      })
+      if (railPark !== null) await page.moveTo(railPark.x, railPark.y)
+      await sleep(350)
+      if ((await page.count('[data-psa-exit-confirm]')) > 0) {
+        await page.eval(() => document.querySelector('[data-psa-exit-cancel]')?.click())
+        await sleep(300)
+      }
+      await sleep(250)
+      const verified = await page.eval(probeReadme.annotationRequirementsState)
+      assert(
+        JSON.stringify(verified.values) === JSON.stringify(requirements),
+        `the rail requirement values reverted after the React re-render (${short(JSON.stringify(verified.values), 300)})`
+      )
+      assertEqual(verified.markers, 3, `the dummy page must show three numbered annotation markers (got ${verified.markers})`)
+      assertEqual(verified.entries, 3, `the rail must list three annotations (got ${verified.entries})`)
+      const annotated = await readmeCapture(page, {
+        name: 'annotation-annotated.png',
+        pose:
+          'dummy DSH answer card with three annotated elements (#1 title, #2 itinerary row, #3 primary button) ' +
+          'and the rail showing the three requirements',
+        source: 'live GUI dummy Session + client-injected dummy answer card, real annotation mode',
+        scanSelectors: ['body'],
+        pad: 0,
+        postMask: () => page.eval(probeReadme.maskAnnotationMeta),
+        meta: { dummySessionId: dummy.sessionId, heroHidden: hero.hidden, requirements },
+        clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height }),
+      })
+      state.readme.captures.push(annotated)
+      const inserted = await page.eval(() => {
+        const button = document.querySelector('[data-psa-insert-batch]')
+        if (button === null) return false
+        button.click()
+        return true
+      })
+      assert(inserted === true, 'the collection "Insert all into composer" control is missing')
+      await page.waitForFn(
+        () =>
+          document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-decorator="true"]').length >= 1 ||
+          /Please adjust the UI elements below/u.test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || ''),
+        [],
+        { timeout: 8000, label: 'annotation references inserted into the composer' }
+      )
+      await page.waitForFn(
+        () => {
+          const feedback = document.querySelector('[data-psa-feedback]')
+          return feedback === null || (feedback.innerText || '').trim().length === 0
+        },
+        [],
+        { timeout: 6000, label: 'insert toast faded' }
+      ).catch(() => {})
+      await page.eval(probeReadme.positionDummyAnswer)
+      if ((await page.count('.psa-mark')) < 3) await page.eval(probeReadme.fallbackMarkPaint)
+      const railParkAfterInsert = await page.eval(() => {
+        const rail = document.querySelector('[data-psa-rail]')
+        if (rail === null) return null
+        const rect = rail.getBoundingClientRect()
+        return { x: Math.round(rect.left + 24), y: Math.round(rect.top + 40) }
+      })
+      if (railParkAfterInsert !== null) await page.moveTo(railParkAfterInsert.x, railParkAfterInsert.y)
+      await sleep(450)
+      const insertedShot = await readmeCapture(page, {
+        name: 'annotation-inserted.png',
+        pose:
+          'same dummy page: the three annotation references inserted into the composer as one grouped batch chip (never sent), rail still visible',
+        source: 'live GUI dummy Session + client-injected dummy answer card, real annotation mode',
+        scanSelectors: ['body'],
+        pad: 0,
+        postMask: () => page.eval(probeReadme.maskAnnotationMeta),
+        meta: { dummySessionId: dummy.sessionId, heroHidden: hero.hidden, requirements },
+        clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height }),
+      })
+      state.readme.captures.push(insertedShot)
+      await writeManifest()
+      return (
+        `${annotated.screenshot.width}x${annotated.screenshot.height} annotated (${verified.markers} markers, ` +
+        `${verified.entries} rail requirements) + ${insertedShot.screenshot.width}x${insertedShot.screenshot.height} inserted; ` +
+        `dummy Session id recorded in captures.json; hidden sidebar/hero ${hero.hidden}`
+      )
+    }).finally(async () => {
+      // Never leave the live page in annotation mode or with the injected dummy card, and
+      // return to the Session that was current before the dummy pose when its row is reachable.
+      try {
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          const workflow = await page.eval(probeReadme.annotationWorkflowState)
+          if (workflow.active !== 'true') break
+          if (workflow.exitConfirm) {
+            await page.eval(() => document.querySelector('[data-psa-exit-clear]')?.click())
+            await sleep(400)
+            continue
+          }
+          await page.pressEscape()
+          await sleep(350)
+        }
+        await page.eval(probeReadme.removeDummyAnswer)
+        await page.eval(probeReadme.hideSidebar, false)
+        const previousSession = state.readme.previousSessionId
+        if (previousSession !== undefined && previousSession !== null) {
+          try {
+            await ensureNativeSessionRowsVisible(page, 10)
+          } catch {
+            // the row may already be visible
+          }
+          const point = await page.eval(probeReadme.sessionRowPoint, previousSession)
+          if (point !== null) {
+            await page.clickAt(point.x, point.y)
+            await page.waitForFn(
+              (id) => document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') === id,
+              [previousSession],
+              { timeout: 12000, label: 'previous Session restored after the annotation workflow' }
+            )
+          } else {
+            state.readme.deviations.push('annotation workflow: the previous Session row was not reachable for the restore; the dummy blank Session stayed current')
+          }
+        }
+        await page.eval(probeReadme.installStyle)
+        await readmeResetUi(page)
+      } catch (error) {
+        state.readme.deviations.push(`annotation workflow cleanup: ${short(error?.message || String(error), 240)}`)
+        log(`warning: annotation workflow cleanup failed: ${short(error?.message || String(error), 240)}`)
+      }
     })
 
     // ---- Plugin settings section ------------------------------------------------------
