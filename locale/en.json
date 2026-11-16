@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "DSH Power Suite",
-    "description": "A growing set of small DeepSeek Harness Web GUI enhancements in one plugin: session artifacts, per-Workspace default agent presets, composer prompt history, and their settings."
+    "description": "A growing set of small DeepSeek Harness Web GUI enhancements in one plugin: session artifacts with Quick Look, Dynamic Workspaces and the Running & recent card, prompt history and draft attachment memory, interrupted-session recovery, UI element annotation, a Host-synced sidebar width, and their settings."
   }
 }

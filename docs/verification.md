@@ -2643,3 +2643,75 @@ tree gates: `npm test` **360/360 pass**, `npm run check` **exit 0**, docs links
 (3.6 s), logs under `.tmp-work/row-menu-merged/`. This is a client-only change:
 the page reload serves the new menu; no Host restart is needed (the
 sidebar-width route stays live).
+
+## 2026-11-16 — 0.1.0 release preparation (`release-0.1.0-prep`)
+
+Branch `release-0.1.0-prep`, based on `feat/dynamic-workspaces` @ `9533dd8`.
+Preparation only: **no tag, no publish, no claimed release date** — the approved
+2026-11-15 policy keeps the release entries under `## [Unreleased]` (which names
+`0.1.0`) through the tag and moves them to a dated section only after publishing.
+
+### Prepared artifacts
+
+- `package.json`: removed `"private": true`; publish-facing `description` and
+  `keywords` refreshed for the whole suite; version stays **0.1.0** (the lockfile
+  already records 0.1.0, no bump); name/repository/`publishConfig.access`/
+  `files` (including `release-notes`)/`check:release-notes` unchanged.
+- `locale/en.json` + `locale/zh.json`: plugin display metadata description now
+  covers the shipped feature set.
+- `release-notes/0.1.0.md` + `.en.md`: Highlights rewritten to **6 user-facing
+  bullets** covering every shipped feature — Dynamic Workspaces (incl. the
+  native row menu) with sidebar width persistence/sync and the flicker fix,
+  session artifacts + Quick Look, prompt history + draft attachments,
+  interrupted-session recovery, UI element annotation, and the update notice;
+  Details refreshed for the first-release framing.
+- `README.md`: the status block now states the prepared state (package no longer
+  `private`, notes committed) and the remaining tag conditions; the first-release
+  highlights gained the sidebar-width item.
+- `CHANGELOG.md`: intentionally unchanged (entries stay under `## [Unreleased]`,
+  which the publish workflow accepts as the `0.1.0` record).
+
+### Gates (local, 2026-11-16)
+
+- `npm run check` → **exit 0** (syntax, manifest, docs links, **360/360** Node
+  tests, release-notes gate, `pack:check` with `entryCount` **88**, 88 files).
+  The packed byte total is intentionally not pinned here: this record itself
+  ships under `docs/`, so its own size shifts the figure.
+- `npm run check:docs-links` → **ok, 22 Markdown files**.
+- `npm run check:release-notes` → **ok, 0.1.0, 6 Chinese + 6 English** Highlights.
+- `node scripts/check-publish-manifest.mjs` → **ok** for
+  `@zephinel/dsh-power-suite@0.1.0`.
+- `git diff --check` → clean.
+- Browser checks stay local (CI has no browser job): `sidebar.e2e.mjs --smoke`
+  **4/4 PASS** (exit 0, 4.3 s) and `update-prompt.e2e.mjs` **21/21 checks
+  passed** (exit 0), both with 0 page errors. The per-feature acceptance
+  evidence recorded earlier on 2026-11-16 (`--layout`, `--interrupted`,
+  `--row-menu`, negative controls, client md5 `2b700ff6…`) remains the current
+  source evidence; this preparation changes no `src/` code.
+
+### Independent review of the preparation
+
+A read-only independent review of the preparation commit found **no blockers**
+and four documentation nits, all fixed in the same commit: the plugin-page
+settings clause was moved back under the Dynamic Workspaces bullet (it had been
+stranded in the prompt-history bullet), the still-shipped Workspace
+default-agent-preset submenu was restored to the first-release Highlights, the
+self-referential packed byte figure was dropped from this record (it changes
+with the record itself; `entryCount` 88 / 88 files is kept), and the README
+status block now names the missing first push (no `origin` remote yet), not only
+the green-CI requirement.
+
+### Outstanding release preconditions (tag is blocked until these are resolved)
+
+- The repository currently has **no git remote/upstream**; `main` is **303
+  commits behind** `feat/dynamic-workspaces` (main `cf220d4`), and no CI run
+  exists. The release procedure requires the released branch merged to `main`,
+  `main` in sync with `origin/main`, and a green CI run before tagging.
+- Explicit approval of the exact version (**0.1.0**) and the committed
+  release-notes text is still required before `git tag -a v0.1.0` and the tag
+  push.
+- Next steps after approval: merge the prepared tree to `main`, add `origin`
+  (`git@github.com:Zephinel/dsh-power-suite.git`) and push `main`, wait for green
+  CI, then tag/publish; after publishing, move the `[Unreleased]` entries into
+  `## [0.1.0] - <UTC date>` and record the workflow run, registry version,
+  provenance, GitHub Release and tag-pinned notes URLs here.

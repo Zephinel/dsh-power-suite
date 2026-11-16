@@ -24,10 +24,14 @@ First public release: 0.1.0 (planned). The package has never been published
 before: the `0.1.0` (2026-11-09), `0.1.1` (2026-11-11), and undated `0.2.0`
 development snapshots were internal only — never tagged, never released — and
 their history is consolidated into this first release (see
-[CHANGELOG.md](CHANGELOG.md)). The release is cut by pushing the `v0.1.0` tag
-once the bilingual [release notes](release-notes/README.md) are approved; until
-then npm has no `latest` version for the package and the in-app update notice
-stays silent.
+[CHANGELOG.md](CHANGELOG.md)). The 0.1.0 package metadata and the bilingual
+[release notes](release-notes/README.md) are prepared on the release branch (the
+package is no longer `private`); the release is still cut by pushing the
+`v0.1.0` tag after the notes are approved, the release branch is merged to
+`main`, and `main` is pushed to `origin` with a green CI run (the repository
+still needs its first push — no remote is configured yet). Until then npm has
+no `latest` version for the
+package and the in-app update notice stays silent.
 
 Highlights of the first release:
 
@@ -74,6 +78,11 @@ Highlights of the first release:
   composer inline reference chips — one per reference or one grouped batch —
   without sending, and multi-select, marquee, and a pass-through modifier are
   included.
+- **Sidebar width** — the native left sidebar's dragged width is a durable,
+  Host-owned preference: it survives reloads and new tabs, is shared by every
+  browser paired with the same Host (last write wins), reopens at the stored
+  width after a collapse, and a synchronous canvas repaint after each resize
+  removes the rainbow atmosphere's flicker while the handle is dragged.
 - **Update notice (new)** — the Host reads the npm `latest` dist-tag and the
   tag-pinned release notes; every page load checks at most once and shows a
   bottom-right card when a newer stable version exists, with the version change,

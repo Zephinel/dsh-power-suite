@@ -1,7 +1,6 @@
 {
   "name": "@zephinel/dsh-power-suite",
   "version": "0.1.0",
-  "private": true,
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Zephinel/dsh-power-suite.git"
@@ -10,7 +9,7 @@
     "access": "public"
   },
   "type": "module",
-  "description": "One DeepSeek Harness Web plugin that adds session artifacts, per-Workspace default agent presets, composer prompt history, interrupted-session recovery, and their settings.",
+  "description": "One DeepSeek Harness Web plugin that adds session artifacts, Dynamic Workspaces, prompt history, draft attachment memory, interrupted-session recovery, UI element annotation, a Host-synced sidebar width, and their settings.",
   "main": "./src/index.js",
   "exports": {
     ".": "./src/index.js",
@@ -67,7 +66,11 @@
     "dsh-bundle",
     "power-suite",
     "artifacts",
-    "prompt-history"
+    "prompt-history",
+    "dynamic-workspaces",
+    "interrupted-sessions",
+    "ui-annotation",
+    "sidebar-width"
   ],
   "author": "rexxin",
   "license": "MIT",
