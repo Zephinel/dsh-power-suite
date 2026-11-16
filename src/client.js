@@ -4952,7 +4952,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
     /** Pending-notice glyph paths (24 viewBox): question mark and shield; the plan
      *  notice reuses the existing file glyph. */
-    const DW_NOTICE_QUESTION_PATH = 'M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM11 15V17H13V15H11ZM11 7V13H13V7H11Z'
+    const DW_NOTICE_QUESTION_PATH = 'M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM12 7C13.6569 7 15 8.34315 15 10C15 10.9819 14.5806 11.7882 13.8765 12.4056C13.4165 12.8007 13 13.3466 13 14H11C11 12.6666 11.6873 11.7354 12.4375 11.0931C12.806 10.7786 13 10.4166 13 10C13 9.44772 12.5523 9 12 9C11.4477 9 11 9.44772 11 10H9C9 8.34315 10.3431 7 12 7ZM11 15H13V17H11V15Z'
     const DW_NOTICE_APPROVAL_PATH = 'M12 2L20 5V11C20 16.05 16.6 20.35 12 22C7.4 20.35 4 16.05 4 11V5L12 2ZM12 4.25L6 6.45V11C6 14.8 8.5 17.95 12 19.7C15.5 17.95 18 14.8 18 11V6.45L12 4.25Z'
 
     /**
@@ -5319,7 +5319,7 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-notice{position:fixed;appearance:none;display:flex;align-items:flex-start;gap:9px;box-sizing:border-box;width:320px;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-hovercard-bg,#2c2c2e);color:var(--dsw-static-neutral-bluish-00,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;text-align:left;cursor:pointer;pointer-events:auto}
 .psd-notice:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psd-notice-icon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;color:var(--dsw-alias-state-business-primary)}
-.psd-notice-content{display:flex;flex-direction:column;gap:2px;min-width:0}
+.psd-notice-content{display:flex;flex:1 1 auto;flex-direction:column;gap:2px;min-width:0}
 .psd-notice-head{display:flex;align-items:baseline;gap:8px;min-width:0}
 .psd-notice-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;line-height:18px;font-weight:500;color:var(--dsw-static-neutral-bluish-00,#fff)}
 .psd-notice-kind{flex:none;color:var(--dsw-static-neutral-bluish-400,#adb2b8);font-size:11px;line-height:16px}
