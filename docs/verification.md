@@ -2519,3 +2519,115 @@ former `lw-6` SKIP is now a real PASS: Host document round-trip at the dragged
 420 px; `--interrupted` **PASS 9 / SKIP 1 / FAIL 0**; `--smoke` **4/4 PASS**;
 every run 0 page errors and 0 real network failures (logs under
 `.tmp-work/post-restart/`).
+
+## 2026-11-16 — Row "…" menu = native shared context-menu popup (`row-menu-native-popup`)
+
+Branch `row-menu-native-popup` (based on `feat/dynamic-workspaces` @ `ba7517b`;
+feature commit `d74d6f5`, review fixes `14c0cfb`, plus the E2E commit). The card
+row "…" menu used to be a custom popup — its own card-styled surface, a local
+Remix icon map, no native shortcut hints and its own keyboard handling — so it
+did not match the native DSH Session row menu. It now opens the shell's **native
+shared context-menu popup** through a plugin-owned captured-target kind
+(`powerSuiteSession`): a registered contribution resolves the native `session`
+target, filters only the Pin/Unpin entry (the card's title-left pin button
+remains the pin owner) and hands the popup delegating actions that copy every
+native presentation field and run the nested native `select`, so the shell
+supplies material, placement, keyed icons, live shortcut hints, keyboard focus,
+Escape/outside dismissal, submenus and the Archive footer. The custom
+`DwSessionMenu`, its `.psd-menu*` styles and its local glyph map are deleted.
+Docs: [dynamic-workspaces.md](dynamic-workspaces.md),
+[architecture.md](architecture.md), [overview.md](overview.md),
+[limitations.md](limitations.md), `README.md` and `CHANGELOG.md` updated in the
+same round.
+
+### Environment (2026-11-16)
+
+- Node **v24.22.3**; headless Chrome **157.0.8103.79**; viewport **1728×900**;
+  throwaway `--user-data-dir`; GUI token redacted.
+- Fixed client `src/client.js` md5 **`2b700ff6db6f8ba500a8e5feadd4079b`**
+  (1,226,770 chars / 1,231,955 bytes, 24,774 lines); pre-change control
+  `client-prefix.js` md5 **`c91e97be04aef561d7c267e9092b0f2f`** (the merged
+  parent client).
+
+### Automated gates (local, 2026-11-16)
+
+- `npm test`: **360 tests, 360 passed, 0 failed** — 343 baseline plus the new
+  `test/row-menu.test.js` (**17/17**: Pin/Unpin filtering by id suffix and by
+  native icon key, verbatim presentation-field copying incl.
+  `commandId`/`icon`/`disabled`/`danger`/`separatorBefore`/`afterContent`, nested
+  children mapped recursively, delegated `select` with the original namespaced
+  id, abort/dispose handling, the bounded 800 ms ready wait with published-view
+  fallback, and the inert production seam).
+- `npm run check`: **exit 0**.
+- `node scripts/check-docs-links.mjs`: ok, **22 Markdown files**.
+
+### Live acceptance — `node test/browser/sidebar.e2e.mjs --row-menu`
+
+Exit **0**; **PASS 8 / SKIP 0 / FAIL 0**; **0 page errors**; **0 real network
+failures**; **16.9 s**. Log:
+`.tmp-work/row-menu/e2e/row-menu-acceptance-2026-11-16.log`. The mode injects
+this worktree's client into the running GUI, drives both menus with real CDP
+pointer input, never creates or types into a Session, and never clicks an action
+item (Escape only); the `finally` cleanup dismisses anything it opened.
+
+- `smoke-1..4` **PASS** — pipeline: injected client evaluated in the live page,
+  card mounted, the restored current Session left untouched (0 transcript
+  messages, 0-char draft; no Session created), 1728×900 screenshot round-trip.
+- `rm-net` **PASS** — CDP Network domain enabled; same-origin API/document
+  failures are counted.
+- `rm-1` **PASS** — the native DSH Session row menu ("优化 APP 的 SSH Key 登录体验")
+  is captured as the shared popup: `[data-menu-material="translucent"]`,
+  `role="menu"`, surface class
+  `_surface_1w4el_1 _list_1p5el_7 _scrollable_1p5el_19 _portal_1p5el_46`, six
+  items (`Pin session`, Rename, Fork session, Copy Session ID, Show in Finder,
+  Archive session), shortcut hints `Rename[⌥⌘G]`, `Fork session[⇧⌘F]`,
+  `Archive session[⌥⌘A]`, two separators and the Archive footer.
+- `rm-2` **PASS** — our `.psd-run-more` menu opens the same shared surface:
+  identical class list, `role="menu"` and computed material (translucent backing
+  `rgba(48, 49, 54, 0.64)` with `blur(40px) saturate(1.5)`, 16 px radius,
+  identical border/shadow/padding), **5 items = the native 6 minus the Pin/Unpin
+  entry** (the captured entry was `Pin session` because the sampled row was
+  unpinned; `Show in Finder` kept), equal `aria-keyshortcuts`/rendered `kbd`
+  hints, equal icon SVG markup for every shared action, 34 px item height /
+  13 px font, equal footer class/labels/separator, `data-menu-open="true"` with
+  the time↔"…" swap while open, and Escape dismisses after the native ~80 ms
+  exit animation with focus restored to `.psd-run-more`. Screenshots and
+  comparison JSON under `.tmp-work/row-menu/e2e/`.
+- `rm-3` **PASS** — opening the menu from the second card row replaces the first:
+  exactly one shared popup remains, `data-menu-open` follows the active row, and
+  Escape dismisses.
+- Cleanup: popup dismissed, 0 `[role="menu"]` surfaces, 0 `.psd-menu` custom
+  surfaces, no row left marked open, 0 issues; no action item was clicked in any
+  step.
+
+### Negative control (2026-11-16)
+
+The same `--row-menu` mode against the pre-change client copy
+(`.tmp-work/row-menu/e2e/client-prefix.js`, md5 `c91e97be…`) exits **1**:
+`rm-1` PASS, **`rm-2` FAIL** — "no `[data-menu-material]` native shared surface;
+legacy custom `.psd-menu` surface present (1); no keyboard-shortcut hints
+rendered in the card menu; icon SVG markup differs for Rename, Fork session,
+Copy Session ID, Show in Finder, Archive session" — and `rm-3` is an explicit
+**SKIP** (not the native popup, so replacement semantics do not apply);
+**PASS 6 / SKIP 1 / FAIL 1**, 0 page errors, 0 real network failures, **14.3 s**
+(log `.tmp-work/row-menu/e2e/row-menu-negative-control-final.log`). The
+native-popup oracle is discriminating.
+
+### Evidence limits (state honestly)
+
+- The native menu is captured from the installed shell build and compared
+  native-vs-ours **in the same page/build** (surface class hashes are not
+  hardcoded); a future shell restyle is expected to flow through rather than
+  being asserted against a frozen recipe.
+- The captured native first entry was `Pin session` because the sampled row was
+  unpinned; the `Unpin session` variant is filtered by the same id-suffix and
+  native-icon-key rule, covered by unit tests rather than by two live captures.
+- No action item was clicked in any run (dismissal is Escape only), so action
+  execution rests on the delegated native `select` and the unit tests. The card
+  menu's only intentional difference from the native menu is the filtered
+  Pin/Unpin entry.
+- The action list is a snapshot at open time; the nested resolution waits at
+  most 800 ms for native providers and falls back to already-published views,
+  and its cleanup is deferred one microtask so a delegated selection still
+  lands after the outer registry aborts. Full harness mode was not re-run in
+  this round.

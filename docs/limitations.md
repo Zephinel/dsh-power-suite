@@ -209,18 +209,29 @@
   rows intentionally have **no** New session action (their action/disclosure
   columns are empty spacers so times still align); an interrupted child keeps
   only Continue in the action slot. Hover never shifts the grid.
-- **The row "…" menu is the card's own popup.** Every top-level row (including
-  the current rainbow row) keeps its time at rest; hover/focus hides the time
-  and shows the trigger, and the swap stays while the menu is open. It is a
-  desktop hover/focus affordance, and subagent rows have no trigger. The
+- **The row "…" menu is the shell's native shared popup.** Every top-level row
+  (including the current rainbow row) keeps its time at rest; hover/focus hides
+  the time and shows the trigger, and the swap stays while the menu is open. It
+  is a desktop hover/focus affordance, and subagent rows have no trigger. The
   trigger paints the ordinary soft hover background; only the rainbow row
   suppresses it (transparent background + `brightness(1.2)`), like its other
-  controls. The popup shows the native labels with a compact local glyph per
-  action but does **not** reproduce the native keyboard-shortcut hints. Its entries are the
-  shell's native Session action contributions, so an action a Host build does
-  not contribute is simply absent, and the **Pin/Unpin entry is always filtered
-  out**: pinning is owned by the title-left pin button, so the menu can never
-  unpin or pin a Session.
+  controls. The menu opens the shell's shared context-menu popup against a
+  plugin-owned target kind, so its material, placement, keyed icons, shortcut
+  hints, focus handling and Escape/outside-press/scroll/resize dismissal are
+  native. Its entries are the shell's native Session action contributions (an
+  action a Host build does not contribute is simply absent), and the **Pin/Unpin
+  entry is always filtered out**: pinning is owned by the title-left pin button,
+  so the menu can never pin or unpin a Session. On a DSH build without the
+  shared context-menu service (`contextMenus.open`) the trigger is hidden — there
+  is no custom fallback popup.
+- **The row menu's action list is delegated, not owned.** It is a snapshot taken
+  when the menu opens (one-shot delegation; the native popup only re-resolves
+  reactive providers). The nested native resolution's `ready` wait is bounded to
+  **800 ms** and falls back to the views already published, so one slow native
+  action provider cannot empty the menu, and its cleanup is deferred by one
+  microtask so a delegated selection still lands after the outer registry
+  aborts. The card's only intentional difference from the native Session menu is
+  the filtered Pin/Unpin entry.
 - **The pending-interaction notice stack is preview-only.** It shows at most
   three waiting Sessions (question, plan review, approval) and a "+N more"
   line; it never answers anything, so answering still happens in that

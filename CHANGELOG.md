@@ -95,15 +95,17 @@ and no dated release heading is added until the release is cut.
   while the menu is open and leaving restores the time. The trigger keeps the
   ordinary soft hover paint (plus the keyboard `focus-visible` ring); only the
   rainbow row suppresses it, with the same `brightness(1.2)` lift as the other
-  current-row controls. The popup is the card's own surface built from
-  `ctx.contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })`,
-  so Rename, Fork, Copy Session ID, Show in Finder, and Archive keep their
-  native behavior and labels; the **Pin/Unpin entry is filtered out** (the
-  title-left pin button is the only pin owner), and the popup shows the native
-  labels with a compact local glyph per action but no native shortcut hints. It
-  supports arrow/Home/End navigation and
-  closes on Escape, an outside pointer press, scroll or resize. Subagent rows
-  have no trigger.
+  current-row controls. The popup is the shell's **native shared context-menu
+  popup** — the same surface the native Session row's own "…" trigger opens —
+  opened against a plugin-owned captured-target kind and filled by delegating to
+  the native Session action contributions
+  (`ctx.contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })`),
+  so Rename, Fork, Copy Session ID, Show in Finder, Archive and any
+  plugin-contributed action keep their native behavior and rendering, including
+  native labels, keyed icons, shortcut hints, separators and the Archive footer.
+  The **Pin/Unpin entry is the only one filtered out** (the title-left pin
+  button is the only pin owner), and keyboard navigation, focus restoration and
+  dismissal come from the shell. Subagent rows have no trigger.
 - **Running & recent pending-interaction notices** — when a Session other than
   the one open in the main view is waiting on `ask_user_question` (question or
   plan review) or an approval (`SessionStatus.pendingInteraction`), a fixed
@@ -742,6 +744,21 @@ and no dated release heading is added until the release is cut.
   badge and the hover Continue CTA, wired to the same continuation handshake as
   idle rows, and every mark/CTA disappears once the continuation turn is running
   (`running: true`). No Host route, payload or state shape changed.
+- **Row "…" menu uses the native shared context-menu popup** — the card row
+  menu no longer renders a custom card-styled popup with a local glyph map and
+  no shortcut hints; it opens the shell's native shared context-menu surface
+  (the one the native DSH Session row opens) against a plugin-owned
+  captured-target kind, so its material, keyed native icons, live keyboard
+  shortcut hints, submenus, separators and the Archive `afterContent` footer
+  match the native menu. A registered contribution delegates the action list to
+  the native Session actions — Rename, Fork, Copy Session ID, Show in Finder,
+  Archive and any plugin-contributed action keep their native behavior — and
+  filters only the Pin/Unpin entry, because the card's title-left pin button
+  remains the pin owner. The old `DwSessionMenu` portal, its local icon map and
+  its custom `.psd-menu*` styles are removed; the trigger is focused before
+  opening so the shared popup restores focus to it, `data-menu-open` follows the
+  shared popup's active target, and a DSH build without the shared context-menu
+  service hides the trigger instead of falling back to the custom surface.
 
 ### Removed
 

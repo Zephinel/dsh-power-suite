@@ -27,7 +27,7 @@ src/client.js           Browser entry (DSH module loader)
 ├─ Workspace preset context-menu submenu
 ├─ Composer prompt-history keys + right-edge history rail
 ├─ Draft attachment memory seat (invisible)
-├─ Dynamic Workspaces buckets + running & recent card (pin, row menu, pending notices)
+├─ Dynamic Workspaces buckets + running & recent card (pin, row menu via the native shared popup, pending notices)
 ├─ Sidebar width persistence (Host-synced width; synchronous atmosphere repaint on resize)
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
 ├─ UI element annotation mode (launcher, right rail, floating-surface picking, marks/detail card, note popover, composer reference chips, batch collection)
@@ -459,14 +459,19 @@ the row keeps its time at rest, and hover/focus (or an open menu) hides the time
 and reveals the trigger, restoring it on leave. The trigger keeps the ordinary
 soft hover paint (plus the keyboard `focus-visible` ring); only the rainbow row
 suppresses it (transparent + the same `brightness(1.2)` lift as the other
-current-row controls). Nested subagent rows have no trigger. The trigger opens the card's **own
-popup** built from
-`ctx.contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })`:
-Rename, Fork, Copy Session ID, Show in Finder, and Archive keep their native
-behavior, the **Pin/Unpin contribution is filtered out** (the pin button owns
-pinning), and the popup shows the native labels with a compact local glyph per
-action but does **not** reproduce the native shortcut hints; it keeps
-arrow/Home/End navigation and Escape/outside/scroll/resize dismissal.
+current-row controls). Nested subagent rows have no trigger. The trigger opens
+the shell's **native shared context-menu popup** against a plugin-owned
+captured-target kind (`powerSuiteSession`); a registered contribution resolves
+the native `session` target and hands the popup delegating actions that copy the
+native presentation fields (label, keyed icon, command id, disabled/danger
+flags, separators, the `afterContent` footer and nested children) and run the
+nested native `select` with the original namespaced id, so Rename, Fork, Copy
+Session ID, Show in Finder, Archive and any plugin-contributed action keep their
+native behavior and rendering. The **Pin/Unpin contribution is the only one
+filtered out** (the pin button owns pinning). The trigger is focused before
+opening so the shared popup restores focus to it, `data-menu-open` mirrors the
+shared popup's active target, and a DSH build without `contextMenus.open`
+renders no trigger.
 Pending-interaction notices are a client-only addition beside the card: the seat
 subscribes to `props.useSessionStatus` (the same
 `SessionStatus.pendingInteraction` the native composer cards use), derives up to
@@ -838,9 +843,10 @@ re-open a card the user just dismissed.
   filters the Pin/Unpin entry, and the card never reads or writes the native
   sidebar pin list.
 - The Dynamic Workspaces row menu and pending-interaction notices are
-  browser-only surfaces: the menu resolves native contributions without
-  registering any of its own, and the notices never answer an interaction and
-  add no Host route/store.
+  browser-only surfaces: the menu registers one captured-target provider
+  (`powerSuiteSession`) that delegates to the native Session contributions and
+  filters the Pin/Unpin entry, while the notices never answer an interaction;
+  neither adds a Host route or store.
 - The UI element annotation mode stays browser-only: it adds no Host route,
   service, Session-log write, or profile change. Its v2 records are browser
   `localStorage` memory (capped at 100, never synced); the two modifiers,

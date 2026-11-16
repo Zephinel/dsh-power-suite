@@ -303,26 +303,29 @@ trigger in the same slot, and that swap **stays while the row's menu is open**
 trigger paints the same soft hover background as the sibling New-session
 control; only the **rainbow row** suppresses it, following the atmosphere
 control rule (transparent background with a `brightness(1.2)` icon lift). A
-keyboard `focus-visible` ring stays in both cases. Clicking the trigger opens
-the card's **own Session menu popup**. This card menu is an additional
-surface: the native Workspace Session row keeps its own native "…" menu
-(native rows are never modified by this feature). The popup is built from the
+keyboard `focus-visible` ring stays in both cases. Clicking the trigger opens the
+shell's **native shared context-menu popup** — the same surface the native
+Workspace Session row's own "…" trigger opens — through a plugin-owned
+captured-target kind (`powerSuiteSession`). This card menu stays an additional
+surface: the native Workspace Session row keeps its own native "…" menu (native
+rows are never modified by this feature). A registered contribution resolves the
 shell's native Session action contributions
-(`ctx.contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })`),
-so Rename, Fork, Copy Session ID, Show in Finder, and Archive keep their native
-behavior and labels, but the **Pin/Unpin entry is filtered out**: pinning belongs
-to the card's title-left pin button (see *Pinned Sessions*), so the menu never
-offers a second pin affordance. The popup is 224 px wide, uses the theme's
-surface/elevation tokens, shows the native labels with a compact local glyph for
-each action, does **not** reproduce the native keyboard-shortcut hints (a
-documented limitation), and offers the same keyboard
-navigation and dismissal as a native menu (arrow keys/Home/End move between
-enabled items, Escape or an outside pointer press closes it, scroll and resize
-close it). While the action contributions are still resolving it shows a small
-loading placeholder, and clicking the trigger again closes the popup. **Subagent
-child rows have no trigger.** The swap is hover/focus driven (desktop), and the
-New session button and the inline interrupted Continue triangle remain the
-separate trailing controls described above.
+(`ctx.contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })`)
+and fills the shared popup with delegating actions that copy each native
+presentation field (label, keyed icon, command id, disabled/danger flags,
+separator positions, the `afterContent` footer and nested children) and run the
+nested native `select`, so Rename, Fork, Copy Session ID, Show in Finder,
+Archive and any other plugin-contributed Session action keep their native
+behavior, labels, icons, shortcut hints, arrow/Home/End navigation and
+Escape/outside-press/scroll/resize dismissal. The **Pin/Unpin entry is the only
+one filtered out**: pinning belongs to the card's title-left pin button (see
+*Pinned Sessions*), so the menu never offers a second pin affordance. Because the
+popup is the shell's, its width/material/placement, focus restoration and the
+Archive footer also come from the shell; the action list is a snapshot taken
+when the menu opens. **Subagent child rows have no trigger.** The swap is
+hover/focus driven (desktop), and the New session button and the inline
+interrupted Continue triangle remain the separate trailing controls described
+above.
 
 ## Pinned Sessions
 
@@ -1202,10 +1205,14 @@ The native **View options** menu picks how Sessions are grouped:
   ordinary soft hover paint (plus the keyboard `focus-visible` ring); only the
   rainbow row suppresses it (transparent + the same `brightness(1.2)` lift as
   the other current-row controls). Subagent rows have no trigger, and a
-  touch-only device cannot open it. Its popup is the card's own surface (not the
-  native popup): it shows the native labels with a compact local glyph per
-  action but no native shortcut hints, and always filters out the native
-  Pin/Unpin contribution, so pinning stays on the title-left pin button.
+  touch-only device cannot open it. Its popup is the shell's **native shared
+  context-menu popup** — the same one the native Session row opens — against a
+  plugin-owned target kind, so material/placement, keyed icons, shortcut hints,
+  focus and dismissal are native; it lists the native Session actions minus the
+  Pin/Unpin entry, so pinning stays on the title-left pin button. Its action list
+  is a snapshot taken at open time, and on a DSH build without the shared
+  context-menu service (`contextMenus.open`) the trigger is hidden — there is no
+  custom fallback popup.
 - **The pending-interaction notice stack is preview-only.** It shows at most
   three waiting Sessions (question, plan review, approval) and a "+N more"
   line; it never answers anything, so answering still happens in that
@@ -1275,6 +1282,7 @@ plugin change) and asserts the polish work on the real DOM:
 ```bash
 node test/browser/sidebar.e2e.mjs          # full run, screenshots in .tmp-work/sidebar-e2e/
 node test/browser/sidebar.e2e.mjs --smoke  # pipeline-only smoke
+node test/browser/sidebar.e2e.mjs --row-menu  # card row "…" menu = native shared-popup parity
 ```
 
 It requires at least one running or recently finished Session in the card (it
@@ -1300,12 +1308,16 @@ persistence across reloads including the pre-hydration bucket cache and live
 drift correction; annotation-mode pinning; and zero page errors.
 
 The card-owned pin store (`test/session-pins.test.js`), the pin ordering
-(`test/dynamic-workspaces-pin.test.js`), and the Running & recent panel/notice
-helpers (`test/dynamic-workspaces-panel.test.js`) cover the pure state; the row
-"…" menu with Pin absent and the notice component were additionally probed live
-(recorded in [verification.md](verification.md)). The committed harness keeps
-its `--pin` acceptance mode (card-owned pin, Host route/cache probes) and does
-not yet exercise the new menu/notice surfaces.
+(`test/dynamic-workspaces-pin.test.js`), the Running & recent panel/notice
+helpers (`test/dynamic-workspaces-panel.test.js`), and the row-menu delegation
+(`test/row-menu.test.js`) cover the pure state; the row "…" menu with Pin absent
+and the notice component were additionally probed live (recorded in
+[verification.md](verification.md)). The committed harness keeps its `--pin`
+acceptance mode (card-owned pin, Host route/cache probes); its `--row-menu` mode
+(added with the native-popup alignment) opens both the native Session row menu
+and our card row menu and asserts the shared surface/material, item
+labels/order, shortcut hints, icon markup, separators, the Archive footer,
+Escape dismissal with focus restore, and second-row replacement.
 
 Manual checks on the running DSH Web GUI:
 
@@ -1402,8 +1414,9 @@ Manual checks on the running DSH Web GUI:
     its time is hidden and a "…" trigger appears in the 48 px slot; the trigger
     keeps the ordinary soft hover paint (the rainbow row suppresses it and keeps
     only the `brightness(1.2)` icon lift; the keyboard focus ring remains). Click it
-    to open the card's own Session menu (Rename, Fork, Copy Session ID, Show in
-    Finder, Archive — **no Pin/Unpin**), use arrow keys/Home/End to move, and
+    to open the card row's Session menu — the shell's native shared popup
+    (Rename, Fork, Copy Session ID, Show in Finder, Archive — **no Pin/Unpin**),
+    use arrow keys/Home/End to move, and
     close it with Escape or an outside click; while the menu is open the swap
     stays, and leaving restores the time. Subagent rows have no trigger.
 18. Pin a main Session with its title-left pin button, then unpin it: hover or
