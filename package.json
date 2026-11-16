@@ -23,6 +23,7 @@
     "src",
     "cordis.patch.yml",
     "locale",
+    "assets",
     "docs",
     "release-notes",
     "icon.png",
@@ -57,7 +58,9 @@
     "pack:check": "npm pack --dry-run --json",
     "check:release-notes": "node scripts/check-release-notes.mjs",
     "check:docs-links": "node scripts/check-docs-links.mjs",
-    "check:publish-manifest": "node scripts/check-publish-manifest.mjs"
+    "check:publish-manifest": "node scripts/check-publish-manifest.mjs",
+    "build:readme-bento": "node scripts/build-readme-bento.mjs",
+    "capture:readme-shots": "node test/browser/sidebar.e2e.mjs --readme-shots"
   },
   "keywords": [
     "deepseek-harness",
