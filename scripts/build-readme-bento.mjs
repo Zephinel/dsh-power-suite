@@ -55,49 +55,46 @@ const FRAMES = {
 const FRAME = { width: 1600, padding: 28, gap: 18, ...FRAMES[process.env.README_BENTO_FRAME === 'dark' ? 'dark' : 'light'] }
 
 /**
- * Bento groups: each tile is explicitly positioned so its size matches the
- * source (or its crop) aspect ratio, inside a 1600 px wide light frame.
+ * Bento groups: explicit positions with a uniform 18 px gutter; every tile is
+ * sized to its source aspect so screenshots fill the card with no letterboxing.
  * @type {Array<{out: string, height: number, cells: Array<{file: string, x: number, y: number, w: number, h: number, fit?: string, position?: string, source?: 'docs', crop?: {x: number, y: number, w: number, h: number}}>}>}
  */
 const groups = [
   {
     out: 'readme-overview.webp',
-    height: 1000,
+    height: 828,
     cells: [
-      { file: 'workspaces.png', x: 28, y: 28, w: 700, h: 944 },
-      { file: 'card.png', x: 728, y: 28, w: 490, h: 309 },
-      { file: 'row-menu.png', x: 1236, y: 28, w: 336, h: 161 },
-      { file: 'interrupted-row.png', x: 1236, y: 207, w: 336, h: 48 },
-      { file: 'card-hover.png', x: 728, y: 355, w: 844, h: 568 }
+      { file: 'workspaces.png', x: 28, y: 28, w: 660, h: 772 },
+      { file: 'card.png', x: 706, y: 28, w: 500, h: 174 },
+      { file: 'row-menu.png', x: 1224, y: 28, w: 348, h: 167 },
+      { file: 'card-hover.png', x: 706, y: 220, w: 866, h: 569 }
     ]
   },
   {
     out: 'readme-artifacts.webp',
-    height: 654,
+    height: 880,
     cells: [
-      { file: 'artifacts.png', x: 28, y: 28, w: 980, h: 598 },
-      { file: 'artifacts-quicklook.png', x: 1046, y: 28, w: 500, h: 323 },
-      { file: 'artifacts-filter.png', x: 1046, y: 369, w: 340, h: 233 }
+      { file: 'artifacts.png', x: 28, y: 28, w: 920, h: 824 },
+      { file: 'artifacts-quicklook.png', x: 966, y: 28, w: 606, h: 392 },
+      { file: 'artifacts-filter.png', x: 966, y: 438, w: 606, h: 414 }
     ]
   },
   {
     out: 'readme-composer.webp',
-    height: 599,
+    height: 652,
     cells: [
-      { file: 'prompt-history.png', x: 28, y: 28, w: 600, h: 378, crop: { x: 0, y: 140, w: 724, h: 456 } },
-      { file: 'interrupted-composer.png', x: 28, y: 424, w: 600, h: 96 },
-      { file: 'settings.png', x: 646, y: 28, w: 700, h: 543 }
+      { file: 'prompt-history.png', x: 28, y: 28, w: 600, h: 482 },
+      { file: 'interrupted-composer.png', x: 28, y: 528, w: 600, h: 96 },
+      { file: 'settings.png', x: 646, y: 56, w: 700, h: 540 }
     ]
   },
   {
     out: 'readme-annotation.webp',
-    height: 864,
+    height: 860,
     cells: [
-      // Three rail states: enter mode → collect → insert into the composer.
-      { file: 'annotation-mode.png', x: 302, y: 28, w: 320, h: 686, source: 'docs', crop: { x: 1308, y: 0, w: 420, h: 900 } },
-      { file: 'annotation-collection.png', x: 640, y: 28, w: 320, h: 686, source: 'docs', crop: { x: 1308, y: 0, w: 420, h: 900 } },
-      { file: 'annotation-inserted.png', x: 978, y: 28, w: 320, h: 686, source: 'docs', crop: { x: 1308, y: 0, w: 420, h: 900 } },
-      { file: 'annotation-inserted.png', x: 420, y: 732, w: 760, h: 104, source: 'docs', crop: { x: 478, y: 768, w: 760, h: 104 } }
+      // Dummy DSH Session: three real annotations on an injected answer card,
+      // with the rail showing the requirement texts.
+      { file: 'annotation-annotated.png', x: 28, y: 28, w: 1544, h: 804 }
     ]
   }
 ]
