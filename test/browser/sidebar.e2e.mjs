@@ -117,6 +117,7 @@
  *   node test/browser/sidebar.e2e.mjs --layout        # sidebar-width drag flicker + persistence + Host sync
  *   node test/browser/sidebar.e2e.mjs --interrupted   # interrupted-state consistency acceptance (controlled seam)
  *   node test/browser/sidebar.e2e.mjs --row-menu      # card row "…" menu = native shared popup parity acceptance
+ *   node test/browser/sidebar.e2e.mjs --readme-shots  # raw README/Bento captures (2x, privacy-masked, demo stubs)
  *   node test/browser/sidebar.e2e.mjs --no-shots      # skip screenshots
  *   node test/browser/sidebar.e2e.mjs --client path/to/client.js
  *   node test/browser/sidebar.e2e.mjs --keep-open     # leave Chrome running for inspection
@@ -240,6 +241,7 @@ function parseArgs(argv) {
     else if (arg === '--layout') opts.mode = 'layout'
     else if (arg === '--interrupted') opts.mode = 'interrupted'
     else if (arg === '--row-menu') opts.mode = 'row-menu'
+    else if (arg === '--readme-shots') opts.mode = 'readme-shots'
     else if (arg === '--no-shots') opts.shots = false
     else if (arg === '--keep-open') opts.keepOpen = true
     else if (arg === '--headful') opts.headful = true
@@ -248,7 +250,7 @@ function parseArgs(argv) {
     else if (arg === '--url') opts.url = argv[++i]
     else if (arg.startsWith('--url=')) opts.url = arg.slice('--url='.length)
     else if (arg === '--help' || arg === '-h') {
-      console.log('usage: node test/browser/sidebar.e2e.mjs [--smoke] [--pin] [--live] [--layout] [--interrupted] [--no-shots] [--client path] [--keep-open] [--headful] [--url TOKEN_URL]')
+      console.log('usage: node test/browser/sidebar.e2e.mjs [--smoke] [--pin] [--live] [--layout] [--interrupted] [--row-menu] [--readme-shots] [--no-shots] [--client path] [--keep-open] [--headful] [--url TOKEN_URL]')
       process.exit(0)
     } else {
       throw new Error(`unknown argument: ${arg}`)
@@ -479,10 +481,11 @@ class Page {
     await page.send('Emulation.setDeviceMetricsOverride', {
       width: VIEWPORT.width,
       height: VIEWPORT.height,
-      deviceScaleFactor: 1,
+      deviceScaleFactor: options.deviceScaleFactor ?? 1,
       mobile: false,
     })
     if (initScript) await page.addInitScript(initScript)
+    if (typeof options.beforeNavigate === 'function') await options.beforeNavigate(page)
     await page.navigate(url)
     return page
   }
@@ -12621,6 +12624,1921 @@ async function cleanupRowMenu(page, state) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// --readme-shots mode: raw README/Bento captures of the live GUI (privacy-masked + demo stubs)
+// ---------------------------------------------------------------------------------------------
+
+/** Output directory for the README capture pass (gitignored `.tmp-work/`). */
+const README_SHOTS_DIR = path.join(WORKTREE, '.tmp-work', 'readme-shots')
+/** Raw PNG directory the README Bento composer (`scripts/build-readme-bento.mjs`) reads. */
+const README_RAW_DIR = path.join(README_SHOTS_DIR, 'raw')
+/** Capture contract: device scale factor 2, viewport 1728x900, 12 px clip padding (design §3). */
+const README_DPR = 2
+const README_CLIP_PAD = 12
+/** The raw files design §3 requires; the pass fails when any of them is missing. */
+const README_REQUIRED_FILES = [
+  'workspaces.png',
+  'card.png',
+  'card-hover.png',
+  'row-menu.png',
+  'interrupted-row.png',
+  'interrupted-composer.png',
+  'artifacts.png',
+  'artifacts-quicklook.png',
+  'artifacts-filter.png',
+  'prompt-history.png',
+  'settings.png',
+]
+/** Allowlisted demo copy substituted for every user-identifying string in the page. */
+const README_SESSION_TITLES = [
+  'Release checklist',
+  'Design review',
+  'Docs pass',
+  'Sidebar polish',
+  'API cleanup',
+  'Hover card pass',
+  'Artifacts tour',
+  'Composer polish',
+  'Prompt history',
+  'Settings pass',
+  'Menu parity',
+  'Interrupted state',
+]
+const README_WORKSPACE_TITLES = [
+  'Power Suite',
+  'Design system',
+  'Docs site',
+  'Release tooling',
+  'Sandbox',
+  'Infra',
+  'CLI toolkit',
+  'Marketing site',
+  'Analytics',
+  'Mobile client',
+  'Payments',
+  'Search service',
+  'Data pipeline',
+  'Auth',
+  'Docs gallery',
+]
+const README_HOVER_WORKSPACE = 'Power Suite'
+const README_HOVER_PATH = '~/Projects/Power Suite'
+/** Canned English prompt the rail's hover preview card is masked to (demo copy, never user text). */
+const README_PREVIEW_PROMPT = 'Draft the release checklist and summarize the risky files'
+/**
+ * Banned substrings that must never appear in a capture crop (design §3 privacy gate).
+ * The page-side scanners compile the source strings; the Node-side assertion uses the regexes.
+ */
+const README_BANNED_PATTERNS = [
+  ['/Users/', /\/Users\//u],
+  ['rexxin', /rexxin/iu],
+  ['http://', /http:\/\//iu],
+  ['https://', /https:\/\//iu],
+  ['token=', /token=/iu],
+  ['dsh-power-suite/', /dsh-power-suite\//iu],
+  ['CJK', /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u],
+]
+const README_BANNED_SOURCES = README_BANNED_PATTERNS.map(([label, pattern]) => [label, pattern.source])
+/** Demo artifacts served by the CDP Fetch stub for the Artifacts poses (design §3 payload). */
+const README_STUB_ARTIFACTS = {
+  sessionId: 'readme-demo',
+  origin: null,
+  workspaceRoot: '/demo/readme-workspace',
+  artifacts: [
+    {
+      path: '/demo/readme-workspace/release-checklist.md',
+      name: 'release-checklist.md',
+      turn: 4,
+      mime: 'text/markdown',
+      previewable: true,
+      size: 4210,
+      missing: false,
+    },
+    {
+      path: '/demo/readme-workspace/revenue-chart.svg',
+      name: 'revenue-chart.svg',
+      turn: 4,
+      mime: 'image/svg+xml',
+      previewable: true,
+      size: 1820,
+      missing: false,
+    },
+    {
+      provided: true,
+      attachmentId: 'readme-demo-attachment-3',
+      name: 'design-notes.md',
+      mediaType: 'text/markdown',
+      mime: 'text/markdown',
+      previewable: true,
+      bytes: 2310,
+      size: 2310,
+      promptOrdinal: 2,
+      missing: false,
+    },
+    {
+      provided: true,
+      attachmentId: 'readme-demo-attachment-4',
+      name: 'benchmark.csv',
+      mediaType: 'text/csv',
+      mime: 'text/csv',
+      previewable: true,
+      bytes: 940,
+      size: 940,
+      promptOrdinal: 2,
+      missing: false,
+    },
+    {
+      path: '/demo/readme-workspace/usage-notes.md',
+      name: 'usage-notes.md',
+      turn: 5,
+      mime: 'text/markdown',
+      previewable: true,
+      size: 3840,
+      missing: false,
+    },
+    {
+      provided: true,
+      attachmentId: 'readme-demo-attachment-5',
+      name: 'flow-diagram.svg',
+      mediaType: 'image/svg+xml',
+      mime: 'image/svg+xml',
+      previewable: true,
+      bytes: 1640,
+      size: 1640,
+      promptOrdinal: 3,
+      missing: false,
+    },
+  ],
+}
+/** Demo Markdown returned by the stubbed preview/raw routes (Quick Look pose). */
+const README_STUB_MARKDOWN = [
+  '# Release checklist',
+  '',
+  '- Confirm the CHANGELOG entry mirrors the diff',
+  '- Run npm run check and npm test',
+  '- Rebuild the README Bento assets',
+  '',
+  '```sh',
+  'npm run build:readme-bento',
+  '```',
+  '',
+].join('\n')
+/** Demo SVG returned by the stubbed raw route for the generated image row (never hovered). */
+const README_STUB_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180">' +
+  '<rect width="320" height="180" fill="#15161a"/>' +
+  '<text x="20" y="40" fill="#ffffff" font-family="sans-serif">demo chart</text></svg>'
+/** Demo prompt history served by the CDP Fetch stub (privacy: canned English lines only). */
+const README_STUB_PROMPTS = {
+  sessionId: 'readme-demo',
+  prompts: [
+    { seq: 1, text: 'Draft the release checklist and summarize the risky files', at: Date.UTC(2026, 10, 8, 9, 30) },
+    { seq: 2, text: 'Review the README Bento layout screenshots', at: Date.UTC(2026, 10, 8, 11, 15) },
+    { seq: 3, text: 'Polish the sidebar hover card spacing', at: Date.UTC(2026, 10, 8, 14, 5) },
+    { seq: 4, text: 'Check the release notes for the plugin', at: Date.UTC(2026, 10, 9, 8, 40) },
+    { seq: 5, text: 'Trace the interrupted composer state', at: Date.UTC(2026, 10, 9, 10, 20) },
+    { seq: 6, text: 'Compare the native and card row menus', at: Date.UTC(2026, 10, 9, 13, 50) },
+    { seq: 7, text: 'Write the quick look artifact tour', at: Date.UTC(2026, 10, 9, 16, 10) },
+    { seq: 8, text: 'Tighten the annotation rail copy', at: Date.UTC(2026, 10, 10, 9, 5) },
+    { seq: 9, text: 'Verify the prompt history keyboard shortcut', at: Date.UTC(2026, 10, 10, 11, 45) },
+    { seq: 10, text: 'Capture the artifacts filter menu', at: Date.UTC(2026, 10, 10, 15, 25) },
+    { seq: 11, text: 'Summarize the docs pass findings', at: Date.UTC(2026, 10, 11, 8, 55) },
+    { seq: 12, text: 'Audit the settings page layout', at: Date.UTC(2026, 10, 11, 10, 35) },
+    { seq: 13, text: 'Check the folded project buckets', at: Date.UTC(2026, 10, 11, 14, 15) },
+    { seq: 14, text: 'Rebuild the screenshot pipeline', at: Date.UTC(2026, 10, 11, 16, 5) },
+    { seq: 15, text: 'Document the test seams', at: Date.UTC(2026, 10, 12, 9, 20) },
+    { seq: 16, text: 'Review the session pin sync', at: Date.UTC(2026, 10, 12, 11, 0) },
+    { seq: 17, text: 'Measure the sidebar resize handle', at: Date.UTC(2026, 10, 12, 13, 40) },
+    { seq: 18, text: 'Fix the hover card fade timing', at: Date.UTC(2026, 10, 12, 16, 30) },
+    { seq: 19, text: 'Inspect the subagent child rows', at: Date.UTC(2026, 10, 13, 9, 10) },
+    { seq: 20, text: 'Update the changelog entry', at: Date.UTC(2026, 10, 13, 11, 30) },
+    { seq: 21, text: 'Run the full browser harness', at: Date.UTC(2026, 10, 13, 14, 20) },
+    { seq: 22, text: 'Verify the reduced motion path', at: Date.UTC(2026, 10, 14, 8, 45) },
+    { seq: 23, text: 'Check the composer gallery wheel', at: Date.UTC(2026, 10, 14, 10, 55) },
+    { seq: 24, text: 'Trim the README feature table', at: Date.UTC(2026, 10, 14, 15, 35) },
+  ],
+}
+/** Demo preview descriptor for the generated Markdown artifact (Quick Look pose). */
+const README_STUB_PREVIEW = {
+  path: '/demo/readme-workspace/release-checklist.md',
+  name: 'release-checklist.md',
+  mime: 'text/markdown',
+  size: README_STUB_MARKDOWN.length,
+  previewable: true,
+  kind: 'text',
+  text: README_STUB_MARKDOWN,
+  truncated: false,
+}
+
+/**
+ * Page-side probes for the `--readme-shots` pass (plain serializable functions: they only
+ * touch the throwaway page's DOM and never persist anything).
+ */
+const probeReadme = {
+  /** Install the capture stylesheet and mark the document as captured. */
+  installStyle: () => {
+    if (document.getElementById('psd-readme-capture-style') === null) {
+      const style = document.createElement('style')
+      style.id = 'psd-readme-capture-style'
+      style.textContent = [
+        'html[data-psd-readme-capture] [data-slot="conversation.header"]{visibility:hidden!important}',
+        'html[data-psd-readme-capture] [data-slot="conversation.session"]{visibility:hidden!important}',
+        'html[data-psd-readme-capture] [data-slot="conversation.session"] [data-conversation-region="composer"]{visibility:visible!important}',
+        'html[data-psd-readme-capture] [data-files-content] > :not([data-psfa-overlay]){visibility:hidden!important}',
+      ].join('\n')
+      document.head.appendChild(style)
+    }
+    document.documentElement.setAttribute('data-psd-readme-capture', 'true')
+    return true
+  },
+
+  /**
+   * Mask every visible user-identifying string in the captured page (design §3):
+   * session/workspace titles in the native sidebar and the card, the card hover-card
+   * workspace/session/path, and the composer workspace selector. A final scrub replaces
+   * any leftover banned substring (CJK text, local paths, URLs) outside the hidden
+   * transcript, so the crop and document scans cannot see real user text.
+   * @param {object} copy - allowlisted demo strings for each surface.
+   * @returns {object} per-surface mask counts.
+   */
+  maskAll: (copy) => {
+    const masked = {}
+    const bump = (key) => {
+      masked[key] = (masked[key] ?? 0) + 1
+    }
+    /**
+     * Replace the text of one element's direct text nodes, keeping its child elements
+     * (icons, carets) intact: the first non-empty node carries the demo copy, the rest
+     * are blanked.
+     * @param {Element} element - target element.
+     * @param {string} text - demo copy.
+     * @returns {boolean} whether anything was replaced.
+     */
+    const setLeafText = (element, text) => {
+      if (!(element instanceof Element)) return false
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+      const nodes = []
+      while (walker.nextNode()) nodes.push(walker.currentNode)
+      let replaced = false
+      for (const node of nodes) {
+        const value = node.nodeValue || ''
+        if (value.trim().length === 0) continue
+        if (!replaced) {
+          node.nodeValue = text
+          replaced = true
+        } else {
+          node.nodeValue = ''
+        }
+      }
+      return replaced
+    }
+    const cycle = (list, index) => list[index % list.length]
+    let index = 0
+    for (const element of document.querySelectorAll('[data-row-key^="session:"] [class*="_title"]')) {
+      if (setLeafText(element, cycle(copy.sessionTitles, index))) {
+        bump('nativeSessionTitles')
+        index += 1
+      }
+    }
+    index = 0
+    for (const element of document.querySelectorAll('[data-row-key^="workspace:"] [class*="_title"]')) {
+      if (setLeafText(element, cycle(copy.workspaceTitles, index))) {
+        bump('nativeWorkspaceTitles')
+        index += 1
+      }
+    }
+    index = 0
+    for (const element of document.querySelectorAll('.psd-run-title, .psd-child-title')) {
+      if (setLeafText(element, cycle(copy.sessionTitles, index))) {
+        bump('cardTitles')
+        index += 1
+      }
+    }
+    for (const element of document.querySelectorAll('.psd-hovercard-title')) {
+      if (setLeafText(element, copy.hoverWorkspace)) bump('hoverWorkspaceTitles')
+    }
+    index = 0
+    for (const element of document.querySelectorAll('.psd-hovercard-session')) {
+      if (setLeafText(element, cycle(copy.sessionTitles, index))) {
+        bump('hoverSessionTitles')
+        index += 1
+      }
+    }
+    for (const element of document.querySelectorAll('.psd-hovercard-path')) {
+      if (setLeafText(element, copy.hoverPath)) bump('hoverWorkspacePaths')
+    }
+    for (const element of document.querySelectorAll('.psp-rail-card-text')) {
+      if (setLeafText(element, copy.previewPrompt)) bump('promptPreviewTexts')
+    }
+    index = 0
+    for (const element of document.querySelectorAll('[data-conversation-region="composer"] [aria-label="Choose workspace"]')) {
+      if (setLeafText(element, cycle(copy.workspaceTitles, index))) {
+        bump('composerWorkspace')
+        index += 1
+      }
+    }
+    // Last-resort scrub: any remaining banned substring outside the hidden transcript is
+    // replaced with neutral demo copy. Only the throwaway page is touched.
+    const banned = copy.bannedSources
+      .map(([, source]) => {
+        try {
+          return new RegExp(source, 'iu')
+        } catch {
+          return null
+        }
+      })
+      .filter((pattern) => pattern !== null)
+    const matchesBanned = (value) => banned.some((pattern) => pattern.test(value))
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    const nodes = []
+    while (walker.nextNode()) nodes.push(walker.currentNode)
+    for (const node of nodes) {
+      const value = node.nodeValue
+      if (value === null || value === undefined || value.trim().length === 0) continue
+      if (!matchesBanned(value)) continue
+      const element = node.parentElement
+      if (element === null) continue
+      if (element.closest('[data-slot="conversation.session"], [data-slot="conversation.header"]') !== null) continue
+      const filesContent = element.closest('[data-files-content]')
+      if (filesContent !== null && element.closest('[data-psfa-overlay]') === null) continue
+      node.nodeValue = 'Demo'
+      bump('scrubbedBannedTextNodes')
+    }
+    return masked
+  },
+
+  /** Union rect of the visible matches of `selectors`, optionally including descendants. */
+  boxes: (payload) => {
+    const boxes = []
+    const push = (element) => {
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return
+      boxes.push({ x: rect.x, y: rect.y, width: rect.width, height: rect.height })
+    }
+    for (const selector of payload.selectors) {
+      const nodes = [...document.querySelectorAll(selector)]
+      const list = payload.first === true ? nodes.slice(0, 1) : nodes
+      for (const element of list) {
+        push(element)
+        if (payload.descendants === true) {
+          for (const child of element.querySelectorAll('*')) push(child)
+        }
+      }
+    }
+    if (boxes.length === 0) return null
+    const left = Math.min(...boxes.map((box) => box.x))
+    const top = Math.min(...boxes.map((box) => box.y))
+    const right = Math.max(...boxes.map((box) => box.x + box.width))
+    const bottom = Math.max(...boxes.map((box) => box.y + box.height))
+    return { x: left, y: top, width: right - left, height: bottom - top }
+  },
+
+  /**
+   * Interrupted-composer pose geometry: the composer's visual rounded card (the input
+   * card containing the attachment button, model / Intelligent-UI controls and the
+   * play-triangle send control) plus the composer region itself.
+   */
+  composerCardParts: () => {
+    const toBox = (element) => {
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+    }
+    const composer = document.querySelector('[data-conversation-region="composer"]')
+    let card = null
+    if (composer !== null) {
+      // The visual card is the widest opaque, strongly rounded element inside the composer.
+      for (const element of composer.querySelectorAll('*')) {
+        const rect = element.getBoundingClientRect()
+        if (rect.width < 500 || rect.height < 80) continue
+        const style = getComputedStyle(element)
+        const radius = Number.parseFloat(style.borderTopLeftRadius) || 0
+        if (radius < 18) continue
+        const background = style.backgroundColor
+        if (background === 'rgba(0, 0, 0, 0)' || background === 'transparent') continue
+        const box = { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+        if (card === null || box.width * box.height > card.width * card.height) card = box
+      }
+    }
+    let overhangBottom = null
+    if (card !== null) {
+      const bandTop = card.y + card.height + 2
+      const bandEnd = card.y + card.height + 64
+      for (const element of document.querySelectorAll('*')) {
+        if (element.childElementCount !== 0) continue
+        const text = (element.innerText || '').trim()
+        if (text.length < 4) continue
+        const rect = element.getBoundingClientRect()
+        if (rect.width < 40 || rect.height < 8) continue
+        if (rect.top < bandTop || rect.top > bandEnd) continue
+        if (overhangBottom === null || rect.bottom > overhangBottom) overhangBottom = rect.bottom
+      }
+    }
+    return {
+      composer: toBox(composer),
+      card,
+      send: toBox(composer === null ? null : composer.querySelector('button[class$="_primary"]')),
+      editor: toBox(composer === null ? null : composer.querySelector('[data-lexical-editor="true"]')),
+      overhangBottom,
+    }
+  },
+
+  /**
+   * Prompt-history pose geometry: the right-edge rail, its hover full-text preview card and
+   * the optional search card, plus their tight union.
+   */
+  promptHistoryParts: () => {
+    const toBox = (element) => {
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+    }
+    const preview = toBox(document.querySelector('[data-psp-preview-card]'))
+    const rail = toBox(document.querySelector('[data-psp-rail]'))
+    const divider = toBox(document.querySelector('[data-psp-rail-divider]'))
+    const searchCard = toBox(document.querySelector('[data-psp-search-card]'))
+    const parts = [preview, rail, divider, searchCard].filter((box) => box !== null)
+    if (parts.length === 0) return { preview, rail, divider, searchCard, box: null }
+    const left = Math.min(...parts.map((box) => box.x))
+    const top = Math.min(...parts.map((box) => box.y))
+    const right = Math.max(...parts.map((box) => box.x + box.width))
+    const bottom = Math.max(...parts.map((box) => box.y + box.height))
+    return { preview, rail, divider, searchCard, box: { x: left, y: top, width: right - left, height: bottom - top } }
+  },
+
+  /** Native Workspaces header + Inactive Projects geometry used to crop workspaces.png. */
+  workspaceCropParts: () => {
+    const toBox = (element) => {
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+    }
+    const sidebar = document.querySelector('[class$="_sidebarCol"]')
+    let label = null
+    if (sidebar !== null) {
+      const walker = document.createTreeWalker(sidebar, NodeFilter.SHOW_TEXT)
+      while (walker.nextNode()) {
+        const node = walker.currentNode
+        if ((node.nodeValue || '').trim() !== 'Workspaces') continue
+        const parent = node.parentElement
+        const box = toBox(parent)
+        if (box === null) continue
+        label = box
+        break
+      }
+    }
+    const inactive = document.querySelector('[data-psd="group"][data-group="inactive"]')
+    const inactiveHeader = toBox(inactive)
+    const inactiveRows = inactiveHeader === null
+      ? []
+      : [...document.querySelectorAll('[data-row-key^="workspace:"]')]
+          .map((row) => ({ row, box: toBox(row) }))
+          .filter((entry) => entry.box !== null && entry.box.y > inactiveHeader.y)
+          .slice(0, 2)
+          .map((entry) => entry.box)
+    return {
+      sidebar: toBox(sidebar),
+      panel: toBox(document.querySelector('.psd-panel')),
+      tree: toBox(document.querySelector('[role="tree"]')),
+      label,
+      inactiveHeader,
+      inactiveRows,
+      currentWorkspace: toBox(document.querySelector('[data-psd-current-workspace="true"]')),
+    }
+  },
+
+  /**
+   * Scroll the native Workspaces tree just enough to keep the Inactive Projects header and
+   * its first two rows inside the viewport (the Workspaces header itself never scrolls).
+   */
+  revealInactiveProjects: () => {
+    const tree = document.querySelector('[role="tree"]')
+    const inactive = document.querySelector('[data-psd="group"][data-group="inactive"]')
+    if (tree === null || inactive === null) return null
+    const inactiveRect = inactive.getBoundingClientRect()
+    const rows = [...document.querySelectorAll('[data-row-key^="workspace:"]')]
+      .map((row) => row.getBoundingClientRect())
+      .filter((rect) => rect.top > inactiveRect.top && rect.width > 0)
+      .slice(0, 2)
+    const bottom = Math.max(inactiveRect.bottom, ...rows.map((rect) => rect.bottom))
+    const limit = Math.min(tree.getBoundingClientRect().bottom, window.innerHeight) - 10
+    const overflow = Math.max(0, Math.round(bottom - limit))
+    if (overflow > 0) tree.scrollTop += overflow
+    return { overflow, scrollTop: tree.scrollTop, rows: rows.length }
+  },
+
+  /** Artifacts panel content geometry: header row, list rows and their pitch. */
+  artifactsContentParts: () => {
+    const toBox = (element) => {
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+    }
+    const root = toBox(document.querySelector('.psfa-view .dsa-root'))
+    const header = toBox(document.querySelector('.psfa-view .dsa-header'))
+    const rows = [...document.querySelectorAll('.psfa-view .dsa-row')].map(toBox).filter((box) => box !== null)
+    const rowHeight = rows.length === 0 ? 0 : rows.reduce((total, box) => total + box.height, 0) / rows.length
+    return { root, header, rows, rowHeight }
+  },
+
+  /** Scroll the plugin settings section to the top of its scroller before measuring. */
+  scrollSettingsIntoView: () => {
+    const settings = document.querySelector('.dps-settings')
+    if (settings === null) return false
+    settings.scrollIntoView({ block: 'start' })
+    return true
+  },
+
+  /**
+   * Docs-asset privacy guard used by the annotation captures (same recipe as the annotation
+   * harness): blur the native sidebar/conversation header and lay a theme-matched frosted
+   * shield over the conversation above the composer. Passing `false` removes both.
+   */
+  annotationGuard: (enabled) => {
+    const CLASS = 'psd-readme-annotation-privacy'
+    if (enabled !== true) {
+      document.documentElement.classList.remove(CLASS)
+      const existing = document.getElementById('psd-readme-annotation-shield')
+      if (existing !== null) existing.remove()
+      return { active: false }
+    }
+    if (document.getElementById('psd-readme-annotation-guard-style') === null) {
+      const style = document.createElement('style')
+      style.id = 'psd-readme-annotation-guard-style'
+      style.textContent =
+        'html.' + CLASS + ' [class$="_sidebarCol"]{filter:blur(7px)!important}' +
+        'html.' + CLASS + ' [data-slot="conversation.header"]{filter:blur(6px)!important}'
+      document.head.appendChild(style)
+    }
+    document.documentElement.classList.add(CLASS)
+    let shield = document.getElementById('psd-readme-annotation-shield')
+    if (shield === null) {
+      shield = document.createElement('div')
+      shield.id = 'psd-readme-annotation-shield'
+      document.body.appendChild(shield)
+    }
+    const sidebar = document.querySelector('[class$="_sidebarCol"]')
+    const rail = document.querySelector('[data-psa-rail]')
+    const composer = document.querySelector('[data-conversation-region="composer"]')
+    const sidebarRight = sidebar === null ? 0 : Math.round(sidebar.getBoundingClientRect().right)
+    const railLeft = rail === null ? innerWidth : Math.round(rail.getBoundingClientRect().left)
+    const composerTop = composer === null ? innerHeight : Math.round(composer.getBoundingClientRect().top)
+    let background = 'rgba(20, 22, 28, 0.9)'
+    for (const element of [document.querySelector('[data-conversation-region="chat"]'), document.querySelector('[data-slot="main"]'), document.body]) {
+      if (element === null) continue
+      const computed = getComputedStyle(element).backgroundColor || ''
+      const match = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/.exec(computed)
+      if (match === null) continue
+      const alpha = match[4] === undefined ? 1 : Number(match[4])
+      if (alpha < 0.5) continue
+      background = 'rgba(' + match[1] + ', ' + match[2] + ', ' + match[3] + ', 0.9)'
+      break
+    }
+    const width = Math.max(0, railLeft - sidebarRight)
+    const height = Math.max(0, composerTop)
+    Object.assign(shield.style, {
+      position: 'fixed',
+      left: sidebarRight + 'px',
+      top: '0px',
+      width: width + 'px',
+      height: height + 'px',
+      background,
+      backdropFilter: 'blur(14px)',
+      WebkitBackdropFilter: 'blur(14px)',
+      pointerEvents: 'none',
+      zIndex: '18'
+    })
+    return { active: true, sidebarRight, railLeft, composerTop, background, width, height }
+  },
+
+  /** Mask Session ids / workspace names shown in the annotation rail metadata. */
+  maskAnnotationMeta: () => {
+    let masked = 0
+    for (const scope of ['[data-psa-rail]', '[data-psa-popover]']) {
+      for (const root of document.querySelectorAll(scope)) {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+        const nodes = []
+        while (walker.nextNode()) nodes.push(walker.currentNode)
+        for (const node of nodes) {
+          const value = node.nodeValue
+          if (value === null || value === undefined || value.length === 0) continue
+          let next = value.replace(/Session\s+[0-9a-f][0-9a-f-]{5,}/gi, 'Session demo')
+          next = next.replace(/Workspace\s+[^\s·]+/g, 'Workspace Power Suite')
+          if (next === value) continue
+          node.nodeValue = next
+          masked += 1
+        }
+      }
+    }
+    return { masked }
+  },
+
+  /** Annotation mode facts used to pose the docs-asset captures. */
+  annotationState: () => ({
+    active: document.documentElement.getAttribute('data-psa-active'),
+    rail: document.querySelector('[data-psa-rail]') !== null,
+    railPanel: document.querySelector('[data-psa-rail-panel]')?.getAttribute('data-psa-rail-panel') ?? null,
+    entries: document.querySelectorAll('[data-psa-entry]').length,
+    popovers: document.querySelectorAll('[data-psa-popover]').length,
+    add: document.querySelector('[data-psa-add]') !== null,
+    insertBatch: document.querySelector('[data-psa-insert-batch]') !== null,
+    chips: document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-decorator="true"]').length,
+    launcher: document.querySelector('[data-psa-launcher]') !== null
+  }),
+
+  /** Find the click point of a native control by aria-label (`kind: 'aria'`) or text. */
+  annotationTarget: (spec) => {
+    for (const button of document.querySelectorAll('button')) {
+      const aria = button.getAttribute('aria-label') || ''
+      const text = (button.innerText || '').trim()
+      const matches = spec.kind === 'aria' ? aria === spec.value : text === spec.value
+      if (!matches) continue
+      const rect = button.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) continue
+      return {
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+        label: spec.kind === 'aria' ? aria : text
+      }
+    }
+    return null
+  },
+
+  /** Current Session identity + composer state (no transcript text is returned). */
+  sessionState: () => {
+    const session = document.querySelector('[data-conversation-session]')
+    const editor = document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')
+    return {
+      sessionId: session === null ? null : session.getAttribute('data-conversation-session'),
+      hasComposer: editor !== null,
+      draftLength: editor === null ? 0 : (editor.innerText || '').trim().length,
+      messages: document.querySelectorAll('[data-conversation-message]').length,
+      htmlInterrupted: document.documentElement.getAttribute('data-power-suite-interrupted'),
+    }
+  },
+
+  /** Card rows without any user text: state, geometry and click/hover points only. */
+  cardRows: () => {
+    const toBox = (element) => {
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      return { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }
+    }
+    const point = (element, offset) => {
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      return { x: Math.round(rect.left + offset), y: Math.round(rect.top + rect.height / 2) }
+    }
+    return [...document.querySelectorAll('.psd-run')].map((row, index) => ({
+      index,
+      state: row.getAttribute('data-state'),
+      current: row.getAttribute('aria-current') === 'true',
+      menuable: row.getAttribute('data-menuable') === 'true',
+      rect: toBox(row),
+      mainPoint: point(row.querySelector('.psd-run-main'), Math.min(80, Math.max(24, row.getBoundingClientRect().width / 2))),
+      triggerPoint: point(row.querySelector('.psd-run-more'), 10),
+    }))
+  },
+
+  /** Whether the idle composer/content background is empty of user text. */
+  hoverCardState: () => {
+    const card = document.querySelector('[data-psd-hovercard]')
+    if (card === null) return null
+    const rect = card.getBoundingClientRect()
+    return { textLength: (card.innerText || '').trim().length, width: Math.round(rect.width), height: Math.round(rect.height) }
+  },
+
+  /** Whether one card row is still hovered (the hover card's anchor row). */
+  hoveredCardRows: () => document.querySelectorAll('.psd-run:hover, .psd-child:hover').length,
+
+  /** Dismiss the hover card by parking the pointer away from the sidebar/card. */
+  parkPointer: () => {
+    const target = document.querySelector('[data-slot="main"]')
+    const rect = target === null ? { left: 600, top: 400, width: 400, height: 200 } : target.getBoundingClientRect()
+    return {
+      x: Math.round(rect.left + Math.max(40, rect.width / 2)),
+      y: Math.round(rect.top + Math.max(40, rect.height / 2)),
+    }
+  },
+
+  /** Scan the innerText of the pose's scan roots for banned substrings. */
+  scanText: (selectors, sources) => {
+    const patterns = sources.map(([label, source]) => [label, new RegExp(source, 'iu')])
+    const parts = []
+    const missing = []
+    for (const selector of selectors) {
+      const nodes = [...document.querySelectorAll(selector)]
+      if (nodes.length === 0) missing.push(selector)
+      for (const element of nodes) parts.push(element.innerText || '')
+    }
+    const text = parts.join('\n')
+    const hits = patterns.filter(([, pattern]) => pattern.test(text)).map(([label]) => label)
+    return {
+      textLength: text.trim().length,
+      missing,
+      hits,
+      sample: hits.length === 0 ? '' : text.replace(/\s+/gu, ' ').slice(0, 240),
+    }
+  },
+
+  /**
+   * Scan every visible text node whose box intersects the clip: this approximates the
+   * text a viewer of the cropped screenshot would see, including fixed overlays (hover
+   * card, menu, quick look) while skipping display:none / visibility:hidden subtrees,
+   * faded-out layers (opacity < 0.1) and anything outside the crop.
+   */
+  scanClip: (rect, sources) => {
+    const patterns = sources.map(([label, source]) => [label, new RegExp(source, 'iu')])
+    const texts = []
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    let nodes = 0
+    while (walker.nextNode()) {
+      const node = walker.currentNode
+      const value = node.nodeValue || ''
+      if (value.trim().length === 0) continue
+      const element = node.parentElement
+      if (element === null) continue
+      const tag = element.tagName
+      if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') continue
+      const style = getComputedStyle(element)
+      if (style.display === 'none' || style.visibility !== 'visible') continue
+      let opacity = 1
+      for (let parent = element; parent !== null; parent = parent.parentElement) {
+        const value = Number.parseFloat(getComputedStyle(parent).opacity)
+        if (Number.isFinite(value)) opacity *= value
+        if (opacity < 0.1) break
+      }
+      if (opacity < 0.1) continue
+      const box = element.getBoundingClientRect()
+      if (box.width <= 0 || box.height <= 0) continue
+      if (box.right <= rect.x || box.left >= rect.x + rect.width) continue
+      if (box.bottom <= rect.y || box.top >= rect.y + rect.height) continue
+      texts.push(value.trim())
+      nodes += 1
+    }
+    const text = texts.join(' ')
+    const hits = patterns.filter(([, pattern]) => pattern.test(text)).map(([label]) => label)
+    return {
+      textLength: text.length,
+      nodes,
+      hits,
+      sample: hits.length === 0 ? '' : text.replace(/\s+/gu, ' ').slice(0, 240),
+    }
+  },
+
+  /** Scan the rendered whole-page text (transcript/header hidden, titles masked). */
+  scanDocument: (sources) => {
+    const patterns = sources.map(([label, source]) => [label, new RegExp(source, 'iu')])
+    const text = document.body.innerText || ''
+    const hits = patterns.filter(([, pattern]) => pattern.test(text)).map(([label]) => label)
+    return {
+      textLength: text.trim().length,
+      hits,
+      sample: hits.length === 0 ? '' : text.replace(/\s+/gu, ' ').slice(0, 300),
+    }
+  },
+
+  /** Write the current cards + settings + artifacts facts used for the run log (no user text). */
+  facts: () => {
+    const count = (selector) => document.querySelectorAll(selector).length
+    return {
+      cardRows: count('.psd-run'),
+      cardChildren: count('.psd-child'),
+      nativeSessionRows: count('[data-row-key^="session:"]'),
+      nativeWorkspaceRows: count('[data-row-key^="workspace:"]'),
+      artifactsRows: count('.dsa-row'),
+      promptMarks: count('[data-psp-mark]'),
+      viewport: { width: innerWidth, height: innerHeight },
+      devicePixelRatio,
+    }
+  },
+}
+
+/** Install the CDP Fetch stubs that serve demo artifacts + prompt history to the page. */
+async function installReadmeStubs(cdp, page) {
+  const fulfill = (requestId, status, mime, body) =>
+    cdp
+      .send(
+        'Fetch.fulfillRequest',
+        {
+          requestId,
+          responseCode: status,
+          responseHeaders: [
+            { name: 'content-type', value: mime },
+            { name: 'cache-control', value: 'no-store' },
+          ],
+          body: Buffer.from(body, 'utf8').toString('base64'),
+        },
+        page.sessionId
+      )
+      .catch((error) => log(`warning: readme stub fulfill failed: ${short(error?.message || String(error), 160)}`))
+  cdp.on('Fetch.requestPaused', async (params, eventSession) => {
+    if (eventSession !== page.sessionId) return
+    const url = params.request.url
+    try {
+      if (url.includes('/api/session-artifacts.list')) {
+        await fulfill(params.requestId, 200, 'application/json', JSON.stringify(README_STUB_ARTIFACTS))
+      } else if (url.includes('/api/session-artifacts.preview')) {
+        await fulfill(params.requestId, 200, 'application/json', JSON.stringify(README_STUB_PREVIEW))
+      } else if (url.includes('/api/session-artifacts.raw')) {
+        const rawUrl = new URL(url)
+        const rawPath = rawUrl.searchParams.get('path') || ''
+        if (rawPath.endsWith('.svg')) await fulfill(params.requestId, 200, 'image/svg+xml', README_STUB_SVG)
+        else await fulfill(params.requestId, 200, 'text/markdown; charset=utf-8', README_STUB_MARKDOWN)
+      } else if (url.includes('/api/prompt-history.list')) {
+        await fulfill(params.requestId, 200, 'application/json', JSON.stringify(README_STUB_PROMPTS))
+      } else {
+        await cdp.send('Fetch.continueRequest', { requestId: params.requestId }, page.sessionId)
+      }
+    } catch (error) {
+      log(`warning: readme stub handler failed: ${short(error?.message || String(error), 160)}`)
+    }
+  })
+  await cdp.send(
+    'Fetch.enable',
+    {
+      patterns: [
+        { urlPattern: '*api/session-artifacts.list*', requestStage: 'Request' },
+        { urlPattern: '*api/session-artifacts.preview*', requestStage: 'Request' },
+        { urlPattern: '*api/session-artifacts.raw*', requestStage: 'Request' },
+        { urlPattern: '*api/prompt-history.list*', requestStage: 'Request' },
+      ],
+    },
+    page.sessionId
+  )
+  return true
+}
+
+/** Demo copy passed to the page-side masker. */
+const README_MASK_COPY = {
+  sessionTitles: README_SESSION_TITLES,
+  workspaceTitles: README_WORKSPACE_TITLES,
+  hoverWorkspace: README_HOVER_WORKSPACE,
+  hoverPath: README_HOVER_PATH,
+  previewPrompt: README_PREVIEW_PROMPT,
+  bannedSources: README_BANNED_SOURCES,
+}
+
+/** Clamp one measured box to the viewport and add the contract's 12 px padding. */
+function readmeClipFromRect(rect, pad = README_CLIP_PAD) {
+  assert(rect !== null && Number.isFinite(rect.x) && Number.isFinite(rect.y), 'capture clip could not be measured')
+  const x = Math.max(0, Math.floor(rect.x - pad))
+  const y = Math.max(0, Math.floor(rect.y - pad))
+  const right = Math.min(VIEWPORT.width, Math.ceil(rect.x + rect.width + pad))
+  const bottom = Math.min(VIEWPORT.height, Math.ceil(rect.y + rect.height + pad))
+  return { x, y, width: Math.max(0, right - x), height: Math.max(0, bottom - y) }
+}
+
+/** Screenshot file name -> PNG dimensions from the IHDR chunk. */
+function readmePngSize(buffer) {
+  return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) }
+}
+
+/** Escape every open popup/overlay and park the pointer away from live rows. */
+async function readmeResetUi(page) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const open = await page.eval(
+      () =>
+        document.querySelectorAll('[role="menu"], .dsa-filter-menu, .dsa-quicklook, [data-psp-search-card], [data-psd-hovercard]').length > 0
+    )
+    if (!open) break
+    await page.pressEscape()
+    await sleep(300)
+  }
+  try {
+    const park = await page.eval(probeReadme.parkPointer)
+    await page.moveTo(park.x, park.y)
+  } catch {
+    // parking is best effort
+  }
+  await sleep(350)
+}
+
+/** Wait until an element's rect stops changing (layout/scroll animations settle). */
+async function readmeWaitStableRect(page, selector, { timeout = 6000, interval = 150 } = {}) {
+  const readRect = () =>
+    page.eval((target) => {
+      const element = document.querySelector(target)
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      return { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }
+    }, selector)
+  const deadline = Date.now() + timeout
+  let previous = null
+  let stableSamples = 0
+  while (Date.now() < deadline) {
+    const current = await readRect()
+    if (current !== null && previous !== null) {
+      const same = ['x', 'y', 'width', 'height'].every((key) => current[key] === previous[key])
+      stableSamples = same ? stableSamples + 1 : 0
+      if (stableSamples >= 2) return current
+    }
+    previous = current
+    await sleep(interval)
+  }
+  const fallback = await readRect()
+  assert(fallback !== null, `layout for ${selector} never settled (rect could not be measured)`)
+  return fallback
+}
+
+/** Ensure the Running & recent card is expanded (its chevron toggles the body). */
+async function readmeEnsureCardExpanded(page) {
+  const expanded = await page.eval(() => document.querySelector('.psd-panel-toggle')?.getAttribute('aria-expanded') ?? null)
+  if (expanded === 'false') {
+    await page.eval(() => document.querySelector('.psd-panel-toggle')?.click())
+    await sleep(500)
+  }
+  await page.waitForFn(() => document.querySelector('.psd-panel-toggle')?.getAttribute('aria-expanded') === 'true', [], {
+    timeout: 5000,
+    label: 'Running & recent card expanded',
+  })
+}
+
+/** Collapse the Running & recent card so the Workspaces crop gets the full column height. */
+async function readmeCollapseCard(page) {
+  const expanded = await page.eval(() => document.querySelector('.psd-panel-toggle')?.getAttribute('aria-expanded') ?? null)
+  if (expanded === 'true') {
+    await page.eval(() => document.querySelector('.psd-panel-toggle')?.click())
+    await sleep(500)
+  }
+  await page.waitForFn(() => document.querySelector('.psd-panel-toggle')?.getAttribute('aria-expanded') === 'false', [], {
+    timeout: 5000,
+    label: 'Running & recent card collapsed',
+  })
+}
+
+/**
+ * Mask every user-identifying string, verify the pose's scan roots + the clip region + the
+ * whole rendered document against the banned patterns, then capture the clip to
+ * `.tmp-work/readme-shots/raw/<name>.png`. The capture is discarded (and the pose fails)
+ * when the pre- or post-capture scan finds a banned pattern.
+ * @param {object} page - Page wrapper.
+ * @param {object} spec - `{ name, pose, source, clip(), scanSelectors, allowDocumentScan }`.
+ * @returns {Promise<object>} capture metadata for `captures.json`.
+ */
+async function readmeCapture(page, spec) {
+  let masked = await page.eval(probeReadme.maskAll, README_MASK_COPY)
+  await sleep(140)
+  const secondPass = await page.eval(probeReadme.maskAll, README_MASK_COPY)
+  for (const [key, value] of Object.entries(secondPass)) masked[key] = (masked[key] ?? 0) + value
+  if (typeof spec.postMask === 'function') {
+    const extra = await spec.postMask()
+    for (const [key, value] of Object.entries(extra ?? {})) masked[key] = (masked[key] ?? 0) + value
+  }
+  const rect = await spec.clip()
+  const clip = readmeClipFromRect(rect, spec.pad === undefined ? README_CLIP_PAD : spec.pad)
+  assert(clip.width >= 40 && clip.height >= 40, `${spec.name}: measured clip is too small (${clip.width}x${clip.height})`)
+  let roots = await page.eval(probeReadme.scanText, spec.scanSelectors, README_BANNED_SOURCES)
+  let area = await page.eval(probeReadme.scanClip, clip, README_BANNED_SOURCES)
+  if (roots.hits.length > 0 || area.hits.length > 0) {
+    await page.eval(probeReadme.maskAll, README_MASK_COPY)
+    roots = await page.eval(probeReadme.scanText, spec.scanSelectors, README_BANNED_SOURCES)
+    area = await page.eval(probeReadme.scanClip, clip, README_BANNED_SOURCES)
+  }
+  assert(
+    roots.hits.length === 0,
+    `${spec.name}: privacy gate — scan roots ${JSON.stringify(spec.scanSelectors)} still contain ${roots.hits.join(', ')} after masking (sample: ${short(roots.sample, 200)})`
+  )
+  assert(
+    area.hits.length === 0,
+    `${spec.name}: privacy gate — the clip region still contains ${area.hits.join(', ')} after masking (sample: ${short(area.sample, 200)})`
+  )
+  let documentScan = { skipped: true, reason: 'document scan disabled for this pose' }
+  if (spec.allowDocumentScan !== false) {
+    const pageScan = await page.eval(probeReadme.scanDocument, README_BANNED_SOURCES)
+    assert(
+      pageScan.hits.length === 0,
+      `${spec.name}: privacy gate — the rendered page still contains ${pageScan.hits.join(', ')} after masking (sample: ${short(pageScan.sample, 220)})`
+    )
+    documentScan = { skipped: false, ...pageScan }
+  }
+  const data = await page.screenshotBase64(clip)
+  const buffer = Buffer.from(data, 'base64')
+  const size = readmePngSize(buffer)
+  const dpr = spec.dpr === undefined ? README_DPR : spec.dpr
+  assertEqual(size.width, clip.width * dpr, `${spec.name}: captured PNG width`)
+  assertEqual(size.height, clip.height * dpr, `${spec.name}: captured PNG height`)
+  const file = path.join(spec.directory === undefined ? README_RAW_DIR : spec.directory, spec.name)
+  await writeFile(file, buffer)
+  // Post-capture scan: a late React re-render must never leave real text in the file.
+  const postRoots = await page.eval(probeReadme.scanText, spec.scanSelectors, README_BANNED_SOURCES)
+  const postArea = await page.eval(probeReadme.scanClip, clip, README_BANNED_SOURCES)
+  if (postRoots.hits.length > 0 || postArea.hits.length > 0) {
+    await rm(file, { force: true }).catch(() => {})
+    throw new Error(
+      `${spec.name}: post-capture privacy scan failed (${postRoots.hits.concat(postArea.hits).join(', ')}); the capture was discarded`
+    )
+  }
+  log(
+    `readme capture: ${spec.name} ${clip.width}x${clip.height} CSS -> ${size.width}x${size.height}px ` +
+      `(roots ${roots.textLength} chars, area ${area.textLength} chars, page ${documentScan.skipped === true ? 'scan skipped' : `${documentScan.textLength} chars`}; masked ${JSON.stringify(masked)})`
+  )
+  return {
+    file: spec.name,
+    source: spec.source,
+    pose: spec.pose,
+    rect: clip,
+    dpr: README_DPR,
+    screenshot: { width: size.width, height: size.height, bytes: buffer.length },
+    dpr,
+    masked,
+    scan: {
+      roots: { selectors: spec.scanSelectors, textLength: roots.textLength, hits: roots.hits },
+      clip: { textLength: area.textLength, nodes: area.nodes, hits: area.hits },
+      document: documentScan,
+      postCapture: { roots: postRoots.textLength, clip: postArea.textLength, hits: postRoots.hits.concat(postArea.hits) },
+    },
+  }
+}
+
+/**
+ * Pick a card row for the hover / menu poses: a running top-level row first (the design's
+ * "running row" pose), otherwise the first rendered row.
+ * @param {object} page - Page wrapper.
+ * @returns {Promise<object>} the chosen row facts.
+ */
+async function readmePickCardRow(page) {
+  const rows = await page.eval(probeReadme.cardRows)
+  assert(rows.length > 0, 'the Running & recent card renders no rows in this live GUI; the pose needs at least one')
+  const running = rows.filter((row) => row.state === 'running' && row.mainPoint !== null)
+  const target = running.length > 0 ? running[0] : rows.find((row) => row.mainPoint !== null)
+  assert(target, 'no clickable card row in this live GUI')
+  return target
+}
+
+/**
+ * Hover one card row and wait for its native-style hover card; retries on live re-sorts.
+ * @param {object} page - Page wrapper.
+ * @param {object} row - row facts from `readmePickCardRow`.
+ * @returns {Promise<object>} the hover card state.
+ */
+async function readmeOpenCardHover(page, row) {
+  const park = await page.eval(probeReadme.parkPointer)
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await page.moveTo(park.x, park.y)
+    await sleep(180)
+    await page.moveTo(row.mainPoint.x, row.mainPoint.y)
+    const deadline = Date.now() + 2600
+    while (Date.now() < deadline) {
+      await sleep(100)
+      const hover = await page.eval(probeReadme.hoverCardState)
+      const hovered = await page.eval(probeReadme.hoveredCardRows)
+      if (hover !== null && hover.textLength > 30 && hovered > 0) return hover
+    }
+  }
+  throw new Error('the card row hover card did not open (live list kept re-sorting); no capture written')
+}
+
+/** Wait for the native shared context menu opened by the card row "…" trigger. */
+async function readmeWaitRowMenu(page) {
+  const deadline = Date.now() + 8000
+  while (Date.now() < deadline) {
+    const state = await page.eval(() => {
+      const surface = document.querySelector('[data-menu-material]')
+      if (surface === null) return null
+      const rect = surface.getBoundingClientRect()
+      const openRow = document.querySelector('.psd-run[data-menu-open="true"]')
+      return {
+        menu: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        row: openRow === null ? null : (() => {
+          const rowRect = openRow.getBoundingClientRect()
+          return { x: rowRect.x, y: rowRect.y, width: rowRect.width, height: rowRect.height }
+        })(),
+        items: document.querySelectorAll('[role="menuitem"]').length,
+      }
+    })
+    if (state !== null && state.items > 0) return state
+    await sleep(120)
+  }
+  throw new Error('the card row "…" shared menu did not open; no capture written')
+}
+
+/** Wait for the stubbed artifacts list to settle with the four demo rows. */
+async function readmeWaitArtifactsReady(page) {
+  await openArtifactsByPointer(page)
+  await waitArtifactsOpen(page)
+  await waitArtifactsPanelSettled(page)
+  await page.waitForFn(
+    (expected) => document.querySelectorAll('.dsa-row').length === expected,
+    [README_STUB_ARTIFACTS.artifacts.length],
+    { timeout: 8000, label: 'stubbed artifact rows' }
+  )
+  await sleep(350)
+}
+
+/** Keep the artifacts overlay open (re-open it through the Files header when needed). */
+async function readmeEnsureArtifacts(page) {
+  const rows = await page.count('.dsa-row')
+  if (rows === README_STUB_ARTIFACTS.artifacts.length) return
+  const overlay = await page.count('[data-psfa-overlay]')
+  if (overlay === 0) {
+    const files = await page.count('[data-files-artifacts-button]')
+    if (files === 0) await openFilesTab(page)
+    await readmeWaitArtifactsReady(page)
+    return
+  }
+  await page.waitForFn(
+    (expected) => document.querySelectorAll('.dsa-row').length === expected,
+    [README_STUB_ARTIFACTS.artifacts.length],
+    { timeout: 8000, label: 'stubbed artifact rows' }
+  )
+}
+
+/** Log one run-log line with the capture's file/geometry/scan facts only. */
+function logReadmeCaptureState(state) {
+  const captures = state.readme?.captures ?? []
+  log(`\nreadme raw captures: ${captures.length}/${README_REQUIRED_FILES.length} files in ${README_RAW_DIR}`)
+  for (const capture of captures) {
+    log(
+      `  ${capture.file}  ${capture.rect.width}x${capture.rect.height} CSS -> ${capture.screenshot.width}x${capture.screenshot.height}px  ` +
+        `scan roots ${capture.scan.roots.textLength}ch/0 hits, clip ${capture.scan.clip.textLength}ch/0 hits, ` +
+        `page ${capture.scan.document.skipped === true ? 'skipped' : `${capture.scan.document.textLength}ch/0 hits`}`
+    )
+  }
+  for (const deviation of state.readme?.deviations ?? []) log(`  deviation: ${deviation}`)
+}
+
+/**
+ * `--readme-shots`: pose the live GUI's documented seams/stubs and capture the raw PNGs the
+ * README Bento composer consumes. Never creates a Session, sends a prompt, types into a
+ * Session, pins/unpins, archives or changes a persisted setting; every real user string in
+ * the captured page is masked before each shot and scanned against the banned patterns.
+ * @param {object} input - `{ page, results, state, cdp }`.
+ * @returns {Promise<void>}
+ */
+async function runReadmeShotsMode({ page, results, state, cdp }) {
+  log('\n=== --readme-shots: README Bento raw captures (privacy-masked, demo stubs) ===')
+  state.mode = 'readme-shots'
+  state.readme = { captures: [], deviations: [], file: path.join(README_RAW_DIR, 'captures.json') }
+  await rm(README_RAW_DIR, { recursive: true, force: true }).catch(() => {})
+  await mkdir(README_RAW_DIR, { recursive: true })
+  await page.eval(probeReadme.installStyle)
+  // Hydrate like the rest of the harness: the shell restores its Session and the card rows
+  // asynchronously after first paint.
+  await page.waitForFn(() => document.querySelectorAll('.psd-run').length > 0, [], {
+    timeout: 15000,
+    label: 'Running & recent card rows before the README pass',
+  }).catch(() => {})
+  await page.waitForFn(() => document.querySelector('[data-conversation-session]') !== null, [], {
+    timeout: 15000,
+    label: 'restored Session before the README pass',
+  }).catch(() => {})
+  await sleep(800)
+  const facts = await page.eval(probeReadme.facts)
+  log(`readme environment: viewport ${facts.viewport.width}x${facts.viewport.height}, dpr ${facts.devicePixelRatio}, ${facts.nativeSessionRows} native session row(s), ${facts.cardRows} card row(s), ${facts.cardChildren} nested child row(s)`)
+
+  /** Persist `captures.json` after every capture so a mid-run failure still records evidence. */
+  const writeManifest = async () => {
+    const manifest = {
+      generatedAt: new Date().toISOString(),
+      harness: 'test/browser/sidebar.e2e.mjs --readme-shots',
+      gui: 'live DSH Web GUI (token redacted)',
+      viewport: { width: VIEWPORT.width, height: VIEWPORT.height, deviceScaleFactor: README_DPR },
+      rawDirectory: README_RAW_DIR,
+      contract: 'README Bento redesign design.md §3',
+      privacy: {
+        hiddenSurfaces: ['conversation.header', 'conversation.session transcript', 'Files content behind the Artifacts overlay'],
+        maskedSurfaces: [
+          'native sidebar session titles -> allowlisted demo titles',
+          'native sidebar workspace titles -> allowlisted demo workspace names',
+          'card rows / subagent children titles -> allowlisted demo titles',
+          'card hover-card workspace/session/path -> Power Suite / ~/Projects/Power Suite',
+          'composer workspace selector -> allowlisted demo workspace name',
+          'prompt-history rail hover preview text -> canned demo prompt ("Draft the release checklist and summarize the risky files")',
+          'leftover banned substrings outside the hidden transcript -> "Demo"',
+        ],
+        demoNamePolicy:
+          'allowed demo session/workspace names are cycled over 12/15 entries so a single crop never shows a repeated demo name',
+        bannedPatterns: README_BANNED_PATTERNS.map(([label]) => label),
+        stubRoutes: [
+          'GET /api/session-artifacts.list -> demo 6-row artifact list (3 generated + 3 provided)',
+          'GET /api/session-artifacts.preview -> demo release-checklist markdown descriptor',
+          'GET|HEAD /api/session-artifacts.raw -> demo markdown / demo svg bytes',
+          'GET /api/prompt-history.list -> canned English demo prompts',
+        ],
+      },
+      captures: state.readme.captures,
+      annotationAssets: state.readme.annotationAssets ?? [],
+      deviations: state.readme.deviations,
+    }
+    await writeFile(state.readme.file, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+  }
+
+  try {
+    // ---- Running & recent card ---------------------------------------------------------
+    await results.check('readme-card', 'card.png — Running & recent card (running + recent rows, nested children)', async () => {
+      await readmeResetUi(page)
+      await readmeEnsureCardExpanded(page)
+      await page.waitForFn(() => document.querySelectorAll('.psd-child').length > 0, [], {
+        timeout: 6000,
+        label: 'nested subagent child rows for the card pose',
+      }).catch(() => {})
+      const rows = await page.eval(probeReadme.cardRows)
+      const fresh = await page.eval(probeReadme.facts)
+      assert(rows.length > 0, 'the Running & recent card renders no rows in this live GUI')
+      const capture = await readmeCapture(page, {
+        name: 'card.png',
+        source: 'live GUI .psd-panel (Running & recent card)',
+        pose: 'card expanded: running + recent rows with nested subagent children',
+        scanSelectors: ['.psd-panel'],
+        clip: () => page.eval(probeReadme.boxes, { selectors: ['.psd-panel'], first: true }),
+      })
+      state.readme.captures.push(capture)
+      if (!rows.some((row) => row.state === 'running')) state.readme.deviations.push('card.png: no running row was rendered at capture time; the card shows recent rows only')
+      if (fresh.cardChildren === 0) state.readme.deviations.push('card.png: no nested subagent child row was rendered at capture time')
+      state.readme.deviations.push('card.png: no pinned row was rendered (the live Host pin document is empty and this mode never pins/unpins); the card shows running/recent rows and nested children only')
+      await writeManifest()
+      return `${capture.screenshot.width}x${capture.screenshot.height}px, ${rows.length} top-level rows + ${fresh.cardChildren} nested children, masked ${JSON.stringify(capture.masked)}`
+    })
+
+    // ---- Hover card over a running row -------------------------------------------------
+    await results.check('readme-card-hover', 'card-hover.png — native-style row hover card (statistics / tokens / context)', async () => {
+      await readmeResetUi(page)
+      const row = await readmePickCardRow(page)
+      const hover = await readmeOpenCardHover(page, row)
+      const capture = await readmeCapture(page, {
+        name: 'card-hover.png',
+        source: 'live GUI card row + [data-psd-hovercard]',
+        pose: 'hover card open over a card row (Session statistics / Token usage / Context usage)',
+        scanSelectors: ['.psd-panel', '[data-psd-hovercard]'],
+        clip: () => page.eval(probeReadme.boxes, { selectors: ['.psd-run:hover', '[data-psd-hovercard]'] }),
+      })
+      state.readme.captures.push(capture)
+      await writeManifest()
+      return `${capture.screenshot.width}x${capture.screenshot.height}px, hover card ${hover.width}x${hover.height} CSS, masked ${JSON.stringify(capture.masked)}`
+    })
+
+    // ---- Row "…" menu (native shared popup) --------------------------------------------
+    await results.check('readme-row-menu', 'row-menu.png — card row "…" native shared popup', async () => {
+      await readmeResetUi(page)
+      const row = await readmePickCardRow(page)
+      await readmeOpenCardHover(page, row)
+      assert(row.triggerPoint !== null, 'the hovered card row exposes no "…" trigger')
+      await page.moveTo(row.triggerPoint.x, row.triggerPoint.y)
+      await sleep(320)
+      await page.clickAt(row.triggerPoint.x, row.triggerPoint.y)
+      const menu = await readmeWaitRowMenu(page)
+      // Move the pointer onto the shared popup so the row hover card dismisses and only the
+      // row + popup remain in the crop.
+      await page.moveTo(menu.menu.x + Math.round(menu.menu.width / 2), menu.menu.y + Math.round(menu.menu.height / 2))
+      await sleep(600)
+      const capture = await readmeCapture(page, {
+        name: 'row-menu.png',
+        source: 'live GUI card row + native shared context menu [data-menu-material]',
+        pose: 'row "…" native shared popup open on the top card row',
+        scanSelectors: ['.psd-panel', '[data-menu-material]'],
+        clip: () => page.eval(probeReadme.boxes, { selectors: ['.psd-run[data-menu-open="true"]', '[data-menu-material]'] }),
+      })
+      state.readme.captures.push(capture)
+      await writeManifest()
+      return `${capture.screenshot.width}x${capture.screenshot.height}px, ${menu.items} shared-menu items (no action clicked), masked ${JSON.stringify(capture.masked)}`
+    })
+
+    // ---- Native Workspaces browser (card collapsed for the tall crop) ------------------
+    await results.check('readme-workspaces', 'workspaces.png — native Workspaces browser with current-project rainbow row + Inactive Projects', async () => {
+      await readmeResetUi(page)
+      await readmeCollapseCard(page)
+      await sleep(400)
+      const scroll = await page.eval(probeReadme.revealInactiveProjects)
+      await sleep(400)
+      const parts = await page.eval(probeReadme.workspaceCropParts)
+      assert(parts.sidebar !== null && parts.panel !== null, 'sidebar/panel geometry could not be measured')
+      assert(scroll !== null, 'the native Workspaces tree or the Inactive Projects header is missing')
+      assert(parts.label !== null, 'the native Workspaces header row is not rendered')
+      assert(parts.inactiveHeader !== null, 'the Inactive Projects header is not rendered')
+      assert(parts.inactiveRows.length >= 2, `the Inactive Projects header is not followed by two workspace rows (${parts.inactiveRows.length})`)
+      // Start at the Workspaces header row (no partial card edge) and end after the Inactive
+      // Projects header + its first two rows.
+      const top = Math.max(Math.round(parts.panel.y + parts.panel.height + 6), Math.round(parts.label.y - 12))
+      const inactiveLast = parts.inactiveRows[parts.inactiveRows.length - 1]
+      const bottom = Math.min(
+        VIEWPORT.height,
+        Math.max(Math.round(parts.inactiveHeader.y + parts.inactiveHeader.height + 12), Math.round(inactiveLast.y + inactiveLast.height + 12))
+      )
+      const capture = await readmeCapture(page, {
+        name: 'workspaces.png',
+        source: 'live GUI [class$="_sidebarCol"] Workspaces browser (Workspaces header .. Inactive Projects)',
+        pose: 'sidebar expanded, Running & recent collapsed: Workspaces header + Active Projects (current-project rainbow row, session rows) + Inactive Projects header and its first two rows',
+        scanSelectors: ['[class$="_sidebarCol"]'],
+        pad: 0,
+        clip: () => {
+          // Exact crop: start at the Workspaces header row (well below the collapsed card),
+          // end 12 px under the second Inactive Projects row.
+          const y = Math.max(Math.round(parts.panel.y + parts.panel.height + 10), Math.round(parts.label.y - 6))
+          const rowBottom = Math.max(
+            ...parts.inactiveRows.map((row) => Math.round(row.y + row.height)),
+            Math.round(parts.inactiveHeader.y + parts.inactiveHeader.height)
+          )
+          const endY = Math.min(VIEWPORT.height, rowBottom)
+          return {
+            x: 0,
+            y,
+            width: Math.min(VIEWPORT.width, Math.round(parts.sidebar.width)),
+            height: Math.max(40, endY - y),
+          }
+        },
+      })
+      state.readme.captures.push(capture)
+      state.readme.deviations.push(
+        'workspaces.png: the Running & recent card is collapsed for this pose so the Workspaces browser gets the tall column crop; the card is expanded again afterwards'
+      )
+      await writeManifest()
+      return `${capture.screenshot.width}x${capture.screenshot.height}px, Workspaces header y=${top}, Inactive Projects + ${parts.inactiveRows.length} rows to y=${bottom}, tree scrolled ${scroll.scrollTop}px, masked ${JSON.stringify(capture.masked)}`
+    }).finally(async () => {
+      try {
+        await page.eval(() => {
+          const tree = document.querySelector('[role="tree"]')
+          if (tree !== null) tree.scrollTop = 0
+          return true
+        })
+        await readmeEnsureCardExpanded(page)
+      } catch (error) {
+        log(`warning: could not re-expand the running card: ${short(error?.message || String(error), 200)}`)
+      }
+    })
+
+    // ---- Interrupted current card row (documented seam) -------------------------------
+    await results.check('readme-interrupted-row', 'interrupted-row.png — interrupted current card row (amber mark + inline Continue)', async () => {
+      await readmeResetUi(page)
+      await readmeEnsureCardExpanded(page)
+      const row = await readmePickCardRow(page)
+      const park = await page.eval(probeReadme.parkPointer)
+      await page.moveTo(park.x, park.y)
+      await sleep(200)
+      await page.clickAt(row.mainPoint.x, row.mainPoint.y)
+      await page.waitForFn(() => document.querySelector('.psd-run-current') !== null, [], {
+        timeout: 15000,
+        label: 'current card row after opening a Session from the card',
+      })
+      await sleep(1500)
+      const session = await page.eval(probeReadme.sessionState)
+      assert(session.sessionId !== null, 'no Session is current after opening the card row')
+      assertEqual(session.draftLength, 0, 'refusing the interrupted-row pose: the opened composer draft is not empty')
+      const seeded = await page.eval((id) => {
+        const hooks = globalThis.__POWER_SUITE_TEST_HOOKS__
+        if (hooks === null || hooks === undefined || hooks.interruptedSessions === undefined) return { unavailable: true }
+        return { unavailable: false, record: hooks.interruptedSessions.set(id, { interrupted: true, running: false }) }
+      }, session.sessionId)
+      assert(seeded.unavailable !== true, 'the interruptedSessions test seam is unavailable')
+      await page.waitForFn(
+        () => {
+          const current = document.querySelector('.psd-run-current')
+          return current !== null && current.querySelector('.psd-interrupted') !== null && (current.getAttribute('data-actions') || '').includes('continue')
+        },
+        [],
+        { timeout: 8000, label: 'interrupted current card row (amber mark + Continue action)' }
+      )
+      await page.moveTo(park.x, park.y)
+      await sleep(200)
+      const point = await page.eval(() => {
+        const row = document.querySelector('.psd-run-current')
+        if (row === null) return null
+        const rect = row.getBoundingClientRect()
+        return { x: Math.round(rect.left + Math.min(150, rect.width / 2)), y: Math.round(rect.top + rect.height / 2) }
+      })
+      assert(point !== null, 'the interrupted current card row disappeared before the hover reveal')
+      await page.moveTo(point.x, point.y)
+      await page.waitForFn(
+        () => {
+          const slot = document.querySelector('.psd-run-current .psd-continue-slot')
+          if (slot === null) return false
+          const style = getComputedStyle(slot)
+          return style.opacity === '1' && Number.parseFloat(style.width) >= 20
+        },
+        [],
+        { timeout: 5000, label: 'inline Continue control revealed on the interrupted current row' }
+      )
+      await sleep(200)
+      const capture = await readmeCapture(page, {
+        name: 'interrupted-row.png',
+        source: 'live GUI .psd-run-current card row with the interrupted seam',
+        pose: 'interrupted current card row: amber mark + inline Continue (hover-revealed) + current rainbow row',
+        scanSelectors: ['.psd-run-current'],
+        clip: () => page.eval(probeReadme.boxes, { selectors: ['.psd-run-current'], first: true }),
+      })
+      state.readme.captures.push(capture)
+      await writeManifest()
+      return `${capture.screenshot.width}x${capture.screenshot.height}px, session ${session.messages} transcript message(s), masked ${JSON.stringify(capture.masked)}`
+    }).finally(async () => {
+      try {
+        const session = await page.eval(probeReadme.sessionState)
+        if (session.sessionId !== null) {
+          await page.eval((id) => globalThis.__POWER_SUITE_TEST_HOOKS__?.interruptedSessions?.clear(id), session.sessionId)
+        }
+        await readmeResetUi(page)
+      } catch (error) {
+        log(`warning: could not clear the interrupted card record: ${short(error?.message || String(error), 200)}`)
+      }
+    })
+
+    // ---- Interrupted composer (opened current Session, documented seam) -----------------
+    await results.check('readme-interrupted-composer', 'interrupted-composer.png — play-triangle submit control on the interrupted current Session', async () => {
+      await readmeResetUi(page)
+      const session = await page.eval(probeReadme.sessionState)
+      assert(session.sessionId !== null, 'no current Session is open; the composer pose needs the restored Session (this mode never creates one)')
+      assertEqual(session.draftLength, 0, 'refusing the composer pose: the current composer draft is not empty')
+      const seeded = await page.eval((id) => {
+        const hooks = globalThis.__POWER_SUITE_TEST_HOOKS__
+        if (hooks === null || hooks === undefined || hooks.interruptedSessions === undefined) return { unavailable: true }
+        return { unavailable: false, record: hooks.interruptedSessions.set(id, { interrupted: true, running: false }) }
+      }, session.sessionId)
+      assert(seeded.unavailable !== true, 'the interruptedSessions test seam is unavailable')
+      await page.waitForFn(() => document.documentElement.getAttribute('data-power-suite-interrupted') === 'true', [], {
+        timeout: 8000,
+        label: 'interrupted composer play state',
+      })
+      await sleep(350)
+      const parts = await page.eval(probeReadme.composerCardParts)
+      assert(parts.composer !== null && parts.send !== null, 'the composer/save control geometry could not be measured')
+      const playState = await page.eval(() => {
+        const composer = document.querySelector('[data-conversation-region="composer"]')
+        const send = composer === null ? null : composer.querySelector('button[class$="_primary"]')
+        if (send === null) return null
+        const pseudo = getComputedStyle(send, '::before')
+        const svg = send.querySelector('svg')
+        return {
+          aria: send.getAttribute('aria-label'),
+          svgDisplay: svg === null ? null : getComputedStyle(svg).display,
+          mask: pseudo.maskImage === 'none' || pseudo.maskImage === '' ? pseudo.webkitMaskImage : pseudo.maskImage,
+          width: pseudo.width,
+          height: pseudo.height,
+        }
+      })
+      assert(
+        playState !== null && playState.svgDisplay === 'none' && typeof playState.mask === 'string' && playState.mask !== 'none',
+        `the interrupted composer play control is not showing (state ${short(JSON.stringify(playState), 300)})`
+      )
+      // Full composer card with even 16 px margins on every side (no hero / empty band; the
+      // card contains the attachment button, model and IUI controls and the play-triangle
+      // send control). `pad: 0` keeps the exact even margins instead of the default 12 px.
+      const margin = 16
+      const cardRect = parts.card === null ? parts.composer : parts.card
+      assert(cardRect !== null, 'the composer card geometry could not be measured')
+      const capture = await readmeCapture(page, {
+        name: 'interrupted-composer.png',
+        source: 'live GUI composer card (.uV2eYG_card / composer region) with the interrupted seam',
+        pose: 'interrupted current Session composer card: play-triangle send control (seam active, amber interrupted marker present)',
+        scanSelectors: ['[data-conversation-region="composer"]'],
+        pad: 0,
+        clip: () => {
+          const x = Math.max(0, Math.round(cardRect.x - margin))
+          const y = Math.max(0, Math.round(cardRect.y - margin))
+          const cardBottom = Math.round(cardRect.y + cardRect.height) + margin
+          const overhang = parts.overhangBottom === null ? cardBottom : Math.round(parts.overhangBottom) + 14
+          return {
+            x,
+            y,
+            width: Math.min(VIEWPORT.width - x, Math.round(cardRect.width) + margin * 2),
+            height: Math.min(VIEWPORT.height - y, Math.max(cardBottom, overhang) - y),
+          }
+        },
+      })
+      state.readme.captures.push(capture)
+      await writeManifest()
+      return `${capture.screenshot.width}x${capture.screenshot.height}px, composer card ${Math.round(cardRect.width)}x${Math.round(cardRect.height)} CSS, play control "${playState.aria}" ${Math.round(parts.send.width)}x${Math.round(parts.send.height)}, masked ${JSON.stringify(capture.masked)}`
+    }).finally(async () => {
+      try {
+        const session = await page.eval(probeReadme.sessionState)
+        if (session.sessionId !== null) {
+          await page.eval((id) => globalThis.__POWER_SUITE_TEST_HOOKS__?.interruptedSessions?.clear(id), session.sessionId)
+        }
+        await page.waitForFn(() => document.documentElement.getAttribute('data-power-suite-interrupted') === null, [], {
+          timeout: 5000,
+          label: 'interrupted composer cleared',
+        })
+      } catch (error) {
+        log(`warning: could not clear the interrupted composer record: ${short(error?.message || String(error), 200)}`)
+      }
+    })
+
+    // ---- Prompt history rail + hover full-text preview (stubbed prompts) ---------------
+    await results.check('readme-prompt-history', 'prompt-history.png — right-edge prompt rail + hover full-text preview', async () => {
+      await readmeResetUi(page)
+      await page.waitForFn(() => document.querySelector('[data-psp-search-toggle]') !== null, [], {
+        timeout: 12000,
+        label: 'prompt-history rail (stubbed prompt list)',
+      })
+      // Open the search card (empty query) so the crop can include the search/filter header
+      // whenever it does not cover the hover preview card.
+      const toggle = await page.findRect('[data-psp-search-toggle]')
+      assert(toggle, 'prompt-history search toggle is not visible')
+      await page.clickAt(toggle.x, toggle.y)
+      await page.waitForFn(() => document.querySelector('[data-psp-search-card]') !== null, [], { timeout: 5000, label: 'prompt-history search card' })
+      await sleep(250)
+      const chooseMark = () =>
+        page.eval(() => {
+          const marks = [...document.querySelectorAll('[data-psp-mark]')]
+          if (marks.length === 0) return null
+          const pick = marks[Math.max(0, marks.length - 3)]
+          const rect = pick.getBoundingClientRect()
+          return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2), count: marks.length }
+        })
+      const openPreview = async () => {
+        const park = await page.eval(probeReadme.parkPointer)
+        await page.moveTo(park.x, park.y)
+        await sleep(200)
+        const mark = await chooseMark()
+        assert(mark, 'the stubbed prompt rail renders no tick marks')
+        await page.moveTo(mark.x, mark.y)
+        await page.waitForFn(
+          () => {
+            const card = document.querySelector('[data-psp-preview-card]')
+            return card !== null && (card.innerText || '').trim().length > 10
+          },
+          [],
+          { timeout: 5000, label: 'prompt rail full-text preview card' }
+        )
+        await sleep(350)
+        return mark
+      }
+      const overlaps = (left, right) =>
+        left !== null && right !== null &&
+        left.x < right.x + right.width && left.x + left.width > right.x &&
+        left.y < right.y + right.height && left.y + left.height > right.y
+      let mark = await openPreview()
+      let parts = await page.eval(probeReadme.promptHistoryParts)
+      assert(parts.preview !== null && parts.rail !== null, 'prompt rail/preview geometry could not be measured')
+      if (overlaps(parts.preview, parts.searchCard)) {
+        // Keep the rail + preview readable: close the search card and re-hover a tick.
+        await page.clickAt(toggle.x, toggle.y)
+        await page.waitForFn(() => document.querySelector('[data-psp-search-card]') === null, [], { timeout: 4000, label: 'prompt search card closed' })
+        mark = await openPreview()
+        parts = await page.eval(probeReadme.promptHistoryParts)
+        assert(parts.preview !== null && parts.rail !== null, 'prompt rail/preview geometry could not be measured')
+      }
+      const capture = await readmeCapture(page, {
+        name: 'prompt-history.png',
+        source: 'live GUI prompt-history right-edge rail + hover full-text preview (stubbed prompt list)',
+        pose:
+          'prompt-history rail with the hover full-text preview card' +
+          (parts.searchCard === null ? '' : ' + search card') +
+          ' (preview text masked to canned demo English)',
+        scanSelectors: ['[data-psp-search-card]', '[data-psp-preview-card]', '[data-psp-rail]', '[data-conversation-region="composer"]'],
+        clip: async () => (await page.eval(probeReadme.promptHistoryParts)).box,
+      })
+      state.readme.captures.push(capture)
+      await writeManifest()
+      return `${capture.screenshot.width}x${capture.screenshot.height}px, ${mark.count} rail ticks, preview ${parts.preview === null ? 'n/a' : `${Math.round(parts.preview.width)}x${Math.round(parts.preview.height)} CSS`}, search card ${parts.searchCard === null ? 'closed' : 'open'}, masked ${JSON.stringify(capture.masked)}`
+    }).finally(async () => {
+      try {
+        await readmeResetUi(page)
+      } catch (error) {
+        log(`warning: prompt-history cleanup failed: ${short(error?.message || String(error), 200)}`)
+      }
+    })
+
+    // ---- Files-header Artifacts overlay (stubbed list) --------------------------------
+    await results.check('readme-artifacts', 'artifacts.png — Files-header Artifacts overlay with the stubbed artifact list', async () => {
+      await readmeResetUi(page)
+      await openFilesTab(page)
+      await readmeWaitArtifactsReady(page)
+      const content = await page.eval(probeReadme.artifactsContentParts)
+      assert(content.root !== null && content.header !== null && content.rows.length === README_STUB_ARTIFACTS.artifacts.length,
+        `the artifacts list did not render ${README_STUB_ARTIFACTS.artifacts.length} stubbed rows`)
+      const lastRow = content.rows[content.rows.length - 1]
+      const capture = await readmeCapture(page, {
+        name: 'artifacts.png',
+        source: 'live GUI Files-header Artifacts overlay (.psfa-view) with CDP Fetch demo stubs',
+        pose: 'Artifacts header + six demo list rows (3 generated + 3 provided), two rows of vertical padding, no footer',
+        scanSelectors: ['.psfa-view .dsa-root'],
+        pad: 0,
+        clip: () => {
+          const top = Math.round(content.root.y)
+          const bottom = Math.min(
+            Math.round(content.root.y + content.root.height),
+            Math.round(lastRow.y + lastRow.height + content.rowHeight * 2)
+          )
+          return {
+            x: Math.round(content.root.x),
+            y: top,
+            width: Math.round(content.root.width),
+            height: Math.max(40, bottom - top),
+          }
+        },
+      })
+      state.readme.captures.push(capture)
+      await writeManifest()
+      return `${capture.screenshot.width}x${capture.screenshot.height}px, ${content.rows.length} stubbed rows (3 generated / 3 provided, row pitch ${content.rowHeight.toFixed(1)} CSS), masked ${JSON.stringify(capture.masked)}`
+    })
+
+    await results.check('readme-artifacts-quicklook', 'artifacts-quicklook.png — Quick Look over the stubbed generated Markdown artifact', async () => {
+      await readmeEnsureArtifacts(page)
+      const row = await page.findRect('.dsa-row')
+      assert(row, 'the stubbed artifact list renders no row for the Quick Look pose')
+      await page.moveTo(row.x, row.y)
+      await page.waitForFn(
+        () => {
+          const card = document.querySelector('.dsa-quicklook')
+          return card !== null && (card.innerText || '').trim().length > 80
+        },
+        [],
+        { timeout: 5000, label: 'artifact Quick Look card with demo markdown' }
+      )
+      await sleep(300)
+      const name = await page.eval(() => document.querySelector('.dsa-quicklook-name')?.innerText ?? null)
+      assertEqual(name, 'release-checklist.md', 'the Quick Look card must show the stubbed demo file')
+      const capture = await readmeCapture(page, {
+        name: 'artifacts-quicklook.png',
+        source: 'live GUI artifact Quick Look card (.dsa-quicklook) over a stubbed generated Markdown artifact',
+        pose: 'Quick Look card open over release-checklist.md (stubbed raw markdown)',
+        scanSelectors: ['.dsa-quicklook'],
+        clip: () => page.eval(probeReadme.boxes, { selectors: ['.dsa-quicklook'], first: true }),
+      })
+      state.readme.captures.push(capture)
+      await writeManifest()
+      return `${capture.screenshot.width}x${capture.screenshot.height}px, card shows ${JSON.stringify(name)}, masked ${JSON.stringify(capture.masked)}`
+    })
+
+    await results.check('readme-artifacts-filter', 'artifacts-filter.png — artifact source filter menu (All / Generated / Provided)', async () => {
+      await readmeResetUi(page)
+      await readmeEnsureArtifacts(page)
+      const trigger = await page.findRect('.dsa-filter-trigger')
+      assert(trigger, 'the artifacts filter trigger is missing (stubbed list must be open)')
+      await page.clickAt(trigger.x, trigger.y)
+      await page.waitForFn(() => document.querySelector('.dsa-filter-menu') !== null, [], { timeout: 5000, label: 'artifact filter menu' })
+      await sleep(300)
+      const capture = await readmeCapture(page, {
+        name: 'artifacts-filter.png',
+        source: 'live GUI artifact filter trigger + menu',
+        pose: 'artifact source filter menu open (All 4 / Generated 2 / Provided 2)',
+        scanSelectors: ['.dsa-filter-trigger', '.dsa-filter-menu'],
+        clip: () => page.eval(probeReadme.boxes, { selectors: ['.dsa-filter-trigger', '.dsa-filter-menu'] }),
+      })
+      state.readme.captures.push(capture)
+      await writeManifest()
+      return `${capture.screenshot.width}x${capture.screenshot.height}px, masked ${JSON.stringify(capture.masked)}`
+    }).finally(async () => {
+      try {
+        await page.pressEscape()
+        await waitArtifactsClosed(page)
+        await closeRightSidebar(page)
+        await page.emulateMedia([])
+      } catch (error) {
+        log(`warning: could not close the artifacts overlay/right sidebar: ${short(error?.message || String(error), 200)}`)
+      }
+    })
+
+    // ---- Annotation docs assets (docs/assets/annotation-*.png refresh) ----------------
+    // The annotation harness's own `--shots-only --assets` pose targets a composer control,
+    // but the shipped client deliberately makes the composer a pointer pass-through region
+    // (docs/ui-annotation.md: "composer region is the one exception"), so that pose can no
+    // longer produce a popover. The same five assets are captured here with the same privacy
+    // guard, using native controls outside the composer.
+    await results.check('readme-annotation-assets', 'annotation assets — mode / selection / collection / inserted into docs/assets', async () => {
+      await readmeResetUi(page)
+      if ((await page.count('[data-sidebar-right-open]')) > 0) {
+        await closeRightSidebar(page)
+        await page.waitForFn(() => document.querySelector('[data-sidebar-right-open]') === null, [], {
+          timeout: 8000,
+          label: 'right Sidebar closed before the annotation assets',
+        })
+      }
+      const session = await page.eval(probeReadme.sessionState)
+      assert(session.sessionId !== null && session.hasComposer, 'the annotation assets need an open Session with a composer')
+      assertEqual(session.draftLength, 0, 'refusing the annotation assets: the composer draft is not empty')
+      const launcher = await page.findRect('[data-psa-launcher]')
+      assert(launcher, 'the annotation launcher is missing (ui-annotation feature not mounted)')
+      // The committed docs assets are 1728x900: capture this group at DPR 1 and restore the
+      // 2x capture scale afterwards.
+      await page.send('Emulation.setDeviceMetricsOverride', {
+        width: VIEWPORT.width,
+        height: VIEWPORT.height,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+      await sleep(600)
+      const assets = []
+      state.readme.annotationAssets = assets
+      /** Capture one full-page docs asset (1728x900, DPR 1) through the standard privacy gate. */
+      const captureAsset = async (name, pose) => {
+        const shot = await readmeCapture(page, {
+          name,
+          directory: path.join(WORKTREE, 'docs', 'assets'),
+          dpr: 1,
+          pad: 0,
+          source: 'live GUI full page (annotation mode) with the docs privacy guard',
+          pose,
+          scanSelectors: ['body'],
+          postMask: () => page.eval(probeReadme.maskAnnotationMeta),
+          clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height }),
+        })
+        assets.push(shot)
+        return shot
+      }
+      const guard = await page.eval(probeReadme.annotationGuard, true)
+      assert(guard.active === true && guard.width > 100, `the annotation privacy guard could not be placed (${short(JSON.stringify(guard), 240)})`)
+      await sleep(400)
+      await captureAsset('annotation-idle.png', 'idle: floating launcher only, mode off')
+      await page.clickAt(launcher.x, launcher.y)
+      await page.waitForFn(
+        () => document.documentElement.getAttribute('data-psa-active') === 'true' && document.querySelector('[data-psa-rail]') !== null,
+        [],
+        { timeout: 10000, label: 'annotation mode active with the right rail' }
+      )
+      // Let the transient "Annotation mode on" toast fade before the mode capture.
+      await page.waitForFn(
+        () => {
+          const feedback = document.querySelector('[data-psa-feedback]')
+          return feedback === null || (feedback.innerText || '').trim().length === 0
+        },
+        [],
+        { timeout: 6000, label: 'annotation mode toast faded' }
+      ).catch(() => {})
+      await sleep(600)
+      await page.eval(probeReadme.annotationGuard, true)
+      await captureAsset('annotation-mode.png', 'mode on: shrunk page + annotation rail, no annotations yet')
+      const selectTarget = async (spec, note) => {
+        const target = await page.eval(probeReadme.annotationTarget, spec)
+        assert(target, `annotation target not found: ${JSON.stringify(spec)}`)
+        await page.clickAt(target.x, target.y)
+        await page.waitForFn(() => document.querySelector('[data-psa-popover]') !== null, [], {
+          timeout: 5000,
+          label: `annotation popover for ${target.label}`,
+        })
+        await sleep(250)
+        const noteRect = await page.eval(() => {
+          const element = document.querySelector('[data-psa-note]')
+          if (element === null) return null
+          const rect = element.getBoundingClientRect()
+          return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+        })
+        assert(noteRect, 'the annotation note field is missing')
+        await page.clickAt(noteRect.x, noteRect.y)
+        await sleep(120)
+        await page.send('Input.insertText', { text: note })
+        await sleep(220)
+        return target
+      }
+      // Targets live in the (blurred) native sidebar: the conversation header/composer are
+      // pass-through/hidden surfaces, and the annotation layer keeps the marker + popover crisp.
+      const selectionTarget = await selectTarget({ kind: 'text', value: 'Plugins' }, 'Clarify what this control opens')
+      await captureAsset('annotation-selection.png', `selection: popover with a note over the native "${selectionTarget.label}" control`)
+      await page.eval(() => document.querySelector('[data-psa-add]')?.click())
+      await page.waitForFn(() => document.querySelectorAll('[data-psa-entry]').length >= 1, [], { timeout: 5000, label: 'first annotation added' })
+      for (const label of ['Automation tasks', 'More']) {
+        await selectTarget({ kind: 'text', value: label }, `Explain the ${label} entry`)
+        await page.eval(() => document.querySelector('[data-psa-add]')?.click())
+        await sleep(400)
+      }
+      await page.waitForFn(() => document.querySelectorAll('[data-psa-entry]').length >= 3, [], {
+        timeout: 6000,
+        label: 'three annotations in the collection rail',
+      })
+      // A stray exit-confirm dialog must never be part of the collection asset.
+      const dialog = await page.eval(() => document.querySelector('[role="dialog"]') !== null)
+      if (dialog) {
+        await page.eval(() => {
+          for (const button of document.querySelectorAll('[role="dialog"] button')) {
+            if (/^(Cancel|取消)/u.test((button.innerText || '').trim())) {
+              button.click()
+              return true
+            }
+          }
+          return false
+        })
+        await sleep(400)
+      }
+      await sleep(350)
+      await captureAsset('annotation-collection.png', 'collection view: three annotations managed together in the rail')
+      const inserted = await page.eval(() => {
+        const button = document.querySelector('[data-psa-insert-batch]')
+        if (button === null) return false
+        button.click()
+        return true
+      })
+      assert(inserted === true, 'the collection batch-insert control is missing')
+      await page.waitForFn(
+        () =>
+          document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-decorator="true"]').length >= 1 ||
+          /Please adjust the UI elements below/u.test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || ''),
+        [],
+        { timeout: 8000, label: 'annotation batch inserted into the composer' }
+      )
+      await sleep(400)
+      await captureAsset('annotation-inserted.png', 'composer with the structured annotation batch inserted (never sent)')
+      await page.eval(probeReadme.annotationGuard, false)
+      await page.send('Emulation.setDeviceMetricsOverride', {
+        width: VIEWPORT.width,
+        height: VIEWPORT.height,
+        deviceScaleFactor: README_DPR,
+        mobile: false,
+      })
+      await sleep(400)
+      return `${assets.length} docs assets refreshed: ${assets.map((shot) => `${shot.file} ${shot.screenshot.width}x${shot.screenshot.height}`).join(', ')}`
+    })
+
+    // ---- Plugin settings section ------------------------------------------------------
+    await results.check('readme-settings', 'settings.png — suite settings section on the plugin detail page', async () => {
+      await readmeResetUi(page)
+      // Fresh document: earlier conversation/right-Sidebar layout state can leave the plugin
+      // detail page in a narrower column (and a later reflow would clip the measured crop).
+      // A reload restores the same saved Session and the full-width Plugins page layout.
+      await reloadFresh(page)
+      await page.waitForFn(probe.appReady, [], { timeout: 60000, label: 'DSH shell after reload for the settings pose' })
+      await ensureAppReady(page)
+      await sleep(1200)
+      const nav = await page.eval(() => {
+        for (const button of document.querySelectorAll('button')) {
+          const rect = button.getBoundingClientRect()
+          if (rect.width < 100 || rect.height < 20) continue
+          if (!/^(Plugins|插件)$/iu.test((button.innerText || '').trim())) continue
+          return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+        }
+        return null
+      })
+      assert(nav, 'native Plugins navigation button not found')
+      await page.clickAt(nav.x, nav.y)
+      await page.waitForFn(
+        () => /^(Plugins|插件)/u.test((document.querySelector('[data-slot="main"]')?.innerText || '').replace(/\s+/gu, ' ').trim()),
+        [],
+        { timeout: 10000, label: 'Plugins page' }
+      )
+      await sleep(600)
+      const entry = await page.eval(() => {
+        const main = document.querySelector('[data-slot="main"]')
+        if (main === null) return null
+        for (const button of main.querySelectorAll('button')) {
+          if ((button.getAttribute('aria-label') || '') !== 'View DSH Power Suite') continue
+          button.scrollIntoView({ block: 'center' })
+          const rect = button.getBoundingClientRect()
+          return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+        }
+        return null
+      })
+      assert(entry, 'the DSH Power Suite entry is missing from the Plugins page')
+      await sleep(500)
+      await page.clickAt(entry.x, entry.y)
+      await page.waitForFn(() => document.querySelector('.dps-settings') !== null, [], { timeout: 15000, label: 'suite settings section' })
+      await page.eval(probeReadme.scrollSettingsIntoView)
+      await sleep(400)
+      const settingsRect = await readmeWaitStableRect(page, '.dps-settings')
+      const capture = await readmeCapture(page, {
+        name: 'settings.png',
+        source: 'live GUI plugin detail page settings section (.dps-settings)',
+        pose: 'suite settings section (prompt-history shortcut + Active & recent retention); no setting toggled',
+        scanSelectors: ['.dps-settings'],
+        clip: () => settingsRect,
+      })
+      state.readme.captures.push(capture)
+      await writeManifest()
+      return `${capture.screenshot.width}x${capture.screenshot.height}px, masked ${JSON.stringify(capture.masked)}`
+    })
+
+    await results.check('readme-files', 'every design §3 raw file + captures.json exist with expected geometry', async () => {
+      const missing = []
+      for (const name of README_REQUIRED_FILES) {
+        if (!existsSync(path.join(README_RAW_DIR, name))) missing.push(name)
+      }
+      assertEqual(missing.length, 0, `missing raw captures: ${missing.join(', ')}`)
+      assert(existsSync(state.readme.file), `captures.json is missing at ${state.readme.file}`)
+      const manifest = JSON.parse(await readFile(state.readme.file, 'utf8'))
+      assertEqual(manifest.captures.length, README_REQUIRED_FILES.length, 'captures.json must list every raw file')
+      for (const capture of manifest.captures) {
+        assertEqual(capture.dpr, README_DPR, `${capture.file}: dpr metadata`)
+        assertEqual(capture.rect.width * README_DPR, capture.screenshot.width, `${capture.file}: PNG width matches the 2x clip`)
+        assertEqual(capture.scan.clip.hits.length, 0, `${capture.file}: clip scan hits`)
+        assertEqual(capture.scan.document.skipped, false, `${capture.file}: page scan should be enabled`)
+        assertEqual(capture.masked === undefined || typeof capture.masked !== 'object', false, `${capture.file}: mask metadata`)
+      }
+      return `${manifest.captures.length} PNG + captures.json (${README_RAW_DIR})`
+    })
+  } finally {
+    await readmeResetUi(page)
+    await writeManifest()
+    logReadmeCaptureState(state)
+  }
+}
+
+/**
+ * Cleanup after the `--readme-shots` pass: clear any controlled interrupted record and
+ * remove the capture CSS/attribute. The throwaway page is closed by the caller.
+ * @param {object} page - Page wrapper.
+ * @param {object} state - harness state.
+ * @returns {Promise<void>}
+ */
+async function cleanupReadmeShots(page, state) {
+  if (state.mode !== 'readme-shots') return
+  try {
+    const session = await page.eval(probeReadme.sessionState)
+    if (session.sessionId !== null) {
+      await page.eval((id) => globalThis.__POWER_SUITE_TEST_HOOKS__?.interruptedSessions?.clear(id), session.sessionId)
+    }
+    await page.eval(() => {
+      document.documentElement.removeAttribute('data-psd-readme-capture')
+      document.getElementById('psd-readme-capture-style')?.remove()
+      return true
+    })
+  } catch (error) {
+    log(`warning: readme-shots cleanup failed: ${short(error?.message || String(error), 200)}`)
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------------------------
 
@@ -12656,12 +14574,39 @@ async function run() {
     chrome = await launchChrome(opts)
     log(`chrome: headless pid ${chrome.proc.pid}, CDP port ${chrome.port}`)
     const cdp = await CdpConnection.connect(chrome.wsUrl)
-    page = await Page.open(cdp, url, injectorSource(clientSource), { trackNetwork: opts.mode === 'pin' || opts.mode === 'layout' || opts.mode === 'interrupted' || opts.mode === 'row-menu' })
+    const readmeMode = opts.mode === 'readme-shots'
+    page = await Page.open(cdp, url, injectorSource(clientSource), {
+      trackNetwork: opts.mode === 'pin' || opts.mode === 'layout' || opts.mode === 'interrupted' || opts.mode === 'row-menu',
+      deviceScaleFactor: readmeMode ? README_DPR : 1,
+      beforeNavigate: readmeMode ? (openPage) => installReadmeStubs(cdp, openPage) : undefined,
+    })
     log('page: opened, waiting for the DSH shell…')
 
-    await runSmoke({ page, results, state, opts })
-    await ensureAppReady(page)
-    if (opts.mode === 'full') {
+    if (readmeMode) {
+      // The README pass only poses the documented UI; it must never create a Session or
+      // type into one, so it skips the smoke mode's blank-Session helper entirely.
+      await results.check('readme-ready', 'live GUI shell + injected worktree client ready (no Session created, no prompt sent)', async () => {
+        await page.waitForFn(probe.appReady, [], { timeout: 60000, label: 'DSH shell + injected plugin factory' })
+        await ensureAppReady(page)
+        await page.waitForFn(() => document.querySelector('[data-conversation-session]') !== null, [], {
+          timeout: 15000,
+          label: 'restored current Session',
+        }).catch(() => {})
+        const session = await page.eval(probeReadme.sessionState)
+        assert(session.sessionId !== null, 'no restored current Session is open in the live GUI; the README poses need one (this mode never creates a Session)')
+        return `current Session open, ${session.messages} transcript message(s), draft ${session.draftLength} char(s)`
+      })
+    } else {
+      await runSmoke({ page, results, state, opts })
+      await ensureAppReady(page)
+    }
+    if (opts.mode === 'readme-shots') {
+      try {
+        await runReadmeShotsMode({ page, results, state, cdp })
+      } finally {
+        await cleanupReadmeShots(page, state)
+      }
+    } else if (opts.mode === 'full') {
       log('\n=== Acceptance checks ===')
       await runComposerGalleryChecks({ page, results, state, opts })
       await runLayoutChecks({ page, results, state })
@@ -12797,6 +14742,9 @@ async function run() {
     log(`row menu: comparison ${state.rowMenu?.comparison ? short(JSON.stringify(state.rowMenu.comparison), 900) : 'not run'}`)
     log(`row menu evidence: ${state.rowMenuEvidence ? state.rowMenuEvidence.join(', ') : 'none'}`)
     log(`row menu cleanup: ${state.rowMenuCleanup ? short(JSON.stringify(state.rowMenuCleanup), 1200) : 'not run'}`)
+  }
+  if (state.mode === 'readme-shots') {
+    logReadmeCaptureState(state)
   }
   if (state.screenshots.length > 0) log(`screenshots: ${state.screenshots.join(', ')}`)
   log(`elapsed: ${((Date.now() - started) / 1000).toFixed(1)}s`)

@@ -495,6 +495,7 @@ node test/browser/sidebar.e2e.mjs --live           shipped-install check (NO cli
 node test/browser/sidebar.e2e.mjs --layout         sidebar-width drag/persistence/Host-sync acceptance (restores the width)
 node test/browser/sidebar.e2e.mjs --interrupted    interrupted-state consistency acceptance (controlled seam, live route)
 node test/browser/sidebar.e2e.mjs --row-menu       card row "…" menu = native shared-popup parity acceptance
+node test/browser/sidebar.e2e.mjs --readme-shots   raw README/Bento captures (2x, privacy-masked, demo stubs)
 node test/browser/sidebar.e2e.mjs --no-shots       no screenshots
 node test/browser/sidebar.e2e.mjs --client PATH    inject a different client.js
 node test/browser/sidebar.e2e.mjs --keep-open      leave Chrome running for inspection
@@ -1347,6 +1348,59 @@ bottom 232/232), annotation S2/S5/S8 **7/0/0 each** (9.3/8.2/12.5 s,
   control rather than the literal keyword.
 - `--live` requires the linked checkout to be merged to the branch tip; it proves the
   served client, not the worktree-only code, and does not restart the service.
+
+## README Bento capture mode (`sidebar.e2e.mjs --readme-shots`)
+
+`--readme-shots` captures the raw screenshots the repository README's composed
+Bento images are built from. It poses the live GUI states the README images need,
+masks the user's data in the page, and writes the crops; it never creates a
+Session, types a prompt, sends a message, pins/unpins, archives, or changes a
+persisted setting.
+
+```bash
+node test/browser/sidebar.e2e.mjs --readme-shots
+```
+
+- **Output** — 11 PNG crops (`workspaces`, `card`, `card-hover`, `row-menu`,
+  `interrupted-row`, `interrupted-composer`, `artifacts`, `artifacts-quicklook`,
+  `artifacts-filter`, `prompt-history`, `settings`) plus a `captures.json`
+  manifest in `.tmp-work/readme-shots/raw/`. The directory is gitignored; the
+  committed README images are the composed WebPs under `assets/`, built by
+  `npm run build:readme-bento`.
+- **Device facts** — device scale factor **2** (each crop is 2× its CSS size),
+  1728×900 CSS viewport, throwaway headless Chrome profile, this worktree's
+  client injected with `window.__POWER_SUITE_TEST_HOOKS__` so the interrupted
+  poses can use the documented seam.
+- **Privacy gate (hard requirement)** — before every shot the mode masks every
+  visible user-identifying string in the captured page: native Session and
+  Workspace titles/paths, card titles, hover-card conversation text,
+  prompt-history rows and previews, and the composer's workspace; the composer
+  draft stays empty. It then scans the crop's root selectors, the clip region
+  and the page `innerText` for `/Users/`, the user name, `http(s)://`,
+  `token=`, the checkout path and CJK characters. Zero hits are required; a
+  crop that still leaks is discarded and its pose fails. The GUI token is never
+  printed or written.
+- **Stub poses** — the Artifacts poses stub `GET /api/session-artifacts.list`,
+  `.raw` and `.preview` through CDP `Fetch` with demo artifacts only; the Quick
+  Look pose shows a stubbed demo Markdown document; the prompt-history pose
+  masks preview text to canned demo lines. The stubs mirror the real route
+  response shapes; nothing is invented in the Host.
+- **Annotation sources fallback** — `annotation.e2e.mjs --shots-only --assets`
+  currently exits 1 because the live composer region is pointer pass-through
+  for that harness, so the mode re-captures the five
+  `docs/assets/annotation-*.png` poses itself through the same privacy guard at
+  1728×900 (the `readme-annotation-assets` row).
+- **Recorded run (2026-11-16)** — exit 0, **PASS 14 / SKIP 0 / FAIL 0**, **0
+  page errors**, **125.9 s**, 11/11 raw files, log
+  `.tmp-work/readme-shots/run.log`; the 36 non-JS console lines are the known
+  benign `ws://127.0.0.1:9230/ingest` 403 telemetry noise. Deviations: no
+  pinned row in `card.png` (the live pin document is empty and this mode never
+  pins), and the Running & recent card is collapsed for the tall
+  `workspaces.png` pose (restored afterwards).
+- **Side effects** — opens/closes UI, hovers, opens native menus and applies the
+  documented seams only; restores the poses it changed (card expanded state,
+  menus dismissed, seam records cleared) and never clicks a destructive or
+  persistent control.
 
 ## Update prompt harness
 
