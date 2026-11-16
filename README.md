@@ -39,7 +39,7 @@ The suite works inside the native shell instead of beside it: it augments the si
 - **A width that stays put.** The dragged left sidebar width is a Host-owned preference: it survives reloads and new tabs, matches across every browser paired with the same Host (last write wins), reopens at the stored width after a collapse, and no longer blinks the rainbow atmosphere while the handle is dragged.
 - **Read state shared by the Host.** Read marks, card pins and event-sourced last-activity times live on the Host, so they persist across reloads and are shared by every browser on the same Host instead of belonging to one browser's storage.
 
-Read more: [Dynamic Workspaces](docs/dynamic-workspaces.md) · [Sidebar width](docs/sidebar-width.md) · [Interrupted sessions](docs/interrupted-sessions.md).
+Read more: [Dynamic Workspaces](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/dynamic-workspaces.md) · [Sidebar width](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/sidebar-width.md) · [Interrupted sessions](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/interrupted-sessions.md).
 
 ## Session artifacts
 
@@ -52,7 +52,7 @@ The right Sidebar's **Files** pane header carries an **Artifacts** button. It op
 - **The actions you need on a file.** Open, download, copy content (text verbatim; images as a real clipboard picture in a secure context), and copy the authenticated LAN link.
 - **The same preview in the Workspace tree.** The native Workspace files list gets the same Quick Look row, so files preview the same way in both places.
 
-Read more: [Session artifacts](docs/session-artifacts.md).
+Read more: [Session artifacts](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/session-artifacts.md).
 
 ## Composer: prompt recall, drafts, recovery
 
@@ -65,7 +65,7 @@ The composer keeps the work around the prompt: what you asked before, what you a
 - **Interrupted Sessions are marked and recoverable.** A Session whose last turn did not finish gets an amber title mark, a hover-revealed inline **Continue** triangle and a play-shaped composer submit control. Continuing is implicit and Host-owned, and an SSE stream keeps open pages in sync across devices.
 - **Settings in one place.** The bundle's Plugins page holds the prompt-history modifier and the two retention windows for the Active/recent surfaces.
 
-Read more: [Prompt history](docs/prompt-history.md), [draft attachments](docs/draft-attachments.md), [interrupted sessions](docs/interrupted-sessions.md).
+Read more: [Prompt history](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/prompt-history.md), [draft attachments](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/draft-attachments.md), [interrupted sessions](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/interrupted-sessions.md).
 
 ## UI element annotation
 
@@ -77,22 +77,22 @@ A round launcher at the bottom-right of the page toggles a point-and-click annot
 - **The note stays with the page.** Each annotation becomes a persisted record with a page marker, a numbered requirement badge and a hover detail card; edit the requirement, relocate the target, copy the locator, or delete with a 5 s undo.
 - **Send it as a reference, not prose.** References are inserted as native composer inline reference chips — one chip or one grouped batch — without sending. The rail's collection view edits, previews, reorders and batch-inserts annotations, with multi-select, marquee, ancestor adjustment and a pass-through modifier.
 
-Read more: [UI element annotation](docs/ui-annotation.md).
+Read more: [UI element annotation](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/ui-annotation.md).
 
 ## Features at a glance
 
 | Feature | What it adds |
 |---|---|
-| [Dynamic Workspaces](docs/dynamic-workspaces.md) | Active/Inactive activity buckets, the Running & recent card with Host-shared pinning and subagent rows, the native row menu, pending-interaction notices and the rainbow current row. |
-| [Session artifacts](docs/session-artifacts.md) | The Files-pane Artifacts list for generated files and provided attachments, with Quick Look, open/download/copy actions and the All/Generated/Provided filter. |
-| [UI element annotation](docs/ui-annotation.md) | Point-and-click annotation with a right rail, persisted page markers, a collection view and native composer reference chips. |
-| [Prompt history](docs/prompt-history.md) | Modifier + ↑/↓ recall plus a right-edge history rail with preview, search and click-to-copy. |
-| [Draft attachments](docs/draft-attachments.md) | Browser-owned attachment memory across Session switches for the page lifetime. |
-| [Interrupted sessions](docs/interrupted-sessions.md) | An amber mark, inline Continue and a play-shaped submit control for turns that did not finish, with Host-owned cross-device state. |
-| [Sidebar width](docs/sidebar-width.md) | A Host-owned, durable left-sidebar width shared across browsers, restored after a collapse, with a flicker-free rainbow repaint. |
-| [Workspace presets](docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions in that Workspace. |
-| [Settings](docs/settings.md) | The bundle's Plugins-page section: the prompt-history modifier and the two retention windows. |
-| [Update notice](docs/update-check.md) | A bottom-right Host-checked notice for a newer published version, with the version change and release highlights; silent until the package is published. |
+| [Dynamic Workspaces](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/dynamic-workspaces.md) | Active/Inactive activity buckets, the Running & recent card with Host-shared pinning and subagent rows, the native row menu, pending-interaction notices and the rainbow current row. |
+| [Session artifacts](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/session-artifacts.md) | The Files-pane Artifacts list for generated files and provided attachments, with Quick Look, open/download/copy actions and the All/Generated/Provided filter. |
+| [UI element annotation](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/ui-annotation.md) | Point-and-click annotation with a right rail, persisted page markers, a collection view and native composer reference chips. |
+| [Prompt history](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/prompt-history.md) | Modifier + ↑/↓ recall plus a right-edge history rail with preview, search and click-to-copy. |
+| [Draft attachments](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/draft-attachments.md) | Browser-owned attachment memory across Session switches for the page lifetime. |
+| [Interrupted sessions](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/interrupted-sessions.md) | An amber mark, inline Continue and a play-shaped submit control for turns that did not finish, with Host-owned cross-device state. |
+| [Sidebar width](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/sidebar-width.md) | A Host-owned, durable left-sidebar width shared across browsers, restored after a collapse, with a flicker-free rainbow repaint. |
+| [Workspace presets](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions in that Workspace. |
+| [Settings](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/settings.md) | The bundle's Plugins-page section: the prompt-history modifier and the two retention windows. |
+| [Update notice](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/update-check.md) | A bottom-right Host-checked notice for a newer published version, with the version change and release highlights; silent until the package is published. |
 
 The features ship in the single bundle `@zephinel/dsh-power-suite` (Loader row `power-suite`), so they install, enable and uninstall together. The browser half attaches to the Web platform only.
 
@@ -188,26 +188,41 @@ node test/browser/annotation.e2e.mjs --smoke   # UI element annotation
 node test/browser/update-prompt.e2e.mjs        # update notice
 ```
 
-They need a running DSH Web and Chrome, and run one at a time; environment variables, per-mode checks and the full option list are in the [browser harness guide](test/browser/README.md). CI has no browser job — these are local pre-release checks.
+They need a running DSH Web and Chrome, and run one at a time; environment variables, per-mode checks and the full option list are in the [browser harness guide](https://github.com/Zephinel/dsh-power-suite/blob/main/test/browser/README.md). CI has no browser job — these are local pre-release checks.
 
-**Deploy** means installing the bundle into the target DSH profile; there is no separate server or watch mode. The local install/reload loop and the tag-publish procedure (Trusted Publishing on a `v*` tag) are in [docs/development.md](docs/development.md).
+**Deploy** means installing the bundle into the target DSH profile; there is no separate server or watch mode. The local install/reload loop and the tag-publish procedure (Trusted Publishing on a `v*` tag) are in [docs/development.md](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/development.md).
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — Host and browser halves, routes, slots, services and settings documents.
-- [Usage](docs/usage.md) — what each feature does in the UI, step by step.
-- [Feature inventory](docs/overview.md) — the full inventory plus the recipe for adding a feature.
-- [Development](docs/development.md) — local install/reload loop, checks, the README capture and Bento pipeline, release flow.
-- [Verification](docs/verification.md) — the checks and evidence for this checkout.
-- [Limitations](docs/limitations.md) — known bounds and unverified areas.
-- [Browser harness](test/browser/README.md) — the live-GUI acceptance suites, their modes and evidence.
-- [Changelog](CHANGELOG.md) — release entries; the first release is 0.1.0, not yet cut.
-- [Release notes](release-notes/README.md) — the tag-pinned Highlights format read by the update notice.
+Detailed docs live in `docs/` and ship with the package; the links below use
+absolute GitHub URLs so they stay clickable from the npm README as well once
+the repository is pushed (the publishing target). For uncommitted features,
+use the files in the checkout. Start with the
+[full documentation index](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/README.md).
+
+**Concepts**
+
+- [Architecture](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/architecture.md) — Host and browser halves, routes, slots, services and settings documents.
+- [Usage](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/usage.md) — what each feature does in the UI, step by step.
+- [Feature inventory](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/overview.md) — the full inventory plus the recipe for adding a feature.
+
+**Feature reference**
+
+- [Dynamic Workspaces](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/dynamic-workspaces.md) · [Sidebar width](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/sidebar-width.md) · [Session artifacts](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/session-artifacts.md) · [Prompt history](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/prompt-history.md) · [Draft attachments](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/draft-attachments.md) · [Interrupted sessions](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/interrupted-sessions.md) · [UI element annotation](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/ui-annotation.md) · [Workspace presets](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/workspace-default-presets.md) · [Settings](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/settings.md) · [Update notice](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/update-check.md)
+
+**Development and verification**
+
+- [Development](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/development.md) — local install/reload loop, checks, the README capture and Bento pipeline, release flow.
+- [Verification](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/verification.md) — the checks and evidence for this checkout.
+- [Limitations](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/limitations.md) — known bounds and unverified areas.
+- [Browser harness](https://github.com/Zephinel/dsh-power-suite/blob/main/test/browser/README.md) — the live-GUI acceptance suites, their modes and evidence.
+- [Changelog](https://github.com/Zephinel/dsh-power-suite/blob/main/CHANGELOG.md) — release entries; the first release is 0.1.0, not yet cut.
+- [Release notes](https://github.com/Zephinel/dsh-power-suite/blob/main/release-notes/README.md) — the tag-pinned Highlights format read by the update notice.
 
 ## Contributing
 
 - Bugs and feature requests go to GitHub Issues once the repository is pushed; today there is no remote, so work from the local checkout and report to the maintainer directly.
-- Run `npm run check` before proposing a change. Host logic lives in `src/features/<name>/` behind tests under `test/`, and each feature has a page under `docs/`; [docs/development.md](docs/development.md) documents the feature recipe, the commit conventions and the release flow.
+- Run `npm run check` before proposing a change. Host logic lives in `src/features/<name>/` behind tests under `test/`, and each feature has a page under `docs/`; [docs/development.md](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/development.md) documents the feature recipe, the commit conventions and the release flow.
 - Behavior, copy or gate changes need the matching docs updated too: the feature reference, `CHANGELOG.md` and `docs/verification.md`.
 - Releases are cut from a tag by the publish workflow. Never run `npm publish` locally; the maintainer procedure is `.agents/skills/release-power-suite/SKILL.md`.
 - Maintainer: [@Zephinel](https://github.com/Zephinel).
