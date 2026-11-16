@@ -190,15 +190,15 @@ test('adjacent rows push later notices down so cards never overlap', () => {
     { left: 420, top: 100, width: 320 },
     { left: 420, top: 134, width: 320 },
     { left: 420, top: 400, width: 320 }
-  ], 900, 84))
+  ], 900, 96))
   assert.equal(cards[0].top, 100, 'the first notice stays exactly on its row')
-  assert.equal(cards[1].top, 100 + 84 + 6, 'an overlapping follow-up is pushed below the first card')
+  assert.equal(cards[1].top, 100 + 96 + 6, 'an overlapping follow-up is pushed below the first card')
   assert.equal(cards[2].top, 400, 'a distant row keeps its own top')
   for (let index = 1; index < cards.length; index += 1) {
-    assert.ok(cards[index].top >= cards[index - 1].top + 84 + 6, 'no two cards overlap')
+    assert.ok(cards[index].top >= cards[index - 1].top + 96 + 6, 'no two cards overlap')
   }
-  const clamped = plain(stack([{ left: 420, top: 880, width: 320 }], 900, 84))
-  assert.equal(clamped[0].top, 900 - 8 - 84, 'the last card stays inside the viewport')
+  const clamped = plain(stack([{ left: 420, top: 880, width: 320 }], 900, 96))
+  assert.equal(clamped[0].top, 900 - 8 - 96, 'the last card stays inside the viewport')
   assert.deepEqual(plain(stack([], 900, 84)), [])
 })
 

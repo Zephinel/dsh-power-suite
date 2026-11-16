@@ -4802,6 +4802,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** Most pending notices shown at once; the rest collapse into a "+N" line. */
     const DW_NOTICE_LIMIT = 3
 
+    /** Estimated rendered height of one notice card (two-line headline + meta). */
+    const DW_NOTICE_CARD_HEIGHT = 96
+
     /** Captured-target kind of the card row "…" menu. The card opens the shared
      *  native context-menu popup against this plugin-owned kind; the contribution
      *  below then delegates the action list to the native `session` providers. */
@@ -5311,7 +5314,7 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-child-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap}
 .psd-child-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
-.psd-notices{position:fixed;inset:0;z-index:999;pointer-events:none}
+.psd-notices{position:fixed;inset:0;z-index:1001;pointer-events:none}
 .psd-notices-live{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .psd-notice{position:fixed;appearance:none;display:flex;align-items:flex-start;gap:9px;box-sizing:border-box;width:320px;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-hovercard-bg,#2c2c2e);color:var(--dsw-static-neutral-bluish-00,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;text-align:left;cursor:pointer;pointer-events:auto}
 .psd-notice:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
@@ -6657,11 +6660,13 @@ function dwClearNativeAtmospheres() {
      */
     function dwNoticeRowElement(sessionId) {
       if (typeof document === 'undefined' || typeof sessionId !== 'string' || sessionId.length === 0) return null
-      const escaped = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(sessionId) : sessionId
-      const cardRow = document.querySelector(`.psd-panel [data-psd-session="${escaped}"]`)
-      if (cardRow instanceof HTMLElement) return cardRow
-      const nativeRow = document.querySelector(`[data-row-key="session:${escaped}"]`)
-      return nativeRow instanceof HTMLElement ? nativeRow : null
+      for (const row of document.querySelectorAll('.psd-panel [data-psd-session]')) {
+        if (row instanceof HTMLElement && row.getAttribute('data-psd-session') === sessionId) return row
+      }
+      for (const row of document.querySelectorAll('[data-row-key^="session:"]')) {
+        if (row instanceof HTMLElement && row.getAttribute('data-row-key') === `session:${sessionId}`) return row
+      }
+      return null
     }
 
     /**
@@ -7658,14 +7663,17 @@ function dwClearNativeAtmospheres() {
       // line up with it. The layout is fixed-positioned and re-measured on scroll,
       // resize, sidebar/card size changes and for rows that mount a frame later.
       const [noticeLayout, setNoticeLayout] = React.useState(null)
+      const revealedRef = React.useRef(new Set())
       React.useLayoutEffect(() => {
         if (noticeKey.length === 0) {
+          revealedRef.current.clear()
           setNoticeLayout(null)
           return undefined
         }
         let disposed = false
         const frames = new Set()
-        const revealed = new Set()
+        let pendingFrame = 0
+        const revealed = revealedRef.current
         const schedule = (fn) => {
           const id = window.requestAnimationFrame(() => {
             frames.delete(id)
@@ -7673,12 +7681,21 @@ function dwClearNativeAtmospheres() {
           })
           frames.add(id)
         }
+        const schedulePlace = () => {
+          if (pendingFrame !== 0) return
+          pendingFrame = window.requestAnimationFrame(() => {
+            pendingFrame = 0
+            if (!disposed) place()
+          })
+        }
         const place = () => {
           const panel = panelRootRef.current
           if (!(panel instanceof HTMLElement)) return
           const sidebar = panel.closest('[class*="_sidebarCol"]')
-          const anchorLeft = sidebar instanceof HTMLElement ? Math.round(sidebar.getBoundingClientRect().right) : null
           const panelRect = panel.getBoundingClientRect()
+          // Fall back to the card's right edge + 10 like the Session info card, not the
+          // row's own left edge (which would cover the sidebar rows).
+          const anchorLeft = sidebar instanceof HTMLElement ? Math.round(sidebar.getBoundingClientRect().right) : Math.round(panelRect.right + 10)
           const elements = notices.map((notice) => dwNoticeRowElement(notice.sessionId))
           let issuedScroll = false
           for (let index = 0; index < elements.length; index += 1) {
@@ -7690,16 +7707,16 @@ function dwClearNativeAtmospheres() {
           }
           const settle = () => {
             if (disposed) return
-            const fallback = dwNoticePlacement(panelRect, window.innerWidth, window.innerHeight, 12 + Math.min(notices.length, 3) * 96 + (noticeOverflow > 0 ? 18 : 0))
+            const fallback = dwNoticePlacement(panelRect, window.innerWidth, window.innerHeight, 12 + Math.min(notices.length, 3) * DW_NOTICE_CARD_HEIGHT + (noticeOverflow > 0 ? 18 : 0))
             const aligned = notices.map((notice, index) => {
               const element = elements[index]
-              if (element === null) return { left: fallback.left, top: fallback.top + index * 84, width: fallback.width }
+              if (element === null) return { left: fallback.left, top: fallback.top + index * (DW_NOTICE_CARD_HEIGHT + 6), width: fallback.width }
               return dwNoticePlacementForRow(element.getBoundingClientRect(), window.innerWidth, window.innerHeight, anchorLeft, 96)
             })
-            const cards = dwNoticeStackCards(aligned, window.innerHeight, 84)
+            const cards = dwNoticeStackCards(aligned, window.innerHeight, DW_NOTICE_CARD_HEIGHT)
             const last = cards[cards.length - 1]
             const overflow = noticeOverflow > 0
-              ? { left: last.left, top: Math.min(window.innerHeight - 8 - 18, last.top + 84 + 6), width: last.width }
+              ? { left: last.left, top: Math.min(window.innerHeight - 8 - 18, last.top + DW_NOTICE_CARD_HEIGHT + 6), width: last.width }
               : null
             setNoticeLayout((current) => {
               const same = current !== null
@@ -7710,11 +7727,11 @@ function dwClearNativeAtmospheres() {
               return same ? current : { cards, overflow }
             })
           }
-          if (issuedScroll) schedule(() => schedule(settle))
+          if (issuedScroll) schedule(settle)
           else settle()
         }
         place()
-        const onReflow = () => place()
+        const onReflow = () => schedulePlace()
         window.addEventListener('resize', onReflow)
         window.addEventListener('scroll', onReflow, true)
         const panel = panelRootRef.current
@@ -7722,16 +7739,24 @@ function dwClearNativeAtmospheres() {
           ? null
           : new ResizeObserver(onReflow)
         if (observer !== null) observer.observe(panel)
-        // Rows can mount one frame after the notices (native tree expansion,
-        // collapse state, virtualized list timing): retry once.
-        schedule(() => place())
+        // Rows can mount or reorder a frame after the notices (native tree
+        // expansion, show-all, collapsed children): retry once and watch the
+        // sidebar column for late row mounts.
+        const sidebarRoot = panel.closest('[class*="_sidebarCol"]')
+        const mutations = sidebarRoot === null || typeof MutationObserver === 'undefined'
+          ? null
+          : new MutationObserver(onReflow)
+        if (mutations !== null) mutations.observe(sidebarRoot, { childList: true, subtree: true })
+        schedulePlace()
         return () => {
           disposed = true
+          if (pendingFrame !== 0) window.cancelAnimationFrame(pendingFrame)
           for (const id of frames) window.cancelAnimationFrame(id)
           frames.clear()
           window.removeEventListener('resize', onReflow)
           window.removeEventListener('scroll', onReflow, true)
           if (observer !== null) observer.disconnect()
+          if (mutations !== null) mutations.disconnect()
         }
       }, [noticeKey, noticeOverflow, expanded])
       const canExpand = rows.length > DW_PANEL_LIMIT

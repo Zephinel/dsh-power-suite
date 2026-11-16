@@ -456,11 +456,15 @@ answering surface, and clicking a notice just opens that Session.
   column's right boundary — the same anchor the Session info card uses — and
   only shifts left with the 8 px viewport clamp. The card is fixed-positioned
   (the sidebar's scroll container cannot clip it) and re-measured on scroll,
-  resize, sidebar expansion, card height changes and row remounts.
+  resize, sidebar expansion, card height changes and row insert/removal (the
+  sidebar column is watched for late row mounts; reflows are coalesced into one
+  animation frame).
 - **Auto-reveal**: when the Session row is scrolled out of its container (or
   otherwise outside the visible band), the stack scrolls the row's nearest
-  vertical scroller just enough to centre it before placing the notice, with a
-  one-frame re-measure; it does not fight a later deliberate user scroll.
+  vertical scroller just enough to centre it before placing the notice, then
+  re-measures on the next frame and retries once for rows that mount late; a
+  per-notice revealed record means a later deliberate user scroll is not
+  overridden.
 - **Adjacent rows**: two waiting Sessions can sit in adjacent 34 px rows while a
   notice is taller, so later cards are pushed down by just enough to avoid
   overlap (the first stays exactly on its row) and the last card stays inside

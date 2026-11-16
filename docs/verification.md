@@ -2893,6 +2893,15 @@ No Host route, store or native-surface change.
 ### Verification
 
 - `node --check src/client.js` → OK.
+- Independent review (`PASS-WITH-FINDINGS`) was closed in the same branch:
+  sidebar-class fallback now uses the Session-info-card anchor
+  (`panel.right + 10`) instead of the row's left edge; revealed rows are tracked
+  in a ref so a later user scroll is not overridden; scroll/resize reflows are
+  coalesced into one animation frame and the sidebar column is watched with a
+  `MutationObserver` for late row mounts; the card height estimate is one shared
+  constant (`96`) for stacking and the overflow line; notices sit above the
+  hovercard (`z-index 1001`); row lookup compares attributes instead of
+  interpolating ids into selectors.
 - `node --test test/dynamic-workspaces-panel.test.js` → **7/7 pass**, including
   per-row placement (row top → notice top, sidebar anchor → left, bottom/top
   clamps, no-anchor fallback) and the CSS contract that hover keeps the opaque
@@ -2922,6 +2931,29 @@ No Host route, store or native-surface change.
 - Structural test evidence: the card row elements now carry `data-psd-session`
   so the binding does not depend on titles/order; the native fallback uses the
   existing `data-row-key="session:<id>"`.
+
+### Rendered scenarios (2026-11-17, isolated demo instance)
+
+A throwaway isolated DSH instance (`/tmp/ps-readme-home`, port 3199, demo
+Workspace only) was seeded with nine generic demo Sessions, and a probe-only
+client supplied fixture pending statuses through the **real** notice renderer.
+Renders (gitignored `.tmp-work/notices-render-final/`):
+
+- `01-single.png` — one notice beside its Session row: notice `left 280` =
+  sidebar right `280`, notice top equals the row top, info-card surface (light
+  theme).
+- `02-hover.png` — hover keeps the same surface (`backgroundColor
+  rgb(255,255,255)`, `backgroundImage none`, alpha 1).
+- `03-multiple.png` — three notices on adjacent rows: tops `272 / 374 / 476`
+  with heights `78 / 61 / 61`; the first stays on its row and the later cards
+  are pushed by the shared 96 px estimate + 6 px gap, so none overlap.
+- Scroll-following and auto-reveal were verified numerically by the probes
+  (scroll delta moves the notice with its row; the reveal helper scrolls
+  `0 → 474` for a row 600 px down a synthetic scroller). The isolated demo
+  tree has only a ~69 px scroll range and the shell list resets programmatic
+  scroll in this build, so a static before/after scroll screenshot was not
+  trustworthy and is not presented; the behavior is covered by the helper
+  tests and the probe numbers.
 
 ### Limits
 
