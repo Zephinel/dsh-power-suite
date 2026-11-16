@@ -494,6 +494,7 @@ node test/browser/sidebar.e2e.mjs --pin            pipeline smoke + R1/R2/R3 acc
 node test/browser/sidebar.e2e.mjs --live           shipped-install check (NO client injection, read-only, two profiles)
 node test/browser/sidebar.e2e.mjs --layout         sidebar-width drag/persistence/Host-sync acceptance (restores the width)
 node test/browser/sidebar.e2e.mjs --interrupted    interrupted-state consistency acceptance (controlled seam, live route)
+node test/browser/sidebar.e2e.mjs --row-menu       card row "…" menu = native shared-popup parity acceptance
 node test/browser/sidebar.e2e.mjs --no-shots       no screenshots
 node test/browser/sidebar.e2e.mjs --client PATH    inject a different client.js
 node test/browser/sidebar.e2e.mjs --keep-open      leave Chrome running for inspection
@@ -559,16 +560,14 @@ committed scenario yet**:
   time. The trigger keeps the ordinary soft hover paint (plus the keyboard
   `focus-visible` ring); only the rainbow row suppresses it, with the same
   `brightness(1.2)` lift as the New session/pin/Continue controls, and subagent
-  rows have no trigger. The trigger opens the card's own popup
-  (`data-psd-menu`) built from the native Session action contributions via
-  `contextMenus.resolve`: Rename / Fork / Copy Session ID / Show in Finder /
-  Archive keep their native behavior, the **Pin/Unpin entry is filtered out**
-  (the restored title-left pin button is the only pin owner), and the popup
-  shows the native labels with a compact local glyph per action but no native
-  shortcut hints. Full-mode `b2-3` asserts
-  the uniform highlight swap and no-hover-background rule; the popup actions and
-  the absent Pin entry were verified by Lead live probes on the real GUI, not by
-  this harness.
+  rows have no trigger. The trigger now opens the **native shared context-menu
+  popup** for a plugin-owned captured-target kind that delegates to the native
+  Session actions: Rename / Fork / Copy Session ID / Show in Finder / Archive keep
+  their native icons, shortcut hints, material and behavior, and the **Pin/Unpin
+  entry is filtered out** (the restored title-left pin button is the only pin
+  owner). The `--row-menu` mode below is the committed live acceptance for this
+  alignment (an older round's custom `.psd-menu` popup is gone); full-mode `b2-3`
+  still asserts the uniform highlight swap and no-hover-background rule.
 - **Pending-interaction notices** — a fixed 320 px stack beside the card for
   Sessions waiting on `ask_user_question` (question / plan review) or an
   approval, up to three cards plus "+N more", preview-only (clicking opens the
@@ -788,6 +787,96 @@ static edits for the next full run.
   `iw-4` reports a residual label honestly instead of asserting it.
 - The negative control proves the two fixed oracles are discriminating; it intentionally
   exits 1 and is not part of a green acceptance run.
+
+### `--row-menu` checks (card row "…" menu = native shared context-menu popup)
+
+`--row-menu` is the live-GUI acceptance mode for the row "…" menu alignment: the card row
+menu must be the **same native shared popup** the native DSH Session row opens (the
+`@deepseek-ai/dsh-client-ui-context-menu` / primitives `Menu` surface), matching its
+material, icons, shortcut hints, separators and afterContent footer, with exactly the
+Pin/Unpin entry filtered out. It runs the four pipeline smoke checks, enables the CDP
+`Network` domain and drives both menus with **real CDP pointer input**; it never creates or
+types into a Session, never clicks an action item (Escape only) and closes anything it
+opens in a `finally` block.
+
+| # | Check | Oracle |
+|---|-------|--------|
+| `smoke-1..4` | Pipeline | Injected worktree client ran; card mounted; a current Session is open and untouched (this mode does **not** run `ensureBlankSession`, so no Session is created); 1728x900 screenshot round-trip |
+| `rm-net` | Network oracle ready | `Network.enable` succeeded; same-origin API/document failures fail the run |
+| `rm-1` | Native Session row menu capture | reveals the native Workspace groups like a user, hovers a non-blank `[data-row-key="session:…"]` row and opens its **native "…" trigger** with a real click (right-clicking the row does not open this shell's row menu; the native trigger is the reachable path). Captures and sanity-asserts the shared surface: `[data-menu-material="translucent"]` with `role="menu"`, its class list and computed styles, every `[role="menuitem"]` label/order/`aria-keyshortcuts`/rendered `kbd` texts/icon SVG outerHTML, separators, and the afterContent footer (`Archive`). Dismisses with Escape |
+| `rm-2` | Card row menu = native popup minus Pin/Unpin | opens OUR `.psd-run-more` menu on a top-level running/recent row, moves the pointer onto the menu surface (natural position; also lets the row hover card dismiss) and compares it with the rm-1 capture: **(a)** same native surface — `[data-menu-material="translucent"]` present, class list identical to the native surface, `role="menu"`, exactly one `[role="menu"]`, **zero `.psd-menu` custom surfaces**; **(b)** computed material identical (background-color/image, backdrop-filter, border, border-radius, box-shadow, padding; plus the backing `_material_` layer's background/backdrop), and per-item height/font-size/classes identical; **(c)** item labels/order equal the native list with **exactly the Pin/Unpin entry removed** (Pin absent; `Show in Finder` and the other native/plugin actions kept); **(d)** `aria-keyshortcuts` and rendered `kbd` text equal the native hints for every shared action; **(e)** icon SVG outerHTML equal to the native keyed icon for every shared action; **(f)** the `Archive` afterContent footer region (classes, item labels, separator) matches the native footer and the total separator structure matches; **(g)** while open the row keeps `data-menu-open="true"` and the time↔"…" swap (time opacity 0, trigger opacity 1), and **Escape dismisses** the popup and **restores focus to the `.psd-run-more` trigger** (sampled after the native ~80 ms exit animation + unmount, polled, never faked); `data-menu-open` clears and the time/trigger swap restores after the pointer leaves. Screenshots + JSON evidence are written |
+| `rm-3` | Second-row replacement (one shared popup) | opens the menu from the lower visible top-level row, then opens the other (upper) row's trigger while the first menu is open; asserts exactly **one** shared popup remains, both rows are the native popup, `data-menu-open` moves to the active row, and Escape dismisses. The replacement click is geometrically verified (at plan time and again immediately before the click) NOT to be covered by the open menu surface, so it can never land on an action item; if the only second trigger is covered, or only one menuable row exists, the row is an explicit SKIP |
+
+Exit contract: **0** only when every row is PASS (explicit SKIPs allowed), with **0 page
+errors** and **0 real network failures**; `1` for any failed row, page error, real network
+failure or fatal error; `2` for usage errors.
+
+The negative control is required and recorded: the same mode run against the **pre-fix
+client** copied from the main checkout (md5 `c91e97be04aef561d7c267e9092b0f2f`, which still
+has the old custom `.psd-menu` popup) must fail `rm-2` with the custom surface / missing
+material / missing shortcut hints / different icons, while `rm-1` still passes and `rm-3`
+is an explicit SKIP (not the native popup, so replacement semantics do not apply). Logs
+under `.tmp-work/row-menu/e2e/` (gitignored).
+
+### Side effects and cleanup (`--row-menu`)
+
+- Creates/opens/edits **no Session** and types nothing: the mode only hovers rows, clicks
+  the row's own "…" triggers (never an action item), and dismisses with Escape. Smoke-3
+  only verifies the Session the shell restored and records its id.
+- Never clicks Rename / Fork / Copy Session ID / Show in Finder / Archive or any other
+  menu entry: every dismissal is Escape (the mode's only clicks are the two/three menu
+  triggers, and the replacement click is rect-checked against the open surface first).
+- The `finally` cleanup dismisses any popup left open by a failed check through Escape only
+  (pointer over the native surface first when one exists, pointer parked off the row for
+  the legacy custom popup), then prints the residual open state, `[role="menu"]` count,
+  `.psd-menu` count and rows still marked `data-menu-open` honestly.
+- No Host write: menu actions are never executed, no settings change, no localStorage
+  document is written by the harness; screenshots and capture JSON are written to the
+  gitignored `.tmp-work/row-menu/e2e/` directory and the throwaway Chrome profile is
+  removed with the temporary `--user-data-dir`.
+- Exit 0 requires every row PASS (SKIPs allowed), 0 page errors and 0 real network
+  failures.
+
+### Known limitations (`--row-menu`)
+
+- `rm-1` needs at least one rendered **non-blank** native Session row whose "…" trigger is
+  reachable after expanding the native Workspace groups like a user. On an empty sidebar
+  the check fails with the rendered-row snapshot; it never fabricates activity.
+- **Hover-card Escape interplay**: while a card row's hover card is open, the plugin's own
+  window-capture Escape handler closes the tooltip first and stops propagation, so a first
+  Escape with the pointer still over the row closes the tooltip rather than the menu. That
+  is pre-existing plugin keyboard behavior, not the native popup: the mode moves the
+  pointer onto the menu surface (where a user naturally is when choosing an item) and then
+  asserts Escape dismissal + focus restore. `rm-2` records the hover-card count before
+  Escape and requires it to be 0.
+- The native popup animates out (~80 ms) and unmounts after the exit animation, and focus
+  restore settles with the dismissal; `rm-2` polls the post-animation state for up to
+  2.5 s and asserts the restore strictly (a missing restore fails, never passes silently).
+- Surface class hashes are compared **native-vs-ours in the same page/build**, so a shell
+  stylesheet rename is not hardcoded; item counts/labels come from the same native
+  resolution the card delegates to.
+- `rm-3` needs two visible top-level menuable card rows and a second trigger not covered by
+  the open menu surface; otherwise it is an explicit SKIP (the safe-click rule wins over
+  the optional check).
+- Full mode was **not** run in this round; `b2-3`'s swap/hover-paint assertions are
+  unchanged by the popup alignment.
+
+### Recorded evidence (`--row-menu`, review-fix client, 2026-11-16)
+
+Worktree `row-menu-native-popup`, **fixed client** `src/client.js` md5
+**2b700ff6db6f8ba500a8e5feadd4079b** (1,226,770 chars / 1,231,955 bytes, 24,774 lines;
+contains the extracted, unit-tested `dwRowMenuResolve` delegation with the bounded
+800 ms nested `ready` wait + published-views fallback). **Pre-fix control** copied from the
+main checkout `src/client.js` md5 **c91e97be04aef561d7c267e9092b0f2f** to
+`.tmp-work/row-menu/e2e/client-prefix.js`. Node **v24.22.3**, Chrome **157.0.8103.79**,
+headless 1728x900 against the live GUI; logs/screenshots/JSON under
+`.tmp-work/row-menu/e2e/` (gitignored).
+
+| Run | Command | Result |
+|-----|---------|--------|
+| Acceptance | `node test/browser/sidebar.e2e.mjs --row-menu` | **PASS 8 / SKIP 0 / FAIL 0**, **0 page errors**, **0 real network failures**, 16.9 s, exit 0 (`row-menu-acceptance-2026-11-16.log`): rm-1 native menu 6 items `["Pin session","Rename","Fork session","Copy Session ID","Show in Finder","Archive session"]` (the entry is `Pin session` or `Unpin session` depending on the row's pinned state; both are filtered), material `translucent`, surface `_surface_1w4el_1 _list_1p5el_7 _scrollable_1p5el_19 _portal_1p5el_46`, shortcuts `Rename[⌥⌘G]`, `Fork session[⇧⌘F]`, `Archive session[⌥⌘A]`, 2 separators, footer `["Archive session"]`; rm-2 same surface/material/computed styles, **5 items = native 6 minus the Pin/Unpin entry**, identical shortcut hints and icon SVG markup for every shared action, 34 px item height / 13 px font, same footer placement, row kept `data-menu-open="true"` + time↔trigger swap, Escape dismissed and **focus returned to `.psd-run-more`** after the exit animation; rm-3 menu moved from the lower row to the upper row with exactly one shared popup and `data-menu-open` following the active row |
+| Negative control | `node test/browser/sidebar.e2e.mjs --row-menu --client .tmp-work/row-menu/e2e/client-prefix.js` | **exit 1**: `rm-1` **PASS**, `rm-2` **FAIL** with `no [data-menu-material] native shared surface; legacy custom .psd-menu surface present (1); no keyboard-shortcut hints rendered in the card menu; icon SVG markup differs for Rename, Fork session, Copy Session ID, Show in Finder, Archive session`, `rm-3` explicit **SKIP** (not the native popup), **0 page errors**, **0 real network failures**, 14.3 s (`row-menu-negative-control-final.log`) — the native-popup oracle is discriminating |
+| Static | `node --check test/browser/sidebar.e2e.mjs`; `node --check src/client.js` | exit 0 |
 
 ### Side effects and cleanup (`--pin` / `--live`)
 

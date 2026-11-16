@@ -101,7 +101,13 @@
  * clicked), the composer shows the play control (iw-3), clearing the record restores every
  * surface (iw-4), and real Host-interrupted rows are consistent with their rendered
  * marks (iw-5). It creates no Session and types nothing; every controlled record is
- * cleared in a `finally` block.
+ * cleared in a `finally` block. The `--row-menu` mode accepts the card row "…" menu
+ * alignment: it opens the native DSH Session row menu through the native row's own
+ * trigger and the card row menu through `.psd-run-more`, captures both, and asserts the
+ * card menu is the same native shared popup (surface material/classes, computed material,
+ * icon markup, shortcut hints, separators and the afterContent footer) with exactly the
+ * Pin/Unpin entry filtered out; it dismisses both with Escape only (no action item is
+ * ever clicked) and restores focus to the trigger.
  *
  * Usage:
  *   node test/browser/sidebar.e2e.mjs                 # full run (screenshots into .tmp-work/)
@@ -110,6 +116,7 @@
  *   node test/browser/sidebar.e2e.mjs --live          # shipped-install check, no client injection
  *   node test/browser/sidebar.e2e.mjs --layout        # sidebar-width drag flicker + persistence + Host sync
  *   node test/browser/sidebar.e2e.mjs --interrupted   # interrupted-state consistency acceptance (controlled seam)
+ *   node test/browser/sidebar.e2e.mjs --row-menu      # card row "…" menu = native shared popup parity acceptance
  *   node test/browser/sidebar.e2e.mjs --no-shots      # skip screenshots
  *   node test/browser/sidebar.e2e.mjs --client path/to/client.js
  *   node test/browser/sidebar.e2e.mjs --keep-open     # leave Chrome running for inspection
@@ -169,6 +176,13 @@ const INTERRUPTED_EVIDENCE_DIR = path.join(WORKTREE, '.tmp-work', 'interrupted-s
 const INTERRUPTED_CONTINUE_LABEL = /^(Continue the unfinished task|继续未完成的任务)$/
 const INTERRUPTED_BADGE_LABEL = /^(Task did not finish|任务未完成)$/
 
+// --row-menu mode: the card row "…" menu must be the native shared context-menu popup.
+// Evidence (captured menu facts + comparison) is written to this gitignored directory.
+const ROW_MENU_EVIDENCE_DIR = path.join(WORKTREE, '.tmp-work', 'row-menu', 'e2e')
+// Pin/Unpin label shapes in the native session menu (EN / ZH); the card menu must filter
+// exactly these entries out because its title-left pin button owns pinning.
+const ROW_MENU_PIN_LABEL = /^((un)?pin( session)?|(取消)?(固定|置顶))$/iu
+
 // ---------------------------------------------------------------------------------------------
 // small utilities
 // ---------------------------------------------------------------------------------------------
@@ -225,6 +239,7 @@ function parseArgs(argv) {
     else if (arg === '--live') opts.mode = 'live'
     else if (arg === '--layout') opts.mode = 'layout'
     else if (arg === '--interrupted') opts.mode = 'interrupted'
+    else if (arg === '--row-menu') opts.mode = 'row-menu'
     else if (arg === '--no-shots') opts.shots = false
     else if (arg === '--keep-open') opts.keepOpen = true
     else if (arg === '--headful') opts.headful = true
@@ -2114,7 +2129,7 @@ async function runSmoke({ page, results, state, opts }) {
     assertEqual(details.panels, 1, 'expected exactly one running card')
     return 'card inside the native Workspaces browser root'
   })
-  if (opts !== undefined && (opts.mode === 'layout' || opts.mode === 'interrupted')) {
+  if (opts !== undefined && (opts.mode === 'layout' || opts.mode === 'interrupted' || opts.mode === 'row-menu')) {
     // `--layout` / `--interrupted` only need the Session the shell already restored;
     // they never type and must not create a Session — `ensureBlankSession` can open a
     // new blank Session on the Host and switch the live GUI, which these modes avoid.
@@ -11900,6 +11915,712 @@ async function cleanupInterruptedMode(page, state) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// --row-menu mode: the card row "…" menu is the native shared context-menu popup
+// ---------------------------------------------------------------------------------------------
+
+/** Page-side probes for the `--row-menu` checks (plain serializable functions). */
+const probeRm = {
+  /** Top-level card rows: title, geometry, open state, time↔trigger swap, trigger centre. */
+  cardRows: () => {
+    const box = (element) => {
+      const rect = element.getBoundingClientRect()
+      return { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }
+    }
+    return [...document.querySelectorAll('.psd-run')].map((row) => {
+      const boxed = box(row)
+      const trigger = row.querySelector('.psd-run-more')
+      const time = row.querySelector('.psd-run-time')
+      const triggerRect = trigger === null ? null : box(trigger)
+      return {
+        title: (row.querySelector('.psd-run-title')?.innerText ?? '').trim(),
+        current: row.getAttribute('aria-current') === 'true',
+        menuable: row.getAttribute('data-menuable') === 'true',
+        menuOpen: row.getAttribute('data-menu-open') === 'true',
+        rect: boxed,
+        timeOpacity: time === null ? null : getComputedStyle(time).opacity,
+        moreOpacity: trigger === null ? null : getComputedStyle(trigger).opacity,
+        triggerPresent: trigger !== null,
+        triggerRect: triggerRect === null ? null : {
+          left: triggerRect.left,
+          top: triggerRect.top,
+          width: triggerRect.width,
+          height: triggerRect.height,
+          x: triggerRect.left + Math.round(triggerRect.width / 2),
+          y: triggerRect.top + Math.round(triggerRect.height / 2),
+        },
+      }
+    })
+  },
+
+  /** Native Session rows: key/text/geometry and the native "…" menu trigger, when rendered. */
+  nativeRows: () => {
+    const box = (element) => {
+      const rect = element.getBoundingClientRect()
+      return { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }
+    }
+    return [...document.querySelectorAll('[data-row-key^="session:"]')].map((row) => {
+      const boxed = box(row)
+      const trigger = row.querySelector('button[data-context-menu-trigger]')
+      const triggerRect = trigger === null ? null : box(trigger)
+      return {
+        key: row.getAttribute('data-row-key'),
+        id: (row.getAttribute('data-row-key') ?? '').replace(/^session:/, ''),
+        text: (row.innerText || '').trim().slice(0, 100),
+        rect: boxed,
+        hasTrigger: trigger !== null,
+        triggerVisible: triggerRect !== null && triggerRect.width >= 8,
+        triggerRect: triggerRect === null ? null : { ...triggerRect, x: triggerRect.left + Math.round(triggerRect.width / 2), y: triggerRect.top + Math.round(triggerRect.height / 2) },
+      }
+    })
+  },
+
+  /** Scroll one native Session row into view and return hover coordinates. */
+  nativeRowPoint: (key) => {
+    const row = document.querySelector(`[data-row-key="${key}"]`)
+    if (row === null) return null
+    row.scrollIntoView({ block: 'center' })
+    const rect = row.getBoundingClientRect()
+    return {
+      left: Math.round(rect.left),
+      top: Math.round(rect.top),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      hoverX: Math.round(rect.left + 70),
+      hoverY: Math.round(rect.top + Math.round(rect.height / 2)),
+    }
+  },
+
+  /**
+   * Capture every comparable fact of the open menu: the shared native surface (material,
+   * classes, computed styles, backing material layer), each `[role="menuitem"]` (label,
+   * aria-keyshortcuts, kbd texts, icon SVG outerHTML, metrics, footer placement), the
+   * separators and the afterContent footer region. Also detects the legacy custom
+   * `.psd-menu` surface so the negative control can report exactly what it renders.
+   */
+  menu: () => {
+    const box = (element) => {
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      return {
+        left: Math.round(rect.left),
+        top: Math.round(rect.top),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        right: Math.round(rect.right),
+        bottom: Math.round(rect.bottom),
+      }
+    }
+    const styleOf = (element) => {
+      if (element === null) return null
+      const style = getComputedStyle(element)
+      return {
+        backgroundColor: style.backgroundColor,
+        backgroundImage: style.backgroundImage,
+        backdropFilter: style.backdropFilter || style.webkitBackdropFilter || 'none',
+        border: `${style.borderTopWidth} ${style.borderTopStyle} ${style.borderTopColor}`,
+        borderRadius: style.borderRadius,
+        boxShadow: style.boxShadow,
+        padding: style.padding,
+        fontSize: style.fontSize,
+      }
+    }
+    const surface = document.querySelector('[data-menu-material]')
+    const material = surface === null ? null : surface.firstElementChild
+    const footer = surface === null ? null : surface.lastElementChild
+    const labelOf = (item) => ((item.innerText || item.textContent || '').trim().split('\n')[0] ?? '').trim()
+    const items = [...document.querySelectorAll('[role="menuitem"]')]
+    const describe = (item) => {
+      const svgs = [...item.querySelectorAll('svg')]
+      const keys = [...item.querySelectorAll('kbd')]
+      const rect = item.getBoundingClientRect()
+      const style = getComputedStyle(item)
+      let inFooter = false
+      for (let node = item.parentElement; node !== null && node !== surface && node !== document.body; node = node.parentElement) {
+        if (String(node.className).includes('footer')) {
+          inFooter = true
+          break
+        }
+      }
+      return {
+        label: labelOf(item),
+        text: (item.innerText || '').trim(),
+        role: item.getAttribute('role'),
+        keyshortcuts: item.getAttribute('aria-keyshortcuts'),
+        kbdTexts: keys.map((key) => (key.textContent || '').trim()),
+        icons: svgs.map((svg) => svg.outerHTML),
+        svgCount: svgs.length,
+        height: Math.round(rect.height),
+        fontSize: style.fontSize,
+        className: String(item.className),
+        wrapperClass: item.parentElement === null ? null : String(item.parentElement.className),
+        disabled: item.getAttribute('aria-disabled') === 'true' || item.disabled === true,
+        inFooter,
+      }
+    }
+    const described = items.map(describe)
+    return {
+      open: document.querySelectorAll('[role="menu"]').length > 0 || document.querySelector('.psd-menu') !== null,
+      menuCount: document.querySelectorAll('[role="menu"]').length,
+      customMenus: document.querySelectorAll('.psd-menu').length,
+      nativeSurface: surface === null ? null : {
+        material: surface.getAttribute('data-menu-material'),
+        role: surface.getAttribute('role'),
+        phase: surface.getAttribute('data-menu-phase'),
+        classList: [...surface.classList],
+        className: String(surface.className),
+        rect: box(surface),
+        style: styleOf(surface),
+        materialClass: material === null ? null : String(material.className),
+        materialStyle: styleOf(material),
+      },
+      itemLabels: described.map((item) => item.label),
+      items: described,
+      separators: document.querySelectorAll('[role="separator"]').length,
+      footer: footer === null ? null : {
+        className: String(footer.className),
+        itemLabels: [...footer.querySelectorAll('[role="menuitem"]')].map(labelOf),
+        separators: footer.querySelectorAll('[role="separator"]').length,
+      },
+    }
+  },
+
+  /** One card row's open state and time↔trigger swap, keyed by exact title. */
+  rowState: (title) => {
+    const row = [...document.querySelectorAll('.psd-run')]
+      .find((node) => ((node.querySelector('.psd-run-title')?.innerText ?? '').trim()) === title)
+    if (row === undefined) return { found: false }
+    const trigger = row.querySelector('.psd-run-more')
+    const time = row.querySelector('.psd-run-time')
+    return {
+      found: true,
+      menuOpen: row.getAttribute('data-menu-open') === 'true',
+      timeOpacity: time === null ? null : getComputedStyle(time).opacity,
+      moreOpacity: trigger === null ? null : getComputedStyle(trigger).opacity,
+      activeIsTrigger: trigger !== null && document.activeElement === trigger,
+    }
+  },
+
+  /** Focus / popup / hover-card state read after dismissal. */
+  focusState: () => ({
+    tag: document.activeElement === null ? null : document.activeElement.tagName,
+    className: document.activeElement === null ? null : String(document.activeElement.className),
+    isCardTrigger: document.activeElement !== null && document.activeElement.classList.contains('psd-run-more'),
+    isMenuItem: document.activeElement !== null && document.activeElement.getAttribute('role') === 'menuitem',
+    hoverCards: document.querySelectorAll('.psd-hovercard').length,
+    menus: document.querySelectorAll('[role="menu"]').length,
+    customMenus: document.querySelectorAll('.psd-menu').length,
+  }),
+}
+
+/**
+ * @param {object} page - Page wrapper.
+ * @returns {Promise<object | null>} the open-menu capture (never throws).
+ */
+async function readRowMenuState(page) {
+  try {
+    return await page.eval(probeRm.menu)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Poll the open-menu capture until the predicate accepts it.
+ * @param {object} page - Page wrapper.
+ * @param {Function} predicate - receives the capture.
+ * @param {object} [options] - timeout/interval/label.
+ * @returns {Promise<object>} the matching capture.
+ */
+async function waitRowMenuState(page, predicate, { timeout = 8000, interval = 120, label = 'row menu state' } = {}) {
+  const deadline = Date.now() + timeout
+  let last = null
+  while (Date.now() < deadline) {
+    const menu = await readRowMenuState(page)
+    if (menu !== null) {
+      last = menu
+      if (predicate(menu)) return menu
+    }
+    await sleep(interval)
+  }
+  throw new Error(`timed out after ${timeout}ms waiting for ${label} (last capture ${short(JSON.stringify(last === null ? null : { open: last.open, menuCount: last.menuCount, customMenus: last.customMenus, labels: last.itemLabels }), 500)})`)
+}
+
+/**
+ * @param {object} page - Page wrapper.
+ * @param {object} [options] - timeout/label.
+ * @returns {Promise<object>} the open menu capture.
+ */
+async function waitRowMenuOpen(page, { timeout = 8000, label = 'shared context menu' } = {}) {
+  return waitRowMenuState(page, (menu) => menu.open === true, { timeout, label })
+}
+
+/**
+ * @param {object} page - Page wrapper.
+ * @param {object} [options] - timeout/label.
+ * @returns {Promise<object>} the closed-menu capture.
+ */
+async function waitRowMenuClosed(page, { timeout = 6000, label = 'shared context menu dismissal' } = {}) {
+  return waitRowMenuState(page, (menu) => menu.open === false, { timeout, label })
+}
+
+/**
+ * Whether one native menu entry is the Pin/Unpin action the card menu must filter.
+ * @param {object} item - captured menu item.
+ * @returns {boolean} whether it is a pin entry.
+ */
+function isRowMenuPinItem(item) {
+  if (ROW_MENU_PIN_LABEL.test((item.label ?? '').trim())) return true
+  return (item.icons ?? []).some((html) => /data-icon="[^"]*(pin|pushpin)/iu.test(html))
+}
+
+/**
+ * Move the pointer over the open menu surface (a natural position while choosing an
+ * item). This also lets the card row's hover card dismiss, so the shared popup — not the
+ * hover card's own Escape handler — receives Escape.
+ * @param {object} page - Page wrapper.
+ * @param {object} menu - open-menu capture.
+ * @returns {Promise<boolean>} whether the pointer was placed over the native surface.
+ */
+async function movePointerOntoRowMenu(page, menu) {
+  const rect = menu === null ? null : menu.nativeSurface?.rect ?? null
+  if (rect === null || rect.width < 8 || rect.height < 8) return false
+  await page.moveTo(rect.left + Math.round(rect.width / 2), rect.top + Math.round(rect.height / 2))
+  await sleep(450)
+  return true
+}
+
+/**
+ * Dismiss any open popup through Escape only (no action item is ever clicked). When a
+ * native surface exists the pointer is placed over it first; the legacy custom popup (and
+ * the negative control) gets the pointer parked off the row instead.
+ * @param {object} page - Page wrapper.
+ * @param {object} [options] - attempts.
+ * @returns {Promise<boolean>} whether no popup is open afterwards.
+ */
+async function dismissRowMenu(page, { attempts = 4 } = {}) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const menu = await readRowMenuState(page)
+    if (menu !== null && menu.open === false) return true
+    if (menu === null) return false
+    if (menu.nativeSurface?.rect !== null && menu.nativeSurface?.rect !== undefined) {
+      await movePointerOntoRowMenu(page, menu)
+    } else {
+      await page.moveTo(900, 500)
+      await sleep(350)
+    }
+    await page.pressEscape()
+    await sleep(500)
+  }
+  const menu = await readRowMenuState(page)
+  return menu !== null && menu.open === false
+}
+
+/**
+ * Hover one card row, then click its real "…" trigger with CDP input.
+ * @param {object} page - Page wrapper.
+ * @param {string} title - exact card row title.
+ * @returns {Promise<object>} the open-menu capture.
+ */
+async function openCardRowMenu(page, title) {
+  await page.moveTo(900, 500)
+  await sleep(220)
+  const initial = (await page.eval(probeRm.cardRows)).find((row) => row.title === title)
+  assert(initial !== undefined, `the card row "${short(title, 50)}" disappeared before opening its menu`)
+  await page.moveTo(initial.rect.left + 80, initial.rect.top + Math.round(initial.rect.height / 2))
+  await sleep(700)
+  const hovered = (await page.eval(probeRm.cardRows)).find((row) => row.title === title)
+  assert(hovered !== undefined && hovered.triggerRect !== null, `the "${short(title, 50)}" row "…" trigger is not reachable on hover`)
+  await page.moveTo(hovered.triggerRect.x, hovered.triggerRect.y)
+  await sleep(280)
+  await page.clickAt(hovered.triggerRect.x, hovered.triggerRect.y)
+  return waitRowMenuOpen(page, { timeout: 8000, label: `card row menu for "${short(title, 40)}"` })
+}
+
+/**
+ * Open the native DSH Session row menu through the row's own native "…" trigger with
+ * real CDP input (right-clicking the row does not open this shell's row menu).
+ * @param {object} page - Page wrapper.
+ * @returns {Promise<{ row: object, menu: object }>} the native row and the captured menu.
+ */
+async function captureNativeSessionMenu(page) {
+  // The native tree starts collapsed on a fresh profile: reveal the Workspace groups so
+  // real Session rows (and their native "…" triggers) are rendered, like a user would.
+  try {
+    await ensureNativeSessionRowsVisible(page, 4)
+  } catch {
+    // The scan below reports the exact missing-row state instead.
+  }
+  const rows = await page.eval(probeRm.nativeRows)
+  const candidates = rows.filter((row) => row.hasTrigger && row.text.length > 0)
+  assert(candidates.length > 0, `no non-blank native Session row exposes its "…" menu trigger (rendered session rows: ${short(JSON.stringify(rows.map((row) => ({ key: row.key, text: row.text.slice(0, 40), hasTrigger: row.hasTrigger, rect: row.rect }))), 1100)}; start or open a Session and rerun)`)
+  const problems = []
+  for (const candidate of candidates) {
+    const point = await page.eval(probeRm.nativeRowPoint, candidate.key)
+    if (point === null) continue
+    await page.moveTo(900, 500)
+    await sleep(180)
+    await page.moveTo(point.hoverX, point.hoverY)
+    await sleep(750)
+    const hovered = (await page.eval(probeRm.nativeRows)).find((row) => row.key === candidate.key)
+    if (hovered === undefined || hovered.triggerRect === null || hovered.triggerRect.width < 8) {
+      problems.push(`${candidate.key}: native menu trigger not reachable on hover`)
+      continue
+    }
+    await page.moveTo(hovered.triggerRect.x, hovered.triggerRect.y)
+    await sleep(250)
+    await page.clickAt(hovered.triggerRect.x, hovered.triggerRect.y)
+    try {
+      const menu = await waitRowMenuOpen(page, { timeout: 8000, label: `native Session row menu for "${short(candidate.text, 40)}"` })
+      if (menu.nativeSurface === null) {
+        problems.push(`${candidate.key}: the native row opened no [data-menu-material] surface (custom menus ${menu.customMenus})`)
+        await dismissRowMenu(page)
+        continue
+      }
+      return { row: hovered, menu }
+    } catch (error) {
+      problems.push(`${candidate.key}: ${(error && error.message) || String(error)}`)
+      await dismissRowMenu(page)
+    }
+  }
+  throw new Error(`the native Session row menu did not open for any visible row (${short(JSON.stringify(problems), 900)})`)
+}
+
+/**
+ * Plan the optional second-row replacement check: open the first row menu from the lower
+ * row, then verify the other (upper) row's trigger is not covered by the open surface so a
+ * safe replacement click cannot hit an action item.
+ * @param {object} page - Page wrapper.
+ * @returns {Promise<{ skipReason: string | null, first?: object, second?: object, menu?: object }>} the plan.
+ */
+async function planRowMenuReplacement(page) {
+  await page.moveTo(900, 500)
+  await sleep(250)
+  const rows = (await page.eval(probeRm.cardRows)).filter((row) => row.menuable && row.triggerPresent)
+  if (rows.length < 2) return { skipReason: `only ${rows.length} top-level card row(s) expose the "…" trigger in this live data state; a second-row replacement cannot be exercised` }
+  const ordered = [...rows].sort((left, right) => left.rect.top - right.rect.top)
+  const first = ordered[ordered.length - 1]
+  const second = ordered[0]
+  if (first.title === second.title) return { skipReason: 'the visible card rows do not provide two distinct rows' }
+  let menu = null
+  try {
+    menu = await openCardRowMenu(page, first.title)
+  } catch (error) {
+    return { skipReason: `the first replacement row menu did not open: ${short((error && error.message) || String(error), 300)}` }
+  }
+  if (menu.nativeSurface === null) {
+    await dismissRowMenu(page)
+    return { skipReason: `the card row menu in this client is not the native shared popup (custom .psd-menu nodes: ${menu.customMenus}); replacement semantics are not applicable (see rm-2)` }
+  }
+  const initialSecondTrigger = second.triggerRect
+  const surface = menu.nativeSurface.rect
+  const overlaps = initialSecondTrigger !== null
+    && initialSecondTrigger.left < surface.right
+    && initialSecondTrigger.left + initialSecondTrigger.width > surface.left
+    && initialSecondTrigger.top < surface.bottom
+    && initialSecondTrigger.top + initialSecondTrigger.height > surface.top
+  if (overlaps) {
+    await dismissRowMenu(page)
+    return { skipReason: 'the second row\'s "…" trigger is covered by the open menu surface, so a replacement click could land on an action item; the safe single-popup assertions are skipped' }
+  }
+  return { skipReason: null, first, second, menu }
+}
+
+/**
+ * Write one optional screenshot into the gitignored `--row-menu` evidence directory.
+ * @returns {Promise<string | null>} the file path, or null when disabled/failed.
+ */
+async function writeRowMenuShot(page, name, clip, state) {
+  if (state.shotsEnabled !== true || clip === null || clip === undefined) return null
+  try {
+    await mkdir(ROW_MENU_EVIDENCE_DIR, { recursive: true })
+    const x = Math.max(0, Math.round(clip.left) - 16)
+    const y = Math.max(0, Math.round(clip.top) - 16)
+    const width = Math.min(Math.round(clip.width) + 32, VIEWPORT.width - x)
+    const height = Math.min(Math.round(clip.height) + 32, VIEWPORT.height - y)
+    if (width < 8 || height < 8) return null
+    const file = path.join(ROW_MENU_EVIDENCE_DIR, `${name}.png`)
+    await page.screenshot(file, { x, y, width, height })
+    log(`wrote ${file}`)
+    state.rowMenuEvidence = [...(state.rowMenuEvidence ?? []), file]
+    return file
+  } catch (error) {
+    log(`warning: row-menu screenshot ${name} failed: ${short((error && error.message) || String(error), 200)}`)
+    return null
+  }
+}
+
+/**
+ * Write one JSON evidence file (captured menus + comparison) into the gitignored
+ * `--row-menu` evidence directory. The token is never included.
+ * @returns {Promise<string | null>} the file path, or null when the write failed.
+ */
+async function writeRowMenuEvidence(state, name, data) {
+  try {
+    await mkdir(ROW_MENU_EVIDENCE_DIR, { recursive: true })
+    const stamp = new Date().toISOString().replace(/[:.]/gu, '-')
+    const file = path.join(ROW_MENU_EVIDENCE_DIR, `row-menu-${name}-${stamp}.json`)
+    await writeFile(file, `${JSON.stringify({ at: new Date().toISOString(), ...data }, null, 2)}\n`, 'utf8')
+    log(`wrote ${file}`)
+    state.rowMenuEvidence = [...(state.rowMenuEvidence ?? []), file]
+    return file
+  } catch (error) {
+    log(`warning: could not write row-menu evidence ${name}: ${short((error && error.message) || String(error), 200)}`)
+    return null
+  }
+}
+
+/**
+ * `--row-menu`: accept that the card row "…" menu is the native shared context-menu popup
+ * (native material, icons, shortcut hints and footer) with only Pin/Unpin filtered out.
+ * @param {object} input - `{ page, results, state }`.
+ * @returns {Promise<void>}
+ */
+async function runRowMenuChecks({ page, results, state }) {
+  log('\n=== --row-menu: card row "…" menu = native shared context-menu popup ===')
+  state.mode = 'row-menu'
+  state.rowMenu = { native: null, ours: null, comparison: null, target: null }
+
+  await results.check('rm-net', 'CDP Network domain enabled (real network-failure oracle)', async () => {
+    assert(page.networkEnabled === true, `Network.enable failed: ${page.networkError || 'unknown error'}`)
+    return 'Network domain enabled; same-origin API/document failures are counted'
+  })
+
+  // Expand the card's five-row default like a user so every top-level row is reachable.
+  await ensurePanelRows(page)
+  await resetPointer(page)
+
+  await results.check('rm-1', 'native DSH Session row menu is the shared popup: material, items, shortcut hints, icons, separators and footer captured', async () => {
+    const captured = await captureNativeSessionMenu(page)
+    const menu = captured.menu
+    assert(menu.nativeSurface !== null, 'the native Session row menu rendered no [data-menu-material] shared surface')
+    assertEqual(menu.nativeSurface.material, 'translucent', `the native Session row menu must use the translucent shared material (got ${menu.nativeSurface.material})`)
+    assertEqual(menu.nativeSurface.role, 'menu', 'the shared surface must expose role="menu"')
+    assert(menu.items.length >= 4, `the native Session row menu must carry the native Session actions (got ${menu.items.length})`)
+    assert(menu.items.every((item) => typeof item.label === 'string' && item.label.length > 0), 'every native menu item must render a label')
+    const shortcutItems = menu.items.filter((item) => (item.keyshortcuts ?? '') !== '' || item.kbdTexts.length > 0)
+    assert(shortcutItems.length >= 1, `at least one native Session action must carry its shortcut hint (got ${shortcutItems.length})`)
+    assert(menu.items.some((item) => item.icons.length === 1), 'the native menu must render keyed icon SVGs')
+    assert(menu.footer !== null && menu.footer.itemLabels.length >= 1, 'the native menu must render its afterContent footer region (Archive)')
+    assert(menu.items.some((item) => item.inFooter), 'at least one native action must sit in the afterContent footer')
+    state.rowMenu.native = { row: { key: captured.row.key, text: captured.row.text }, menu }
+    log(`native menu: ${menu.items.length} items ${short(JSON.stringify(menu.itemLabels), 400)}; material ${menu.nativeSurface.material}; ${menu.separators} separator(s); footer ${short(JSON.stringify(menu.footer.itemLabels), 160)}`)
+    await writeRowMenuShot(page, 'rm1-native-session-menu', menu.nativeSurface.rect, state)
+    await writeRowMenuEvidence(state, 'native-menu', { row: captured.row, menu })
+    await page.pressEscape()
+    await waitRowMenuClosed(page, { timeout: 6000, label: 'Escape dismissal of the native Session row menu' })
+    return `native row "${short(captured.row.text, 50)}": ${menu.items.length} items, material ${menu.nativeSurface.material}/${menu.nativeSurface.className}, ${shortcutItems.map((item) => `${item.label}[${item.kbdTexts.join('')}]`).join(', ')}, ${menu.separators} separator(s), footer ${JSON.stringify(menu.footer.itemLabels)}`
+  })
+
+  await results.check('rm-2', 'card row "…" menu is the native shared popup with native material/icons/shortcut hints/footer, minus Pin/Unpin', async () => {
+    const native = state.rowMenu?.native
+    assert(native !== null && native !== undefined, 'the native Session row menu was not captured (rm-1 failed first)')
+    await resetPointer(page)
+    const rows = (await page.eval(probeRm.cardRows)).filter((row) => row.menuable && row.triggerPresent)
+    assert(rows.length > 0, 'no top-level running/recent card row exposes the "…" trigger')
+    // Prefer an ordinary (non-current) row: no atmosphere/hover-card noise beyond the tooltip.
+    const target = rows.find((row) => row.current === false) ?? rows[0]
+    state.rowMenu.target = target.title
+    await openCardRowMenu(page, target.title)
+    const opened = await readRowMenuState(page)
+    await movePointerOntoRowMenu(page, opened)
+    const menu = await readRowMenuState(page)
+    const rowState = await page.eval(probeRm.rowState, target.title)
+    const focusOpen = await page.eval(probeRm.focusState)
+    state.rowMenu.ours = { target: target.title, menu, rowState }
+    await writeRowMenuShot(page, 'rm2-card-row-menu', menu.nativeSurface?.rect ?? { left: 0, top: 0, width: VIEWPORT.width, height: VIEWPORT.height }, state)
+    await writeRowMenuEvidence(state, 'ours-menu', { native: native.menu, ours: menu, rowState })
+    // Aggregate the headline discrepancies first so a wrong-surface client (the negative
+    // control's legacy custom `.psd-menu`) reports every missing native trait at once.
+    const headlineProblems = []
+    if (menu.nativeSurface === null) headlineProblems.push('no [data-menu-material] native shared surface')
+    if (menu.customMenus > 0) headlineProblems.push(`legacy custom .psd-menu surface present (${menu.customMenus})`)
+    if (menu.nativeSurface !== null && menu.nativeSurface.material !== native.menu.nativeSurface.material) {
+      headlineProblems.push(`surface material ${JSON.stringify(menu.nativeSurface.material)} instead of ${JSON.stringify(native.menu.nativeSurface.material)}`)
+    }
+    const ourShortcutCount = menu.items.filter((item) => (item.keyshortcuts ?? '') !== '' || item.kbdTexts.length > 0).length
+    const nativeShortcutCount = native.menu.items.filter((item) => (item.keyshortcuts ?? '') !== '' || item.kbdTexts.length > 0).length
+    if (nativeShortcutCount > 0 && ourShortcutCount === 0) headlineProblems.push('no keyboard-shortcut hints rendered in the card menu')
+    const nativeSharedForHeadline = native.menu.items.filter((item) => !isRowMenuPinItem(item))
+    const iconProblems = nativeSharedForHeadline.filter((expected) => {
+      const actual = menu.items.find((item) => item.label === expected.label)
+      return actual === undefined || JSON.stringify(actual.icons) !== JSON.stringify(expected.icons)
+    })
+    if (iconProblems.length > 0) headlineProblems.push(`icon SVG markup differs for ${iconProblems.map((item) => item.label).join(', ')}`)
+    assertEqual(headlineProblems.length, 0,
+      `the card row menu does not match the native shared popup: ${headlineProblems.join('; ')} (card labels ${short(JSON.stringify(menu.itemLabels), 240)})`)
+    // (a) the same native shared popup, not a custom surface.
+    assert(menu.nativeSurface !== null, `the card row menu is not the native shared popup: no [data-menu-material] surface (custom .psd-menu nodes: ${menu.customMenus})`)
+    assertEqual(menu.customMenus, 0, 'the legacy custom .psd-menu surface must be gone')
+    assertEqual(menu.menuCount, 1, `exactly one shared popup may be open (got ${menu.menuCount})`)
+    assertEqual(menu.nativeSurface.material, native.menu.nativeSurface.material, 'the card menu material must match the native Session row menu')
+    assertEqual(menu.nativeSurface.material, 'translucent', 'the card menu must use the native translucent material')
+    assertEqual(JSON.stringify(menu.nativeSurface.classList), JSON.stringify(native.menu.nativeSurface.classList),
+      `the card menu surface classes must match the native surface (ours ${JSON.stringify(menu.nativeSurface.classList)}, native ${JSON.stringify(native.menu.nativeSurface.classList)})`)
+    // (b) computed material/geometry matches the native surface exactly.
+    for (const key of ['backgroundColor', 'backgroundImage', 'backdropFilter', 'border', 'borderRadius', 'boxShadow', 'padding']) {
+      assertEqual(menu.nativeSurface.style[key], native.menu.nativeSurface.style[key], `the card menu surface ${key} must match the native menu (ours ${JSON.stringify(menu.nativeSurface.style[key])}, native ${JSON.stringify(native.menu.nativeSurface.style[key])})`)
+    }
+    assertEqual(menu.nativeSurface.materialClass, native.menu.nativeSurface.materialClass, 'the card menu backing material class must match the native menu')
+    for (const key of ['backgroundColor', 'backgroundImage', 'backdropFilter']) {
+      assertEqual(menu.nativeSurface.materialStyle[key], native.menu.nativeSurface.materialStyle[key], `the card menu material layer ${key} must match the native menu`)
+    }
+    // (c) items = native list in order, with exactly Pin/Unpin removed; no pin entry.
+    const nativePin = native.menu.items.filter((item) => isRowMenuPinItem(item))
+    const nativeShared = native.menu.items.filter((item) => !isRowMenuPinItem(item))
+    assert(nativePin.length >= 1, `the native Session menu must carry the Pin/Unpin entry it filters (native labels ${JSON.stringify(native.menu.itemLabels)})`)
+    assert(menu.items.every((item) => !isRowMenuPinItem(item)), `the card menu must not contain a Pin/Unpin entry (labels ${JSON.stringify(menu.itemLabels)})`)
+    assertEqual(JSON.stringify(menu.itemLabels), JSON.stringify(nativeShared.map((item) => item.label)),
+      `the card menu items must equal the native Session actions in order with exactly the Pin/Unpin entry removed (ours ${JSON.stringify(menu.itemLabels)}, native minus pin ${JSON.stringify(nativeShared.map((item) => item.label))})`)
+    if (nativeShared.some((item) => item.label === 'Show in Finder')) {
+      assert(menu.itemLabels.includes('Show in Finder'), 'the plugin-contributed "Show in Finder" action must stay in the card menu')
+    }
+    // (d)(e) shortcut hints and icon SVG markup match the native menu for every shared action.
+    for (const expected of nativeShared) {
+      const actual = menu.items.find((item) => item.label === expected.label)
+      assert(actual !== undefined, `the card menu is missing the native action "${expected.label}"`)
+      assertEqual(actual.keyshortcuts ?? null, expected.keyshortcuts ?? null, `"${expected.label}" aria-keyshortcuts must match the native menu`)
+      assertEqual(JSON.stringify(actual.kbdTexts), JSON.stringify(expected.kbdTexts), `"${expected.label}" rendered shortcut keys must match the native menu (ours ${JSON.stringify(actual.kbdTexts)}, native ${JSON.stringify(expected.kbdTexts)})`)
+      assertEqual(JSON.stringify(actual.icons), JSON.stringify(expected.icons), `"${expected.label}" icon SVG markup must match the native keyed icon`)
+      assertEqual(actual.svgCount, expected.svgCount, `"${expected.label}" must render the same number of icon SVGs as the native menu`)
+      assertEqual(actual.height, expected.height, `"${expected.label}" menu item height must match the native item`)
+      assertEqual(actual.fontSize, expected.fontSize, `"${expected.label}" menu item font-size must match the native item`)
+      assertEqual(actual.className, expected.className, `"${expected.label}" menu item classes must match the native item`)
+      assertEqual(actual.inFooter, expected.inFooter, `"${expected.label}" footer placement must match the native menu`)
+    }
+    const shortcutItems = menu.items.filter((item) => (item.keyshortcuts ?? '') !== '' || item.kbdTexts.length > 0)
+    assert(shortcutItems.length >= 2, `the card menu must expose the native shortcut hints (got ${shortcutItems.length}: ${JSON.stringify(shortcutItems.map((item) => `${item.label}[${item.kbdTexts.join('')}]`))})`)
+    // (f) footer / afterContent placement matches the native menu.
+    assert(menu.footer !== null, 'the card menu must render the native afterContent footer region')
+    assertEqual(menu.footer.className, native.menu.footer.className, 'the card menu footer classes must match the native menu footer')
+    assertEqual(JSON.stringify(menu.footer.itemLabels), JSON.stringify(native.menu.footer.itemLabels), 'the card menu footer actions must match the native footer actions')
+    assertEqual(menu.footer.separators, native.menu.footer.separators, 'the card menu footer separator must match the native footer')
+    assertEqual(menu.separators, native.menu.separators, 'the card menu separator structure must match the native menu')
+    assert(menu.footer.itemLabels.length >= 1, 'the afterContent footer must carry at least one action (Archive)')
+    // (g) the row keeps its open state and swap while the popup is open.
+    assertEqual(rowState.found, true, `the card row "${short(target.title, 50)}" disappeared while its menu was open`)
+    assertEqual(rowState.menuOpen, true, 'the row must keep data-menu-open="true" while the shared popup is open')
+    assertEqual(rowState.timeOpacity, '0', `the row time must stay swapped for the "…" trigger while the menu is open (opacity ${rowState.timeOpacity})`)
+    assertEqual(rowState.moreOpacity, '1', `the "…" trigger must stay visible while the menu is open (opacity ${rowState.moreOpacity})`)
+    assertEqual(focusOpen.hoverCards, 0, 'the row hover card must be dismissed before Escape is asserted (pointer over the menu)')
+    // (g) Escape dismisses and restores focus to the trigger; data-menu-open clears.
+    await page.pressEscape()
+    await waitRowMenuClosed(page, { timeout: 6000, label: 'Escape dismissal of the card row menu' })
+    // The native popup animates out (~80 ms exit) and only unmounts afterwards; the shared
+    // popup restores focus when the dismissal settles. Poll for that post-animation state
+    // instead of reading a pre-animation snapshot (the restore is still strictly asserted).
+    let dismissed = await page.eval(probeRm.rowState, target.title)
+    let focusClosed = await page.eval(probeRm.focusState)
+    const focusDeadline = Date.now() + 2500
+    while (Date.now() < focusDeadline && dismissed.activeIsTrigger !== true) {
+      await sleep(120)
+      dismissed = await page.eval(probeRm.rowState, target.title)
+      focusClosed = await page.eval(probeRm.focusState)
+    }
+    assertEqual(dismissed.menuOpen, false, 'data-menu-open must clear after Escape')
+    assertEqual(dismissed.activeIsTrigger, true, `Escape must restore focus to the row "…" trigger after the exit animation (active element ${JSON.stringify(focusClosed.className)})`)
+    assertEqual(focusClosed.menus, 0, 'no [role="menu"] may remain after Escape')
+    await resetPointer(page)
+    await sleep(400)
+    const restored = await page.eval(probeRm.rowState, target.title)
+    assertEqual(restored.timeOpacity, '1', 'the row time must return after the menu is dismissed and the pointer leaves')
+    assertEqual(restored.moreOpacity, '0', 'the "…" trigger must hide again after dismissal')
+    state.rowMenu.comparison = {
+      surfaceClass: menu.nativeSurface.className,
+      items: menu.itemLabels,
+      nativeItems: native.menu.itemLabels,
+      filteredPin: nativePin.map((item) => item.label),
+      shortcutItems: shortcutItems.map((item) => `${item.label}[${item.kbdTexts.join('')}]`),
+      footer: menu.footer.itemLabels,
+    }
+    await writeRowMenuEvidence(state, 'comparison', { native: native.menu, ours: menu, rowState, comparison: state.rowMenu.comparison })
+    return `same surface ${menu.nativeSurface.className}; ${menu.items.length} items = native ${native.menu.items.length} minus ${JSON.stringify(nativePin.map((item) => item.label))}; shortcuts ${shortcutItems.map((item) => `${item.label}[${item.kbdTexts.join('')}]`).join(', ')}; icon markup equal for every shared action; footer ${JSON.stringify(menu.footer.itemLabels)}; row data-menu-open + time↔"…" swap held; Escape dismissed and restored focus to the trigger`
+  })
+
+  // A popup must not leak into the replacement check (rm-2 may have failed while one is
+  // open, e.g. the legacy custom menu in the negative control).
+  await dismissRowMenu(page)
+  const oursMenu = state.rowMenu?.ours?.menu ?? null
+  const oursIsNative = oursMenu !== null && oursMenu.nativeSurface !== null
+  const replacementPlan = oursIsNative
+    ? await planRowMenuReplacement(page)
+    : { skipReason: `the card row menu in this client is not the native shared popup (no [data-menu-material] surface${oursMenu !== null && oursMenu.customMenus > 0 ? `; custom .psd-menu nodes: ${oursMenu.customMenus}` : ''}) — second-row replacement semantics are not applicable (see rm-2)` }
+  if (replacementPlan.skipReason !== null) {
+    await results.skip('rm-3', 'opening the menu from a second card row replaces the first (one shared popup)', replacementPlan.skipReason)
+  } else {
+    await results.check('rm-3', 'opening the menu from a second card row replaces the first (one shared popup)', async () => {
+      const first = replacementPlan.first
+      const second = replacementPlan.second
+      const firstMenu = replacementPlan.menu
+      assertEqual(firstMenu.menuCount, 1, 'exactly one shared popup must be open for the first row')
+      const firstState = await page.eval(probeRm.rowState, first.title)
+      assertEqual(firstState.menuOpen, true, `the first row "${short(first.title, 40)}" must be marked open`)
+      // Move to the second (upper) row and open its menu; its trigger is not covered by the
+      // first menu's surface (checked by planRowMenuReplacement).
+      await page.moveTo(900, 500)
+      await sleep(200)
+      await page.moveTo(second.rect.left + 80, second.rect.top + Math.round(second.rect.height / 2))
+      await sleep(700)
+      const secondHovered = (await page.eval(probeRm.cardRows)).find((row) => row.title === second.title)
+      assert(secondHovered !== undefined && secondHovered.triggerRect !== null, `the second row "${short(second.title, 40)}" trigger is not reachable`)
+      const surfaceNow = (await readRowMenuState(page))?.nativeSurface?.rect ?? null
+      assert(surfaceNow !== null, 'the first row menu surface disappeared before the replacement click')
+      const overlapsNow = secondHovered.triggerRect.left < surfaceNow.right
+        && secondHovered.triggerRect.left + secondHovered.triggerRect.width > surfaceNow.left
+        && secondHovered.triggerRect.top < surfaceNow.bottom
+        && secondHovered.triggerRect.top + secondHovered.triggerRect.height > surfaceNow.top
+      assert(!overlapsNow, 'the second row "…" trigger moved under the open menu surface; refusing to click (an action item could be hit)')
+      await page.moveTo(secondHovered.triggerRect.x, secondHovered.triggerRect.y)
+      await sleep(280)
+      await page.clickAt(secondHovered.triggerRect.x, secondHovered.triggerRect.y)
+      const replaced = await waitRowMenuOpen(page, { timeout: 6000, label: 'replacement card row menu' })
+      assert(replaced.nativeSurface !== null, 'the replacement menu must still be the native shared popup')
+      assertEqual(replaced.menuCount, 1, `only one shared popup may exist after opening from a second row (got ${replaced.menuCount})`)
+      const secondState = await page.eval(probeRm.rowState, second.title)
+      const firstAfter = await page.eval(probeRm.rowState, first.title)
+      assertEqual(secondState.menuOpen, true, 'the second row must own data-menu-open after the replacement')
+      assertEqual(firstAfter.menuOpen, false, 'the first row must clear data-menu-open when the menu moves to the second row')
+      await movePointerOntoRowMenu(page, replaced)
+      await page.pressEscape()
+      await waitRowMenuClosed(page, { timeout: 6000, label: 'Escape dismissal of the replacement menu' })
+      return `menu moved from "${short(first.title, 40)}" to "${short(second.title, 40)}": 1 shared popup, data-menu-open follows the active row, Escape dismissed`
+    })
+  }
+}
+
+/**
+ * Close any popup the `--row-menu` checks left open (Escape only) and report the residual
+ * menu state honestly. Never clicks an action item.
+ * @param {object} page - Page wrapper.
+ * @param {object} state - harness state with `rowMenu`.
+ * @returns {Promise<void>}
+ */
+async function cleanupRowMenu(page, state) {
+  if (state.mode !== 'row-menu') return
+  const issues = []
+  try {
+    const dismissed = await dismissRowMenu(page, { attempts: 4 })
+    if (!dismissed) issues.push('could not dismiss the popup with Escape')
+    const menu = await readRowMenuState(page)
+    const openRows = await page.eval(() => [...document.querySelectorAll('.psd-run[data-menu-open="true"]')]
+      .map((row) => (row.querySelector('.psd-run-title')?.innerText ?? '').trim()))
+    state.rowMenuCleanup = {
+      dismissed,
+      open: menu === null ? null : menu.open === true,
+      menuCount: menu === null ? null : menu.menuCount,
+      customMenus: menu === null ? null : menu.customMenus,
+      openRows,
+      issues,
+    }
+    log(`cleanup: popup dismissed=${dismissed}; open ${state.rowMenuCleanup.open}; menus ${state.rowMenuCleanup.menuCount}; custom .psd-menu ${state.rowMenuCleanup.customMenus}; rows still marked open ${short(JSON.stringify(openRows), 200)}; issues ${issues.length}`)
+    if (issues.length > 0) log(`cleanup issues: ${short(issues.join('; '), 400)}`)
+  } catch (error) {
+    issues.push(`cleanup failed: ${(error && error.message) || String(error)}`)
+    state.rowMenuCleanup = { issues }
+    log(`cleanup: ${short((error && error.message) || String(error), 500)}`)
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------------------------
 
@@ -11935,7 +12656,7 @@ async function run() {
     chrome = await launchChrome(opts)
     log(`chrome: headless pid ${chrome.proc.pid}, CDP port ${chrome.port}`)
     const cdp = await CdpConnection.connect(chrome.wsUrl)
-    page = await Page.open(cdp, url, injectorSource(clientSource), { trackNetwork: opts.mode === 'pin' || opts.mode === 'layout' || opts.mode === 'interrupted' })
+    page = await Page.open(cdp, url, injectorSource(clientSource), { trackNetwork: opts.mode === 'pin' || opts.mode === 'layout' || opts.mode === 'interrupted' || opts.mode === 'row-menu' })
     log('page: opened, waiting for the DSH shell…')
 
     await runSmoke({ page, results, state, opts })
@@ -11979,6 +12700,14 @@ async function run() {
         // Clear every controlled record even when a check failed mid-run, then report
         // the residual marker/record state honestly.
         await cleanupInterruptedMode(page, state)
+      }
+    } else if (opts.mode === 'row-menu') {
+      try {
+        await runRowMenuChecks({ page, results, state })
+      } finally {
+        // Never leave a popup open: dismiss through Escape (pointer over the menu first
+        // when the card row's hover card would swallow the key) and report residuals.
+        await cleanupRowMenu(page, state)
       }
     }
   } catch (error) {
@@ -12061,6 +12790,13 @@ async function run() {
     log(`interrupted controlled records: ${short(JSON.stringify(state.interrupted?.controlled ?? []), 400)}`)
     log(`interrupted cleanup: ${state.interruptedCleanup ? short(JSON.stringify(state.interruptedCleanup), 1600) : 'not run'}`)
     log(`interrupted real-state rows: ${state.interrupted?.realStateRows === undefined ? 'n/a' : state.interrupted.realStateRows}`)
+  }
+  if (state.mode === 'row-menu') {
+    log(`row menu: native items ${short(JSON.stringify(state.rowMenu?.native?.menu?.itemLabels ?? null), 400)}`)
+    log(`row menu: card items ${short(JSON.stringify(state.rowMenu?.ours?.menu?.itemLabels ?? null), 400)}`)
+    log(`row menu: comparison ${state.rowMenu?.comparison ? short(JSON.stringify(state.rowMenu.comparison), 900) : 'not run'}`)
+    log(`row menu evidence: ${state.rowMenuEvidence ? state.rowMenuEvidence.join(', ') : 'none'}`)
+    log(`row menu cleanup: ${state.rowMenuCleanup ? short(JSON.stringify(state.rowMenuCleanup), 1200) : 'not run'}`)
   }
   if (state.screenshots.length > 0) log(`screenshots: ${state.screenshots.join(', ')}`)
   log(`elapsed: ${((Date.now() - started) / 1000).toFixed(1)}s`)
