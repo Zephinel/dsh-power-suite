@@ -2946,7 +2946,10 @@ Renders (gitignored `.tmp-work/notices-render-final/`):
   rgb(255,255,255)`, `backgroundImage none`, alpha 1).
 - `03-multiple.png` — three notices on adjacent rows: tops `272 / 374 / 476`
   with heights `78 / 61 / 61`; the first stays on its row and the later cards
-  are pushed by the shared 96 px estimate + 6 px gap, so none overlap.
+  are pushed by the shared 96 px estimate + 6 px gap, so none overlap. The
+  content column stretches the card (title flexes, kind label on the right edge,
+  headline wraps full width) and all three kind glyphs are the outline family
+  (question mark, file, shield).
 - Scroll-following and auto-reveal were verified numerically by the probes
   (scroll delta moves the notice with its row; the reveal helper scrolls
   `0 → 474` for a row 600 px down a synthetic scroller). The isolated demo

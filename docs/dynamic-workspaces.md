@@ -444,11 +444,13 @@ stack never answers anything, the native composer card remains the only
 answering surface, and clicking a notice just opens that Session.
 
 - **Trigger kinds**: the three interaction kinds are `question`, plan review
-  (`plan-review`), and `approval`. Each notice shows the kind (with its own
-  glyph and label), the Session title, and the first question text (for a
-  question), the plan-review question, or the approval reason — falling back to
-  the tool name when the interaction carries no text. A multi-question batch
-  adds a `{count} questions` line.
+  (`plan-review`), and `approval`. Each notice shows the kind with its own
+  **outline-family glyph** (question mark, file, shield) and label, the Session
+  title, and the first question text (for a question), the plan-review question,
+  or the approval reason — falling back to the tool name when the interaction
+  carries no text. The content column fills the fixed-width card, so the title
+  flexes, the kind label sits on the right edge and the headline wraps the full
+  width. A multi-question batch adds a `{count} questions` line.
 - **Bound to its Session row**: each notice is placed at the **height of its
   own Session row** (card row first, native Workspaces row as fallback) instead
   of a fixed stack position, so the notice and the Session it summarises always
