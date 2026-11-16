@@ -2505,5 +2505,17 @@ cover both). Merged tree: `npm test` **343/343 pass**, `npm run check`
 Re-run on the merged client: `--layout` **PASS 11 / SKIP 1 / FAIL 0**,
 `--interrupted` **PASS 9 / SKIP 1 / FAIL 0**, `--smoke` **4/4 PASS**, 0 page
 errors and 0 real network failures in every run (logs under
-`.tmp-work/merge-verify/`). The Host-side sidebar-width route still needs the
-DSH Web service restart to load; the pre-restart SKIP is unchanged.
+`.tmp-work/merge-verify/`).
+
+**Post-restart confirmation (2026-11-16, after `~/.local/bin/dsh-web restart`).**
+The service came back with a new PID (14820, port 3080 owned, unauthenticated
+root 401), the Host route answered
+`GET /api/power-suite.sidebar-width` → `200 {"version":1,"sidebarWidth":420}`
+(the running page had seeded the document at boot), and all live modes were
+re-run on the merged client: `--layout` **PASS 12 / SKIP 0 / FAIL 0** — the
+former `lw-6` SKIP is now a real PASS: Host document round-trip at the dragged
+380 px, a second fresh `--user-data-dir` profile adopted 380 px with
+`probe().attached:true`, cleanup restored the Host document to the pre-run
+420 px; `--interrupted` **PASS 9 / SKIP 1 / FAIL 0**; `--smoke` **4/4 PASS**;
+every run 0 page errors and 0 real network failures (logs under
+`.tmp-work/post-restart/`).

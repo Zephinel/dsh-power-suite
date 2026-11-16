@@ -242,10 +242,13 @@ summarized below and recorded in full in [verification.md](verification.md).
   the collapse→reopen cycle (`lw-8`) reopened at the stored 320 px through a real
   pointer click on the shell toggle instead of the native 280 px, and cleanup
   returned the width to 280 px.
-- `lw-6` is an explicit **SKIP**: `GET /api/power-suite.sidebar-width` answered
-  **404** because the running Host predates the merged plugin, so the Host
-  round-trip and second-profile adoption are a post-restart re-run; the
-  per-origin cache is authoritative until then.
+- `lw-6` before the restart was an explicit **SKIP** (`GET
+  /api/power-suite.sidebar-width` answered **404** because the running Host
+  predated the merged plugin). **After the 2026-11-16 service restart it is a
+  real PASS**: the Host document round-tripped the dragged 380 px, a second
+  fresh browser profile adopted 380 px (`probe().attached:true`), and cleanup
+  restored the pre-run 420 px document; the post-restart `--layout` run is
+  **PASS 12 / SKIP 0 / FAIL 0**.
 - Negative control: the same mode against the fixed client with **only the
   synchronous resize repaint reverted** fails `lw-3` on blank samples (drag steps
   1/8/9, PASS 10 / SKIP 1 / FAIL 1) while every feature row stays green, so the

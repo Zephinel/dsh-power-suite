@@ -658,11 +658,11 @@ failure or fatal error; `2` for usage errors.
 
 ### Known limitations (`--layout`)
 
-- **Pre-restart Host coverage**: while the running Host predates the merged route,
-  `lw-6` is an explicit SKIP and the Host document / second-fresh-profile cross-device
-  assertions exist only for the post-restart run; the 200 branch is implemented against
-  the documented route contract but cannot be exercised against the live Host in this
-  pre-restart environment. The local cache and reload path are exercised pre-restart.
+- **Host coverage**: before the DSH Web service restarted, `lw-6` was an explicit
+  SKIP because the running Host predated the merged route. After the 2026-11-16
+  restart it is a real PASS (Host document round-trip, second-fresh-profile adoption,
+  Host restore); on a Host build without the route the row stays an explicit SKIP and
+  the local cache/reload path is still exercised.
 - **Cross-device proof** is a second fresh Chrome profile of the same Host on this machine,
   not a second physical device.
 - The flicker oracle uses real input at live frame cadence; the sample cadence (~26 ms per
