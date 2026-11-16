@@ -118,6 +118,8 @@
  *   node test/browser/sidebar.e2e.mjs --interrupted   # interrupted-state consistency acceptance (controlled seam)
  *   node test/browser/sidebar.e2e.mjs --row-menu      # card row "…" menu = native shared popup parity acceptance
  *   node test/browser/sidebar.e2e.mjs --readme-shots  # raw README/Bento captures (2x, privacy-masked, demo stubs)
+ *   node test/browser/sidebar.e2e.mjs --readme-chat   # real-model chat + annotation captures only (clean page, light theme)
+ *   node test/browser/sidebar.e2e.mjs --readme-dashboard  # README dashboard poses only (isolated demo instance)
  *   node test/browser/sidebar.e2e.mjs --no-shots      # skip screenshots
  *   node test/browser/sidebar.e2e.mjs --client path/to/client.js
  *   node test/browser/sidebar.e2e.mjs --keep-open     # leave Chrome running for inspection
@@ -242,6 +244,8 @@ function parseArgs(argv) {
     else if (arg === '--interrupted') opts.mode = 'interrupted'
     else if (arg === '--row-menu') opts.mode = 'row-menu'
     else if (arg === '--readme-shots') opts.mode = 'readme-shots'
+    else if (arg === '--readme-chat') opts.mode = 'readme-chat'
+    else if (arg === '--readme-dashboard') { opts.mode = 'readme-shots'; opts.dashboardOnly = true }
     else if (arg === '--no-shots') opts.shots = false
     else if (arg === '--keep-open') opts.keepOpen = true
     else if (arg === '--headful') opts.headful = true
@@ -250,7 +254,7 @@ function parseArgs(argv) {
     else if (arg === '--url') opts.url = argv[++i]
     else if (arg.startsWith('--url=')) opts.url = arg.slice('--url='.length)
     else if (arg === '--help' || arg === '-h') {
-      console.log('usage: node test/browser/sidebar.e2e.mjs [--smoke] [--pin] [--live] [--layout] [--interrupted] [--row-menu] [--readme-shots] [--no-shots] [--client path] [--keep-open] [--headful] [--url TOKEN_URL]')
+      console.log('usage: node test/browser/sidebar.e2e.mjs [--smoke] [--pin] [--live] [--layout] [--interrupted] [--row-menu] [--readme-shots] [--readme-chat] [--readme-dashboard] [--no-shots] [--client path] [--keep-open] [--headful] [--url TOKEN_URL]')
       process.exit(0)
     } else {
       throw new Error(`unknown argument: ${arg}`)
@@ -12635,6 +12639,19 @@ const README_RAW_DIR = path.join(README_SHOTS_DIR, 'raw')
 const README_DPR = 2
 const README_CLIP_PAD = 12
 /** The raw files design §3 requires; the pass fails when any of them is missing. */
+const README_DASHBOARD_FILES = [
+  'workspaces.png',
+  'card.png',
+  'card-hover.png',
+  'row-menu.png',
+  'interrupted-row.png',
+  'interrupted-composer.png',
+  'artifacts.png',
+  'artifacts-quicklook.png',
+  'artifacts-filter.png',
+  'settings.png',
+]
+
 const README_REQUIRED_FILES = [
   'workspaces.png',
   'card.png',
@@ -12645,7 +12662,7 @@ const README_REQUIRED_FILES = [
   'artifacts.png',
   'artifacts-quicklook.png',
   'artifacts-filter.png',
-  'prompt-history.png',
+  'composer-chat.png',
   'settings.png',
   'annotation-annotated.png',
   'annotation-inserted.png',
@@ -12880,21 +12897,33 @@ const README_STUB_PREVIEW = {
  * touch the throwaway page's DOM and never persist anything).
  */
 const probeReadme = {
-  /** Install the capture stylesheet and mark the document as captured. */
+  /**
+   * Install the capture stylesheet and mark the document as captured. The conversation
+   * header/transcript stay hidden by default (sidebar/card poses); a real-chat pose calls
+   * `setChatVisible(true)` to show the transcript while keeping the header hidden.
+   */
   installStyle: () => {
-    if (document.getElementById('psd-readme-capture-style') === null) {
-      const style = document.createElement('style')
+    let style = document.getElementById('psd-readme-capture-style')
+    if (style === null) {
+      style = document.createElement('style')
       style.id = 'psd-readme-capture-style'
-      style.textContent = [
-        'html[data-psd-readme-capture] [data-slot="conversation.header"]{visibility:hidden!important}',
-        'html[data-psd-readme-capture] [data-slot="conversation.session"]{visibility:hidden!important}',
-        'html[data-psd-readme-capture] [data-slot="conversation.session"] [data-conversation-region="composer"]{visibility:visible!important}',
-        'html[data-psd-readme-capture] [data-files-content] > :not([data-psfa-overlay]){visibility:hidden!important}',
-      ].join('\n')
       document.head.appendChild(style)
     }
+    style.textContent = [
+      'html[data-psd-readme-capture] [data-slot="conversation.header"]{visibility:hidden!important}',
+      'html[data-psd-readme-capture]:not([data-psd-readme-show-chat]) [data-slot="conversation.session"]{visibility:hidden!important}',
+      'html[data-psd-readme-capture]:not([data-psd-readme-show-chat]) [data-slot="conversation.session"] [data-conversation-region="composer"]{visibility:visible!important}',
+      'html[data-psd-readme-capture] [data-files-content] > :not([data-psfa-overlay]){visibility:hidden!important}',
+    ].join('\n')
     document.documentElement.setAttribute('data-psd-readme-capture', 'true')
     return true
+  },
+
+  /** Show/hide the real conversation transcript for the composer/annotation poses. */
+  setChatVisible: (visible) => {
+    if (visible === true) document.documentElement.setAttribute('data-psd-readme-show-chat', 'true')
+    else document.documentElement.removeAttribute('data-psd-readme-show-chat')
+    return { visible: visible === true }
   },
 
   /**
@@ -13586,6 +13615,275 @@ const probeReadme = {
     return { hidden: 1, height: Math.round(row.getBoundingClientRect().height) }
   },
 
+  /** Real-task chat facts (no transcript text is returned). */
+  chatState: () => {
+    const messages = [...document.querySelectorAll('[data-message-id]')]
+    const last = messages.length === 0 ? null : messages[messages.length - 1]
+    const composer = document.querySelector('[data-conversation-region="composer"]')
+    const editor = composer === null ? null : composer.querySelector('[data-lexical-editor="true"]')
+    const send = composer === null ? null : composer.querySelector('button[class$="_primary"]')
+    return {
+      session: document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') ?? null,
+      messages: messages.length,
+      lastTextLength: last === null ? 0 : (last.innerText || '').trim().length,
+      lastTextHead: last === null ? '' : (last.innerText || '').trim().slice(0, 40),
+      draftLength: editor === null ? 0 : (editor.innerText || '').trim().length,
+      sendDisabled: send === null ? null : send.disabled === true,
+      sendAria: send === null ? null : send.getAttribute('aria-label'),
+      chatVisible: document.documentElement.getAttribute('data-psd-readme-show-chat') === 'true',
+    }
+  },
+
+  /** Composer editor + send-button click points for the real-task prompt. */
+  chatSendPoints: () => {
+    const toPoint = (element) => {
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2), width: Math.round(rect.width), height: Math.round(rect.height) }
+    }
+    const composer = document.querySelector('[data-conversation-region="composer"]')
+    if (composer === null) return null
+    const editor = composer.querySelector('[data-lexical-editor="true"]')
+    const buttons = [...composer.querySelectorAll('button')]
+    const send = buttons.find((button) => /^(Send message|发送消息)$/iu.test(button.getAttribute('aria-label') || '')) || composer.querySelector('button[class$="_primary"]')
+    return { editor: toPoint(editor), send: toPoint(send) }
+  },
+
+  /**
+   * Click points for the rendered assistant answer: heading, one itinerary item and the
+   * budget line. Returns short public text previews for the report only.
+   */
+  chatAnswerTargets: () => {
+    const toPoint = (element) => {
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2), width: Math.round(rect.width), height: Math.round(rect.height) }
+    }
+    const messages = [...document.querySelectorAll('[data-message-id]')]
+    let scope = null
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const text = (messages[index].innerText || '').trim()
+      if (text.length > 80) {
+        scope = messages[index]
+        break
+      }
+    }
+    if (scope === null) return { ok: false, reason: 'no assistant message with text found' }
+    const textOf = (element) => (element.innerText || '').trim()
+    const heading =
+      [...scope.querySelectorAll('h1, h2, h3, h4')].find((element) => textOf(element).length > 3) ??
+      [...scope.querySelectorAll('strong, p')].find((element) => textOf(element).length > 3 && textOf(element).length < 80) ??
+      null
+    const items = [...scope.querySelectorAll('li')]
+    const itinerary =
+      items.find((element) => /(day|morning|afternoon|evening|walk|visit|·|—)/iu.test(textOf(element)) && textOf(element).length > 10) ??
+      items[0] ??
+      null
+    const tipLeaves = [...scope.querySelectorAll('p, li, td, span, strong')].filter((element) => {
+      const text = textOf(element)
+      return text.length >= 8 && text.length <= 320 && /(tip|advice|remember|practical|caution|note)/iu.test(text)
+    })
+    const budget =
+      tipLeaves.find((element) => element.childElementCount === 0) ??
+      tipLeaves[0] ??
+      [...scope.querySelectorAll('p')].filter((element) => textOf(element).length > 20).pop() ??
+      null
+    return {
+      ok: true,
+      messageCount: messages.length,
+      heading: heading === null ? null : { point: toPoint(heading), text: textOf(heading).slice(0, 120) },
+      itinerary: itinerary === null ? null : { point: toPoint(itinerary), text: textOf(itinerary).slice(0, 160) },
+      budget: budget === null ? null : { point: toPoint(budget), text: textOf(budget).slice(0, 160) },
+    }
+  },
+
+  /**
+   * The ACTIVE conversation Session (hidden stale conversation roots can remain in the DOM
+   * after a Session switch, so a plain querySelector can read the previous Session).
+   */
+  activeSessionState: () => {
+    const activeRoot = document.querySelector('[data-conversation-content][data-content-phase="active"]')
+    const activeId = activeRoot === null ? null : activeRoot.getAttribute('data-conversation-session')
+    const ids = [...document.querySelectorAll('[data-conversation-session]')]
+      .map((element) => element.getAttribute('data-conversation-session'))
+      .filter((value) => typeof value === 'string' && value.length > 0)
+    const editor = document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')
+    const workspaceRow = document.querySelector('[data-psd-current-workspace="true"]')
+    const selectedRow = [...document.querySelectorAll('[data-row-key^="session:"]')].find(
+      (row) => row.getAttribute('aria-selected') === 'true' || row.hasAttribute('data-psd-current-session')
+    )
+    return {
+      sessionId: activeId ?? (ids.length === 0 ? null : ids[ids.length - 1]),
+      activeId,
+      roots: ids.length,
+      draftLength: editor === null ? 0 : (editor.innerText || '').trim().length,
+      messageNodes: document.querySelectorAll('[data-chat-anchor-key]').length,
+      phase: activeRoot === null ? null : activeRoot.getAttribute('data-content-phase'),
+      currentWorkspace: workspaceRow === null ? null : (workspaceRow.querySelector('[class*="_title"]')?.innerText || '').trim(),
+      selectedRowTitle: selectedRow === undefined ? null : (selectedRow.querySelector('[class*="_title"]')?.innerText || '').trim(),
+    }
+  },
+
+  /** Dismiss a blocking modal notice (e.g. the isolated Preview instance notice). */
+  dismissBlockingDialog: () => {
+    const dialog = document.querySelector('[role="dialog"][aria-label*="Notice" i], [role="alertdialog"][aria-label*="Notice" i]')
+    if (dialog === null) return { dismissed: false, reason: 'no notice dialog' }
+    const buttons = [...dialog.querySelectorAll('button')]
+    const preferred =
+      buttons.find((button) => /^(Continue|Got it|OK|Okay|Understood|Close|Dismiss|Agree|Start|Accept)/iu.test((button.innerText || '').trim())) ??
+      buttons[buttons.length - 1] ??
+      null
+    if (preferred === null) return { dismissed: false, reason: 'notice dialog has no button' }
+    preferred.click()
+    return { dismissed: true, label: (preferred.innerText || '').trim().slice(0, 60) }
+  },
+
+  /** Real-shell chat facts (this shell renders transcript nodes as data-chat-* items). */
+  chatFlowState: (promptText) => {
+    const userNodes = document.querySelectorAll('[data-chat-flow-kind="user"]').length
+    const flowNodes = document.querySelectorAll('[data-chat-anchor-key]').length
+    const main = document.querySelector('[data-slot="main"]')
+    const mainText = main === null ? '' : (main.innerText || '')
+    const composer = document.querySelector('[data-conversation-region="composer"]')
+    const editor = composer === null ? null : composer.querySelector('[data-lexical-editor="true"]')
+    const primary = composer === null ? null : composer.querySelector('button[class$="_primary"]')
+    return {
+      session: document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') ?? null,
+      userNodes,
+      flowNodes,
+      mainTextLen: mainText.length,
+      transcriptTextLen: (document.querySelector('[data-slot="conversation.chat.flow"]')?.innerText || '').trim().length,
+      promptPresent: typeof promptText === 'string' && promptText.length > 0 ? mainText.includes(promptText) : null,
+      draftLength: editor === null ? 0 : (editor.innerText || '').trim().length,
+      primaryAria: primary === null ? null : primary.getAttribute('aria-label'),
+      primaryDisabled: primary === null ? null : primary.disabled === true,
+      running: primary !== null && /stop generating/iu.test(primary.getAttribute('aria-label') || ''),
+      turnsLine: (mainText.match(/\d+\s+turns?[^\n]{0,40}/iu) || [null])[0],
+    }
+  },
+
+  /**
+   * Scroll one real-answer element into view and return its click point: answer heading,
+   * one numbered checklist step, or the closing tip/risk paragraph.
+   */
+  answerTargetPoint: (kind) => {
+    const textOf = (element) => (element.innerText || '').trim()
+    const scope =
+      [...document.querySelectorAll('[data-slot="conversation.chat.flow"], [data-slot="conversation.session"]')].find((element) => textOf(element).length > 200) ??
+      document.querySelector('[data-conversation-scroll]')
+    if (scope === null || scope === undefined) return { ok: false, kind, reason: 'no transcript scope' }
+    let element = null
+    const isUserText = (candidate) => candidate.closest('[data-chat-flow-kind="user"]') !== null
+    if (kind === 'heading') {
+      element =
+        [...scope.querySelectorAll('h1, h2, h3, h4')].find((candidate) => !isUserText(candidate) && textOf(candidate).length > 3) ??
+        [...scope.querySelectorAll('strong')].find((candidate) => !isUserText(candidate) && textOf(candidate).length > 3 && textOf(candidate).length < 90) ??
+        null
+    } else if (kind === 'step') {
+      const items = [...scope.querySelectorAll('li')].filter((candidate) => !isUserText(candidate))
+      element =
+        items.find((candidate) => /(^|\s)(\d+[.)]|step|checklist)/iu.test(textOf(candidate)) && textOf(candidate).length > 8) ??
+        items.find((candidate) => textOf(candidate).length > 8) ??
+        null
+    } else if (kind === 'tip') {
+      const isUserNode = (candidate) => candidate.closest('[data-chat-flow-kind="user"]') !== null
+      const leaves = [...scope.querySelectorAll('p, li, td, span, strong')].filter((candidate) => {
+        if (isUserNode(candidate)) return false
+        const text = textOf(candidate)
+        return text.length >= 12 && text.length <= 340 && /(tip|risk|rollback|remember|advice|practical|caution)/iu.test(text)
+      })
+      const preferred = leaves.filter((candidate) => /^one (practical )?tip[:\s]|^tip[:\s]|practical tip/iu.test(textOf(candidate)))
+      element = preferred.find((candidate) => candidate.childElementCount === 0) ?? preferred[0] ?? leaves.find((candidate) => candidate.childElementCount === 0) ?? leaves[0] ?? null
+      if (element === null) {
+        const paragraphs = [...scope.querySelectorAll('p')].filter((candidate) => !isUserNode(candidate) && textOf(candidate).length > 20)
+        element = paragraphs.length > 0 ? paragraphs[paragraphs.length - 1] : null
+      }
+    }
+    if (element === null) return { ok: false, kind, reason: 'no matching answer element' }
+    element.scrollIntoView({ block: 'center', behavior: 'instant' })
+    const rect = element.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return { ok: false, kind, reason: 'element has no box after scrolling' }
+    return {
+      ok: true,
+      kind,
+      point: { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2), width: Math.round(rect.width), height: Math.round(rect.height) },
+      text: textOf(element).slice(0, 180),
+    }
+  },
+
+  /** Geometry for the composer-chat crop (new-shell transcript nodes + composer + rail cards). */
+  chatWindowParts: () => {
+    const toBox = (element) => {
+      if (element === null || element === undefined) return null
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+    }
+    const union = (boxes) => {
+      if (boxes.length === 0) return null
+      return {
+        x: Math.min(...boxes.map((box) => box.x)),
+        y: Math.min(...boxes.map((box) => box.y)),
+        width: Math.max(...boxes.map((box) => box.x + box.width)) - Math.min(...boxes.map((box) => box.x)),
+        height: Math.max(...boxes.map((box) => box.y + box.height)) - Math.min(...boxes.map((box) => box.y)),
+      }
+    }
+    const nodes = [...document.querySelectorAll('[data-chat-anchor-key]')]
+      .map(toBox)
+      .filter((box) => box !== null && box.y < innerHeight && box.y + box.height > 0)
+    return {
+      messages: union(nodes),
+      messageCount: nodes.length,
+      userNodes: document.querySelectorAll('[data-chat-flow-kind="user"]').length,
+      composer: toBox(document.querySelector('[data-conversation-region="composer"]')),
+      rail: toBox(document.querySelector('[data-psp-rail]')),
+      searchCard: toBox(document.querySelector('[data-psp-search-card]')),
+      previewCard: toBox(document.querySelector('[data-psp-preview-card]')),
+      scroll: toBox(document.querySelector('[data-conversation-scroll]')),
+      viewport: { width: innerWidth, height: innerHeight },
+    }
+  },
+
+  /** Geometry for the composer-chat crop: transcript messages, composer, prompt rail cards. */
+  composerChatParts: () => {
+    const toBox = (element) => {
+      if (element === null || element === undefined) return null
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+    }
+    const messages = [...document.querySelectorAll('[data-message-id]')]
+      .map(toBox)
+      .filter((box) => box !== null && box.y < innerHeight && box.y + box.height > 0)
+    const union = (boxes) => {
+      if (boxes.length === 0) return null
+      const left = Math.min(...boxes.map((box) => box.x))
+      const top = Math.min(...boxes.map((box) => box.y))
+      const right = Math.max(...boxes.map((box) => box.x + box.width))
+      const bottom = Math.max(...boxes.map((box) => box.y + box.height))
+      return { x: left, y: top, width: right - left, height: bottom - top }
+    }
+    return {
+      messages: union(messages),
+      messageCount: messages.length,
+      composer: toBox(document.querySelector('[data-conversation-region="composer"]')),
+      rail: toBox(document.querySelector('[data-psp-rail]')),
+      searchCard: toBox(document.querySelector('[data-psp-search-card]')),
+      previewCard: toBox(document.querySelector('[data-psp-preview-card]')),
+      scroll: toBox(document.querySelector('[data-conversation-scroll]')),
+      viewport: { width: innerWidth, height: innerHeight },
+    }
+  },
+
+  /** Prompt-rail tick click points (for the hover preview in composer-chat). */
+  promptRailMarks: () => [...document.querySelectorAll('[data-psp-mark]')].map((mark) => {
+    const rect = mark.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return null
+    return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2), index: Number(mark.getAttribute('data-psp-index') || 0) }
+  }).filter((mark) => mark !== null),
+
   /** Annotation-workflow facts (mode, rail, entries, markers, composer chips). */
   annotationWorkflowState: () => ({
     active: document.documentElement.getAttribute('data-psa-active'),
@@ -13612,6 +13910,45 @@ const probeReadme = {
       }
     }
     return best === null ? null : { x: best.x, y: best.y }
+  },
+
+  /**
+   * Locate the "DSH" Workspace row (the checkout/harness Workspace explicitly allowed as
+   * the isolated real-task Workspace when the native add-workspace flow cannot be driven
+   * in headless Chrome). Returns its own "New session in DSH" action point.
+   */
+  dshWorkspaceInfo: () => {
+    const toPoint = (element) => {
+      if (element === null) return null
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      return {
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      }
+    }
+    for (const row of document.querySelectorAll('[data-row-key^="workspace:"]')) {
+      const title = (row.querySelector('[class*="_title"]')?.innerText || '').trim()
+      if (!/^DSH$/iu.test(title)) continue
+      row.scrollIntoView({ block: 'center' })
+      const buttons = [...row.querySelectorAll('button')]
+      const newSession = buttons.find((button) => /^New session in /iu.test(button.getAttribute('aria-label') || '')) ?? null
+      const actions = buttons.find((button) => /^Workspace actions for /iu.test(button.getAttribute('aria-label') || '')) ?? null
+      return {
+        found: true,
+        name: title,
+        rowKey: row.getAttribute('data-row-key'),
+        row: toPoint(row),
+        newSession: toPoint(newSession),
+        hasNewSession: newSession !== null,
+        hasActions: actions !== null,
+        actions: toPoint(actions),
+        expanded: row.getAttribute('aria-expanded'),
+      }
+    }
+    return { found: false }
   },
 
   /** Centre of one native Session row (restores the previous Session after the dummy pose). */
@@ -13783,6 +14120,9 @@ const probeReadme = {
 }
 
 /** Install the CDP Fetch stubs that serve demo artifacts + prompt history to the page. */
+/** Mutable stub state: Sessions whose real prompt history must reach the page unstubbed. */
+const README_STUB_STATE = { realPromptSessionIds: new Set() }
+
 async function installReadmeStubs(cdp, page) {
   const fulfill = (requestId, status, mime, body) =>
     cdp
@@ -13814,7 +14154,12 @@ async function installReadmeStubs(cdp, page) {
         if (rawPath.endsWith('.svg')) await fulfill(params.requestId, 200, 'image/svg+xml', README_STUB_SVG)
         else await fulfill(params.requestId, 200, 'text/markdown; charset=utf-8', README_STUB_MARKDOWN)
       } else if (url.includes('/api/prompt-history.list')) {
-        await fulfill(params.requestId, 200, 'application/json', JSON.stringify(README_STUB_PROMPTS))
+        const sessionId = new URL(url).searchParams.get('sessionId') || ''
+        if (README_STUB_STATE.realPromptSessionIds.has(sessionId)) {
+          await cdp.send('Fetch.continueRequest', { requestId: params.requestId }, page.sessionId)
+        } else {
+          await fulfill(params.requestId, 200, 'application/json', JSON.stringify(README_STUB_PROMPTS))
+        }
       } else {
         await cdp.send('Fetch.continueRequest', { requestId: params.requestId }, page.sessionId)
       }
@@ -13910,6 +14255,214 @@ async function readmeWaitStableRect(page, selector, { timeout = 6000, interval =
   return fallback
 }
 
+/** Send one prompt through the real composer (type + native send action). */
+async function readmeSendChatPrompt(page, promptText) {
+  const points = await page.eval(probeReadme.chatSendPoints)
+  assert(points !== null && points.editor !== null, 'the composer editor could not be measured')
+  assert(points.send !== null, 'the composer send control could not be measured')
+  const before = await page.eval(probeReadme.chatState)
+  await page.clickAt(points.editor.x, points.editor.y)
+  await sleep(250)
+  await page.send('Input.insertText', { text: promptText })
+  await sleep(450)
+  const typed = await page.eval(probeReadme.chatState)
+  assert(typed.draftLength > 10, `the prompt was not typed into the composer (draft ${typed.draftLength} chars)`)
+  await page.clickAt(points.send.x, points.send.y)
+  await page.waitForFn(
+    (previousMessages) => {
+      const messageCount = document.querySelectorAll('[data-message-id]').length
+      const editor = document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')
+      const draftLength = editor === null ? 0 : (editor.innerText || '').trim().length
+      return messageCount > previousMessages || draftLength === 0
+    },
+    [before.messages],
+    { timeout: 15000, label: 'prompt accepted by the composer', interval: 200 }
+  ).catch(() => {})
+  return { before, typed }
+}
+
+/** Wait until the assistant answer is rendered and the turn has settled (stable text). */
+async function readmeWaitChatAnswer(page, { timeout = 180000 } = {}) {
+  const deadline = Date.now() + timeout
+  let lastLength = -1
+  let stableSamples = 0
+  let state = null
+  while (Date.now() < deadline) {
+    state = await page.eval(probeReadme.chatState)
+    const length = state.lastTextLength
+    if (state.messages >= 2 && length > 80 && length === lastLength) stableSamples += 1
+    else stableSamples = 0
+    if (stableSamples >= 3) return state
+    lastLength = length
+    await sleep(1500)
+  }
+  throw new Error(
+    `the model answer did not finish within ${timeout}ms ` +
+      `(messages ${state === null ? 'n/a' : state.messages}, last message ${state === null ? 'n/a' : state.lastTextLength} chars, ` +
+      `draft ${state === null ? 'n/a' : state.draftLength} chars)`
+  )
+}
+
+/** Open the prompt-history search card and optionally filter it, returning the toggle point. */
+async function readmeOpenPromptRail(page, queryText) {
+  await page.waitForFn(() => document.querySelector('[data-psp-search-toggle]') !== null, [], {
+    timeout: 15000,
+    label: 'prompt-history rail for the real chat Session',
+  })
+  const toggle = await page.findRect('[data-psp-search-toggle]')
+  assert(toggle, 'the prompt-history search toggle is not visible')
+  await page.clickAt(toggle.x, toggle.y)
+  await page.waitForFn(() => document.querySelector('[data-psp-search-card]') !== null, [], {
+    timeout: 5000,
+    label: 'prompt-history search card',
+  })
+  if (typeof queryText === 'string' && queryText.length > 0) {
+    const input = await page.findRect('.psp-search-input')
+    assert(input, 'the prompt-history search input is not visible')
+    await page.clickAt(input.x, input.y)
+    await sleep(150)
+    await page.send('Input.insertText', { text: queryText })
+    await page.waitForFn(
+      (text) => document.querySelector('.psp-search-input') !== null && document.querySelector('.psp-search-input').value === text,
+      [queryText],
+      { timeout: 5000, label: `prompt search filtered to "${queryText}"` }
+    )
+  }
+  await sleep(250)
+  return toggle
+}
+
+/**
+ * Hover a prompt-rail tick and wait for the full-text preview card. Prefers a tick whose
+ * preview card does not overlap the open search card; returns the measured geometry.
+ */
+async function readmeHoverRailPreview(page) {
+  const marks = await page.eval(probeReadme.promptRailMarks)
+  assert(marks.length > 0, 'the prompt rail renders no tick marks for the real chat Session')
+  const park = await page.eval(probeReadme.parkPointer)
+  const ordered = [...marks].sort((left, right) => left.y - right.y)
+  for (const mark of ordered) {
+    await page.moveTo(park.x, park.y)
+    await sleep(220)
+    await page.moveTo(mark.x, mark.y)
+    const deadline = Date.now() + 3000
+    let preview = null
+    while (Date.now() < deadline) {
+      await sleep(120)
+      preview = await page.eval(() => {
+        const card = document.querySelector('[data-psp-preview-card]')
+        if (card === null) return null
+        const rect = card.getBoundingClientRect()
+        if (rect.width <= 0 || rect.height <= 0) return null
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, textLength: (card.innerText || '').trim().length }
+      })
+      if (preview !== null && preview.textLength > 10) break
+    }
+    if (preview === null) continue
+    const parts = await page.eval(probeReadme.composerChatParts)
+    const overlaps = (left, right) =>
+      left !== null && right !== null &&
+      left.x < right.x + right.width && left.x + left.width > right.x &&
+      left.y < right.y + right.height && left.y + left.height > right.y
+    if (!overlaps(preview, parts.searchCard)) return { preview, parts, mark }
+  }
+  const fallbackParts = await page.eval(probeReadme.composerChatParts)
+  const fallbackPreview = fallbackParts.previewCard
+  assert(fallbackPreview !== null, 'the prompt-rail hover preview card did not open')
+  return { preview: fallbackPreview, parts: fallbackParts, mark: ordered[ordered.length - 1] }
+}
+
+/** Crop the real chat window (messages + composer + prompt rail) for composer-chat.png. */
+function readmeChatClip(parts) {
+  const right = Math.min(
+    parts.viewport.width,
+    Math.max(
+      parts.composer === null ? 0 : parts.composer.x + parts.composer.width,
+      parts.rail === null ? 0 : parts.rail.x + parts.rail.width,
+      parts.searchCard === null ? 0 : parts.searchCard.x + parts.searchCard.width,
+      parts.previewCard === null ? 0 : parts.previewCard.x + parts.previewCard.width
+    ) + 12
+  )
+  const contentLeft = Math.min(
+    parts.composer === null ? right : parts.composer.x,
+    parts.messages === null ? right : parts.messages.x
+  )
+  const left = Math.max(0, Math.min(right - 1300, contentLeft - 12))
+  return { x: Math.round(left), y: 0, width: Math.round(Math.min(parts.viewport.width, right - left)), height: parts.viewport.height }
+}
+
+/**
+ * Archive the isolated real-task Session through its native row "…" menu (only that
+ * Session; nothing else is touched), returning an honest cleanup record.
+ */
+async function readmeArchiveTaskSession(page, sessionId, workspaceName) {
+  const ensureRow = async () => {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const row = await page.eval((id) => {
+        const found = document.querySelector(`[data-row-key="session:${id}"]`)
+        if (found === null) return null
+        found.scrollIntoView({ block: 'center' })
+        const rect = found.getBoundingClientRect()
+        if (rect.width <= 0 || rect.height <= 0) return null
+        return { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }
+      }, sessionId)
+      if (row !== null) return row
+      await page.eval((expectedWorkspace) => {
+        for (const workspaceRow of document.querySelectorAll('[data-row-key^="workspace:"]')) {
+          const title = (workspaceRow.querySelector('[class*="_title"]')?.innerText || '').trim()
+          if (expectedWorkspace !== null && title !== expectedWorkspace) continue
+          if (workspaceRow.getAttribute('aria-expanded') === 'false') workspaceRow.click()
+          return true
+        }
+        return false
+      }, workspaceName ?? null)
+      await sleep(600)
+    }
+    return null
+  }
+  const row = await ensureRow()
+  if (row === null) return { archived: false, reason: 'the real-task Session row was not reachable in the native sidebar' }
+  await page.moveTo(900, 500)
+  await sleep(150)
+  await page.moveTo(row.left + 80, row.top + Math.round(row.height / 2))
+  await sleep(800)
+  const trigger = await page.eval((id) => {
+    const row = document.querySelector(`[data-row-key="session:${id}"]`)
+    if (row === null) return null
+    const button = row.querySelector('button[data-context-menu-trigger]')
+    if (button === null) return null
+    const rect = button.getBoundingClientRect()
+    if (rect.width <= 0) return null
+    return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+  }, sessionId)
+  if (trigger === null) return { archived: false, reason: 'the real-task Session row "…" trigger was not reachable on hover' }
+  await page.moveTo(trigger.x, trigger.y)
+  await sleep(250)
+  await page.clickAt(trigger.x, trigger.y)
+  await page.waitForFn(() => document.querySelector('[role="menu"]') !== null, [], {
+    timeout: 8000,
+    label: 'real-task Session row context menu',
+  })
+  const clicked = await page.eval(() => {
+    for (const item of document.querySelectorAll('[role="menuitem"]')) {
+      if (!/^Archive session$/iu.test((item.innerText || '').trim().split('\n')[0])) continue
+      item.click()
+      return true
+    }
+    return false
+  })
+  if (clicked !== true) {
+    await page.pressEscape()
+    return { archived: false, reason: 'the native menu had no "Archive session" item' }
+  }
+  await page.waitForFn((id) => document.querySelector(`[data-row-key="session:${id}"]`) === null, [sessionId], {
+    timeout: 10000,
+    label: 'archived real-task Session row removed',
+  }).catch(() => {})
+  const gone = (await page.count(`[data-row-key="session:${sessionId}"]`)) === 0
+  return { archived: gone, reason: gone ? 'archived through the native row "…" menu (Archive session)' : 'the row stayed visible after Archive session' }
+}
+
 /** Ensure the Running & recent card is expanded (its chevron toggles the body). */
 async function readmeEnsureCardExpanded(page) {
   const expanded = await page.eval(() => document.querySelector('.psd-panel-toggle')?.getAttribute('aria-expanded') ?? null)
@@ -13946,9 +14499,10 @@ async function readmeCollapseCard(page) {
  * @returns {Promise<object>} capture metadata for `captures.json`.
  */
 async function readmeCapture(page, spec) {
-  let masked = await page.eval(probeReadme.maskAll, README_MASK_COPY)
+  const maskCopy = spec.maskCopy === undefined ? README_MASK_COPY : spec.maskCopy
+  let masked = await page.eval(probeReadme.maskAll, maskCopy)
   await sleep(140)
-  const secondPass = await page.eval(probeReadme.maskAll, README_MASK_COPY)
+  const secondPass = await page.eval(probeReadme.maskAll, maskCopy)
   for (const [key, value] of Object.entries(secondPass)) masked[key] = (masked[key] ?? 0) + value
   if (typeof spec.postMask === 'function') {
     const extra = await spec.postMask()
@@ -13960,7 +14514,7 @@ async function readmeCapture(page, spec) {
   let roots = await page.eval(probeReadme.scanText, spec.scanSelectors, README_BANNED_SOURCES)
   let area = await page.eval(probeReadme.scanClip, clip, README_BANNED_SOURCES)
   if (roots.hits.length > 0 || area.hits.length > 0) {
-    await page.eval(probeReadme.maskAll, README_MASK_COPY)
+    await page.eval(probeReadme.maskAll, maskCopy)
     roots = await page.eval(probeReadme.scanText, spec.scanSelectors, README_BANNED_SOURCES)
     area = await page.eval(probeReadme.scanClip, clip, README_BANNED_SOURCES)
   }
@@ -14009,6 +14563,7 @@ async function readmeCapture(page, spec) {
     rect: clip,
     dpr,
     screenshot: { width: size.width, height: size.height, bytes: buffer.length },
+    theme: 'light',
     ...(spec.meta === undefined ? {} : spec.meta),
     masked,
     scan: {
@@ -14135,17 +14690,27 @@ function logReadmeCaptureState(state) {
  * @param {object} input - `{ page, results, state, cdp }`.
  * @returns {Promise<void>}
  */
-async function runReadmeShotsMode({ page, results, state, cdp }) {
+async function runReadmeShotsMode({ page, results, state, cdp, opts }) {
   log('\n=== --readme-shots: README Bento raw captures (privacy-masked, demo stubs) ===')
   state.mode = 'readme-shots'
+  const dashboardOnly = opts?.dashboardOnly === true
   state.readme = { captures: [], deviations: [], file: path.join(README_RAW_DIR, 'captures.json') }
-  await rm(README_RAW_DIR, { recursive: true, force: true }).catch(() => {})
+  if (dashboardOnly !== true) {
+    await rm(README_RAW_DIR, { recursive: true, force: true }).catch(() => {})
+  }
   await mkdir(README_RAW_DIR, { recursive: true })
-  // The README Bento frame is dark, so the captures must be the app's dark theme even
-  // when the host machine is in light appearance (headless Chrome reports light then).
-  await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
-  await sleep(700)
+  // Round 3: the README/Bento frame is a soft pale beige, so every capture is the app's
+  // LIGHT appearance. Force it for the whole pass (headless Chrome follows the host).
+  await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+  await sleep(900)
   await page.eval(probeReadme.installStyle)
+  const lightChrome = await page.evaluate(`(() => ({
+    dark: document.body.hasAttribute('data-ds-dark-theme') || document.documentElement.hasAttribute('data-ds-dark-theme'),
+    bodyBackground: getComputedStyle(document.body).backgroundColor,
+    mainBackground: document.querySelector('[data-slot="main"]') === null ? null : getComputedStyle(document.querySelector('[data-slot="main"]')).backgroundColor,
+  }))()`)
+  assertEqual(lightChrome.dark, false, 'the capture pass must render the light appearance')
+  log(`readme theme: light (body ${lightChrome.bodyBackground}, main ${lightChrome.mainBackground})`)
   // Hydrate like the rest of the harness: the shell restores its Session and the card rows
   // asynchronously after first paint.
   await page.waitForFn(() => document.querySelectorAll('.psd-run').length > 0, [], {
@@ -14164,8 +14729,12 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
   const writeManifest = async () => {
     const manifest = {
       generatedAt: new Date().toISOString(),
-      harness: 'test/browser/sidebar.e2e.mjs --readme-shots',
-      gui: 'live DSH Web GUI (token redacted)',
+      harness: dashboardOnly === true ? 'test/browser/sidebar.e2e.mjs --readme-dashboard' : 'test/browser/sidebar.e2e.mjs --readme-shots',
+      gui:
+        dashboardOnly === true
+          ? 'isolated DSH Preview instance at http://127.0.0.1:3199 (token redacted, DSH_HOME=/tmp/ps-readme-home)'
+          : 'live DSH Web GUI (token redacted)',
+      dashboardOnly: dashboardOnly === true,
       viewport: { width: VIEWPORT.width, height: VIEWPORT.height, deviceScaleFactor: README_DPR },
       rawDirectory: README_RAW_DIR,
       contract: 'README Bento redesign design.md §3',
@@ -14190,9 +14759,21 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
           'GET /api/prompt-history.list -> canned English demo prompts',
         ],
       },
+      theme: 'light',
+      themeEmulation: 'CDP Emulation.setEmulatedMedia prefers-color-scheme=light (whole pass)',
+      task: {
+        prompt: state.readme.taskPrompt ?? null,
+        sessionId: state.readme.taskSessionId ?? null,
+        requirements: state.readme.taskRequirements ?? [],
+        answer: state.readme.taskAnswer ?? null,
+        workspace: state.readme.taskWorkspace ?? null,
+        cleanup: state.readme.taskCleanup ?? null,
+        fallback: state.readme.taskFallback ?? null,
+      },
       captures: state.readme.captures,
       annotationAssets: state.readme.annotationAssets ?? [],
-      dummySessionId: state.readme.dummySessionId ?? null,
+      annotationAssetsNote:
+        'docs/assets/annotation-*.png were not refreshed in round 3 (light): the README annotation group now uses raw/annotation-*.png; the docs assets still come from round 2',
       deviations: state.readme.deviations,
     }
     await writeFile(state.readme.file, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
@@ -14280,11 +14861,18 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
       assert(scroll !== null, 'the native Workspaces tree or the Inactive Projects header is missing')
       assert(parts.label !== null, 'the native Workspaces header row is not rendered')
       assert(parts.inactiveHeader !== null, 'the Inactive Projects header is not rendered')
-      assert(parts.inactiveRows.length >= 2, `the Inactive Projects header is not followed by two workspace rows (${parts.inactiveRows.length})`)
+      if (dashboardOnly !== true) {
+        assert(parts.inactiveRows.length >= 2, `the Inactive Projects header is not followed by two workspace rows (${parts.inactiveRows.length})`)
+      } else {
+        state.readme.deviations.push(
+          'workspaces.png: the isolated demo instance exposes one demo Workspace, so Inactive Projects has no rows; ' +
+            'the crop still shows the Workspaces header, Active Projects with its session rows, and the Inactive Projects header ("0")'
+        )
+      }
       // Start at the Workspaces header row (no partial card edge) and end after the Inactive
       // Projects header + its first two rows.
       const top = Math.max(Math.round(parts.panel.y + parts.panel.height + 6), Math.round(parts.label.y - 12))
-      const inactiveLast = parts.inactiveRows[parts.inactiveRows.length - 1]
+      const inactiveLast = parts.inactiveRows.length > 0 ? parts.inactiveRows[parts.inactiveRows.length - 1] : parts.inactiveHeader
       const bottom = Math.min(
         VIEWPORT.height,
         Math.max(Math.round(parts.inactiveHeader.y + parts.inactiveHeader.height + 12), Math.round(inactiveLast.y + inactiveLast.height + 12))
@@ -14292,7 +14880,10 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
       const capture = await readmeCapture(page, {
         name: 'workspaces.png',
         source: 'live GUI [class$="_sidebarCol"] Workspaces browser (Workspaces header .. Inactive Projects)',
-        pose: 'sidebar expanded, Running & recent collapsed: Workspaces header + Active Projects (current-project rainbow row, session rows) + Inactive Projects header and its first two rows',
+        pose:
+          dashboardOnly === true
+            ? 'sidebar expanded, Running & recent collapsed: Workspaces header + Active Projects (current-project rainbow row, session rows) + Inactive Projects header (empty in the isolated demo instance)'
+            : 'sidebar expanded, Running & recent collapsed: Workspaces header + Active Projects (current-project rainbow row, session rows) + Inactive Projects header and its first two rows',
         scanSelectors: ['[class$="_sidebarCol"]'],
         pad: 0,
         clip: () => {
@@ -14300,8 +14891,8 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
           // end 12 px under the second Inactive Projects row.
           const y = Math.max(Math.round(parts.panel.y + parts.panel.height + 10), Math.round(parts.label.y - 6))
           const rowBottom = Math.max(
-            ...parts.inactiveRows.map((row) => Math.round(row.y + row.height)),
-            Math.round(parts.inactiveHeader.y + parts.inactiveHeader.height)
+            Math.round(parts.inactiveHeader.y + parts.inactiveHeader.height),
+            ...parts.inactiveRows.map((row) => Math.round(row.y + row.height))
           )
           const endY = Math.min(VIEWPORT.height, rowBottom)
           return {
@@ -14438,10 +15029,21 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
           height: pseudo.height,
         }
       })
-      assert(
-        playState !== null && playState.svgDisplay === 'none' && typeof playState.mask === 'string' && playState.mask !== 'none',
-        `the interrupted composer play control is not showing (state ${short(JSON.stringify(playState), 300)})`
-      )
+      const playVisible =
+        playState !== null &&
+        (playState.svgDisplay === 'none' ? typeof playState.mask === 'string' && playState.mask !== 'none' : playState.svgDisplay !== 'none')
+      const playAria = playState === null ? '' : String(playState.aria || '')
+      if (dashboardOnly !== true) {
+        assert(
+          playState !== null && playState.svgDisplay === 'none' && typeof playState.mask === 'string' && playState.mask !== 'none',
+          `the interrupted composer play control is not showing (state ${short(JSON.stringify(playState), 300)})`
+        )
+      } else {
+        assert(
+          playVisible && /continue/iu.test(playAria),
+          `the interrupted composer play control is not showing (state ${short(JSON.stringify(playState), 300)})`
+        )
+      }
       // Full composer card with even 16 px margins on every side (no hero / empty band; the
       // card contains the attachment button, model and IUI controls and the play-triangle
       // send control). `pad: 0` keeps the exact even margins instead of the default 12 px.
@@ -14482,82 +15084,6 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
         })
       } catch (error) {
         log(`warning: could not clear the interrupted composer record: ${short(error?.message || String(error), 200)}`)
-      }
-    })
-
-    // ---- Prompt history rail + hover full-text preview (stubbed prompts) ---------------
-    await results.check('readme-prompt-history', 'prompt-history.png — right-edge prompt rail + hover full-text preview', async () => {
-      await readmeResetUi(page)
-      await page.waitForFn(() => document.querySelector('[data-psp-search-toggle]') !== null, [], {
-        timeout: 12000,
-        label: 'prompt-history rail (stubbed prompt list)',
-      })
-      // Open the search card (empty query) so the crop can include the search/filter header
-      // whenever it does not cover the hover preview card.
-      const toggle = await page.findRect('[data-psp-search-toggle]')
-      assert(toggle, 'prompt-history search toggle is not visible')
-      await page.clickAt(toggle.x, toggle.y)
-      await page.waitForFn(() => document.querySelector('[data-psp-search-card]') !== null, [], { timeout: 5000, label: 'prompt-history search card' })
-      await sleep(250)
-      const chooseMark = () =>
-        page.eval(() => {
-          const marks = [...document.querySelectorAll('[data-psp-mark]')]
-          if (marks.length === 0) return null
-          const pick = marks[Math.max(0, marks.length - 3)]
-          const rect = pick.getBoundingClientRect()
-          return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2), count: marks.length }
-        })
-      const openPreview = async () => {
-        const park = await page.eval(probeReadme.parkPointer)
-        await page.moveTo(park.x, park.y)
-        await sleep(200)
-        const mark = await chooseMark()
-        assert(mark, 'the stubbed prompt rail renders no tick marks')
-        await page.moveTo(mark.x, mark.y)
-        await page.waitForFn(
-          () => {
-            const card = document.querySelector('[data-psp-preview-card]')
-            return card !== null && (card.innerText || '').trim().length > 10
-          },
-          [],
-          { timeout: 5000, label: 'prompt rail full-text preview card' }
-        )
-        await sleep(350)
-        return mark
-      }
-      const overlaps = (left, right) =>
-        left !== null && right !== null &&
-        left.x < right.x + right.width && left.x + left.width > right.x &&
-        left.y < right.y + right.height && left.y + left.height > right.y
-      let mark = await openPreview()
-      let parts = await page.eval(probeReadme.promptHistoryParts)
-      assert(parts.preview !== null && parts.rail !== null, 'prompt rail/preview geometry could not be measured')
-      if (overlaps(parts.preview, parts.searchCard)) {
-        // Keep the rail + preview readable: close the search card and re-hover a tick.
-        await page.clickAt(toggle.x, toggle.y)
-        await page.waitForFn(() => document.querySelector('[data-psp-search-card]') === null, [], { timeout: 4000, label: 'prompt search card closed' })
-        mark = await openPreview()
-        parts = await page.eval(probeReadme.promptHistoryParts)
-        assert(parts.preview !== null && parts.rail !== null, 'prompt rail/preview geometry could not be measured')
-      }
-      const capture = await readmeCapture(page, {
-        name: 'prompt-history.png',
-        source: 'live GUI prompt-history right-edge rail + hover full-text preview (stubbed prompt list)',
-        pose:
-          'prompt-history rail with the hover full-text preview card' +
-          (parts.searchCard === null ? '' : ' + search card') +
-          ' (preview text masked to canned demo English)',
-        scanSelectors: ['[data-psp-search-card]', '[data-psp-preview-card]', '[data-psp-rail]', '[data-conversation-region="composer"]'],
-        clip: async () => (await page.eval(probeReadme.promptHistoryParts)).box,
-      })
-      state.readme.captures.push(capture)
-      await writeManifest()
-      return `${capture.screenshot.width}x${capture.screenshot.height}px, ${mark.count} rail ticks, preview ${parts.preview === null ? 'n/a' : `${Math.round(parts.preview.width)}x${Math.round(parts.preview.height)} CSS`}, search card ${parts.searchCard === null ? 'closed' : 'open'}, masked ${JSON.stringify(capture.masked)}`
-    }).finally(async () => {
-      try {
-        await readmeResetUi(page)
-      } catch (error) {
-        log(`warning: prompt-history cleanup failed: ${short(error?.message || String(error), 200)}`)
       }
     })
 
@@ -14643,406 +15169,388 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
       return `${capture.screenshot.width}x${capture.screenshot.height}px, masked ${JSON.stringify(capture.masked)}`
     }).finally(async () => {
       try {
-        for (let attempt = 0; attempt < 4; attempt += 1) {
-          if ((await page.count('[data-psfa-overlay]')) === 0) break
-          if ((await page.count('.dsa-filter-menu')) > 0) {
-            await page.pressEscape()
-            await sleep(250)
-            continue
-          }
-          await page.pressEscape()
-          await waitArtifactsClosed(page, { timeout: 3000 })
-        }
-        await closeRightSidebar(page)
-        // Keep the capture pass dark: clearing emulation would fall back to the host
-        // appearance (light in daytime), and every README capture is dark-theme.
-        await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+        // Reload instead of driving the native Files/overlay Esc-close sequence: in the
+        // light pass that close animation can wedge the headless renderer. A reload also
+        // clears the right Sidebar/Files state for the following poses.
+        await page.reload()
+        await page.waitForFn(() => document.readyState === 'complete', [], {
+          timeout: 20000,
+          label: 'reloaded document after the artifacts poses',
+        })
+        await page.waitForFn(probe.appReady, [], { timeout: 60000, label: 'DSH shell after the artifacts reload' })
+        await ensureAppReady(page)
+        await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+        await page.eval(probeReadme.installStyle)
+        await sleep(900)
       } catch (error) {
-        log(`warning: could not close the artifacts overlay/right sidebar: ${short(error?.message || String(error), 200)}`)
+        log(`warning: could not reset the page after the artifacts poses: ${short(error?.message || String(error), 200)}`)
       }
     })
 
-    // ---- Annotation docs assets (docs/assets/annotation-*.png refresh) ----------------
-    // The annotation harness's own `--shots-only --assets` pose targets a composer control,
-    // but the shipped client deliberately makes the composer a pointer pass-through region
-    // (docs/ui-annotation.md: "composer region is the one exception"), so that pose can no
-    // longer produce a popover. The same five assets are captured here with the same privacy
-    // guard, using native controls outside the composer.
-    await results.check('readme-annotation-assets', 'annotation assets — mode / selection / collection / inserted into docs/assets', async () => {
-      await readmeResetUi(page)
-      if ((await page.count('[data-sidebar-right-open]')) > 0) {
-        await closeRightSidebar(page)
-        await page.waitForFn(() => document.querySelector('[data-sidebar-right-open]') === null, [], {
-          timeout: 8000,
-          label: 'right Sidebar closed before the annotation assets',
+    if (dashboardOnly !== true) {
+    // ---- Real-task chat + annotation (round 3) ---------------------------------------
+    // The user rejected the injected dummy card: the composer and annotation shots must
+    // come from a real, isolated model task. One new blank Session, one short generic
+    // prompt, the real answer, then real annotations on that answer. If the model call
+    // fails twice, the injected demo card is used as a clearly labelled fallback.
+    await results.check(
+      'readme-chat-annotation',
+      'composer-chat.png + annotation-annotated.png + annotation-inserted.png — real model answer in an isolated Session',
+      async () => {
+        const taskPrompt =
+          'Write a short release checklist for a web app: five steps, one risk, and one practical tip.'
+        const requirements = [
+          'Tighten this heading and keep it to one line',
+          'Add an owner to each checklist step',
+          'Turn the practical tip into a highlighted callout',
+        ]
+        state.readme.taskPrompt = taskPrompt
+        state.readme.taskRequirements = requirements
+        // 1) Isolated real-task Workspace. The user forbade creating the Session in their
+        //    project Workspaces; the native add-workspace directory dialog cannot be driven
+        //    in headless Chrome (it blocks the renderer), so use the explicitly allowed
+        //    "DSH" checkout/harness Workspace instead of adding a temporary Workspace.
+        await page.eval(probeReadme.installStyle)
+        await page.waitForFn(() => document.querySelector('[data-conversation-session]') !== null, [], {
+          timeout: 15000,
+          label: 'restored Session before the real-task flow',
+        }).catch(() => {})
+        await sleep(1000)
+        const previous = await page.eval(probeReadme.sessionState)
+        assert(previous.sessionId !== null, 'the real-task flow needs a previous Session to restore')
+        state.readme.previousSessionId = previous.sessionId
+        let workspace = await page.eval(probeReadme.dshWorkspaceInfo)
+        assert(workspace.found === true, 'the DSH Workspace row was not found (isolated real-task Workspace fallback)')
+        // The workspace row actions are reveal-on-hover: hover the row, then measure again.
+        assert(workspace.row !== null, 'the DSH Workspace row could not be measured')
+        await page.moveTo(workspace.row.x, workspace.row.y)
+        await sleep(700)
+        workspace = await page.eval(probeReadme.dshWorkspaceInfo)
+        assert(workspace.found === true, 'the DSH Workspace row disappeared while hovering it')
+        assert(workspace.newSession !== null, 'the DSH Workspace exposes no "New session in DSH" action')
+        state.readme.taskWorkspace = { name: workspace.name, path: '/Users/rexxin/Development/DSH' }
+        await page.clickAt(workspace.newSession.x, workspace.newSession.y)
+        await page.waitForFn(
+          (previousId) => {
+            const node = document.querySelector('[data-conversation-session]')
+            return node !== null && node.getAttribute('data-conversation-session') !== previousId
+          },
+          [previous.sessionId],
+          { timeout: 20000, label: 'new Session opened in the DSH Workspace' }
+        )
+        await sleep(1500)
+        const taskSession = await page.eval(probeReadme.sessionState)
+        assert(taskSession.sessionId !== null && taskSession.sessionId !== previous.sessionId, 'the real-task Session did not open')
+        assertEqual(taskSession.draftLength, 0, 'the new real-task Session composer is not empty')
+        const taskWorkspaceOwner = await page.eval(() => {
+          const row = document.querySelector('[data-psd-current-workspace="true"]')
+          return row === null ? null : (row.querySelector('[class*="_title"]')?.innerText || '').trim()
         })
-      }
-      const session = await page.eval(probeReadme.sessionState)
-      assert(session.sessionId !== null && session.hasComposer, 'the annotation assets need an open Session with a composer')
-      assertEqual(session.draftLength, 0, 'refusing the annotation assets: the composer draft is not empty')
-      const launcher = await page.findRect('[data-psa-launcher]')
-      assert(launcher, 'the annotation launcher is missing (ui-annotation feature not mounted)')
-      // The committed docs assets are 1728x900: capture this group at DPR 1 and restore the
-      // 2x capture scale afterwards.
-      await page.send('Emulation.setDeviceMetricsOverride', {
-        width: VIEWPORT.width,
-        height: VIEWPORT.height,
-        deviceScaleFactor: 1,
-        mobile: false,
-      })
-      await sleep(600)
-      const assets = []
-      state.readme.annotationAssets = assets
-      /** Capture one full-page docs asset (1728x900, DPR 1) through the standard privacy gate. */
-      const captureAsset = async (name, pose) => {
-        const shot = await readmeCapture(page, {
-          name,
-          directory: path.join(WORKTREE, 'docs', 'assets'),
-          dpr: 1,
-          pad: 0,
-          source: 'live GUI full page (annotation mode) with the docs privacy guard',
-          pose,
-          scanSelectors: ['body'],
-          postMask: () => page.eval(probeReadme.maskAnnotationMeta),
-          clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height }),
-        })
-        assets.push(shot)
-        return shot
-      }
-      const guard = await page.eval(probeReadme.annotationGuard, true)
-      assert(guard.active === true && guard.width > 100, `the annotation privacy guard could not be placed (${short(JSON.stringify(guard), 240)})`)
-      await sleep(400)
-      await captureAsset('annotation-idle.png', 'idle: floating launcher only, mode off')
-      await page.clickAt(launcher.x, launcher.y)
-      await page.waitForFn(
-        () => document.documentElement.getAttribute('data-psa-active') === 'true' && document.querySelector('[data-psa-rail]') !== null,
-        [],
-        { timeout: 10000, label: 'annotation mode active with the right rail' }
-      )
-      // Let the transient "Annotation mode on" toast fade before the mode capture.
-      await page.waitForFn(
-        () => {
-          const feedback = document.querySelector('[data-psa-feedback]')
-          return feedback === null || (feedback.innerText || '').trim().length === 0
-        },
-        [],
-        { timeout: 6000, label: 'annotation mode toast faded' }
-      ).catch(() => {})
-      await sleep(600)
-      await page.eval(probeReadme.annotationGuard, true)
-      await captureAsset('annotation-mode.png', 'mode on: shrunk page + annotation rail, no annotations yet')
-      const selectTarget = async (spec, note) => {
-        const target = await page.eval(probeReadme.annotationTarget, spec)
-        assert(target, `annotation target not found: ${JSON.stringify(spec)}`)
-        await page.clickAt(target.x, target.y)
-        await page.waitForFn(() => document.querySelector('[data-psa-popover]') !== null, [], {
-          timeout: 5000,
-          label: `annotation popover for ${target.label}`,
-        })
-        await sleep(250)
-        const noteRect = await page.eval(() => {
-          const element = document.querySelector('[data-psa-note]')
-          if (element === null) return null
-          const rect = element.getBoundingClientRect()
-          return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
-        })
-        assert(noteRect, 'the annotation note field is missing')
-        await page.clickAt(noteRect.x, noteRect.y)
-        await sleep(120)
-        await page.send('Input.insertText', { text: note })
-        await sleep(220)
-        return target
-      }
-      // Targets live in the (blurred) native sidebar: the conversation header/composer are
-      // pass-through/hidden surfaces, and the annotation layer keeps the marker + popover crisp.
-      const selectionTarget = await selectTarget({ kind: 'text', value: 'Plugins' }, 'Clarify what this control opens')
-      await captureAsset('annotation-selection.png', `selection: popover with a note over the native "${selectionTarget.label}" control`)
-      await page.eval(() => document.querySelector('[data-psa-add]')?.click())
-      await page.waitForFn(() => document.querySelectorAll('[data-psa-entry]').length >= 1, [], { timeout: 5000, label: 'first annotation added' })
-      for (const label of ['Automation tasks', 'More']) {
-        await selectTarget({ kind: 'text', value: label }, `Explain the ${label} entry`)
-        await page.eval(() => document.querySelector('[data-psa-add]')?.click())
-        await sleep(400)
-      }
-      await page.waitForFn(() => document.querySelectorAll('[data-psa-entry]').length >= 3, [], {
-        timeout: 6000,
-        label: 'three annotations in the collection rail',
-      })
-      // A stray exit-confirm dialog must never be part of the collection asset.
-      const dialog = await page.eval(() => document.querySelector('[role="dialog"]') !== null)
-      if (dialog) {
-        await page.eval(() => {
-          for (const button of document.querySelectorAll('[role="dialog"] button')) {
-            if (/^(Cancel|取消)/u.test((button.innerText || '').trim())) {
-              button.click()
-              return true
-            }
+        assert(
+          /^DSH$/iu.test(taskWorkspaceOwner || ''),
+          `the new Session is not in the DSH Workspace (owner ${JSON.stringify(taskWorkspaceOwner)})`
+        )
+        state.readme.taskSessionId = taskSession.sessionId
+        README_STUB_STATE.realPromptSessionIds.add(taskSession.sessionId)
+        // 2) clean chat look: sidebar hidden, transcript visible, header hidden
+        await page.eval(probeReadme.hideSidebar, true)
+        await page.eval(probeReadme.setChatVisible, true)
+        await sleep(700)
+        // 3) send the prompt and wait for the real model answer (180 s, one retry)
+        let answer = null
+        let modelError = null
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+          try {
+            await readmeSendChatPrompt(page, taskPrompt)
+            answer = await readmeWaitChatAnswer(page, { timeout: 180000 })
+            break
+          } catch (error) {
+            modelError = error
+            log(`warning: real-task model attempt ${attempt} failed: ${short(error?.message || String(error), 320)}`)
+            await sleep(1500)
           }
-          return false
-        })
-        await sleep(400)
-      }
-      await sleep(350)
-      await captureAsset('annotation-collection.png', 'collection view: three annotations managed together in the rail')
-      const inserted = await page.eval(() => {
-        const button = document.querySelector('[data-psa-insert-batch]')
-        if (button === null) return false
-        button.click()
-        return true
-      })
-      assert(inserted === true, 'the collection batch-insert control is missing')
-      await page.waitForFn(
-        () =>
-          document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-decorator="true"]').length >= 1 ||
-          /Please adjust the UI elements below/u.test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || ''),
-        [],
-        { timeout: 8000, label: 'annotation batch inserted into the composer' }
-      )
-      await sleep(400)
-      await captureAsset('annotation-inserted.png', 'composer with the structured annotation batch inserted (never sent)')
-      await page.eval(probeReadme.annotationGuard, false)
-      await page.send('Emulation.setDeviceMetricsOverride', {
-        width: VIEWPORT.width,
-        height: VIEWPORT.height,
-        deviceScaleFactor: README_DPR,
-        mobile: false,
-      })
-      await sleep(400)
-      return `${assets.length} docs assets refreshed: ${assets.map((shot) => `${shot.file} ${shot.screenshot.width}x${shot.screenshot.height}`).join(', ')}`
-    })
-
-    // ---- Dummy-page annotation workflow (README annotation screenshots) --------------
-    // The user asked for a real annotation interaction on a clean dummy DSH page instead
-    // of a rail with blurred surroundings: a blank new Session, a client-injected dummy
-    // answer card, three real annotations with requirements, then the batch insertion.
-    await results.check('readme-annotation-workflow', 'annotation-annotated.png + annotation-inserted.png — dummy DSH page with real annotation interaction', async () => {
-      // The earlier docs-asset pose leaves annotation mode active with records; exit it
-      // through its own confirm dialog (Clear & exit) instead of reloading, so the page's
-      // animation frames stay live for the marker geometry.
-      for (let attempt = 0; attempt < 6; attempt += 1) {
-        const workflow = await page.eval(probeReadme.annotationWorkflowState)
-        if (workflow.active !== 'true') break
-        if (workflow.exitConfirm) {
-          await page.eval(() => document.querySelector('[data-psa-exit-clear]')?.click())
-          await sleep(450)
-          continue
         }
-        await page.pressEscape()
+        const modelOk = answer !== null
+        state.readme.taskAnswer = modelOk
+          ? { messages: answer.messages, lastMessageLength: answer.lastTextLength }
+          : null
+        if (modelOk) {
+          log(
+            `readme real task: answer rendered (${answer.messages} messages, last message ${answer.lastTextLength} chars; ` +
+              `session id recorded in captures.json)`
+          )
+        } else {
+          state.readme.taskFallback =
+            `model call failed after two attempts: ${short(modelError?.message || String(modelError), 320)}; ` +
+            'annotation poses fell back to the client-injected demo card and composer-chat shows the sent prompt without an assistant answer'
+          state.readme.deviations.push(state.readme.taskFallback)
+          log(`warning: ${state.readme.taskFallback}`)
+        }
+        // 4) composer-chat.png: real chat window + composer + prompt rail/preview/search
+        await readmeResetUi(page)
+        await page.evaluate(`(() => {
+          const scroll = document.querySelector('[data-conversation-scroll]')
+          if (scroll !== null) scroll.scrollTop = scroll.scrollHeight
+          window.scrollTo(0, document.body.scrollHeight)
+          return true
+        })()`)
+        await sleep(400)
+        let chatClip = null
+        let chatParts = null
+        if (modelOk) {
+          await readmeOpenPromptRail(page, 'weekend')
+          const hover = await readmeHoverRailPreview(page)
+          chatParts = hover.parts
+          chatClip = readmeChatClip(hover.parts)
+        } else {
+          chatParts = await page.eval(probeReadme.composerChatParts)
+          chatClip = readmeChatClip(chatParts)
+        }
+        const chatShot = await readmeCapture(page, {
+          name: 'composer-chat.png',
+          pose:
+            'real DSH chat window: assistant answer + composer, prompt-history rail with hover full-text preview and open search card' +
+            (modelOk ? '' : ' (model fallback: sent prompt shown without an assistant answer)'),
+          source: 'live GUI real model task in an isolated new Session (sidebar hidden)',
+          scanSelectors: ['body'],
+          pad: 0,
+          maskCopy: { ...README_MASK_COPY, previewPrompt: taskPrompt },
+          meta: {
+            taskPrompt,
+            taskSessionId: taskSession.sessionId,
+            answer: modelOk ? { messages: answer.messages, lastMessageLength: answer.lastTextLength } : null,
+            fallback: modelOk ? null : 'model call failed; sent prompt shown without assistant answer',
+          },
+          clip: () => chatClip,
+        })
+        state.readme.captures.push(chatShot)
+        await writeManifest()
+        log(
+          `readme composer-chat: ${chatShot.screenshot.width}x${chatShot.screenshot.height}px ` +
+            `(crop ${chatShot.rect.width}x${chatShot.rect.height}, transcript ${chatParts.messageCount ?? 0} messages, rail ${modelOk ? 'open' : 'absent'})`
+        )
+        // 5) annotation on the real answer (or the labelled injected-card fallback)
+        const annotatePoint = async (point, label) => {
+          const before = await page.eval(() => document.querySelectorAll('[data-psa-entry]').length)
+          await page.clickAt(point.x, point.y)
+          await page.waitForFn(() => document.querySelector('[data-psa-popover]') !== null, [], {
+            timeout: 5000,
+            label: `annotation popover for ${label}`,
+          })
+          await sleep(200)
+          const added = await page.eval(() => {
+            const button = document.querySelector('[data-psa-add]')
+            if (button === null) return false
+            button.click()
+            return true
+          })
+          assert(added === true, `the annotation add control is missing (${label})`)
+          await page.waitForFn((expected) => document.querySelectorAll('[data-psa-entry]').length >= expected, [before + 1], {
+            timeout: 6000,
+            label: `annotation entry added for ${label}`,
+          })
+          await sleep(220)
+        }
+        const activateAnnotation = async () => {
+          const launcher = await page.findRect('[data-psa-launcher]')
+          assert(launcher, 'the annotation launcher is missing')
+          await page.clickAt(launcher.x, launcher.y)
+          await page.waitForFn(
+            () => document.documentElement.getAttribute('data-psa-active') === 'true' && document.querySelector('[data-psa-rail]') !== null,
+            [],
+            { timeout: 12000, label: 'annotation mode active for the real-task pose' }
+          )
+          await page.waitForFn(
+            () => {
+              const feedback = document.querySelector('[data-psa-feedback]')
+              return feedback === null || (feedback.innerText || '').trim().length === 0
+            },
+            [],
+            { timeout: 6000, label: 'annotation mode toast faded' }
+          ).catch(() => {})
+          await sleep(500)
+        }
+        const paintMarksIfMissing = async (label) => {
+          await page.waitForFn(() => document.querySelectorAll('.psa-mark').length >= 3, [], {
+            timeout: 2500,
+            label: `three numbered page markers (${label})`,
+          }).catch(() => {})
+          if ((await page.count('.psa-mark')) < 3) {
+            const painted = await page.eval(probeReadme.fallbackMarkPaint)
+            assert(
+              painted.ok === true && painted.count === 3,
+              `the page marks could not be painted (${label}: ${short(JSON.stringify(painted), 280)})`
+            )
+            state.readme.deviations.push(
+              `annotation workflow (${label}): the controller geometry pass did not derive page marks for the captured content in headless Chrome; ` +
+                'the three numbered page marks were painted through the plugin snapshot store (same mark descriptors), while the annotations themselves are real records created by clicking the page'
+            )
+            await sleep(400)
+          }
+          await page.waitForFn(() => document.querySelectorAll('.psa-mark').length >= 3, [], {
+            timeout: 5000,
+            label: `three numbered page markers (${label})`,
+          })
+        }
+        const parkAndDismiss = async () => {
+          const railPark = await page.eval(() => {
+            const rail = document.querySelector('[data-psa-rail]')
+            if (rail === null) return null
+            const rect = rail.getBoundingClientRect()
+            return { x: Math.round(rect.left + 24), y: Math.round(rect.top + 40) }
+          })
+          if (railPark !== null) await page.moveTo(railPark.x, railPark.y)
+          await sleep(350)
+          if ((await page.count('[data-psa-exit-confirm]')) > 0) {
+            await page.eval(() => document.querySelector('[data-psa-exit-cancel]')?.click())
+            await sleep(300)
+          }
+          await sleep(200)
+        }
+        const captureAnnotation = async (name, pose) => {
+          const shot = await readmeCapture(page, {
+            name,
+            pose,
+            source: modelOk
+              ? 'live GUI real model answer in an isolated new Session, real annotation mode (sidebar hidden)'
+              : 'FALLBACK: client-injected demo card in an isolated new Session, real annotation mode (sidebar hidden)',
+            scanSelectors: ['body'],
+            pad: 0,
+            postMask: () => page.eval(probeReadme.maskAnnotationMeta),
+            meta: {
+              taskPrompt,
+              taskSessionId: taskSession.sessionId,
+              requirements,
+              fallback: modelOk ? null : 'injected demo card (model call failed)',
+            },
+            clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height }),
+          })
+          state.readme.captures.push(shot)
+          await writeManifest()
+          return shot
+        }
+        let annotatedShot = null
+        if (modelOk) {
+          await readmeResetUi(page)
+          await activateAnnotation()
+          const targets = await page.eval(probeReadme.chatAnswerTargets)
+          assert(targets.ok === true, `the rendered answer could not be located (${short(JSON.stringify(targets), 240)})`)
+          assert(targets.heading !== null, 'the answer has no annotatable heading')
+          assert(targets.itinerary !== null, 'the answer has no annotatable itinerary item')
+          assert(targets.budget !== null, 'the answer has no annotatable budget line')
+          log(
+            `readme annotation targets: heading ${JSON.stringify(targets.heading.text)}, list item ${JSON.stringify(targets.itinerary.text)}, closing tip ${JSON.stringify(targets.budget.text)}`
+          )
+          await annotatePoint(targets.heading.point, 'answer heading')
+          await annotatePoint(targets.itinerary.point, 'itinerary item')
+          await annotatePoint(targets.budget.point, 'budget line')
+          const filled = await page.eval(probeReadme.annotationFillRequirements, requirements)
+          assertEqual(filled.count, 3, 'the rail must show three requirement textareas for the real answer')
+          assert(
+            JSON.stringify(filled.values) === JSON.stringify(requirements),
+            `the rail requirement textareas did not take the texts (got ${short(JSON.stringify(filled.values), 300)})`
+          )
+          await sleep(350)
+          await paintMarksIfMissing('real answer')
+          await parkAndDismiss()
+          const verified = await page.eval(probeReadme.annotationRequirementsState)
+          assert(
+            JSON.stringify(verified.values) === JSON.stringify(requirements),
+            `the rail requirement values reverted after the React re-render (${short(JSON.stringify(verified.values), 300)})`
+          )
+          assertEqual(verified.markers, 3, `the answer must show three numbered annotation markers (got ${verified.markers})`)
+          assertEqual(verified.entries, 3, `the rail must list three annotations (got ${verified.entries})`)
+          annotatedShot = await captureAnnotation(
+            'annotation-annotated.png',
+            'real model answer with three annotated elements (#1 heading, #2 checklist list item, #3 closing practical tip) and the rail requirements'
+          )
+          const insertedOk = await page.eval(() => {
+            const button = document.querySelector('[data-psa-insert-batch]')
+            if (button === null) return false
+            button.click()
+            return true
+          })
+          assert(insertedOk === true, 'the collection "Insert all into composer" control is missing')
+          await page.waitForFn(
+            () =>
+              document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-decorator="true"]').length >= 1 ||
+              /Please adjust the UI elements below/u.test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || ''),
+            [],
+            { timeout: 8000, label: 'annotation references inserted into the composer' }
+          )
+          await page.waitForFn(
+            () => {
+              const feedback = document.querySelector('[data-psa-feedback]')
+              return feedback === null || (feedback.innerText || '').trim().length === 0
+            },
+            [],
+            { timeout: 6000, label: 'insert toast faded' }
+          ).catch(() => {})
+          await parkAndDismiss()
+          const insertedShot = await captureAnnotation(
+            'annotation-inserted.png',
+            'real model answer: the three annotation references inserted into the composer as one grouped chip (never sent), rail visible'
+          )
+          state.readme.taskFallback = null
+          return (
+            `${annotatedShot.screenshot.width}x${annotatedShot.screenshot.height} annotated + ` +
+            `${insertedShot.screenshot.width}x${insertedShot.screenshot.height} inserted, ` +
+            `composer-chat ${chatShot.screenshot.width}x${chatShot.screenshot.height}, real answer ${answer.messages} messages/${answer.lastTextLength} chars, ` +
+            `targets ${JSON.stringify({ heading: targets.heading.text.slice(0, 60), itinerary: targets.itinerary.text.slice(0, 60), budget: targets.budget.text.slice(0, 60) })}`
+          )
+        }
+        // Fallback (model failed twice): client-injected demo card, labelled as fallback.
+        await page.eval(probeReadme.setChatVisible, false)
+        await page.eval(probeReadme.hideComposerContextRow)
+        await page.eval(probeReadme.installDummyAnswer)
+        await sleep(400)
+        await readmeResetUi(page)
+        await activateAnnotation()
+        const placed = await page.eval(probeReadme.positionDummyAnswer)
+        assert(placed !== null && placed.width >= 700, `the demo card could not be placed (${short(JSON.stringify(placed), 220)})`)
+        const dummyTargets = await page.eval(probeReadme.dummyTargets)
+        assert(dummyTargets.title !== null && dummyTargets.row !== null && dummyTargets.button !== null, 'the fallback demo card targets are missing')
+        await annotatePoint(dummyTargets.title, 'fallback card title')
+        await annotatePoint(dummyTargets.row, 'fallback itinerary row')
+        await annotatePoint(dummyTargets.button, 'fallback primary button')
+        const filledFallback = await page.eval(probeReadme.annotationFillRequirements, requirements)
+        assertEqual(filledFallback.count, 3, 'the fallback rail must show three requirement textareas')
         await sleep(350)
-      }
-      await page.waitForFn(() => document.documentElement.getAttribute('data-psa-active') !== 'true', [], {
-        timeout: 8000,
-        label: 'annotation mode off before the dummy page workflow',
-      })
-      await page.eval(probeReadme.installStyle)
-      await page.waitForFn(() => document.querySelector('[data-conversation-session]') !== null, [], {
-        timeout: 15000,
-        label: 'restored Session before the annotation workflow',
-      }).catch(() => {})
-      await sleep(1200)
-      let previous = await page.eval(probeReadme.sessionState)
-      for (let attempt = 0; attempt < 6; attempt += 1) {
-        await sleep(400)
-        const next = await page.eval(probeReadme.sessionState)
-        if (next.sessionId !== null && next.sessionId === previous.sessionId) {
-          previous = next
-          break
-        }
-        previous = next
-      }
-      assert(previous.sessionId !== null, 'the annotation workflow needs a current Session to return to')
-      state.readme.previousSessionId = previous.sessionId
-      const newSession = await page.eval(probeReadme.newSessionPoint)
-      assert(newSession, 'native New Session control not found')
-      await page.clickAt(newSession.x, newSession.y)
-      await page.waitForFn(
-        (previousId) => {
-          const node = document.querySelector('[data-conversation-session]')
-          return node !== null && node.getAttribute('data-conversation-session') !== previousId
-        },
-        [previous.sessionId],
-        { timeout: 20000, label: 'dummy blank Session opened through the native New Session flow' }
-      )
-      await sleep(1500)
-      const dummy = await page.eval(probeReadme.sessionState)
-      assert(dummy.sessionId !== null && dummy.sessionId !== previous.sessionId, 'the dummy blank Session did not open')
-      assertEqual(dummy.draftLength, 0, 'refusing the dummy pose: the new Session composer draft is not empty')
-      state.readme.dummySessionId = dummy.sessionId
-      await page.eval(probeReadme.hideSidebar, true)
-      const hero = await page.eval(probeReadme.hideEmptyHomeState)
-      await page.eval(probeReadme.hideComposerContextRow)
-      await page.eval(probeReadme.installDummyAnswer)
-      await sleep(400)
-      const launcher = await page.findRect('[data-psa-launcher]')
-      assert(launcher, 'the annotation launcher is missing')
-      await page.clickAt(launcher.x, launcher.y)
-      await page.waitForFn(
-        () => document.documentElement.getAttribute('data-psa-active') === 'true' && document.querySelector('[data-psa-rail]') !== null,
-        [],
-        { timeout: 12000, label: 'annotation mode active for the dummy page' }
-      )
-      await page.waitForFn(
-        () => {
-          const feedback = document.querySelector('[data-psa-feedback]')
-          return feedback === null || (feedback.innerText || '').trim().length === 0
-        },
-        [],
-        { timeout: 6000, label: 'annotation mode toast faded' }
-      ).catch(() => {})
-      await sleep(500)
-      const placed = await page.eval(probeReadme.positionDummyAnswer)
-      assert(placed !== null && placed.width >= 700, `the dummy card could not be placed (${short(JSON.stringify(placed), 220)})`)
-      const targets = await page.eval(probeReadme.dummyTargets)
-      assert(targets.title !== null, 'the dummy card title cannot be clicked for annotation')
-      assert(targets.row !== null, 'the dummy itinerary row cannot be clicked for annotation')
-      assert(targets.button !== null, 'the dummy primary button cannot be clicked for annotation')
-      const requirements = [
-        'Shorten this heading and keep the date chips',
-        'Show walking time on the right of each stop',
-        'Use the primary button style and full width',
-      ]
-      const annotate = async (point, label) => {
-        const before = await page.eval(() => document.querySelectorAll('[data-psa-entry]').length)
-        await page.clickAt(point.x, point.y)
-        await page.waitForFn(() => document.querySelector('[data-psa-popover]') !== null, [], {
-          timeout: 5000,
-          label: `annotation popover for ${label}`,
-        })
-        await sleep(200)
-        const added = await page.eval(() => {
-          const button = document.querySelector('[data-psa-add]')
+        await paintMarksIfMissing('injected demo fallback')
+        await parkAndDismiss()
+        annotatedShot = await captureAnnotation(
+          'annotation-annotated.png',
+          'FALLBACK (model unavailable): client-injected demo answer card with three annotated elements and the rail requirements'
+        )
+        const insertedFallback = await page.eval(() => {
+          const button = document.querySelector('[data-psa-insert-batch]')
           if (button === null) return false
           button.click()
           return true
         })
-        assert(added === true, `the annotation add control is missing (${label})`)
-        await page.waitForFn((expected) => document.querySelectorAll('[data-psa-entry]').length >= expected, [before + 1], {
-          timeout: 6000,
-          label: `annotation entry added for ${label}`,
-        })
-        await sleep(220)
-      }
-      await annotate(targets.title, 'card title')
-      await annotate(targets.row, 'itinerary row')
-      await annotate(targets.button, 'primary button')
-      const filled = await page.eval(probeReadme.annotationFillRequirements, requirements)
-      assertEqual(filled.count, 3, 'the rail must show exactly three requirement textareas for the dummy page')
-      assert(
-        JSON.stringify(filled.values) === JSON.stringify(requirements),
-        `the rail requirement textareas did not take the texts (got ${short(JSON.stringify(filled.values), 300)})`
-      )
-      // Page marks are derived on the controller's geometry frames; for the
-      // client-injected card that derivation does not paint them in this headless session,
-      // so paint the same mark descriptors through the plugin's own snapshot store (React
-      // then renders the plugin's real numbered `.psa-mark` elements). The annotations
-      // themselves are real records created by clicking the card.
-      await page.waitForFn(() => document.querySelectorAll('.psa-mark').length >= 3, [], {
-        timeout: 1500,
-        label: 'three numbered page markers from the geometry frame',
-      }).catch(() => {})
-      if ((await page.count('.psa-mark')) < 3) {
-        const painted = await page.eval(probeReadme.fallbackMarkPaint)
-        assert(
-          painted.ok === true && painted.count === 3,
-          `the page marks could not be painted for the dummy card (${short(JSON.stringify(painted), 300)})`
-        )
-        state.readme.deviations.push(
-          'annotation workflow: the controller geometry pass did not derive page marks for the client-injected dummy card in headless Chrome; the three numbered page marks were painted through the plugin snapshot store (same mark descriptors), while the annotations themselves are real records created by clicking the card'
+        assert(insertedFallback === true, 'the fallback collection "Insert all into composer" control is missing')
+        await page.waitForFn(
+          () =>
+            document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-decorator="true"]').length >= 1 ||
+            /Please adjust the UI elements below/u.test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || ''),
+          [],
+          { timeout: 8000, label: 'fallback annotation references inserted into the composer' }
         )
         await sleep(400)
+        await parkAndDismiss()
+        const fallbackInserted = await captureAnnotation(
+          'annotation-inserted.png',
+          'FALLBACK (model unavailable): annotation references inserted into the composer as one grouped chip (never sent)'
+        )
+        return (
+          `FALLBACK ${annotatedShot.screenshot.width}x${annotatedShot.screenshot.height} annotated + ` +
+          `${fallbackInserted.screenshot.width}x${fallbackInserted.screenshot.height} inserted, ` +
+          `composer-chat ${chatShot.screenshot.width}x${chatShot.screenshot.height}; model error: ${short(modelError?.message || String(modelError), 240)}`
+        )
       }
-      await page.waitForFn(() => document.querySelectorAll('.psa-mark').length >= 3, [], {
-        timeout: 5000,
-        label: 'three numbered page markers for the dummy card',
-      })
-      // Park the pointer over the annotation rail (own UI): clears the page hover outline
-      // and dismisses any stray exit dialog before the capture.
-      const railPark = await page.eval(() => {
-        const rail = document.querySelector('[data-psa-rail]')
-        if (rail === null) return null
-        const rect = rail.getBoundingClientRect()
-        return { x: Math.round(rect.left + 24), y: Math.round(rect.top + 40) }
-      })
-      if (railPark !== null) await page.moveTo(railPark.x, railPark.y)
-      await sleep(350)
-      if ((await page.count('[data-psa-exit-confirm]')) > 0) {
-        await page.eval(() => document.querySelector('[data-psa-exit-cancel]')?.click())
-        await sleep(300)
-      }
-      await sleep(250)
-      const verified = await page.eval(probeReadme.annotationRequirementsState)
-      assert(
-        JSON.stringify(verified.values) === JSON.stringify(requirements),
-        `the rail requirement values reverted after the React re-render (${short(JSON.stringify(verified.values), 300)})`
-      )
-      assertEqual(verified.markers, 3, `the dummy page must show three numbered annotation markers (got ${verified.markers})`)
-      assertEqual(verified.entries, 3, `the rail must list three annotations (got ${verified.entries})`)
-      const annotated = await readmeCapture(page, {
-        name: 'annotation-annotated.png',
-        pose:
-          'dummy DSH answer card with three annotated elements (#1 title, #2 itinerary row, #3 primary button) ' +
-          'and the rail showing the three requirements',
-        source: 'live GUI dummy Session + client-injected dummy answer card, real annotation mode',
-        scanSelectors: ['body'],
-        pad: 0,
-        postMask: () => page.eval(probeReadme.maskAnnotationMeta),
-        meta: { dummySessionId: dummy.sessionId, heroHidden: hero.hidden, requirements },
-        clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height }),
-      })
-      state.readme.captures.push(annotated)
-      const inserted = await page.eval(() => {
-        const button = document.querySelector('[data-psa-insert-batch]')
-        if (button === null) return false
-        button.click()
-        return true
-      })
-      assert(inserted === true, 'the collection "Insert all into composer" control is missing')
-      await page.waitForFn(
-        () =>
-          document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-decorator="true"]').length >= 1 ||
-          /Please adjust the UI elements below/u.test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || ''),
-        [],
-        { timeout: 8000, label: 'annotation references inserted into the composer' }
-      )
-      await page.waitForFn(
-        () => {
-          const feedback = document.querySelector('[data-psa-feedback]')
-          return feedback === null || (feedback.innerText || '').trim().length === 0
-        },
-        [],
-        { timeout: 6000, label: 'insert toast faded' }
-      ).catch(() => {})
-      await page.eval(probeReadme.positionDummyAnswer)
-      if ((await page.count('.psa-mark')) < 3) await page.eval(probeReadme.fallbackMarkPaint)
-      const railParkAfterInsert = await page.eval(() => {
-        const rail = document.querySelector('[data-psa-rail]')
-        if (rail === null) return null
-        const rect = rail.getBoundingClientRect()
-        return { x: Math.round(rect.left + 24), y: Math.round(rect.top + 40) }
-      })
-      if (railParkAfterInsert !== null) await page.moveTo(railParkAfterInsert.x, railParkAfterInsert.y)
-      await sleep(450)
-      const insertedShot = await readmeCapture(page, {
-        name: 'annotation-inserted.png',
-        pose:
-          'same dummy page: the three annotation references inserted into the composer as one grouped batch chip (never sent), rail still visible',
-        source: 'live GUI dummy Session + client-injected dummy answer card, real annotation mode',
-        scanSelectors: ['body'],
-        pad: 0,
-        postMask: () => page.eval(probeReadme.maskAnnotationMeta),
-        meta: { dummySessionId: dummy.sessionId, heroHidden: hero.hidden, requirements },
-        clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height }),
-      })
-      state.readme.captures.push(insertedShot)
-      await writeManifest()
-      return (
-        `${annotated.screenshot.width}x${annotated.screenshot.height} annotated (${verified.markers} markers, ` +
-        `${verified.entries} rail requirements) + ${insertedShot.screenshot.width}x${insertedShot.screenshot.height} inserted; ` +
-        `dummy Session id recorded in captures.json; hidden sidebar/hero ${hero.hidden}`
-      )
-    }).finally(async () => {
-      // Never leave the live page in annotation mode or with the injected dummy card, and
-      // return to the Session that was current before the dummy pose when its row is reachable.
+    ).finally(async () => {
+      // Never leave the live page in annotation mode / with the demo card, and return to
+      // the Session that was current before the real-task pose.
       try {
         for (let attempt = 0; attempt < 8; attempt += 1) {
           const workflow = await page.eval(probeReadme.annotationWorkflowState)
@@ -15056,6 +15564,7 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
           await sleep(350)
         }
         await page.eval(probeReadme.removeDummyAnswer)
+        await page.eval(probeReadme.setChatVisible, false)
         await page.eval(probeReadme.hideSidebar, false)
         const previousSession = state.readme.previousSessionId
         if (previousSession !== undefined && previousSession !== null) {
@@ -15070,19 +15579,31 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
             await page.waitForFn(
               (id) => document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') === id,
               [previousSession],
-              { timeout: 12000, label: 'previous Session restored after the annotation workflow' }
+              { timeout: 12000, label: 'previous Session restored after the real-task flow' }
             )
           } else {
-            state.readme.deviations.push('annotation workflow: the previous Session row was not reachable for the restore; the dummy blank Session stayed current')
+            state.readme.deviations.push(
+              'real-task flow: the previous Session row was not reachable for the restore; the real-task Session stayed current'
+            )
           }
+        }
+        // Archive only the isolated real-task Session this flow created.
+        const taskSessionId = state.readme.taskSessionId
+        if (typeof taskSessionId === 'string' && taskSessionId.length > 0) {
+          const cleanup = await readmeArchiveTaskSession(page, taskSessionId)
+          state.readme.taskCleanup = cleanup
+          if (cleanup.archived !== true) state.readme.deviations.push(`real-task Session cleanup: ${cleanup.reason}`)
+          log(`real-task Session cleanup: ${short(JSON.stringify(cleanup), 240)}`)
         }
         await page.eval(probeReadme.installStyle)
         await readmeResetUi(page)
       } catch (error) {
-        state.readme.deviations.push(`annotation workflow cleanup: ${short(error?.message || String(error), 240)}`)
-        log(`warning: annotation workflow cleanup failed: ${short(error?.message || String(error), 240)}`)
+        state.readme.deviations.push(`real-task flow cleanup: ${short(error?.message || String(error), 240)}`)
+        log(`warning: real-task flow cleanup failed: ${short(error?.message || String(error), 240)}`)
       }
     })
+
+    }
 
     // ---- Plugin settings section ------------------------------------------------------
     await results.check('readme-settings', 'settings.png — suite settings section on the plugin detail page', async () => {
@@ -15111,6 +15632,20 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
         { timeout: 10000, label: 'Plugins page' }
       )
       await sleep(600)
+      await page.waitForFn(
+        () => {
+          const main = document.querySelector('[data-slot="main"]')
+          if (main === null) return false
+          for (const button of main.querySelectorAll('button')) {
+            if ((button.getAttribute('aria-label') || '') !== 'View DSH Power Suite') continue
+            button.scrollIntoView({ block: 'center' })
+            return true
+          }
+          return false
+        },
+        [],
+        { timeout: 15000, label: 'DSH Power Suite entry on the Plugins page' }
+      ).catch(() => {})
       const entry = await page.eval(() => {
         const main = document.querySelector('[data-slot="main"]')
         if (main === null) return null
@@ -15142,14 +15677,15 @@ async function runReadmeShotsMode({ page, results, state, cdp }) {
     })
 
     await results.check('readme-files', 'every design §3 raw file + captures.json exist with expected geometry', async () => {
+      const requiredFiles = dashboardOnly === true ? README_DASHBOARD_FILES : README_REQUIRED_FILES
       const missing = []
-      for (const name of README_REQUIRED_FILES) {
+      for (const name of requiredFiles) {
         if (!existsSync(path.join(README_RAW_DIR, name))) missing.push(name)
       }
       assertEqual(missing.length, 0, `missing raw captures: ${missing.join(', ')}`)
       assert(existsSync(state.readme.file), `captures.json is missing at ${state.readme.file}`)
       const manifest = JSON.parse(await readFile(state.readme.file, 'utf8'))
-      assertEqual(manifest.captures.length, README_REQUIRED_FILES.length, 'captures.json must list every raw file')
+      assertEqual(manifest.captures.length, requiredFiles.length, 'captures.json must list every raw file')
       for (const capture of manifest.captures) {
         assertEqual(capture.dpr, README_DPR, `${capture.file}: dpr metadata`)
         assertEqual(capture.rect.width * README_DPR, capture.screenshot.width, `${capture.file}: PNG width matches the 2x clip`)
@@ -15191,6 +15727,683 @@ async function cleanupReadmeShots(page, state) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// --readme-chat mode: isolated real-model chat + annotation captures (round 3)
+
+/**
+ * Read the demo Workspace registry of the isolated capture instance when present
+ * (`/tmp/ps-readme-home`, seeded by the Lead). Returns `{ name, path }` or null.
+ */
+async function readIsolatedDemoWorkspace() {
+  try {
+    const document = JSON.parse(await readFile('/tmp/ps-readme-home/storages/workspace.json', 'utf8'))
+    const workspaces = document?.tables?.workspaces ?? {}
+    const entries = Object.values(workspaces)
+    if (entries.length === 0) return null
+    return { name: String(entries[0].title ?? ''), path: String(entries[0].path ?? '') }
+  } catch {
+    return null
+  }
+}
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Merge the chat/annotation captures into raw/captures.json, keeping the other light-theme
+ * poses captured earlier and replacing every chat/annotation entry + travel/fallback text.
+ * @param {Array<object>} captures - new capture metadata.
+ * @param {object} task - real-task metadata (prompt, workspace, session, answer, cleanup…).
+ * @param {Array<string>} deviations - current deviations.
+ * @returns {Promise<void>}
+ */
+async function readmeWriteChatManifest(captures, task, deviations) {
+  const file = path.join(README_RAW_DIR, 'captures.json')
+  let existing = { captures: [], annotationAssets: [], deviations: [] }
+  try {
+    existing = JSON.parse(await readFile(file, 'utf8'))
+  } catch {
+    existing = { captures: [], annotationAssets: [], deviations: [] }
+  }
+  const names = new Set(captures.map((capture) => capture.file))
+  const kept = (Array.isArray(existing.captures) ? existing.captures : []).filter((capture) => !names.has(capture.file))
+  const staleTravel = /travel|weekend|shanghai|budget line|demo card|injected demo|model answer did not finish/i
+  const manifest = {
+    generatedAt: new Date().toISOString(),
+    harness: 'test/browser/sidebar.e2e.mjs --readme-chat',
+    gui: 'live DSH Web GUI (token redacted)',
+    viewport: { width: VIEWPORT.width, height: VIEWPORT.height, deviceScaleFactor: README_DPR },
+    theme: 'light',
+    themeEmulation: 'CDP Emulation.setEmulatedMedia prefers-color-scheme=light',
+    rawDirectory: README_RAW_DIR,
+    contract: 'README Bento redesign (round 3 review: light theme, real isolated model task, chat + settings composer group)',
+    task,
+    captures: [...kept, ...captures],
+    annotationAssets: existing.annotationAssets ?? [],
+    annotationAssetsNote:
+      'docs/assets/annotation-*.png come from round 2; the README annotation group uses raw/annotation-annotated.png + raw/annotation-inserted.png',
+    deviations: [
+      ...(Array.isArray(existing.deviations) ? existing.deviations : []).filter((line) => !staleTravel.test(line)),
+      ...deviations,
+    ],
+  }
+  await writeFile(file, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+  return manifest
+}
+
+/** Focus the real composer and return its send-control point. */
+async function readmeFocusComposer(page) {
+  const points = await page.eval(probeReadme.chatSendPoints)
+  assert(points !== null && points.editor !== null, 'the composer editor could not be measured')
+  await page.clickAt(points.editor.x, points.editor.y)
+  await sleep(300)
+  return points
+}
+
+/**
+ * Type the prompt through the real composer, then send it with Enter AND the submit
+ * control. Returns the composer state after the attempt (the caller asserts the user
+ * message appeared in the transcript).
+ */
+async function readmeSendPromptReal(page, promptText) {
+  let points = await readmeFocusComposer(page)
+  const before = await page.eval(probeReadme.chatFlowState, promptText)
+  if (before.draftLength < 10) {
+    await page.send('Input.insertText', { text: promptText })
+    await sleep(450)
+  }
+  const typed = await page.eval(probeReadme.chatFlowState, promptText)
+  assert(typed.draftLength > 10, `the prompt was not typed into the composer (draft ${typed.draftLength} chars)`)
+  await page.waitForFn(
+    () => {
+      const composer = document.querySelector('[data-conversation-region="composer"]')
+      const primary = composer === null ? null : composer.querySelector('button[class$="_primary"]')
+      return primary !== null && primary.disabled !== true
+    },
+    [],
+    { timeout: 8000, label: 'composer submit control enabled' }
+  )
+  const dispatchEnter = (type) =>
+    page
+      .send('Input.dispatchKeyEvent', {
+        type,
+        key: 'Enter',
+        code: 'Enter',
+        windowsVirtualKeyCode: 13,
+        nativeVirtualKeyCode: 13,
+        ...(type === 'keyDown' ? { text: '\r', unmodifiedText: '\r' } : {}),
+      })
+      .catch(() => {})
+  await dispatchEnter('keyDown')
+  await dispatchEnter('keyUp')
+  await sleep(400)
+  // Never click a control that has already flipped to "Stop generating": that would
+  // interrupt the turn we just started. Click the submit control only when the prompt is
+  // still in the composer (i.e. Enter did not submit it).
+  await sleep(350)
+  let afterEnter = await page.eval(probeReadme.chatFlowState, promptText)
+  const sentByEnter = afterEnter.draftLength === 0 && afterEnter.flowNodes >= 1
+  if (sentByEnter !== true && afterEnter.draftLength > 0) {
+    points = await page.eval(probeReadme.chatSendPoints)
+    if (points !== null && points.send !== null) {
+      await page.clickAt(points.send.x, points.send.y)
+      await sleep(600)
+      afterEnter = await page.eval(probeReadme.chatFlowState, promptText)
+    }
+  }
+  return { typed, afterEnter }
+}
+
+/** Wait until the sent prompt is a visible user message in the transcript (send evidence). */
+async function readmeWaitUserMessage(page, promptText, { timeout = 15000 } = {}) {
+  const started = Date.now()
+  const deadline = started + timeout
+  let last = null
+  while (Date.now() < deadline) {
+    last = await page.eval(probeReadme.chatFlowState, promptText)
+    const running = /stop generating/iu.test(last.primaryAria || '')
+    if (last.flowNodes >= 1 && last.draftLength === 0 && (last.promptPresent === true || running)) {
+      return { ...last, elapsedMs: Date.now() - started }
+    }
+    await sleep(300)
+  }
+  throw new Error(
+    `no user message appeared within ${timeout}ms ` +
+      `(flowNodes ${last === null ? 'n/a' : last.flowNodes}, promptPresent ${last === null ? 'n/a' : last.promptPresent}, ` +
+      `draft ${last === null ? 'n/a' : last.draftLength}, primaryAria ${last === null ? 'n/a' : last.primaryAria})`
+  )
+}
+
+/** Wait until the assistant answer is fully rendered and the turn has ended. */
+async function readmeWaitAnswerReal(page, promptText, { timeout = 180000 } = {}) {
+  const deadline = Date.now() + timeout
+  let lastTranscriptLength = -1
+  let stableSamples = 0
+  let last = null
+  while (Date.now() < deadline) {
+    last = await page.eval(probeReadme.chatFlowState, promptText)
+    const ended =
+      last.flowNodes >= 1 &&
+      last.primaryDisabled === true &&
+      last.running !== true &&
+      last.primaryAria !== null
+    if (ended && last.transcriptTextLen > 250 && last.transcriptTextLen === lastTranscriptLength) stableSamples += 1
+    else stableSamples = 0
+    if (stableSamples >= 3) return last
+    lastTranscriptLength = last.transcriptTextLen
+    await sleep(1500)
+  }
+  throw new Error(
+    `the assistant answer did not finish within ${timeout}ms ` +
+      `(flowNodes ${last === null ? 'n/a' : last.flowNodes}, mainText ${last === null ? 'n/a' : last.mainTextLen}, ` +
+      `transcript ${last === null ? 'n/a' : last.transcriptTextLen}, primaryAria ${last === null ? 'n/a' : last.primaryAria}, ` +
+      `primaryDisabled ${last === null ? 'n/a' : last.primaryDisabled}, running ${last === null ? 'n/a' : last.running})`
+  )
+}
+
+/**
+ * `--readme-chat`: a clean-page pass that produces only the real-task chat + annotation
+ * captures. It never opens the Artifacts/right-Sidebar surfaces. The isolated Session is
+ * created in the explicitly allowed DSH Workspace (native add-workspace dialog cannot be
+ * driven in headless Chrome), then archived through its native row menu.
+ * @param {object} input - `{ page, results, state }`.
+ * @returns {Promise<void>}
+ */
+async function runReadmeChatShotsMode({ page, results, state, opts }) {
+  log('\n=== --readme-chat: real-model chat + annotation captures (clean page, light theme) ===')
+  state.mode = 'readme-chat'
+  const isolated = typeof opts?.url === 'string' && /127\.0\.0\.1|localhost/iu.test(opts.url)
+  const demoWorkspace = isolated ? await readIsolatedDemoWorkspace() : null
+  const taskPrompt = 'Write a short release checklist for a web app: five steps, one risk, and one practical tip.'
+  const requirements = [
+    'Tighten this heading and keep it to one line',
+    'Add an owner to each checklist step',
+    'Turn the practical tip into a highlighted callout',
+  ]
+  const captures = []
+  const deviations = []
+  const task = {
+    prompt: taskPrompt,
+    requirements,
+    workspace: null,
+    sessionId: null,
+    realTask: false,
+    answer: null,
+    sendEvidence: null,
+    sendFailure: null,
+    cleanup: null,
+    fallback: null,
+  }
+  state.readme = { captures, deviations, file: path.join(README_RAW_DIR, 'captures.json'), task }
+  await mkdir(README_RAW_DIR, { recursive: true })
+  await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+  await sleep(700)
+  await page.eval(probeReadme.installStyle)
+  await page.waitForFn(probe.appReady, [], { timeout: 60000, label: 'DSH shell + injected client' })
+  await ensureAppReady(page)
+  const lightChrome = await page.evaluate(`(() => ({
+    dark: document.body.hasAttribute('data-ds-dark-theme') || document.documentElement.hasAttribute('data-ds-dark-theme'),
+    bodyBackground: getComputedStyle(document.body).backgroundColor
+  }))()`)
+  assertEqual(lightChrome.dark, false, 'the chat capture pass must render the light appearance')
+  log(`readme-chat theme: light (body ${lightChrome.bodyBackground})`)
+  const notice = await page.eval(probeReadme.dismissBlockingDialog)
+  if (notice.dismissed === true) {
+    log(`readme-chat: dismissed the blocking notice dialog ("${notice.label}")`)
+    await page.waitForFn(() => document.querySelector('[role="dialog"][aria-label*="Notice" i]') === null, [], {
+      timeout: 8000,
+      label: 'blocking notice dialog dismissed',
+    }).catch(() => {})
+    await sleep(500)
+  }
+  await page.waitForFn(() => document.querySelector('[data-conversation-session]') !== null, [], {
+    timeout: 15000,
+    label: 'restored Session before the real-task chat',
+  }).catch(() => {})
+  await sleep(1200)
+  const previous = await page.eval(probeReadme.activeSessionState)
+  assert(previous.sessionId !== null, 'the chat pass needs a current Session before the real task')
+  log(`readme-chat current state: ${short(JSON.stringify(previous), 400)}`)
+  // 1) Isolated real-task Session in the explicitly allowed DSH Workspace (the native
+  //    add-workspace dialog wedges headless Chrome). The shell reuses an already-blank
+  //    current Session instead of creating a fresh one, so use that blank Session directly
+  //    when it already sits in the DSH Workspace; otherwise create one natively.
+  task.workspace = { name: 'DSH', path: '/Users/rexxin/Development/DSH' }
+  const blankReusable =
+    previous.messageNodes === 0 && /^(New Session|新会话)$/iu.test(previous.selectedRowTitle || '')
+  const sessionRootSwitched = (previousId) =>
+    [...document.querySelectorAll('[data-conversation-session]')].some((node) => {
+      const id = node.getAttribute('data-conversation-session')
+      return typeof id === 'string' && id.length > 0 && id !== previousId
+    })
+  let taskSession = null
+  if (blankReusable) {
+    taskSession = previous
+    task.workspace = demoWorkspace ?? { name: previous.currentWorkspace || 'demo-workspace', path: null }
+    log(`readme-chat: using the existing blank Session in ${task.workspace.name} as the isolated real-task Session`)
+  } else {
+    // A blank current Session elsewhere makes the global New Session control a no-op, so
+    // use the DSH Workspace's own native "New session in DSH" action.
+    task.previousSessionId = previous.messageNodes === 0 ? null : previous.sessionId
+    const hadSession = previous.sessionId !== null
+    let sessionOpened = hadSession === false
+    for (let attempt = 1; attempt <= 3 && sessionOpened !== true; attempt += 1) {
+      const newSession = await page.eval(probeReadme.newSessionPoint)
+      if (newSession === null) {
+        log(`warning: native New Session control not measurable on attempt ${attempt}`)
+        await sleep(800)
+        continue
+      }
+      await page.clickAt(newSession.x, newSession.y)
+      try {
+        await page.waitForFn(
+          hadSession === false
+            ? () => document.querySelector('[data-conversation-session]') !== null
+            : (previousId) => {
+                const active = document.querySelector('[data-conversation-content][data-content-phase="active"]')
+                const activeId = active === null ? null : active.getAttribute('data-conversation-session')
+                return typeof activeId === 'string' && activeId.length > 0 && activeId !== previousId
+              },
+          [previous.sessionId],
+          { timeout: 10000, label: 'new Session opened through the native New Session flow' }
+        )
+        sessionOpened = true
+      } catch (error) {
+        log(`warning: native New Session attempt ${attempt} did not open/switch Session: ${short(error?.message || String(error), 240)}`)
+        await sleep(900)
+      }
+    }
+    assert(sessionOpened === true, 'could not create the isolated Session through the native New Session flow')
+    await sleep(1500)
+    taskSession = await page.eval(probeReadme.activeSessionState)
+    assert(
+      taskSession.sessionId !== null,
+      `the isolated real-task Session did not become active (${short(JSON.stringify(taskSession), 240)})`
+    )
+    if (hadSession) assert(taskSession.sessionId !== previous.sessionId, 'the isolated real-task Session did not switch')
+    const createdOwner = await page.eval(() => {
+      const row = document.querySelector('[data-psd-current-workspace="true"]')
+      return row === null ? null : (row.querySelector('[class*="_title"]')?.innerText || '').trim()
+    })
+    task.workspace = demoWorkspace ?? { name: createdOwner || 'demo-workspace', path: null }
+    if (demoWorkspace !== null && createdOwner !== null) {
+      assert(
+        createdOwner === demoWorkspace.name,
+        `the real-task Session is not in the demo Workspace (${JSON.stringify(createdOwner)} != ${JSON.stringify(demoWorkspace.name)})`
+      )
+    }
+  }
+  assert(taskSession.sessionId !== null, 'the isolated real-task Session has no identity')
+  assertEqual(taskSession.draftLength, 0, 'the isolated real-task Session composer is not empty')
+  const owner = await page.eval(() => {
+    const row = document.querySelector('[data-psd-current-workspace="true"]')
+    return row === null ? null : (row.querySelector('[class*="_title"]')?.innerText || '').trim()
+  })
+  assert(owner !== null, 'the real-task Session has no visible Workspace owner')
+  if (task.workspace === null || task.workspace.name === 'demo-workspace') {
+    task.workspace = { name: owner, path: demoWorkspace === null ? null : demoWorkspace.path }
+  }
+  task.sessionId = taskSession.sessionId
+  log(`readme-chat workspace: ${task.workspace.name} (${task.workspace.path}); isolated Session id recorded in captures.json`)
+  // 2) clean chat look: sidebar hidden, transcript visible (header hidden by the stylesheet)
+  await page.eval(probeReadme.hideSidebar, true)
+  await page.eval(probeReadme.setChatVisible, true)
+  await sleep(800)
+  try {
+    // 3) send the prompt; assert a real user message within 15 s, retry the send once
+    let sendEvidence = null
+    let sendError = null
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const attemptState = await readmeSendPromptReal(page, taskPrompt)
+        log(
+          `readme-chat send attempt ${attempt}: typed draft ${attemptState.typed.draftLength} chars, ` +
+            `after-enter flowNodes ${attemptState.afterEnter.flowNodes}, primaryAria ${attemptState.afterEnter.primaryAria}, ` +
+            `promptPresent ${attemptState.afterEnter.promptPresent}`
+        )
+        const evidence = await readmeWaitUserMessage(page, taskPrompt, { timeout: 15000 })
+        sendEvidence = { ...evidence, attempt, typedDraftLength: attemptState.typed.draftLength }
+        break
+      } catch (error) {
+        sendError = error
+        log(`warning: real-task send attempt ${attempt} failed: ${short(error?.message || String(error), 320)}`)
+        try {
+          const data = await page.screenshotBase64(null)
+          await writeFile(path.join(README_SHOTS_DIR, 'chat-send-failure.png'), Buffer.from(data, 'base64'))
+        } catch {
+          // failure screenshot is best effort
+        }
+        await sleep(1200)
+      }
+    }
+    if (sendEvidence === null) {
+      task.sendFailure = {
+        error: short(sendError?.message || String(sendError), 500),
+        screenshot: path.join(README_SHOTS_DIR, 'chat-send-failure.png'),
+      }
+      task.fallback = 'none: the prompt never became a user message; no travel/demo content used'
+      deviations.push(
+        `real-task send failed after two attempts: ${short(sendError?.message || String(sendError), 400)}; ` +
+          'failure screenshot saved under .tmp-work/readme-shots/chat-send-failure.png'
+      )
+      await readmeWriteChatManifest(captures, task, deviations)
+      throw new Error(`real-task prompt never became a user message: ${task.sendFailure.error}`)
+    }
+    task.realTask = true
+    task.sendEvidence = sendEvidence
+    log(
+      `readme-chat send evidence: user message visible after ${sendEvidence.elapsedMs}ms on attempt ${sendEvidence.attempt} ` +
+        `(userNodes ${sendEvidence.userNodes}, promptPresent ${sendEvidence.promptPresent}, primaryAria ${sendEvidence.primaryAria})`
+    )
+    const answer = await readmeWaitAnswerReal(page, taskPrompt, { timeout: 180000 })
+    task.answer = {
+      userMessages: answer.userNodes,
+      transcriptTextLength: answer.transcriptTextLen,
+      mainTextLength: answer.mainTextLen,
+      turnsLine: answer.turnsLine ?? null,
+    }
+    log(`readme-chat answer: ${JSON.stringify(task.answer)}`)
+    // 4) Reload once so the prompt-history rail mounts with the real prompts of this
+    //    Session (the rail fetches at mount; a Session created after page load has none).
+    await page.reload()
+    await page.waitForFn(() => document.readyState === 'complete', [], { timeout: 20000, label: 'chat page reloaded' })
+    await page.waitForFn(probe.appReady, [], { timeout: 60000, label: 'DSH shell after the chat reload' })
+    await ensureAppReady(page)
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+    await page.eval(probeReadme.dismissBlockingDialog).catch(() => {})
+    await page.eval(probeReadme.installStyle)
+    // after a reload the shell has no current Session: reopen the real-task Session from
+    // its native row (this also mounts the prompt-history rail with the real prompts).
+    await page.eval(probeReadme.hideSidebar, false)
+    await page.waitForFn(() => document.querySelector('[data-row-key^="session:"]') !== null, [], {
+      timeout: 20000,
+      label: 'native Session rows after the chat reload',
+    })
+    await ensureNativeSessionRowsVisible(page, 10).catch(() => {})
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const rowPoint = await page.eval(probeReadme.sessionRowPoint, task.sessionId)
+      if (rowPoint !== null) {
+        await page.clickAt(rowPoint.x, rowPoint.y)
+        break
+      }
+      await page.eval((expectedWorkspace) => {
+        for (const workspaceRow of document.querySelectorAll('[data-row-key^="workspace:"]')) {
+          const title = (workspaceRow.querySelector('[class*="_title"]')?.innerText || '').trim()
+          if (expectedWorkspace !== null && title !== expectedWorkspace) continue
+          if (workspaceRow.getAttribute('aria-expanded') === 'false') workspaceRow.click()
+          return true
+        }
+        return false
+      }, task.workspace?.name ?? null)
+      await sleep(700)
+    }
+    await page.waitForFn(
+      (id) => {
+        const active = document.querySelector('[data-conversation-content][data-content-phase="active"]')
+        return active !== null && active.getAttribute('data-conversation-session') === id
+      },
+      [task.sessionId],
+      { timeout: 15000, label: 'real-task Session reopened after the chat reload' }
+    )
+    await page.eval(probeReadme.hideSidebar, true)
+    await page.eval(probeReadme.setChatVisible, true)
+    await sleep(1200)
+    await page.evaluate(`(() => {
+      const scroll = document.querySelector('[data-conversation-scroll]')
+      if (scroll !== null) scroll.scrollTop = scroll.scrollHeight
+      return true
+    })()`)
+    await sleep(400)
+    // 4) composer-chat.png: real chat window + composer + prompt rail preview + search card
+    await readmeResetUi(page)
+    await page.evaluate(`(() => {
+      const scroll = document.querySelector('[data-conversation-scroll]')
+      if (scroll !== null) scroll.scrollTop = scroll.scrollHeight
+      return true
+    })()`)
+    await sleep(500)
+    await readmeOpenPromptRail(page, 'release')
+    await readmeHoverRailPreview(page)
+    const parts = await page.eval(probeReadme.chatWindowParts)
+    const clip = readmeChatClip(parts)
+    const chatShot = await readmeCapture(page, {
+      name: 'composer-chat.png',
+      pose:
+        'real DSH chat window: real assistant answer + composer, prompt-history rail with hover full-text preview and the open search card (sidebar hidden)',
+      source: 'live GUI isolated real model task (DSH Workspace), light theme, clean page (no Artifacts/right sidebar)',
+      scanSelectors: ['body'],
+      pad: 0,
+      maskCopy: { ...README_MASK_COPY, previewPrompt: taskPrompt },
+      meta: {
+        taskPrompt,
+        workspace: task.workspace,
+        answer: task.answer,
+        sendEvidence,
+      },
+      clip: () => clip,
+    })
+    captures.push(chatShot)
+    log(`readme-chat composer-chat: ${chatShot.screenshot.width}x${chatShot.screenshot.height}px (crop ${clip.width}x${clip.height})`)
+    // 5) annotation on the real answer elements
+    await readmeResetUi(page)
+    const launcher = await page.findRect('[data-psa-launcher]')
+    assert(launcher, 'the annotation launcher is missing')
+    await page.clickAt(launcher.x, launcher.y)
+    await page.waitForFn(
+      () => document.documentElement.getAttribute('data-psa-active') === 'true' && document.querySelector('[data-psa-rail]') !== null,
+      [],
+      { timeout: 12000, label: 'annotation mode active for the real answer' }
+    )
+    await page.waitForFn(
+      () => {
+        const feedback = document.querySelector('[data-psa-feedback]')
+        return feedback === null || (feedback.innerText || '').trim().length === 0
+      },
+      [],
+      { timeout: 6000, label: 'annotation mode toast faded' }
+    ).catch(() => {})
+    await sleep(500)
+    const annotatePoint = async (point, label) => {
+      const before = await page.eval(() => document.querySelectorAll('[data-psa-entry]').length)
+      await page.clickAt(point.x, point.y)
+      await page.waitForFn(() => document.querySelector('[data-psa-popover]') !== null, [], {
+        timeout: 5000,
+        label: `annotation popover for ${label}`,
+      })
+      await sleep(200)
+      const added = await page.eval(() => {
+        const button = document.querySelector('[data-psa-add]')
+        if (button === null) return false
+        button.click()
+        return true
+      })
+      assert(added === true, `the annotation add control is missing (${label})`)
+      await page.waitForFn((expected) => document.querySelectorAll('[data-psa-entry]').length >= expected, [before + 1], {
+        timeout: 6000,
+        label: `annotation entry added for ${label}`,
+      })
+      await sleep(220)
+    }
+    const targetInfo = {}
+    for (const kind of ['heading', 'step', 'tip']) {
+      const info = await page.eval(probeReadme.answerTargetPoint, kind)
+      assert(info.ok === true, `no real answer element could be annotated for "${kind}" (${short(JSON.stringify(info), 240)})`)
+      targetInfo[kind] = { text: info.text, rect: info.point }
+      await annotatePoint(info.point, kind)
+    }
+    log(
+      `readme-chat annotation targets: heading ${JSON.stringify(targetInfo.heading.text)}, ` +
+        `checklist step ${JSON.stringify(targetInfo.step.text)}, tip ${JSON.stringify(targetInfo.tip.text)}`
+    )
+    const filled = await page.eval(probeReadme.annotationFillRequirements, requirements)
+    assertEqual(filled.count, 3, 'the rail must show three requirement textareas for the real answer')
+    assert(
+      JSON.stringify(filled.values) === JSON.stringify(requirements),
+      `the rail requirement textareas did not take the texts (got ${short(JSON.stringify(filled.values), 300)})`
+    )
+    await sleep(350)
+    await page.waitForFn(() => document.querySelectorAll('.psa-mark').length >= 3, [], {
+      timeout: 2500,
+      label: 'three numbered page markers on the real answer',
+    }).catch(() => {})
+    if ((await page.count('.psa-mark')) < 3) {
+      const painted = await page.eval(probeReadme.fallbackMarkPaint)
+      assert(painted.ok === true && painted.count === 3, `the page marks could not be painted (${short(JSON.stringify(painted), 280)})`)
+      deviations.push(
+        'annotation workflow: the controller geometry pass did not derive page marks for the real answer in headless Chrome; ' +
+          'the three numbered page marks were painted through the plugin snapshot store (same mark descriptors), while the annotations themselves are real records created by clicking the answer'
+      )
+      await sleep(400)
+    }
+    await page.waitForFn(() => document.querySelectorAll('.psa-mark').length >= 3, [], {
+      timeout: 5000,
+      label: 'three numbered page markers on the real answer',
+    })
+    const parkPointer = async () => {
+      const railPark = await page.eval(() => {
+        const rail = document.querySelector('[data-psa-rail]')
+        if (rail === null) return null
+        const rect = rail.getBoundingClientRect()
+        return { x: Math.round(rect.left + 24), y: Math.round(rect.top + 40) }
+      })
+      if (railPark !== null) await page.moveTo(railPark.x, railPark.y)
+      await sleep(350)
+      if ((await page.count('[data-psa-exit-confirm]')) > 0) {
+        await page.eval(() => document.querySelector('[data-psa-exit-cancel]')?.click())
+        await sleep(300)
+      }
+      await sleep(200)
+    }
+    await parkPointer()
+    await page.waitForFn(
+      () => {
+        const feedback = document.querySelector('[data-psa-feedback]')
+        return feedback === null || (feedback.innerText || '').trim().length === 0
+      },
+      [],
+      { timeout: 8000, label: 'annotation mark toast faded before the capture' }
+    ).catch(() => {})
+    await sleep(500)
+    const verified = await page.eval(probeReadme.annotationRequirementsState)
+    assert(
+      JSON.stringify(verified.values) === JSON.stringify(requirements),
+      `the rail requirement values reverted after the React re-render (${short(JSON.stringify(verified.values), 300)})`
+    )
+    assertEqual(verified.markers, 3, `the answer must show three numbered annotation markers (got ${verified.markers})`)
+    assertEqual(verified.entries, 3, `the rail must list three annotations (got ${verified.entries})`)
+    let annotatedShot = await readmeCapture(page, {
+      name: 'annotation-annotated.png',
+      pose: 'real model answer with three annotated elements (#1 heading, #2 numbered checklist step, #3 closing tip) and the rail requirements',
+      source: 'live GUI isolated real model task (DSH Workspace), light theme, real annotation mode (sidebar hidden)',
+      scanSelectors: ['body'],
+      pad: 0,
+      postMask: () => page.eval(probeReadme.maskAnnotationMeta),
+      meta: { taskPrompt, workspace: task.workspace, requirements, targets: targetInfo, answer: task.answer },
+      clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height }),
+    })
+    captures.push(annotatedShot)
+    const insertedOk = await page.eval(() => {
+      const button = document.querySelector('[data-psa-insert-batch]')
+      if (button === null) return false
+      button.click()
+      return true
+    })
+    assert(insertedOk === true, 'the collection "Insert all into composer" control is missing')
+    await page.waitForFn(
+      () =>
+        document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-decorator="true"]').length >= 1 ||
+        /Please adjust the UI elements below/u.test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || ''),
+      [],
+      { timeout: 8000, label: 'annotation references inserted into the composer' }
+    )
+    await page.waitForFn(
+      () => {
+        const feedback = document.querySelector('[data-psa-feedback]')
+        return feedback === null || (feedback.innerText || '').trim().length === 0
+      },
+      [],
+      { timeout: 6000, label: 'insert toast faded' }
+    ).catch(() => {})
+    await parkPointer()
+    const insertedShot = await readmeCapture(page, {
+      name: 'annotation-inserted.png',
+      pose: 'real model answer: the three annotation references inserted into the composer as one grouped chip (never sent), rail visible',
+      source: 'live GUI isolated real model task (DSH Workspace), light theme, real annotation mode (sidebar hidden)',
+      scanSelectors: ['body'],
+      pad: 0,
+      postMask: () => page.eval(probeReadme.maskAnnotationMeta),
+      meta: { taskPrompt, workspace: task.workspace, requirements, answer: task.answer },
+      clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height }),
+    })
+    captures.push(insertedShot)
+    await writeFile(path.join(README_SHOTS_DIR, 'chat-task.json'), `${JSON.stringify({ ...task, captures: captures.map((shot) => shot.file) }, null, 2)}\n`)
+    return (
+      `real task OK: ${chatShot.screenshot.width}x${chatShot.screenshot.height} composer-chat, ` +
+      `${annotatedShot.screenshot.width}x${annotatedShot.screenshot.height} annotated, ` +
+      `${insertedShot.screenshot.width}x${insertedShot.screenshot.height} inserted; ` +
+      `answer ${task.answer.userMessages} user message(s)/${task.answer.transcriptTextLength} transcript chars`
+    )
+  } finally {
+    // Never leave annotation mode / injected UI / the isolated Session behind.
+    try {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const workflow = await page.eval(probeReadme.annotationWorkflowState)
+        if (workflow.active !== 'true') break
+        if (workflow.exitConfirm) {
+          await page.eval(() => document.querySelector('[data-psa-exit-clear]')?.click())
+          await sleep(400)
+          continue
+        }
+        await page.pressEscape()
+        await sleep(350)
+      }
+      await page.eval(probeReadme.removeDummyAnswer)
+      await page.eval(probeReadme.setChatVisible, false)
+      await page.eval(probeReadme.hideSidebar, false)
+      if (typeof task.previousSessionId === 'string' && task.previousSessionId.length > 0) {
+        try {
+          await ensureNativeSessionRowsVisible(page, 10)
+        } catch {
+          // row may already be visible
+        }
+        const point = await page.eval(probeReadme.sessionRowPoint, task.previousSessionId)
+        if (point !== null) {
+          await page.clickAt(point.x, point.y)
+          await page.waitForFn(
+            (id) => {
+              const active = document.querySelector('[data-conversation-content][data-content-phase="active"]')
+              return active !== null && active.getAttribute('data-conversation-session') === id
+            },
+            [task.previousSessionId],
+            { timeout: 12000, label: 'previous Session restored after the real-task chat' }
+          ).catch(() => {})
+        }
+      }
+      if (task.sessionId !== null) {
+        const cleanup = await readmeArchiveTaskSession(page, task.sessionId, task.workspace?.name ?? null).catch((error) => ({
+          archived: false,
+          reason: short(error?.message || String(error), 240),
+        }))
+        task.cleanup = cleanup
+        if (cleanup.archived !== true) deviations.push(`real-task Session cleanup: ${cleanup.reason}`)
+        log(`readme-chat Session cleanup: ${short(JSON.stringify(cleanup), 240)}`)
+      }
+      await page.eval(probeReadme.installStyle)
+    } catch (error) {
+      deviations.push(`readme-chat cleanup: ${short(error?.message || String(error), 240)}`)
+      log(`warning: readme-chat cleanup failed: ${short(error?.message || String(error), 240)}`)
+    }
+    try {
+      const manifest = await readmeWriteChatManifest(captures, task, deviations)
+      log(
+        `readme-chat captures.json: ${manifest.captures.length} total capture(s), ` +
+          `theme ${manifest.theme}, workspace ${task.workspace === null ? 'n/a' : task.workspace.name}, ` +
+          `session ${task.sessionId === null ? 'n/a' : 'recorded'}, archived ${task.cleanup === null ? 'n/a' : task.cleanup.archived}`
+      )
+    } catch (error) {
+      log(`warning: could not write captures.json for the chat pass: ${short(error?.message || String(error), 240)}`)
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------------------------
 
@@ -15227,14 +16440,15 @@ async function run() {
     log(`chrome: headless pid ${chrome.proc.pid}, CDP port ${chrome.port}`)
     const cdp = await CdpConnection.connect(chrome.wsUrl)
     const readmeMode = opts.mode === 'readme-shots'
+    const chatMode = opts.mode === 'readme-chat'
     page = await Page.open(cdp, url, injectorSource(clientSource), {
       trackNetwork: opts.mode === 'pin' || opts.mode === 'layout' || opts.mode === 'interrupted' || opts.mode === 'row-menu',
-      deviceScaleFactor: readmeMode ? README_DPR : 1,
+      deviceScaleFactor: readmeMode || chatMode ? README_DPR : 1,
       beforeNavigate: readmeMode ? (openPage) => installReadmeStubs(cdp, openPage) : undefined,
     })
     log('page: opened, waiting for the DSH shell…')
 
-    if (readmeMode) {
+    if (readmeMode || chatMode) {
       // The README pass only poses the documented UI; it must never create a Session or
       // type into one, so it skips the smoke mode's blank-Session helper entirely.
       await results.check('readme-ready', 'live GUI shell + injected worktree client ready (no Session created, no prompt sent)', async () => {
@@ -15254,9 +16468,23 @@ async function run() {
     }
     if (opts.mode === 'readme-shots') {
       try {
-        await runReadmeShotsMode({ page, results, state, cdp })
+        await runReadmeShotsMode({ page, results, state, cdp, opts })
       } finally {
         await cleanupReadmeShots(page, state)
+      }
+    } else if (chatMode) {
+      try {
+        await runReadmeChatShotsMode({ page, results, state, opts })
+      } catch (error) {
+        log(`FATAL  readme-chat: ${short(error?.message || String(error), 600)}`)
+        if (error?.stack) log(short(error.stack, 1600))
+        results.rows.push({
+          id: 'readme-chat',
+          title: 'real-model chat + annotation captures',
+          pass: false,
+          detail: short(error?.message || String(error), 500),
+          ms: 0,
+        })
       }
     } else if (opts.mode === 'full') {
       log('\n=== Acceptance checks ===')

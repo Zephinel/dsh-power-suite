@@ -1349,75 +1349,61 @@ bottom 232/232), annotation S2/S5/S8 **7/0/0 each** (9.3/8.2/12.5 s,
 - `--live` requires the linked checkout to be merged to the branch tip; it proves the
   served client, not the worktree-only code, and does not restart the service.
 
-## README Bento capture mode (`sidebar.e2e.mjs --readme-shots`)
+## README Bento capture modes (`--readme-chat` / `--readme-dashboard`)
 
-`--readme-shots` captures the raw screenshots the repository README's composed
-Bento images are built from. It poses the live GUI states the README images need,
-masks the user's data in the page, and writes the crops; it never creates a
-Session, types a prompt, sends a message, pins/unpins, archives, or changes a
-persisted setting.
+These two modes capture the raw screenshots the repository README's composed
+Bento images are built from. They run against a **temporary, isolated DSH
+instance** (`DSH_HOME=/tmp/ps-readme-home`, own web profile on 127.0.0.1:3199,
+the checkout installed as a local `link:` bundle), never against the production
+GUI. Both force `prefers-color-scheme: light`, use DPR 2 at a 1728×900
+viewport, hide or mask user-visible strings, and write their raws plus a
+`captures.json` manifest (source selector, crop rectangle, DPR, pose, masking
+state, privacy-scan result) to `.tmp-work/readme-shots/raw/` (gitignored).
 
 ```bash
-node test/browser/sidebar.e2e.mjs --readme-shots
+URL="$(cat /tmp/ps-readme-home-url.txt)"   # token never printed or committed
+node test/browser/sidebar.e2e.mjs --readme-chat      --url "$URL"
+node test/browser/sidebar.e2e.mjs --readme-dashboard --url "$URL"
 ```
 
-- **Output** — 13 raw captures (`workspaces`, `card`, `card-hover`, `row-menu`,
-  `interrupted-row`, `interrupted-composer`, `artifacts`, `artifacts-quicklook`,
-  `artifacts-filter`, `prompt-history`, `settings`, plus the two full-page
-  annotation workflow captures `annotation-annotated` and `annotation-inserted`)
-  and a `captures.json` manifest in `.tmp-work/readme-shots/raw/`. The directory
-  is gitignored; the committed README images are the composed WebPs under
-  `assets/`, built by `npm run build:readme-bento`.
-- **Device facts** — device scale factor **2** (each crop is 2× its CSS size),
-  1728×900 CSS viewport, throwaway headless Chrome profile, this worktree's
-  client injected with `window.__POWER_SUITE_TEST_HOOKS__` so the interrupted
-  poses can use the documented seam.
-- **Privacy gate (hard requirement)** — before every shot the mode masks every
-  visible user-identifying string in the captured page: native Session and
-  Workspace titles/paths, card titles, hover-card conversation text,
-  prompt-history rows and previews, and the composer's workspace; the composer
-  draft stays empty. It then scans the crop's root selectors, the clip region
-  and the page `innerText` for `/Users/`, the user name, `http(s)://`,
-  `token=`, the checkout path and CJK characters. Zero hits are required; a
-  crop that still leaks is discarded and its pose fails. The GUI token is never
-  printed or written.
+- **`--readme-chat`** — creates a blank demo Session, sends a short generic
+  prompt (release checklist), waits for the real model answer (asserting the
+  user message appeared and the turn settled), captures `composer-chat.png`
+  with the answer, composer, open prompt-history search card and hover preview
+  (sidebar hidden), enters annotation mode, annotates two or three real answer
+  elements with requirement texts, captures `annotation-annotated.png` and —
+  after “Insert all into composer” — `annotation-inserted.png` full-page at DPR
+  2, then exits annotation and archives the demo Session.
+- **`--readme-dashboard`** — captures `workspaces`, `card`, `card-hover`,
+  `row-menu`, `interrupted-row`, `interrupted-composer`, `artifacts` (ten
+  stubbed rows), `artifacts-quicklook`, `artifacts-filter` and `settings` from
+  the demo data seeded in the isolated instance.
+- **Privacy gate (hard requirement)** — before every shot the dashboard mode
+  masks native Session/Workspace titles and paths, card titles, hover-card text
+  and prompt previews (transcript hidden where it can enter a crop), then scans
+  the crop's roots, the clip region and the page for `/Users/`, the user name,
+  `http(s)://`, `token=`, the checkout path and CJK characters. Zero hits are
+  required; a leaky crop is discarded and its pose fails. The chat mode hides
+  the whole sidebar and shows only the demo prompt/answer. The token is never
+  printed or written into the repo.
 - **Stub poses** — the Artifacts poses stub `GET /api/session-artifacts.list`,
-  `.raw` and `.preview` through CDP `Fetch` with demo artifacts only (the list
-  pose returns ten rows so the panel is full); the Quick Look pose shows a
-  stubbed demo Markdown document; the prompt-history pose masks preview text to
-  canned demo lines. The stubs mirror the real route response shapes; nothing is
-  invented in the Host.
-- **Annotation workflow pose** — creates a blank dummy Session through native
-  New Session (nothing typed or sent; the previous Session is restored and the
-  id is only recorded in `captures.json`), hides the native sidebar/header, and
-  injects a demo answer card client-side ("Weekend in Shanghai"). It enters
-  annotation mode, clicks three elements (heading, itinerary row, primary
-  button), writes realistic requirement texts into the rail textareas via the
-  native value setter, captures the full page, then clicks **Insert all into
-  composer** and captures again. The injected card's controller does not paint
-  page marks through its rAF derivation in headless Chrome, so the numbered
-  marks are drawn by the plugin's own `.psa-mark` renderer from the same
-  snapshot descriptors; annotations, rail entries, texts and insertion are real
-  feature state (recorded in `captures.json.deviations`).
-- **Annotation sources fallback** — `annotation.e2e.mjs --shots-only --assets`
-  currently exits 1 because the live composer region is pointer pass-through
-  for that harness, so the mode re-captures the five
-  `docs/assets/annotation-*.png` poses itself through the same privacy guard at
-  1728×900 (the `readme-annotation-assets` row).
-- **Recorded run (2026-11-16, final after the screenshot review)** — exit 0,
-  **PASS 15 / SKIP 0 / FAIL 0**, **0 page errors**, **228.8 s**, 13/13 raw
-  captures, log `.tmp-work/readme-shots/run.log`; the non-JS console lines are
-  the known benign `ws://127.0.0.1:9230/ingest` 403 telemetry noise. The pass
-  forces `prefers-color-scheme: dark` so the images stay consistent when the
-  host appearance is light. Deviations: no pinned row in `card.png` (the live
-  pin document is empty and this mode never pins), the Running & recent card is
-  collapsed for the tall `workspaces.png` pose (restored afterwards), and the
-  injected-card marks fallback described above.
-- **Side effects** — opens/closes UI, hovers, opens native menus and applies the
-  documented seams only; restores the poses it changed (card expanded state,
-  menus dismissed, seam records cleared) and never clicks a destructive or
-  persistent control.
+  `.raw` and `.preview` through CDP `Fetch` with demo artifacts only; the Quick
+  Look pose shows a stubbed demo Markdown document. The stubs mirror the real
+  route response shapes.
+- **Isolation limits** — the native add-workspace flow opens the browser File
+  System Access directory picker and cannot run headlessly, so the isolated
+  instance uses one demo Workspace (`ps-readme-workspace`) with six demo
+  Sessions (four short generic model turns, one blank, one archived task
+  session); Inactive Projects and pinned/running/child rows are therefore empty
+  in the dashboard raws (recorded in `captures.json.deviations`). The
+  interrupted poses use the documented test seam.
+- **Recorded runs (2026-11-16)** — `--readme-chat` **PASS 1 / SKIP 0 / FAIL 0**,
+  0 page errors, 43.4 s; `--readme-dashboard` **PASS 12 / SKIP 0 / FAIL 0**, 0
+  page errors, 40.0 s. Teardown after composition:
+  `pkill -f "dsh web --port 3199"`, then remove `/tmp/ps-readme-home` and
+  `/tmp/ps-readme-home-url.txt`.
 
+## Update prompt harness
 ## Update prompt harness
 
 `update-prompt.e2e.mjs` is the local-only acceptance harness for the in-app
