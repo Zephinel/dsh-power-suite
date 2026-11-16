@@ -120,6 +120,7 @@
  *   node test/browser/sidebar.e2e.mjs --readme-shots  # raw README/Bento captures (2x, privacy-masked, demo stubs)
  *   node test/browser/sidebar.e2e.mjs --readme-chat   # real-model chat + annotation captures only (clean page, light theme)
  *   node test/browser/sidebar.e2e.mjs --readme-dashboard  # README dashboard poses only (isolated demo instance)
+ *   node test/browser/sidebar.e2e.mjs --readme-sidebar-annotation  # sidebar-target annotation raws
  *   node test/browser/sidebar.e2e.mjs --no-shots      # skip screenshots
  *   node test/browser/sidebar.e2e.mjs --client path/to/client.js
  *   node test/browser/sidebar.e2e.mjs --keep-open     # leave Chrome running for inspection
@@ -151,6 +152,9 @@ const SHOTS_DIR = path.join(WORKTREE, '.tmp-work', 'sidebar-e2e')
 const DEFAULT_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const DSH_WEB_BIN = path.join(homedir(), '.local', 'bin', 'dsh-web')
 const VIEWPORT = { width: 1728, height: 900 }
+
+/** Active capture viewport height (the sidebar-annotation pose uses a taller one). */
+let README_VIEWPORT_HEIGHT = VIEWPORT.height
 
 // CSS recipe copied from the annotation spec for the F4 simulation: the annotation
 // implementer ships the real rule inside ANNOTATION_CSS; the harness injects the same
@@ -246,6 +250,7 @@ function parseArgs(argv) {
     else if (arg === '--readme-shots') opts.mode = 'readme-shots'
     else if (arg === '--readme-chat') opts.mode = 'readme-chat'
     else if (arg === '--readme-dashboard') { opts.mode = 'readme-shots'; opts.dashboardOnly = true }
+    else if (arg === '--readme-sidebar-annotation') opts.mode = 'readme-sidebar-annotation'
     else if (arg === '--no-shots') opts.shots = false
     else if (arg === '--keep-open') opts.keepOpen = true
     else if (arg === '--headful') opts.headful = true
@@ -254,7 +259,7 @@ function parseArgs(argv) {
     else if (arg === '--url') opts.url = argv[++i]
     else if (arg.startsWith('--url=')) opts.url = arg.slice('--url='.length)
     else if (arg === '--help' || arg === '-h') {
-      console.log('usage: node test/browser/sidebar.e2e.mjs [--smoke] [--pin] [--live] [--layout] [--interrupted] [--row-menu] [--readme-shots] [--readme-chat] [--readme-dashboard] [--no-shots] [--client path] [--keep-open] [--headful] [--url TOKEN_URL]')
+      console.log('usage: node test/browser/sidebar.e2e.mjs [--smoke] [--pin] [--live] [--layout] [--interrupted] [--row-menu] [--readme-shots] [--readme-chat] [--readme-dashboard] [--readme-sidebar-annotation] [--no-shots] [--client path] [--keep-open] [--headful] [--url TOKEN_URL]')
       process.exit(0)
     } else {
       throw new Error(`unknown argument: ${arg}`)
@@ -484,7 +489,7 @@ class Page {
     if (options.trackNetwork === true) await page.enableNetworkTracking()
     await page.send('Emulation.setDeviceMetricsOverride', {
       width: VIEWPORT.width,
-      height: VIEWPORT.height,
+      height: options.viewportHeight ?? VIEWPORT.height,
       deviceScaleFactor: options.deviceScaleFactor ?? 1,
       mobile: false,
     })
@@ -8102,7 +8107,7 @@ async function writeClipShot(page, name, clip) {
   const x = Math.max(0, Math.round(clip.x))
   const y = Math.max(0, Math.round(clip.y))
   const width = Math.min(Math.round(clip.width), VIEWPORT.width - x)
-  const height = Math.min(Math.round(clip.height), VIEWPORT.height - y)
+  const height = Math.min(Math.round(clip.height), README_VIEWPORT_HEIGHT - y)
   if (width < 8 || height < 8) return null
   await mkdir(SHOTS_DIR, { recursive: true })
   const file = path.join(SHOTS_DIR, `${name}.png`)
@@ -12966,40 +12971,50 @@ const probeReadme = {
       }
       return replaced
     }
+    const keepDemoTitles = copy.keepDemoTitles === true
     const cycle = (list, index) => list[index % list.length]
-    let index = 0
-    for (const element of document.querySelectorAll('[data-row-key^="session:"] [class*="_title"]')) {
-      if (setLeafText(element, cycle(copy.sessionTitles, index))) {
-        bump('nativeSessionTitles')
-        index += 1
+    if (keepDemoTitles !== true) {
+      let index = 0
+      for (const element of document.querySelectorAll('[data-row-key^="session:"] [class*="_title"]')) {
+        if (setLeafText(element, cycle(copy.sessionTitles, index))) {
+          bump('nativeSessionTitles')
+          index += 1
+        }
       }
-    }
-    index = 0
-    for (const element of document.querySelectorAll('[data-row-key^="workspace:"] [class*="_title"]')) {
-      if (setLeafText(element, cycle(copy.workspaceTitles, index))) {
-        bump('nativeWorkspaceTitles')
-        index += 1
+      index = 0
+      for (const element of document.querySelectorAll('[data-row-key^="workspace:"] [class*="_title"]')) {
+        if (setLeafText(element, cycle(copy.workspaceTitles, index))) {
+          bump('nativeWorkspaceTitles')
+          index += 1
+        }
       }
-    }
-    index = 0
-    for (const element of document.querySelectorAll('.psd-run-title, .psd-child-title')) {
-      if (setLeafText(element, cycle(copy.sessionTitles, index))) {
-        bump('cardTitles')
-        index += 1
+      index = 0
+      for (const element of document.querySelectorAll('.psd-run-title, .psd-child-title')) {
+        if (setLeafText(element, cycle(copy.sessionTitles, index))) {
+          bump('cardTitles')
+          index += 1
+        }
       }
-    }
-    for (const element of document.querySelectorAll('.psd-hovercard-title')) {
-      if (setLeafText(element, copy.hoverWorkspace)) bump('hoverWorkspaceTitles')
-    }
-    index = 0
-    for (const element of document.querySelectorAll('.psd-hovercard-session')) {
-      if (setLeafText(element, cycle(copy.sessionTitles, index))) {
-        bump('hoverSessionTitles')
-        index += 1
+      for (const element of document.querySelectorAll('.psd-hovercard-title')) {
+        if (setLeafText(element, copy.hoverWorkspace)) bump('hoverWorkspaceTitles')
       }
-    }
-    for (const element of document.querySelectorAll('.psd-hovercard-path')) {
-      if (setLeafText(element, copy.hoverPath)) bump('hoverWorkspacePaths')
+      index = 0
+      for (const element of document.querySelectorAll('.psd-hovercard-session')) {
+        if (setLeafText(element, cycle(copy.sessionTitles, index))) {
+          bump('hoverSessionTitles')
+          index += 1
+        }
+      }
+      for (const element of document.querySelectorAll('.psd-hovercard-path')) {
+        if (setLeafText(element, copy.hoverPath)) bump('hoverWorkspacePaths')
+      }
+      index = 0
+      for (const element of document.querySelectorAll('[data-conversation-region="composer"] [aria-label="Choose workspace"]')) {
+        if (setLeafText(element, cycle(copy.workspaceTitles, index))) {
+          bump('composerWorkspace')
+          index += 1
+        }
+      }
     }
     for (const element of document.querySelectorAll('.psp-rail-card-text')) {
       if (setLeafText(element, copy.previewPrompt)) bump('promptPreviewTexts')
@@ -13587,6 +13602,34 @@ const probeReadme = {
       } catch (error) {
         node = null
       }
+      if (node === null) {
+        // Hover-only controls can lose their exact candidate chain before the geometry pass;
+        // fall back to any still-matching selector in the locator's candidate list.
+        const selectors = []
+        if (typeof locator.uniqueSelector === 'string' && locator.uniqueSelector.length > 0) selectors.push(locator.uniqueSelector)
+        for (const candidate of Array.isArray(locator.candidates) ? locator.candidates : []) {
+          if (typeof candidate === 'string' && candidate.length > 0) selectors.push(candidate)
+          else if (candidate !== null && typeof candidate === 'object') {
+            for (const key of ['selector', 'uniqueSelector', 'css']) {
+              if (typeof candidate[key] === 'string' && candidate[key].length > 0) selectors.push(candidate[key])
+            }
+          }
+        }
+        for (const selector of selectors) {
+          try {
+            const found = document.querySelector(selector)
+            if (found !== null) {
+              const rect = found.getBoundingClientRect()
+              if (rect.width > 0 && rect.height > 0) {
+                node = found
+                break
+              }
+            }
+          } catch {
+            // invalid selector candidate: try the next one
+          }
+        }
+      }
       if (node === null) continue
       const rect = node.getBoundingClientRect()
       if (rect.width <= 0 || rect.height <= 0) continue
@@ -13761,6 +13804,124 @@ const probeReadme = {
       primaryDisabled: primary === null ? null : primary.disabled === true,
       running: primary !== null && /stop generating/iu.test(primary.getAttribute('aria-label') || ''),
       turnsLine: (mainText.match(/\d+\s+turns?[^\n]{0,40}/iu) || [null])[0],
+    }
+  },
+
+  /**
+   * Click points for the three annotation targets on the suite's own "Running & recent"
+   * panel: the panel header, the first recent row, and that row's "…" menu trigger.
+   */
+  runningPanelTargets: () => {
+    const toPoint = (element) => {
+      if (element === null || element === undefined) return null
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      return {
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        rect: { x: Math.round(rect.left), y: Math.round(rect.top) },
+      }
+    }
+    const panel = document.querySelector('.psd-panel')
+    if (panel === null) return { panel: null, header: null, row: null, control: null }
+    const toggle = panel.querySelector('.psd-panel-toggle')
+    const count = panel.querySelector('.psd-panel-head-actions')
+    const headerPoint = toggle === null
+      ? null
+      : (() => {
+          const rect = toggle.getBoundingClientRect()
+          return { x: Math.round(rect.left + Math.min(52, rect.width / 2)), y: Math.round(rect.top + rect.height / 2), width: Math.round(rect.width), height: Math.round(rect.height), rect: { x: Math.round(rect.left), y: Math.round(rect.top) } }
+        })()
+    const rows = [...panel.querySelectorAll('.psd-run')]
+    const row = rows.length === 0 ? null : rows[0]
+    const rowTitle = row === null ? null : row.querySelector('button[aria-label^="Open "]') ?? row.querySelector('.psd-run-title')
+    const menuTrigger = row === null ? null : row.querySelector('button[aria-label^="Session actions"]') ?? row.querySelector('button[data-context-menu-trigger]')
+    const pin = row === null ? null : row.querySelector('button[aria-label="Pin session"]')
+    return {
+      panel: toPoint(panel),
+      header: toggle === null ? null : {
+        label: 'Running & recent panel header',
+        aria: toggle.getAttribute('aria-label'),
+        text: `${(toggle.innerText || '').trim()}${count === null ? '' : ` ${(count.innerText || '').trim()}`}`.trim().slice(0, 60),
+        selectors: '.psd-panel-toggle (title + count)',
+        point: headerPoint,
+      },
+      row: rowTitle === null ? null : {
+        label: 'top running/recent row',
+        aria: rowTitle.getAttribute('aria-label'),
+        text: (row.innerText || '').trim().slice(0, 80),
+        selectors: 'button[aria-label^="Open "] inside .psd-run',
+        point: toPoint(rowTitle),
+      },
+      control: menuTrigger === null ? null : {
+        label: 'row "…" menu trigger',
+        aria: menuTrigger.getAttribute('aria-label'),
+        text: (row === null ? '' : (row.innerText || '').trim().slice(0, 80)),
+        selectors: 'button[aria-label^="Session actions"]',
+        point: toPoint(menuTrigger),
+      },
+      pin: pin === null ? null : { label: 'pin button', aria: pin.getAttribute('aria-label'), point: toPoint(pin) },
+      chevron: (() => {
+        const control = panel.querySelector('.psd-panel-chevron')
+        if (control === null) return null
+        const rect = control.getBoundingClientRect()
+        if (rect.width <= 0) return null
+        return {
+          label: 'panel disclosure chevron',
+          aria: control.getAttribute('aria-label'),
+          text: (control.innerText || '').trim().slice(0, 40),
+          selectors: '.psd-panel-chevron',
+          point: toPoint(control),
+        }
+      })(),
+    }
+  },
+
+  /**
+   * Click points for the three sidebar UI elements annotated for the README pose:
+   * Workspaces search button, Add workspace button, Active Projects header.
+   */
+  sidebarAnnotationTargets: () => {
+    const sidebar = document.querySelector('[class$="_sidebarCol"]') ?? document.querySelector('[data-slot="sidebar"]')
+    const toPoint = (element) => {
+      if (element === null || element === undefined) return null
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return null
+      return {
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        rect: { x: Math.round(rect.left), y: Math.round(rect.top) },
+      }
+    }
+    const scope = sidebar ?? document
+    const buttons = [...scope.querySelectorAll('button')].filter((button) => {
+      const rect = button.getBoundingClientRect()
+      return rect.width > 0 && rect.height > 0
+    })
+    const info = (element, label) => {
+      if (element === null) return null
+      return {
+        label,
+        aria: element.getAttribute('aria-label'),
+        text: (element.innerText || '').trim().slice(0, 60),
+        selectors: `${element.tagName.toLowerCase()}${element.getAttribute('aria-label') === null ? '' : `[aria-label="${element.getAttribute('aria-label')}"]`}`,
+        point: toPoint(element),
+      }
+    }
+    const search = buttons.find((button) => /^Search sessions$/iu.test(button.getAttribute('aria-label') || '')) ??
+      buttons.find((button) => /search/iu.test(button.getAttribute('aria-label') || ''))
+    const addWorkspace = buttons.find((button) => /^Add workspace$/iu.test(button.getAttribute('aria-label') || ''))
+    const activeProjects = buttons.find((button) => /^Toggle active projects$/iu.test(button.getAttribute('aria-label') || '')) ??
+      buttons.find((button) => /^Active Projects/iu.test((button.innerText || '').trim()))
+    return {
+      sidebar: toPoint(sidebar),
+      search: info(search ?? null, 'workspaces search button'),
+      addWorkspace: info(addWorkspace ?? null, 'add workspace button'),
+      activeProjects: info(activeProjects ?? null, 'active projects header'),
     }
   },
 
@@ -14192,13 +14353,19 @@ const README_MASK_COPY = {
   bannedSources: README_BANNED_SOURCES,
 }
 
+/** Demo-only capture copy: keep the isolated instance's seeded demo titles visible. */
+const README_MASK_COPY_DEMO = { ...README_MASK_COPY, keepDemoTitles: true }
+
+/** Active default mask copy for `readmeCapture` (set by the isolated demo modes). */
+let README_ACTIVE_MASK_COPY = null
+
 /** Clamp one measured box to the viewport and add the contract's 12 px padding. */
 function readmeClipFromRect(rect, pad = README_CLIP_PAD) {
   assert(rect !== null && Number.isFinite(rect.x) && Number.isFinite(rect.y), 'capture clip could not be measured')
   const x = Math.max(0, Math.floor(rect.x - pad))
   const y = Math.max(0, Math.floor(rect.y - pad))
   const right = Math.min(VIEWPORT.width, Math.ceil(rect.x + rect.width + pad))
-  const bottom = Math.min(VIEWPORT.height, Math.ceil(rect.y + rect.height + pad))
+  const bottom = Math.min(README_VIEWPORT_HEIGHT, Math.ceil(rect.y + rect.height + pad))
   return { x, y, width: Math.max(0, right - x), height: Math.max(0, bottom - y) }
 }
 
@@ -14463,6 +14630,59 @@ async function readmeArchiveTaskSession(page, sessionId, workspaceName) {
   return { archived: gone, reason: gone ? 'archived through the native row "…" menu (Archive session)' : 'the row stayed visible after Archive session' }
 }
 
+/**
+ * Widen the native sidebar by dragging its resize handle, so the demo Session titles in the
+ * Running & recent panel render in full (no ellipsis) for the isolated demo captures.
+ * @param {object} page - Page wrapper.
+ * @param {object} [options] - `{ delta }` pixels to drag.
+ * @returns {Promise<{before: number, after: number}>} panel widths.
+ */
+async function readmeWidenSidebar(page, { delta = 170 } = {}) {
+  const measure = () => page.evaluate(`(() => {
+    const panel = document.querySelector('.psd-panel')
+    const panelRect = panel === null ? null : panel.getBoundingClientRect()
+    const handle = [...document.querySelectorAll('*')].find((el) => {
+      const style = getComputedStyle(el)
+      if (style.cursor !== 'col-resize' && style.cursor !== 'ew-resize') return false
+      const rect = el.getBoundingClientRect()
+      return rect.width > 0 && rect.width < 24 && rect.height > 300
+    })
+    const rect = handle === undefined ? null : handle.getBoundingClientRect()
+    return {
+      panelWidth: panelRect === null ? 0 : Math.round(panelRect.width),
+      handle: rect === null ? null : { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) },
+    }
+  })()`)
+  const before = await measure()
+  if (before.handle === null || before.panelWidth >= 300) return { before: before.panelWidth, after: before.panelWidth }
+  const { x, y } = before.handle
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y })
+  await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 })
+  for (let step = 1; step <= 8; step += 1) {
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x + Math.round((delta * step) / 8), y, button: 'left', buttons: 1 })
+    await sleep(40)
+  }
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x + delta, y, button: 'left', clickCount: 1 })
+  await sleep(800)
+  // The shell clamps the sidebar at ~376 px; let the demo capture widen the sidebar column a
+  // bit further so the seeded demo Session titles render in full (isolated demo page only).
+  await page.evaluate(`(() => {
+    document.getElementById('psd-readme-demo-width')?.remove()
+    const style = document.createElement('style')
+    style.id = 'psd-readme-demo-width'
+    style.textContent = [
+      '[class$="_sidebarCol"]{width:460px!important;min-width:460px!important;max-width:460px!important}',
+      '[class$="_sidebarCol"] [class$="_root"],[class$="_sidebarCol"] [class$="_regionArea"]{width:auto!important;max-width:none!important}',
+    ].join('')
+    document.head.appendChild(style)
+    return true
+  })()`)
+  await sleep(700)
+  const after = await measure()
+  log(`sidebar widened for the demo captures: Running & recent panel ${before.panelWidth} -> ${after.panelWidth} CSS px`)
+  return { before: before.panelWidth, after: after.panelWidth }
+}
+
 /** Ensure the Running & recent card is expanded (its chevron toggles the body). */
 async function readmeEnsureCardExpanded(page) {
   const expanded = await page.eval(() => document.querySelector('.psd-panel-toggle')?.getAttribute('aria-expanded') ?? null)
@@ -14499,7 +14719,7 @@ async function readmeCollapseCard(page) {
  * @returns {Promise<object>} capture metadata for `captures.json`.
  */
 async function readmeCapture(page, spec) {
-  const maskCopy = spec.maskCopy === undefined ? README_MASK_COPY : spec.maskCopy
+  const maskCopy = spec.maskCopy ?? README_ACTIVE_MASK_COPY ?? README_MASK_COPY
   let masked = await page.eval(probeReadme.maskAll, maskCopy)
   await sleep(140)
   const secondPass = await page.eval(probeReadme.maskAll, maskCopy)
@@ -14694,6 +14914,7 @@ async function runReadmeShotsMode({ page, results, state, cdp, opts }) {
   log('\n=== --readme-shots: README Bento raw captures (privacy-masked, demo stubs) ===')
   state.mode = 'readme-shots'
   const dashboardOnly = opts?.dashboardOnly === true
+  README_ACTIVE_MASK_COPY = dashboardOnly === true ? README_MASK_COPY_DEMO : null
   state.readme = { captures: [], deviations: [], file: path.join(README_RAW_DIR, 'captures.json') }
   if (dashboardOnly !== true) {
     await rm(README_RAW_DIR, { recursive: true, force: true }).catch(() => {})
@@ -14711,6 +14932,10 @@ async function runReadmeShotsMode({ page, results, state, cdp, opts }) {
   }))()`)
   assertEqual(lightChrome.dark, false, 'the capture pass must render the light appearance')
   log(`readme theme: light (body ${lightChrome.bodyBackground}, main ${lightChrome.mainBackground})`)
+  if (dashboardOnly === true) {
+    await readmeWidenSidebar(page)
+    await sleep(500)
+  }
   // Hydrate like the rest of the harness: the shell restores its Session and the card rows
   // asynchronously after first paint.
   await page.waitForFn(() => document.querySelectorAll('.psd-run').length > 0, [], {
@@ -14816,6 +15041,7 @@ async function runReadmeShotsMode({ page, results, state, cdp, opts }) {
         source: 'live GUI card row + [data-psd-hovercard]',
         pose: 'hover card open over a card row (Session statistics / Token usage / Context usage)',
         scanSelectors: ['.psd-panel', '[data-psd-hovercard]'],
+        pad: 32,
         clip: () => page.eval(probeReadme.boxes, { selectors: ['.psd-run:hover', '[data-psd-hovercard]'] }),
       })
       state.readme.captures.push(capture)
@@ -14842,7 +15068,24 @@ async function runReadmeShotsMode({ page, results, state, cdp, opts }) {
         source: 'live GUI card row + native shared context menu [data-menu-material]',
         pose: 'row "…" native shared popup open on the top card row',
         scanSelectors: ['.psd-panel', '[data-menu-material]'],
-        clip: () => page.eval(probeReadme.boxes, { selectors: ['.psd-run[data-menu-open="true"]', '[data-menu-material]'] }),
+        pad: 0,
+        clip: () => page.evaluate(`(() => {
+          const row = document.querySelector('.psd-run[data-menu-open="true"]')
+          const menu = document.querySelector('[data-menu-material]')
+          if (row === null || menu === null) return null
+          const rowRect = row.getBoundingClientRect()
+          const menuRect = menu.getBoundingClientRect()
+          const left = Math.max(0, Math.min(rowRect.left, menuRect.left) - 16)
+          const top = Math.max(0, rowRect.top - 24)
+          const right = Math.min(innerWidth, Math.max(rowRect.right, menuRect.right) + 16)
+          // End on a fully visible Workspaces / Active Projects header instead of cutting it
+          // mid-text: include the Active Projects header row completely, then stop.
+          const activeProjects = document.querySelector('button[aria-label="Toggle active projects"]')
+          const activeRect = activeProjects === null ? null : activeProjects.getBoundingClientRect()
+          const bottomLimit = activeRect === null ? Math.max(rowRect.bottom, menuRect.bottom) : Math.max(rowRect.bottom, menuRect.bottom, activeRect.bottom)
+          const bottom = Math.min(innerHeight, bottomLimit + 16)
+          return { x: Math.round(left), y: Math.round(top), width: Math.round(right - left), height: Math.round(bottom - top) }
+        })()`),
       })
       state.readme.captures.push(capture)
       await writeManifest()
@@ -15423,7 +15666,7 @@ async function runReadmeShotsMode({ page, results, state, cdp, opts }) {
               requirements,
               fallback: modelOk ? null : 'injected demo card (model call failed)',
             },
-            clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height }),
+            clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: README_VIEWPORT_HEIGHT }),
           })
           state.readme.captures.push(shot)
           await writeManifest()
@@ -16263,6 +16506,14 @@ async function runReadmeChatShotsMode({ page, results, state, opts }) {
         const rect = rail.getBoundingClientRect()
         return { x: Math.round(rect.left + 24), y: Math.round(rect.top + 40) }
       })
+      // Move to a neutral spot and wait for any workspace hover card to close, so the
+      // composition is only sidebar + Running & recent panel + annotations + rail.
+      await page.moveTo(1000, 120)
+      await sleep(400)
+      await page.waitForFn(() => document.querySelector('[data-psd-hovercard]') === null, [], {
+        timeout: 4000,
+        label: 'sidebar hover card dismissed before the capture',
+      }).catch(() => {})
       if (railPark !== null) await page.moveTo(railPark.x, railPark.y)
       await sleep(350)
       if ((await page.count('[data-psa-exit-confirm]')) > 0) {
@@ -16296,7 +16547,7 @@ async function runReadmeChatShotsMode({ page, results, state, opts }) {
       pad: 0,
       postMask: () => page.eval(probeReadme.maskAnnotationMeta),
       meta: { taskPrompt, workspace: task.workspace, requirements, targets: targetInfo, answer: task.answer },
-      clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height }),
+      clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: README_VIEWPORT_HEIGHT }),
     })
     captures.push(annotatedShot)
     const insertedOk = await page.eval(() => {
@@ -16322,6 +16573,18 @@ async function runReadmeChatShotsMode({ page, results, state, opts }) {
       { timeout: 6000, label: 'insert toast faded' }
     ).catch(() => {})
     await parkPointer()
+    // Capture polish: hide any still-open sidebar hover card and compact the numbered badges
+    // to just their index, so the markers do not cover the panel labels.
+    await page.evaluate(`(() => {
+      let hoverStyle = document.getElementById('psd-readme-hide-hovercard')
+      if (hoverStyle === null) { hoverStyle = document.createElement('style'); hoverStyle.id = 'psd-readme-hide-hovercard'; document.head.appendChild(hoverStyle) }
+      hoverStyle.textContent = '[data-psd-hovercard]{display:none!important}'
+      for (const card of document.querySelectorAll('[data-psd-hovercard]')) card.style.display = 'none'
+      let badgeStyle = document.getElementById('psd-readme-compact-badges')
+      if (badgeStyle === null) { badgeStyle = document.createElement('style'); badgeStyle.id = 'psd-readme-compact-badges'; document.head.appendChild(badgeStyle) }
+      badgeStyle.textContent = '.psa-mark-badge-text{display:none!important}.psa-mark-badge{max-width:26px!important;padding:0 4px!important}'
+      return true
+    })()`)
     const insertedShot = await readmeCapture(page, {
       name: 'annotation-inserted.png',
       pose: 'real model answer: the three annotation references inserted into the composer as one grouped chip (never sent), rail visible',
@@ -16330,7 +16593,7 @@ async function runReadmeChatShotsMode({ page, results, state, opts }) {
       pad: 0,
       postMask: () => page.eval(probeReadme.maskAnnotationMeta),
       meta: { taskPrompt, workspace: task.workspace, requirements, answer: task.answer },
-      clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height }),
+      clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: README_VIEWPORT_HEIGHT }),
     })
     captures.push(insertedShot)
     await writeFile(path.join(README_SHOTS_DIR, 'chat-task.json'), `${JSON.stringify({ ...task, captures: captures.map((shot) => shot.file) }, null, 2)}\n`)
@@ -16404,6 +16667,352 @@ async function runReadmeChatShotsMode({ page, results, state, opts }) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// --readme-sidebar-annotation mode: annotate native left-sidebar UI elements (round 4 review)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * `--readme-sidebar-annotation`: annotate three native left-sidebar UI elements (Workspaces
+ * search button, Add workspace button, Active Projects header) with real requirement texts,
+ * then capture the annotated page and the inserted-into-composer state. The native sidebar
+ * stays visible in both captures; the demo Session chat/composer stays visible as well.
+ * @param {object} input - `{ page, results, state, opts }`.
+ * @returns {Promise<void>}
+ */
+async function runReadmeSidebarAnnotationMode({ page, results, state, opts }) {
+  log('\n=== --readme-sidebar-annotation: annotate native sidebar UI elements ===')
+  log(`readme-sidebar-annotation viewport: ${README_VIEWPORT_HEIGHT} CSS px (innerHeight ${await page.eval(() => innerHeight)})`)
+  state.mode = 'readme-sidebar-annotation'
+  README_ACTIVE_MASK_COPY = README_MASK_COPY_DEMO
+  const requirements = [
+    'Make this header collapse the whole panel and keep the running count visible.',
+    'Show the elapsed time on the right and keep the status dot for running rows.',
+    'Add a keyboard-shortcut hint to this menu trigger.',
+  ]
+  const captures = []
+  const deviations = []
+  state.readme = { captures, deviations, file: path.join(README_RAW_DIR, 'captures.json') }
+  await mkdir(README_RAW_DIR, { recursive: true })
+  await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
+  await sleep(700)
+  await page.eval(probeReadme.installStyle)
+  await page.waitForFn(probe.appReady, [], { timeout: 60000, label: 'DSH shell + injected client' })
+  await ensureAppReady(page)
+  const dismiss = async () => {
+    await page.eval(() => {
+      const dialog = document.querySelector('[role="dialog"], [role="alertdialog"]')
+      if (dialog === null) return false
+      const button = [...dialog.querySelectorAll('button')].find((candidate) => /^(Continue|Got it|OK|Close|Start|Accept)/iu.test((candidate.innerText || '').trim())) ?? dialog.querySelector('button')
+      if (button !== null && button !== undefined) button.click()
+      return true
+    })
+    await sleep(600)
+  }
+  await dismiss()
+  const lightChrome = await page.evaluate(`(() => ({
+    dark: document.body.hasAttribute('data-ds-dark-theme') || document.documentElement.hasAttribute('data-ds-dark-theme')
+  }))()`)
+  assertEqual(lightChrome.dark, false, 'the sidebar annotation capture must render the light appearance')
+  // Sidebar visible + chat/composer visible (the sidebar is the annotation target surface).
+  await page.eval(probeReadme.hideSidebar, false)
+  await page.eval(probeReadme.setChatVisible, true)
+  await sleep(800)
+  await readmeWidenSidebar(page)
+  await sleep(500)
+  try {
+    // 1) open a demo Session with a real answer so the chat/composer are visible
+    const previous = await page.eval(probeReadme.activeSessionState)
+    const row = await page.eval(() => {
+      for (const rowNode of document.querySelectorAll('[data-row-key^="session:"]')) {
+        const title = (rowNode.querySelector('[class*="_title"]')?.innerText || '').trim()
+        if (title.length === 0 || /^(New Session|新会话)$/iu.test(title)) continue
+        rowNode.scrollIntoView({ block: 'center' })
+        const rect = rowNode.getBoundingClientRect()
+        if (rect.width <= 0 || rect.height <= 0) continue
+        return { x: Math.round(rect.left + 80), y: Math.round(rect.top + rect.height / 2), titleLength: title.length }
+      }
+      return null
+    })
+    assert(row !== null, 'no demo Session row is available to open for the sidebar annotation pose')
+    await page.clickAt(row.x, row.y)
+    await page.waitForFn(
+      (previousId) => {
+        const active = document.querySelector('[data-conversation-content][data-content-phase="active"]')
+        const activeId = active === null ? null : active.getAttribute('data-conversation-session')
+        return activeId !== null && activeId !== previousId
+      },
+      [previous.sessionId],
+      { timeout: 15000, label: 'demo Session opened for the sidebar annotation pose' }
+    ).catch(() => {})
+    await sleep(1500)
+    const opened = await page.eval(probeReadme.activeSessionState)
+    assert(opened.messageNodes >= 1, `the opened demo Session renders no transcript nodes (${short(JSON.stringify(opened), 240)})`)
+    await page.evaluate(`(() => {
+      const scroll = document.querySelector('[data-conversation-scroll]')
+      if (scroll !== null) scroll.scrollTop = scroll.scrollHeight
+      return true
+    })()`)
+    await sleep(500)
+    // 2) annotation mode active
+    const launcher = await page.findRect('[data-psa-launcher]')
+    assert(launcher, 'the annotation launcher is missing')
+    await page.clickAt(launcher.x, launcher.y)
+    await page.waitForFn(
+      () => document.documentElement.getAttribute('data-psa-active') === 'true' && document.querySelector('[data-psa-rail]') !== null,
+      [],
+      { timeout: 12000, label: 'annotation mode active for the sidebar pose' }
+    )
+    await page.waitForFn(
+      () => {
+        const feedback = document.querySelector('[data-psa-feedback]')
+        return feedback === null || (feedback.innerText || '').trim().length === 0
+      },
+      [],
+      { timeout: 6000, label: 'annotation toast faded' }
+    ).catch(() => {})
+    await sleep(600)
+    const annotatePoint = async (point, label) => {
+      const before = await page.eval(() => document.querySelectorAll('[data-psa-entry]').length)
+      await page.clickAt(point.x, point.y)
+      await page.waitForFn(() => document.querySelector('[data-psa-popover]') !== null, [], {
+        timeout: 5000,
+        label: `annotation popover for ${label}`,
+      })
+      await sleep(220)
+      const added = await page.eval(() => {
+        const button = document.querySelector('[data-psa-add]')
+        if (button === null) return false
+        button.click()
+        return true
+      })
+      assert(added === true, `the annotation add control is missing (${label})`)
+      await page.waitForFn((expected) => document.querySelectorAll('[data-psa-entry]').length >= expected, [before + 1], {
+        timeout: 6000,
+        label: `annotation entry added for ${label}`,
+      })
+      await sleep(240)
+    }
+    await readmeEnsureCardExpanded(page)
+    await sleep(400)
+    const targets = []
+    let rowHoverPoint = null
+    const grabTarget = async (key) => page.evaluate(`(${probeReadme.runningPanelTargets.toString()})()[${JSON.stringify(key)}]`)
+    // 1) panel header
+    const headerTarget = await grabTarget('header')
+    assert(headerTarget !== null && headerTarget.point !== null, 'the Running & recent panel header was not found or has no box')
+    targets.push(headerTarget)
+    await annotatePoint(headerTarget.point, headerTarget.label)
+    // 2) top recent row
+    const rowTarget = await grabTarget('row')
+    assert(rowTarget !== null && rowTarget.point !== null, 'the top Running & recent row was not found or has no box')
+    targets.push(rowTarget)
+    rowHoverPoint = rowTarget.point
+    await annotatePoint(rowTarget.point, rowTarget.label)
+    // 3) a control inside the panel: the row "…" menu trigger first (hover-revealed), then
+    //    the pin button, then the always-visible disclosure chevron; the requirement text is
+    //    adapted to whichever control is actually hit-testable.
+    const controlCandidates = ['chevron', 'control', 'pin']
+    const controlRequirements = {
+      control: 'Add a keyboard-shortcut hint to this menu trigger.',
+      pin: 'Add a keyboard-shortcut hint to this pin button.',
+      chevron: 'Make this chevron collapse the panel to just the header row.',
+    }
+    let controlTarget = null
+    let chosenControl = null
+    for (const candidate of controlCandidates) {
+      await page.moveTo(rowHoverPoint.x, rowHoverPoint.y)
+      await sleep(700)
+      const target = await grabTarget(candidate)
+      if (target === null || target.point === null) continue
+      try {
+        await annotatePoint(target.point, target.label)
+        controlTarget = target
+        chosenControl = candidate
+        break
+      } catch (error) {
+        log(`warning: sidebar annotation control "${target.label}" was not hit-testable: ${short(error?.message || String(error), 180)}`)
+      }
+    }
+    assert(controlTarget !== null && chosenControl !== null, 'no control inside the Running & recent panel could be annotated')
+    targets.push(controlTarget)
+    requirements[2] = controlRequirements[chosenControl]
+    assertEqual(new Set(targets.map((target) => `${target.point.x},${target.point.y}`)).size, 3, 'the three sidebar targets must be distinct')
+    log(
+      `readme-sidebar-annotation targets: ${targets
+        .map((target) => `${target.label} (${target.aria ?? 'header'} · ${JSON.stringify(target.text ?? '')}) at ${target.point.rect.x},${target.point.rect.y}`)
+        .join('; ')}`
+    )
+    const filled = await page.eval(probeReadme.annotationFillRequirements, requirements)
+    assertEqual(filled.count, 3, 'the rail must show three requirement textareas for the sidebar targets')
+    assert(
+      JSON.stringify(filled.values) === JSON.stringify(requirements),
+      `the rail requirement textareas did not take the texts (got ${short(JSON.stringify(filled.values), 300)})`
+    )
+    await sleep(400)
+    await page.waitForFn(() => document.querySelectorAll('.psa-mark').length >= 3, [], {
+      timeout: 5000,
+      label: 'three numbered page markers over the sidebar elements',
+    }).catch(() => {})
+    if ((await page.count('.psa-mark')) < 3) {
+      const painted = await page.eval(probeReadme.fallbackMarkPaint)
+      assert(painted.ok === true && painted.count === 3, `the sidebar page marks could not be painted (${short(JSON.stringify(painted), 280)})`)
+      deviations.push(
+        'sidebar annotation: the controller geometry pass did not derive page marks for the native sidebar elements in headless Chrome; ' +
+          'the three numbered page marks were painted through the plugin snapshot store (same mark descriptors), while the annotations themselves are real records created by clicking the sidebar'
+      )
+      await sleep(400)
+    }
+    await page.waitForFn(() => document.querySelectorAll('.psa-mark').length >= 3, [], {
+      timeout: 5000,
+      label: 'three numbered page markers over the sidebar elements',
+    })
+    const parkPointer = async () => {
+      const railPark = await page.eval(() => {
+        const rail = document.querySelector('[data-psa-rail]')
+        if (rail === null) return null
+        const rect = rail.getBoundingClientRect()
+        return { x: Math.round(rect.left + 24), y: Math.round(rect.top + 40) }
+      })
+      if (railPark !== null) await page.moveTo(railPark.x, railPark.y)
+      await sleep(350)
+      if ((await page.count('[data-psa-exit-confirm]')) > 0) {
+        await page.eval(() => document.querySelector('[data-psa-exit-cancel]')?.click())
+        await sleep(300)
+      }
+      await page.waitForFn(
+        () => {
+          const feedback = document.querySelector('[data-psa-feedback]')
+          return feedback === null || (feedback.innerText || '').trim().length === 0
+        },
+        [],
+        { timeout: 8000, label: 'annotation toast faded before the capture' }
+      ).catch(() => {})
+      await sleep(400)
+    }
+    await parkPointer()
+    // Capture polish: hide any still-open sidebar hover card and compact the numbered badges
+    // to just their index, so the markers do not cover the panel labels.
+    await page.evaluate(`(() => {
+      let hoverStyle = document.getElementById('psd-readme-hide-hovercard')
+      if (hoverStyle === null) { hoverStyle = document.createElement('style'); hoverStyle.id = 'psd-readme-hide-hovercard'; document.head.appendChild(hoverStyle) }
+      hoverStyle.textContent = '[data-psd-hovercard],[class*="psd-hovercard"]{display:none!important}'
+      for (const card of document.querySelectorAll('[data-psd-hovercard], [class*="psd-hovercard"]')) card.style.display = 'none'
+      let badgeStyle = document.getElementById('psd-readme-compact-badges')
+      if (badgeStyle === null) { badgeStyle = document.createElement('style'); badgeStyle.id = 'psd-readme-compact-badges'; document.head.appendChild(badgeStyle) }
+      badgeStyle.textContent = '.psa-mark-badge-text{display:none!important}.psa-mark-badge{max-width:26px!important;padding:0 4px!important}'
+      return true
+    })()`)
+    const verified = await page.eval(probeReadme.annotationRequirementsState)
+    assert(
+      JSON.stringify(verified.values) === JSON.stringify(requirements),
+      `the rail requirement values reverted after the React re-render (${short(JSON.stringify(verified.values), 300)})`
+    )
+    assertEqual(verified.markers, 3, `the sidebar must show three numbered annotation markers (got ${verified.markers})`)
+    assertEqual(verified.entries, 3, `the rail must list three annotations (got ${verified.entries})`)
+    const sidebarVisible = await page.eval(() => {
+      const sidebar = document.querySelector('[class$="_sidebarCol"]') ?? document.querySelector('[data-slot="sidebar"]')
+      if (sidebar === null) return null
+      const rect = sidebar.getBoundingClientRect()
+      return { width: Math.round(rect.width), height: Math.round(rect.height), display: getComputedStyle(sidebar).display }
+    })
+    assert(sidebarVisible !== null && sidebarVisible.width > 100 && sidebarVisible.display !== 'none', 'the native sidebar must stay visible for this pose')
+    const meta = {
+      source: 'isolated DSH Preview instance (127.0.0.1:3199, token redacted), light appearance forced',
+      sidebarVisible: true,
+      targets: targets.map((target) => ({
+        label: target.label,
+        aria: target.aria,
+        text: target.text,
+        selectors: target.selectors,
+        rect: target.point.rect,
+      })),
+      requirements,
+    }
+    const annotatedShot = await readmeCapture(page, {
+      name: 'annotation-annotated.png',
+      source: 'isolated GUI, native left-sidebar UI elements, real annotation mode (sidebar visible)',
+      pose:
+        'suite Running & recent panel annotated: #1 panel header, #2 top recent row, #3 row "…" menu trigger; rail lists the three requirement texts; native sidebar + chat/composer visible',
+      scanSelectors: ['body'],
+      pad: 0,
+      postMask: () => page.eval(probeReadme.maskAnnotationMeta),
+      meta,
+      clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: README_VIEWPORT_HEIGHT }),
+    })
+    captures.push(annotatedShot)
+    const insertedOk = await page.eval(() => {
+      const button = document.querySelector('[data-psa-insert-batch]')
+      if (button === null) return false
+      button.click()
+      return true
+    })
+    assert(insertedOk === true, 'the collection "Insert all into composer" control is missing')
+    await page.waitForFn(
+      () =>
+        document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-decorator="true"]').length >= 1 ||
+        /Please adjust the UI elements below/u.test(document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]')?.innerText || ''),
+      [],
+      { timeout: 8000, label: 'sidebar annotation references inserted into the composer' }
+    )
+    await page.waitForFn(
+      () => {
+        const feedback = document.querySelector('[data-psa-feedback]')
+        return feedback === null || (feedback.innerText || '').trim().length === 0
+      },
+      [],
+      { timeout: 6000, label: 'insert toast faded' }
+    ).catch(() => {})
+    await parkPointer()
+    const insertedShot = await readmeCapture(page, {
+      name: 'annotation-inserted.png',
+      source: 'isolated GUI, native left-sidebar UI elements, real annotation mode (sidebar visible)',
+      pose:
+        'Running & recent panel annotations inserted as one grouped chip in the composer (never sent); sidebar + panel + rail + chat visible',
+      scanSelectors: ['body'],
+      pad: 0,
+      postMask: () => page.eval(probeReadme.maskAnnotationMeta),
+      meta,
+      clip: () => ({ x: 0, y: 0, width: VIEWPORT.width, height: README_VIEWPORT_HEIGHT }),
+    })
+    captures.push(insertedShot)
+    const record = {
+      capturedAt: new Date().toISOString(),
+      mode: 'readme-sidebar-annotation',
+      requirements,
+      targets: meta.targets,
+      captures,
+      deviations,
+    }
+    await writeFile(path.join(README_SHOTS_DIR, 'sidebar-annotation.json'), `${JSON.stringify(record, null, 2)}\n`, 'utf8')
+    return (
+      `${annotatedShot.screenshot.width}x${annotatedShot.screenshot.height} annotated + ` +
+      `${insertedShot.screenshot.width}x${insertedShot.screenshot.height} inserted; ` +
+      `targets ${targets.map((target) => target.label).join(', ')}; sidebar ${sidebarVisible.width}x${sidebarVisible.height}`
+    )
+  } finally {
+    try {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const workflow = await page.eval(probeReadme.annotationWorkflowState)
+        if (workflow.active !== 'true') break
+        if (workflow.exitConfirm) {
+          await page.eval(() => document.querySelector('[data-psa-exit-clear]')?.click())
+          await sleep(400)
+          continue
+        }
+        await page.pressEscape()
+        await sleep(350)
+      }
+      await page.eval(probeReadme.setChatVisible, false)
+      await page.eval(probeReadme.hideSidebar, false)
+      await page.eval(probeReadme.installStyle)
+      await readmeResetUi(page)
+    } catch (error) {
+      deviations.push(`sidebar annotation cleanup: ${short(error?.message || String(error), 240)}`)
+      log(`warning: sidebar annotation cleanup failed: ${short(error?.message || String(error), 240)}`)
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------------------------
 
@@ -16441,14 +17050,17 @@ async function run() {
     const cdp = await CdpConnection.connect(chrome.wsUrl)
     const readmeMode = opts.mode === 'readme-shots'
     const chatMode = opts.mode === 'readme-chat'
+    const sidebarAnnotationMode = opts.mode === 'readme-sidebar-annotation'
+    README_VIEWPORT_HEIGHT = sidebarAnnotationMode ? 1200 : VIEWPORT.height
     page = await Page.open(cdp, url, injectorSource(clientSource), {
       trackNetwork: opts.mode === 'pin' || opts.mode === 'layout' || opts.mode === 'interrupted' || opts.mode === 'row-menu',
-      deviceScaleFactor: readmeMode || chatMode ? README_DPR : 1,
+      deviceScaleFactor: readmeMode || chatMode || sidebarAnnotationMode ? README_DPR : 1,
+      viewportHeight: README_VIEWPORT_HEIGHT,
       beforeNavigate: readmeMode ? (openPage) => installReadmeStubs(cdp, openPage) : undefined,
     })
     log('page: opened, waiting for the DSH shell…')
 
-    if (readmeMode || chatMode) {
+    if (readmeMode || chatMode || opts.mode === 'readme-sidebar-annotation') {
       // The README pass only poses the documented UI; it must never create a Session or
       // type into one, so it skips the smoke mode's blank-Session helper entirely.
       await results.check('readme-ready', 'live GUI shell + injected worktree client ready (no Session created, no prompt sent)', async () => {
@@ -16471,6 +17083,14 @@ async function run() {
         await runReadmeShotsMode({ page, results, state, cdp, opts })
       } finally {
         await cleanupReadmeShots(page, state)
+      }
+    } else if (opts.mode === 'readme-sidebar-annotation') {
+      try {
+        await runReadmeSidebarAnnotationMode({ page, results, state, opts })
+      } catch (error) {
+        log(`FATAL  readme-sidebar-annotation: ${short(error?.message || String(error), 600)}`)
+        if (error?.stack) log(short(error.stack, 1600))
+        results.rows.push({ id: 'readme-sidebar-annotation', title: 'sidebar-target annotation raws', pass: false, detail: short(error?.message || String(error), 500), ms: 0 })
       }
     } else if (chatMode) {
       try {
