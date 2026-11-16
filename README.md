@@ -1,180 +1,213 @@
+<img src="icon.png" alt="DSH Power Suite" width="72" height="72" align="right">
+
 # DSH Power Suite
 
-One installable plugin for the DeepSeek Harness Web GUI that adds a small suite
-of workday improvements around the conversation.
+[![npm version](https://img.shields.io/npm/v/@zephinel/dsh-power-suite?label=npm)](https://www.npmjs.com/package/@zephinel/dsh-power-suite)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![DSH](https://img.shields.io/badge/DSH-0.2.2-4f46e5)](https://www.npmjs.com/package/@deepseek-ai/dsh)
 
-The installable unit is a single bundle, `@zephinel/dsh-power-suite` (Loader row
-`power-suite`). Its features are modules inside the package, so the Plugin list
-shows one plugin whose inventory grows with the suite.
+**One plugin that makes the DSH Web GUI show the working session, not only the answer.** It adds a Running & recent panel and activity buckets to the sidebar, a Session artifacts browser, prompt recall and draft memory in the composer, interrupted-session recovery, and point-and-click UI annotation — all as one `power-suite` plugin row, with no build step.
+
+Install it from npm (after the 0.1.0 release) and start the Web UI:
+
+```bash
+dsh plugin --profile web add @zephinel/dsh-power-suite@0.1.0
+dsh web
+```
+
+> [!NOTE]
+> **Status: release prepared, not published.** `@zephinel/dsh-power-suite@0.1.0`
+> is prepared on the `release-0.1.0-prep` branch — package metadata, the bilingual
+> release notes and the CHANGELOG entries are in place — but the package is
+> **not on npm yet**, and this repository has **no git remote**, so nothing has
+> been pushed and no CI run exists. Until the first tag is published, install the
+> local checkout instead (see [Install](#install)); the in-app update notice stays
+> silent while no published version exists.
+
+[Overview](#overview) · [Features](#features-at-a-glance) · [Install](#install) · [Quick start](#quick-start) · [Build, test and deploy](#build-test-and-deploy)
+
+## Overview
+
+The suite works inside the native shell instead of beside it: it augments the sidebar, the Files pane and the composer with Host-backed state, and adds one annotation surface that never covers the page. Unloading the plugin restores the native surface.
+
+![Running & recent card, activity buckets, the native row menu, a row hover card and an interrupted row](assets/readme-overview.webp)
+
+- **Running & recent, at the top of the sidebar.** The card lists running and recently finished Sessions, nests delegated subagent rows, raises a preview-only notice when a Session waits on a question, plan review or approval, and paints the current row with its rainbow glow. Hover a row for the native **Session statistics**, **Token usage** and **Context usage** figures.
+- **Native row menus.** A top-level row's "…" menu opens the shell's own shared context-menu popup with the native Session actions (Pin is left out): native material, icons, shortcut hints and footer.
+- **A width that stays put.** The dragged left sidebar width is a Host-owned preference: it survives reloads and new tabs, matches across every browser paired with the same Host (last write wins), reopens at the stored width after a collapse, and no longer blinks the rainbow atmosphere while the handle is dragged.
+- **Read state shared by the Host.** Read marks, card pins and event-sourced last-activity times live on the Host, so they persist across reloads and are shared by every browser on the same Host instead of belonging to one browser's storage.
+
+## Session artifacts
+
+The right Sidebar's **Files** pane header carries an **Artifacts** button. It opens the current Session's list in place: every file the Session created or delivered, plus the images and files you attached to your own prompts.
+
+![Artifacts panel with generated and provided rows, a Quick Look preview and the source filter](assets/readme-artifacts.webp)
+
+- **One list, two sources.** Generated files and provided attachments share one list; the header filter switches **All / Generated / Provided** with live counts.
+- **Look before you open.** Hover a row for the shared Quick Look: Markdown, highlighted code, images, audio/video, PDF and HTML for generated files, and images, media and text-like files for provided attachments — all in a resizable card.
+- **The actions you need on a file.** Open, download, copy content (text verbatim; images as a real clipboard picture in a secure context), and copy the authenticated LAN link.
+- **The same preview in the Workspace tree.** The native Workspace files list gets the same Quick Look row, so files preview the same way in both places.
+
+Full reference: [session artifacts](docs/session-artifacts.md).
+
+## Composer: prompt recall, drafts, recovery
+
+The composer keeps the work around the prompt: what you asked before, what you attached, and what happened when a turn did not finish.
+
+![Prompt history rail and search, the interrupted-session composer and the suite settings](assets/readme-composer.webp)
+
+- **Prompt history.** The configured modifier + ↑/↓ recalls prompts already sent in this Session; plain arrows keep their native behavior. A rail at the conversation's right edge lists the same prompts as ticks, oldest first, with timestamps, a full-text hover preview, an inline search and click-to-copy.
+- **Draft attachments survive Session switches.** Pasted, dropped or picked files stay with the draft when you open another Session and come back, for the page lifetime — the shell itself persists only the draft text.
+- **Interrupted Sessions are marked and recoverable.** A Session whose last turn did not finish gets an amber title mark, a hover-revealed inline **Continue** triangle and a play-shaped composer submit control. Continuing is implicit and Host-owned, and an SSE stream keeps open pages in sync across devices.
+- **Settings in one place.** The bundle's Plugins page holds the prompt-history modifier and the two retention windows for the Active/recent surfaces.
+
+Full reference: [prompt history](docs/prompt-history.md), [draft attachments](docs/draft-attachments.md), [interrupted sessions](docs/interrupted-sessions.md).
+
+## UI element annotation
+
+A round launcher at the bottom-right of the page toggles a point-and-click annotation mode. The page makes room for a narrow right rail instead of being covered.
+
+![Annotation mode with its right rail, a collected annotation and composer reference chips](assets/readme-annotation.webp)
+
+- **Point at the element.** Hovering outlines the element a click would select, including floating surfaces such as native hover preview cards, which can be drilled into. The popover carries the locator summary, live status, parent/child adjustment and the requested change.
+- **The note stays with the page.** Each annotation becomes a persisted record with a page marker, a numbered requirement badge and a hover detail card; edit the requirement, relocate the target, copy the locator, or delete with a 5 s undo.
+- **Send it as a reference, not prose.** References are inserted as native composer inline reference chips — one chip or one grouped batch — without sending. The rail's collection view edits, previews, reorders and batch-inserts annotations, with multi-select, marquee, ancestor adjustment and a pass-through modifier.
+
+Full reference: [UI element annotation](docs/ui-annotation.md).
+
+## Features at a glance
 
 | Feature | What it adds |
 |---|---|
-| [Session artifacts](docs/session-artifacts.md) | An **Artifacts** card in the right Sidebar's Start page listing the current Session's created and delivered files **and the images/files the user attached to their prompts**, with 40 px image thumbnails, an All/Generated/Provided dropdown filter in the panel header, native open, download, copy content (text verbatim; images as a real clipboard picture in a secure context, with an HTML-image fallback on plain HTTP), and LAN link copy. |
-| [Workspace presets](docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions created in that Workspace. |
-| [Dynamic Workspaces](docs/dynamic-workspaces.md) | The native Workspaces browser gains **Active Projects** and **Inactive Projects** buckets that follow running and recently active Sessions, plus a **Running & recent** card above the native header with a fixed trailing grid (time → New session action → disclosure; subagent rows have no New session), a card-owned **Host-shared pin** (title-left pin button with two-phase hover reveal; pinned rows lead newest-activity-first and never retire, with a subtle violet single-layer tint), a **"…" row menu** on top-level rows that opens the shell's **native shared context-menu popup** with the native Session actions without the Pin/Unpin entry (native material, keyed icons and shortcut hints; every top-level row swaps its time for the trigger on hover/focus and restores it on leave; the trigger keeps the ordinary hover paint and only the rainbow row suppresses it), a preview-only **pending-interaction notice stack** beside the card for Sessions waiting on a question, plan review, or approval (clicking opens the Session; answering stays in the native composer card), Host-shared read marks, event-sourced Host last-activity times, a breathing rainbow glow on the current row's bottom edge and its owning Workspace row, a native-style row hover card carrying status plus the native **Session statistics / Token usage / Context usage** figures, nested subagent Sessions, and configurable retention windows. |
-| [Prompt history](docs/prompt-history.md) | The configured modifier + ↑/↓ recalls prompts already sent in this Session; a right-edge rail lists them newest first with a hover full-text preview, an inline search, and click-to-copy. Plain arrows keep their original behavior. |
-| [Draft attachments](docs/draft-attachments.md) | Attachments in a draft (pasted images, dropped or picked files) survive switching Sessions and coming back, for the page lifetime; the shell only persists the draft text. |
-| [Interrupted sessions](docs/interrupted-sessions.md) | Sessions that did not finish — restart/crash, any provider/model/network error (quota, timeout, rate limit), an output limit, or an imported unknown cancellation — carry an amber mark left of the title, a hover-revealed inline Continue triangle in the status cell (title shifts right, no hover mask), and a play-shaped composer submit control; deliberate cancellations and completed turns stay unmarked. State is Host-owned and cross-device: a Host SSE stream invalidates open pages immediately on turn boundaries, with polling as fallback. |
-| [Update notice](docs/update-check.md) | Once per page load the bundle asks its Host route whether npm has a newer stable release; when one exists, a fixed bottom-right card (`shell.overlay`, no sidebar DOM) shows the version change and up to six release highlights, with **更新** (opens the bundle's Plugin page so DSH performs the update), **下次再说** (counted per version; after three, **不再提醒** silences that version), and expand/collapse. No auto-update, no cross-device state, and it stays silent until the package is published. |
-| [UI element annotation](docs/ui-annotation.md) | A floating launcher toggles a point-and-click annotation mode in which the page makes room for a narrow right rail instead of being covered. Hovering outlines the element a click would select — including floating surfaces such as native hover preview cards, which can also be drilled into — and each annotation becomes a persisted v2 record (verified unique selector, Session/Workspace identity, position) shown as a page marker with a requirement badge and a hover detail card. References are inserted as **native composer inline reference chips** (single or one grouped batch) without sending, and the right rail's collection view edits, previews, reorders, and batch-inserts annotations — with multi-select, marquee, ancestor adjustment, and a hold-to-pass-through modifier. |
-| [Settings](docs/settings.md) | The bundle's Plugins page carries its own configuration section: the prompt-history modifier plus the two Dynamic Workspaces retention windows (finished Sessions and Active projects). |
-| [Sidebar width](docs/sidebar-width.md) | The native left sidebar's dragged width becomes a durable, Host-owned preference: it survives reloads and new tabs, is shared by every browser paired with the same Host (last write wins), reopens at the stored width after a collapse, and a synchronous canvas repaint after each resize removes the rainbow atmosphere's flicker while the handle is dragged. |
+| [Dynamic Workspaces](docs/dynamic-workspaces.md) | Active/Inactive activity buckets, the Running & recent card with Host-shared pinning and subagent rows, the native row menu, pending-interaction notices and the rainbow current row. |
+| [Session artifacts](docs/session-artifacts.md) | The Files-pane Artifacts list for generated files and provided attachments, with Quick Look, open/download/copy actions and the All/Generated/Provided filter. |
+| [UI element annotation](docs/ui-annotation.md) | Point-and-click annotation with a right rail, persisted page markers, a collection view and native composer reference chips. |
+| [Prompt history](docs/prompt-history.md) | Modifier + ↑/↓ recall plus a right-edge history rail with preview, search and click-to-copy. |
+| [Draft attachments](docs/draft-attachments.md) | Browser-owned attachment memory across Session switches for the page lifetime. |
+| [Interrupted sessions](docs/interrupted-sessions.md) | An amber mark, inline Continue and a play-shaped submit control for turns that did not finish, with Host-owned cross-device state. |
+| [Sidebar width](docs/sidebar-width.md) | A Host-owned, durable left-sidebar width shared across browsers, restored after a collapse, with a flicker-free rainbow repaint. |
+| [Workspace presets](docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions in that Workspace. |
+| [Settings](docs/settings.md) | The bundle's Plugins-page section: the prompt-history modifier and the two retention windows. |
+| [Update notice](docs/update-check.md) | A bottom-right Host-checked notice for a newer published version, with the version change and release highlights; silent until the package is published. |
 
-First public release: 0.1.0 (planned). The package has never been published
-before: the `0.1.0` (2026-11-09), `0.1.1` (2026-11-11), and undated `0.2.0`
-development snapshots were internal only — never tagged, never released — and
-their history is consolidated into this first release (see
-[CHANGELOG.md](CHANGELOG.md)). The 0.1.0 package metadata and the bilingual
-[release notes](release-notes/README.md) are prepared on the release branch (the
-package is no longer `private`); the release is still cut by pushing the
-`v0.1.0` tag after the notes are approved, the release branch is merged to
-`main`, and `main` is pushed to `origin` with a green CI run (the repository
-still needs its first push — no remote is configured yet). Until then npm has
-no `latest` version for the
-package and the in-app update notice stays silent.
-
-Highlights of the first release:
-
-- **Dynamic Workspaces** — the shipped Workspaces browser is augmented, never
-  replaced: Active/Inactive buckets follow the running and recent Sessions live,
-  fold independently with persisted state, and hide in rail mode, while a
-  **Running & recent** card above the native header lists running and recently
-  finished Sessions as single-line rows, nests delegated subagent Sessions under
-  their parent, marks unread completions green until opened, and shows status
-  plus the native Session statistics / token / context figures on hover. A
-  title-left pin button (Host-shared, with a two-phase reveal) keeps main
-  Sessions pinned first and past the retention window, while a "…" row menu opens the shell's
-  native shared context-menu popup with the
-  Rename/Fork/Copy Session ID/Show in Finder/Archive actions (without Pin). Every
-  top-level row (the current rainbow row included) keeps its time at rest and
-  swaps it for the "…" trigger on hover/focus; the trigger keeps the ordinary
-  hover paint (only the rainbow row suppresses it), and leaving restores the time. Sessions waiting on a question, plan review, or approval raise a
-  preview-only notice beside the card. Read marks and last-activity times are
-  Host-shared, the current row carries a rainbow atmosphere, and both retention
-  windows are settings on the bundle's Plugins page.
-- **Prompt history** — the configured modifier + ↑/↓ recalls prompts already sent
-  in this Session; a right-edge rail lists them oldest first with a full-text
-  hover preview, an inline search, per-prompt timestamps, and click-to-copy.
-  Draft attachment memory keeps pasted/dropped files across Session switches for
-  the page lifetime.
-- **Session artifacts** — the right Sidebar's Start page carries an **Artifacts**
-  card listing the current Session's created and delivered files **and the
-  images/files you attached to your prompts**, de-duplicated by attachment id
-  with 40 px lazy thumbnails, an All/Generated/Provided dropdown filter, open,
-  download, copy content (text verbatim; images as a real clipboard picture in a
-  secure context), LAN-link copy, and a hover Quick Look.
-- **Interrupted sessions** — Sessions whose last turn did not finish (restart/
-  crash, any provider/model/network error, an output limit, or an imported
-  unknown cancellation) carry an amber title mark, a hover-revealed inline
-  Continue triangle, and a play-shaped composer submit control; Continue is
-  implicit and Host-owned, and an SSE stream keeps every tab in sync.
-- **UI element annotation** — a round launcher toggles a point-and-click
-  annotation mode in which the page makes room for a responsive right rail
-  instead of being covered: hovering outlines the element a click would select
-  (including floating surfaces such as native hover preview cards, which can be
-  drilled into), and a compact popover records the requested change. Each
-  annotation becomes a persisted record with a page marker, a numbered
-  requirement badge, and a hover detail card; references are inserted as native
-  composer inline reference chips — one per reference or one grouped batch —
-  without sending, and multi-select, marquee, and a pass-through modifier are
-  included.
-- **Sidebar width** — the native left sidebar's dragged width is a durable,
-  Host-owned preference: it survives reloads and new tabs, is shared by every
-  browser paired with the same Host (last write wins), reopens at the stored
-  width after a collapse, and a synchronous canvas repaint after each resize
-  removes the rainbow atmosphere's flicker while the handle is dragged.
-- **Update notice (new)** — the Host reads the npm `latest` dist-tag and the
-  tag-pinned release notes; every page load checks at most once and shows a
-  bottom-right card when a newer stable version exists, with the version change,
-  up to six Highlights, **更新** (opens the Plugin page; DSH performs the
-  update), **下次再说** (counted per version; after three, **不再提醒** silences
-  that version), and Escape/outside-click as "later". State is per browser; the
-  card inserts no sidebar DOM and stays silent while 0.1.0 is the latest
-  version.
-- **Workspace presets and settings** — a Workspace context-menu submenu sets the
-  default agent preset for new Sessions in that Workspace, and the bundle's
-  Plugins page carries the prompt-history modifier plus the two Dynamic
-  Workspaces retention windows.
-
-The same plugin adds a shared **hover preview** to Artifacts rows (generated
-files plus provided images and text-like attachments) and the native Workspace
-files tree: Markdown, highlighted code, images, audio/video, PDF, and HTML, with
-drag-to-resize and animated switching. The card opens at a 570 x 360 default so
-its content is visible on the first hover.
-
-![Quick Look card showing rendered Markdown content](docs/assets/artifacts-quicklook.png)
-
-![Artifacts card in the Start guide](docs/assets/artifacts-guide.png)
-
-![Artifacts panel listing generated files and user-provided attachments](docs/assets/artifacts-panel.png)
+The features ship in the single bundle `@zephinel/dsh-power-suite` (Loader row `power-suite`), so they install, enable and uninstall together. The browser half attaches to the Web platform only.
 
 ## Install
 
-The bundle is `@zephinel/dsh-power-suite` (Loader row `power-suite`). Install a
-published release from npm:
+The bundle is `@zephinel/dsh-power-suite` (Loader row `power-suite`). Install it into a DSH profile, then reload the plugin or restart the Web process so the Host half loads — a page refresh is not enough for Host code.
 
-```text
-plugin_manager action=install_bundle target=@zephinel/dsh-power-suite
-```
-
-For development, install the checkout as a local `link:` bundle instead:
-
-```text
-plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-suite
-```
-
-The profile keeps a local checkout as a `link:` dependency, so an edited
-checkout is the code the Host runs after a reload. Removing the bundle removes
-the plugin.
-
-Changes are profile-wide and survive restarts. After changing Host code, reload
-the plugin (or restart the Host process); after changing browser code, reload
-the Web page.
-
-## Repository layout
-
-```text
-.
-├── package.json             # bundle manifest, exports, checks
-├── cordis.patch.yml         # inserts the single `power-suite` row
-├── src/
-│   ├── index.js             # Host entry: installs each feature
-│   ├── client.js            # browser entry: one `#region feature: <name>` per feature
-│   └── features/<name>/     # Host-side feature modules
-├── locale/                  # plugin display metadata (en, zh)
-├── docs/                    # architecture, guides, per-feature reference
-├── release-notes/           # tag-pinned Highlights read by the update notice
-├── scripts/check.mjs        # syntax + package-manifest + release-notes checks
-├── test/                    # node:test pure-logic tests
-└── .github/workflows/       # CI (verify + tag-triggered publish)
-```
-
-## Development
-
-No build step is required: the package exports its ES modules directly.
+**From npm, after the 0.1.0 release:**
 
 ```bash
-npm test               # node --test test/*.test.js
-npm run check          # syntax + manifest + release-notes gate + tests + pack:check
-npm run pack:check     # inspect the published file list
-npm run check:release-notes  # validate the release-notes Highlights for the package version
+dsh plugin --profile web add @zephinel/dsh-power-suite@0.1.0
 ```
 
-See [docs/development.md](docs/development.md) for the local install/reload loop
-and the release flow, and [docs/architecture.md](docs/architecture.md) for the
-Host/Client contracts.
+Or use the in-app route: **Plugins** in the Web sidebar → **Add plugin** → enter `@zephinel/dsh-power-suite@0.1.0` → **Install** → **Enable now**.
+
+**From this checkout, available today:** in the **Plugins** page choose **Add plugin** → **Install a third-party plugin** and enter the checkout's absolute path. From an agent session the same install is:
+
+```text
+plugin_manager action=install_bundle target=/absolute/path/to/dsh-power-suite
+```
+
+The profile keeps a local checkout as a `link:` dependency, so an edited checkout is the code the Host runs after a reload. There is no build step; removing the bundle removes the plugin.
+
+Installation needs `pnpm` on `PATH`: `dsh plugin add` forwards to pnpm in the profile, and the Plugins page runs pnpm behind its install dialog.
+
+## Quick start
+
+Start (or restart) the Web UI and open the URL it prints:
+
+```bash
+dsh web
+```
+
+1. Expand the left sidebar: **Running & recent** sits above the native Workspaces header, and the Workspace list is split into **Active Projects** and **Inactive Projects**.
+2. Open a Session that has sent prompts: the prompt-history rail appears at the conversation's right edge, and the modifier + ↑/↓ recalls earlier prompts in the composer.
+3. Open **Files** in the right sidebar and click **Artifacts** to list what the Session produced and what you attached.
+4. Click the round launcher at the bottom-right: the page narrows, and hovering outlines the element a click would annotate.
+5. Open the bundle's page under **Plugins** for its settings: the prompt-history modifier and the two retention windows.
+
+The address and port come from the DSH profile. After a browser-code change, refresh the page; after a Host-code change, reload the plugin or restart the Web process.
+
+## Get the code
+
+The publishing target is GitHub:
+
+```bash
+git clone https://github.com/Zephinel/dsh-power-suite.git
+cd dsh-power-suite
+```
+
+> [!IMPORTANT]
+> The repository has no remote configured yet, so this clone does not work until the first push lands. Until then, work in the existing local checkout this README ships in and install it as a local `link:` bundle (see [Install](#install)).
+
+The checkout needs no `npm install` to run the checks: the package has no runtime dependencies and no build step.
+
+## Prerequisites
+
+- **DSH 0.2.2 plugin interface** — the Host and browser halves target DSH 0.2.2. The Web Host used for this repository's browser checks runs **0.2.2-rc.1**; later DSH versions are unverified. Install the CLI with `npm install -g @deepseek-ai/dsh`.
+- **Node.js 22 or newer** — `package.json` declares `engines.node >= 22`; the CI gate runs on Node 22 and 24.
+- **pnpm** — needed to install profile bundles: `dsh plugin add` forwards to it, and the in-app Plugins page runs it behind its dialog.
+- **Git** — needed only to get the code; the repository sets no minimum version.
+- **Google Chrome** (optional) — only for the local browser suites; they use the standard macOS Chrome path and accept `CHROME_BIN` elsewhere.
+
+Confirm the tools are present:
+
+```bash
+node --version   # v22 or newer
+dsh --version    # verified: 0.2.2-rc.1
+pnpm --version
+git --version
+```
+
+Verified platform: macOS with DSH Web 0.2.2-rc.1. The plugin itself is a Web-platform bundle; other platforms are unverified.
+
+## Build, test and deploy
+
+There is no build step: the Host and browser entries are the checked-in ES modules under `src/`, with no runtime dependencies. Run the commands below from the checkout root.
+
+| Command | Purpose |
+|---|---|
+| `npm test` | `node --test test/*.test.js` — pure-logic tests for the Host stores/routes and the browser-side derivations. |
+| `npm run check` | The full gate: syntax, package manifest, docs links, Node tests and the release-notes check, then `pack:check`. |
+| `npm run pack:check` | `npm pack --dry-run --json` — inspect the published file list. |
+| `npm run check:release-notes` | Validate the tag-pinned release highlights for the package version. |
+| `npm run check:docs-links` | Verify that local Markdown links and images resolve. |
+| `npm run build:readme-bento` | Compose the README Bento images from local captures (needs Chrome). |
+
+The browser acceptance suites drive the real running Web GUI in a throwaway headless Chrome profile:
+
+```bash
+node test/browser/sidebar.e2e.mjs --smoke      # sidebar surfaces
+node test/browser/annotation.e2e.mjs --smoke   # UI element annotation
+node test/browser/update-prompt.e2e.mjs        # update notice
+```
+
+They need a running DSH Web and Chrome, and run one at a time; environment variables, per-mode checks and the full option list are in the [browser harness guide](test/browser/README.md). CI has no browser job — these are local pre-release checks.
+
+**Deploy** means installing the bundle into the target DSH profile; there is no separate server or watch mode. The local install/reload loop and the tag-publish procedure (Trusted Publishing on a `v*` tag) are in [docs/development.md](docs/development.md).
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — Host and browser halves, routes, slots, settings.
-- [Usage](docs/usage.md) — what each feature does in the UI.
-- [Update notice](docs/update-check.md) — behavior, route contract, cache rules, prompt state, release-notes source.
-- [Development](docs/development.md) — install, reload, tests, release flow, adding a feature.
+- [Architecture](docs/architecture.md) — Host and browser halves, routes, slots, services and settings documents.
+- [Usage](docs/usage.md) — what each feature does in the UI, step by step.
+- [Feature inventory](docs/overview.md) — the full inventory plus the recipe for adding a feature.
+- [Development](docs/development.md) — local install/reload loop, checks, the README capture and Bento pipeline, release flow.
 - [Verification](docs/verification.md) — the checks and evidence for this checkout.
-- [Limitations](docs/limitations.md) — known bounds and unsupported cases.
-- [Feature reference](docs/overview.md) — the feature inventory and addition recipe.
-- [Release notes](release-notes/README.md) — the tag-pinned Highlights format used by the update notice.
+- [Limitations](docs/limitations.md) — known bounds and unverified areas.
+- [Browser harness](test/browser/README.md) — the live-GUI acceptance suites, their modes and evidence.
+- [Changelog](CHANGELOG.md) — release entries; the first release is 0.1.0, not yet cut.
+- [Release notes](release-notes/README.md) — the tag-pinned Highlights format read by the update notice.
+
+## Contributing
+
+- Bugs and feature requests go to GitHub Issues once the repository is pushed; today there is no remote, so work from the local checkout and report to the maintainer directly.
+- Run `npm run check` before proposing a change. Host logic lives in `src/features/<name>/` behind tests under `test/`, and each feature has a page under `docs/`; [docs/development.md](docs/development.md) documents the feature recipe, the commit conventions and the release flow.
+- Behavior, copy or gate changes need the matching docs updated too: the feature reference, `CHANGELOG.md` and `docs/verification.md`.
+- Releases are cut from a tag by the publish workflow. Never run `npm publish` locally; the maintainer procedure is `.agents/skills/release-power-suite/SKILL.md`.
+- Maintainer: [@Zephinel](https://github.com/Zephinel).
 
 ## License
 
-[MIT](LICENSE). Third-party notices are in [NOTICE](NOTICE).
+[MIT](LICENSE). Third-party notices are in [NOTICE](NOTICE): Remix Icon SVG path data inlined in the browser entry (Apache-2.0), and the DeepSeek Harness platform disclaimer.

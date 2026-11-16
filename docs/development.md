@@ -37,6 +37,64 @@ npm run check:release-notes # release-notes Highlights for the current package v
 runs it on push and pull request. The release-notes gate runs inside
 `npm run check` and again in the publish workflow.
 
+## README screenshots and the Bento pipeline
+
+The README images are composed Bento grids, not raw screenshots. Raw captures
+stay local and gitignored; only the composed WebPs under `assets/` are
+committed, and `assets` is part of the published package so the npm README can
+load them.
+
+1. **Capture the raw screenshots** from the live GUI in a throwaway headless
+   Chrome (device scale factor 2, viewport 1728×900):
+
+   ```bash
+   node test/browser/sidebar.e2e.mjs --readme-shots
+   ```
+
+   The mode writes 11 PNG crops to `.tmp-work/readme-shots/raw/` plus a
+   `captures.json` manifest that records each file's source selector, crop
+   rectangle, device scale factor, pose, masking state and privacy-scan result.
+   It also re-captures the five privacy-guarded `docs/assets/annotation-*.png`
+   poses the annotation group composes from: the standalone refresh command
+   `node test/browser/annotation.e2e.mjs --shots-only --assets` currently exits
+   1 because the live composer region is pointer pass-through for that harness,
+   so use the readme mode's `readme-annotation-assets` check instead. A capture
+   run takes about two minutes.
+
+2. **Compose the Bento groups** (Chrome required; no network):
+
+   ```bash
+   npm run build:readme-bento     # or: node scripts/build-readme-bento.mjs
+   ```
+
+   `scripts/build-readme-bento.mjs` reads the raw files, builds one HTML grid per
+   group on the light README frame (`#f4f3f0`; set `README_BENTO_FRAME=dark` for
+   the dark alternative), and captures each grid as a 1600 px WebP. It fails
+   loudly on a missing source and verifies that every output has the expected
+   width/height:
+
+   | Output | Group |
+   |---|---|
+   | `assets/readme-overview.webp` | Workspaces browser, Running & recent card, native row menu, row hover card, interrupted row |
+   | `assets/readme-artifacts.webp` | Artifacts panel, Quick Look, source filter |
+   | `assets/readme-composer.webp` | Prompt-history rail, interrupted composer, suite settings |
+   | `assets/readme-annotation.webp` | Annotation mode, collection rail, inserted composer reference chips |
+
+3. **Run the gates.** `README.md` links the four outputs by relative path, so
+   `node scripts/check-docs-links.mjs` (also part of `npm run check`) fails until
+   every composed file exists; re-run it after composing.
+
+**Privacy rule.** The captured page loads the user's real Host data, so every
+capture is masked in the page before the screenshot: Session and card rows use
+allowlisted demo titles, Workspace names and paths are replaced, hover-card and
+conversation text uses canned demo lines, and the composer draft is empty. Each
+crop region is then scanned for user paths, user names, URLs, tokens, the
+checkout path and CJK characters; the scan result is logged in `captures.json`.
+A crop that still contains private text must be fixed or dropped, never
+committed. Raw captures, capture logs and the token stay out of git
+(`.tmp-work/` is gitignored); committed files carry no token, cookie, full URL
+or Session id.
+
 ## Release flow
 
 The first public release is **0.1.0**; `package.json` is already at that version.

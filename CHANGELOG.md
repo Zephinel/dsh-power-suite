@@ -788,3 +788,11 @@ and no dated release heading is added until the release is cut.
   single first-release section, and reframed the README around the planned
   first public release (0.1.0) instead of the old 0.2.0/0.3.0 snapshot
   narrative.
+- Rewrote the English README as a Bento landing page — icon header, three
+  badges, a one-line hook, a `[!NOTE]` status block, overview sections with four
+  composed WebP images in `assets/`, a scannable feature table, and install,
+  quick-start, prerequisite and gate sections. The images are produced by
+  `npm run build:readme-bento` (`scripts/build-readme-bento.mjs`) from local
+  live-GUI captures taken by the new `test/browser/sidebar.e2e.mjs
+  --readme-shots` mode; the capture and compose pipeline, including its privacy
+  masking rule, is documented in [docs/development.md](docs/development.md).
