@@ -548,6 +548,14 @@ and no dated release heading is added until the release is cut.
 
 ### Fixed
 
+- **Pending-interaction notice stack** — each notice is now bound to its own
+  Session row: it sits at that row's height (card row first, native Workspaces
+  row as fallback) and starts flush at the sidebar column's right edge like the
+  Session info card, instead of a fixed card-relative stack that made the
+  notice and its Session drift apart. If the row is scrolled out of its
+  container the stack scrolls it into view before placing the notice. Hovering
+  a notice keeps its opaque card layer under the native hover tint so the
+  title/headline no longer show the page text behind it.
 - **Interrupted-session refresh and timing** — badges repull automatically after
   a Host restart (Connection generation reset), on focus/visibility/online, and
   on a 20 s poll instead of waiting for a Session click; parent Sessions whose

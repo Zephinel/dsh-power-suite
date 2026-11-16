@@ -449,13 +449,21 @@ answering surface, and clicking a notice just opens that Session.
   question), the plan-review question, or the approval reason — falling back to
   the tool name when the interaction carries no text. A multi-question batch
   adds a `{count} questions` line.
-- **Placement**: the stack is 320 px wide and prefers the card's **right edge**
-  (native-tooltip style, outside the sidebar); when it does not fit it flips to
-  the card's left edge, then clamps to an 8 px viewport inset on both axes. It
-  is fixed-positioned (the sidebar's scroll container cannot clip it), and the
-  top edge is clamped using the estimated stack height so all three cards stay
-  inside the viewport; it is re-measured on resize, scroll, sidebar expansion,
-  and card height changes.
+- **Bound to its Session row**: each notice is placed at the **height of its
+  own Session row** (card row first, native Workspaces row as fallback) instead
+  of a fixed stack position, so the notice and the Session it summarises always
+  line up while the sidebar scrolls. The card's left edge is the sidebar
+  column's right boundary — the same anchor the Session info card uses — and
+  only shifts left with the 8 px viewport clamp. The card is fixed-positioned
+  (the sidebar's scroll container cannot clip it) and re-measured on scroll,
+  resize, sidebar expansion, card height changes and row remounts.
+- **Auto-reveal**: when the Session row is scrolled out of its container (or
+  otherwise outside the visible band), the stack scrolls the row's nearest
+  vertical scroller just enough to centre it before placing the notice, with a
+  one-frame re-measure; it does not fight a later deliberate user scroll.
+- **Opaque hover**: hovering a notice keeps the card's opaque `bg-layer-1`
+  surface and composites the native hover tint over it, so the title and
+  headline never show the page text behind the card.
 - **Stack and overflow**: up to **3** notice cards, newest activity first; the
   rest collapse into a "+N more" line. Only the cards take the pointer; the
   stack never steals focus and has no hover preview of its own.

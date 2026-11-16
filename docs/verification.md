@@ -2855,3 +2855,74 @@ annotated with compact numbered marks and the rail requirement texts.
   isolated instance's `/tmp` home and token file were removed after composition.
 - **No CI run exists** for this branch (no remote); `npm run check` and the
   capture passes are local.
+
+## 2026-11-17 — Pending notices bound to their Session rows (`pending-notice-align`)
+
+Browser-half fix round for the dynamic-Workspaces pending-interaction notices.
+No Host route, store or native-surface change.
+
+### Cause and fix
+
+- **The notices were a fixed stack.** One 320 px stack was positioned from the
+  Running & recent card (`panel.right + 8`, top of the card) and every notice
+  sat in that stack, so a notice could face a Session row at a completely
+  different height — and, because the anchor was card-relative, the stack
+  crossed the sidebar boundary over the conversation.
+- **Each notice is now bound to its own Session row.** A row element is resolved
+  per notice (card row `[data-psd-session]` first, native Workspaces row
+  `[data-row-key="session:<id>"]` as fallback) and the notice is fixed at that
+  row's top edge with its left edge flush against the sidebar column's right
+  boundary (the same anchor as the Session info card, with the 8 px viewport
+  clamp). The layout is recomputed on scroll/resize/sidebar and card size
+  changes, so the notice follows the row while the sidebar scrolls.
+- **Auto-reveal.** When the row is outside its scroll container's visible band,
+  `dwNoticeRevealRow` scrolls the nearest vertical scroller just enough to
+  centre it (one-frame re-measure) before placing the notice; it does not fight
+  a later deliberate user scroll. The fallback stack position is kept only when
+  the row cannot be found in the DOM at all.
+- **Hover transparency.** `.psd-notice:hover` replaced the opaque
+  `background: var(--dsw-alias-bg-layer-1)` with the translucent
+  `--dsw-alias-interactive-bg-hover` (measured `rgba(38, 49, 72, 0.06)`), so the
+  page text behind the card showed through while hovering. Hover now keeps
+  `background-color: var(--dsw-alias-bg-layer-1)` and paints the native tint as
+  a `linear-gradient` image over it, so the card stays opaque.
+
+### Verification
+
+- `node --check src/client.js` → OK.
+- `node --test test/dynamic-workspaces-panel.test.js` → **6/6 pass**, including
+  per-row placement (row top → notice top, sidebar anchor → left, bottom/top
+  clamps, no-anchor fallback) and the CSS contract that hover keeps the opaque
+  layer.
+- `npm test` → **363/363 pass**; `npm run check` → exit 0; docs links ok
+  (23 Markdown files); pack entryCount 93.
+- **End-to-end live probe** (throwaway Chrome against the running GUI; token
+  redacted; the production GUI was read-only). No real Session was waiting on an
+  interaction, so the probe first picked a real card-row Session id, then
+  reloaded with a probe-only client whose `dwPendingNotices` returns one fixture
+  notice for that id — the **real `DwPendingNotices` renderer** then drew it:
+  - `sidebarRight 420`, notice `left 420` (flush), row `top 311`, notice
+    `top 311` (**same height as its Session row**, 0 px delta), one notice card;
+  - hover: `backgroundColor rgb(255, 255, 255)` → **alpha 1**, with the native
+    tint as a gradient image over it (no page text bleed-through);
+  - auto-reveal helper through the same code path: synthetic scroller 160 px
+    tall with the row 600 px down → `dwNoticeRevealRow` returned true,
+    `scrollTop 0 → 474`, row top moved 608 → 134 (centred in the scroller).
+  - Screenshot `.tmp-work/pending-notice/row-bound/notices-row-bound.png`
+    (gitignored).
+- Structural test evidence: the card row elements now carry `data-psd-session`
+  so the binding does not depend on titles/order; the native fallback uses the
+  existing `data-row-key="session:<id>"`.
+
+### Limits
+
+- The live probe used a probe-only fixture notice because no real Session was
+  waiting at probe time; the renderer, positioning effect, hover styles and
+  reveal helper are the production ones. Auto-reveal was proven through the
+  helper with a synthetic scroller (no naturally scrolled-out Session row was
+  available in the current demo state).
+- If a row is not mounted at all (collapsed card and folded/archived native
+  tree), the stack keeps the card-relative fallback; the next row mount
+  re-binds it.
+- Notices never open or answer a Session by themselves; clicking still opens
+  the Session and the native composer card remains the answering surface.
