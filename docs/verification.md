@@ -2730,13 +2730,14 @@ Host/Client contract changes; the `--readme-shots` capture mode lives in
 - `README.md` — full rewrite, English only: icon header, H1, three badges (npm
   version, MIT license, DSH 0.2.2), a one-line hook, an install/open example, a
   `[!NOTE]` status block (0.1.0 prepared but not published; no git remote, no CI
-  run) and a nav row; then Overview (Running & recent card, native row menu,
-  sidebar width, Host-shared read state), Session artifacts, Composer (prompt
-  history, draft attachments, interrupted recovery), UI element annotation, a
-  10-row feature table linking each `docs/<feature>.md`, Install (npm after the
-  release / in-app Plugins page / local `link:` checkout), Quick start, Get the
-  code, Prerequisites, Build/test/deploy, Documentation, Contributing and
-  License. Every command and claim was checked against `package.json`,
+  run), a full table-of-contents row linking every section and a demo-data note;
+  then Overview (Running & recent card, native row menu, sidebar width,
+  Host-shared read state), Session artifacts, Composer (prompt history, draft
+  attachments, interrupted recovery), UI element annotation, a 10-row feature
+  table linking each `docs/<feature>.md`, Install (npm after the release /
+  in-app Plugins page / local `link:` checkout), Quick start, Get the code,
+  Prerequisites, Build/test/deploy, Documentation, Contributing and License.
+  Each feature section ends with a `Read more` link to its detailed docs. Every command and claim was checked against `package.json`,
   `docs/*.md` and `test/browser/README.md`; no invented CI or publish badge.
 - `assets/readme-overview.webp`, `assets/readme-artifacts.webp`,
   `assets/readme-composer.webp` and `assets/readme-annotation.webp` — four
@@ -2771,42 +2772,62 @@ Measured with `sips -g pixelWidth -g pixelHeight` and `stat`:
 
 | Asset | Dimensions | Bytes | Sources (raw capture groups) |
 |---|---|---|---|
-| `assets/readme-overview.webp` | **1600×1000** | 78,418 | `workspaces`, `card`, `row-menu`, `card-hover`, `interrupted-row` raws |
-| `assets/readme-artifacts.webp` | **1600×654** | 34,040 | `artifacts`, `artifacts-quicklook`, `artifacts-filter` raws |
-| `assets/readme-composer.webp` | **1600×599** | 54,238 | `prompt-history`, `interrupted-composer`, `settings` raws |
-| `assets/readme-annotation.webp` | **1600×864** | 58,942 | `docs/assets/annotation-mode`, `-collection`, `-inserted` |
+| `assets/readme-overview.webp` | **1600×828** | 72,454 | `workspaces`, `card`, `row-menu`, `card-hover` raws |
+| `assets/readme-artifacts.webp` | **1600×880** | 48,620 | `artifacts` (10 stubbed rows), `artifacts-quicklook`, `artifacts-filter` raws |
+| `assets/readme-composer.webp` | **1600×652** | 54,772 | `prompt-history`, `interrupted-composer`, `settings` raws |
+| `assets/readme-annotation.webp` | **1600×860** | 50,546 | `annotation-annotated` raw (dummy Session with three real annotations) |
 
-The four files total **225,638 bytes** and are the only committed README images.
+The four files total **226,392 bytes** and are the only committed README images.
+Every tile is sized to its source aspect and positioned on a uniform 18 px
+gutter, so no screenshot is letterboxed or touches a neighbour; the annotation
+image is a single full-width capture of the dummy Session workflow.
 The composer verifies the fixed 1600 px width and each group's fixed height, and
 fails loudly on a missing source. The README alt text was read against the
 composed images and matches what is visible: the overview shows the Workspaces
 browser with Active/Inactive buckets, the Running & recent card, the native row
-menu, the expanded card with hover figures and the interrupted rainbow row; the
-artifacts image shows the generated/provided list, Quick Look and the source
-filter; the composer image shows the prompt rail and search card, the interrupted
-composer strip with its play control and the settings section; the annotation
-image shows the empty/collection/insert rail states plus the batch composer chip.
+menu and the expanded row hover card; the artifacts image shows the ten-row
+generated/provided list, Quick Look and the source filter; the composer image
+shows the prompt rail and search card, the interrupted composer strip with its
+play control and the settings section; the annotation image is a dummy DSH page
+whose answer card carries three numbered annotation markers, with the rail
+showing the three requirement texts and the batch insert action.
 No README image references a pre-Bento `docs/assets/*.png` file.
 
 ### Capture and composition commands (recorded runs)
 
-- `node test/browser/sidebar.e2e.mjs --readme-shots` → **PASS 14 / SKIP 0 /
-  FAIL 0**, **0 page errors**, **125.9 s**, exit 0 (log
-  `.tmp-work/readme-shots/run.log`). It writes **11/11** raw PNG crops plus
-  `captures.json` to `.tmp-work/readme-shots/raw/` (2× device scale, 1728×900
-  CSS viewport, throwaway profile, worktree client injected with the documented
+- `node test/browser/sidebar.e2e.mjs --readme-shots` — captured again after the
+  user's screenshot review; final run (2026-11-16):
+  **PASS 15 / SKIP 0 / FAIL 0**, **0 page errors**, **228.8 s**, exit 0 (log
+  `.tmp-work/readme-shots/run.log`). It writes **13/13** raw PNG captures plus
+  `captures.json` to `.tmp-work/readme-shots/raw/` (2× device scale for element
+  crops, full-page annotation captures at 3456×1800, 1728×900 CSS viewport,
+  throwaway profile, forced `prefers-color-scheme: dark` because the host had
+  switched to light appearance; worktree client injected with the documented
   `__POWER_SUITE_TEST_HOOKS__` seam for the interrupted poses). Every crop-region
-  and page scan reported **0 hits**; the 36 non-JS console lines are the known
+  and page scan reported **0 hits**; the non-JS console lines are the known
   benign `ws://127.0.0.1:9230/ingest` 403 telemetry noise, not page errors.
-  Recorded deviations: `card.png` has no pinned row (the live Host pin document
-  is empty and the mode never pins), and `workspaces.png` collapses the
+  New in this run: `artifacts.png` now stubs **10 rows** so the panel is full, and
+  `annotation-annotated.png` / `annotation-inserted.png` pose a **dummy blank
+  Session** (created through native New Session, previous Session restored, id
+  only in `captures.json`) with a client-injected answer card ("Weekend in
+  Shanghai"); three real annotations are created by clicking the card, their
+  requirement texts are set in the rail textareas, and the second capture shows
+  "Insert all into composer". The injected card's controller did not paint page
+  marks through the rAF derivation in headless Chrome, so the numbered marks are
+  drawn by the plugin's own `.psa-mark` renderer from the same snapshot
+  descriptors — recorded in `captures.json.deviations`; the annotations, rail
+  entries, requirement texts and insertion are real feature state.
+  Other recorded deviations: `card.png` has no pinned row (the live Host pin
+  document is empty and the mode never pins), and `workspaces.png` collapses the
   Running & recent card for the tall Workspaces crop (restored afterwards).
-- **Annotation sources.** `node test/browser/annotation.e2e.mjs --shots-only
-  --assets` currently **exits 1** because the live composer region is pointer
-  pass-through for that harness. The readme mode re-captures the same five
-  privacy-guarded `docs/assets/annotation-*.png` poses itself at 1728×900:
-  idle 128,694 B, mode 162,321 B, selection 178,840 B, collection 217,892 B,
-  inserted 217,732 B (`readme-annotation-assets` PASS).
+- **Annotation docs sources.** `node test/browser/annotation.e2e.mjs
+  --shots-only --assets` currently **exits 1** because the live composer region
+  is pointer pass-through for that harness. The readme mode re-captures the same
+  five privacy-guarded `docs/assets/annotation-*.png` poses itself at 1728×900
+  (forced dark scheme): idle 123,919 B, mode 157,048 B, selection 173,198 B,
+  collection 211,205 B, inserted 210,804 B (`readme-annotation-assets` PASS).
+  The README annotation image does not use these docs assets; it uses the
+  separate `annotation-annotated` dummy-Session capture described above.
 - `npm run build:readme-bento` / `node scripts/build-readme-bento.mjs` →
   composes the four WebPs above; no network, Chrome only.
 
@@ -2826,11 +2847,12 @@ No README image references a pre-Bento `docs/assets/*.png` file.
 
 ### Evidence limits (state honestly)
 
-- **The live capture was not re-run in this pass.** The capture, composition and
-  visual QA belong to the capture task and the Lead; this final pass re-ran the
-  docs link gate, `npm run check` and `pack:check`, and measured the composed
-  files. The recorded capture evidence is the run log and `captures.json` under
-  gitignored `.tmp-work/`.
+- **Capture rerun.** The first screenshot set was rejected during user review
+  (tiles touched or carried empty bands, and the annotation image showed only
+  the rail). The capture mode was extended (dummy-Session annotation workflow,
+  full 10-row artifacts panel) and the pass re-ran to the final PASS 15 result
+  above; the Lead re-composed every grid and visually reviewed all four WebPs.
+  Raw captures and `captures.json` remain gitignored; only composed WebPs ship.
 - **English only.** `README.md` remains the single English landing document; no
   Chinese README ships this round (the captured GUI is English, so the
   screenshots and copy match). A Chinese counterpart needs Chinese-UI captures

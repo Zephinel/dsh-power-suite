@@ -51,11 +51,18 @@ load them.
    node test/browser/sidebar.e2e.mjs --readme-shots
    ```
 
-   The mode writes 11 PNG crops to `.tmp-work/readme-shots/raw/` plus a
+   The mode writes 13 raw captures to `.tmp-work/readme-shots/raw/` plus a
    `captures.json` manifest that records each file's source selector, crop
    rectangle, device scale factor, pose, masking state and privacy-scan result.
-   It also re-captures the five privacy-guarded `docs/assets/annotation-*.png`
-   poses the annotation group composes from: the standalone refresh command
+   Newer poses include a full ten-row Artifacts panel and a dummy-Session
+   annotation workflow: a blank Session is created through native New Session
+   (previous Session restored, id only in `captures.json`), the native sidebar
+   and header are hidden, a demo answer card is injected client-side, three real
+   annotations are created on it with requirement texts, and both the annotated
+   page and the "Insert all into composer" state are captured full-page. The
+   pass forces `prefers-color-scheme: dark` so the images do not change with the
+   host appearance. It also re-captures the five privacy-guarded
+   `docs/assets/annotation-*.png` poses: the standalone refresh command
    `node test/browser/annotation.e2e.mjs --shots-only --assets` currently exits
    1 because the live composer region is pointer pass-through for that harness,
    so use the readme mode's `readme-annotation-assets` check instead. A capture
@@ -75,10 +82,10 @@ load them.
 
    | Output | Group |
    |---|---|
-   | `assets/readme-overview.webp` | Workspaces browser, Running & recent card, native row menu, row hover card, interrupted row |
+   | `assets/readme-overview.webp` | Workspaces browser, Running & recent card, native row menu, row hover card |
    | `assets/readme-artifacts.webp` | Artifacts panel, Quick Look, source filter |
    | `assets/readme-composer.webp` | Prompt-history rail, interrupted composer, suite settings |
-   | `assets/readme-annotation.webp` | Annotation mode, collection rail, inserted composer reference chips |
+   | `assets/readme-annotation.webp` | Dummy DSH page with three real annotations (numbered marks + rail requirement texts) |
 
 3. **Run the gates.** `README.md` links the four outputs by relative path, so
    `node scripts/check-docs-links.mjs` (also part of `npm run check`) fails until

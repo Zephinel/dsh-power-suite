@@ -24,18 +24,22 @@ dsh web
 > local checkout instead (see [Install](#install)); the in-app update notice stays
 > silent while no published version exists.
 
-[Overview](#overview) · [Features](#features-at-a-glance) · [Install](#install) · [Quick start](#quick-start) · [Build, test and deploy](#build-test-and-deploy)
+[Overview](#overview) · [Session artifacts](#session-artifacts) · [Composer](#composer-prompt-recall-drafts-recovery) · [UI annotation](#ui-element-annotation) · [Features](#features-at-a-glance) · [Install](#install) · [Quick start](#quick-start) · [Get the code](#get-the-code) · [Prerequisites](#prerequisites) · [Build, test and deploy](#build-test-and-deploy) · [Documentation](#documentation) · [Contributing](#contributing)
 
 ## Overview
 
 The suite works inside the native shell instead of beside it: it augments the sidebar, the Files pane and the composer with Host-backed state, and adds one annotation surface that never covers the page. Unloading the plugin restores the native surface.
 
-![Running & recent card, activity buckets, the native row menu, a row hover card and an interrupted row](assets/readme-overview.webp)
+![Running & recent card, activity buckets, the native row menu and a row hover card](assets/readme-overview.webp)
+
+*All screenshots use demo data — a demo Session, demo artifacts and a demo answer card — so no personal content appears.*
 
 - **Running & recent, at the top of the sidebar.** The card lists running and recently finished Sessions, nests delegated subagent rows, raises a preview-only notice when a Session waits on a question, plan review or approval, and paints the current row with its rainbow glow. Hover a row for the native **Session statistics**, **Token usage** and **Context usage** figures.
 - **Native row menus.** A top-level row's "…" menu opens the shell's own shared context-menu popup with the native Session actions (Pin is left out): native material, icons, shortcut hints and footer.
 - **A width that stays put.** The dragged left sidebar width is a Host-owned preference: it survives reloads and new tabs, matches across every browser paired with the same Host (last write wins), reopens at the stored width after a collapse, and no longer blinks the rainbow atmosphere while the handle is dragged.
 - **Read state shared by the Host.** Read marks, card pins and event-sourced last-activity times live on the Host, so they persist across reloads and are shared by every browser on the same Host instead of belonging to one browser's storage.
+
+Read more: [Dynamic Workspaces](docs/dynamic-workspaces.md) · [Sidebar width](docs/sidebar-width.md) · [Interrupted sessions](docs/interrupted-sessions.md).
 
 ## Session artifacts
 
@@ -48,7 +52,7 @@ The right Sidebar's **Files** pane header carries an **Artifacts** button. It op
 - **The actions you need on a file.** Open, download, copy content (text verbatim; images as a real clipboard picture in a secure context), and copy the authenticated LAN link.
 - **The same preview in the Workspace tree.** The native Workspace files list gets the same Quick Look row, so files preview the same way in both places.
 
-Full reference: [session artifacts](docs/session-artifacts.md).
+Read more: [Session artifacts](docs/session-artifacts.md).
 
 ## Composer: prompt recall, drafts, recovery
 
@@ -61,19 +65,19 @@ The composer keeps the work around the prompt: what you asked before, what you a
 - **Interrupted Sessions are marked and recoverable.** A Session whose last turn did not finish gets an amber title mark, a hover-revealed inline **Continue** triangle and a play-shaped composer submit control. Continuing is implicit and Host-owned, and an SSE stream keeps open pages in sync across devices.
 - **Settings in one place.** The bundle's Plugins page holds the prompt-history modifier and the two retention windows for the Active/recent surfaces.
 
-Full reference: [prompt history](docs/prompt-history.md), [draft attachments](docs/draft-attachments.md), [interrupted sessions](docs/interrupted-sessions.md).
+Read more: [Prompt history](docs/prompt-history.md), [draft attachments](docs/draft-attachments.md), [interrupted sessions](docs/interrupted-sessions.md).
 
 ## UI element annotation
 
 A round launcher at the bottom-right of the page toggles a point-and-click annotation mode. The page makes room for a narrow right rail instead of being covered.
 
-![Annotation mode with its right rail, a collected annotation and composer reference chips](assets/readme-annotation.webp)
+![Annotating three elements of a demo DSH answer card: numbered markers on the page and the annotation rail with the three requirement texts](assets/readme-annotation.webp)
 
 - **Point at the element.** Hovering outlines the element a click would select, including floating surfaces such as native hover preview cards, which can be drilled into. The popover carries the locator summary, live status, parent/child adjustment and the requested change.
 - **The note stays with the page.** Each annotation becomes a persisted record with a page marker, a numbered requirement badge and a hover detail card; edit the requirement, relocate the target, copy the locator, or delete with a 5 s undo.
 - **Send it as a reference, not prose.** References are inserted as native composer inline reference chips — one chip or one grouped batch — without sending. The rail's collection view edits, previews, reorders and batch-inserts annotations, with multi-select, marquee, ancestor adjustment and a pass-through modifier.
 
-Full reference: [UI element annotation](docs/ui-annotation.md).
+Read more: [UI element annotation](docs/ui-annotation.md).
 
 ## Features at a glance
 
