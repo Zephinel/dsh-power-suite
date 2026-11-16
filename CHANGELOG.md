@@ -553,7 +553,9 @@ and no dated release heading is added until the release is cut.
   row as fallback) and starts flush at the sidebar column's right edge like the
   Session info card, instead of a fixed card-relative stack that made the
   notice and its Session drift apart. If the row is scrolled out of its
-  container the stack scrolls it into view before placing the notice. The card
+  container the stack scrolls it into view before placing the notice; rows that
+  are closer together than a card push the later notices down just enough to
+  avoid overlap. The card
   now reuses the Session info card surface (`--dsw-hovercard-bg` + the static
   label palette, 16 px radius, lv3 shadow, light-theme override) and, like the
   info card, keeps that surface on hover instead of swapping in a translucent

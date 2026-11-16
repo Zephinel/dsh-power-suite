@@ -6698,6 +6698,36 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
+     * Resolve vertical collisions between row-aligned notice cards.
+     *
+     * Two waiting Sessions can sit in adjacent rows (34 px apart) while a notice
+     * is taller than that, so the later cards are pushed down just enough to keep
+     * the stack readable; the first card stays exactly on its Session row. Every
+     * top is clamped so the last card still fits the viewport.
+     * @param {readonly { left: number, top: number, width: number }[]} cards - row-aligned boxes.
+     * @param {number} viewportHeight - viewport height in CSS px.
+     * @param {number} [cardHeight] - estimated rendered card height in CSS px.
+     * @returns {{ left: number, top: number, width: number }[]} non-overlapping boxes.
+     */
+    function dwNoticeStackCards(cards, viewportHeight, cardHeight) {
+      if (!Array.isArray(cards) || cards.length === 0) return []
+      const gap = 6
+      const height = typeof cardHeight === 'number' && Number.isFinite(cardHeight) && cardHeight > 0
+        ? cardHeight
+        : 84
+      const placed = []
+      for (const card of cards) {
+        let top = card.top
+        for (const prior of placed) {
+          if (top < prior.top + height + gap) top = prior.top + height + gap
+        }
+        top = Math.min(top, Math.max(8, viewportHeight - 8 - height))
+        placed.push({ ...card, top })
+      }
+      return placed
+    }
+
+    /**
      * Reveal a Session row inside its scroll container so its notice can align.
      *
      * No-op when the row already has room for the notice. Otherwise the nearest
@@ -7661,14 +7691,15 @@ function dwClearNativeAtmospheres() {
           const settle = () => {
             if (disposed) return
             const fallback = dwNoticePlacement(panelRect, window.innerWidth, window.innerHeight, 12 + Math.min(notices.length, 3) * 96 + (noticeOverflow > 0 ? 18 : 0))
-            const cards = notices.map((notice, index) => {
+            const aligned = notices.map((notice, index) => {
               const element = elements[index]
               if (element === null) return { left: fallback.left, top: fallback.top + index * 84, width: fallback.width }
               return dwNoticePlacementForRow(element.getBoundingClientRect(), window.innerWidth, window.innerHeight, anchorLeft, 96)
             })
+            const cards = dwNoticeStackCards(aligned, window.innerHeight, 84)
             const last = cards[cards.length - 1]
             const overflow = noticeOverflow > 0
-              ? { left: last.left, top: Math.min(window.innerHeight - 8 - 18, last.top + 84), width: last.width }
+              ? { left: last.left, top: Math.min(window.innerHeight - 8 - 18, last.top + 84 + 6), width: last.width }
               : null
             setNoticeLayout((current) => {
               const same = current !== null
@@ -24872,6 +24903,7 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         dwPendingNotices,
         dwNoticePlacement,
         dwNoticePlacementForRow,
+        dwNoticeStackCards,
         dwNoticeRowElement,
         dwNoticeRevealRow,
       }

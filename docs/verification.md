@@ -2893,11 +2893,11 @@ No Host route, store or native-surface change.
 ### Verification
 
 - `node --check src/client.js` → OK.
-- `node --test test/dynamic-workspaces-panel.test.js` → **6/6 pass**, including
+- `node --test test/dynamic-workspaces-panel.test.js` → **7/7 pass**, including
   per-row placement (row top → notice top, sidebar anchor → left, bottom/top
   clamps, no-anchor fallback) and the CSS contract that hover keeps the opaque
   layer.
-- `npm test` → **363/363 pass**; `npm run check` → exit 0; docs links ok
+- `npm test` → **364/364 pass**; `npm run check` → exit 0; docs links ok
   (23 Markdown files); pack entryCount 93.
 - **End-to-end live probe** (throwaway Chrome against the running GUI; token
   redacted; the production GUI was read-only). No real Session was waiting on an
@@ -2911,7 +2911,12 @@ No Host route, store or native-surface change.
     bleed-through);
   - auto-reveal helper through the same code path: synthetic scroller 160 px
     tall with the row 600 px down → `dwNoticeRevealRow` returned true,
-    `scrollTop 0 → 474`, row top moved 608 → 134 (centred in the scroller).
+    `scrollTop 0 → 474`, row top moved 608 → 134 (centred in the scroller);
+  - two-notice probe on two adjacent card rows: first notice `top 272` = its
+    row `top 272`, second row `top 310` but its notice is pushed to `top 362`
+    (272 + 84 + 6) so the cards do not overlap; the second card's own top would
+    have overlapped the first by 27 px. Unit test
+    `dwNoticeStackCards` pins this, including the viewport clamp.
   - Screenshot `.tmp-work/pending-notice/row-bound/notices-row-bound.png`
     (gitignored).
 - Structural test evidence: the card row elements now carry `data-psd-session`

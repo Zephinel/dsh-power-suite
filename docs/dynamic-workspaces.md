@@ -461,6 +461,10 @@ answering surface, and clicking a notice just opens that Session.
   otherwise outside the visible band), the stack scrolls the row's nearest
   vertical scroller just enough to centre it before placing the notice, with a
   one-frame re-measure; it does not fight a later deliberate user scroll.
+- **Adjacent rows**: two waiting Sessions can sit in adjacent 34 px rows while a
+  notice is taller, so later cards are pushed down by just enough to avoid
+  overlap (the first stays exactly on its row) and the last card stays inside
+  the viewport.
 - **Same surface as the Session info card**: the notice reuses the info card's
   theme-following hover-card recipe — `--dsw-hovercard-bg`, the static
   bluish label palette (flipped to the light-theme tokens in light mode), the
