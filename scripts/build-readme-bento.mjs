@@ -37,11 +37,12 @@ const CHROME_CANDIDATES = [
  */
 const FRAMES = {
   light: {
-    background: '#f4f3f0',
-    tile: '#0e0f12',
-    tileBorder: 'rgba(15, 16, 19, .10)',
+    // Soft pale beige canvas with warm-white screenshot cards.
+    background: '#f6f1e6',
+    tile: '#fffdf8',
+    tileBorder: 'rgba(92, 77, 52, .16)',
     radius: 18,
-    shadow: '0 14px 30px rgb(22 24 29 / 16%), inset 0 1px 0 rgb(255 255 255 / 5%)'
+    shadow: '0 10px 26px rgb(80 65 40 / 12%), inset 0 1px 0 rgb(255 255 255 / 70%)'
   },
   dark: {
     background: '#0b0c0e',
@@ -55,19 +56,20 @@ const FRAMES = {
 const FRAME = { width: 1600, padding: 28, gap: 18, ...FRAMES[process.env.README_BENTO_FRAME === 'dark' ? 'dark' : 'light'] }
 
 /**
- * Bento groups: explicit positions with a uniform 18 px gutter; every tile is
- * sized to its source aspect so screenshots fill the card with no letterboxing.
+ * Bento groups: explicit positions with a uniform 18 px gutter on the pale
+ * beige canvas; every tile is sized to its source aspect, so screenshots fill
+ * the card with no letterboxing. All sources are light-theme captures from the
+ * isolated demo DSH instance.
  * @type {Array<{out: string, height: number, cells: Array<{file: string, x: number, y: number, w: number, h: number, fit?: string, position?: string, source?: 'docs', crop?: {x: number, y: number, w: number, h: number}}>}>}
  */
 const groups = [
   {
     out: 'readme-overview.webp',
-    height: 828,
+    height: 800,
     cells: [
-      { file: 'workspaces.png', x: 28, y: 28, w: 660, h: 772 },
-      { file: 'card.png', x: 706, y: 28, w: 500, h: 174 },
-      { file: 'row-menu.png', x: 1224, y: 28, w: 348, h: 167 },
-      { file: 'card-hover.png', x: 706, y: 220, w: 866, h: 569 }
+      // Workspaces browser (tall) beside the Running & recent card + hover figures.
+      { file: 'workspaces.png', x: 28, y: 51, w: 560, h: 698 },
+      { file: 'card-hover.png', x: 606, y: 28, w: 966, h: 744 }
     ]
   },
   {
@@ -81,19 +83,18 @@ const groups = [
   },
   {
     out: 'readme-composer.webp',
-    height: 652,
+    height: 611,
     cells: [
-      { file: 'prompt-history.png', x: 28, y: 28, w: 600, h: 482 },
-      { file: 'interrupted-composer.png', x: 28, y: 528, w: 600, h: 96 },
-      { file: 'settings.png', x: 646, y: 56, w: 700, h: 540 }
+      // The main chat window (answer + composer + prompt rail) and the settings view.
+      { file: 'composer-chat.png', x: 61, y: 28, w: 900, h: 555 },
+      { file: 'settings.png', x: 979, y: 89, w: 560, h: 432 }
     ]
   },
   {
     out: 'readme-annotation.webp',
     height: 860,
     cells: [
-      // Dummy DSH Session: three real annotations on an injected answer card,
-      // with the rail showing the requirement texts.
+      // Real answer from the demo Session with three annotations and the rail requirements.
       { file: 'annotation-annotated.png', x: 28, y: 28, w: 1544, h: 804 }
     ]
   }
