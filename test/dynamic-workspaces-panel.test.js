@@ -25,7 +25,7 @@ const panel = client.hooks?.dynamicWorkspacesPanel
 const NOW = 1_760_000_000_000
 
 /** Functions the seam must expose. */
-const SEAM_KEYS = ['dwNoticePlacement', 'dwPendingNotices']
+const SEAM_KEYS = ['dwNoticePlacement', 'dwNoticePlacementForRow', 'dwNoticeRowElement', 'dwNoticeRevealRow', 'dwPendingNotices']
 
 /**
  * Read one helper off the panel seam with a clear failure.
@@ -151,4 +151,47 @@ test('notice placement prefers the card right edge and clamps into the viewport'
   const stacked = plain(place({ left: 16, right: 280, top: 2000 }, 1440, 900, 300))
   assert.equal(stacked.top, 900 - 8 - 300, 'a three-notice stack is clamped so its bottom edge stays in view')
   assert.ok(stacked.top + 300 <= 900 - 8)
+})
+
+test('notice placement aligns flush with the sidebar boundary like the Session info card', () => {
+  const place = helper('dwNoticePlacement')
+  assert.deepEqual(
+    plain(place({ left: 16, right: 280, top: 100 }, 1440, 900, undefined, 400)),
+    { left: 400, top: 108, width: 320 },
+    'the stack starts at the supplied sidebar edge instead of a card-relative gap'
+  )
+  const clamped = plain(place({ left: 16, right: 280, top: 100 }, 1440, 900, undefined, 1400))
+  assert.equal(clamped.left, 1440 - 8 - 320, 'a right-edge anchor is clamped so the card stays in view')
+  const narrow = plain(place({ left: 8, right: 240, top: 100 }, 360, 800, undefined, 352))
+  assert.equal(narrow.width, 320)
+  assert.equal(narrow.left, 32, 'a narrow viewport clamps the stack inside the right margin')
+})
+
+test('each notice is placed at its own Session row height', () => {
+  const place = helper('dwNoticePlacementForRow')
+  assert.deepEqual(
+    plain(place({ top: 300 }, 1440, 900, 420, 96)),
+    { left: 420, top: 300, width: 320 },
+    'the notice top matches the row top and the left matches the sidebar edge'
+  )
+  const bottom = plain(place({ top: 880 }, 1440, 900, 420, 96))
+  assert.equal(bottom.top, 900 - 8 - 96, 'a row near the bottom keeps the whole notice inside the viewport')
+  const topEdge = plain(place({ top: 2 }, 1440, 900, 420))
+  assert.equal(topEdge.top, 8, 'a row at the top is clamped to the viewport inset')
+  const noAnchor = plain(place({ top: 300, left: 104 }, 1440, 900, null))
+  assert.equal(noAnchor.left, 104, 'without a sidebar anchor the row left edge is used')
+  const noAnchorRight = plain(place({ top: 300, left: 1400 }, 1440, 900, null))
+  assert.equal(noAnchorRight.left, 1440 - 8 - 320, 'the fallback is clamped inside the viewport')
+})
+
+test('notice cards keep an opaque layer beneath the translucent hover tint', () => {
+  assert.match(
+    client.source,
+    /\.psd-notice:hover\{background-color:var\(--dsw-alias-bg-layer-1\);background-image:linear-gradient\(/,
+    'hover tints the opaque card layer instead of replacing it with a translucent color'
+  )
+  assert.doesNotMatch(
+    client.source,
+    /\.psd-notice:hover\{background:var\(--dsw-alias-interactive-bg-hover\)\}/
+  )
 })

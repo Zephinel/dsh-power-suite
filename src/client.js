@@ -5311,10 +5311,10 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-child-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap}
 .psd-child-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
-.psd-notices{position:fixed;z-index:999;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.psd-notices{position:fixed;inset:0;z-index:999;pointer-events:none}
 .psd-notices-live{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-.psd-notice{appearance:none;display:flex;align-items:flex-start;gap:9px;box-sizing:border-box;width:100%;padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,14px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;text-align:left;cursor:pointer;pointer-events:auto}
-.psd-notice:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.psd-notice{position:fixed;appearance:none;display:flex;align-items:flex-start;gap:9px;box-sizing:border-box;width:320px;padding:10px 12px;border:0;border-radius:var(--dsw-radius-lg,14px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;text-align:left;cursor:pointer;pointer-events:auto}
+.psd-notice:hover{background-color:var(--dsw-alias-bg-layer-1);background-image:linear-gradient(var(--dsw-alias-interactive-bg-hover),var(--dsw-alias-interactive-bg-hover))}
 .psd-notice:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .psd-notice-icon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;color:var(--dsw-alias-state-business-primary)}
 .psd-notice-content{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -5323,7 +5323,7 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-notice-kind{flex:none;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}
 .psd-notice-headline{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:17px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 .psd-notice-meta{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:15px}
-.psd-notices-overflow{padding:0 4px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;text-align:right;pointer-events:none}
+.psd-notices-overflow{position:fixed;padding:0 4px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;text-align:right;pointer-events:none}
 .psd-hovercard{position:fixed;z-index:1000;box-sizing:border-box;width:${DW_HOVERCARD_WIDTH}px;max-height:min(${DW_HOVERCARD_MAX_HEIGHT}px,calc(100vh - 16px));overflow-x:hidden;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-hovercard-bg,#2c2c2e);color:var(--dsw-static-neutral-bluish-00,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;font-size:12px;line-height:16px;pointer-events:none}
 .psd-hovercard::-webkit-scrollbar{display:none;width:0;height:0}
 .psd-hovercard-content{display:flex;flex-direction:column;gap:8px}
@@ -6607,29 +6607,133 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
-     * Place the notice stack beside the card without leaving the viewport.
+     * Place the notice stack at the sidebar boundary without leaving the viewport.
      *
-     * Prefers the card's right edge (native tooltip style, outside the sidebar);
-     * falls back to its left edge, then clamps both axes. Pure so the browser test
-     * can pin the geometry.
+     * When the caller supplies the sidebar column's right edge (the same anchor the
+     * Session info card uses), the stack starts flush there instead of floating a
+     * gap past the card, so it reads as one column with the sideways cards. Without
+     * that anchor it keeps the card-relative fallback. Both axes are clamped so the
+     * stack never crosses the viewport. Pure so the browser test can pin the geometry.
      * @param {{ left: number, right: number, top: number }} panelRect - card bounds.
      * @param {number} viewportWidth - viewport width in CSS px.
      * @param {number} viewportHeight - viewport height in CSS px.
      * @param {number} [stackHeight] - estimated stack height in CSS px; the top is
      *   clamped so the card bottom also stays inside the viewport.
+     * @param {number} [anchorLeft] - the sidebar column's right edge in CSS px; when
+     *   present the stack aligns flush to it like the Session info card.
      * @returns {{ left: number, top: number, width: number }} fixed card box.
      */
-    function dwNoticePlacement(panelRect, viewportWidth, viewportHeight, stackHeight) {
+    function dwNoticePlacement(panelRect, viewportWidth, viewportHeight, stackHeight, anchorLeft) {
       const gap = 8
       const width = Math.min(DW_HOVERCARD_WIDTH, Math.max(240, viewportWidth - gap * 2))
       const height = typeof stackHeight === 'number' && Number.isFinite(stackHeight) && stackHeight > 0
         ? stackHeight
         : 80
-      let left = Math.round(panelRect.right + gap)
-      if (left + width > viewportWidth - gap) left = Math.round(panelRect.left - width - gap)
-      if (left < gap) left = gap
+      let left
+      if (typeof anchorLeft === 'number' && Number.isFinite(anchorLeft)) {
+        // Flush with the sidebar column's right edge, then pull back only as far as
+        // the viewport requires (the same clamp the Session info card applies).
+        left = Math.round(anchorLeft)
+        left = Math.min(left, viewportWidth - gap - width)
+        if (left < gap) left = gap
+      } else {
+        left = Math.round(panelRect.right + gap)
+        if (left + width > viewportWidth - gap) left = Math.round(panelRect.left - width - gap)
+        if (left < gap) left = gap
+      }
       const top = Math.round(Math.max(gap, Math.min(panelRect.top + gap, viewportHeight - gap - height)))
       return { left, top, width }
+    }
+
+    /**
+     * Find the DOM row a pending notice belongs to.
+     *
+     * The card row is preferred (it sits next to the notices); the native tree
+     * row is the fallback when the card does not render that Session (collapsed,
+     * limited or scrolled). Matching by the row's own Session id keeps the
+     * binding independent of titles and order.
+     * @param {string} sessionId - Session id from the notice.
+     * @returns {HTMLElement | null} the row element, or null when not mounted.
+     */
+    function dwNoticeRowElement(sessionId) {
+      if (typeof document === 'undefined' || typeof sessionId !== 'string' || sessionId.length === 0) return null
+      const escaped = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(sessionId) : sessionId
+      const cardRow = document.querySelector(`.psd-panel [data-psd-session="${escaped}"]`)
+      if (cardRow instanceof HTMLElement) return cardRow
+      const nativeRow = document.querySelector(`[data-row-key="session:${escaped}"]`)
+      return nativeRow instanceof HTMLElement ? nativeRow : null
+    }
+
+    /**
+     * Place one notice card at its Session row's height.
+     *
+     * The top edge matches the row's top edge (the Session info card uses the same
+     * anchor) and the left edge is the sidebar boundary, so a notice always lines
+     * up with the row it summarises rather than a fixed card position. The top is
+     * clamped into the viewport with room for the whole card.
+     * @param {{ top: number, left?: number }} rowRect - the row's viewport rect.
+     * @param {number} viewportWidth - viewport width in CSS px.
+     * @param {number} viewportHeight - viewport height in CSS px.
+     * @param {number | null} anchorLeft - sidebar column right edge, when known.
+     * @param {number} [cardHeight] - estimated notice height for the bottom clamp.
+     * @returns {{ left: number, top: number, width: number }} fixed card box.
+     */
+    function dwNoticePlacementForRow(rowRect, viewportWidth, viewportHeight, anchorLeft, cardHeight) {
+      const gap = 8
+      const width = Math.min(DW_HOVERCARD_WIDTH, Math.max(240, viewportWidth - gap * 2))
+      const height = typeof cardHeight === 'number' && Number.isFinite(cardHeight) && cardHeight > 0
+        ? cardHeight
+        : 96
+      let left
+      if (typeof anchorLeft === 'number' && Number.isFinite(anchorLeft)) {
+        left = Math.round(anchorLeft)
+        left = Math.min(left, viewportWidth - gap - width)
+        if (left < gap) left = gap
+      } else {
+        left = Math.round(typeof rowRect.left === 'number' && Number.isFinite(rowRect.left) ? rowRect.left : gap)
+        if (left + width > viewportWidth - gap) left = Math.max(gap, viewportWidth - gap - width)
+      }
+      const top = Math.round(Math.max(gap, Math.min(rowRect.top, viewportHeight - gap - height)))
+      return { left, top, width }
+    }
+
+    /**
+     * Reveal a Session row inside its scroll container so its notice can align.
+     *
+     * No-op when the row already has room for the notice. Otherwise the nearest
+     * vertical scroller (the native sidebar column or the Workspaces tree) is
+     * scrolled just enough to centre the row, and the page is used only when no
+     * scroller exists.
+     * @param {HTMLElement | null} element - the Session row to reveal.
+     * @param {number} [cardHeight] - estimated notice height for the safe band.
+     * @returns {boolean} true when a scroll was issued (the caller re-measures).
+     */
+    function dwNoticeRevealRow(element, cardHeight) {
+      if (!(element instanceof HTMLElement)) return false
+      const margin = 8
+      const height = typeof cardHeight === 'number' && Number.isFinite(cardHeight) && cardHeight > 0
+        ? cardHeight
+        : 96
+      const rect = element.getBoundingClientRect()
+      let scroller = element.parentElement
+      while (scroller !== null) {
+        const style = window.getComputedStyle(scroller)
+        if ((style.overflowY === 'auto' || style.overflowY === 'scroll') && scroller.scrollHeight > scroller.clientHeight + 1) break
+        scroller = scroller.parentElement
+      }
+      if (scroller !== null) {
+        // Visibility is judged against the row's own scroll container: a row can be
+        // inside the viewport yet clipped by the sidebar's scroller.
+        const box = scroller.getBoundingClientRect()
+        if (rect.top >= box.top + margin && rect.top + height <= box.bottom - margin) return false
+        const desired = scroller.scrollTop + (rect.top - box.top) - (box.height - height) / 2
+        const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+        scroller.scrollTop = Math.max(0, Math.min(max, desired))
+        return true
+      }
+      if (rect.top >= margin && rect.top + height <= window.innerHeight - margin) return false
+      element.scrollIntoView({ block: 'center' })
+      return true
     }
 
     /**
@@ -7518,33 +7622,84 @@ function dwClearNativeAtmospheres() {
       // because the sidebar width, card height and viewport all change live; only
       // the box changes, the stack itself is re-derived from the Session status.
       const noticeKey = Array.isArray(notices) ? notices.map((notice) => notice.sessionId).join('|') : ''
-      const [noticeStyle, setNoticeStyle] = React.useState(null)
+      // One placement per notice, each bound to its own Session row. Rows are
+      // preferred from the card and fall back to the native Workspaces tree; a row
+      // that is scrolled out of its container is revealed once so its notice can
+      // line up with it. The layout is fixed-positioned and re-measured on scroll,
+      // resize, sidebar/card size changes and for rows that mount a frame later.
+      const [noticeLayout, setNoticeLayout] = React.useState(null)
       React.useLayoutEffect(() => {
         if (noticeKey.length === 0) {
-          setNoticeStyle(null)
+          setNoticeLayout(null)
           return undefined
         }
-        const update = () => {
+        let disposed = false
+        const frames = new Set()
+        const revealed = new Set()
+        const schedule = (fn) => {
+          const id = window.requestAnimationFrame(() => {
+            frames.delete(id)
+            if (!disposed) fn()
+          })
+          frames.add(id)
+        }
+        const place = () => {
           const panel = panelRootRef.current
           if (!(panel instanceof HTMLElement)) return
-          const stackHeight = 12 + Math.min(notices.length, 3) * 96 + (noticeOverflow > 0 ? 18 : 0)
-          const next = dwNoticePlacement(panel.getBoundingClientRect(), window.innerWidth, window.innerHeight, stackHeight)
-          setNoticeStyle((current) => (current !== null
-            && current.left === next.left && current.top === next.top && current.width === next.width
-            ? current
-            : next))
+          const sidebar = panel.closest('[class*="_sidebarCol"]')
+          const anchorLeft = sidebar instanceof HTMLElement ? Math.round(sidebar.getBoundingClientRect().right) : null
+          const panelRect = panel.getBoundingClientRect()
+          const elements = notices.map((notice) => dwNoticeRowElement(notice.sessionId))
+          let issuedScroll = false
+          for (let index = 0; index < elements.length; index += 1) {
+            if (revealed.has(index)) continue
+            if (dwNoticeRevealRow(elements[index], 96)) {
+              revealed.add(index)
+              issuedScroll = true
+            }
+          }
+          const settle = () => {
+            if (disposed) return
+            const fallback = dwNoticePlacement(panelRect, window.innerWidth, window.innerHeight, 12 + Math.min(notices.length, 3) * 96 + (noticeOverflow > 0 ? 18 : 0))
+            const cards = notices.map((notice, index) => {
+              const element = elements[index]
+              if (element === null) return { left: fallback.left, top: fallback.top + index * 84, width: fallback.width }
+              return dwNoticePlacementForRow(element.getBoundingClientRect(), window.innerWidth, window.innerHeight, anchorLeft, 96)
+            })
+            const last = cards[cards.length - 1]
+            const overflow = noticeOverflow > 0
+              ? { left: last.left, top: Math.min(window.innerHeight - 8 - 18, last.top + 84), width: last.width }
+              : null
+            setNoticeLayout((current) => {
+              const same = current !== null
+                && current.cards.length === cards.length
+                && current.cards.every((card, index) => card.left === cards[index].left && card.top === cards[index].top && card.width === cards[index].width)
+                && ((current.overflow === null) === (overflow === null))
+                && (overflow === null || (current.overflow.left === overflow.left && current.overflow.top === overflow.top && current.overflow.width === overflow.width))
+              return same ? current : { cards, overflow }
+            })
+          }
+          if (issuedScroll) schedule(() => schedule(settle))
+          else settle()
         }
-        update()
-        window.addEventListener('resize', update)
-        window.addEventListener('scroll', update, true)
+        place()
+        const onReflow = () => place()
+        window.addEventListener('resize', onReflow)
+        window.addEventListener('scroll', onReflow, true)
         const panel = panelRootRef.current
         const observer = typeof ResizeObserver === 'undefined' || !(panel instanceof HTMLElement)
           ? null
-          : new ResizeObserver(update)
+          : new ResizeObserver(onReflow)
         if (observer !== null) observer.observe(panel)
+        // Rows can mount one frame after the notices (native tree expansion,
+        // collapse state, virtualized list timing): retry once.
+        schedule(() => place())
         return () => {
-          window.removeEventListener('resize', update)
-          window.removeEventListener('scroll', update, true)
+          disposed = true
+          for (const id of frames) window.cancelAnimationFrame(id)
+          frames.clear()
+          window.removeEventListener('resize', onReflow)
+          window.removeEventListener('scroll', onReflow, true)
           if (observer !== null) observer.disconnect()
         }
       }, [noticeKey, noticeOverflow, expanded])
@@ -7859,6 +8014,7 @@ function dwClearNativeAtmospheres() {
             React.createElement('div', {
               className: isCurrent(row.id) ? 'psd-run psd-run-current' : 'psd-run',
               'data-state': row.state,
+              'data-psd-session': row.id,
               'data-pinned': pinned ? 'true' : undefined,
               'data-menu-open': menuOpen ? 'true' : undefined,
               'data-menuable': menuEnabled ? 'true' : undefined,
@@ -7971,6 +8127,7 @@ function dwClearNativeAtmospheres() {
                   key: child.id,
                   className: childCurrent ? 'psd-child psd-child-current' : 'psd-child',
                   'data-state': child.state,
+                  'data-psd-session': child.id,
                   'aria-current': childCurrent ? 'true' : undefined,
                   'data-actions': childInterrupted ? 'continue' : 'none',
                   onClick: (event) => {
@@ -8030,7 +8187,7 @@ function dwClearNativeAtmospheres() {
           overflow: noticeOverflow ?? 0,
           t,
           onOpen,
-          style: noticeStyle
+          layout: noticeLayout
         }))
       }
       if (hover !== null) {
@@ -8107,18 +8264,19 @@ function dwClearNativeAtmospheres() {
      * @param {object} props - component props.
      * @returns {object | null} the stack, or null when nothing is pending.
      */
-    function DwPendingNotices({ notices, overflow, t, onOpen, style }) {
-      if (!Array.isArray(notices) || notices.length === 0 || style === null) return null
+    function DwPendingNotices({ notices, overflow, t, onOpen, layout }) {
+      if (!Array.isArray(notices) || notices.length === 0 || layout === null) return null
       const glyphFor = (kind) => {
         const path = kind === 'plan'
           ? REMIX_FILE_LINE
           : (kind === 'approval' ? DW_NOTICE_APPROVAL_PATH : DW_NOTICE_QUESTION_PATH)
         return RemixGlyph(path, 14)
       }
-      const cards = notices.map((notice) => React.createElement('button', {
+      const cards = notices.map((notice, index) => React.createElement('button', {
         key: notice.sessionId,
         type: 'button',
         className: 'psd-notice',
+        style: layout.cards[index] ?? { left: 8, top: 8, width: 320 },
         'data-kind': notice.kind,
         'data-psd-notice': notice.sessionId,
         onClick: () => onOpen(notice.sessionId)
@@ -8138,8 +8296,7 @@ function dwClearNativeAtmospheres() {
         className: 'psd-notices',
         'data-psd-notices': '',
         role: 'region',
-        'aria-label': t('notice.region'),
-        style
+        'aria-label': t('notice.region')
       },
       React.createElement('span', {
         className: 'psd-notices-live',
@@ -8147,8 +8304,8 @@ function dwClearNativeAtmospheres() {
         'aria-live': 'polite'
       }, t('notice.live', { count: notices.length + (overflow > 0 ? overflow : 0) })),
       cards,
-      overflow > 0
-        ? React.createElement('div', { className: 'psd-notices-overflow' }, t('notice.overflow', { count: overflow }))
+      overflow > 0 && layout.overflow !== null
+        ? React.createElement('div', { className: 'psd-notices-overflow', style: layout.overflow }, t('notice.overflow', { count: overflow }))
         : null)
     }
 
@@ -24714,6 +24871,9 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesPanel = {
         dwPendingNotices,
         dwNoticePlacement,
+        dwNoticePlacementForRow,
+        dwNoticeRowElement,
+        dwNoticeRevealRow,
       }
       // The card row "..." menu: the plugin-owned captured-target kind the shared
       // popup opens against plus the pure delegation helpers (Pin/Unpin filtering
