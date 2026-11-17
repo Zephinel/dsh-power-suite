@@ -8,6 +8,8 @@ All notable changes to this repository are documented here. The format follows
 
 ### Changed
 
+- **Strict TypeScript Host (Phase 2d).** `tsconfig.json` now enables `strict: true` and the Host sources pass `tsc --noEmit --strict`; explicit `any` remains only at DSH platform boundaries (and other dynamic seams), and `npm run check` reports the count as a tracked budget (335 sites). No runtime behavior or package layout changes; this closes Phase 2 of the migration.
+
 - **Host half is now TypeScript (Phase 2c).** `src/index.ts`, `src/features/**/*.ts`, `src/host/document-store.ts` and `src/shared/protocol.ts` replace the Host JavaScript modules, with `.ts` import specifiers and real type annotations for the boundaries that previously relied on JSDoc. The Node tests import the sources directly through Node's native type stripping (zero build; `engines.node >= 22.18`), while esbuild still bundles the two `lib/` entries, so the published file set is unchanged. `strict: true` is deferred to Phase 2d.
 
 - **Shared durable-document store.** `src/host/document-store.js` now owns the Host persistence mechanism: lazy single-flight read, coded read-error policy, serialized read-modify-write, an atomic 0600 temporary-sibling rename, and in-memory publication only after the rename. The settings, read-acks, session-pins, sidebar-width and workspace-presets stores became adapters that supply only their document policy, removing the duplicated write machinery; `test/document-store.test.js` covers the module interface. The activity ledger keeps its debounced write path for now. File formats and runtime behavior are unchanged.

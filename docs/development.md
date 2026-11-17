@@ -33,7 +33,7 @@ truth and stays repo-only.
 ```bash
 npm run build               # esbuild: src/ → gitignored lib/index.js + lib/client.js
 npm test                    # node --test test/*.test.js: imports the .ts sources via Node >= 22.18 type stripping; no build
-npm run typecheck           # tsc --noEmit: no-emit check over the Host TypeScript sources (src/client.js opted out)
+npm run typecheck           # tsc --noEmit: no-emit strict check over the Host TypeScript sources (src/client.js opted out)
 npm run check               # build + syntax + typecheck + manifest + docs links + tests + release-notes gate, then pack:check
 npm run pack:check          # npm pack --dry-run --json (prepare builds); inspect the published file list
 npm run check:release-notes # release-notes Highlights for the current package version
@@ -46,7 +46,8 @@ runs it on push and pull request. A docs-only change (CHANGELOG/PRODUCT/docs/`
 the typecheck. The release-notes gate runs inside `npm run check` and again in
 the publish workflow.
 
-`npm ci` installs esbuild, TypeScript and `@types/node` as dev dependencies;
+`npm run check` reports an explicit-`any` budget for `src/**/*.ts` (currently 335 sites, mostly DSH
+platform boundaries); it is tracked, not gated. `npm ci` installs esbuild, TypeScript and `@types/node` as dev dependencies;
 `npm run build` emits only the gitignored `lib/` entries, and the typecheck
 itself emits nothing. The classic browser entry stays out of the type gate until
 Phase 3 — see [the TypeScript migration plan](plans/typescript-migration.md).

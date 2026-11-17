@@ -189,9 +189,10 @@ Acceptance:
   unchanged. `strict: true` (421 errors) is deferred to 2d; 2c carries the
   minimal annotations needed for a clean `tsc --noEmit` plus
   `erasableSyntaxOnly`/`verbatimModuleSyntax` guardrails.
-- **2d (strictness) pending:** `strict: true` over the Host sources is expected
-  to add roughly 421 errors (mostly implicit `any` at DSH platform boundaries);
-  it needs ambient/context types first and stays out of 2c.
+- **2d (strictness) done.** `tsconfig.json` now sets `strict: true`; the Host
+  sources pass `tsc --noEmit` cleanly, with explicit `any` kept only at DSH
+  platform boundaries (and other genuinely dynamic seams) and counted as a
+  tracked budget (`npm run check` prints 335 sites). This closes Phase 2.
 
 Introduce the build (recommended: esbuild for the browser classic script and
 `tsc --noEmit` for types; alternative: `tsc` emit for both), switch `exports` and
