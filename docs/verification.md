@@ -2973,6 +2973,26 @@ conversation scroll and lagging while the right sidebar is resized.
   column.
 - `node --check src/client.js` OK; `npm test` 360/360; docs links 23.
 
+### Follow-up: drag spring
+
+The first fix removed the scroll drift and matched the native hide, but the rail
+still trailed then snapped while a dock/right-sidebar drag moved the native
+frame:
+
+- Cause: the position was only applied through a React state update, so it landed
+  after the commit while the native frame moved every drag frame; the delayed
+  follow-up timers added the rest of the spring.
+- Fix: the measurement now writes `top`/`right`/`max-height` straight to the
+  existing rail element before paint, keeps the state update for visibility and
+  the search card, runs a per-frame measurement burst while a pointer is pressed
+  and for 600 ms after release, and no longer resets the tick list's own scroll
+  position on every layout change.
+- Probe (same isolated six-turn Session, pointer held while the viewport was
+  stepped 1728 → 1000 px in 40 ms steps): at each visible step the rail's
+  `right` equalled the native frame's right exactly (1709, 1681, 1631, 1581,
+  1531, 1481, 1431, 1381, 1281), and both disappeared when the native frame's
+  container query hid it (1200/1100/1000).
+
 ### Limits
 
 - The frame is identified by the shell's hashed `_frame` class token plus

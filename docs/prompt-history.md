@@ -92,7 +92,10 @@ prompts.
   middle of the usable scrollport. Its bottom always stays above the composer.
   It re-measures in one animation frame on window resize, composer-height
   changes, sidebar-width changes, and the native rail mounting/loading;
-  scrolling the conversation does **not** re-measure or move it. When the shell
+  while a pointer drag is resizing a dock or the right sidebar it also
+  re-measures every frame (and for a short settle after release), and writes
+  the new box straight to the rail before paint instead of waiting for a React
+  commit. Scrolling the conversation does **not** re-measure or move it. When the shell
   hides the native rail in a narrow conversation container (900 px or less),
   the prompt rail is hidden too — matching the native surface — and it keeps
   the right-edge fallback column only when no native rail exists at all.

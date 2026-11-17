@@ -9555,6 +9555,7 @@ function dwClearNativeAtmospheres() {
       const searchCardRef = React.useRef(null)
       const toggleRef = React.useRef(null)
       const marksRef = React.useRef(null)
+      const railRef = React.useRef(null)
       const previewTimer = React.useRef(null)
 
       const prompts = snapshot.sessionId === sessionId && snapshot.status === 'ready' ? snapshot.prompts : []
@@ -9588,7 +9589,7 @@ function dwClearNativeAtmospheres() {
         const marks = marksRef.current
         if (marks === null) return
         marks.scrollTop = marks.scrollHeight
-      }, [sessionId, promptCount, layout])
+      }, [sessionId, promptCount])
 
       // A finished turn can have appended a prompt; refetch once input is plain again.
       const previousPhase = React.useRef(phase)
@@ -9610,6 +9611,17 @@ function dwClearNativeAtmospheres() {
         let disposed = false
         const measure = () => {
           const next = measurePromptHistoryRail(sessionId)
+          // Position the existing rail before the next paint instead of waiting
+          // for the React commit: during a dock/sidebar drag the native frame
+          // moves every frame, and a deferred state-only update made the rail
+          // trail behind and snap (“spring”). The state update below still
+          // drives visibility, search anchoring and the fade/max-height render.
+          const rail = railRef.current
+          if (rail !== null && next !== null) {
+            rail.style.top = `${next.top}px`
+            rail.style.right = `${next.right}px`
+            rail.style.maxHeight = `${Math.min(next.maxHeight, 420)}px`
+          }
           setLayout((current) => (samePromptHistoryLayout(current, next) ? current : next))
         }
         const schedule = () => {
@@ -9630,14 +9642,41 @@ function dwClearNativeAtmospheres() {
         const mutationObserver = typeof MutationObserver === 'function' ? new MutationObserver(schedule) : null
         if (mutationObserver !== null) mutationObserver.observe(scroll ?? document.body, { childList: true, subtree: true })
         window.addEventListener('resize', schedule)
+        let burstFrame = 0
+        let burstUntil = 0
+        const pump = () => {
+          if (burstFrame !== 0) return
+          const tick = () => {
+            burstFrame = 0
+            if (disposed) return
+            measure()
+            if (performance.now() < burstUntil) burstFrame = window.requestAnimationFrame(tick)
+          }
+          burstFrame = window.requestAnimationFrame(tick)
+        }
+        const burst = (duration) => {
+          burstUntil = Math.max(burstUntil, performance.now() + duration)
+          pump()
+        }
+        // Any pressed pointer may be dragging a dock/sidebar edge; follow every
+        // frame while it moves, then keep measuring for the settle animation.
+        const onPointerMove = (event) => { if (event.buttons !== 0) burst(250) }
+        const onPointerUp = () => burst(600)
+        window.addEventListener('pointermove', onPointerMove, true)
+        window.addEventListener('pointerup', onPointerUp, true)
+        window.addEventListener('pointercancel', onPointerUp, true)
         const settle = window.setTimeout(schedule, 300)
         return () => {
           disposed = true
           window.clearTimeout(settle)
           if (frame !== 0) window.cancelAnimationFrame(frame)
+          if (burstFrame !== 0) window.cancelAnimationFrame(burstFrame)
           if (resizeObserver !== null) resizeObserver.disconnect()
           if (mutationObserver !== null) mutationObserver.disconnect()
           window.removeEventListener('resize', schedule)
+          window.removeEventListener('pointermove', onPointerMove, true)
+          window.removeEventListener('pointerup', onPointerUp, true)
+          window.removeEventListener('pointercancel', onPointerUp, true)
         }
       }, [sessionId, prompts.length])
 
@@ -9824,6 +9863,7 @@ function dwClearNativeAtmospheres() {
       const rail = React.createElement('div', {
         className: 'psp-rail',
         'data-psp-rail': '',
+        ref: railRef,
         style: railStyle
       },
       React.createElement('div', {

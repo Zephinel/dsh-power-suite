@@ -567,7 +567,11 @@ and no dated release heading is added until the release is cut.
   right-edge distance, directly below the frame), does not re-measure or move on
   conversation scroll, and hides when the native rail is hidden by its
   narrow-container rule (falling back to the old right-edge column only when no
-  native rail exists).
+  native rail exists). During a dock/sidebar drag the position is written
+  straight to the rail's DOM before paint (not deferred to a React commit), and
+  a frame-by-frame burst follows pressed-pointer moves plus a short
+  post-release settle, so the rail no longer trails then snaps; the tick list
+  also stops resetting its own scroll on layout changes.
 - **Interrupted-session refresh and timing** — badges repull automatically after
   a Host restart (Connection generation reset), on focus/visibility/online, and
   on a 20 s poll instead of waiting for a Session click; parent Sessions whose
