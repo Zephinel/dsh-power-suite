@@ -2881,10 +2881,13 @@ settings document or native-surface change.
 - **Card row replaces the leading glyph.** The card row's fixed 16 px
   leading-glyph cell renders the amber flag instead of the state dot / sparkle /
   robot glyph (same cell, so the title position does not move). In the native
-  Workspaces tree a small seat effect inserts the same flag before the row's
-  `_title` element and removes it again when the Session settles/archives
-  (`MutationObserver` re-applies for late rows; unmount removes every injected
-  flag).
+  Workspaces tree a small seat effect puts the same flag **inside the row's
+  fixed 16 px leading slot** (the slot's native dot/visually-hidden glyph is
+  hidden while pending), so the native title's x position does not change
+  either; a fallback inserts before `_title` if a future shell drops the slot.
+  The effect re-resolves the sidebar root on render/mutations, coalesces
+  observer passes into one animation frame, prunes stray duplicate flags left
+  by React slot recreation, and removes its flags/markers on cleanup.
 - **Docs/i18n:** the dynamic-workspaces, limitations, architecture, overview and
   README descriptions now say "pending-interaction flag" instead of the notice
   stack; the CHANGELOG Added bullet is the flag design and the obsolete Fixed
@@ -2893,35 +2896,43 @@ settings document or native-surface change.
 ### Verification
 
 - `node --check src/client.js` → OK.
-- `node --test test/dynamic-workspaces-panel.test.js` → **2/2 pass**: seam shape
-  plus `dwPendingSessionIds` filters (idle/archived/blank/subagent/missing and
+- `node --test test/dynamic-workspaces-panel.test.js` → **3/3 pass**: seam
+  shape; `dwPendingSessionIds` filters (idle/archived/blank/subagent/missing and
   the current Session skipped, every actionable waiting Session included,
-  newest-first, no cap).
-- `npm test` → **359/359 pass**; `npm run check` → exit 0; docs links ok
+  newest-first, no cap); and approval/plan-review pass-through including the
+  status-key `sessionId` fallback (previously the only approval fixture was
+  filtered out, so it did not prove the kind).
+- `npm test` → **360/360 pass**; `npm run check` → exit 0; docs links ok
   (23 Markdown files); pack entryCount 93.
-- **Live probe** on the isolated demo instance (token redacted, no production
-  data; fixture ids fed through the real `dwPendingSessionIds` + renderer):
-  - before: `cardFlags 0`, `nativeFlags 0`, `[data-psd-notices] 0`;
-  - during (two fixture waiting Sessions): `cardFlags 2`, `nativeFlags 2`,
-    each flag `14×14`, colour `rgb(245, 158, 11)`, label
-    “Waiting for your answer”; card flags are inside the fixed leading-glyph
-    cell (`inGlyphCell true`, cell children exactly `["psd-pending-flag"]`, so the
-    original state glyph is hidden; flag `left 42`, title `left 72`); native flag
-    `left 36` sits before the native title `left 62`; no notice element exists;
-    the flag path is Remix `flag-fill` with the pole on the left;
+- **Live probe at code commit `06d5ac1`** on the isolated demo instance (token
+  redacted, no production data; fixture ids fed through the real
+  `dwPendingSessionIds` + renderer; the probe reads the `data-psd-session` card
+  seam):
+  - before the fixture, the demo instance already had one real waiting Session
+    and showed exactly `cardFlags 1` / `nativeFlags 1` from the production
+    derivation (no notice element);
+  - with two fixture waiting Sessions: `cardFlags 2`, `nativeFlags 2`, no
+    `[data-psd-notices]`; each flag `14×14`, colour `rgb(245, 158, 11)`, label
+    “Waiting for your answer”, Remix `flag-fill` with the pole on the left;
+  - card flags: `inGlyphCell true`, cell children exactly
+    `["psd-pending-flag"]` (original state glyph hidden), flag `left 42`,
+    title `left 72`;
+  - native flags: `inSlot true` (slot children are the hidden native
+    dot/visually-hidden plus `dps-row-pending-flag`), flag `left 21`,
+    `titleLeft 42` — identical to the un-flagged native-row baseline
+    `titleLeft 42`, proving no title shift;
   - after clearing the fixture: both counts back to `0`.
-  - screenshot `.tmp-work/pending-flags/pending-flags.png` (gitignored).
-- The probe used fixture pending statuses because no real Session was waiting;
-  the renderer, derivation, row decoration and removal path are the production
-  ones.
+  - screenshot committed at [assets/pending-flags.png](assets/pending-flags.png).
+- The probe used fixture pending statuses; the renderer, derivation, row
+  decoration/removal path and colours are the production ones.
 
 ### Limits
 
 - The flag is decorative and intentionally identical for question / plan review
   / approval (per the request: one amber `flag-fill`, not per-kind shapes).
-- The native-row injection identifies the row title by the shell's stable
-  `_title` class suffix; if a future shell build renames it, only the card row
-  keeps the flag (the insertion is skipped, no crash).
+- The native-row injection identifies the shell's hashed `_slot` / `_title`
+  class tokens by suffix; if a future shell build renames them, the card row
+  keeps the flag and the native fallback only skips the insertion (no crash).
 - Flags are not rendered in rail mode because the rows themselves are not
   rendered; no Host involvement means status freshness is exactly the composer
   cards' own snapshot refresh.
