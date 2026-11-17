@@ -96,7 +96,7 @@ plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-
 No Host restart is needed for this feature: it is browser-only and reloads with
 the client entry.
 
-Implementation: [`src/client.js`](../src/client.js) under its
+Implementation: [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js) under its
 `feature: draft attachment memory` region.
 
 ## Verification

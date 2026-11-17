@@ -27,7 +27,8 @@ plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-
 ```
 
 The profile keeps this package as a `link:` dependency, so an edited checkout is
-the code the Host runs after a restart. Removing the bundle removes the plugin.
+the code the Host runs after `npm run build` and a restart (the Host loads
+`lib/index.js`, not `src/`). Removing the bundle removes the plugin.
 
 ## Layout
 
@@ -49,12 +50,12 @@ the code the Host runs after a restart. Removing the bundle removes the plugin.
 
 1. Host side: create `src/features/<name>/host.ts` exporting
    `install<Name>(ctx)`; register routes, services, and events inside
-   `ctx.effect`. Call the installer from [`src/index.ts`](../src/index.ts) and add any new
+   `ctx.effect`. Call the installer from [`src/index.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/index.ts) and add any new
    service names to its `inject` union. A durable Host document goes through
-   [`src/host/document-store.ts`](../src/host/document-store.ts) (atomic queued
+   [`src/host/document-store.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/host/document-store.ts) (atomic queued
    writes, coded read errors) — supply decode/encode/clone/change policy instead
    of hand-rolling filesystem code.
-2. Browser side: add a `//#region feature: <name>` section to [`src/client.js`](../src/client.js)
+2. Browser side: add a `//#region feature: <name>` section to [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js)
    with its tab type, guide card, slot component, and copy. The entry's `apply`
    registers each feature's contributions.
 3. Feature routes live under `/api/<feature>.*` and use

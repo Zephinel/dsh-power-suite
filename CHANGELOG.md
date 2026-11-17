@@ -6,21 +6,25 @@ All notable changes to this repository are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Bundled update check reports the running version.** `src/features/update-check/checker.ts` now resolves the package manifest through the package self-reference (`import.meta.resolve`) instead of a path relative to the source module, so the bundled `lib/index.js` reads its own package.json and the update prompt shows the installed version. The build probes that resolution from inside `lib/`, and `npm run check:release` now deletes `lib/` before `npm pack` to prove `prepare` rebuilds it.
+
 ### Changed
 
 - **Strict TypeScript Host (Phase 2d).** `tsconfig.json` now enables `strict: true` and the Host sources pass `tsc --noEmit --strict`; explicit `any` remains only at DSH platform boundaries (and other dynamic seams), and `npm run check` reports the count as a tracked budget (335 sites). No runtime behavior or package layout changes; this closes Phase 2 of the migration.
 
 - **Host half is now TypeScript (Phase 2c).** `src/index.ts`, `src/features/**/*.ts`, `src/host/document-store.ts` and `src/shared/protocol.ts` replace the Host JavaScript modules, with `.ts` import specifiers and real type annotations for the boundaries that previously relied on JSDoc. The Node tests import the sources directly through Node's native type stripping (zero build; `engines.node >= 22.18`), while esbuild still bundles the two `lib/` entries, so the published file set is unchanged. `strict: true` is deferred to Phase 2d.
 
-- **Shared durable-document store.** `src/host/document-store.js` now owns the Host persistence mechanism: lazy single-flight read, coded read-error policy, serialized read-modify-write, an atomic 0600 temporary-sibling rename, and in-memory publication only after the rename. The settings, read-acks, session-pins, sidebar-width and workspace-presets stores became adapters that supply only their document policy, removing the duplicated write machinery; `test/document-store.test.js` covers the module interface. The activity ledger keeps its debounced write path for now. File formats and runtime behavior are unchanged.
+- **Shared durable-document store.** `src/host/document-store.ts` now owns the Host persistence mechanism: lazy single-flight read, coded read-error policy, serialized read-modify-write, an atomic 0600 temporary-sibling rename, and in-memory publication only after the rename. The settings, read-acks, session-pins, sidebar-width and workspace-presets stores became adapters that supply only their document policy, removing the duplicated write machinery; `test/document-store.test.js` covers the module interface. The activity ledger keeps its debounced write path for now. File formats and runtime behavior are unchanged.
 
-- **Build step (Phase 2 of the TypeScript migration).** `npm run build` (`scripts/build.mjs`, esbuild dev dependency) bundles `src/index.js` into the ESM Host entry and `src/client.js` into the classic browser entry under the gitignored `lib/`; the npm package now ships `lib/` instead of `src/`, `prepare` builds before `npm pack`/`npm publish`, `npm run check` builds first, and `npm run check:release` compares the packed `lib/` against a fresh build before installing/booting/uninstalling. Runtime behavior and UI are unchanged; esbuild is a dev dependency only.
+- **Build step (Phase 2 of the TypeScript migration).** `npm run build` (`scripts/build.mjs`, esbuild dev dependency) bundles `src/index.ts` into the ESM Host entry and `src/client.js` into the classic browser entry under the gitignored `lib/`; the npm package now ships `lib/` instead of `src/`, `prepare` builds before `npm pack`/`npm publish`, `npm run check` builds first, and `npm run check:release` compares the packed `lib/` against a fresh build before installing/booting/uninstalling. Runtime behavior and UI are unchanged; esbuild is a dev dependency only.
 
 - **No-build TypeScript gate (Phase 1).** `tsconfig.json` plus `npm run typecheck`
   (`tsc --noEmit`, `allowJs`/`checkJs`) now checks the Host half through its JSDoc
   types, and `npm run check` plus CI run it. The 24.8k-line classic browser entry
   stays opted out (`// @ts-nocheck`) until Phase 3, the shared settings/protocol
-  typedefs live in `src/shared/protocol.js`, and `test/protocol-contract.test.js`
+  typedefs live in `src/shared/protocol.ts`, and `test/protocol-contract.test.js`
   guards the duplicated route/enum literals. No build step, emitted files or
   package-layout change.
 

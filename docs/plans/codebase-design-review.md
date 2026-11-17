@@ -191,11 +191,11 @@ this ordering; the design changes it in three places:
 - [TypeScript migration plan](typescript-migration.md)
 - [Architecture](../architecture.md) — the current Host/browser module map.
 - [Development](../development.md) — the feature recipe and checks.
-- Store implementations: [`settings/store.ts`](../../src/features/settings/store.ts),
-  [`read-acks/store.ts`](../../src/features/read-acks/store.ts),
-  [`session-pins/store.ts`](../../src/features/session-pins/store.ts),
-  [`session-activity/store.ts`](../../src/features/session-activity/store.ts),
-  [`sidebar-width/store.ts`](../../src/features/sidebar-width/store.ts),
-  [`workspace-presets/store.ts`](../../src/features/workspace-presets/store.ts).
-- Browser half and its test seam: [`src/client.js`](../../src/client.js),
+- Store implementations: [`settings/store.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/features/settings/store.ts),
+  [`read-acks/store.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/features/read-acks/store.ts),
+  [`session-pins/store.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/features/session-pins/store.ts),
+  [`session-activity/store.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/features/session-activity/store.ts),
+  [`sidebar-width/store.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/features/sidebar-width/store.ts),
+  [`workspace-presets/store.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/features/workspace-presets/store.ts).
+- Browser half and its test seam: [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js),
   [`test/helpers/client-module.mjs`](../../test/helpers/client-module.mjs).

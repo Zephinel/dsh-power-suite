@@ -13,8 +13,9 @@ import { readFileSync } from 'node:fs'
 import { isNewerStableVersion, parseStableVersion } from './version.ts'
 import { parseHighlights, releaseNotesUrl, releaseNotesVariant, repositorySlug } from './release-notes.ts'
 
-/** Manifest of the running package; this module lives at `src/features/update-check/`. */
-const DEFAULT_MANIFEST_URL = new URL('../../../package.json', import.meta.url)
+/** Manifest of the running package, resolved through the package self-reference so
+ * the source module and the bundled `lib/index.js` entry resolve the same file. */
+const DEFAULT_MANIFEST_URL = new URL(import.meta.resolve('@zephinel/dsh-power-suite/package.json'))
 
 /** Successful answers are reused for six hours. */
 const SUCCESS_TTL_MS = 6 * 60 * 60_000

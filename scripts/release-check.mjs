@@ -34,6 +34,7 @@ const execFileAsync = promisify(execFile)
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const dshBin = process.env.DSH_BIN ?? 'dsh'
 const keepArtifacts = process.argv.includes('--keep')
+const allowDirty = process.argv.includes('--allow-dirty')
 const PACKAGE_NAME = '@zephinel/dsh-power-suite'
 const PROFILE = 'web'
 
@@ -52,10 +53,16 @@ const REQUIRED_PACK_FILES = [
   'PRODUCT.md',
   'docs/README.md',
   'icon.png',
-  `release-notes/${pkg.version}.md`
+  `release-notes/${pkg.version}.md`,
+  'LICENSE',
+  'NOTICE',
+  'docs/architecture.md',
+  'docs/development.md',
+  'docs/overview.md',
+  'docs/verification.md'
 ]
 /** Repo-only directories that must never reach the tarball. */
-const FORBIDDEN_PACK_PREFIXES = ['src/', 'test/', 'skills/', '.agents/', '.github/', '.git/', 'node_modules/', '.tmp-']
+const FORBIDDEN_PACK_PREFIXES = ['src/', 'test/', 'skills/', '.agents/', '.github/', '.git/', 'node_modules/', 'scripts/', '.tmp-']
 
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms))
 
@@ -198,12 +205,26 @@ async function main() {
   try {
     console.log(`release-check: ${PACKAGE_NAME}@${pkg.version}`)
 
+    console.log('- the tracked worktree is clean')
+    if (allowDirty) {
+      pass('--allow-dirty: skipped the clean-worktree check')
+    } else {
+      const status = await run('git', ['status', '--porcelain', '--untracked-files=no'])
+      ensure(status.stdout.trim() === '', 'release-check needs a clean tracked worktree (commit or stash, or pass --allow-dirty)')
+      pass('tracked worktree is clean')
+    }
+
     console.log('- build the package entries')
     await run(process.execPath, [join(root, 'scripts/build.mjs')], { timeout: 120_000 })
     const builtLib = new Map(
       [...(await hashTree(join(root, 'lib')))].map(([path, hash]) => [`lib/${path}`, hash])
     )
     pass(`${builtLib.size} built entries`)
+
+    // Remove the build output so npm pack must recreate it through `prepare`;
+    // the packed lib is then compared with the hashes above.
+    await rm(join(root, 'lib'), { recursive: true, force: true })
+    pass('removed lib/ so npm pack must rebuild it through prepare')
 
     console.log('- pack')
     await mkdir(packDir, { recursive: true })
@@ -233,6 +254,14 @@ async function main() {
       ensure(packedFiles.has(path), `npm listed ${path} but the tarball has no such file`)
     }
     pass(`${packedFiles.size} files extracted`)
+
+    console.log('- packed docs do not link to repo-only src/')
+    for (const [path] of packedFiles) {
+      if (!path.endsWith('.md')) continue
+      const text = await readFile(join(packedRoot, path), 'utf8')
+      ensure(!/\]\((?:\.\.\/)+src\//.test(text), `${path} links to repo-only src/`)
+    }
+    pass('no packed Markdown links to src/')
 
     console.log('- the packed manifest and bundle row are internally consistent')
     const packedPkg = JSON.parse(await readFile(join(packedRoot, 'package.json'), 'utf8'))

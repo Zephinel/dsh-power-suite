@@ -19,13 +19,17 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 - `npm run build` (esbuild) bundles `src/` into the gitignored `lib/index.js`
   and `lib/client.js`;
 - `node --check` on the remaining JavaScript entry (`src/client.js`);
-- `tsc --noEmit` in **strict** mode over the Host TypeScript sources (`src/**/*.ts`); (`tsconfig.json` with `allowJs`/`checkJs`;
-  the classic browser entry opts out until Phase 3 of the migration plan);
+- `tsc --noEmit` in **strict** mode over the Host TypeScript sources
+  (`src/**/*.ts`; `tsconfig.json` keeps `allowJs`/`checkJs` for the classic
+  browser entry, which opts out until Phase 3 of the migration plan);
 - package-manifest validation: exports/files/icon/cordis patch are present and
   the DSH bundle patch points at a real file;
 - local Markdown links and images (`scripts/check-docs-links.mjs`);
 - the pure-logic test suite (`node --test test/*.test.js`, importing the Host
   `.ts` sources through Node's native type stripping);
+- a built-entry smoke: imports the bundled `lib/index.js`, applies it to a stub
+  context and drives the update route with a stubbed registry fetch, asserting
+  the reported `current` is the package version (catches bundle-only root bugs);
 - the release-notes gate (`scripts/check-release-notes.mjs`).
 
 ### Current gates (2026-11-18, Node 24.22.3)
@@ -33,7 +37,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 - `npm run build`: **`lib/index.js` 104.6 kB** (Host ESM bundle) and
   **`lib/client.js` 957.7 kB** (classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **374 tests, 374 passed, 0 failed**, 24 test files — Host stores/routes
+- `npm test`: **377 tests, 377 passed, 0 failed**, 24 test files — Host stores/routes
   plus the browser-side derivations, the release-notes approval round-trip, the
   protocol contract guard for duplicated route/enum literals and the durable
   document-store interface.
@@ -42,17 +46,19 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   `// @ts-nocheck` until Phase 3).
 - `npm run check` also reports an explicit-`any` budget: **335 sites** in
   `src/**/*.ts` (mostly DSH platform boundaries), tracked but not gated.
-- `rm -rf lib && node --test test/*.test.js`: **374/374** — the suite imports the
+- `rm -rf lib && node --test test/*.test.js`: **377/377** — the suite imports the
   `.ts` sources directly (Node >= 22.18 native type stripping), so the tests need
   no build.
 - `npm run check`: passed (`25 TypeScript modules, 1 JavaScript module(s), 24 test files`); it builds `lib/` first,
-  then runs the syntax checks, the typecheck, package-manifest validation, local
-  docs links, the Node suite and the release-notes gate, then `pack:check`.
+  then runs the syntax checks, the typecheck, package-manifest validation, the
+  built-entry smoke (update route reports `current=0.1.0`), local docs links, the
+  Node suite and the release-notes gate, then `pack:check`.
 - `npm run pack:check`: **75 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).
 - `npm run check:release`: **PASS** — 75 packaged files installed into a throwaway
-  `$DSH_HOME`; the packed `lib/` matches the fresh build, every other packed file
-  is byte-identical to the tarball and the checkout, and the mounted `power-suite`
+  `$DSH_HOME`; it deletes `lib/` first so `npm pack` must rebuild it through
+  `prepare`, then the packed `lib/` matches the fresh build, every other packed
+  file is byte-identical to the tarball and the checkout, and the mounted `power-suite`
   Loader row, the boot graph, the served client bundle and clean uninstall pass
   (requires `dsh` + `pnpm`; intentionally not in CI).
 - `node scripts/release-notes-approval.mjs --verify`: the tagged commit's

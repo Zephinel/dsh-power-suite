@@ -1241,7 +1241,7 @@ Host counterpart: nothing is added to `src/index.ts`, `src/features/`, or the
 package manifest.
 
 - **One region, one installer** — `//#region feature: ui element annotation` in
-  [`src/client.js`](../src/client.js), installed by `installUiAnnotation(ctx)`
+  [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js), installed by `installUiAnnotation(ctx)`
   from the entry's `apply()` inside `ctx.effect`. An install guard makes a
   reconnect/HMR install idempotent: one launcher, one set of listeners.
 - **Two seats** — a `shell.overlay` seat (`AnnotationOverlay`) renders the
@@ -1693,7 +1693,7 @@ Because the feature is browser-only, no Host reload is required for it: reload
 the Web page after upgrading the package's browser code. The feature adds no
 route and no service, so a Host that predates this version still serves it.
 
-Implementation: browser region [`src/client.js`](../src/client.js) under its
+Implementation: browser region [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js) under its
 `feature: ui element annotation` region, pure model helpers in the same region
 and the shared test seam, tests
 [`test/ui-annotation.test.js`](../test/ui-annotation.test.js), browser
@@ -2534,7 +2534,7 @@ Host counterpart: nothing is added to `src/index.ts`, `src/features/`, or the
 package manifest.
 
 - **One region, one installer** — `//#region feature: ui element annotation` in
-  [`src/client.js`](../src/client.js), installed by `installUiAnnotation(ctx)`
+  [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js), installed by `installUiAnnotation(ctx)`
   from the entry's `apply()` inside `ctx.effect`. An install guard makes a
   reconnect/HMR install idempotent: one launcher, one set of listeners.
 - **Two seats** — a `shell.overlay` seat (`AnnotationOverlay`) renders the
@@ -2986,7 +2986,7 @@ Because the feature is browser-only, no Host reload is required for it: reload
 the Web page after upgrading the package's browser code. The feature adds no
 route and no service, so a Host that predates this version still serves it.
 
-Implementation: browser region [`src/client.js`](../src/client.js) under its
+Implementation: browser region [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js) under its
 `feature: ui element annotation` region, pure model helpers in the same region
 and the shared test seam, tests
 [`test/ui-annotation.test.js`](../test/ui-annotation.test.js), browser

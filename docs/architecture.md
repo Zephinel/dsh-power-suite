@@ -582,7 +582,7 @@ leave the content invisible.
 
 A **browser-only** feature: it has no Host route, service, Session-log write, or
 profile change. One `//#region feature: ui element annotation` in
-[`src/client.js`](../src/client.js) is installed through `ctx.effect` by
+[`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js) is installed through `ctx.effect` by
 `installUiAnnotation(ctx)`, which registers a `shell.overlay` seat and a
 renderless `conversation.input.overlay` seat, injects one
 `<style data-power-suite-css="ui-annotation">`, creates the controller singleton,

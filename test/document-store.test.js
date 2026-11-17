@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -112,4 +112,49 @@ test('flush resolves after queued writes settle', async (t) => {
   await store.flush()
   await pending
   assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), { entries: { flushed: true } })
+})
+
+test('a failed rename cleans up the temporary sibling', async (t) => {
+  const file = await documentPath(t, 'blocked.json')
+  await mkdir(file, { recursive: true })
+  const store = createDocumentStore({ file, decode: decodeEntries, encode: encodeEntries })
+  await assert.rejects(store.update(() => ({ next: { entries: { a: 1 } } })))
+  const leftovers = (await readdir(join(file, '..'))).filter((name) => name.endsWith('.tmp'))
+  assert.deepEqual(leftovers, [])
+})
+
+test('a coded read failure is retried by the next get', async (t) => {
+  const file = await documentPath(t)
+  await mkdir(file, { recursive: true })
+  const store = createDocumentStore({
+    file,
+    decode: decodeEntries,
+    encode: encodeEntries,
+    readError: { code: 'DOCUMENT_READ_FAILED', message: 'document could not be read' }
+  })
+  await assert.rejects(store.get(), (error) => error?.code === 'DOCUMENT_READ_FAILED')
+  await rm(file, { recursive: true, force: true })
+  assert.deepEqual(await store.get(), { entries: {} })
+})
+
+test('update hands the mutate callback a clone of the stored document', async (t) => {
+  const file = await documentPath(t)
+  let encodes = 0
+  const store = createDocumentStore({
+    file,
+    decode: decodeEntries,
+    encode: (value) => {
+      encodes += 1
+      return encodeEntries(value)
+    },
+    clone: (value) => structuredClone(value)
+  })
+  await store.update(() => ({ next: { entries: { a: 1 } } }))
+  const next = await store.update((current) => {
+    current.entries.a = 99
+    return { next: current, changed: false }
+  })
+  assert.deepEqual(next, { entries: { a: 99 } })
+  assert.deepEqual(await store.get(), { entries: { a: 1 } })
+  assert.equal(encodes, 1)
 })

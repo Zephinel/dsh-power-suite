@@ -307,9 +307,9 @@ half registers the **Files-header Artifacts action** (and its animated in-pane
 view), the thumbnails, and the source filter. Restart the Host process after
 upgrading the package's JavaScript.
 
-Implementation: Host entry [`src/features/session-artifacts/host.ts`](../src/features/session-artifacts/host.ts),
-pure fold [`artifact-index.ts`](../src/features/session-artifacts/artifact-index.ts),
-browser surface [`client.js`](../src/client.js) under its `feature: session artifacts`
+Implementation: Host entry [`src/features/session-artifacts/host.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/features/session-artifacts/host.ts),
+pure fold [`artifact-index.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/features/session-artifacts/artifact-index.ts),
+browser surface [`client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js) under its `feature: session artifacts`
 region, unit tests [`test/session-artifacts.test.js`](../test/session-artifacts.test.js)
 and [`test/files-artifacts.test.js`](../test/files-artifacts.test.js), live checks in
 [`test/browser/sidebar.e2e.mjs`](../test/browser/sidebar.e2e.mjs) (`files-*`).

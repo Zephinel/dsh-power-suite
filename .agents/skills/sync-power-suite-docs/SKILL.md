@@ -15,7 +15,7 @@ notes and changelog, and a documentation set (`README.md`, `docs/`,
 `PRODUCT.md`) that **ships in the npm package**, plus a repo-only
 `test/browser/README.md`. A small esbuild build (`npm run build`) produces the
 gitignored `lib/index.js` and `lib/client.js` that the npm package ships; the
-the Host sources are TypeScript (Phase 2c) while `src/client.js` remains the
+Host sources are TypeScript (Phase 2c) while `src/client.js` remains the
 classic browser script, and there is no vendored tree or bilingual doc pair. DSH shell docs are out of scope.
 
 Docs split into two contracts. **As-built** docs describe what the bundle does

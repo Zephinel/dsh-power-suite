@@ -5,16 +5,18 @@
  *      TypeScript sources are parsed by the typecheck instead;
  *   2. no-build typecheck (`tsc --noEmit`) over the Host TypeScript sources;
  *   3. validate the bundle manifest, exports, icon, locale, and cordis patch;
- *   4. validate local Markdown links (docs/, README, CHANGELOG, PRODUCT, skills);
- *   5. run the node:test suites;
- *   6. require reviewed release-notes for the package version.
+ *   4. built-entry smoke: the bundled Host sees its own package, and its update
+ *      route reports the running version (not a bundle-relative 0.0.0);
+ *   5. validate local Markdown links (docs/, README, CHANGELOG, PRODUCT, skills);
+ *   6. run the node:test suites;
+ *   7. require reviewed release-notes for the package version.
  *
  * Run with `npm run check`. CI runs the same script.
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const failures = []
@@ -106,7 +108,67 @@ for (const file of ['locale/en.json', 'locale/zh.json']) {
 if (!existsSync(resolve(root, 'README.md'))) failures.push('README.md is missing')
 if (!existsSync(resolve(root, 'CHANGELOG.md'))) failures.push('CHANGELOG.md is missing')
 
-// 4. Local Markdown links and images must resolve. Kept in its own script so
+// 4. Built-entry smoke. The published Host is the bundled lib/index.js, while
+// the unit tests import the TypeScript sources; this drives the built entry
+// through a stub context so a bundle-only regression (for example a module-
+// relative package.json path) fails the gate instead of shipping silently.
+{
+  const routes = []
+  const stub = new Proxy(function () {}, {
+    get(_target, property) {
+      if (property === 'register') {
+        return (route) => {
+          routes.push(route)
+          return () => {}
+        }
+      }
+      if (property === 'effect') {
+        return (callback) => {
+          try {
+            return callback()
+          } catch {
+            return () => {}
+          }
+        }
+      }
+      if (property === 'then') return undefined
+      return stub
+    },
+    apply() {
+      return stub
+    },
+    construct() {
+      return stub
+    }
+  })
+  try {
+    const built = await import(`${pathToFileURL(resolve(root, 'lib/index.js')).href}?smoke=${Date.now()}`)
+    if (typeof built.apply !== 'function') throw new Error('built Host entry has no apply()')
+    built.apply(stub)
+    const route = routes.find((candidate) => candidate.path === '/api/power-suite.update')
+    if (route === undefined) throw new Error('built Host entry did not register the update route')
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = async () => Response.json({ version: '9.9.9' })
+    try {
+      const response = await route.fetch({
+        url: 'http://127.0.0.1/api/power-suite.update?lang=default',
+        method: 'GET',
+        headers: new Headers()
+      })
+      const view = await response.json()
+      if (view.current !== pkg.version) {
+        throw new Error(`built update route reports current=${view.current}, expected ${pkg.version}`)
+      }
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+    console.log(`built-entry smoke: update route reports current=${pkg.version}`)
+  } catch (error) {
+    failures.push(`built-entry smoke failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+// 5. Local Markdown links and images must resolve. Kept in its own script so
 // the CI docs-only fast path can run the same check without the full gate.
 try {
   run(['scripts/check-docs-links.mjs'])
@@ -114,7 +176,7 @@ try {
   failures.push('docs link check failed: scripts/check-docs-links.mjs')
 }
 
-// 5. Tests.
+// 6. Tests.
 const testDirectory = resolve(root, 'test')
 const tests = statSync(testDirectory).isDirectory()
   ? readdirSync(testDirectory).filter((name) => name.endsWith('.test.js')).map((name) => join(testDirectory, name))
@@ -122,7 +184,7 @@ const tests = statSync(testDirectory).isDirectory()
 if (tests.length === 0) failures.push('no node:test files found under test/')
 else run(['--test', ...tests])
 
-// 6. Release-notes gate: the release must commit reviewed highlights for the
+// 7. Release-notes gate: the release must commit reviewed highlights for the
 // package version, because the in-app update prompt reads them from the
 // tag-pinned raw URL (see scripts/check-release-notes.mjs).
 try {
