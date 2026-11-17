@@ -172,6 +172,17 @@ and no dated release heading is added until the release is cut.
   the files. The cache is page-lifetime (8 Sessions / 20 files), clears on send
   and on explicit removal of every restored attachment, and never attempts
   persistence; the shell persists only the draft's text and reference chips.
+- **Composer image gallery** — when a composer holds two or more pasted images,
+  clicking a thumbnail opens a continuous client-only viewer instead of the
+  shell's single-image lightbox: the clicked image first, an `N / M` counter,
+  previous/next buttons disabled at the ends (no wrap), ←/→ keys, one mouse-wheel
+  gesture per image with a 260 ms momentum cooldown, and Esc/backdrop/close with
+  focus returned to the opening thumbnail. Removing an image while the viewer is
+  open clamps it to the remaining set and removing every image closes it; a
+  single image is left entirely to the native lightbox, and page/Markdown images
+  are never intercepted. The overlay uses the shell's tooltip/elevation tokens
+  in both themes, is instant under reduced motion, and closes on Session
+  switch/composer unmount/plugin unload without adding a URL or history entry.
 - **Interrupted sessions** — Sessions whose last turn did not finish are marked
   in the sidebar and can be continued. Detection covers **every unfinished turn
   ending**, not only Host restarts/crashes: any `turn/end` reason `error`

@@ -6,7 +6,7 @@
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![DSH](https://img.shields.io/badge/DSH-0.2.2-4f46e5)](https://www.npmjs.com/package/@deepseek-ai/dsh)
 
-**One plugin that makes the DSH Web GUI show the working session, not only the answer.** It adds a Running & recent panel and activity buckets to the sidebar, a Session artifacts browser, prompt recall and draft memory in the composer, interrupted-session recovery, and point-and-click UI annotation — all as one `power-suite` plugin row, with no build step.
+**One plugin that makes the DSH Web GUI show the working session, not only the answer.** It adds a Running & recent panel and activity buckets to the sidebar, a Session artifacts browser, prompt recall, draft memory and a multi-image composer gallery, interrupted-session recovery, and point-and-click UI annotation — all as one `power-suite` plugin row, with no build step.
 
 Install it from npm (after the 0.1.0 release) and start the Web UI:
 
@@ -62,10 +62,11 @@ The composer keeps the work around the prompt: what you asked before, what you a
 
 - **Prompt history.** The configured modifier + ↑/↓ recalls prompts already sent in this Session; plain arrows keep their native behavior. A rail at the conversation's right edge lists the same prompts as ticks, oldest first, with timestamps, a full-text hover preview, an inline search and click-to-copy.
 - **Draft attachments survive Session switches.** Pasted, dropped or picked files stay with the draft when you open another Session and come back, for the page lifetime — the shell itself persists only the draft text.
+- **A viewer for pasted screenshots.** When the composer holds two or more pasted images, clicking one opens a continuous `N / M` viewer instead of the native single-image lightbox: previous/next buttons and ←/→ keys, one-step mouse-wheel navigation, Esc/backdrop/close returning focus to the thumbnail, and clamping when an image is removed while it is open (removing all closes it). A single image keeps the native lightbox.
 - **Interrupted Sessions are marked and recoverable.** A Session whose last turn did not finish gets an amber title mark, a hover-revealed inline **Continue** triangle and a play-shaped composer submit control. Continuing is implicit and Host-owned, and an SSE stream keeps open pages in sync across devices.
 - **Settings in one place.** The bundle's Plugins page holds the prompt-history modifier and the two retention windows for the Active/recent surfaces.
 
-Read more: [Prompt history](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/prompt-history.md), [draft attachments](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/draft-attachments.md), [interrupted sessions](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/interrupted-sessions.md).
+Read more: [Prompt history](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/prompt-history.md), [draft attachments](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/draft-attachments.md), [composer image gallery](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/usage.md#composer-image-gallery), [interrupted sessions](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/interrupted-sessions.md).
 
 ## UI element annotation
 
@@ -88,6 +89,7 @@ Read more: [UI element annotation](https://github.com/Zephinel/dsh-power-suite/b
 | [UI element annotation](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/ui-annotation.md) | Point-and-click annotation with a right rail, persisted page markers, a collection view and native composer reference chips. |
 | [Prompt history](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/prompt-history.md) | Modifier + ↑/↓ recall plus a right-edge history rail with preview, search and click-to-copy. |
 | [Draft attachments](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/draft-attachments.md) | Browser-owned attachment memory across Session switches for the page lifetime. |
+| [Composer image gallery](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/usage.md#composer-image-gallery) | A continuous N/M viewer for two or more pasted composer images, with keys/wheel navigation, focus return, removal clamping and native behavior for a single image. |
 | [Interrupted sessions](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/interrupted-sessions.md) | An amber mark, inline Continue and a play-shaped submit control for turns that did not finish, with Host-owned cross-device state. |
 | [Sidebar width](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/sidebar-width.md) | A Host-owned, durable left-sidebar width shared across browsers, restored after a collapse, with a flicker-free rainbow repaint. |
 | [Workspace presets](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions in that Workspace. |
