@@ -2909,13 +2909,11 @@ settings document or native-surface change.
 - `npm test` → **360/360 pass**; `npm run check` → exit 0; docs links ok
   (23 Markdown files); pack entryCount **95** at this tip (the two evidence
   screenshots are packed).
-- **Live probe at code commit `06d5ac1`** on the isolated demo instance (token
+- **Live probe at code commit `12b4228`** on the isolated demo instance (token
   redacted, no production data; fixture ids fed through the real
   `dwPendingSessionIds` + renderer; the probe reads the `data-psd-session` card
   seam):
-  - before the fixture, the demo instance already had one real waiting Session
-    and showed exactly `cardFlags 1` / `nativeFlags 1` from the production
-    derivation (no notice element);
+  - before the fixture: `cardFlags 0`, `nativeFlags 0`, no notice element;
   - with two fixture waiting Sessions: `cardFlags 2`, `nativeFlags 2`, no
     `[data-psd-notices]`; each flag `14×14`, colour `rgb(245, 158, 11)`, label
     “Waiting for your answer”, Remix `flag-fill` with the pole on the left;
