@@ -62,7 +62,7 @@ function isRecord(value) {
  * @param {unknown} value - candidate Session id.
  * @returns {boolean} whether it is an accepted id.
  */
-export function isActivitySessionId(value) {
+export function isActivitySessionId(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= MAX_ACTIVITY_SESSION_ID_LENGTH
 }
 
@@ -71,7 +71,7 @@ export function isActivitySessionId(value) {
  * @param {unknown} value - candidate epoch milliseconds.
  * @returns {boolean} whether it is a finite positive time.
  */
-export function isActivityTime(value) {
+export function isActivityTime(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
 }
 
@@ -80,7 +80,7 @@ export function isActivityTime(value) {
  * @param {unknown} value - decoded entries.
  * @returns {Record<string, number>} sanitized entries.
  */
-export function sanitizeActivitySessions(value) {
+export function sanitizeActivitySessions(value: unknown): Record<string, number> {
   const sessions = {}
   if (!isRecord(value)) return sessions
   for (const [id, time] of Object.entries(value)) {
@@ -95,7 +95,7 @@ export function sanitizeActivitySessions(value) {
  * @param {Record<string, number>} sessions - sanitized entries.
  * @returns {Record<string, number>} at most {@link MAX_ACTIVITY_SESSIONS} entries.
  */
-export function capActivitySessions(sessions) {
+export function capActivitySessions(sessions: Record<string, number>): Record<string, number> {
   const entries = Object.entries(sessions)
   if (entries.length <= MAX_ACTIVITY_SESSIONS) return sessions
   entries.sort((left, right) => (right[1] - left[1]) || left[0].localeCompare(right[0]))
@@ -110,7 +110,7 @@ export function capActivitySessions(sessions) {
  * @param {Record<string, number>} incoming - incoming entries.
  * @returns {Record<string, number>} merged, sanitized, bounded entries.
  */
-export function mergeActivitySessions(current, incoming) {
+export function mergeActivitySessions(current: Record<string, number>, incoming: Record<string, number>): Record<string, number> {
   const merged = sanitizeActivitySessions(current)
   for (const [id, time] of Object.entries(sanitizeActivitySessions(incoming))) {
     const previous = merged[id]
@@ -125,7 +125,7 @@ export function mergeActivitySessions(current, incoming) {
  * @param {unknown} text - file contents.
  * @returns {Record<string, number>} the entries.
  */
-export function parseActivityLedger(text) {
+export function parseActivityLedger(text: string): Record<string, number> {
   if (typeof text !== 'string' || text.length === 0) return {}
   let value
   try {
@@ -142,7 +142,7 @@ export function parseActivityLedger(text) {
  * @param {Record<string, number>} sessions - entries.
  * @returns {string} file contents ending in one newline.
  */
-export function serializeActivityLedger(sessions) {
+export function serializeActivityLedger(sessions: Record<string, number>): string {
   return `${JSON.stringify({ version: ACTIVITY_LEDGER_VERSION, sessions: capActivitySessions(sanitizeActivitySessions(sessions)) }, null, 2)}\n`
 }
 
@@ -151,7 +151,7 @@ export function serializeActivityLedger(sessions) {
  * @param {string} dshHome - harness home directory.
  * @returns {string} absolute file path.
  */
-export function activityLedgerPath(dshHome) {
+export function activityLedgerPath(dshHome: string): string {
   return path.join(dshHome, ACTIVITY_LEDGER_DIRECTORY, ACTIVITY_LEDGER_FILE)
 }
 
@@ -167,12 +167,12 @@ export function activityLedgerPath(dshHome) {
  * @param {number} [options.debounceMs] - durable write debounce window.
  * @returns {Record<string, any>} the ledger handle.
  */
-export function createActivityLedger(dshHome, options = {}) {
+export function createActivityLedger(dshHome: string, options: { debounceMs?: number } = {}) {
   const file = activityLedgerPath(dshHome)
   const debounceMs = Number.isFinite(options.debounceMs) && options.debounceMs >= 0
     ? options.debounceMs
     : ACTIVITY_WRITE_DEBOUNCE_MS
-  let state = {}
+  let state: Record<string, number> = {}
   let dirty = false
   let disposed = false
   let timer = null
@@ -276,7 +276,7 @@ export function createActivityLedger(dshHome, options = {}) {
           // memory, reset the single-flight promise, and reject with a typed
           // error so the Host retries a later load instead of caching failure.
           loadPromise = null
-          const readError = /** @type {Error & { code: string }} */ (new Error('session activity ledger could not be read'))
+          const readError = new Error('session activity ledger could not be read') as Error & { code: string }
           readError.code = ACTIVITY_READ_FAILED
           throw readError
         }

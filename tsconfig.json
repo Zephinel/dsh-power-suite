@@ -15,9 +15,13 @@
     "resolveJsonModule": true,
     "types": [
       "node"
-    ]
+    ],
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true
   },
   "include": [
+    "src/**/*.ts",
     "src/**/*.js"
   ]
 }

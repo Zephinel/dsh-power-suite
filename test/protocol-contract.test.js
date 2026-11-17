@@ -2,23 +2,23 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 
-import { ATTACHMENT_ROUTE, LIST_ROUTE, PREVIEW_ROUTE, RAW_ROUTE } from '../src/features/session-artifacts/artifact-index.js'
-import { GET_ROUTE as PRESET_GET_ROUTE, SET_ROUTE as PRESET_SET_ROUTE } from '../src/features/workspace-presets/host.js'
-import { PROMPT_HISTORY_ROUTE } from '../src/features/prompt-history/history.js'
-import { INTERRUPTED_ROUTE } from '../src/features/interrupted-sessions/turns.js'
-import { CONTINUE_ROUTE, INTERRUPTED_EVENTS_ROUTE } from '../src/features/interrupted-sessions/host.js'
-import { SETTINGS_ROUTE } from '../src/features/settings/host.js'
-import { READ_ACKS_ROUTE } from '../src/features/read-acks/host.js'
-import { SESSION_PINS_ROUTE } from '../src/features/session-pins/host.js'
-import { SIDEBAR_WIDTH_ROUTE } from '../src/features/sidebar-width/host.js'
-import { SESSION_ACTIVITY_ROUTE } from '../src/features/session-activity/host.js'
-import { UPDATE_ROUTE } from '../src/features/update-check/host.js'
+import { ATTACHMENT_ROUTE, LIST_ROUTE, PREVIEW_ROUTE, RAW_ROUTE } from '../src/features/session-artifacts/artifact-index.ts'
+import { GET_ROUTE as PRESET_GET_ROUTE, SET_ROUTE as PRESET_SET_ROUTE } from '../src/features/workspace-presets/host.ts'
+import { PROMPT_HISTORY_ROUTE } from '../src/features/prompt-history/history.ts'
+import { INTERRUPTED_ROUTE } from '../src/features/interrupted-sessions/turns.ts'
+import { CONTINUE_ROUTE, INTERRUPTED_EVENTS_ROUTE } from '../src/features/interrupted-sessions/host.ts'
+import { SETTINGS_ROUTE } from '../src/features/settings/host.ts'
+import { READ_ACKS_ROUTE } from '../src/features/read-acks/host.ts'
+import { SESSION_PINS_ROUTE } from '../src/features/session-pins/host.ts'
+import { SIDEBAR_WIDTH_ROUTE } from '../src/features/sidebar-width/host.ts'
+import { SESSION_ACTIVITY_ROUTE } from '../src/features/session-activity/host.ts'
+import { UPDATE_ROUTE } from '../src/features/update-check/host.ts'
 import {
   ACTIVE_PROJECT_DAYS,
   defaultSettings,
   PROMPT_HISTORY_MODIFIERS,
   RECENT_SESSION_MINUTES
-} from '../src/features/settings/store.js'
+} from '../src/features/settings/store.ts'
 
 // The browser half is a classic script that cannot import the Host constants
 // until the build exists (docs/plans/typescript-migration.md), so Phase 1 keeps

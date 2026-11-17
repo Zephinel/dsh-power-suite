@@ -27,7 +27,7 @@ await mkdir(outDir, { recursive: true })
 
 await build({
   absWorkingDir: root,
-  entryPoints: ['src/index.js'],
+  entryPoints: ['src/index.ts'],
   outfile: 'lib/index.js',
   bundle: true,
   platform: 'node',

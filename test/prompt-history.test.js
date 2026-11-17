@@ -4,7 +4,7 @@ import {
   MAX_PROMPTS,
   collectPromptHistory,
   promptTextOfEvent
-} from '../src/features/prompt-history/history.js'
+} from '../src/features/prompt-history/history.ts'
 
 /** One recorded user message event. */
 function userEvent(seq, text, source = { kind: 'user' }, time = 1_000 * seq) {

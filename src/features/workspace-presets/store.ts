@@ -10,7 +10,7 @@
 
 import path from 'node:path'
 
-import { createDocumentStore } from '../../host/document-store.js'
+import { createDocumentStore } from '../../host/document-store.ts'
 
 /** Store schema version; bump when the shape changes. */
 export const STORE_VERSION = 1

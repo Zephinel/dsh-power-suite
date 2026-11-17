@@ -16,7 +16,7 @@
 
 import os from 'node:os'
 import path from 'node:path'
-import { createPresetStore, shouldApplyPreset } from './store.js'
+import { createPresetStore, shouldApplyPreset } from './store.ts'
 
 /** Route serving one Workspace's stored default preset. */
 export const GET_ROUTE = '/api/workspace-presets.get'

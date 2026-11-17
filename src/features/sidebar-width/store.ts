@@ -19,7 +19,7 @@
 
 import path from 'node:path'
 
-import { createDocumentStore } from '../../host/document-store.js'
+import { createDocumentStore } from '../../host/document-store.ts'
 
 /** Store schema version; bump when the document shape changes. */
 export const SIDEBAR_WIDTH_VERSION = 1

@@ -19,7 +19,7 @@ import { loadClientModule } from './helpers/client-module.mjs'
 import {
   isNewerStableVersion as hostIsNewerStableVersion,
   parseStableVersion as hostParseStableVersion
-} from '../src/features/update-check/version.js'
+} from '../src/features/update-check/version.ts'
 
 /** One materialization of the browser module; the seam is read from it. */
 const client = loadClientModule()

@@ -17,7 +17,7 @@
 
 import path from 'node:path'
 
-import { createDocumentStore } from '../../host/document-store.js'
+import { createDocumentStore } from '../../host/document-store.ts'
 
 /** Store schema version; bump when the shape changes. */
 export const READ_ACKS_VERSION = 1
@@ -60,7 +60,7 @@ function isRecord(value) {
  * @param {unknown} value - candidate Session id.
  * @returns {boolean} whether it is an accepted id.
  */
-export function isSessionId(value) {
+export function isSessionId(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= MAX_SESSION_ID_LENGTH
 }
 
@@ -69,7 +69,7 @@ export function isSessionId(value) {
  * @param {unknown} value - candidate baseline.
  * @returns {boolean} whether it is a finite positive epoch-millisecond value.
  */
-export function isAckBaseline(value) {
+export function isAckBaseline(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
 }
 
@@ -78,7 +78,7 @@ export function isAckBaseline(value) {
  * @param {unknown} value - decoded entries.
  * @returns {Record<string, number>} sanitized entries.
  */
-export function sanitizeAcked(value) {
+export function sanitizeAcked(value: unknown): Record<string, number> {
   const acked = {}
   if (!isRecord(value)) return acked
   for (const [id, baseline] of Object.entries(value)) {
@@ -93,7 +93,7 @@ export function sanitizeAcked(value) {
  * @param {Record<string, number>} acked - sanitized entries.
  * @returns {Record<string, number>} a document with at most {@link MAX_READ_ACKS} entries.
  */
-export function capAcked(acked) {
+export function capAcked(acked: Record<string, number>): Record<string, number> {
   const entries = Object.entries(acked)
   if (entries.length <= MAX_READ_ACKS) return acked
   entries.sort((left, right) => (right[1] - left[1]) || left[0].localeCompare(right[0]))
@@ -107,7 +107,7 @@ export function capAcked(acked) {
  * @param {unknown} value - candidate document entries.
  * @returns {Record<string, number>} normalized entries.
  */
-export function normalizeAcked(value) {
+export function normalizeAcked(value: unknown): Record<string, number> {
   return capAcked(sanitizeAcked(value))
 }
 
@@ -117,7 +117,7 @@ export function normalizeAcked(value) {
  * @param {Record<string, number>} incoming - incoming entries.
  * @returns {Record<string, number>} merged, sanitized, bounded entries.
  */
-export function mergeAcked(current, incoming) {
+export function mergeAcked(current: Record<string, number>, incoming: Record<string, number>): Record<string, number> {
   const merged = sanitizeAcked(current)
   for (const [id, baseline] of Object.entries(sanitizeAcked(incoming))) {
     const previous = merged[id]
@@ -135,7 +135,7 @@ export function mergeAcked(current, incoming) {
  * @param {unknown} text - file contents.
  * @returns {Record<string, number>} the acknowledgement entries.
  */
-export function parseReadAcks(text) {
+export function parseReadAcks(text: string): Record<string, number> {
   if (typeof text !== 'string' || text.length === 0) return {}
   let value
   try {
@@ -152,7 +152,7 @@ export function parseReadAcks(text) {
  * @param {Record<string, number>} acked - acknowledgment entries.
  * @returns {string} file contents ending in one newline.
  */
-export function serializeReadAcks(acked) {
+export function serializeReadAcks(acked: Record<string, number>): string {
   return `${JSON.stringify({ version: READ_ACKS_VERSION, acked: normalizeAcked(acked) }, null, 2)}\n`
 }
 
@@ -161,7 +161,7 @@ export function serializeReadAcks(acked) {
  * @param {string} dshHome - harness home directory.
  * @returns {string} absolute file path.
  */
-export function readAcksPath(dshHome) {
+export function readAcksPath(dshHome: string): string {
   return path.join(dshHome, READ_ACKS_DIRECTORY, READ_ACKS_FILE)
 }
 
@@ -173,7 +173,7 @@ export function readAcksPath(dshHome) {
  * @param {string} dshHome - harness home directory.
  * @returns {{ get(): Promise<Record<string, number>>, record(entries: Record<string, number>): Promise<Record<string, number>> }} the store.
  */
-export function createReadAckStore(dshHome) {
+export function createReadAckStore(dshHome: string) {
   const store = createDocumentStore({
     file: readAcksPath(dshHome),
     decode: parseReadAcks,

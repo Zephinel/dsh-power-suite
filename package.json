@@ -82,7 +82,7 @@
   "author": "Zephinel <ventugem@gmail.com>",
   "license": "MIT",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

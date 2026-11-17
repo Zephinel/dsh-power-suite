@@ -10,7 +10,7 @@
 
 import os from 'node:os'
 import path from 'node:path'
-import { createSettingsStore, validatePatch } from './store.js'
+import { createSettingsStore, validatePatch } from './store.ts'
 
 /** Route serving and storing the settings document. */
 export const SETTINGS_ROUTE = '/api/power-suite.settings'

@@ -13,8 +13,8 @@ import {
   readAcksPath,
   sanitizeAcked,
   serializeReadAcks
-} from '../src/features/read-acks/store.js'
-import { READ_ACKS_ROUTE, harnessHome, installReadAcks } from '../src/features/read-acks/host.js'
+} from '../src/features/read-acks/store.ts'
+import { READ_ACKS_ROUTE, harnessHome, installReadAcks } from '../src/features/read-acks/host.ts'
 
 /**
  * Create one throwaway harness home.

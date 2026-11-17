@@ -8,8 +8,8 @@
  * idempotent operations, and merge the Host document back through this route.
  */
 
-import { SESSION_PINS_READ_FAILED, createSessionPinStore, validatePinOps } from './store.js'
-import { harnessHome } from '../read-acks/host.js'
+import { SESSION_PINS_READ_FAILED, createSessionPinStore, validatePinOps } from './store.ts'
+import { harnessHome } from '../read-acks/host.ts'
 
 /** Route serving and applying the session-pins document. */
 export const SESSION_PINS_ROUTE = '/api/power-suite.session-pins'
@@ -53,7 +53,10 @@ export function validatePinApplyBody(body) {
  * @param {Record<string, any>} [options.store] - store override with `get`/`apply`.
  * @returns {void}
  */
-export function installSessionPins(ctx, options = {}) {
+export function installSessionPins(
+  ctx: any,
+  options: { store?: ReturnType<typeof createSessionPinStore> } = {}
+) {
   const store = options.store ?? createSessionPinStore(harnessHome())
   ctx.effect(() => ctx.connection.fetch.register({
     path: SESSION_PINS_ROUTE,

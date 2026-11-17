@@ -12,7 +12,7 @@
 
 import os from 'node:os'
 import path from 'node:path'
-import { READ_ACKS_READ_FAILED, createReadAckStore, isAckBaseline, isSessionId } from './store.js'
+import { READ_ACKS_READ_FAILED, createReadAckStore, isAckBaseline, isSessionId } from './store.ts'
 
 /** Route serving and merging the read-acks document. */
 export const READ_ACKS_ROUTE = '/api/power-suite.read-acks'
@@ -73,7 +73,10 @@ export function validateReadAckBody(body) {
  * @param {Record<string, any>} [options.store] - store override with `get`/`record`.
  * @returns {void}
  */
-export function installReadAcks(ctx, options = {}) {
+export function installReadAcks(
+  ctx: any,
+  options: { store?: ReturnType<typeof createReadAckStore> } = {}
+) {
   const store = options.store ?? createReadAckStore(harnessHome())
   ctx.effect(() => ctx.connection.fetch.register({
     path: READ_ACKS_ROUTE,

@@ -35,7 +35,7 @@ import {
   foldUserAttachments,
   previewKindOf,
   sortArtifactsNewestFirst
-} from './artifact-index.js'
+} from './artifact-index.ts'
 
 /** The suite entry supplies the services this feature registers against. */
 
@@ -143,7 +143,7 @@ async function readAttachmentFile(attachments, ref, signal) {
   for await (const chunk of attachments.readFileStream(ref, signal)) {
     total += chunk.byteLength
     if (total > MAX_RAW_BYTES) {
-      const error = /** @type {Error & { code: string }} */ (new Error('Attachment exceeds the response limit'))
+      const error = new Error('Attachment exceeds the response limit') as Error & { code: string }
       error.code = 'FS_TOO_LARGE'
       throw error
     }

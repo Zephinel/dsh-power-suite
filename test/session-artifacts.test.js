@@ -10,7 +10,7 @@ import {
   previewKindOf,
   resolveArtifactPath,
   sortArtifactsNewestFirst
-} from '../src/features/session-artifacts/artifact-index.js'
+} from '../src/features/session-artifacts/artifact-index.ts'
 
 /** Build one raw session event. */
 function event(seq, type, data) {

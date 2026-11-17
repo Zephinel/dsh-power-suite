@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
  * Repository gate:
- *   1. syntax-check both package entries and every Host feature module
- *      (src/shared is parsed by the typecheck);
- *   2. no-build typecheck (`tsc --noEmit`, Phase 1 of the TS migration plan);
+ *   1. syntax-check the remaining checked-in JavaScript entries (src/client.js);
+ *      TypeScript sources are parsed by the typecheck instead;
+ *   2. no-build typecheck (`tsc --noEmit`) over the Host TypeScript sources;
  *   3. validate the bundle manifest, exports, icon, locale, and cordis patch;
  *   4. validate local Markdown links (docs/, README, CHANGELOG, PRODUCT, skills);
  *   5. run the node:test suites;
@@ -24,13 +24,13 @@ function run(args) {
   execFileSync(process.execPath, args, { cwd: root, stdio: 'inherit' })
 }
 
-/** Collect every .js file below a directory. */
-function collectJavaScript(directory) {
+/** Collect every file with one extension below a directory. */
+function collectFiles(directory, extension) {
   const files = []
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name)
-    if (entry.isDirectory()) files.push(...collectJavaScript(path))
-    else if (entry.isFile() && entry.name.endsWith('.js')) files.push(path)
+    if (entry.isDirectory()) files.push(...collectFiles(path, extension))
+    else if (entry.isFile() && entry.name.endsWith(extension)) files.push(path)
   }
   return files
 }
@@ -40,8 +40,9 @@ function requirePath(relative, label) {
   if (!existsSync(resolve(root, relative))) failures.push(`${label} is missing: ${relative}`)
 }
 
-// 1. Syntax checks.
-const sources = [resolve(root, 'src/index.js'), resolve(root, 'src/client.js'), ...collectJavaScript(resolve(root, 'src/features'))]
+// 1. Syntax checks (JavaScript entries only; tsc parses the TypeScript sources).
+const sources = collectFiles(resolve(root, 'src'), '.js')
+const typeScriptSources = collectFiles(resolve(root, 'src'), '.ts')
 for (const file of sources) {
   try {
     run(['--check', file])
@@ -50,7 +51,13 @@ for (const file of sources) {
   }
 }
 
-// 2. No-build typecheck (Phase 1 of docs/plans/typescript-migration.md).
+// 2. No-build typecheck over the Host TypeScript sources.
+// Node >= 22.18 is required for the test suite to import the sources directly
+// via native type stripping; fail with a clear message instead of an ESM error.
+const typescriptMode = process.features?.typescript
+if (typescriptMode !== 'strip' && typescriptMode !== 'transform') {
+  failures.push(`Node ${process.version} cannot run the TypeScript sources directly; use Node >= 22.18`)
+}
 const tsc = resolve(root, 'node_modules/typescript/bin/tsc')
 let typecheckPassed = false
 try {
@@ -116,4 +123,4 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
-console.log(`\ncheck passed: ${sources.length} modules, ${tests.length} test files.`)
+console.log(`\ncheck passed: ${typeScriptSources.length} TypeScript modules, ${sources.length} JavaScript module(s), ${tests.length} test files.`)

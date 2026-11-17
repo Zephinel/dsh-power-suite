@@ -48,7 +48,7 @@ import {
   createActivityLedger,
   isActivitySessionId,
   isActivityTime
-} from './store.js'
+} from './store.ts'
 
 /** Route serving the live activity ledger snapshot. */
 export const SESSION_ACTIVITY_ROUTE = '/api/power-suite.session-activity'
@@ -255,7 +255,11 @@ export function createProjectionCacheReader(dshHome) {
  * @param {(id: string) => Promise<number | null>} [options.readCachedDocument] - cache reader.
  * @returns {Promise<Record<string, number>>} the ledger snapshot after seeding.
  */
-export async function seedActivityBaseline(ctx, ledger, options = {}) {
+export async function seedActivityBaseline(
+  ctx: any,
+  ledger: any,
+  options: { readCachedDocument?: (id: string) => Promise<number | null> } = {}
+) {
   const query = ctx !== null && typeof ctx === 'object' ? ctx.sessionQuery : undefined
   if (query === undefined || query === null || typeof query.listSessions !== 'function') {
     return ledger.snapshot()
@@ -304,7 +308,16 @@ export async function seedActivityBaseline(ctx, ledger, options = {}) {
  * @param {number} [options.seedBackoffMs] - immediate-serve window after a seed timeout/failure.
  * @returns {void}
  */
-export function installSessionActivity(ctx, options = {}) {
+export function installSessionActivity(
+  ctx: any,
+  options: {
+    ledger?: any
+    readCachedDocument?: (id: string) => Promise<number | null>
+    seedBaseline?: (hostCtx: any, ledgerHandle: any) => Promise<unknown>
+    seedWaitMs?: number
+    seedBackoffMs?: number
+  } = {}
+) {
   const ledger = options.ledger ?? createActivityLedger(harnessHome())
   const seedWaitMs = Number.isFinite(options.seedWaitMs) && options.seedWaitMs >= 0 ? options.seedWaitMs : SEED_BASELINE_WAIT_MS
   const seedBackoffMs = Number.isFinite(options.seedBackoffMs) && options.seedBackoffMs >= 0 ? options.seedBackoffMs : SEED_TIMEOUT_BACKOFF_MS

@@ -10,8 +10,8 @@
  */
 
 import { readFileSync } from 'node:fs'
-import { isNewerStableVersion, parseStableVersion } from './version.js'
-import { parseHighlights, releaseNotesUrl, releaseNotesVariant, repositorySlug } from './release-notes.js'
+import { isNewerStableVersion, parseStableVersion } from './version.ts'
+import { parseHighlights, releaseNotesUrl, releaseNotesVariant, repositorySlug } from './release-notes.ts'
 
 /** Manifest of the running package; this module lives at `src/features/update-check/`. */
 const DEFAULT_MANIFEST_URL = new URL('../../../package.json', import.meta.url)
@@ -28,16 +28,27 @@ const FETCH_TIMEOUT_MS = 5_000
 /** Most highlights one answer carries; the parser itself is not capped. */
 const MAX_HIGHLIGHTS = 6
 
-/**
- * @typedef {object} UpdateCheckView
- * @property {string} current - running package version; `0.0.0` when unknown.
- * @property {string | null} latest - newest stable published version, or null
- *   when it could not be read (or is not a stable version).
- * @property {boolean} updateAvailable - whether a newer stable version than the
- *   running one is published.
- * @property {readonly string[]} highlights - reviewed release highlights for
- *   `latest`; empty when they are unavailable.
- */
+/** One update-check answer rendered by the browser card. */
+export interface UpdateCheckView {
+  /** Running package version; `0.0.0` when unknown. */
+  current: string
+  /** Newest stable published version, or null when it could not be read. */
+  latest: string | null
+  /** Whether a newer stable version than the running one is published. */
+  updateAvailable: boolean
+  /** Reviewed release highlights for `latest`; empty when unavailable. */
+  highlights: readonly string[]
+}
+
+/** Injectable dependencies and cache windows for the checker. */
+export interface UpdateCheckerOptions {
+  manifestUrl?: URL | string
+  fetchImpl?: typeof fetch
+  now?: () => number
+  timeoutMs?: number
+  successTtlMs?: number
+  failureTtlMs?: number
+}
 
 /**
  * Read the running package's manifest.
@@ -45,7 +56,7 @@ const MAX_HIGHLIGHTS = 6
  * @returns {Record<string, any> | undefined} the parsed manifest, or undefined when it is
  *   unreadable.
  */
-function readManifest(manifestUrl) {
+function readManifest(manifestUrl?: URL | string): Record<string, any> | undefined {
   const source = manifestUrl ?? DEFAULT_MANIFEST_URL
   try {
     const parsed = JSON.parse(readFileSync(source, 'utf8'))
@@ -61,7 +72,7 @@ function readManifest(manifestUrl) {
  * @returns {string | undefined} the stable version, or undefined when the
  *   manifest is unreadable or names a prerelease/build version.
  */
-export function installedVersion(manifestUrl) {
+export function installedVersion(manifestUrl?: URL | string): string | undefined {
   const version = readManifest(manifestUrl)?.version
   return typeof version === 'string' && parseStableVersion(version) !== undefined ? version : undefined
 }
@@ -72,7 +83,7 @@ export function installedVersion(manifestUrl) {
  * @returns {string | undefined} `owner/repo`, or undefined when the manifest
  *   has no usable GitHub repository.
  */
-export function releaseNotesRepository(manifestUrl) {
+export function releaseNotesRepository(manifestUrl?: URL | string): string | undefined {
   return repositorySlug(readManifest(manifestUrl)?.repository)
 }
 
@@ -82,7 +93,7 @@ export function releaseNotesRepository(manifestUrl) {
  * @returns {string | undefined} the registry URL, or undefined when the
  *   manifest names no package.
  */
-function registryLatestUrl(manifest) {
+function registryLatestUrl(manifest?: Record<string, any>): string | undefined {
   const name = manifest?.name
   if (typeof name !== 'string' || name.trim() === '') return undefined
   return `https://registry.npmjs.org/${name.trim().replace(/\//gu, '%2F')}/latest`
@@ -125,7 +136,7 @@ async function readResponse(fetchImpl, timeoutMs, url, accept) {
  * @returns {(language?: string | null) => Promise<UpdateCheckView>} the check; it
  *   never rejects.
  */
-export function createUpdateChecker(options = {}) {
+export function createUpdateChecker(options: UpdateCheckerOptions = {}): (language?: string | null) => Promise<UpdateCheckView> {
   const manifest = readManifest(options.manifestUrl)
   // `installedVersion`/`releaseNotesRepository` are the module's derivation
   // helpers (and the documented contract); use them here so the constructor
@@ -139,10 +150,8 @@ export function createUpdateChecker(options = {}) {
   const timeoutMs = options.timeoutMs ?? FETCH_TIMEOUT_MS
   const successTtlMs = options.successTtlMs ?? SUCCESS_TTL_MS
   const failureTtlMs = options.failureTtlMs ?? FAILURE_TTL_MS
-  /** @type {Map<'default' | 'en', { at: number, ttl: number, view: UpdateCheckView }>} */
-  const cached = new Map()
-  /** @type {Map<'default' | 'en', Promise<UpdateCheckView>>} */
-  const inflight = new Map()
+  const cached = new Map<'default' | 'en', { at: number; ttl: number; view: UpdateCheckView }>()
+  const inflight = new Map<'default' | 'en', Promise<UpdateCheckView>>()
 
   /**
    * Read one release's highlights, capped for the card.

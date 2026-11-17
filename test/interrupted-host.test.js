@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { INTERRUPTED_EVENTS_ROUTE, installInterruptedSessions } from '../src/features/interrupted-sessions/host.js'
+import { INTERRUPTED_EVENTS_ROUTE, installInterruptedSessions } from '../src/features/interrupted-sessions/host.ts'
 
 /**
  * Build a Host context for the interrupted-sessions feature.

@@ -14,8 +14,8 @@ import {
   SIDEBAR_WIDTH_READ_FAILED,
   createSidebarWidthStore,
   isSidebarWidth
-} from './store.js'
-import { harnessHome } from '../read-acks/host.js'
+} from './store.ts'
+import { harnessHome } from '../read-acks/host.ts'
 
 /** Route serving and storing the sidebar-width document. */
 export const SIDEBAR_WIDTH_ROUTE = '/api/power-suite.sidebar-width'
@@ -82,7 +82,10 @@ function validateSidebarWidthBody(body) {
  * @param {Record<string, any>} [options.store] - store override with `get`/`set`.
  * @returns {void}
  */
-export function installSidebarWidth(ctx, options = {}) {
+export function installSidebarWidth(
+  ctx: any,
+  options: { store?: ReturnType<typeof createSidebarWidthStore> } = {}
+) {
   const store = options.store ?? createSidebarWidthStore(harnessHome())
   ctx.effect(() => ctx.connection.fetch.register({
     path: SIDEBAR_WIDTH_ROUTE,

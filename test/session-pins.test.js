@@ -34,12 +34,12 @@ import {
   serializeSessionPins,
   sessionPinsPath,
   validatePinOps
-} from '../src/features/session-pins/store.js'
+} from '../src/features/session-pins/store.ts'
 import {
   SESSION_PINS_ROUTE,
   installSessionPins,
   validatePinApplyBody
-} from '../src/features/session-pins/host.js'
+} from '../src/features/session-pins/host.ts'
 
 /** The canonical empty document every parse failure degrades to. */
 const EMPTY_DOCUMENT = { version: SESSION_PINS_VERSION, rev: 0, pinned: [] }

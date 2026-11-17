@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { createDocumentStore } from '../src/host/document-store.js'
+import { createDocumentStore } from '../src/host/document-store.ts'
 
 const decodeEntries = (text) => (text.trim() === '' ? { entries: {} } : JSON.parse(text))
 const encodeEntries = (value) => `${JSON.stringify(value)}\n`

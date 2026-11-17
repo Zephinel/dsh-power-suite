@@ -6,7 +6,7 @@
  * what makes Up recall prompts from turns the browser has not paged in.
  */
 
-import { PROMPT_HISTORY_ROUTE, collectPromptHistory } from './history.js'
+import { PROMPT_HISTORY_ROUTE, collectPromptHistory } from './history.ts'
 
 /**
  * Answer with JSON and a no-store policy: the history grows with the log.

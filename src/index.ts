@@ -7,16 +7,16 @@
  * lifetime to this entry.
  */
 
-import { installInterruptedSessions } from './features/interrupted-sessions/host.js'
-import { installPromptHistory } from './features/prompt-history/host.js'
-import { installReadAcks } from './features/read-acks/host.js'
-import { installSessionPins } from './features/session-pins/host.js'
-import { installSessionActivity } from './features/session-activity/host.js'
-import { installSessionArtifacts } from './features/session-artifacts/host.js'
-import { installSettings } from './features/settings/host.js'
-import { installSidebarWidth } from './features/sidebar-width/host.js'
-import { installUpdateCheck } from './features/update-check/host.js'
-import { installWorkspacePresets } from './features/workspace-presets/host.js'
+import { installInterruptedSessions } from './features/interrupted-sessions/host.ts'
+import { installPromptHistory } from './features/prompt-history/host.ts'
+import { installReadAcks } from './features/read-acks/host.ts'
+import { installSessionPins } from './features/session-pins/host.ts'
+import { installSessionActivity } from './features/session-activity/host.ts'
+import { installSessionArtifacts } from './features/session-artifacts/host.ts'
+import { installSettings } from './features/settings/host.ts'
+import { installSidebarWidth } from './features/sidebar-width/host.ts'
+import { installUpdateCheck } from './features/update-check/host.ts'
+import { installWorkspacePresets } from './features/workspace-presets/host.ts'
 
 /** Stable Loader identity. */
 export const name = 'power-suite'

@@ -23,7 +23,7 @@ import {
   lastTurnStartTime,
   lastTurnState,
   subagentInterruptionAfter
-} from './turns.js'
+} from './turns.ts'
 
 /** Authenticated route that resumes an interrupted Session implicitly. */
 export const CONTINUE_ROUTE = '/api/power-suite.continue'
@@ -295,8 +295,15 @@ export function installInterruptedSessions(ctx) {
     return value
   }
 
+  /** One connected SSE tab. */
+  interface EventStreamClient {
+    readonly closed: boolean
+    send(type: string, payload: unknown): boolean
+    cleanup(): void
+  }
+
   /** Open SSE clients; one entry per connected browser/tab. */
-  const eventClients = new Set()
+  const eventClients = new Set<EventStreamClient>()
   const eventEncoder = new TextEncoder()
 
   ctx.effect(() => ctx.on('session/event', (session, event) => {
@@ -357,8 +364,7 @@ export function installInterruptedSessions(ctx) {
    * @returns {Response} streaming SSE response.
    */
   function openEventStream(request) {
-    /** @type {Record<string, any> | null} */
-    let client = null
+    let client: EventStreamClient | null = null
     const body = new ReadableStream({
       start(controller) {
         let closed = false

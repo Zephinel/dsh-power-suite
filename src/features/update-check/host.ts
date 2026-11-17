@@ -6,7 +6,7 @@
  * failed registry read is a `latest: null` answer, not an error surface.
  */
 
-import { createUpdateChecker } from './checker.js'
+import { createUpdateChecker } from './checker.ts'
 
 /** Same-origin exact route serving the cached update check. */
 export const UPDATE_ROUTE = '/api/power-suite.update'
