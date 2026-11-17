@@ -388,6 +388,8 @@ and no dated release heading is added until the release is cut.
 
 ### Changed
 
+- **Release gates now match the intelligent-ui repository: owner-approved notes and a package-level release check.** `node scripts/release-notes-approval.mjs` hashes the version plus `release-notes/<version>{,.en}.md` and verifies a `Release-Notes-Review: sha256=<hash>` line in the release commit body; `publish.yml` recomputes the hash from the tagged commit and refuses a missing, duplicated or mismatched approval, so an unapproved notes edit can no longer publish. `npm run check:release` (`scripts/release-check.mjs`) packs the artifact, installs it into a throwaway `$DSH_HOME`, and verifies every packed file's byte identity against the checkout and the installed copy, the mounted `power-suite` Loader row, the boot graph and served client bundle, then clean uninstall (requires `dsh` + `pnpm`; intentionally not in CI). Final gate: `npm run check` passed (24 modules, 22 test files, **364/364** tests, docs links 26 files, release-notes 0.1.0 6+6), pack **95 files**, `npm run check:release` **PASS** (95 files), and the approval round-trip is covered by `test/release-notes-approval.test.js`.
+
 - **Running & recent row-menu affordance** — the 48 px time column is now also
   the row-actions slot for **every top-level row**: at rest the row keeps its
   time, and hover/focus hides the time and shows the "…" trigger; the swap

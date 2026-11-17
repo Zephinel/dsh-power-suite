@@ -40,8 +40,13 @@ release cannot drift after publishing.
   shipped feature instead of a delta.
 - `## Details` is optional and is **not** read by the update prompt; it is for
   the GitHub Release body and future plugin-detail update records.
-- Review the notes in the same commit/PR as `package.json` and `CHANGELOG.md`;
-  pushing the `v<version>` tag after that review is the publish approval.
+- Review the notes in the same commit/PR as `package.json` and `CHANGELOG.md`.
+  After the owner approves the exact Highlights, run
+  `node scripts/release-notes-approval.mjs` and put the printed
+  `Release-Notes-Review: sha256=<hash>` line in the release commit body.
+  `publish.yml` recomputes the hash from the tagged tree and refuses a missing,
+  duplicated or mismatched approval; editing either notes file after approval
+  invalidates it, so the hash must be regenerated (and re-reviewed).
 - **Never edit a release-notes file after its tag is pushed.** The tag-pinned
   URL is what users see; fixing a typo means a new version, not a retag.
 - Older releases may omit the file; their card simply has no highlights and the

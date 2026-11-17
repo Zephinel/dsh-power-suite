@@ -14,8 +14,9 @@ rediscover it, and keeps the human approval gates explicit.
 Facts that shape the procedure:
 
 - **No build step.** `package.json` exports `src/index.js` and `src/client.js`
-  directly; there is no `lib/`, no typecheck, and no generated artifact. Gates
-  are syntax/manifest/Node tests plus the pack gate.
+  directly; there is no `lib/`, no typecheck, and no generated artifact. Local
+  gates are syntax/manifest/Node tests, the pack gate, the notes-approval check
+  and the package-level `npm run check:release`.
 - **No `docs/current-facts.json`** and no packed-byte fact remeasurement. Do not
   import the intelligent-ui build/current-facts steps.
 - The in-app update prompt reads `release-notes/<version>.md` (and `.en.md`) from
@@ -30,7 +31,9 @@ Facts that shape the procedure:
   push, or publish.
 - **Preparation and publishing are separate gates.** If the user says "prepare
   the release" or "把发布准备好", do step 1 below but stop before the tag and
-  show the release-notes text for review.
+  show the release-notes text for review. A version approval does not approve
+  the Highlights wording: the notes review in step 1 is its own gate unless the
+  owner explicitly waives it ("要点不用 review").
 - **Tagging/publishing requires an explicit approval for the exact version**
   ("发布吧", "publish 0.1.0", "tag it"). Record the approved version in the
   commit and tag.
@@ -38,8 +41,9 @@ Facts that shape the procedure:
   workflow without that approval. Do not retag or republish an already-published
   version.
 - This skill does not override product decisions, code review, or the separate
-  docs-sync work a feature round may need; it owns only the release branch of
-  work.
+  docs-sync work a feature round may need
+  (`.agents/skills/sync-power-suite-docs/SKILL.md`); it owns only the release
+  branch of work.
 
 ## Preconditions
 
@@ -64,6 +68,18 @@ Facts that shape the procedure:
    ```
    A registry 404 is expected before the first publish; `latest` must otherwise
    point at a stable version.
+6. `dsh` and `pnpm` are on PATH for the local package-level gate
+   (`npm run check:release`); it packs, installs into a throwaway `$DSH_HOME`,
+   boots an isolated Web instance and uninstalls without touching this profile.
+7. **First publish only — bootstrap the npm package.** Trusted Publishing cannot
+   be configured until the package exists on npm, so before the first tag:
+   create the GitHub remote and push `main` (the workflow needs it), publish one
+   prerelease by hand without claiming `latest`
+   (`npm version <version>-rc.0 --no-git-tag-version && npm publish --access
+   public --tag next && git checkout -- package.json package-lock.json`), then
+   run the one-time `npm trust github …` setup below. `npm trust` needs npm
+   >= 11.15.0, write access to the package and account-level 2FA, and refuses
+   until the package exists. The tagged flow publishes the real version.
 
 ## 1. Prepare the release commit (no tag yet)
 
@@ -105,24 +121,44 @@ Facts that shape the procedure:
    - `docs/verification.md` with the release evidence record (see step 5).
    There is no build step and no `docs/current-facts.json` in this repository, so
    there is no packed-fact remeasurement to run.
-6. Show the release-notes Highlights to the user and wait for approval. Stop
-   before section 2 (tag).
+6. **Notes review gate (never skipped implicitly).** Show the complete
+   `release-notes/<version>.md` Highlights (plus `.en.md` when present) to the
+   owner and wait for an explicit approve-or-changes answer before section 2 —
+   even when the owner's message already named the version ("发布 0.1.0"). These
+   bullets render verbatim in the update prompt and the tag pins them, so a
+   wording fix after the tag is impossible. After approval run
+   `node scripts/release-notes-approval.mjs`: it reprints the reviewed bullets
+   and a `Release-Notes-Review: sha256=<hash>` line. Put that line in the
+   release commit body (the commit that gets tagged): the hash covers the
+   version plus both notes files, so any later notes edit invalidates the
+   approval and `publish.yml` refuses to publish. Only an explicit
+   "要点没问题 / skip the review" waives this gate.
 
-## 2. Gates before tagging
+## 2. Commit the prepared tree, then run the gates
 
-Run all of these from the prepared commit:
+Create the release commit first, with the `Release-Notes-Review: sha256=<hash>`
+line in its body (that commit is the one that gets tagged), then run all of
+these from it:
 
 ```bash
 npm run check                 # syntax + manifest + docs links + Node tests + release notes
 npm run check:docs-links      # the docs-only link gate, recorded explicitly
 npm run check:release-notes   # Highlights in default + optional English file
+node scripts/release-notes-approval.mjs --verify  # the release commit carries the approved notes hash
 node scripts/check-publish-manifest.mjs  # after removing "private": true
 npm run pack:check            # npm pack --dry-run --json; inspect the file list
+npm run check:release         # package-level install/boot/byte-identity/uninstall (local, needs dsh + pnpm)
 git diff --check
 ```
 
 - `npm run check` already includes `pack:check`; run both so the release log
   records the packed manifest explicitly.
+- `npm run check:release` is intentionally not in CI (its Linux runner behaviour
+  is unverified); run it locally before the tag. It never reads or writes this
+  profile or the running service.
+- `node scripts/release-notes-approval.mjs --verify` reads HEAD, so run it after
+  the release commit exists; it fails when the body has no approval line, has it
+  twice, or when the notes changed after approval.
 - **Browser e2e stays local.** `test/browser/annotation.e2e.mjs`,
   `test/browser/sidebar.e2e.mjs` and `test/browser/update-prompt.e2e.mjs` drive a
   real running DSH Web GUI with a real Chrome, so they are not in CI. Run the
@@ -133,9 +169,9 @@ git diff --check
   node test/browser/sidebar.e2e.mjs
   node test/browser/update-prompt.e2e.mjs
   ```
-- Commit the prepared tree, push `main`, and wait for CI (`verify`) to be green
-  before tagging. A push-triggered `verify` run is not the publish gate; the tag
-  reruns its own checks.
+- Push `main` and wait for CI (`verify`) to be green before tagging. A
+  push-triggered `verify` run is not the publish gate; the tag reruns its own
+  checks.
 
 ## 3. Tag and publish
 
@@ -152,10 +188,18 @@ Rules:
 - The tag must match `package.json`; `publish.yml` rejects a mismatch.
 - Do not use `--follow-tags` from an unrelated commit: push the tag explicitly
   so the workflow runs exactly once for this version.
+- The tagged commit must carry exactly one
+  `Release-Notes-Review: sha256=<hash>` line matching the committed notes;
+  `publish.yml` recomputes the hash and refuses a missing, duplicated or
+  mismatched approval. Editing the notes after the approval line is generated
+  invalidates it — regenerate (and re-review) before tagging.
 - The workflow reruns `npm run check`, `pack:check`, the CHANGELOG section
-  check and `check:release-notes`, then publishes with OIDC + provenance. There
-  is **no `NODE_AUTH_TOKEN`**; never add or print one.
-- One-time npm setup (package owner, needs account 2FA) — either the CLI:
+  check, `check:release-notes` and the notes-approval verification, then
+  publishes with OIDC + provenance. There is **no `NODE_AUTH_TOKEN`**; never add
+  or print one.
+- One-time npm setup (package owner, needs npm >= 11.15.0 and account 2FA;
+  first publish: run the bootstrap in Preconditions first, because `npm trust`
+  refuses until the package exists) — either the CLI:
   ```bash
   npm login
   npm trust github @zephinel/dsh-power-suite --file publish.yml \
@@ -188,6 +232,8 @@ gh run watch <run-id> --exit-status --interval 10
   npm view @zephinel/dsh-power-suite version dist-tags --json --prefer-online
   curl -sS "https://registry.npmjs.org/@zephinel/dsh-power-suite/<version>"   # check dist.attestations.provenance
   ```
+  A temporary install + `npm audit signatures` is optional but useful for
+  provenance.
 
 ## 5. Post-publish
 
@@ -207,7 +253,9 @@ gh run watch <run-id> --exit-status --interval 10
    `## [<version>] - <UTC date>` (the approved post-publish CHANGELOG move) and
    record the release result in `docs/verification.md` (workflow run ID, npm
    `latest`, provenance, GitHub Release URL, notes URL check) in the same
-   docs-only follow-up. **Do not bump the version.**
+   docs-only follow-up. Run `.agents/skills/sync-power-suite-docs/SKILL.md` in
+   delta mode for the README/CHANGELOG/verification updates in that follow-up.
+   **Do not bump the version.**
 4. If the release was prompted by an issue, comment with the fixed version and
    evidence, then close it if the reporter's scenario is resolved.
 5. The update prompt only starts appearing for users after the **next** release:
@@ -218,6 +266,10 @@ gh run watch <run-id> --exit-status --interval 10
 
 - Don't tag or publish while release-notes are still draft or without the
   exact-version approval.
+- Don't treat an exact-version approval as sign-off on the Highlights: the notes
+  review is a separate gate unless the owner explicitly waives it.
+- Don't tag a release commit without the `Release-Notes-Review: sha256=<hash>`
+  line, and don't edit the notes after approval — `publish.yml` refuses either.
 - Don't `npm publish` locally; Trusted Publishing is the only path.
 - Don't amend, delete, or retag an already-published tag.
 - Don't rewrite released CHANGELOG sections; add a new Unreleased entry for a

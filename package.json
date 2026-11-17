@@ -56,6 +56,7 @@
     "check": "node scripts/check.mjs && npm run pack:check",
     "test": "node --test test/*.test.js",
     "pack:check": "npm pack --dry-run --json",
+    "check:release": "node scripts/release-check.mjs",
     "check:release-notes": "node scripts/check-release-notes.mjs",
     "check:docs-links": "node scripts/check-docs-links.mjs",
     "check:publish-manifest": "node scripts/check-publish-manifest.mjs",

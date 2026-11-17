@@ -11,6 +11,7 @@ Run from the repository root:
 npm run check
 npm test
 npm run pack:check
+npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 ```
 
 `npm run check` performs:
@@ -20,9 +21,26 @@ npm run pack:check
   the DSH bundle patch points at a real file;
 - the pure-logic test suite (`node --test test/*.test.js`).
 
-Baseline evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round — the
-current checkout's counts after the 2026-11-15 update-notice round are recorded
-in the implementation-round section below):
+### Current gates (2026-11-17, Node 24.22.3)
+
+- `npm test`: **364 tests, 364 passed, 0 failed**, 22 test files — Host stores/routes
+  plus the browser-side derivations and the new release-notes approval round-trip.
+- `npm run check`: passed (`24 modules, 22 test files`); it runs the syntax checks,
+  package-manifest validation, local docs links, the Node suite and the
+  release-notes gate, then `pack:check`.
+- `npm run pack:check`: **95 files**; inspect the file list rather than the byte totals
+  (they shift with any packed edit and vary by platform/npm version).
+- `npm run check:release`: **PASS** — 95 packaged files installed into a throwaway
+  `$DSH_HOME`, byte-identical to the tarball and the checkout, the mounted
+  `power-suite` Loader row, the boot graph and served client bundle, then clean
+  uninstall (requires `dsh` + `pnpm`; intentionally not in CI).
+- `node scripts/release-notes-approval.mjs --verify`: the tagged commit's
+  `Release-Notes-Review: sha256=<hash>` line is required before publishing
+  (covered by `test/release-notes-approval.test.js`).
+
+### Historical baseline evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round — the
+counts below were current when that round closed and are kept as history, not as
+current state):
 
 - `npm test`: **229 tests, 229 passed, 0 failed, 0 skipped** after the 0.3.0
   Project-view removal (the 24 project-view tests were deleted with the page),

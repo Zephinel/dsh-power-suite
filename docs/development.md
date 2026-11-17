@@ -31,6 +31,7 @@ npm test                    # node --test test/*.test.js
 npm run check               # syntax + manifest + tests + release-notes gate, then pack:check
 npm run pack:check          # npm pack --dry-run --json; inspect the published file list
 npm run check:release-notes # release-notes Highlights for the current package version
+npm run check:release       # pack → throwaway DSH_HOME install → isolated boot → byte identity → uninstall (needs dsh + pnpm; not in CI)
 ```
 
 `npm run check` is the required gate before committing a functional change. CI
@@ -121,24 +122,78 @@ lives in the release skill
 ([`.agents/skills/release-power-suite/SKILL.md`](../.agents/skills/release-power-suite/SKILL.md)).
 The parts that touch this document:
 
+**One-time npm setup.** Publishing uses Trusted Publishing (OIDC + provenance),
+so no npm token is stored in the repository or CI. npm can trust a package only
+once it exists on the registry, so the first release bootstraps it:
+
+1. Push `main` to the GitHub repository named in `package.json`
+   (`origin`) — the publish workflow only runs there; create the repository
+   first if it does not exist.
+2. Publish one prerelease by hand to create the package without claiming
+   `latest`:
+
+   ```bash
+   npm login                              # owner account, 2FA enabled
+   npm version 0.1.0-rc.0 --no-git-tag-version
+   npm publish --access public --tag next
+   git checkout -- package.json package-lock.json
+   ```
+
+   Publishing `0.1.0` by hand also creates the package, but then the first tag
+   cannot be the first publish; the tagged flow takes over from the next version.
+3. Configure the trusted publisher — `npm trust` needs npm >= 11.15.0, write
+   access to the package, and account-level 2FA, and refuses until the package
+   exists:
+
+   ```bash
+   npm trust github @zephinel/dsh-power-suite --file publish.yml \
+     --repo Zephinel/dsh-power-suite --allow-publish --yes
+   ```
+
+   or npmjs.com → the package → Settings → Trusted Publishing → GitHub Actions
+   (repository `Zephinel/dsh-power-suite`, workflow `publish.yml`).
+4. Optionally remove the bootstrap prerelease's dist-tag:
+   `npm dist-tag rm @zephinel/dsh-power-suite next`.
+
+**A release:**
+
 1. **Prepare (no tag yet).** Commit `release-notes/<version>.md` (and the
    optional `.en.md`) with a `## Highlights` section of 2–6 reviewed,
-   user-facing bullets. Keep the release entries in `CHANGELOG.md` under
-   `## [Unreleased]` for now — the publish gate accepts the version named there.
-   Remove `"private": true` during preparation and run
+   user-facing bullets. Review the exact Highlights with the owner, then run
+   `node scripts/release-notes-approval.mjs` and put the printed
+   `Release-Notes-Review: sha256=<hash>` line in the release commit body — the
+   publish workflow recomputes the hash from the tagged tree and refuses a
+   missing, duplicated or mismatched approval. Keep the release entries in
+   `CHANGELOG.md` under `## [Unreleased]` for now — the publish gate accepts the
+   version named there. Remove `"private": true` during preparation and run
    `node scripts/check-publish-manifest.mjs`. The in-app update notice reads the
    notes from the **tag-pinned** raw URL, so they must be committed before the
    tag.
 2. **Gates.** `npm run check` (syntax, manifest, docs links, Node tests,
-   release-notes gate), `npm run check:docs-links`, `npm run pack:check`,
+   release-notes gate), `npm run check:docs-links`,
+   `node scripts/release-notes-approval.mjs --verify`, `npm run pack:check`,
+   `npm run check:release` (pack → throwaway `$DSH_HOME` → isolated boot →
+   byte identity → clean uninstall; needs `dsh` + `pnpm`, not in CI),
    `git diff --check`, a clean work tree, and the publish-manifest gate.
 3. **Tag and publish.** Push the annotated `v<version>` tag; the tag-triggered
-   `publish.yml` workflow re-runs the gates and publishes through npm Trusted
-   Publishing. Never run `npm publish` locally.
-4. **After publishing.** Move the released entries to a dated
-   `## [<version>] - <UTC date>` heading, create the GitHub Release from the
-   release notes, and record the workflow run, registry version, and provenance
-   in [verification.md](verification.md).
+   `publish.yml` workflow re-runs the gates (including the notes-approval
+   verification) and publishes through npm Trusted Publishing. Never run
+   `npm publish` locally outside the bootstrap step above.
+4. **Verify and finish.** After the workflow settles, verify the registry result:
+
+   ```bash
+   npm view @zephinel/dsh-power-suite version dist-tags --json --prefer-online
+   curl -sS "https://registry.npmjs.org/@zephinel/dsh-power-suite/<version>"   # dist.attestations.provenance
+   ```
+
+   Optionally verify the signature from a temporary install with
+   `npm audit signatures`. Then create the GitHub Release from the release
+   notes, verify the tag-pinned raw notes URLs, move the released entries to a
+   dated `## [<version>] - <UTC date>` heading, and record the workflow run,
+   registry version and provenance in [verification.md](verification.md).
+
+Tag and CHANGELOG/GitHub Release dates use the **UTC** release date; normal
+releases are stable semver with an annotated `v<version>` tag.
 
 ## Adding a feature
 
@@ -158,7 +213,10 @@ The parts that touch this document:
 5. **Docs and tests** — add `docs/<name>.md` and a pure-logic test under
    `test/`.
 6. **Verification** — run `npm run check` and update
-   [verification.md](verification.md) when behavior changes.
+   [verification.md](verification.md) when behavior changes. User-visible copy,
+   settings or route changes also need the README and the feature page synced
+   following
+   [.agents/skills/sync-power-suite-docs/SKILL.md](../.agents/skills/sync-power-suite-docs/SKILL.md).
 
 ## Git workflow
 
