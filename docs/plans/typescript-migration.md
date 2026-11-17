@@ -4,7 +4,8 @@ Status: **proposed (as-planned)** — 2026-11-18. Owner approval is required bef
 Phase 2. This document records the plan only; no runtime behavior, build step or
 release pipeline changes are made by it.
 
-Related: [Development](../development.md) · [Architecture](../architecture.md) ·
+Related: [Codebase design review](codebase-design-review.md) ·
+[Development](../development.md) · [Architecture](../architecture.md) ·
 [Verification](../verification.md) · [Release skill](../../.agents/skills/release-power-suite/SKILL.md)
 
 ## 1. Summary
@@ -78,7 +79,25 @@ Non-goals:
   unrelated formatting churn.
 - Rewriting git history or the released `0.1.0` artifacts.
 
-## 5. Target architecture (if all phases complete)
+## 5. Design constraints
+
+[The codebase design review](codebase-design-review.md) applies the deep-module
+lens to today's tree and adds three constraints to this plan:
+
+1. **Do not type the duplicated mechanisms first.** Six stores re-implement the
+   same durable-document contract; extract it behind one deep module (small
+   interface: read / update / flush / dispose; per-document adapters keep the
+   policy) in Phase 2 before converting the stores to TypeScript.
+2. **Give the cross-half contract an owner.** Fourteen route paths and the
+   settings enums are declared twice (Host constants and client literals). Phase
+   1 adds a contract guard for the duplication; the shared protocol module lands
+   once the build lets both halves import it.
+3. **The browser half needs an interface, not a test global.** The vm harness and
+   `__POWER_SUITE_TEST_HOOKS__` are a test seam; Phase 3 splits features into
+   modules with a `deps` port, imports their pure models directly in Node tests,
+   and keeps the browser suites as the UI-seam tests.
+
+## 6. Target architecture (if all phases complete)
 
 - `tsconfig.json` with `strict` for Host and a documented relaxed profile for the
   browser half; `npm run typecheck` is part of `npm run check` from Phase 1.
@@ -99,14 +118,14 @@ Non-goals:
 - Docs and skills state the new build/pack reality; the "no build step" claims are
   removed in the same phase that introduces the build.
 
-## 6. Phases
+## 7. Phases
 
 Each phase is a separate branch/PR, keeps `main` releasable, and ends with the
 full local gate plus a dry-run package check unless stated otherwise.
 
 ### Phase 0 — decisions and baseline (this document)
 
-Deliverables: owner decisions on the open questions in section 8; a recorded
+Deliverables: owner decisions on the open questions in section 9; a recorded
 baseline (`npm run check` counts, `check:release` result, bundle sizes, typecheck
 error count if Phase 1 is run as a spike).
 
@@ -116,7 +135,9 @@ Acceptance: this plan is approved or amended; no code changes beyond the plan.
 
 Add `tsconfig.json` with `allowJs`, `checkJs`, `noEmit`; add
 `"typecheck": "tsc --noEmit"` to `package.json`; wire it into `npm run check` and
-CI. Keep the build, packaging, exports and repository layout unchanged.
+CI. Keep the build, packaging, exports and repository layout unchanged. Also land
+the shared settings/protocol typedefs, the contract guard against duplicated
+route/enum literals, and the document-store interface design (no extraction yet).
 
 Order of tightening: Host stores and route handlers → shared schema typedefs →
 browser half pure helpers → browser DOM/slot code (may start with `// @ts-nocheck`
@@ -135,8 +156,10 @@ Acceptance:
 Introduce the build (recommended: esbuild for the browser classic script and
 `tsc --noEmit` for types; alternative: `tsc` emit for both), switch `exports` and
 `files` to built entry points, add `prepare` so `npm pack` builds, and add the
-build to CI, `publish.yml` and `check:release`. Convert the 22 Host modules to
-`.ts` with typed store documents and route payloads.
+build to CI, `publish.yml` and `check:release`. Extract the shared document-store
+module in plain JavaScript first and prove behavior parity through its interface,
+then convert the 22 Host modules to `.ts` with typed store documents and route
+payloads.
 
 Acceptance:
 
@@ -150,8 +173,11 @@ Acceptance:
 ### Phase 3 — browser half
 
 Decide between (a) splitting `src/client.js` by `//#region feature:` into modules
-and bundling one classic script, or (b) keeping one file and annotating it. Then
-convert incrementally, keeping the runtime guards for DOM/shell behavior.
+and bundling one classic script, or (b) keeping one file and annotating it. Under
+(a), give each feature an `install(ctx, deps)` plus pure model functions, import
+the models directly in Node tests, and delete the vm/global test hooks as each
+feature lands. Then convert incrementally, keeping the runtime guards for
+DOM/shell behavior.
 
 Acceptance:
 
@@ -173,7 +199,7 @@ Acceptance: all docs claim the build/pack reality; `npm run check`,
 `npm run check:release` and the publish workflow pass; the release notes describe
 the developer-facing change without user-facing behavior claims.
 
-## 7. Risks and mitigations
+## 8. Risks and mitigations
 
 | Risk | Mitigation |
 | --- | --- |
@@ -185,7 +211,7 @@ the developer-facing change without user-facing behavior claims.
 | Large review surface / history churn | One phase per PR, no unrelated formatting, file moves separate from type changes |
 | Owner/agent workflow slows down | Document the build step in `docs/development.md` before Phase 2 lands; make `npm run check` print the typecheck step clearly |
 
-## 8. Open decisions (owner)
+## 9. Open decisions (owner)
 
 1. Approve Phase 1 (no-build JSDoc type checking) as the first step?
 2. Compiler/bundler: esbuild for the browser bundle + `tsc --noEmit`, or `tsc`
@@ -201,7 +227,7 @@ the developer-facing change without user-facing behavior claims.
 6. Keep browser e2e local-only (current design), or add a self-hosted runner later?
 7. Version target: `0.2.0` for the first TypeScript release, or a longer runway?
 
-## 9. Estimated effort
+## 10. Estimated effort
 
 - Phase 1: small (one focused session; most of it is triaging the first
   `checkJs` error baseline).
