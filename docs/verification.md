@@ -2966,20 +2966,28 @@ and trailing/snapping during dock or right-sidebar drags.
   no-native-frame fallback column is gone (the rail is absent with the native
   rail, like the shell).
 
-### Evidence (isolated demo instance with a six-turn Session)
+### Evidence (isolated demo instance with a three-turn Session; code `d20af1a`)
 
-- Rail DOM parent is `eGxaPq_frame`; computed position `absolute`; at 1728 px:
-  native frame `top 393 / bottom 455 / right 1709`, rail `top 465 / right 1709`
-  (`top: 100% + 10`, same column).
+- Rail DOM parent is `eGxaPq_frame`; computed `position: absolute`, `overflow:
+  hidden`, `width: 100%` (28 px), `aria-label="Prompt history"`; at 1728 px:
+  native frame `top 408 / bottom 440 / right 1709`, rail `top 450 / right 1709`
+  (`top: 100% + 10`, same column; the rail height is 64 px for three prompts).
 - Rapid width steps at 40 ms with a held pointer (1728 → 1700 → … → 1000 → 1400
   → 1728): at every step the rail's `right` equalled the frame's `right`
-  (1709/1681/1631/…/1281), with no intermediate frame; at 1200/1100/1000 both
-  the frame and rail had zero boxes (native container query hiding both).
-- Conversation scroll 0 → 600 → 1200 → 1800 → 2364: rail stayed
-  `top 465 / right 1709`.
-- Hover preview card: `top 464 / right 1671 / 300×82`, fully in viewport;
-  search card: `top 565 / right 1709 / 300×61`.
-- `node --check src/client.js` OK; `npm test` 360/360; docs links 23.
+  (1709/1681/1581/…/1281), with no intermediate frame; at 1200/1100/1000 both
+  the frame and rail had zero boxes and were hidden by the native container
+  query.
+- Conversation scrolling: the rail is a native-frame child and stays on the
+  frame column for the entire scroll (no per-scroll measurement exists).
+- Hover preview card: `top 449 / right 1671`, fully in viewport; search card:
+  `top 520 / right 1709`, fully in viewport; clicking a mark copied the prompt
+  into the composer.
+- The native TurnNavigator returns null for fewer than two turn items, so a
+  one-turn Session keeps the keyboard recall but has no rail (documented in
+  README/prompt-history/limitations); the rail inherits the native narrow
+  hiding.
+- `node --check src/client.js` OK; targeted tests 3/3; `npm test` 360/360; docs
+  links 23.
 
 ### Limits
 
