@@ -233,16 +233,17 @@
   aborts. The card's only intentional difference from the native Session menu is
   the filtered Pin/Unpin entry.
 - **The pending-interaction flag is preview-only.** A waiting Session (question,
-  plan review, or approval) shows one amber `flag-fill` before its title in the
-  Running & recent card and in the native Workspaces row; it never answers
+  plan review, or approval) shows one amber `flag-fill` in its row (the card's
+  leading glyph cell is replaced; the native Workspaces row shows it in the
+  leading slot before the title); it never answers
   anything, so answering still happens in that Session's native composer card
   after clicking the row. Current, idle, archived, blank and subagent Sessions
   get no flag, a multi-question batch still produces exactly one flag, and
   collapsing the sidebar to rail mode hides it with the rows. The flag
-  position is fixed and re-measured, but it cannot be dismissed on its own
+  cannot be dismissed on its own
   (answering/settling, opening the Session, or archiving it removes it), and
   its list is limited to Sessions that are in the Session catalog — a waiting
-  Session the catalog no longer lists gets no notice.
+  Session the catalog no longer lists gets no flag.
 - **The card pin is shared per `$DSH_HOME`, not per profile.** The Host document
   `$DSH_HOME/dsh-power-suite/session-pins.json` is served by the suite's own
   `GET|POST /api/power-suite.session-pins` route, so every browser and profile

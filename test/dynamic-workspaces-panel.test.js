@@ -1,6 +1,6 @@
 /**
  * Unit tests for the Running & recent card's native-pin ordering and the
- * pending-interaction flag derivation (`pending-notice-align` design).
+ * pending-interaction flag derivation (`pending-notice-align` inline-flag design).
  *
  * `src/client.js` is a browser classic script materialized in a `node:vm`
  * sandbox by `test/helpers/client-module.mjs`; the helpers are read from the
@@ -48,7 +48,7 @@ function summary(id, overrides = {}) {
   }
 }
 
-test('the panel seam exposes the notice helpers', () => {
+test('the panel seam exposes the pending-flag helper', () => {
   assert.notEqual(panel, undefined, 'hooks.dynamicWorkspacesPanel is missing')
   for (const name of SEAM_KEYS) {
     assert.equal(typeof panel[name], 'function', `${name} is exported through the seam`)
@@ -94,4 +94,20 @@ test('waiting Session ids cover every pending kind and skip non-actionable Sessi
   const many = derive({ list: { byId }, statuses, currentSessionId: null, archived: new Set(), activity: {} })
   assert.deepEqual(plain(many), ['session-0', 'session-1', 'session-2', 'session-3', 'session-4'],
     'every waiting Session gets a flag, newest first — no 3-card cap')
+})
+
+test('approval/plan-review kinds and the status-id fallback keep their flag', () => {
+  const derive = helper('dwPendingSessionIds')
+  const run = derive({
+    list: { byId: { approval: summary('approval', { updatedAt: NOW }), plan: summary('plan', { updatedAt: NOW - 1_000 }) } },
+    statuses: new Map([
+      ['approval', { pendingInteraction: { kind: 'approval', reason: 'Allow rm?' } }],
+      ['plan', { pendingInteraction: { kind: 'plan-review', sessionId: 'plan', questions: [] } }]
+    ]),
+    currentSessionId: null,
+    archived: new Set(),
+    activity: {}
+  })
+  assert.deepEqual(plain(run), ['approval', 'plan'],
+    'an approval without its own sessionId still uses the status key, and no kind is dropped')
 })

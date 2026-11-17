@@ -460,6 +460,11 @@ card remains the only place an answer is submitted.
   Current, idle (`running: false`), archived, blank, subagent-only and missing
   Sessions never get a flag, and every waiting Session is flagged (no cap, no
   "+N" line).
+- **Precedence**: a row shows the waiting flag instead of the ordinary state
+  glyph. If that Session is also in the interrupted state, the flag takes the
+  single leading cell for as long as the interaction waits; the interrupted
+  hover Continue CTA is a separate slot and still appears, and the amber warning
+  glyph returns once the flag clears.
 - **No extra state or interaction**: the flag adds no Host route, store,
   popup, hover card or click handler; it is removed with the panel/unmount and
   hidden when the sidebar is in rail mode because the rows are not rendered.
@@ -1206,8 +1211,9 @@ The native **View options** menu picks how Sessions are grouped:
   context-menu service (`contextMenus.open`) the trigger is hidden — there is no
   custom fallback popup.
 - **The pending-interaction flag is preview-only.** A waiting Session (question,
-  plan review, or approval) shows one amber `flag-fill` before its title in the
-  Running & recent card and in the native Workspaces row; it never answers
+  plan review, or approval) shows one amber `flag-fill` in its row (the card's
+  leading glyph cell is replaced; the native Workspaces row shows it in the
+  leading slot before the title); it never answers
   anything, so answering still happens in that Session's native composer card
   after clicking the row. Current, idle, archived, blank and subagent Sessions
   get no flag, a multi-question batch still produces exactly one flag, and
@@ -1215,7 +1221,7 @@ The native **View options** menu picks how Sessions are grouped:
   decorative and cannot be dismissed on its own
   (answering/settling, opening the Session, or archiving it removes it), and
   its list is limited to Sessions that are in the Session catalog — a waiting
-  Session the catalog no longer lists gets no notice.
+  Session the catalog no longer lists gets no flag.
 - **The card pin is shared per `$DSH_HOME`, not per profile.** The Host
   document (`$DSH_HOME/dsh-power-suite/session-pins.json`) is served by the
   suite's own `GET|POST /api/power-suite.session-pins` route, so every browser
@@ -1299,10 +1305,10 @@ persistence across reloads including the pre-hydration bucket cache and live
 drift correction; annotation-mode pinning; and zero page errors.
 
 The card-owned pin store (`test/session-pins.test.js`), the pin ordering
-(`test/dynamic-workspaces-pin.test.js`), the Running & recent panel/notice
-helpers (`test/dynamic-workspaces-panel.test.js`), and the row-menu delegation
+(`test/dynamic-workspaces-pin.test.js`), the pending-flag derivation
+helper (`test/dynamic-workspaces-panel.test.js`), and the row-menu delegation
 (`test/row-menu.test.js`) cover the pure state; the row "…" menu with Pin absent
-and the notice component were additionally probed live (recorded in
+and the inline flag were additionally probed live (recorded in
 [verification.md](verification.md)). The committed harness keeps its `--pin`
 acceptance mode (card-owned pin, Host route/cache probes); its `--row-menu` mode
 (added with the native-popup alignment) opens both the native Session row menu
@@ -1415,9 +1421,9 @@ Manual checks on the running DSH Web GUI:
     pinned rows keep the filled marker and violet tint, the row leads the card
     newest-activity-first and never retires with time; unpin returns it to the
     ordinary queue. If another Session is waiting on a question, plan review,
-    or approval, a notice card appears beside the card (up to three, then
-    "+N more"); clicking one opens that Session, and answering/approving it,
-    opening it, or archiving it removes the notice automatically. The stack
-    never answers anything itself.
+    or approval, its row shows an amber `flag-fill` (card leading slot / native
+    row before the title); clicking the row opens that Session, and
+    answering/approving it, opening it, or archiving it removes the flag
+    automatically. The flag never answers anything itself.
 
 See [verification.md](verification.md) for the recorded evidence.

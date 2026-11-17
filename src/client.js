@@ -5298,7 +5298,8 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-child-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
 .psd-pending-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary);pointer-events:none}
-.dps-row-pending-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;margin-inline-end:6px;color:var(--dsw-alias-state-warn-primary);pointer-events:none}
+.dps-row-pending-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary);pointer-events:none}
+.dps-row-pending-slot > :not(.dps-row-pending-flag){display:none!important}
 .psd-hovercard{position:fixed;z-index:1000;box-sizing:border-box;width:${DW_HOVERCARD_WIDTH}px;max-height:min(${DW_HOVERCARD_MAX_HEIGHT}px,calc(100vh - 16px));overflow-x:hidden;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-hovercard-bg,#2c2c2e);color:var(--dsw-static-neutral-bluish-00,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;font-size:12px;line-height:16px;pointer-events:none}
 .psd-hovercard::-webkit-scrollbar{display:none;width:0;height:0}
 .psd-hovercard-content{display:flex;flex-direction:column;gap:8px}
@@ -8472,38 +8473,80 @@ function dwClearNativeAtmospheres() {
           flag.appendChild(svg)
           return flag
         }
-        const titleOf = (row) => {
+        const directChild = (row, pattern) => {
           for (const child of row.children) {
-            if (typeof child.className === 'string' && /(?:^|_)title(?:_|$)/u.test(child.className)) return child
+            if (typeof child.className === 'string' && pattern.test(child.className)) return child
+          }
+          return null
+        }
+        const slotOf = (row) => directChild(row, /(?:^|_)slot(?:_|$)/u)
+        const titleOf = (row) => directChild(row, /(?:^|_)title(?:_|$)/u)
+        const flagOf = (row) => {
+          const slot = slotOf(row)
+          if (slot !== null) {
+            for (const child of slot.children) {
+              if (child instanceof HTMLElement && child.classList.contains('dps-row-pending-flag')) return child
+            }
+          }
+          for (const child of row.children) {
+            if (child instanceof HTMLElement && child.classList.contains('dps-row-pending-flag')) return child
           }
           return null
         }
         const apply = () => {
-          for (const row of document.querySelectorAll('[data-row-key^="session:"]')) {
+          const root = document.querySelector('[class*="_sidebarCol"]')
+          if (root === null) return
+          for (const row of root.querySelectorAll('[data-row-key^="session:"]')) {
             const key = row.getAttribute('data-row-key') ?? ''
             const sessionId = key.slice('session:'.length)
             const wanted = pending.has(sessionId)
-            const existing = row.querySelector(':scope > .dps-row-pending-flag')
+            const flag = flagOf(row)
+            const slot = slotOf(row)
             if (wanted) {
               row.setAttribute('data-power-suite-pending', '')
-              if (existing === null) {
+              // Prefer the fixed 16 px leading slot: it reserves the space, so the
+              // title never shifts when the flag appears. Its native glyph is hidden
+              // while pending and restored when the flag goes away.
+              if (slot !== null) {
+                slot.classList.add('dps-row-pending-slot')
+                if (flag === null) slot.appendChild(makeFlag())
+              } else if (flag === null) {
                 const title = titleOf(row)
                 if (title !== null) row.insertBefore(makeFlag(), title)
               }
             } else {
               row.removeAttribute('data-power-suite-pending')
-              if (existing !== null) existing.remove()
+              if (flag !== null) flag.remove()
+              if (slot !== null) slot.classList.remove('dps-row-pending-slot')
             }
           }
         }
+        let observedRoot = null
+        let frame = 0
+        const observer = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
+          if (frame !== 0) return
+          frame = window.requestAnimationFrame(() => {
+            frame = 0
+            ensureObservedRoot()
+            apply()
+          })
+        })
+        const ensureObservedRoot = () => {
+          const root = document.querySelector('[class*="_sidebarCol"]')
+          if (observer === null || root === observedRoot) return
+          observer.disconnect()
+          observedRoot = root
+          if (root !== null) observer.observe(root, { childList: true, subtree: true })
+        }
+        ensureObservedRoot()
         apply()
-        const root = document.querySelector('[class*="_sidebarCol"]')
-        const observer = root === null || typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => apply())
-        if (observer !== null) observer.observe(root, { childList: true, subtree: true })
         return () => {
+          if (frame !== 0) window.cancelAnimationFrame(frame)
           if (observer !== null) observer.disconnect()
-          for (const flag of document.querySelectorAll('.dps-row-pending-flag')) flag.remove()
-          for (const row of document.querySelectorAll('[data-row-key^="session:"][data-power-suite-pending]')) row.removeAttribute('data-power-suite-pending')
+          const root = observedRoot ?? document
+          for (const flag of root.querySelectorAll('.dps-row-pending-flag')) flag.remove()
+          for (const slot of root.querySelectorAll('.dps-row-pending-slot')) slot.classList.remove('dps-row-pending-slot')
+          for (const row of root.querySelectorAll('[data-row-key^="session:"][data-power-suite-pending]')) row.removeAttribute('data-power-suite-pending')
         }
       }, [pendingNativeKey, t])
       // Pinned main Sessions lead the card and never retire with time; every other

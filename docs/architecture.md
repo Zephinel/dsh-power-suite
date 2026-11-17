@@ -472,22 +472,21 @@ filtered out** (the pin button owns pinning). The trigger is focused before
 opening so the shared popup restores focus to it, `data-menu-open` mirrors the
 shared popup's active target, and a DSH build without `contextMenus.open`
 renders no trigger.
-Pending-interaction notices are a client-only addition beside the card: the seat
-subscribes to `props.useSessionStatus` (the same
-`SessionStatus.pendingInteraction` the native composer cards use), derives up to
-three waiting Sessions other than the one open in the main view (kinds
-`question`, `plan-review`, `approval`; explicitly idle, blank, subagent,
-archived, and current Sessions filtered out), and renders a fixed 320 px stack
-inside the card's
-existing overlay-panel portal, with a "+N more" line beyond three. Placement
-prefers the card's right edge, flips to its left edge when it does not fit, and
-clamps to an 8 px viewport inset, re-measuring on resize, scroll, sidebar
-expansion, and card height changes. The stack registers no Host route and writes
-no store, its styles ride the feature's existing `<style>` block, and no nodes
-are inserted into the native sidebar tree for it. Each notice only opens its
-Session — the native composer card remains the answering surface — and a notice
-disappears on the next render once the Session becomes current, the interaction
-settles, or it is archived (one notice per Session, because
+Pending-interaction flags are a client-only addition: the seat subscribes to
+`props.useSessionStatus` (the same `SessionStatus.pendingInteraction` the native
+composer cards use), derives every waiting Session other than the one open in
+the main view (kinds `question`, `plan-review`, `approval`; explicitly idle,
+blank, subagent, archived, and current Sessions filtered out), and renders one
+amber Remix `flag-fill` per waiting row. In the Running & recent card the flag
+replaces the row's fixed leading-glyph cell (state dot / sparkle / robot hidden,
+title position unchanged); in the native Workspaces tree a small decoration
+puts the same flag inside the row's fixed leading slot (title position
+unchanged) and removes it when the Session settles/archives. The flag is
+decorative: it registers no Host route, writes no store, and adds no click
+handler — the row still opens its Session and the native composer card remains
+the answering surface. No nodes are inserted outside the existing rows, and the
+flag disappears on the next render once the Session becomes current, the
+interaction settles, or it is archived (one flag per Session, because
 `pendingInteraction` is one per Session).
 
 While UI-element
