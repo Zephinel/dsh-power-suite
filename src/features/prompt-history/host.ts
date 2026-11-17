@@ -14,7 +14,7 @@ import { PROMPT_HISTORY_ROUTE, collectPromptHistory } from './history.ts'
  * @param {unknown} payload - JSON body.
  * @returns {Response} the response.
  */
-function sendJson(status, payload) {
+function sendJson(status: any, payload: any) {
   return Response.json(payload, { status, headers: { 'cache-control': 'no-store' } })
 }
 
@@ -24,7 +24,7 @@ function sendJson(status, payload) {
  * @param {Request} request - authenticated request.
  * @returns {Promise<Response>} the prompt list or a typed failure.
  */
-async function handleList(ctx, request) {
+async function handleList(ctx: any, request: any) {
   const url = new URL(request.url)
   const sessionId = url.searchParams.get('sessionId')
   if (sessionId === null || sessionId.trim().length === 0) {
@@ -33,7 +33,7 @@ async function handleList(ctx, request) {
   let snapshot
   try {
     snapshot = await ctx.sessionQuery.readSession(sessionId)
-  } catch (error) {
+  } catch (error: any) {
     const code = error !== null && typeof error === 'object' ? error.code : undefined
     if (code === 'SESSION_QUERY_SESSION_NOT_FOUND') {
       return sendJson(404, { code: 'session-not-found', message: 'Session not found' })
@@ -51,11 +51,11 @@ async function handleList(ctx, request) {
  * @param {Record<string, any>} ctx - Host context.
  * @returns {void}
  */
-export function installPromptHistory(ctx) {
+export function installPromptHistory(ctx: any) {
   ctx.effect(() => ctx.connection.fetch.register({
     path: PROMPT_HISTORY_ROUTE,
     methods: ['GET'],
     requestBody: 'buffered',
-    fetch: (request) => handleList(ctx, request)
+    fetch: (request: any) => handleList(ctx, request)
   }), `power-suite: prompt-history GET ${PROMPT_HISTORY_ROUTE}`)
 }

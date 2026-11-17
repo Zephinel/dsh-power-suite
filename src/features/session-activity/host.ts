@@ -136,7 +136,7 @@ export function harnessHome() {
  * @param {unknown} payload - JSON body.
  * @returns {Response} the response.
  */
-function sendJson(status, payload) {
+function sendJson(status: any, payload: any) {
   return Response.json(payload, { status, headers: { 'cache-control': 'no-store' } })
 }
 
@@ -147,7 +147,7 @@ function sendJson(status, payload) {
  * @param {unknown} type - event type.
  * @returns {boolean} whether it must be ignored.
  */
-export function isSyntheticSeedEvent(type) {
+export function isSyntheticSeedEvent(type: any) {
   return typeof type === 'string' && SEED_EVENT_PATTERN.test(type)
 }
 
@@ -157,7 +157,7 @@ export function isSyntheticSeedEvent(type) {
  * @param {unknown} type - event type.
  * @returns {boolean} whether it advances the activity ledger.
  */
-export function isActivityBearingEvent(type) {
+export function isActivityBearingEvent(type: any) {
   return typeof type === 'string' && ACTIVITY_EVENT_TYPES.has(type) && !NON_ACTIVITY_EVENT_TYPES.has(type)
 }
 
@@ -167,7 +167,7 @@ export function isActivityBearingEvent(type) {
  * @param {Record<string, any>} event - committed Session event.
  * @returns {{ sessionId: string, time: number } | null} entry, or null when ignored.
  */
-export function activityFromEvent(session, event) {
+export function activityFromEvent(session: any, event: any) {
   if (session === null || typeof session !== 'object') return null
   const sessionId = session.id
   if (!isActivitySessionId(sessionId)) return null
@@ -187,7 +187,7 @@ export function activityFromEvent(session, event) {
  * @param {unknown} text - document contents.
  * @returns {number | null} cached activity approximation, or null.
  */
-export function readCachedDocumentActivity(text) {
+export function readCachedDocumentActivity(text: any) {
   if (typeof text !== 'string' || text.length === 0) return null
   let document
   try {
@@ -213,10 +213,10 @@ export function readCachedDocumentActivity(text) {
  * @param {string} dshHome - harness home directory.
  * @returns {(id: string) => Promise<number | null>} Session id → cached activity.
  */
-export function createProjectionCacheReader(dshHome) {
+export function createProjectionCacheReader(dshHome: any) {
   const directory = path.join(dshHome, ...PROJECTION_CACHE_PATH)
   const known = new Map()
-  return async function readCachedDocument(id) {
+  return async function readCachedDocument(id: any) {
     if (typeof id !== 'string' || id.length === 0 || !SESSION_ID_PATTERN.test(id)) return null
     const file = path.join(directory, `${id}.json`)
     let info
@@ -274,7 +274,7 @@ export async function seedActivityBaseline(
   const readCachedDocument = typeof options.readCachedDocument === 'function'
     ? options.readCachedDocument
     : createProjectionCacheReader(harnessHome())
-  const seeds = {}
+  const seeds: Record<string, number> = {}
   for (const record of Array.isArray(records) ? records : []) {
     const header = record !== null && typeof record === 'object' ? record.header : undefined
     if (header === null || typeof header !== 'object') continue
@@ -319,13 +319,17 @@ export function installSessionActivity(
   } = {}
 ) {
   const ledger = options.ledger ?? createActivityLedger(harnessHome())
-  const seedWaitMs = Number.isFinite(options.seedWaitMs) && options.seedWaitMs >= 0 ? options.seedWaitMs : SEED_BASELINE_WAIT_MS
-  const seedBackoffMs = Number.isFinite(options.seedBackoffMs) && options.seedBackoffMs >= 0 ? options.seedBackoffMs : SEED_TIMEOUT_BACKOFF_MS
+  const seedWaitMs = options.seedWaitMs !== undefined && Number.isFinite(options.seedWaitMs) && options.seedWaitMs >= 0
+    ? options.seedWaitMs
+    : SEED_BASELINE_WAIT_MS
+  const seedBackoffMs = options.seedBackoffMs !== undefined && Number.isFinite(options.seedBackoffMs) && options.seedBackoffMs >= 0
+    ? options.seedBackoffMs
+    : SEED_TIMEOUT_BACKOFF_MS
   const seedBaseline = typeof options.seedBaseline === 'function'
     ? options.seedBaseline
-    : (hostCtx, ledgerHandle) => seedActivityBaseline(hostCtx, ledgerHandle, { readCachedDocument: options.readCachedDocument })
-  let loadPromise = null
-  let seedPromise = null
+    : (hostCtx: any, ledgerHandle: any) => seedActivityBaseline(hostCtx, ledgerHandle, { readCachedDocument: options.readCachedDocument })
+  let loadPromise: Promise<any> | null = null
+  let seedPromise: Promise<any> | null = null
   let seedSettled = false
   let seedBackoffUntil = 0
   const ensureLoaded = () => {
@@ -363,7 +367,7 @@ export function installSessionActivity(
     if (Date.now() < seedBackoffUntil) return Promise.resolve()
     return new Promise((resolve) => {
       let settled = false
-      const finish = (timedOut) => {
+      const finish = (timedOut: any) => {
         if (settled) return
         settled = true
         clearTimeout(timer)
@@ -377,7 +381,7 @@ export function installSessionActivity(
   ctx.effect(() => {
     void ensureSeeded()
     const stop = typeof ctx.on === 'function'
-      ? ctx.on('session/event', (session, event) => {
+      ? ctx.on('session/event', (session: any, event: any) => {
         const entry = activityFromEvent(session, event)
         if (entry === null) return
         ledger.record({ [entry.sessionId]: entry.time })

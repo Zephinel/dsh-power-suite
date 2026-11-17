@@ -16,13 +16,13 @@ export const UPDATE_ROUTE = '/api/power-suite.update'
  * @param {Record<string, any>} ctx - Host context carrying `connection`.
  * @returns {void}
  */
-export function installUpdateCheck(ctx) {
+export function installUpdateCheck(ctx: any) {
   const check = createUpdateChecker()
   ctx.effect(() => ctx.connection.fetch.register({
     path: UPDATE_ROUTE,
     methods: ['GET'],
     requestBody: 'buffered',
-    fetch: async (request) => {
+    fetch: async (request: any) => {
       const language = new URL(request.url).searchParams.get('lang')
       return Response.json(await check(language), { headers: { 'cache-control': 'no-store' } })
     }

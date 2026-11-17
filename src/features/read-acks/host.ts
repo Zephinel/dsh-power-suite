@@ -36,7 +36,7 @@ export function harnessHome() {
  * @param {unknown} payload - JSON body.
  * @returns {Response} the response.
  */
-function sendJson(status, payload) {
+function sendJson(status: any, payload: any) {
   return Response.json(payload, { status, headers: { 'cache-control': 'no-store' } })
 }
 
@@ -45,7 +45,7 @@ function sendJson(status, payload) {
  * @param {unknown} value - decoded value.
  * @returns {value is Record<string, any>} whether it is a record.
  */
-function isRecord(value) {
+function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -54,10 +54,10 @@ function isRecord(value) {
  * @param {unknown} body - decoded request body.
  * @returns {{ ok: true, value: Record<string, number> } | { ok: false, message: string }} accepted entries or a failure.
  */
-export function validateReadAckBody(body) {
+export function validateReadAckBody(body: any) {
   if (!isRecord(body)) return { ok: false, message: 'request body must be one JSON object' }
   if (!isRecord(body.acked)) return { ok: false, message: '"acked" must be one JSON object' }
-  const acked = {}
+  const acked: Record<string, number> = {}
   for (const [id, baseline] of Object.entries(body.acked)) {
     if (!isSessionId(id)) return { ok: false, message: `invalid Session id "${String(id).slice(0, 40)}"` }
     if (!isAckBaseline(baseline)) return { ok: false, message: `invalid baseline for "${id}"` }
@@ -82,11 +82,11 @@ export function installReadAcks(
     path: READ_ACKS_ROUTE,
     methods: ['GET', 'POST'],
     requestBody: 'buffered',
-    fetch: async (request) => {
+    fetch: async (request: any) => {
       if (request.method === 'GET') {
         try {
           return sendJson(200, { acked: await store.get() })
-        } catch (error) {
+        } catch (error: any) {
           if (error !== null && typeof error === 'object' && error.code === READ_ACKS_READ_FAILED) {
             return sendJson(500, { code: 'store-read-failed', message: 'read acknowledgements could not be read' })
           }
@@ -119,7 +119,7 @@ export function installReadAcks(
       let acked
       try {
         acked = await store.record(verdict.value)
-      } catch (error) {
+      } catch (error: any) {
         // A read failure means the on-disk marks could not be merged safely; do
         // not overwrite them. The client treats both 5xx shapes as retryable.
         if (error !== null && typeof error === 'object' && error.code === READ_ACKS_READ_FAILED) {

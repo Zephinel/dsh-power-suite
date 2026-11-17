@@ -29,7 +29,7 @@ const MAX_BODY_BYTES = 1024
  * @param {unknown} payload - JSON body.
  * @returns {Response} the response.
  */
-function sendJson(status, payload) {
+function sendJson(status: any, payload: any) {
   return Response.json(payload, { status, headers: { 'cache-control': 'no-store' } })
 }
 
@@ -38,7 +38,7 @@ function sendJson(status, payload) {
  * @param {unknown} value - decoded value.
  * @returns {value is Record<string, any>} whether it is a record.
  */
-function isRecord(value) {
+function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -47,7 +47,7 @@ function isRecord(value) {
  * @param {unknown} error - thrown error.
  * @returns {boolean} whether it is a read failure.
  */
-function isReadFailure(error) {
+function isReadFailure(error: any) {
   return error !== null && typeof error === 'object' && 'code' in error && error.code === SIDEBAR_WIDTH_READ_FAILED
 }
 
@@ -60,7 +60,7 @@ function isReadFailure(error) {
  * @param {unknown} body - decoded request body.
  * @returns {{ ok: true, sidebarWidth: number } | { ok: false, message: string }} the accepted width or a failure.
  */
-function validateSidebarWidthBody(body) {
+function validateSidebarWidthBody(body: any) {
   if (!isRecord(body)) return { ok: false, message: 'request body must be one JSON object' }
   const fields = Object.keys(body)
   if (fields.length !== 1 || fields[0] !== 'sidebarWidth') {
@@ -91,11 +91,11 @@ export function installSidebarWidth(
     path: SIDEBAR_WIDTH_ROUTE,
     methods: ['GET', 'POST'],
     requestBody: 'buffered',
-    fetch: async (request) => {
+    fetch: async (request: any) => {
       if (request.method === 'GET') {
         try {
           return sendJson(200, await store.get())
-        } catch (error) {
+        } catch (error: any) {
           if (isReadFailure(error)) {
             return sendJson(500, { code: 'store-read-failed', message: 'sidebar width could not be read' })
           }
@@ -127,7 +127,7 @@ export function installSidebarWidth(
       }
       try {
         return sendJson(200, await store.set(verdict.sidebarWidth))
-      } catch (error) {
+      } catch (error: any) {
         if (isReadFailure(error)) {
           return sendJson(500, { code: 'store-read-failed', message: 'sidebar width could not be read' })
         }

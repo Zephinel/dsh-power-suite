@@ -42,7 +42,7 @@ export const READ_ACKS_READ_FAILED = 'READ_ACKS_READ_FAILED'
  * @param {unknown} error - thrown error.
  * @returns {boolean} whether it is ENOENT.
  */
-function isNotFound(error) {
+function isNotFound(error: any) {
   return error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
 }
 
@@ -51,7 +51,7 @@ function isNotFound(error) {
  * @param {unknown} value - decoded value.
  * @returns {value is Record<string, any>} whether it is a record.
  */
-function isRecord(value) {
+function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -79,7 +79,7 @@ export function isAckBaseline(value: unknown): value is number {
  * @returns {Record<string, number>} sanitized entries.
  */
 export function sanitizeAcked(value: unknown): Record<string, number> {
-  const acked = {}
+  const acked: Record<string, number> = {}
   if (!isRecord(value)) return acked
   for (const [id, baseline] of Object.entries(value)) {
     if (!isSessionId(id) || !isAckBaseline(baseline)) continue
@@ -97,7 +97,7 @@ export function capAcked(acked: Record<string, number>): Record<string, number> 
   const entries = Object.entries(acked)
   if (entries.length <= MAX_READ_ACKS) return acked
   entries.sort((left, right) => (right[1] - left[1]) || left[0].localeCompare(right[0]))
-  const capped = {}
+  const capped: Record<string, number> = {}
   for (const [id, baseline] of entries.slice(0, MAX_READ_ACKS)) capped[id] = baseline
   return capped
 }
@@ -191,7 +191,7 @@ export function createReadAckStore(dshHome: string) {
      * @param {Record<string, number>} entries - Session id → observed updatedAt.
      * @returns {Promise<Record<string, number>>} the document after the merge.
      */
-    async record(entries) {
+    async record(entries: any) {
       return store.update((current) => {
         const next = mergeAcked(current, entries)
         const changed = Object.keys(next).length !== Object.keys(current).length

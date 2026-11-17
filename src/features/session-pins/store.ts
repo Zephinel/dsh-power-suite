@@ -53,7 +53,7 @@ export const PIN_OP_VALUES = ['pin', 'unpin']
  * @param {unknown} error - thrown error.
  * @returns {boolean} whether it is ENOENT.
  */
-function isNotFound(error) {
+function isNotFound(error: any) {
   return error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
 }
 
@@ -62,7 +62,7 @@ function isNotFound(error) {
  * @param {unknown} value - decoded value.
  * @returns {value is Record<string, any>} whether it is a record.
  */
-function isRecord(value) {
+function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -71,7 +71,7 @@ function isRecord(value) {
  * @param {unknown} value - candidate Session id.
  * @returns {boolean} whether it is an accepted id.
  */
-export function isSessionId(value) {
+export function isSessionId(value: any) {
   return typeof value === 'string' && value.length > 0 && value.length <= MAX_SESSION_ID_LENGTH
 }
 
@@ -80,8 +80,8 @@ export function isSessionId(value) {
  * @param {unknown} value - candidate list.
  * @returns {string[]} sanitized pinned ids.
  */
-export function sanitizePinned(value) {
-  const pinned = []
+export function sanitizePinned(value: any) {
+  const pinned: string[] = []
   const seen = new Set()
   if (!Array.isArray(value)) return pinned
   for (const id of value) {
@@ -98,7 +98,7 @@ export function sanitizePinned(value) {
  * @param {unknown} value - candidate document.
  * @returns {{ version: number, rev: number, pinned: string[] }} canonical document.
  */
-export function normalizeSessionPins(value) {
+export function normalizeSessionPins(value: any) {
   const source = isRecord(value) ? value : {}
   const rev = typeof source.rev === 'number' && Number.isFinite(source.rev) && source.rev >= 0
     ? Math.floor(source.rev)
@@ -115,7 +115,7 @@ export function normalizeSessionPins(value) {
  * @param {unknown} value - decoded `ops` value.
  * @returns {{ ok: true, ops: Array<{ op: 'pin' | 'unpin', id: string }> } | { ok: false, message: string }} accepted operations or a failure.
  */
-export function validatePinOps(value) {
+export function validatePinOps(value: any) {
   if (!Array.isArray(value)) return { ok: false, message: '"ops" must be an array' }
   if (value.length === 0) return { ok: false, message: '"ops" must not be empty' }
   if (value.length > MAX_PIN_OPS) return { ok: false, message: `"ops" must not exceed ${MAX_PIN_OPS} entries` }
@@ -138,7 +138,7 @@ export function validatePinOps(value) {
  * @param {Array<{ op: 'pin' | 'unpin', id: string }>} ops - validated operations.
  * @returns {{ version: number, rev: number, pinned: string[] }} the next document (same object values when unchanged).
  */
-export function applyPinOps(document, ops) {
+export function applyPinOps(document: any, ops: any) {
   const current = normalizeSessionPins(document)
   const pinned = current.pinned.slice()
   let changed = false
@@ -167,7 +167,7 @@ export function applyPinOps(document, ops) {
  * @param {unknown} text - file contents.
  * @returns {{ version: number, rev: number, pinned: string[] }} the document.
  */
-export function parseSessionPins(text) {
+export function parseSessionPins(text: any) {
   if (typeof text !== 'string' || text.length === 0) return normalizeSessionPins(null)
   let value
   try {
@@ -184,7 +184,7 @@ export function parseSessionPins(text) {
  * @param {{ version: number, rev: number, pinned: string[] }} document - canonical document.
  * @returns {string} file contents ending in one newline.
  */
-export function serializeSessionPins(document) {
+export function serializeSessionPins(document: any) {
   const normalized = normalizeSessionPins(document)
   return `${JSON.stringify(normalized, null, 2)}\n`
 }
@@ -194,7 +194,7 @@ export function serializeSessionPins(document) {
  * @param {string} dshHome - harness home directory.
  * @returns {string} absolute file path.
  */
-export function sessionPinsPath(dshHome) {
+export function sessionPinsPath(dshHome: any) {
   return path.join(dshHome, SESSION_PINS_DIRECTORY, SESSION_PINS_FILE)
 }
 
@@ -206,7 +206,7 @@ export function sessionPinsPath(dshHome) {
  * @param {string} dshHome - harness home directory.
  * @returns {{ get(): Promise<{ version: number, rev: number, pinned: string[] }>, apply(ops: Array<{ op: 'pin' | 'unpin', id: string }>): Promise<{ version: number, rev: number, pinned: string[] }> }} the store.
  */
-export function createSessionPinStore(dshHome) {
+export function createSessionPinStore(dshHome: any) {
   const store = createDocumentStore({
     file: sessionPinsPath(dshHome),
     decode: parseSessionPins,
@@ -224,7 +224,7 @@ export function createSessionPinStore(dshHome) {
      * @param {Array<{ op: 'pin' | 'unpin', id: string }>} ops - validated operations.
      * @returns {Promise<{ version: number, rev: number, pinned: string[] }>} the document after the batch.
      */
-    async apply(ops) {
+    async apply(ops: any) {
       return store.update((current) => {
         const next = applyPinOps(current, ops)
         return { next, changed: next.rev !== current.rev }

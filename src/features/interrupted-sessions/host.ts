@@ -47,7 +47,7 @@ const DERIVED_TTL_MS = 5000
  * @param {unknown} payload - JSON body.
  * @returns {Response} the response.
  */
-function sendJson(status, payload) {
+function sendJson(status: any, payload: any) {
   return Response.json(payload, { status, headers: { 'cache-control': 'no-store' } })
 }
 
@@ -57,7 +57,7 @@ function sendJson(status, payload) {
  * @param {string} sessionId - Session to inspect.
  * @returns {boolean} whether a live Agent is running.
  */
-function agentRunning(ctx, sessionId) {
+function agentRunning(ctx: any, sessionId: any) {
   const agent = ctx.agents.get(sessionId)
   return agent !== undefined && agent.status === 'running'
 }
@@ -67,7 +67,7 @@ function agentRunning(ctx, sessionId) {
  * @param {Record<string, any>} value - internal value with timing fields.
  * @returns {Record<string, any>} the wire value.
  */
-function toWire(value) {
+function toWire(value: any) {
   const { lastStartTime, lastEndTime, lastEventTime: eventTime, interruptedAt, ...wire } = value
   return wire
 }
@@ -79,7 +79,7 @@ function toWire(value) {
  * @param {string} message - human-readable message.
  * @returns {Response} the response.
  */
-function sendError(status, code, message) {
+function sendError(status: any, code: any, message: any) {
   return sendJson(status, { code, message })
 }
 
@@ -95,7 +95,7 @@ function sendError(status, code, message) {
  * @param {Request} request - authenticated request.
  * @returns {Promise<Response>} accepted acknowledgement or a typed failure.
  */
-async function handleContinue(ctx, request, readEffective, inFlight) {
+async function handleContinue(ctx: any, request: any, readEffective: any, inFlight: any) {
   const contentType = (request.headers.get('content-type') ?? '').toLowerCase()
   if (!contentType.startsWith('application/json')) {
     return sendError(415, 'bad-media-type', 'content-type must be application/json')
@@ -138,7 +138,7 @@ async function handleContinue(ctx, request, readEffective, inFlight) {
       form: 'notice',
       summary: summary.length > 0 ? summary.slice(0, 120) : 'Continue interrupted task'
     })
-  } catch (error) {
+  } catch (error: any) {
     const code = error !== null && typeof error === 'object' && 'code' in error ? error.code : undefined
     if (code === 'session/not-found' || code === 'SESSION_QUERY_SESSION_NOT_FOUND') {
       return sendError(404, 'session-not-found', 'Session not found')
@@ -158,7 +158,7 @@ async function handleContinue(ctx, request, readEffective, inFlight) {
  * @param {Record<string, any>} ctx - Host context.
  * @returns {void}
  */
-export function installInterruptedSessions(ctx) {
+export function installInterruptedSessions(ctx: any) {
   const cache = new Map()
   const derived = new Map()
   const epochs = new Map()
@@ -176,7 +176,7 @@ export function installInterruptedSessions(ctx) {
    * @param {Record<string, any>} value - wire value plus internal timing.
    * @returns {void}
    */
-  const remember = (sessionId, value) => {
+  const remember = (sessionId: any, value: any) => {
     if (cache.size >= MAX_CACHED && !cache.has(sessionId)) {
       const oldest = cache.keys().next().value
       if (oldest !== undefined) cache.delete(oldest)
@@ -189,7 +189,7 @@ export function installInterruptedSessions(ctx) {
    * @param {string} sessionId - Session to inspect.
    * @returns {Promise<Record<string, any>>} public value plus internal timing fields.
    */
-  async function readBase(sessionId) {
+  async function readBase(sessionId: any) {
     const cached = cache.get(sessionId)
     if (cached !== undefined) return cached
     const startEpoch = epochs.get(sessionId) ?? 0
@@ -221,7 +221,7 @@ export function installInterruptedSessions(ctx) {
     if (Date.now() - lineage.at < LINEAGE_TTL_MS) return lineage
     if (lineage.promise !== null) return lineage.promise
     lineage.promise = ctx.sessionQuery.listSessions()
-      .then((records) => {
+      .then((records: any) => {
         const parentBySession = new Map()
         const childrenByParent = new Map()
         for (const record of Array.isArray(records) ? records : []) {
@@ -256,7 +256,7 @@ export function installInterruptedSessions(ctx) {
    * @param {Set<string>} seen - recursion guard.
    * @returns {Promise<Record<string, any>>} public value plus internal timing fields.
    */
-  async function readEffective(sessionId, seen = new Set()) {
+  async function readEffective(sessionId: any, seen = new Set()) {
     if (seen.has(sessionId)) return readBase(sessionId)
     seen.add(sessionId)
     const base = await readBase(sessionId)
@@ -267,7 +267,7 @@ export function installInterruptedSessions(ctx) {
     let value = base
     try {
       const graph = await loadLineage()
-      const children = graph.childrenByParent.get(sessionId) ?? []
+      const children = graph === null ? [] : graph.childrenByParent.get(sessionId) ?? []
       for (const childId of children) {
         const child = await readEffective(childId, new Set(seen))
         if (child.interrupted !== true) continue
@@ -306,7 +306,7 @@ export function installInterruptedSessions(ctx) {
   const eventClients = new Set<EventStreamClient>()
   const eventEncoder = new TextEncoder()
 
-  ctx.effect(() => ctx.on('session/event', (session, event) => {
+  ctx.effect(() => ctx.on('session/event', (session: any, event: any) => {
     if (session === null || typeof session !== 'object' || typeof session.id !== 'string') return
     if (event === null || typeof event !== 'object') return
     const time = typeof event.time === 'number' ? event.time : null
@@ -363,7 +363,7 @@ export function installInterruptedSessions(ctx) {
    * @param {Request} request - authenticated stream request.
    * @returns {Response} streaming SSE response.
    */
-  function openEventStream(request) {
+  function openEventStream(request: any) {
     let client: EventStreamClient | null = null
     const body = new ReadableStream({
       start(controller) {
@@ -433,7 +433,7 @@ export function installInterruptedSessions(ctx) {
       path: INTERRUPTED_EVENTS_ROUTE,
       methods: ['GET'],
       requestBody: 'buffered',
-      fetch: (request) => openEventStream(request)
+      fetch: (request: any) => openEventStream(request)
     })
     return () => {
       if (typeof dispose === 'function') dispose()
@@ -452,14 +452,14 @@ export function installInterruptedSessions(ctx) {
     path: CONTINUE_ROUTE,
     methods: ['POST'],
     requestBody: 'buffered',
-    fetch: (request) => handleContinue(ctx, request, readEffective, continueInFlight)
+    fetch: (request: any) => handleContinue(ctx, request, readEffective, continueInFlight)
   }), `power-suite: continue POST ${CONTINUE_ROUTE}`)
 
   ctx.effect(() => ctx.connection.fetch.register({
     path: INTERRUPTED_ROUTE,
     methods: ['GET'],
     requestBody: 'buffered',
-    fetch: async (request) => {
+    fetch: async (request: any) => {
       const url = new URL(request.url)
       const sessionId = url.searchParams.get('sessionId')
       if (sessionId === null || sessionId.trim().length === 0) {
@@ -476,7 +476,7 @@ export function installInterruptedSessions(ctx) {
       let value
       try {
         value = await readEffective(sessionId)
-      } catch (error) {
+      } catch (error: any) {
         const code = error !== null && typeof error === 'object' && 'code' in error ? error.code : undefined
         if (code === 'SESSION_QUERY_SESSION_NOT_FOUND') {
           return sendJson(404, { code: 'session-not-found', message: 'Session not found' })

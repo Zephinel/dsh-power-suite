@@ -43,7 +43,7 @@ function harnessHome() {
  * @param {unknown} payload - JSON body.
  * @returns {Response} the response.
  */
-function sendJson(status, payload) {
+function sendJson(status: any, payload: any) {
   return Response.json(payload, {
     status,
     headers: { 'cache-control': 'no-store' }
@@ -55,7 +55,7 @@ function sendJson(status, payload) {
  * @param {Request} request - the buffered request.
  * @returns {Promise<{ ok: true, value: Record<string, any> } | { ok: false, status: number, code: string, message: string }>} the decoded object or a typed failure.
  */
-async function readJsonObject(request) {
+async function readJsonObject(request: any) {
   const mediaType = String(request.headers.get('content-type') ?? '')
     .split(';', 1)[0]
     .trim()
@@ -85,9 +85,9 @@ async function readJsonObject(request) {
  * @param {string} preset - preset identity from the request.
  * @returns {Promise<{ ok: true } | { ok: false, status: number, code: string, message: string }>} the verdict.
  */
-async function validatePreset(ctx, preset) {
+async function validatePreset(ctx: any, preset: any) {
   const presets = await ctx.agentPresets.list()
-  const row = presets.find((entry) => entry.id === preset)
+  const row = presets.find((entry: any) => entry.id === preset)
   if (row === undefined) {
     return { ok: false, status: 400, code: 'preset-not-found', message: `No agent preset named "${preset}"` }
   }
@@ -104,7 +104,7 @@ async function validatePreset(ctx, preset) {
  * @param {Request} request - authenticated request.
  * @returns {Promise<Response>} the stored preset.
  */
-async function handleGet(ctx, store, request) {
+async function handleGet(ctx: any, store: any, request: any) {
   const url = new URL(request.url)
   const workspaceId = url.searchParams.get('workspaceId')
   if (workspaceId === null || workspaceId.trim().length === 0) {
@@ -124,7 +124,7 @@ async function handleGet(ctx, store, request) {
  * @param {Request} request - authenticated request.
  * @returns {Promise<Response>} the stored value or a typed failure.
  */
-async function handleSet(ctx, store, request) {
+async function handleSet(ctx: any, store: any, request: any) {
   const body = await readJsonObject(request)
   if (body.ok === false) {
     return sendJson(body.status, { code: body.code, message: body.message })
@@ -157,7 +157,7 @@ async function handleSet(ctx, store, request) {
  * @param {Record<string, any>} agent - the Agent just announced by `agent/created`.
  * @returns {Promise<void>} resolves after the preset settles or the Session is left alone.
  */
-async function applyWorkspaceDefault(ctx, store, agent) {
+async function applyWorkspaceDefault(ctx: any, store: any, agent: any) {
   const session = agent?.session
   if (session === undefined || session === null) return
   const header = session.header
@@ -179,21 +179,21 @@ async function applyWorkspaceDefault(ctx, store, agent) {
  * @param {Record<string, any>} ctx - Host context.
  * @returns {void}
  */
-export function installWorkspacePresets(ctx) {
+export function installWorkspacePresets(ctx: any) {
   const store = createPresetStore(harnessHome())
   ctx.effect(() => ctx.connection.fetch.register({
     path: GET_ROUTE,
     methods: ['GET'],
     requestBody: 'buffered',
-    fetch: (request) => handleGet(ctx, store, request)
+    fetch: (request: any) => handleGet(ctx, store, request)
   }), `power-suite: workspace-presets GET ${GET_ROUTE}`)
   ctx.effect(() => ctx.connection.fetch.register({
     path: SET_ROUTE,
     methods: ['POST'],
     requestBody: 'buffered',
-    fetch: (request) => handleSet(ctx, store, request)
+    fetch: (request: any) => handleSet(ctx, store, request)
   }), `power-suite: workspace-presets POST ${SET_ROUTE}`)
-  ctx.on('agent/created', async ({ agent }) => {
+  ctx.on('agent/created', async ({ agent }: { agent: any }) => {
     try {
       await applyWorkspaceDefault(ctx, store, agent)
     } catch {

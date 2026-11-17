@@ -23,7 +23,7 @@ const MAX_BODY_BYTES = 64 * 1024
  * @param {unknown} payload - JSON body.
  * @returns {Response} the response.
  */
-function sendJson(status, payload) {
+function sendJson(status: any, payload: any) {
   return Response.json(payload, { status, headers: { 'cache-control': 'no-store' } })
 }
 
@@ -32,7 +32,7 @@ function sendJson(status, payload) {
  * @param {unknown} value - decoded value.
  * @returns {value is Record<string, any>} whether it is a record.
  */
-function isRecord(value) {
+function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -41,7 +41,7 @@ function isRecord(value) {
  * @param {unknown} body - decoded request body.
  * @returns {{ ok: true, ops: Array<object> } | { ok: false, message: string }} accepted operations or a failure.
  */
-export function validatePinApplyBody(body) {
+export function validatePinApplyBody(body: any) {
   if (!isRecord(body)) return { ok: false, message: 'request body must be one JSON object' }
   return validatePinOps(body.ops)
 }
@@ -62,11 +62,11 @@ export function installSessionPins(
     path: SESSION_PINS_ROUTE,
     methods: ['GET', 'POST'],
     requestBody: 'buffered',
-    fetch: async (request) => {
+    fetch: async (request: any) => {
       if (request.method === 'GET') {
         try {
           return sendJson(200, await store.get())
-        } catch (error) {
+        } catch (error: any) {
           if (error !== null && typeof error === 'object' && error.code === SESSION_PINS_READ_FAILED) {
             return sendJson(500, { code: 'store-read-failed', message: 'pinned sessions could not be read' })
           }
@@ -98,7 +98,7 @@ export function installSessionPins(
       }
       try {
         return sendJson(200, await store.apply(verdict.ops))
-      } catch (error) {
+      } catch (error: any) {
         if (error !== null && typeof error === 'object' && error.code === SESSION_PINS_READ_FAILED) {
           return sendJson(500, { code: 'store-read-failed', message: 'pinned sessions could not be read' })
         }

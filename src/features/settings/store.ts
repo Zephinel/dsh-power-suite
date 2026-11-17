@@ -68,7 +68,7 @@ export function defaultSettings(): Settings {
  * @param {unknown} value - decoded value.
  * @returns {value is Record<string, any>} whether it is a record.
  */
-function isRecord(value) {
+function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -86,7 +86,7 @@ export function isPromptHistoryModifier(value: unknown): value is PromptHistoryM
  * @param {unknown} value - candidate.
  * @returns {boolean} whether it is accepted.
  */
-export function isRecentSessionMinutes(value) {
+export function isRecentSessionMinutes(value: any) {
   return typeof value === 'number' && RECENT_SESSION_MINUTES.includes(value)
 }
 
@@ -95,7 +95,7 @@ export function isRecentSessionMinutes(value) {
  * @param {unknown} value - candidate.
  * @returns {boolean} whether it is accepted.
  */
-export function isActiveProjectDays(value) {
+export function isActiveProjectDays(value: any) {
   return typeof value === 'number' && ACTIVE_PROJECT_DAYS.includes(value)
 }
 
@@ -150,27 +150,28 @@ export function validatePatch(patch: unknown): { ok: true; value: SettingsPatch 
   if (!isRecord(patch)) return { ok: false, message: 'patch must be one JSON object' }
   const fields = Object.keys(patch)
   if (fields.length === 0) return { ok: false, message: 'patch is empty' }
-  const value = {}
+  const value: SettingsPatch = {}
   for (const field of fields) {
+    const fieldValue = patch[field]
     if (field === PROMPT_HISTORY_MODIFIER_FIELD) {
-      if (!isPromptHistoryModifier(patch[field])) {
+      if (!isPromptHistoryModifier(fieldValue)) {
         return { ok: false, message: `invalid value for "${field}"` }
       }
-      value[field] = patch[field]
+      value.promptHistoryModifier = fieldValue
       continue
     }
     if (field === RECENT_SESSION_FIELD) {
-      if (!isRecentSessionMinutes(patch[field])) {
+      if (!isRecentSessionMinutes(fieldValue)) {
         return { ok: false, message: `invalid value for "${field}"` }
       }
-      value[field] = patch[field]
+      value.recentSessionMinutes = fieldValue
       continue
     }
     if (field === ACTIVE_PROJECT_FIELD) {
-      if (!isActiveProjectDays(patch[field])) {
+      if (!isActiveProjectDays(fieldValue)) {
         return { ok: false, message: `invalid value for "${field}"` }
       }
-      value[field] = patch[field]
+      value.activeProjectDays = fieldValue
       continue
     }
     return { ok: false, message: `unknown setting "${field}"` }
@@ -183,7 +184,7 @@ export function validatePatch(patch: unknown): { ok: true; value: SettingsPatch 
  * @param {string} dshHome - harness home directory.
  * @returns {string} absolute file path.
  */
-export function settingsPath(dshHome) {
+export function settingsPath(dshHome: any) {
   return path.join(dshHome, SETTINGS_DIRECTORY, SETTINGS_FILE)
 }
 
@@ -195,7 +196,7 @@ export function settingsPath(dshHome) {
  * @param {string} dshHome - harness home directory.
  * @returns {{ get(): Promise<Settings>, update(patch: import('../../shared/protocol.ts').SettingsPatch): Promise<Settings> }} the store.
  */
-export function createSettingsStore(dshHome) {
+export function createSettingsStore(dshHome: any) {
   const store = createDocumentStore({
     file: settingsPath(dshHome),
     decode: parseSettings,
@@ -214,7 +215,7 @@ export function createSettingsStore(dshHome) {
     async update(patch: SettingsPatch) {
       return store.update((current) => {
         const next = { ...current, ...patch }
-        const changed = Object.keys(patch).some((field) => current[field] !== next[field])
+        const changed = (Object.keys(patch) as Array<keyof SettingsPatch>).some((field) => current[field] !== next[field])
         return { next, changed }
       })
     }

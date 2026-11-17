@@ -34,7 +34,7 @@ function harnessHome() {
  * @param {unknown} payload - JSON body.
  * @returns {Response} the response.
  */
-function sendJson(status, payload) {
+function sendJson(status: any, payload: any) {
   return Response.json(payload, { status, headers: { 'cache-control': 'no-store' } })
 }
 
@@ -43,13 +43,13 @@ function sendJson(status, payload) {
  * @param {Record<string, any>} ctx - Host context carrying the connection service.
  * @returns {void}
  */
-export function installSettings(ctx) {
+export function installSettings(ctx: any) {
   const store = createSettingsStore(harnessHome())
   ctx.effect(() => ctx.connection.fetch.register({
     path: SETTINGS_ROUTE,
     methods: ['GET', 'POST'],
     requestBody: 'buffered',
-    fetch: async (request) => {
+    fetch: async (request: any) => {
       if (request.method === 'GET') {
         return sendJson(200, { settings: await store.get() })
       }

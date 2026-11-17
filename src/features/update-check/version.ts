@@ -16,7 +16,7 @@ const STABLE_VERSION = /^(\d+)\.(\d+)\.(\d+)$/u
  * @returns {{ major: number, minor: number, patch: number } | undefined} the
  *   numeric parts, or undefined when the value is not a stable `x.y.z` version.
  */
-export function parseStableVersion(value) {
+export function parseStableVersion(value: any) {
   if (typeof value !== 'string') return undefined
   const match = STABLE_VERSION.exec(value.trim())
   if (match === null) return undefined
@@ -41,7 +41,7 @@ export function parseStableVersion(value) {
  * @returns {number | undefined} `-1` when left is older, `1` when it is newer,
  *   `0` when they are equal, and undefined when either side is not stable.
  */
-export function compareStableVersions(left, right) {
+export function compareStableVersions(left: any, right: any) {
   const a = parseStableVersion(left)
   const b = parseStableVersion(right)
   if (a === undefined || b === undefined) return undefined
@@ -57,7 +57,7 @@ export function compareStableVersions(left, right) {
  * @param {unknown} current - the running package version.
  * @returns {boolean} true only when both are stable and latest is greater.
  */
-export function isNewerStableVersion(latest, current) {
+export function isNewerStableVersion(latest: any, current: any) {
   if (parseStableVersion(latest) === undefined) return false
   return (compareStableVersions(latest, current) ?? 0) > 0
 }

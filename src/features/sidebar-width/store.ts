@@ -44,7 +44,7 @@ export const SIDEBAR_WIDTH_READ_FAILED = 'SIDEBAR_WIDTH_READ_FAILED'
  * @param {unknown} error - thrown error.
  * @returns {boolean} whether it is ENOENT.
  */
-function isNotFound(error) {
+function isNotFound(error: any) {
   return error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
 }
 
@@ -53,7 +53,7 @@ function isNotFound(error) {
  * @param {unknown} value - decoded value.
  * @returns {value is Record<string, any>} whether it is a record.
  */
-function isRecord(value) {
+function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -74,7 +74,7 @@ export function defaultSidebarWidthDocument() {
  * @param {unknown} value - candidate width.
  * @returns {boolean} whether it is an integer inside the accepted range.
  */
-export function isSidebarWidth(value) {
+export function isSidebarWidth(value: any) {
   if (typeof value !== 'number' || !Number.isInteger(value)) return false
   return value >= SIDEBAR_WIDTH_MIN && value <= SIDEBAR_WIDTH_MAX
 }
@@ -88,7 +88,7 @@ export function isSidebarWidth(value) {
  * @param {unknown} text - file contents.
  * @returns {{ version: number, sidebarWidth: number | null }} the document.
  */
-export function parseSidebarWidthDocument(text) {
+export function parseSidebarWidthDocument(text: any) {
   if (typeof text !== 'string' || text.length === 0) return defaultSidebarWidthDocument()
   let value
   try {
@@ -106,7 +106,7 @@ export function parseSidebarWidthDocument(text) {
  * @param {{ version: number, sidebarWidth: number | null }} document - document to write.
  * @returns {string} file contents ending in one newline.
  */
-export function serializeSidebarWidthDocument(document) {
+export function serializeSidebarWidthDocument(document: any) {
   const source = isRecord(document) ? document : {}
   const sidebarWidth = isSidebarWidth(source.sidebarWidth) ? source.sidebarWidth : null
   return `${JSON.stringify({ version: SIDEBAR_WIDTH_VERSION, sidebarWidth }, null, 2)}\n`
@@ -117,7 +117,7 @@ export function serializeSidebarWidthDocument(document) {
  * @param {string} dshHome - harness home directory.
  * @returns {string} absolute file path.
  */
-export function sidebarWidthPath(dshHome) {
+export function sidebarWidthPath(dshHome: any) {
   return path.join(dshHome, SIDEBAR_WIDTH_DIRECTORY, SIDEBAR_WIDTH_FILE)
 }
 
@@ -131,7 +131,7 @@ export function sidebarWidthPath(dshHome) {
  * @param {string} dshHome - harness home directory.
  * @returns {{ get(): Promise<{ version: number, sidebarWidth: number | null }>, set(sidebarWidth: number): Promise<{ version: number, sidebarWidth: number | null }> }} the store.
  */
-export function createSidebarWidthStore(dshHome) {
+export function createSidebarWidthStore(dshHome: any) {
   const store = createDocumentStore({
     file: sidebarWidthPath(dshHome),
     decode: parseSidebarWidthDocument,
@@ -148,7 +148,7 @@ export function createSidebarWidthStore(dshHome) {
      * @param {number} sidebarWidth - integer inside the accepted range.
      * @returns {Promise<{ version: number, sidebarWidth: number | null }>} the document after the write.
      */
-    async set(sidebarWidth) {
+    async set(sidebarWidth: any) {
       if (!isSidebarWidth(sidebarWidth)) {
         throw new TypeError(`sidebarWidth must be an integer between ${SIDEBAR_WIDTH_MIN} and ${SIDEBAR_WIDTH_MAX}`)
       }

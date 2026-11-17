@@ -107,7 +107,7 @@ function registryLatestUrl(manifest?: Record<string, any>): string | undefined {
  * @param {string} accept - accepted content type.
  * @returns {Promise<Response>} the successful response.
  */
-async function readResponse(fetchImpl, timeoutMs, url, accept) {
+async function readResponse(fetchImpl: any, timeoutMs: any, url: any, accept: any) {
   const response = await fetchImpl(url, {
     headers: { accept },
     signal: AbortSignal.timeout(timeoutMs)
@@ -159,7 +159,7 @@ export function createUpdateChecker(options: UpdateCheckerOptions = {}): (langua
    * @param {'default' | 'en'} variant - notes variant to read.
    * @returns {Promise<string[]>} plain-text points; possibly empty.
    */
-  const readHighlights = async (latest, variant) => {
+  const readHighlights = async (latest: any, variant: any) => {
     const response = await readResponse(fetchImpl, timeoutMs, releaseNotesUrl(repository, latest, variant), 'text/plain')
     return parseHighlights(await response.text()).slice(0, MAX_HIGHLIGHTS)
   }
@@ -170,7 +170,7 @@ export function createUpdateChecker(options: UpdateCheckerOptions = {}): (langua
    * @returns {Promise<{ view: UpdateCheckView, notesRead: boolean }>} the view
    *   plus whether its highlights source was successfully read.
    */
-  const read = async (variant) => {
+  const read = async (variant: any) => {
     if (latestUrl === undefined) throw new Error('package name is unreadable')
     const response = await readResponse(fetchImpl, timeoutMs, latestUrl, 'application/json')
     const payload = /** @type {Record<string, any>} */ (await response.json())

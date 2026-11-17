@@ -43,7 +43,7 @@ export const inject = [
  * @param {object} ctx - Host context.
  * @returns {void}
  */
-export function apply(ctx) {
+export function apply(ctx: any) {
   installSessionArtifacts(ctx)
   installWorkspacePresets(ctx)
   installPromptHistory(ctx)

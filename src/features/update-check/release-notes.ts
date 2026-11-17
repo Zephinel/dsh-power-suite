@@ -22,7 +22,7 @@ const HEADING = /^#{1,6}\s+/u
  * @param {string} line - one bullet's text after its marker.
  * @returns {string} the plain-text point, collapsed to single spaces.
  */
-function plainText(line) {
+function plainText(line: any) {
   return line
     .replace(/\[\s*([^\]]*)\s*\]\([^)]*\)/gu, '$1')
     .replace(/`([^`]+)`/gu, '$1')
@@ -39,8 +39,8 @@ function plainText(line) {
  * @returns {string[]} plain-text points in document order; empty without a
  *   Highlights section. Not capped: the update check keeps at most six.
  */
-export function parseHighlights(markdown) {
-  const points = []
+export function parseHighlights(markdown: unknown): string[] {
+  const points: string[] = []
   if (typeof markdown !== 'string') return points
   const lines = markdown.split(/\r?\n/u)
   const start = lines.findIndex((line) => HIGHLIGHTS_HEADING.test(line.trim()))
@@ -61,7 +61,7 @@ export function parseHighlights(markdown) {
  * @param {unknown} language - active DSH locale id, such as `en`, `en-US`, or `zh`.
  * @returns {'default' | 'en'} `en` for English locales, otherwise `default`.
  */
-export function releaseNotesVariant(language) {
+export function releaseNotesVariant(language: any) {
   return typeof language === 'string' && language.trim().toLowerCase().startsWith('en') ? 'en' : 'default'
 }
 
@@ -72,7 +72,7 @@ export function releaseNotesVariant(language) {
  * @param {'default' | 'en'} [variant] - notes variant to read.
  * @returns {string} the raw URL for that release's notes.
  */
-export function releaseNotesUrl(repository, version, variant = 'default') {
+export function releaseNotesUrl(repository: any, version: any, variant = 'default') {
   const suffix = variant === 'en' ? '.en' : ''
   return `https://raw.githubusercontent.com/${repository}/v${version}/release-notes/${version}${suffix}.md`
 }
@@ -83,7 +83,7 @@ export function releaseNotesUrl(repository, version, variant = 'default') {
  * @returns {string | undefined} `owner/repo`, or undefined for a non-GitHub or
  *   malformed repository.
  */
-export function repositorySlug(repository) {
+export function repositorySlug(repository: any) {
   const url = typeof repository === 'string'
     ? repository
     : repository !== null && typeof repository === 'object' && 'url' in repository && typeof repository.url === 'string'

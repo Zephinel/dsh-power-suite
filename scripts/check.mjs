@@ -35,6 +35,16 @@ function collectFiles(directory, extension) {
   return files
 }
 
+/** Count explicit `any` sites in the Host TypeScript sources (tracked, not gated). */
+function countAnySites(files) {
+  let count = 0
+  for (const file of files) {
+    const matches = readFileSync(file, 'utf8').match(/:\s*any\b|as\s+any\b|<\s*any\s*>|Record<string,\s*any>/g)
+    if (matches !== null) count += matches.length
+  }
+  return count
+}
+
 /** Absolute path must exist. */
 function requirePath(relative, label) {
   if (!existsSync(resolve(root, relative))) failures.push(`${label} is missing: ${relative}`)
@@ -66,7 +76,10 @@ try {
 } catch {
   failures.push('typecheck failed: node node_modules/typescript/bin/tsc --noEmit')
 }
-if (typecheckPassed) console.log('typecheck: ok (tsc --noEmit; src/client.js opted out until Phase 3)')
+if (typecheckPassed) {
+  console.log('typecheck: ok (tsc --noEmit --strict; src/client.js opted out until Phase 3)')
+  console.log(`any budget: ${countAnySites(typeScriptSources)} explicit any sites in src/**/*.ts (tracked, not gated)`)
+}
 
 // 3. Manifest checks.
 const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))

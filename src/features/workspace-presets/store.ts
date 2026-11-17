@@ -38,7 +38,7 @@ export function emptyState() {
  * @param {unknown} value - decoded value.
  * @returns {value is Record<string, any>} whether it is a record.
  */
-function isRecord(value) {
+function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -50,7 +50,7 @@ function isRecord(value) {
  * @param {unknown} text - file contents.
  * @returns {PresetState} parsed state.
  */
-export function parseState(text) {
+export function parseState(text: any) {
   if (typeof text !== 'string' || text.length === 0) return emptyState()
   let value
   try {
@@ -61,7 +61,7 @@ export function parseState(text) {
   if (!isRecord(value) || value.version !== STORE_VERSION || !isRecord(value.workspaces)) {
     return emptyState()
   }
-  const workspaces = {}
+  const workspaces: Record<string, string> = {}
   for (const [workspaceId, preset] of Object.entries(value.workspaces)) {
     if (workspaceId.length === 0) continue
     if (typeof preset !== 'string' || preset.length === 0) continue
@@ -75,7 +75,7 @@ export function parseState(text) {
  * @param {PresetState} state - store state.
  * @returns {string} file contents ending in one newline.
  */
-export function serializeState(state) {
+export function serializeState(state: any) {
   return `${JSON.stringify({ version: STORE_VERSION, workspaces: state.workspaces }, null, 2)}\n`
 }
 
@@ -85,7 +85,7 @@ export function serializeState(state) {
  * @param {string} workspaceId - Workspace identity.
  * @returns {string | null} the stored preset id, or null for no override.
  */
-export function presetOf(state, workspaceId) {
+export function presetOf(state: any, workspaceId: any) {
   return Object.hasOwn(state.workspaces, workspaceId) ? state.workspaces[workspaceId] : null
 }
 
@@ -98,7 +98,7 @@ export function presetOf(state, workspaceId) {
  * @param {string | null} preset - preset id, or null to clear the override.
  * @returns {PresetState} the next state.
  */
-export function withPreset(state, workspaceId, preset) {
+export function withPreset(state: any, workspaceId: any, preset: any) {
   if (preset === null || preset === undefined) {
     if (!Object.hasOwn(state.workspaces, workspaceId)) return state
     const workspaces = { ...state.workspaces }
@@ -123,7 +123,7 @@ export function withPreset(state, workspaceId, preset) {
  * @param {{ current: string | null, globalDefault: string, target: string | null }} input - decision inputs.
  * @returns {boolean} whether to select the target preset.
  */
-export function shouldApplyPreset(input) {
+export function shouldApplyPreset(input: any) {
   const { current, globalDefault, target } = input
   if (typeof target !== 'string' || target.length === 0) return false
   if (current === target) return false
@@ -136,7 +136,7 @@ export function shouldApplyPreset(input) {
  * @param {string} dshHome - the harness home directory.
  * @returns {string} absolute store path.
  */
-export function storePath(dshHome) {
+export function storePath(dshHome: any) {
   return path.join(dshHome, STORE_DIRECTORY, STORE_FILE)
 }
 
@@ -148,17 +148,17 @@ export function storePath(dshHome) {
  * @param {string} dshHome - the harness home directory.
  * @returns {{ get(workspaceId: string): Promise<string | null>, set(workspaceId: string, preset: string | null): Promise<string | null> }} the store.
  */
-export function createPresetStore(dshHome) {
+export function createPresetStore(dshHome: any) {
   const store = createDocumentStore({
     file: storePath(dshHome),
     decode: parseState,
     encode: serializeState
   })
   return {
-    async get(workspaceId) {
+    async get(workspaceId: any) {
       return presetOf(await store.get(), workspaceId)
     },
-    async set(workspaceId, preset) {
+    async set(workspaceId: any, preset: any) {
       const next = await store.update((current) => {
         const updated = withPreset(current, workspaceId, preset)
         return { next: updated, changed: updated !== current }

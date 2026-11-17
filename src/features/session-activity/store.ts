@@ -44,7 +44,7 @@ export const ACTIVITY_READ_FAILED = 'ACTIVITY_READ_FAILED'
  * @param {unknown} error - thrown error.
  * @returns {boolean} whether it is ENOENT.
  */
-function isNotFound(error) {
+function isNotFound(error: any) {
   return error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
 }
 
@@ -53,7 +53,7 @@ function isNotFound(error) {
  * @param {unknown} value - decoded value.
  * @returns {value is Record<string, any>} whether it is a record.
  */
-function isRecord(value) {
+function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -81,7 +81,7 @@ export function isActivityTime(value: unknown): value is number {
  * @returns {Record<string, number>} sanitized entries.
  */
 export function sanitizeActivitySessions(value: unknown): Record<string, number> {
-  const sessions = {}
+  const sessions: Record<string, number> = {}
   if (!isRecord(value)) return sessions
   for (const [id, time] of Object.entries(value)) {
     if (!isActivitySessionId(id) || !isActivityTime(time)) continue
@@ -99,7 +99,7 @@ export function capActivitySessions(sessions: Record<string, number>): Record<st
   const entries = Object.entries(sessions)
   if (entries.length <= MAX_ACTIVITY_SESSIONS) return sessions
   entries.sort((left, right) => (right[1] - left[1]) || left[0].localeCompare(right[0]))
-  const capped = {}
+  const capped: Record<string, number> = {}
   for (const [id, time] of entries.slice(0, MAX_ACTIVITY_SESSIONS)) capped[id] = time
   return capped
 }
@@ -169,18 +169,18 @@ export function activityLedgerPath(dshHome: string): string {
  */
 export function createActivityLedger(dshHome: string, options: { debounceMs?: number } = {}) {
   const file = activityLedgerPath(dshHome)
-  const debounceMs = Number.isFinite(options.debounceMs) && options.debounceMs >= 0
+  const debounceMs = options.debounceMs !== undefined && Number.isFinite(options.debounceMs) && options.debounceMs >= 0
     ? options.debounceMs
     : ACTIVITY_WRITE_DEBOUNCE_MS
   let state: Record<string, number> = {}
   let dirty = false
   let disposed = false
-  let timer = null
-  let chain = Promise.resolve()
-  let loadPromise = null
-  let disposePromise = null
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let chain: Promise<void> = Promise.resolve()
+  let loadPromise: Promise<Record<string, number>> | null = null
+  let disposePromise: Promise<Record<string, number> | void> | null = null
   const snapshot = () => capActivitySessions(sanitizeActivitySessions(state))
-  const enqueue = (task) => {
+  const enqueue = <T>(task: () => Promise<T>): Promise<T> => {
     const run = chain.then(task, task)
     chain = run.then(
       () => undefined,
@@ -198,7 +198,7 @@ export function createActivityLedger(dshHome: string, options: { debounceMs?: nu
    * cross-process lock. Corrupt or missing files merge as empty; the in-memory
    * map also absorbs external entries.
    */
-  const writeDocument = async (payload) => {
+  const writeDocument = async (payload: any) => {
     let external = {}
     try {
       external = parseActivityLedger(await readFile(file, 'utf8'))
@@ -313,7 +313,7 @@ export function createActivityLedger(dshHome: string, options: { debounceMs?: nu
     })()
     return loadPromise
   }
-  const record = (entries) => {
+  const record = (entries: any) => {
     if (entries === null || typeof entries !== 'object') return
     // Commit-path update is O(entries in this batch), not O(map size): mutate
     // the in-memory map, mark dirty, and defer sanitize/cap/copy to

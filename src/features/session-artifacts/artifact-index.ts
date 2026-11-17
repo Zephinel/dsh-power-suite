@@ -33,7 +33,7 @@ const MUTATING_TOOLS = new Set(['write', 'edit', 'str_replace_editor'])
  * @param {unknown} value - decoded value.
  * @returns {value is Record<string, any>} whether it is a record.
  */
-function isRecord(value) {
+function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -42,7 +42,7 @@ function isRecord(value) {
  * @param {unknown} value - recorded argument.
  * @returns {string | null} the path text, if any.
  */
-function pathValue(value) {
+function pathValue(value: any) {
   return typeof value === 'string' && value.trim().length > 0 ? value : null
 }
 
@@ -55,7 +55,7 @@ function pathValue(value) {
  * @param {unknown} argsRaw - raw JSON argument text.
  * @returns {string | null} the path argument, when the call mutates a file.
  */
-export function mutationPath(name, argsRaw) {
+export function mutationPath(name: any, argsRaw: any) {
   if (typeof argsRaw !== 'string') return null
   let args
   try {
@@ -109,7 +109,7 @@ export function mutationPath(name, argsRaw) {
  * @param {string | undefined} cwd - the Session's workspace root.
  * @returns {string | null} the normalized absolute path, or null when unresolvable.
  */
-export function resolveArtifactPath(recordPath, cwd) {
+export function resolveArtifactPath(recordPath: any, cwd: any) {
   const value = pathValue(recordPath)
   if (value === null) return null
   if (path.isAbsolute(value)) return path.normalize(value)
@@ -125,7 +125,7 @@ export function resolveArtifactPath(recordPath, cwd) {
  * @param {string | undefined} cwd - the Session's workspace root.
  * @returns {string | null} the normalized absolute path.
  */
-function mutationResultPath(argumentPath, meta, cwd) {
+function mutationResultPath(argumentPath: any, meta: any, cwd: any) {
   if (isRecord(meta) && Object.hasOwn(meta, 'path')) {
     const recorded = resolveArtifactPath(meta.path, cwd)
     if (recorded !== null) return recorded
@@ -138,7 +138,7 @@ function mutationResultPath(argumentPath, meta, cwd) {
  * @param {unknown} value - decoded `files` member.
  * @returns {value is { path: string, description?: string }} whether it is usable.
  */
-function isPresentedFile(value) {
+function isPresentedFile(value: any) {
   if (!isRecord(value)) return false
   const { path: declaredPath, description } = value
   return (
@@ -153,7 +153,7 @@ function isPresentedFile(value) {
  * @param {unknown} value - decoded event data.
  * @returns {value is { turn: number, files: unknown[] }} whether it is usable.
  */
-function isPresentedData(value) {
+function isPresentedData(value: any) {
   if (!isRecord(value)) return false
   const { turn, files } = value
   return (
@@ -172,7 +172,7 @@ function isPresentedData(value) {
  * @param {Record<string, any>} fact - what this event proved.
  * @returns {void}
  */
-function upsertArtifact(artifacts, artifactPath, fact) {
+function upsertArtifact(artifacts: any, artifactPath: any, fact: any) {
   const entry = artifacts.get(artifactPath)
   if (entry === undefined) {
     artifacts.set(artifactPath, {
@@ -204,8 +204,8 @@ function upsertArtifact(artifacts, artifactPath, fact) {
  * @param {Array<Record<string, any>>} artifacts - rows carrying numeric `seq` and a `name`.
  * @returns {Array<Record<string, any>>} the same array, sorted in place.
  */
-export function sortArtifactsNewestFirst(artifacts) {
-  return artifacts.sort((left, right) => {
+export function sortArtifactsNewestFirst(artifacts: any) {
+  return artifacts.sort((left: any, right: any) => {
     if (right.seq !== left.seq) return right.seq - left.seq
     return left.name.localeCompare(right.name)
   })
@@ -216,7 +216,7 @@ export function sortArtifactsNewestFirst(artifacts) {
  * @param {unknown} value - recorded metadata.
  * @returns {number | undefined} a finite non-negative number, or undefined.
  */
-function attachmentNumber(value) {
+function attachmentNumber(value: any) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
 }
 
@@ -226,7 +226,7 @@ function attachmentNumber(value) {
  * @param {unknown} mediaType - recorded media type.
  * @returns {string} a non-empty display name.
  */
-function attachmentName(name, mediaType) {
+function attachmentName(name: any, mediaType: any) {
   if (typeof name === 'string' && name.trim().length > 0) return name
   if (typeof mediaType === 'string' && mediaType.startsWith('image/')) {
     const extension = mediaType === 'image/jpeg' ? 'jpg' : mediaType.slice('image/'.length)
@@ -248,7 +248,7 @@ function attachmentName(name, mediaType) {
  * @param {readonly Record<string, any>[]} events - raw session events in ascending seq order.
  * @returns {Array<Record<string, any>>} provided rows, newest event first.
  */
-export function foldUserAttachments(events) {
+export function foldUserAttachments(events: any) {
   const provided = new Map()
   let promptOrdinal = 0
   for (const event of events) {
@@ -296,7 +296,7 @@ export function foldUserAttachments(events) {
  * @param {string | undefined} cwd - the Session's workspace root for relative paths.
  * @returns {Array<Record<string, any>>} artifacts, newest turn first.
  */
-export function foldArtifacts(events, cwd) {
+export function foldArtifacts(events: any, cwd: any) {
   const calls = new Map()
   const artifacts = new Map()
   for (const event of events) {
@@ -357,7 +357,7 @@ export function foldArtifacts(events, cwd) {
  * @returns {{ mime: string, previewable: boolean }} the response type and whether
  * the browser renders it inline rather than downloading it.
  */
-export function artifactKind(name) {
+export function artifactKind(name: any) {
   const extension = path.extname(name).slice(1).toLowerCase()
   switch (extension) {
     case 'html':
@@ -450,7 +450,7 @@ export function artifactKind(name) {
  * @param {string} name - file name.
  * @returns {'text' | 'image' | 'media' | 'pdf' | 'html' | 'binary'} the preview kind.
  */
-export function previewKindOf(name) {
+export function previewKindOf(name: any) {
   const kind = artifactKind(name)
   if (!kind.previewable) return 'binary'
   const mime = kind.mime
@@ -471,7 +471,7 @@ export function previewKindOf(name) {
  * @param {string} name - suggested file name.
  * @returns {string} the header value.
  */
-export function contentDisposition(type, name) {
+export function contentDisposition(type: any, name: any) {
   const fallback = name.replace(/[^\x20-\x7e]|["\\]/g, '_') || 'artifact'
   const encoded = encodeURIComponent(name).replace(
     /['()*]/g,
