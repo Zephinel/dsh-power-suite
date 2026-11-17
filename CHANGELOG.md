@@ -558,6 +558,16 @@ and no dated release heading is added until the release is cut.
 
 ### Fixed
 
+- **Prompt-history rail anchoring** — the rail was anchored to the union of the
+  native turn rail's mark buttons and re-measured on every conversation scroll,
+  so it could move by one mark per scroll; it also stayed visible in a narrow
+  conversation after the native rail had hidden, and its settle-delay
+  re-measures made it lag then snap while dragging the right sidebar. The rail
+  now anchors to the native turn rail's stable 28 px frame column (fixed
+  right-edge distance, directly below the frame), does not re-measure or move on
+  conversation scroll, and hides when the native rail is hidden by its
+  narrow-container rule (falling back to the old right-edge column only when no
+  native rail exists).
 - **Interrupted-session refresh and timing** — badges repull automatically after
   a Host restart (Connection generation reset), on focus/visibility/online, and
   on a 20 s poll instead of waiting for a Session click; parent Sessions whose

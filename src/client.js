@@ -9405,6 +9405,39 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
+     * The native turn rail's stable frame element.
+     *
+     * The shell renders the rail as an absolutely positioned 28 px column inside
+     * a sticky slot (class token `..._frame`). Measuring the frame instead of the
+     * union of its mark buttons keeps our rail fixed while the Conversation
+     * scrolls: marks move/select inside the frame, its outer box does not. A
+     * narrow container hides the frame via a CSS container query; callers can
+     * treat that as "native rail hidden" and hide the prompt rail too.
+     * @param {Element} scroll - Conversation scroll surface.
+     * @returns {HTMLElement | null} the frame, or null when the shell has none.
+     */
+    function promptHistoryTurnRailFrame(scroll) {
+      if (typeof document === 'undefined') return null
+      const candidates = scroll.querySelectorAll('[class*="_frame"]')
+      for (const node of candidates) {
+        if (!(node instanceof HTMLElement)) continue
+        let hasFrameToken = false
+        for (const token of node.classList) {
+          if (token === 'frame' || token.endsWith('_frame')) hasFrameToken = true
+        }
+        if (!hasFrameToken) continue
+        // Several shell frames live inside the conversation scroll surface; the
+        // native turn rail is the absolutely positioned 28 px column. Match its
+        // box (computed even while a narrow container hides it) instead of
+        // taking the first `_frame` in DOM order.
+        const style = window.getComputedStyle(node)
+        if (style.position === 'absolute' && style.width === '28px') return node
+        if (node.getBoundingClientRect().width === 28) return node
+      }
+      return null
+    }
+
+    /**
      * Measure the fixed rail's frame against the Conversation's right edge.
      *
      * The rail sits in the native turn rail's column: directly below it when
@@ -9421,12 +9454,39 @@ function dwClearNativeAtmospheres() {
       const composer = promptHistoryComposerSeat(sessionId)
       const composerTop = composer === null ? Math.min(scrollRect.bottom, window.innerHeight) : composer.getBoundingClientRect().top
       const bottomLimit = Math.min(composerTop, window.innerHeight) - 16
+      // Anchor to the native turn rail's frame, not to the union of its marks:
+      // marks select/move inside the frame while the Conversation scrolls, which
+      // made the old measurement drift by one mark per scroll.
+      const frame = promptHistoryTurnRailFrame(scroll)
+      if (frame !== null) {
+        const frameStyle = window.getComputedStyle(frame)
+        const frameRect = frame.getBoundingClientRect()
+        const frameVisible = frameStyle.display !== 'none'
+          && frameStyle.visibility !== 'hidden'
+          && (frameRect.width > 0 || frameRect.height > 0)
+        // The shell hides the native turn rail in a narrow conversation
+        // container; follow it and hide the prompt rail as well.
+        if (!frameVisible) return null
+        const frameRight = frameRect.right
+        let top = frameRect.bottom + 10
+        if (bottomLimit - top < 90) {
+          top = Math.max(scrollRect.top + 16, Math.round(scrollRect.top + (bottomLimit - scrollRect.top) / 2))
+        }
+        if (bottomLimit - top < 90) top = Math.max(scrollRect.top + 8, bottomLimit - 90)
+        return {
+          top: Math.round(top),
+          right: Math.round(window.innerWidth - frameRight),
+          width: 28,
+          maxHeight: Math.round(Math.max(90, bottomLimit - top)),
+          composerTop: Math.round(composerTop)
+        }
+      }
+      // No native turn rail at all (very short Session): keep the old fallback
+      // column at the conversation's right edge.
       const turnRail = promptHistoryTurnRailBox(scroll)
       let top = null
       if (turnRail !== null && bottomLimit - (turnRail.bottom + 10) >= 90) top = turnRail.bottom + 10
       if (top === null) {
-        // No room below the native rail (or no native rail): fall back to the
-        // vertical middle of the scrollport and keep the rail usable.
         top = Math.max(scrollRect.top + 16, Math.round(scrollRect.top + (bottomLimit - scrollRect.top) / 2))
       }
       if (bottomLimit - top < 90) top = Math.max(scrollRect.top + 8, bottomLimit - 90)
@@ -9548,8 +9608,6 @@ function dwClearNativeAtmospheres() {
       React.useEffect(() => {
         let frame = 0
         let disposed = false
-        let followUp = 0
-        let lateSettle = 0
         const measure = () => {
           const next = measurePromptHistoryRail(sessionId)
           setLayout((current) => (samePromptHistoryLayout(current, next) ? current : next))
@@ -9558,22 +9616,7 @@ function dwClearNativeAtmospheres() {
           if (disposed || frame !== 0) return
           frame = window.requestAnimationFrame(() => {
             frame = 0
-            if (disposed) return
-            measure()
-            // Layout often settles a frame or two after a resize or a sidebar
-            // transition; re-measure once more so a transiently undetectable
-            // native rail can never leave the prompt rail in fallback position.
-            if (followUp !== 0) window.clearTimeout(followUp)
-            followUp = window.setTimeout(() => {
-              followUp = 0
-              if (!disposed) measure()
-            }, 240)
-            // Sidebar width transitions can outlast one follow-up frame.
-            if (lateSettle !== 0) window.clearTimeout(lateSettle)
-            lateSettle = window.setTimeout(() => {
-              lateSettle = 0
-              if (!disposed) measure()
-            }, 700)
+            if (!disposed) measure()
           })
         }
         schedule()
@@ -9587,20 +9630,14 @@ function dwClearNativeAtmospheres() {
         const mutationObserver = typeof MutationObserver === 'function' ? new MutationObserver(schedule) : null
         if (mutationObserver !== null) mutationObserver.observe(scroll ?? document.body, { childList: true, subtree: true })
         window.addEventListener('resize', schedule)
-        if (scroll !== null) scroll.addEventListener('scroll', schedule, { passive: true })
-        document.addEventListener('scroll', schedule, true)
         const settle = window.setTimeout(schedule, 300)
         return () => {
           disposed = true
           window.clearTimeout(settle)
           if (frame !== 0) window.cancelAnimationFrame(frame)
-          if (followUp !== 0) window.clearTimeout(followUp)
-          if (lateSettle !== 0) window.clearTimeout(lateSettle)
           if (resizeObserver !== null) resizeObserver.disconnect()
           if (mutationObserver !== null) mutationObserver.disconnect()
           window.removeEventListener('resize', schedule)
-          if (scroll !== null) scroll.removeEventListener('scroll', schedule)
-          document.removeEventListener('scroll', schedule, true)
         }
       }, [sessionId, prompts.length])
 

@@ -84,12 +84,18 @@ prompts.
   the card dismisses it and clears the filter, and Escape does the same and
   returns focus to the magnifier.
 - **Placement**: the rail measures the conversation's scroll surface, its
-  composer seat, and the native turn rail's marks, then sits below the native
-  rail when at least 90 px of room is available; otherwise it falls back to the
-  vertical middle of the usable scrollport. Its bottom always stays above the
-  composer. It re-measures in one animation frame on window resize, scroll,
-  composer-height changes, sidebar-width changes, and the native rail
-  appearing/loading, with a follow-up measurement after a short settle delay.
+  composer seat, and the native turn rail's **stable frame column** — not the
+  union of its mark buttons, which select and move inside that frame while the
+  conversation scrolls. It sits directly below the frame on the same 28 px
+  column, at the same distance from the conversation's right edge, when at
+  least 90 px of room is available; otherwise it falls back to the vertical
+  middle of the usable scrollport. Its bottom always stays above the composer.
+  It re-measures in one animation frame on window resize, composer-height
+  changes, sidebar-width changes, and the native rail mounting/loading;
+  scrolling the conversation does **not** re-measure or move it. When the shell
+  hides the native rail in a narrow conversation container (900 px or less),
+  the prompt rail is hidden too — matching the native surface — and it keeps
+  the right-edge fallback column only when no native rail exists at all.
 
 The rail with the search card open — with the button near the composer the card
 flips to the magnifier's left (right edge 8 px from the button):

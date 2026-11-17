@@ -2939,3 +2939,44 @@ settings document or native-surface change.
 - Flags are not rendered in rail mode because the rows themselves are not
   rendered; no Host involvement means status freshness is exactly the composer
   cards' own snapshot refresh.
+
+## 2026-11-17 — Prompt-history rail anchored to the native turn-rail frame (`prompt-rail-anchor`)
+
+Browser-half fix for the right-edge prompt-history rail drifting during
+conversation scroll and lagging while the right sidebar is resized.
+
+### Cause / fix
+
+- The old measurement used the union of the native turn rail's mark buttons
+  (`right`/`bottom` of every small button near the scroll edge) and re-ran on
+  every `scroll` event. The native rail's marks live inside a fixed frame; their
+  selection/movement made the measured bottom change and the rail shift by one
+  mark per scroll.
+- The rail now resolves the native turn rail's **stable frame** (class token
+  `_frame`, absolutely positioned, 28 px wide) and anchors to that frame's
+  `right` and `bottom + 10`, so the right-edge distance and vertical position
+  stay put. Scroll listeners and the 240/700 ms follow-up re-measures were
+  removed, so dragging the right sidebar follows the frame in one rAF instead
+  of lagging then snapping.
+- The shell hides the native frame with a container query at conversation width
+  ≤ 900 px; the prompt rail now returns no layout there and disappears with it.
+  Only a Session without any native rail keeps the old right-edge fallback.
+
+### Evidence (isolated demo instance with a six-turn Session)
+
+- 1728 px: native frame `top 393 / bottom 455 / right 1709 / width 28`;
+  prompt rail `top 465 / right 1709` (frame bottom + 10, same column).
+- Scroll `scrollTop` 0 → 600 → 1200 → 1800 → 2364: prompt rail stayed
+  `top 465 / right 1709` at every frame (no per-scroll movement).
+- Widths 1100 / 980 / 900 / 800: native frame `display: none` (container query)
+  and `[data-psp-rail]` absent; at 1728 it is visible again on the native
+  column.
+- `node --check src/client.js` OK; `npm test` 360/360; docs links 23.
+
+### Limits
+
+- The frame is identified by the shell's hashed `_frame` class token plus
+  absolute/28 px geometry; if the shell renames or restyles it, the rail falls
+  back to the old mark-union placement instead of hiding.
+- The probe ran on the isolated demo instance, not on the production page; the
+  native rail's container-query threshold is the shell's 900 px rule.
