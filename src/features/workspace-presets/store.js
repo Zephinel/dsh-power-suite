@@ -145,7 +145,7 @@ export function storePath(dshHome) {
  * Reads happen lazily; writes serialize on one chain, publish to disk before
  * memory, and land atomically through a temporary sibling plus rename.
  * @param {string} dshHome - the harness home directory.
- * @returns {{ get(workspaceId: string): Promise<string | null>, set(workspaceId: string, preset: string | null): Promise<void> }} the store.
+ * @returns {{ get(workspaceId: string): Promise<string | null>, set(workspaceId: string, preset: string | null): Promise<string | null> }} the store.
  */
 export function createPresetStore(dshHome) {
   const file = storePath(dshHome)
@@ -162,6 +162,12 @@ export function createPresetStore(dshHome) {
     state = parseState(text)
     return state
   }
+  /**
+   * Serialize one write on the store chain.
+   * @template T
+   * @param {() => Promise<T>} task - write to run after the current tail.
+   * @returns {Promise<T>} the write result.
+   */
   const enqueue = (task) => {
     const run = chain.then(task, task)
     chain = run.then(

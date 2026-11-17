@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /**
  * Repository gate:
- *   1. syntax-check every checked-in JavaScript module under src/;
- *   2. validate the bundle manifest, exports, icon, locale, and cordis patch;
- *   3. validate local Markdown links (docs/, README, CHANGELOG, PRODUCT, skills);
- *   4. run the node:test suites;
- *   5. require reviewed release-notes for the package version.
+ *   1. syntax-check both package entries and every Host feature module
+ *      (src/shared is parsed by the typecheck);
+ *   2. no-build typecheck (`tsc --noEmit`, Phase 1 of the TS migration plan);
+ *   3. validate the bundle manifest, exports, icon, locale, and cordis patch;
+ *   4. validate local Markdown links (docs/, README, CHANGELOG, PRODUCT, skills);
+ *   5. run the node:test suites;
+ *   6. require reviewed release-notes for the package version.
  *
  * Run with `npm run check`. CI runs the same script.
  */
@@ -50,11 +52,14 @@ for (const file of sources) {
 
 // 2. No-build typecheck (Phase 1 of docs/plans/typescript-migration.md).
 const tsc = resolve(root, 'node_modules/typescript/bin/tsc')
+let typecheckPassed = false
 try {
   run([tsc, '--noEmit'])
+  typecheckPassed = true
 } catch {
   failures.push('typecheck failed: node node_modules/typescript/bin/tsc --noEmit')
 }
+if (typecheckPassed) console.log('typecheck: ok (tsc --noEmit; src/client.js opted out until Phase 3)')
 
 // 3. Manifest checks.
 const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))

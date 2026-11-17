@@ -29,7 +29,7 @@ const FETCH_TIMEOUT_MS = 5_000
 const MAX_HIGHLIGHTS = 6
 
 /**
- * @typedef {Record<string, any>} UpdateCheckView
+ * @typedef {object} UpdateCheckView
  * @property {string} current - running package version; `0.0.0` when unknown.
  * @property {string | null} latest - newest stable published version, or null
  *   when it could not be read (or is not a stable version).

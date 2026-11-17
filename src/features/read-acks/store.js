@@ -170,7 +170,7 @@ export function readAcksPath(dshHome) {
  * Reads are lazy; writes serialize on one chain, land atomically through a
  * temporary sibling plus rename, and publish to memory only after the rename.
  * @param {string} dshHome - harness home directory.
- * @returns {{ get(): Promise<Record<string, number>>, record(entries: Record<string, number>): Promise<void> }} the store.
+ * @returns {{ get(): Promise<Record<string, number>>, record(entries: Record<string, number>): Promise<Record<string, number>> }} the store.
  */
 export function createReadAckStore(dshHome) {
   const file = readAcksPath(dshHome)
@@ -207,6 +207,12 @@ export function createReadAckStore(dshHome) {
     })
     return loadPromise
   }
+  /**
+   * Serialize one write on the store chain.
+   * @template T
+   * @param {() => Promise<T>} task - write to run after the current tail.
+   * @returns {Promise<T>} the write result.
+   */
   const enqueue = (task) => {
     const run = chain.then(task, task)
     chain = run.then(

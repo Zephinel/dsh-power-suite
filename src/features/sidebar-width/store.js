@@ -128,7 +128,7 @@ export function sidebarWidthPath(dshHome) {
  * land atomically through a temporary sibling plus rename, and publish to
  * memory only after the rename.
  * @param {string} dshHome - harness home directory.
- * @returns {{ get(): Promise<{ version: number, sidebarWidth: number | null }>, set(sidebarWidth: number): Promise<void> }} the store.
+ * @returns {{ get(): Promise<{ version: number, sidebarWidth: number | null }>, set(sidebarWidth: number): Promise<{ version: number, sidebarWidth: number | null }> }} the store.
  */
 export function createSidebarWidthStore(dshHome) {
   const file = sidebarWidthPath(dshHome)
@@ -163,6 +163,12 @@ export function createSidebarWidthStore(dshHome) {
     })
     return loadPromise
   }
+  /**
+   * Serialize one write on the store chain.
+   * @template T
+   * @param {() => Promise<T>} task - write to run after the current tail.
+   * @returns {Promise<T>} the write result.
+   */
   const enqueue = (task) => {
     const run = chain.then(task, task)
     chain = run.then(

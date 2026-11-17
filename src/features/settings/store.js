@@ -193,7 +193,7 @@ export function settingsPath(dshHome) {
  * Reads are lazy; writes serialize on one chain, land atomically through a
  * temporary sibling plus rename, and publish to memory only after the rename.
  * @param {string} dshHome - harness home directory.
- * @returns {{ get(): Promise<Settings>, update(patch: import('../../shared/protocol.js').SettingsPatch): Promise<void> }} the store.
+ * @returns {{ get(): Promise<Settings>, update(patch: import('../../shared/protocol.js').SettingsPatch): Promise<Settings> }} the store.
  */
 export function createSettingsStore(dshHome) {
   const file = settingsPath(dshHome)
@@ -210,6 +210,12 @@ export function createSettingsStore(dshHome) {
     state = parseSettings(text)
     return state
   }
+  /**
+   * Serialize one write on the store chain.
+   * @template T
+   * @param {() => Promise<T>} task - write to run after the current tail.
+   * @returns {Promise<T>} the write result.
+   */
   const enqueue = (task) => {
     const run = chain.then(task, task)
     chain = run.then(

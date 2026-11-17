@@ -203,7 +203,7 @@ export function sessionPinsPath(dshHome) {
  * Reads are lazy; writes serialize on one chain, land atomically through a
  * temporary sibling plus rename, and publish to memory only after the rename.
  * @param {string} dshHome - harness home directory.
- * @returns {{ get(): Promise<{ version: number, rev: number, pinned: string[] }>, apply(ops: Array<{ op: 'pin' | 'unpin', id: string }>): Promise<void> }} the store.
+ * @returns {{ get(): Promise<{ version: number, rev: number, pinned: string[] }>, apply(ops: Array<{ op: 'pin' | 'unpin', id: string }>): Promise<{ version: number, rev: number, pinned: string[] }> }} the store.
  */
 export function createSessionPinStore(dshHome) {
   const file = sessionPinsPath(dshHome)
@@ -238,6 +238,12 @@ export function createSessionPinStore(dshHome) {
     })
     return loadPromise
   }
+  /**
+   * Serialize one write on the store chain.
+   * @template T
+   * @param {() => Promise<T>} task - write to run after the current tail.
+   * @returns {Promise<T>} the write result.
+   */
   const enqueue = (task) => {
     const run = chain.then(task, task)
     chain = run.then(
