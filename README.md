@@ -132,7 +132,7 @@ dsh web
 ```
 
 1. Expand the left sidebar: **Running & recent** sits above the native Workspaces header, and the Workspace list is split into **Active Projects** and **Inactive Projects**.
-2. Open a Session that has sent prompts: the prompt-history rail appears at the conversation's right edge, and the modifier + ↑/↓ recalls earlier prompts in the composer.
+2. Open a Session with at least two turns that has sent prompts: the prompt-history rail appears below the native turn rail, and the modifier + ↑/↓ recalls earlier prompts in the composer (one-turn Sessions keep the keyboard recall but have no native rail column to host the ticks).
 3. Open **Files** in the right sidebar and click **Artifacts** to list what the Session produced and what you attached.
 4. Click the round launcher at the bottom-right: the page narrows, and hovering outlines the element a click would annotate.
 5. Open the bundle's page under **Plugins** for its settings: the prompt-history modifier and the two retention windows.

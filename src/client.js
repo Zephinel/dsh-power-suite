@@ -9267,7 +9267,7 @@ function dwClearNativeAtmospheres() {
     const PROMPT_HISTORY_PREVIEW_CSS = `
 .psp-rail{position:fixed;z-index:60;display:flex;flex-direction:column;align-items:center;box-sizing:border-box;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:16px;pointer-events:auto}
 /* Portaled into the native TurnNavigator frame: reuse the native column's positioning (right + sticky band) and put the prompt rail directly below it. */
-[class*="_frame"] > .psp-rail{position:absolute;top:calc(100% + 10px);right:0;left:auto;width:28px;max-height:min(420px,calc(var(--turn-rail-band,800px) / 2 - 50% - 16px));z-index:auto}
+[class*="_frame"] > .psp-rail{position:absolute;top:calc(100% + 10px);right:0;left:auto;width:100%;max-height:min(420px,calc(var(--turn-rail-band,800px) / 2 - 50% - 16px));overflow:hidden;z-index:auto}
 .psp-rail-divider{flex:none;align-self:flex-end;width:32px;height:1px;margin:2px 0 6px;border-radius:1px;background:var(--dsw-alias-border-l3,var(--dsw-alias-border-l2))}
 .psp-marks{flex:1 1 auto;width:100%;min-height:0;display:flex;flex-direction:column;align-items:stretch;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none}
 .psp-marks::-webkit-scrollbar{display:none;width:0;height:0}
@@ -9433,7 +9433,7 @@ function dwClearNativeAtmospheres() {
       const composerTop = composer === null ? window.innerHeight : composer.getBoundingClientRect().top
       return {
         right: Math.round(window.innerWidth - frameRect.right),
-        width: 28,
+        width: Math.round(frameRect.width),
         composerTop: Math.round(composerTop)
       }
     }
@@ -9465,10 +9465,11 @@ function dwClearNativeAtmospheres() {
      * Prompt-history rail (requirement 3, corrected right-edge design).
      *
      * The composer dock registration is only a session-scoped data seat: this
-     * component renders nothing in the composer flow and portals a fixed rail
-     * to the document body. The rail sits in the Conversation's right-edge
-     * column directly below the native Turn navigation, separated from it by a
-     * short divider. It lists this Session's sent prompts as fixed-pitch tick
+     * component renders nothing in the composer flow. The rail is portaled into
+     * the native Session-history turn-rail frame, directly below its marks and
+     * on its column, separated from it by a short divider; the shell's own
+     * layout owns the rail's position. The hover preview and search cards are
+     * portaled to the document body as viewport-fixed overlays. It lists this Session's sent prompts as fixed-pitch tick
      * marks (oldest at top, newest at the bottom), previews a mark's full text to its left on hover
      * or focus, copies it into the composer draft on click or Enter, and
      * reveals a floating search card from the rail's search button. Renders
@@ -9503,22 +9504,32 @@ function dwClearNativeAtmospheres() {
       const [frame, setFrame] = React.useState(null)
       React.useLayoutEffect(() => {
         let disposed = false
+        let frameRequest = 0
         const resolve = () => {
+          frameRequest = 0
           if (disposed) return
           const scroll = promptHistoryScrollSurface(sessionId)
           const next = scroll === null ? null : promptHistoryTurnRailFrame(scroll)
-          setFrame((current) => (current === next ? current : next))
+          setFrame((current) => {
+            if (current === next) return current
+            return next
+          })
+        }
+        const schedule = () => {
+          if (disposed || frameRequest !== 0) return
+          frameRequest = window.requestAnimationFrame(resolve)
         }
         resolve()
-        const observer = typeof MutationObserver === 'function' ? new MutationObserver(resolve) : null
+        const observer = typeof MutationObserver === 'function' ? new MutationObserver(schedule) : null
         if (observer !== null) observer.observe(document.body, { childList: true, subtree: true })
-        window.addEventListener('resize', resolve)
-        const settle = window.setTimeout(resolve, 300)
+        window.addEventListener('resize', schedule)
+        const settle = window.setTimeout(schedule, 300)
         return () => {
           disposed = true
           window.clearTimeout(settle)
+          if (frameRequest !== 0) window.cancelAnimationFrame(frameRequest)
           if (observer !== null) observer.disconnect()
-          window.removeEventListener('resize', resolve)
+          window.removeEventListener('resize', schedule)
         }
       }, [sessionId, prompts.length])
 
@@ -9551,7 +9562,7 @@ function dwClearNativeAtmospheres() {
         const marks = marksRef.current
         if (marks === null) return
         marks.scrollTop = marks.scrollHeight
-      }, [sessionId, promptCount])
+      }, [sessionId, promptCount, frame])
 
       // A finished turn can have appended a prompt; refetch once input is plain again.
       const previousPhase = React.useRef(phase)
@@ -9565,9 +9576,9 @@ function dwClearNativeAtmospheres() {
         if (previewTimer.current !== null) window.clearTimeout(previewTimer.current)
       }, [])
 
-      // Keep the fixed rail glued to the Conversation's right-edge rail column.
-      // One rAF-coalesced measurement serves resizes, composer height changes,
-      // sidebar width changes, scrolling, and the native rail appearing/loading.
+      // Keep the two body-portaled cards anchored to the native column and the
+      // composer. The rail itself is inside the native frame and needs no
+      // positioning loop here.
       React.useEffect(() => {
         let frame = 0
         let disposed = false
@@ -9784,7 +9795,9 @@ function dwClearNativeAtmospheres() {
 
       const rail = React.createElement('div', {
         className: 'psp-rail',
-        'data-psp-rail': ''
+        'data-psp-rail': '',
+        role: 'group',
+        'aria-label': t('list.aria')
       },
       React.createElement('div', {
         className: 'psp-rail-divider',

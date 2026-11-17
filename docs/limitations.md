@@ -422,16 +422,19 @@
   after the next send, turn completion, or page reload.
 - **Copy replaces the draft.** Clicking a rail mark replaces the whole draft
   text, exactly like a keyboard recall.
-- **Rail placement is measured, not owned by the native shell.** The rail is a
-  fixed-position column placed against the Conversation's right edge. The native
-  turn rail is recognised by geometry (small buttons near the scroll surface's
-  right edge), not by a class name, so an unusual native layout can move the
-  rail to its fallback: the vertical middle of the usable scrollport. Placement
-  re-measures in one animation frame on window resize (which also covers zoom
-  and DPI changes), scroll, composer height, sidebar width, and native-rail
-  changes; the rail is hidden while the Session has no sent prompts.
-- **Overflow is deliberately quiet.** A long history caps the rail at
-  `min(available band, 420 px)`; the ticks scroll inside that frame with a
+- **Rail placement is owned by the native shell.** The rail is portaled inside
+  the native Session-history turn-rail frame, directly below its marks on the
+  same 28 px column; its right edge, sticky vertical band, dock/sidebar drag
+  tracking and narrow-container hiding are the native frame's own layout. There
+  is no JavaScript position loop for the rail. Because the native TurnNavigator
+  renders nothing for fewer than two turn items, a one-turn Session (even with
+  several steering prompts) keeps the ⌘↑/⌘↓ recall but shows no rail; the rail
+  also disappears when the native turn rail itself does. A small anchor
+  measurement only places the body-portaled hover/search cards and re-runs on
+  layout changes.
+- **Overflow is deliberately quiet.** A long history caps the rail at the
+  native turn-rail band/space below its frame (and at most 420 px), with the
+  rail clipped so its chrome cannot paint over the composer; the ticks scroll inside that frame with a
   hidden scrollbar and 24 px fade masks at the top and bottom, and the magnifier
   stays pinned at the rail's foot. The hover card line-clamps long prompts to
   six lines instead of scrolling; the full prompt stays in the mark's accessible

@@ -43,7 +43,9 @@ portal to the page body because the native frame is transformed/contained, and
 they remain viewport-fixed. The composer dock slot only supplies the
 Session-scoped hooks: the component renders nothing in the composer flow — no
 horizontal card and no Conversation History bar. The rail is absent while the
-Session has no sent prompts, or when the native turn rail itself is absent.
+Session has no sent prompts, or when the native turn rail itself is absent
+(the native TurnNavigator renders nothing for fewer than two turn items, so a
+one-turn Session keeps the keyboard recall but has no rail).
 
 ![Prompt-history rail below the native turn rail, with a full-text preview card](assets/prompt-history-preview.png)
 
@@ -57,9 +59,10 @@ Session has no sent prompts, or when the native turn rail itself is absent.
   tick in view when the list loads or grows. The rail has no visible scrollbar
   but still scrolls with the wheel
   or trackpad when there are more prompts than fit, and it caps its height at
-  `min(available band, 420 px)` like the native turn rail: a long history
-  scrolls its ticks inside that frame with 24 px fade masks at the top and
-  bottom, while the search button stays pinned at the rail's foot. Each mark's
+  the native turn-rail band/space below its frame (and at most 420 px), clipped
+  so its chrome cannot paint over the composer: a long history scrolls its ticks
+  inside that frame with 24 px fade masks at the top and bottom, while the
+  search button stays pinned at the rail's foot. Each mark's
   accessible name carries the action and the prompt text (`Copy prompt #N: …`),
   so the visible tick never hides what the mark stands for.
 - **Hover or keyboard focus**: a preview card opens to the **left** of the rail
@@ -90,8 +93,9 @@ Session has no sent prompts, or when the native turn rail itself is absent.
   returns focus to the magnifier.
 - **Placement**: because the rail is a child of the native frame, its
   horizontal position, sticky vertical band, dock/sidebar drag behavior and
-  narrow-container visibility are the native ones — there is no separate
-  measurement loop, scroll tracking or drag catch-up. It keeps the native
+  narrow-container visibility are the native ones — no JavaScript loop positions
+  the rail, and there is no scroll or drag catch-up. A small anchor measurement
+  only places the body-portaled hover/search cards. It keeps the native
   column's 28 px width and 10 px gap below the native marks; a long prompt list
   scrolls inside the native band cap with the same top/bottom fades. The
   preview/search cards are body portals in viewport coordinates and are

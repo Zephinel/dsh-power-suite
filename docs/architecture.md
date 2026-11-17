@@ -511,7 +511,8 @@ in the composer flow. The rail is portaled **inside the native Session-history
 turn-rail frame** and placed by CSS directly below its marks on the same 28 px
 column (`right: 0`, `top: calc(100% + 10px)`, native `--turn-rail-band` height
 cap), so sticky positioning, dock/sidebar drag tracking and narrow-container
-hiding all come from the shell rather than a JavaScript measurement loop. The
+hiding all come from the shell. A small measurement only supplies the right
+edge/composer top for the body-portaled cards. The
 hover preview and search cards are portaled to the document body (the native
 frame is transformed/contained, so fixed-position overlays inside it would
 resolve against the frame) and use viewport coordinates. Its marks reuse the

@@ -120,8 +120,8 @@ and no dated release heading is added until the release is cut.
   click target.
 - **Prompt history** — the configured modifier + ↑/↓ recalls prompts already
   sent in this Session; plain arrows keep their original behavior. A vertical
-  rail at the conversation's right edge, below the native turn rail and
-  separated by a short divider, lists the current Session's sent prompts as
+  rail inside the native turn-rail frame, below its marks and separated by a
+  short divider, lists the current Session's sent prompts as
   **native-style tick marks** in reading order — the oldest prompt is the top
   tick and the newest sits at the bottom, and the rail keeps the newest tick in
   view when the list loads or grows. Hover or keyboard focus shows the full
@@ -129,9 +129,13 @@ and no dated release heading is added until the release is cut.
   composer draft, and a pinned search button below the marks reveals a floating
   substring filter (the search card opens directly below the magnifier or flips
   to its left when there is no room above the composer; it dismisses on a blank
-  outside click or Escape). A long history caps the rail at
-  `min(available band, 420 px)`, scrolls its ticks behind 24 px fade masks with
-  hidden scrollbars, and keeps the search button pinned at the foot. The route
+  outside click or Escape). The native TurnNavigator renders nothing for fewer
+  than two turn items, so a one-turn Session keeps the ⌘↑/⌘↓ recall but has no
+  rail; otherwise the rail reuses the native frame's column, sticky band and
+  narrow hiding. A long history caps at the native band/space below the frame
+  (and at most 420 px), clips its chrome so it cannot paint over the composer,
+  scrolls its ticks behind 24 px fade masks with hidden scrollbars, and keeps
+  the search button pinned at the foot. The route
   returns `{ seq, text, at }` for every prompt, where `at` is the Session event
   time in epoch milliseconds or `null` when the event has no usable time; the
   rail and hover card show the times, and a Host that predates the field has
