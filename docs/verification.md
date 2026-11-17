@@ -3035,14 +3035,16 @@ remain the next steps.
 
 ## 2026-11-17 — 0.1.0 published to npm
 
-First public release, cut from the release commit `28837ba`
-(`chore(release): prepare 0.1.0`) whose body carries
+First public release, cut from the release commit `dfefd97`
+(`chore(release): prepare 0.1.0`; its pre-rewrite SHA was `28837ba`, see the
+2026-11-18 identity-cleanup record below) whose body carries
 `Release-Notes-Review: sha256=143090e0…`.
 
 - Pre-tag gates passed locally: `npm run check` (24 modules, 22 test files,
   364/364 tests, docs links 26, release-notes 6+6), `npm run check:release`
   (PASS, 95 packaged files), publish-manifest gate and `git diff --check`.
-- Tag `v0.1.0` is annotated (`0.1.0 — 2026-11-17`) and points at `28837ba`.
+- Tag `v0.1.0` is annotated (`0.1.0 — 2026-11-17`); after the 2026-11-18
+  identity cleanup it points at the rewritten release commit `dfefd97`.
 - Publish workflow run [44131247876](https://github.com/Zephinel/dsh-power-suite/actions/runs/44131247876):
   all gates passed (tag/version, publish manifest, `npm run check`,
   `pack:check`, dated CHANGELOG section, release notes, notes-approval hash) and
@@ -3063,3 +3065,28 @@ First public release, cut from the release commit `28837ba`
   `0.1.0-rc.0` remains as an untagged prerelease. The tagged artifacts were not
   edited after tagging; the post-publish docs sync only updates the
   README/docs, never `release-notes/`.
+
+
+## 2026-11-18 — Contributor identity cleanup (history rewrite)
+
+The historical `rexxin <rexxin@users.noreply.github.com>` (19 commits,
+2026-11-11/12) and `ann-impl-a <ann-impl-a@local>` (2 commits) identities were
+rewritten to the canonical `moekyo <shigotods@outlook.com>` with
+`git filter-repo --mailmap`.
+
+- Content is unchanged: the old and new `main` tree hash is `791ab6b3`, and the
+  release commit's tree hash is `f32ecb8f`; only author/committer metadata and
+  therefore commit SHAs differ.
+- Old `main` `5c862f7` → new `6bf09c9`; the annotated `v0.1.0` tag was
+  re-pointed from `28837ba` to `dfefd97`.
+- GitHub Contributors now reports only `moekyo` (442 commits). The pre-rewrite
+  history is backed up locally in `/tmp/dsh-power-suite-pre-rewrite.bundle`
+  (not committed).
+- npm `@zephinel/dsh-power-suite@0.1.0` is unchanged and was not republished:
+  its provenance attestation still references the pre-rewrite commit
+  `28837ba`, which is no longer reachable from GitHub refs. The artifact and its
+  signatures remain valid; only the provenance source link points at the old
+  SHA.
+- Earlier verification records that quote pre-rewrite SHAs are historical; this
+  record explains the difference. Local feature branches that were never pushed
+  still contain the old SHAs and should not be pushed as-is.

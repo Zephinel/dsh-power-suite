@@ -6,6 +6,14 @@ All notable changes to this repository are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Contributor identity cleanup.** Repository history was rewritten with
+  `git filter-repo --mailmap` to attribute the early `rexxin`/`ann-impl-a`
+  commits to the canonical `moekyo` identity; the tree content is unchanged and
+  the `v0.1.0` tag was re-pointed at the rewritten release commit. The npm
+  `0.1.0` release was not republished.
+
 ## [0.1.0] - 2026-11-17
 
 First public release. This package had no previous release: the earlier
