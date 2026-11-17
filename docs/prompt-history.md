@@ -31,14 +31,19 @@ send, so your own new prompt is recallable immediately.
 
 ## History rail
 
-A fixed vertical rail sits at the right edge of the conversation, directly
-**below** the native **Session history** turn rail and sharing its column. A
+The rail renders **inside the native Session-history turn-rail frame**, directly
+below its marks and sharing its column, instead of being positioned as a separate
+fixed overlay. The shell owns that frame's right edge, sticky band, dock/sidebar
+drag tracking and narrow-container hiding, so the prompt rail inherits all of
+them with no JavaScript position updates (native CSS puts it at the column's
+`right: 0` and `top: calc(100% + 10px)` with the native band height). A
 horizontal divider (a 32 x 1 px line, right-aligned on that column) separates
-the native rail from the prompt marks. The composer dock slot only supplies the
+the native rail from the prompt marks. The hover preview and search cards still
+portal to the page body because the native frame is transformed/contained, and
+they remain viewport-fixed. The composer dock slot only supplies the
 Session-scoped hooks: the component renders nothing in the composer flow — no
-horizontal card and no Conversation History bar — and portals its fixed rail and
-cards to the page body. The rail is absent while the Session has no sent
-prompts.
+horizontal card and no Conversation History bar. The rail is absent while the
+Session has no sent prompts, or when the native turn rail itself is absent.
 
 ![Prompt-history rail below the native turn rail, with a full-text preview card](assets/prompt-history-preview.png)
 
@@ -83,22 +88,15 @@ prompts.
   nothing matches. There is no close (×) button: a blank pointer press outside
   the card dismisses it and clears the filter, and Escape does the same and
   returns focus to the magnifier.
-- **Placement**: the rail measures the conversation's scroll surface, its
-  composer seat, and the native turn rail's **stable frame column** — not the
-  union of its mark buttons, which select and move inside that frame while the
-  conversation scrolls. It sits directly below the frame on the same 28 px
-  column, at the same distance from the conversation's right edge, when at
-  least 90 px of room is available; otherwise it falls back to the vertical
-  middle of the usable scrollport. Its bottom always stays above the composer.
-  It re-measures in one animation frame on window resize, composer-height
-  changes, sidebar-width changes, and the native rail mounting/loading;
-  while a pointer drag is resizing a dock or the right sidebar it also
-  re-measures every frame (and for a short settle after release), and writes
-  the new box straight to the rail before paint instead of waiting for a React
-  commit. Scrolling the conversation does **not** re-measure or move it. When the shell
-  hides the native rail in a narrow conversation container (900 px or less),
-  the prompt rail is hidden too — matching the native surface — and it keeps
-  the right-edge fallback column only when no native rail exists at all.
+- **Placement**: because the rail is a child of the native frame, its
+  horizontal position, sticky vertical band, dock/sidebar drag behavior and
+  narrow-container visibility are the native ones — there is no separate
+  measurement loop, scroll tracking or drag catch-up. It keeps the native
+  column's 28 px width and 10 px gap below the native marks; a long prompt list
+  scrolls inside the native band cap with the same top/bottom fades. The
+  preview/search cards are body portals in viewport coordinates and are
+  re-anchored from the rail/toggle and composer geometry only when opened or
+  resized.
 
 The rail with the search card open — with the button near the composer the card
 flips to the magnifier's left (right edge 8 px from the button):

@@ -2940,63 +2940,51 @@ settings document or native-surface change.
   rendered; no Host involvement means status freshness is exactly the composer
   cards' own snapshot refresh.
 
-## 2026-11-17 — Prompt-history rail anchored to the native turn-rail frame (`prompt-rail-anchor`)
+## 2026-11-17 — Prompt-history rail rendered inside the native turn-rail frame (`prompt-rail-anchor`)
 
-Browser-half fix for the right-edge prompt-history rail drifting during
-conversation scroll and lagging while the right sidebar is resized.
+Browser-half fix for the prompt-history rail drifting during conversation scroll
+and trailing/snapping during dock or right-sidebar drags.
 
 ### Cause / fix
 
-- The old measurement used the union of the native turn rail's mark buttons
-  (`right`/`bottom` of every small button near the scroll edge) and re-ran on
-  every `scroll` event. The native rail's marks live inside a fixed frame; their
-  selection/movement made the measured bottom change and the rail shift by one
-  mark per scroll.
-- The rail now resolves the native turn rail's **stable frame** (class token
-  `_frame`, absolutely positioned, 28 px wide) and anchors to that frame's
-  `right` and `bottom + 10`, so the right-edge distance and vertical position
-  stay put. Scroll listeners and the 240/700 ms follow-up re-measures were
-  removed, so dragging the right sidebar follows the frame in one rAF instead
-  of lagging then snapping.
-- The shell hides the native frame with a container query at conversation width
-  ≤ 900 px; the prompt rail now returns no layout there and disappears with it.
-  Only a Session without any native rail keeps the old right-edge fallback.
+- The rail was a body-portaled fixed overlay positioned from the union of the
+  native turn rail's mark buttons and re-measured on scroll. Marks select and
+  move inside the native frame, so the measured bottom changed by one mark per
+  scroll; during a dock/sidebar drag the frame moved every frame while the
+  overlay only caught up after a state/delay pass, producing the “spring”, and
+  the narrow-container query hid the native rail without hiding ours.
+- Final fix (the user's suggestion): **reuse the native implementation** — the
+  rail is now portaled **inside the native `_frame`** (`eGxaPq_frame`) and placed
+  by CSS at `top: calc(100% + 10px); right: 0; width: 28px` with the native
+  `--turn-rail-band` height cap. Native layout now owns scrolling stability,
+  sticky vertical band, drag tracking and narrow hiding; there is no JS position
+  loop for the rail. The hover preview and search cards are still portaled to
+  `document.body` (the native frame is transformed/contained, so fixed-position
+  overlays inside it would resolve against the frame).
+- The old mark-union measurement is reduced to the native frame's right edge and
+  the composer top, used only to place the two body-portaled cards; the
+  no-native-frame fallback column is gone (the rail is absent with the native
+  rail, like the shell).
 
 ### Evidence (isolated demo instance with a six-turn Session)
 
-- 1728 px: native frame `top 393 / bottom 455 / right 1709 / width 28`;
-  prompt rail `top 465 / right 1709` (frame bottom + 10, same column).
-- Scroll `scrollTop` 0 → 600 → 1200 → 1800 → 2364: prompt rail stayed
-  `top 465 / right 1709` at every frame (no per-scroll movement).
-- Widths 1100 / 980 / 900 / 800: native frame `display: none` (container query)
-  and `[data-psp-rail]` absent; at 1728 it is visible again on the native
-  column.
+- Rail DOM parent is `eGxaPq_frame`; computed position `absolute`; at 1728 px:
+  native frame `top 393 / bottom 455 / right 1709`, rail `top 465 / right 1709`
+  (`top: 100% + 10`, same column).
+- Rapid width steps at 40 ms with a held pointer (1728 → 1700 → … → 1000 → 1400
+  → 1728): at every step the rail's `right` equalled the frame's `right`
+  (1709/1681/1631/…/1281), with no intermediate frame; at 1200/1100/1000 both
+  the frame and rail had zero boxes (native container query hiding both).
+- Conversation scroll 0 → 600 → 1200 → 1800 → 2364: rail stayed
+  `top 465 / right 1709`.
+- Hover preview card: `top 464 / right 1671 / 300×82`, fully in viewport;
+  search card: `top 565 / right 1709 / 300×61`.
 - `node --check src/client.js` OK; `npm test` 360/360; docs links 23.
-
-### Follow-up: drag spring
-
-The first fix removed the scroll drift and matched the native hide, but the rail
-still trailed then snapped while a dock/right-sidebar drag moved the native
-frame:
-
-- Cause: the position was only applied through a React state update, so it landed
-  after the commit while the native frame moved every drag frame; the delayed
-  follow-up timers added the rest of the spring.
-- Fix: the measurement now writes `top`/`right`/`max-height` straight to the
-  existing rail element before paint, keeps the state update for visibility and
-  the search card, runs a per-frame measurement burst while a pointer is pressed
-  and for 600 ms after release, and no longer resets the tick list's own scroll
-  position on every layout change.
-- Probe (same isolated six-turn Session, pointer held while the viewport was
-  stepped 1728 → 1000 px in 40 ms steps): at each visible step the rail's
-  `right` equalled the native frame's right exactly (1709, 1681, 1631, 1581,
-  1531, 1481, 1431, 1381, 1281), and both disappeared when the native frame's
-  container query hid it (1200/1100/1000).
 
 ### Limits
 
-- The frame is identified by the shell's hashed `_frame` class token plus
-  absolute/28 px geometry; if the shell renames or restyles it, the rail falls
-  back to the old mark-union placement instead of hiding.
-- The probe ran on the isolated demo instance, not on the production page; the
-  native rail's container-query threshold is the shell's 900 px rule.
+- The rail depends on the shell's hashed `_frame` class token; if a future shell
+  renames it, the rail is absent rather than mispositioned.
+- The rail inherits the native turn-rail frame's height/band; very tall native
+  rails leave correspondingly less room for the prompt ticks, like the native
+  column.

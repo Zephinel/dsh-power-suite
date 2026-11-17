@@ -9266,6 +9266,8 @@ function dwClearNativeAtmospheres() {
 
     const PROMPT_HISTORY_PREVIEW_CSS = `
 .psp-rail{position:fixed;z-index:60;display:flex;flex-direction:column;align-items:center;box-sizing:border-box;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:16px;pointer-events:auto}
+/* Portaled into the native TurnNavigator frame: reuse the native column's positioning (right + sticky band) and put the prompt rail directly below it. */
+[class*="_frame"] > .psp-rail{position:absolute;top:calc(100% + 10px);right:0;left:auto;width:28px;max-height:min(420px,calc(var(--turn-rail-band,800px) / 2 - 50% - 16px));z-index:auto}
 .psp-rail-divider{flex:none;align-self:flex-end;width:32px;height:1px;margin:2px 0 6px;border-radius:1px;background:var(--dsw-alias-border-l3,var(--dsw-alias-border-l2))}
 .psp-marks{flex:1 1 auto;width:100%;min-height:0;display:flex;flex-direction:column;align-items:stretch;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none}
 .psp-marks::-webkit-scrollbar{display:none;width:0;height:0}
@@ -9378,33 +9380,6 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
-     * Bounding box of the native Turn navigation marks, found by geometry.
-     *
-     * The native rail exposes no stable class name; its marks are the tiny,
-     * fixed-width buttons stacked near the scroll surface's right edge.
-     * @param {Element} scroll - Conversation scroll surface.
-     * @returns {{ right: number, bottom: number } | null} the rail box.
-     */
-    function promptHistoryTurnRailBox(scroll) {
-      const scrollRect = scroll.getBoundingClientRect()
-      const buttons = scroll.querySelectorAll('button')
-      let right = 0
-      let bottom = 0
-      let count = 0
-      for (const button of buttons) {
-        const rect = button.getBoundingClientRect()
-        if (rect.width <= 0 || rect.height <= 0) continue
-        if (rect.width > 44 || rect.height > 24) continue
-        if (rect.right < scrollRect.right - 64 || rect.right > scrollRect.right + 8) continue
-        if (rect.top < scrollRect.top - 8 || rect.bottom > scrollRect.bottom + 8) continue
-        count += 1
-        right = Math.max(right, rect.right)
-        bottom = Math.max(bottom, rect.bottom)
-      }
-      return count === 0 ? null : { right, bottom }
-    }
-
-    /**
      * The native turn rail's stable frame element.
      *
      * The shell renders the rail as an absolutely positioned 28 px column inside
@@ -9438,63 +9413,27 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
-     * Measure the fixed rail's frame against the Conversation's right edge.
+     * Read the native turn-rail column and the composer clearance.
      *
-     * The rail sits in the native turn rail's column: directly below it when
-     * there is room (a short divider between them), otherwise at the vertical
-     * middle of the usable scrollport. Its bottom stops above the composer.
+     * The rail itself now lives inside the native frame, so this only supplies
+     * the geometry the hover preview and search card need: the column's
+     * viewport-right distance and the composer's top edge.
      * @param {string} sessionId - Session identity.
-     * @returns {object | null} viewport geometry, or null before the Conversation mounts.
+     * @returns {{ right: number, width: number, composerTop: number } | null}
+     *   viewport geometry, or null before the Conversation/frame mounts.
      */
     function measurePromptHistoryRail(sessionId) {
       const scroll = promptHistoryScrollSurface(sessionId)
       if (scroll === null) return null
-      const scrollRect = scroll.getBoundingClientRect()
-      if (scrollRect.width <= 0 || scrollRect.height <= 0) return null
-      const composer = promptHistoryComposerSeat(sessionId)
-      const composerTop = composer === null ? Math.min(scrollRect.bottom, window.innerHeight) : composer.getBoundingClientRect().top
-      const bottomLimit = Math.min(composerTop, window.innerHeight) - 16
-      // Anchor to the native turn rail's frame, not to the union of its marks:
-      // marks select/move inside the frame while the Conversation scrolls, which
-      // made the old measurement drift by one mark per scroll.
       const frame = promptHistoryTurnRailFrame(scroll)
-      if (frame !== null) {
-        const frameStyle = window.getComputedStyle(frame)
-        const frameRect = frame.getBoundingClientRect()
-        const frameVisible = frameStyle.display !== 'none'
-          && frameStyle.visibility !== 'hidden'
-          && (frameRect.width > 0 || frameRect.height > 0)
-        // The shell hides the native turn rail in a narrow conversation
-        // container; follow it and hide the prompt rail as well.
-        if (!frameVisible) return null
-        const frameRight = frameRect.right
-        let top = frameRect.bottom + 10
-        if (bottomLimit - top < 90) {
-          top = Math.max(scrollRect.top + 16, Math.round(scrollRect.top + (bottomLimit - scrollRect.top) / 2))
-        }
-        if (bottomLimit - top < 90) top = Math.max(scrollRect.top + 8, bottomLimit - 90)
-        return {
-          top: Math.round(top),
-          right: Math.round(window.innerWidth - frameRight),
-          width: 28,
-          maxHeight: Math.round(Math.max(90, bottomLimit - top)),
-          composerTop: Math.round(composerTop)
-        }
-      }
-      // No native turn rail at all (very short Session): keep the old fallback
-      // column at the conversation's right edge.
-      const turnRail = promptHistoryTurnRailBox(scroll)
-      let top = null
-      if (turnRail !== null && bottomLimit - (turnRail.bottom + 10) >= 90) top = turnRail.bottom + 10
-      if (top === null) {
-        top = Math.max(scrollRect.top + 16, Math.round(scrollRect.top + (bottomLimit - scrollRect.top) / 2))
-      }
-      if (bottomLimit - top < 90) top = Math.max(scrollRect.top + 8, bottomLimit - 90)
+      if (frame === null) return null
+      const frameRect = frame.getBoundingClientRect()
+      if (frameRect.width <= 0 || frameRect.height <= 0) return null
+      const composer = promptHistoryComposerSeat(sessionId)
+      const composerTop = composer === null ? window.innerHeight : composer.getBoundingClientRect().top
       return {
-        top: Math.round(top),
-        right: Math.round(window.innerWidth - (turnRail === null ? scrollRect.right - 12 : turnRail.right)),
+        right: Math.round(window.innerWidth - frameRect.right),
         width: 28,
-        maxHeight: Math.round(Math.max(90, bottomLimit - top)),
         composerTop: Math.round(composerTop)
       }
     }
@@ -9507,10 +9446,8 @@ function dwClearNativeAtmospheres() {
      */
     function samePromptHistoryLayout(left, right) {
       if (left === null || right === null) return left === right
-      return left.top === right.top &&
-        left.right === right.right &&
+      return left.right === right.right &&
         left.width === right.width &&
-        left.maxHeight === right.maxHeight &&
         left.composerTop === right.composerTop
     }
 
@@ -9555,10 +9492,35 @@ function dwClearNativeAtmospheres() {
       const searchCardRef = React.useRef(null)
       const toggleRef = React.useRef(null)
       const marksRef = React.useRef(null)
-      const railRef = React.useRef(null)
       const previewTimer = React.useRef(null)
 
       const prompts = snapshot.sessionId === sessionId && snapshot.status === 'ready' ? snapshot.prompts : []
+
+      // Render the rail inside the native turn-rail frame instead of computing
+      // its viewport box ourselves: the shell already keeps that column fixed,
+      // follows dock/sidebar drags and hides it in a narrow container, so the
+      // rail inherits exactly the native behavior (including during drags).
+      const [frame, setFrame] = React.useState(null)
+      React.useLayoutEffect(() => {
+        let disposed = false
+        const resolve = () => {
+          if (disposed) return
+          const scroll = promptHistoryScrollSurface(sessionId)
+          const next = scroll === null ? null : promptHistoryTurnRailFrame(scroll)
+          setFrame((current) => (current === next ? current : next))
+        }
+        resolve()
+        const observer = typeof MutationObserver === 'function' ? new MutationObserver(resolve) : null
+        if (observer !== null) observer.observe(document.body, { childList: true, subtree: true })
+        window.addEventListener('resize', resolve)
+        const settle = window.setTimeout(resolve, 300)
+        return () => {
+          disposed = true
+          window.clearTimeout(settle)
+          if (observer !== null) observer.disconnect()
+          window.removeEventListener('resize', resolve)
+        }
+      }, [sessionId, prompts.length])
 
       // One request per Session and per finished turn. The per-effect guard
       // drops a response that resolves after a switch or a newer reload.
@@ -9611,17 +9573,6 @@ function dwClearNativeAtmospheres() {
         let disposed = false
         const measure = () => {
           const next = measurePromptHistoryRail(sessionId)
-          // Position the existing rail before the next paint instead of waiting
-          // for the React commit: during a dock/sidebar drag the native frame
-          // moves every frame, and a deferred state-only update made the rail
-          // trail behind and snap (“spring”). The state update below still
-          // drives visibility, search anchoring and the fade/max-height render.
-          const rail = railRef.current
-          if (rail !== null && next !== null) {
-            rail.style.top = `${next.top}px`
-            rail.style.right = `${next.right}px`
-            rail.style.maxHeight = `${Math.min(next.maxHeight, 420)}px`
-          }
           setLayout((current) => (samePromptHistoryLayout(current, next) ? current : next))
         }
         const schedule = () => {
@@ -9642,41 +9593,14 @@ function dwClearNativeAtmospheres() {
         const mutationObserver = typeof MutationObserver === 'function' ? new MutationObserver(schedule) : null
         if (mutationObserver !== null) mutationObserver.observe(scroll ?? document.body, { childList: true, subtree: true })
         window.addEventListener('resize', schedule)
-        let burstFrame = 0
-        let burstUntil = 0
-        const pump = () => {
-          if (burstFrame !== 0) return
-          const tick = () => {
-            burstFrame = 0
-            if (disposed) return
-            measure()
-            if (performance.now() < burstUntil) burstFrame = window.requestAnimationFrame(tick)
-          }
-          burstFrame = window.requestAnimationFrame(tick)
-        }
-        const burst = (duration) => {
-          burstUntil = Math.max(burstUntil, performance.now() + duration)
-          pump()
-        }
-        // Any pressed pointer may be dragging a dock/sidebar edge; follow every
-        // frame while it moves, then keep measuring for the settle animation.
-        const onPointerMove = (event) => { if (event.buttons !== 0) burst(250) }
-        const onPointerUp = () => burst(600)
-        window.addEventListener('pointermove', onPointerMove, true)
-        window.addEventListener('pointerup', onPointerUp, true)
-        window.addEventListener('pointercancel', onPointerUp, true)
         const settle = window.setTimeout(schedule, 300)
         return () => {
           disposed = true
           window.clearTimeout(settle)
           if (frame !== 0) window.cancelAnimationFrame(frame)
-          if (burstFrame !== 0) window.cancelAnimationFrame(burstFrame)
           if (resizeObserver !== null) resizeObserver.disconnect()
           if (mutationObserver !== null) mutationObserver.disconnect()
           window.removeEventListener('resize', schedule)
-          window.removeEventListener('pointermove', onPointerMove, true)
-          window.removeEventListener('pointerup', onPointerUp, true)
-          window.removeEventListener('pointercancel', onPointerUp, true)
         }
       }, [sessionId, prompts.length])
 
@@ -9842,7 +9766,7 @@ function dwClearNativeAtmospheres() {
         }
       }
 
-      if (prompts.length === 0 || layout === null) return null
+      if (prompts.length === 0 || frame === null) return null
 
       const needle = query.trim().toLowerCase()
       // Oldest first, newest at the rail's foot (reading order, like a chat log).
@@ -9853,18 +9777,14 @@ function dwClearNativeAtmospheres() {
         marks.push({ prompt, ordinal: index + 1 })
       }
 
-      // The rail caps its height like the native turn rail so a long history
-      // scrolls its ticks internally while the search button stays pinned and
-      // reachable at the rail's foot.
-      const railMaxHeight = Math.min(layout.maxHeight, 420)
+      // The native frame caps the rail height (same CSS vars as the native
+      // turn rail) so a long history scrolls its ticks internally while the
+      // search button stays pinned and reachable at the rail's foot.
       const style = React.createElement('style', null, PROMPT_HISTORY_PREVIEW_CSS)
-      const railStyle = { top: layout.top, right: layout.right, width: layout.width, maxHeight: railMaxHeight }
 
       const rail = React.createElement('div', {
         className: 'psp-rail',
-        'data-psp-rail': '',
-        ref: railRef,
-        style: railStyle
+        'data-psp-rail': ''
       },
       React.createElement('div', {
         className: 'psp-rail-divider',
@@ -9968,9 +9888,14 @@ function dwClearNativeAtmospheres() {
         : null)
         : null
 
-      return ReactDOM.createPortal(
-        React.createElement(React.Fragment, null, style, rail, previewCard, searchCard),
-        document.body)
+      // The rail lives inside the native frame so native layout owns its
+      // position. The preview and search cards must stay viewport-fixed: the
+      // native frame is transformed/contained, which would make `position:
+      // fixed` resolve against the frame, so portal those two to the body.
+      return React.createElement(React.Fragment, null,
+        ReactDOM.createPortal(React.createElement(React.Fragment, null, style, rail), frame),
+        ReactDOM.createPortal(previewCard, document.body),
+        ReactDOM.createPortal(searchCard, document.body))
     }
 
     /**

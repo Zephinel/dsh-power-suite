@@ -507,24 +507,26 @@ search, drag, and dialog. See [dynamic-workspaces.md](dynamic-workspaces.md).
 
 A `conversation.input.dock` registration supplies the Session-scoped hooks
 (`sessionId`, `useInput`, `inputActions`, `t`), but the component renders nothing
-in the composer flow: its visible surfaces are body-portaled, fixed-position
-elements. The rail is a fixed 28 px column at the Conversation's right edge,
-directly below the native turn rail (detected by geometry: the tiny buttons near
-the scroll surface's right edge, with no native class names), separated by a
-short divider and falling back to the vertical middle of the scrollport when
-there is no room below. Its marks reuse the native turn-rail tick style
-(20 x 2 px, 60 % width at rest, 90 % on hover, right-aligned on the native
-column), with a horizontal 32 x 1 divider and no visible scrollbar; a long
-history caps at `min(available band, 420 px)` and scrolls its ticks internally
-behind 24 px fade masks while the pinned 20 x 22 search button stays at the
-foot. The full-text hover card follows the native preview card style
+in the composer flow. The rail is portaled **inside the native Session-history
+turn-rail frame** and placed by CSS directly below its marks on the same 28 px
+column (`right: 0`, `top: calc(100% + 10px)`, native `--turn-rail-band` height
+cap), so sticky positioning, dock/sidebar drag tracking and narrow-container
+hiding all come from the shell rather than a JavaScript measurement loop. The
+hover preview and search cards are portaled to the document body (the native
+frame is transformed/contained, so fixed-position overlays inside it would
+resolve against the frame) and use viewport coordinates. Its marks reuse the
+native turn-rail tick style (20 x 2 px, 60 % width at rest, 90 % on hover,
+right-aligned on the native column), with a horizontal 32 x 1 divider and no
+visible scrollbar; a long history caps at the native band and scrolls its ticks
+internally behind 24 px fade masks while the pinned 20 x 22 search button stays
+at the foot. The full-text hover card follows the native preview card style
 (line-clamped, panel elevation). The search card opens directly below the pinned
 magnifier (right edge on the rail column) or, with no room above the composer,
 to the magnifier's left (right edge 8 px from the button), clamped above the
-composer; both cards are portaled to the document body. A clicked prompt is
-copied silently through the Session input's `setDraft` — exact draft text and
-composer focus, with no confirmation chip, icon, or animation. Placement is re-measured in one animation frame on resize, scroll,
-composer height, sidebar width, and native-rail changes. Registration id
+composer. A clicked prompt is copied silently through the Session input's
+`setDraft` — exact draft text and composer focus, with no confirmation chip,
+icon, or animation.
+Registration id
 `power-suite.prompt-history-preview`, order 100, locale namespace
 `powerSuitePromptHistoryPreview`.
 
@@ -814,7 +816,7 @@ re-open a card the user just dismissed.
 | `contextMenu.icon` | Workspace menu icon |
 | `contextMenus.register` (`workspace`) | Default agent preset submenu |
 | `conversation.input.overlay` | Renderless prompt-history keyboard seat, draft-attachment memory seat, and the annotation mode's Session bridge seat (Session id, input actions, and the Session's cwd/workspace label mirrored from the slot's `useSessions` hook) |
-| `conversation.input.dock` | Session hooks for the body-portaled prompt-history rail |
+| `conversation.input.dock` | Session hooks for the prompt-history rail hosted in the native turn-rail frame |
 | `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation (card, buckets, pin button, row "…" menu, pending-interaction flags), the UI element annotation launcher/rail/popover, and the update notice card (`power-suite.update-prompt`) |
 | `plugins.bundle.config` | Plugin settings page |
 | `sidebar.session.row.leading` | Interrupted-session badge plus the hover/focus inline Continue triangle |
