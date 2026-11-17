@@ -444,12 +444,16 @@ card remains the only place an answer is submitted.
 
 - **One amber flag**: every waiting kind (question, plan review, approval) uses
   the same Remix `flag-fill` glyph in `--dsw-alias-state-warn-primary` — the
-  same amber the native question prompt uses — 12 px, inline before the title,
-  with a `Waiting for your answer` label for assistive tech. It is decorative
-  (`pointer-events: none`); clicking the row opens the Session as usual.
-- **Both row surfaces**: the flag appears in the Running & recent card row and,
-  through a small native-row decoration, in the native Workspaces tree row for
-  the same Session — so it is visible wherever the Session title is.
+  same amber the native question prompt uses — with a `Waiting for your answer`
+  label for assistive tech. It is decorative (`pointer-events: none`); clicking
+  the row opens the Session as usual.
+- **Card row: replaces the leading icon.** In the Running & recent card the flag
+  takes the row's fixed 16 px leading-glyph cell (the state dot / sparkle / robot
+  glyph is hidden and the amber flag is drawn in the same spot), so the title
+  never shifts and there is no second icon.
+- **Native row: before the title.** In the native Workspaces tree the same flag
+  is injected immediately before the Session title, matching the native rows'
+  own leading-slot geometry.
 - **Live derivation**: a row is flagged from the same `SessionStatus` snapshot
   the native composer cards use and re-derived every render, so answering,
   cancelling, or switching to the asking Session removes the flag immediately.

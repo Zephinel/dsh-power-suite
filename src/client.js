@@ -4946,7 +4946,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
     /** Pending-interaction flag (24 viewBox, Remix flag-fill) shown before a
      *  waiting Session's title in amber, the native question-prompt colour. */
-    const DW_FLAG_FILL_PATH = 'M12 2C12.5523 2 13 2.44772 13 3V4H18C19.1046 4 20 4.89543 20 6V15C20 16.1046 19.1046 17 18 17H13V21H11V17H6C4.89543 17 4 16.1046 4 15V6C4 4.89543 4.89543 4 6 4H11V3C11 2.44772 11.4477 2 12 2Z'
+    const DW_FLAG_FILL_PATH = 'M3 3H12.382C12.7607 3 13.107 3.214 13.2764 3.55279L14 5H20C20.5523 5 21 5.44772 21 6V17C21 17.5523 20.5523 18 20 18H13.618C13.2393 18 12.893 17.786 12.7236 17.4472L12 16H5V22H3V3Z'
 
 
 
@@ -5297,7 +5297,7 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-child-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap}
 .psd-child-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
-.psd-pending-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;margin-right:5px;color:var(--dsw-alias-state-warn-primary);vertical-align:-2px;pointer-events:none}
+.psd-pending-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary);pointer-events:none}
 .dps-row-pending-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;margin-inline-end:6px;color:var(--dsw-alias-state-warn-primary);pointer-events:none}
 .psd-hovercard{position:fixed;z-index:1000;box-sizing:border-box;width:${DW_HOVERCARD_WIDTH}px;max-height:min(${DW_HOVERCARD_MAX_HEIGHT}px,calc(100vh - 16px));overflow-x:hidden;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-hovercard-bg,#2c2c2e);color:var(--dsw-static-neutral-bluish-00,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;font-size:12px;line-height:16px;pointer-events:none}
 .psd-hovercard::-webkit-scrollbar{display:none;width:0;height:0}
@@ -7779,7 +7779,14 @@ function dwClearNativeAtmospheres() {
               React.createElement('div', { className: 'psd-run-main' },
               React.createElement('span', { className: 'psd-run-head' },
                 React.createElement('span', { className: 'psd-run-glyph-cell' },
-                  interrupted
+                  pendingSet.has(row.id)
+                    ? React.createElement('span', {
+                      className: 'psd-pending-flag',
+                      role: 'img',
+                      'aria-label': t('row.pending'),
+                      title: t('row.pending')
+                    }, RemixGlyph(DW_FLAG_FILL_PATH, 13))
+                    : interrupted
                     ? React.createElement('span', {
                       className: 'psd-interrupted',
                       role: 'img',
@@ -7817,16 +7824,7 @@ function dwClearNativeAtmospheres() {
                   },
                   onFocus: (event) => showHover(row, event.currentTarget),
                   onBlur: hideHover
-                }, React.createElement('span', { className: 'psd-run-title' },
-                  pendingSet.has(row.id)
-                    ? React.createElement('span', {
-                      className: 'psd-pending-flag',
-                      role: 'img',
-                      'aria-label': t('row.pending'),
-                      title: t('row.pending')
-                    }, RemixGlyph(DW_FLAG_FILL_PATH, 12))
-                    : null,
-                  row.title)))),
+                }, React.createElement('span', { className: 'psd-run-title' }, row.title)))),
               React.createElement('span', { key: 'spacer', className: 'psd-run-spacer', 'aria-hidden': true }),
               React.createElement('span', { key: 'time', className: 'psd-run-timeslot' },
                 React.createElement('span', { className: 'psd-run-time' }, time),

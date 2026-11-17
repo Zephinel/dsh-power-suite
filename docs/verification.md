@@ -2871,18 +2871,20 @@ settings document or native-surface change.
   `SessionStatus.pendingInteraction` facts (question / plan review / approval,
   running only, not current, not archived, not blank/subagent, summary exists)
   returned as the full newest-first id list — no 3-card cap and no "+N" line.
-- **Inline amber flag.** Waiting Sessions show a 12 px Remix `flag-fill`
-  immediately before the Session title, coloured with
+- **Inline amber flag.** Waiting Sessions show a Remix `flag-fill` (pole on the
+  left, 13 px in the card cell / 12 px in the native row) coloured with
   `--dsw-alias-state-warn-primary` (`--dsw-static-amber-500`; computed
   `rgb(245, 158, 11)` in the probe) — the same amber the native question prompt
   uses. It is decorative (`pointer-events: none`, `aria-label="Waiting for your
   answer"`); clicking the row still opens the Session and the native composer
   card answers.
-- **Both row surfaces.** The card row renders the flag as the first inline child
-  of its title span; a small layout effect in the dynamic-Workspaces seat inserts
-  the same flag before the native Workspaces row's `_title` element and removes
-  it again when the Session settles/archives (`MutationObserver` re-applies for
-  late rows; unmount removes every injected flag).
+- **Card row replaces the leading glyph.** The card row's fixed 16 px
+  leading-glyph cell renders the amber flag instead of the state dot / sparkle /
+  robot glyph (same cell, so the title position does not move). In the native
+  Workspaces tree a small seat effect inserts the same flag before the row's
+  `_title` element and removes it again when the Session settles/archives
+  (`MutationObserver` re-applies for late rows; unmount removes every injected
+  flag).
 - **Docs/i18n:** the dynamic-workspaces, limitations, architecture, overview and
   README descriptions now say "pending-interaction flag" instead of the notice
   stack; the CHANGELOG Added bullet is the flag design and the obsolete Fixed
@@ -2902,8 +2904,11 @@ settings document or native-surface change.
   - before: `cardFlags 0`, `nativeFlags 0`, `[data-psd-notices] 0`;
   - during (two fixture waiting Sessions): `cardFlags 2`, `nativeFlags 2`,
     each flag `14×14`, colour `rgb(245, 158, 11)`, label
-    “Waiting for your answer”; native flag `left 36` sits before the native
-    title `left 62`; no notice element exists;
+    “Waiting for your answer”; card flags are inside the fixed leading-glyph
+    cell (`inGlyphCell true`, cell children exactly `["psd-pending-flag"]`, so the
+    original state glyph is hidden; flag `left 42`, title `left 72`); native flag
+    `left 36` sits before the native title `left 62`; no notice element exists;
+    the flag path is Remix `flag-fill` with the pole on the left;
   - after clearing the fixture: both counts back to `0`.
   - screenshot `.tmp-work/pending-flags/pending-flags.png` (gitignored).
 - The probe used fixture pending statuses because no real Session was waiting;
