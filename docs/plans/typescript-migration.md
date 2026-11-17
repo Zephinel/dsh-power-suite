@@ -1,0 +1,215 @@
+# TypeScript migration plan
+
+Status: **proposed (as-planned)** — 2026-11-18. Owner approval is required before
+Phase 2. This document records the plan only; no runtime behavior, build step or
+release pipeline changes are made by it.
+
+Related: [Development](../development.md) · [Architecture](../architecture.md) ·
+[Verification](../verification.md) · [Release skill](../../.agents/skills/release-power-suite/SKILL.md)
+
+## 1. Summary
+
+The repository is currently pure JavaScript with **no build step**: `package.json`
+exports `src/index.js` and `src/client.js` directly, and everything the package
+ships is the checked-in source. The browser half is a single classic browser
+script (`src/client.js`, ~24.8k lines, ~1.2 MB, 1,595 JSDoc tags); the Host half
+is 22 ES modules under `src/features/`.
+
+The proposal is a **staged migration to TypeScript**, with the first phase being
+a no-build type-checking gate (JSDoc + `checkJs`) that changes neither the runtime
+nor the packaging. Build-backed TypeScript comes later, in phases, only if the
+owner approves it.
+
+## 2. Why consider TypeScript here
+
+| Area | Benefit | Strength |
+| --- | --- | --- |
+| Host routes and stores | 16 `/api/**` routes and 6 persisted documents (settings, session pins, read acks, session activity, sidebar width, workspace presets) would get one typed contract instead of separate hand-written validation and client assumptions | high |
+| Shared record models | Annotation v2/v3 records, artifact rows, activity entries cross the Host/browser boundary; type drift has already appeared in docs (v2 vs v3 wording) | high |
+| Large-file refactors | `src/client.js` is where most slot/feature edits happen; a compiler catches signature and field mismatches beyond what 364 Node tests cover | medium-high |
+| Enums and constants | modifier modes, retention windows, caps (`100`, `1000`, `5000`), storage keys and route names become named types | medium-high |
+| Editor/agent feedback | `tsc --noEmit` in the gate surfaces typos and argument errors earlier, without waiting for a browser run | medium-high |
+| DSH platform APIs | the `dsh.client.inject` packages are runtime-provided and have no local type source; ambient declarations would start as `any` | low-medium |
+
+## 3. Why not a big-bang migration now
+
+These are the concrete constraints that make a full migration an architecture
+change rather than a language swap:
+
+1. **No build step is a feature.** The package publishes `src/` as-is, so there is
+   no built artifact to go stale. `npm run check` stays inside the source tree and
+   `npm run check:release` proves that every packed file is byte-identical to the
+   checkout, then installs it into a throwaway `$DSH_HOME`.
+2. **TypeScript needs a build.** Moving to `.ts` means introducing a compiler or
+   bundler, changing `exports`/`files` to built output, adding a build to CI and
+   `publish.yml`, adapting `scripts/release-check.mjs`, and rewriting every
+   "no build step" claim in the README, `PRODUCT.md`, `docs/development.md`, the
+   release skill and the docs-sync references.
+3. **A build re-introduces a bug class this repo does not have.** dsh-intelligent-ui
+   needs `scripts/release-check.mjs` partly because a rebuilt `lib/` can drift from
+   `skills/`/`locale/`; here that class of bug is structurally absent today.
+4. **The browser half is a classic script, not a module.** `src/client.js` is
+   evaluated as a classic browser script through the DSH module loader; a
+   TypeScript output must remain the same shape. Converting it also means deciding
+   whether to split the single file into modules, which is a refactor, not a type
+   annotation.
+5. **The test harness reads the source text.** `test/helpers/client-module.mjs`
+   reads `src/client.js` into a `node:vm` sandbox, so the harness must be adapted
+   to whatever build output replaces it.
+6. **Platform types are missing.** No DSH client package is a local dependency, so
+   `src/client` would need hand-written ambient declarations; the reference
+   repository excludes its client half from typecheck for exactly this reason.
+
+## 4. Goals and non-goals
+
+Goals:
+
+- One typed contract for the Host/browser boundary and the persisted documents.
+- Compile-time checking of route names, settings keys, caps and shared records.
+- Safer large-file refactors with a gate that fails locally before a browser run.
+- Keep runtime behavior, UI copy and DSH integration unchanged in every phase.
+
+Non-goals:
+
+- Changing behavior, UI, copy, performance targets or the DSH surface.
+- Adding runtime dependencies, bundling dependencies into the artifact, or
+  changing the published install steps.
+- A style-only rewrite of the browser half; type annotations do not justify
+  unrelated formatting churn.
+- Rewriting git history or the released `0.1.0` artifacts.
+
+## 5. Target architecture (if all phases complete)
+
+- `tsconfig.json` with `strict` for Host and a documented relaxed profile for the
+  browser half; `npm run typecheck` is part of `npm run check` from Phase 1.
+- Host sources become `src/features/**/*.ts` with typed route handlers and
+  store document schemas; shared record types live under `src/shared/`.
+- The browser half becomes modules under `src/client/**` bundled into one classic
+  script (IIFE) that keeps the `window.__ModuleLoader__` contract, or stays a
+  single file if splitting proves riskier.
+- A build (esbuild or `tsc` emit — decision in Phase 0) produces the published
+  entry points; built files are gitignored and only produced by `npm run build`
+  and by `npm pack`'s `prepare`.
+- `scripts/release-check.mjs` verifies the packed artifact against a build manifest
+  (source tree hash + expected outputs), installs it into a throwaway `$DSH_HOME`,
+  and keeps the boot-graph/client-bundle/uninstall checks.
+- Ambient types for the runtime-provided DSH packages live under `types/dsh/`,
+  are owned by this repo, and are allowed to be incomplete as long as every `any`
+  is deliberate and documented.
+- Docs and skills state the new build/pack reality; the "no build step" claims are
+  removed in the same phase that introduces the build.
+
+## 6. Phases
+
+Each phase is a separate branch/PR, keeps `main` releasable, and ends with the
+full local gate plus a dry-run package check unless stated otherwise.
+
+### Phase 0 — decisions and baseline (this document)
+
+Deliverables: owner decisions on the open questions in section 8; a recorded
+baseline (`npm run check` counts, `check:release` result, bundle sizes, typecheck
+error count if Phase 1 is run as a spike).
+
+Acceptance: this plan is approved or amended; no code changes beyond the plan.
+
+### Phase 1 — no-build type checking (recommended first)
+
+Add `tsconfig.json` with `allowJs`, `checkJs`, `noEmit`; add
+`"typecheck": "tsc --noEmit"` to `package.json`; wire it into `npm run check` and
+CI. Keep the build, packaging, exports and repository layout unchanged.
+
+Order of tightening: Host stores and route handlers → shared schema typedefs →
+browser half pure helpers → browser DOM/slot code (may start with `// @ts-nocheck`
+on the largest region and be enabled incrementally).
+
+Acceptance:
+
+- `npm run check` runs the typecheck and stays green.
+- `npm run pack:check` file list and `npm run check:release` behavior are
+  unchanged (still byte-identical packed source).
+- No sourcemap, build output or package-content change.
+- The docs-sync reference records the new guard and its expected output.
+
+### Phase 2 — build plus Host TypeScript
+
+Introduce the build (recommended: esbuild for the browser classic script and
+`tsc --noEmit` for types; alternative: `tsc` emit for both), switch `exports` and
+`files` to built entry points, add `prepare` so `npm pack` builds, and add the
+build to CI, `publish.yml` and `check:release`. Convert the 22 Host modules to
+`.ts` with typed store documents and route payloads.
+
+Acceptance:
+
+- Fresh clone can `npm ci && npm run build && npm run check`.
+- The packed tarball is produced only from a clean build; no built file is
+  committed (`git diff --exit-code` stays green in CI).
+- `check:release` proves the packed artifact matches the build manifest, installs
+  into a throwaway `$DSH_HOME`, boots, serves the client bundle and uninstalls.
+- The published 0.1.x JS line is not touched by this branch.
+
+### Phase 3 — browser half
+
+Decide between (a) splitting `src/client.js` by `//#region feature:` into modules
+and bundling one classic script, or (b) keeping one file and annotating it. Then
+convert incrementally, keeping the runtime guards for DOM/shell behavior.
+
+Acceptance:
+
+- `test/browser/{annotation,sidebar,update-prompt}.e2e.mjs` pass locally against a
+  real DSH instance, including the smoke modes and the negative-control checks
+  where applicable.
+- Served bundle size and boot behavior are recorded; `check:release` still
+  verifies the served client bundle against the installed artifact.
+- No behavior, copy or slot changes in the diff.
+
+### Phase 4 — rollout and cleanup
+
+Update README, `PRODUCT.md`, `docs/development.md`, `docs/architecture.md`, the
+release skill and the docs-sync references; record the migration in
+`CHANGELOG.md` and `docs/verification.md`; release as the next minor version
+(target `0.2.0`) with the normal release gates.
+
+Acceptance: all docs claim the build/pack reality; `npm run check`,
+`npm run check:release` and the publish workflow pass; the release notes describe
+the developer-facing change without user-facing behavior claims.
+
+## 7. Risks and mitigations
+
+| Risk | Mitigation |
+| --- | --- |
+| Stale build artifacts reach a package (the bug class the current architecture avoids) | Build inside `npm pack`/`prepare`, never commit build output, CI `git diff --exit-code`, `check:release` compares packed artifact to the build manifest, and the installed copy to the tarball |
+| Browser behavior regressions while converting `client.js` | Convert by feature region, keep runtime guards, run the three browser suites plus the real-GUI smoke checks locally before each merge |
+| DSH platform APIs drift or lack types | Keep ambient declarations minimal and documented; add runtime guards where the platform contract is dynamic; treat `any` as a tracked budget |
+| Tests couple to source text | Adapt `test/helpers/client-module.mjs` in Phase 2 to evaluate the built classic script; keep pure helpers importable for unit tests |
+| Release pipeline disruption | Dry-run `check:release` and a tag-path rehearsal on a pre-release version; keep the 0.1.x line patchable while the migration lands |
+| Large review surface / history churn | One phase per PR, no unrelated formatting, file moves separate from type changes |
+| Owner/agent workflow slows down | Document the build step in `docs/development.md` before Phase 2 lands; make `npm run check` print the typecheck step clearly |
+
+## 8. Open decisions (owner)
+
+1. Approve Phase 1 (no-build JSDoc type checking) as the first step?
+2. Compiler/bundler: esbuild for the browser bundle + `tsc --noEmit`, or `tsc`
+   emit for everything? (Recommendation: esbuild + tsc; it keeps the classic
+   script shape and keeps the build fast.)
+3. Where should built output live and what should the package export — `lib/`
+   (intelligent-ui convention) or `dist/`? (Recommendation: `lib/`, matching the
+   reference repository, with `files` updated.)
+4. Strictness target: `strict: true` for Host/shared by the end of Phase 2, with a
+   documented relaxed profile for the browser half?
+5. Should the `0.1.x` JavaScript line stay patchable until the first TypeScript
+   release, or is `main` the only line after Phase 2 lands?
+6. Keep browser e2e local-only (current design), or add a self-hosted runner later?
+7. Version target: `0.2.0` for the first TypeScript release, or a longer runway?
+
+## 9. Estimated effort
+
+- Phase 1: small (one focused session; most of it is triaging the first
+  `checkJs` error baseline).
+- Phase 2: medium (build plumbing, release-check/manifest changes, 22 Host
+  modules, docs).
+- Phase 3: large — the 24.8k-line browser half dominates; the split-by-region
+  decision is the main risk.
+- Phase 4: small on top of the earlier phases.
+
+No calendar estimate is claimed here; the phases are ordered so each one can stop
+without leaving `main` broken.

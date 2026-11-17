@@ -57,6 +57,7 @@ generated code, no vendored tree and no bilingual doc pair.
 | `docs/reference-libraries.md` | Reference-corpus provenance and license notes for the annotation work (XERJ index, local corpus paths) | External reference material, not a dependency or behavior contract; don't align it with implementation details |
 | `docs/demo/implicit-continue.html` + `.png` | Demo/evidence fixture linked by `docs/interrupted-sessions.md` | Keep provenance truthful when recapturing; don't hand-edit the PNGs |
 | `.agents/skills/**` (this skill, `release-power-suite`) | Maintenance metadata (not shipped) | Agent instructions plus the doc map and guard expectations; refresh when the doc inventory, guards or expected counts change |
+| `docs/plans/typescript-migration.md` | As-planned migration plan (2026-11-18) | Leave the plan intent; update phase status and decisions as they land; implemented behavior belongs in the as-built docs |
 | A new `docs/plans/**`, `ROADMAP*`, proposal or roadmap section | As-planned | Leave the plan intent; flag an unmarked plan; once implemented, behavior belongs in the as-built docs |
 
 ## Generated / assets / legal (regenerate or leave)
