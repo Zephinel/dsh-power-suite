@@ -15,12 +15,11 @@ dsh plugin --profile web add @zephinel/dsh-power-suite@0.1.0
 dsh web
 ```
 
-> [!NOTE]
 > **Status: release prepared, not published.** `@zephinel/dsh-power-suite@0.1.0`
-> is prepared on the `release-0.1.0-prep` branch — package metadata, the bilingual
-> release notes and the CHANGELOG entries are in place — but the package is
-> **not on npm yet**, and this repository has **no git remote**, so nothing has
-> been pushed and no CI run exists. Until the first tag is published, install the
+> is prepared — package metadata, the release notes and the CHANGELOG entries are
+> in place, and the repository is pushed to
+> [GitHub](https://github.com/Zephinel/dsh-power-suite) with CI on `main` — but the
+> package is **not on npm yet**. Until the first tag is published, install the
 > local checkout instead (see [Install](#install)); the in-app update notice stays
 > silent while no published version exists.
 
@@ -148,9 +147,6 @@ git clone https://github.com/Zephinel/dsh-power-suite.git
 cd dsh-power-suite
 ```
 
-> [!IMPORTANT]
-> The repository has no remote configured yet, so this clone does not work until the first push lands. Until then, work in the existing local checkout this README ships in and install it as a local `link:` bundle (see [Install](#install)).
-
 The checkout needs no `npm install` to run the checks: the package has no runtime dependencies and no build step.
 
 ## Prerequisites
@@ -200,10 +196,8 @@ They need a running DSH Web and Chrome, and run one at a time; environment varia
 ## Documentation
 
 Detailed docs live in `docs/` and ship with the package; the links below use
-absolute GitHub URLs so they stay clickable from the npm README as well once
-the repository is pushed (the publishing target). For uncommitted features,
-use the files in the checkout. Start with the
-[full documentation index](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/README.md).
+absolute GitHub URLs so they stay clickable from the npm README as well. Start
+with the [full documentation index](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/README.md).
 
 **Concepts**
 
@@ -226,9 +220,9 @@ use the files in the checkout. Start with the
 
 ## Contributing
 
-- Bugs and feature requests go to GitHub Issues once the repository is pushed; today there is no remote, so work from the local checkout and report to the maintainer directly.
+- Bugs and feature requests go to [GitHub Issues](https://github.com/Zephinel/dsh-power-suite/issues).
 - Run `npm run check` before proposing a change. Host logic lives in `src/features/<name>/` behind tests under `test/`, and each feature has a page under `docs/`; [docs/development.md](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/development.md) documents the feature recipe, the commit conventions and the release flow.
-- Behavior, copy or gate changes need the matching docs updated too: the feature reference, `CHANGELOG.md` and `docs/verification.md`.
+- Behavior, copy or gate changes need the matching docs updated too: the feature reference, `CHANGELOG.md` and `docs/verification.md`; the docs-sync procedure is `.agents/skills/sync-power-suite-docs/SKILL.md`.
 - Releases are cut from a tag by the publish workflow. Never run `npm publish` locally; the maintainer procedure is `.agents/skills/release-power-suite/SKILL.md`.
 - Maintainer: [@Zephinel](https://github.com/Zephinel).
 
