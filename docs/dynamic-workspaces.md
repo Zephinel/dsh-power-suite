@@ -451,9 +451,11 @@ card remains the only place an answer is submitted.
   takes the row's fixed 16 px leading-glyph cell (the state dot / sparkle / robot
   glyph is hidden and the amber flag is drawn in the same spot), so the title
   never shifts and there is no second icon.
-- **Native row: before the title.** In the native Workspaces tree the same flag
-  is injected immediately before the Session title, matching the native rows'
-  own leading-slot geometry.
+- **Native row: inside the leading slot.** In the native Workspaces tree the
+  same flag is put inside the row's fixed 16 px leading slot (the slot's native
+  status dot/visually-hidden glyph is hidden while pending and restored after),
+  so the native title's x position does not change. Only if a future shell drops
+  that slot does the decoration fall back to inserting the flag before `_title`.
 - **Live derivation**: a row is flagged from the same `SessionStatus` snapshot
   the native composer cards use and re-derived every render, so answering,
   cancelling, or switching to the asking Session removes the flag immediately.

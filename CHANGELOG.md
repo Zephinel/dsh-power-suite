@@ -109,11 +109,12 @@ and no dated release heading is added until the release is cut.
 - **Running & recent pending-interaction flags** — when a Session other than
   the one open in the main view is waiting on `ask_user_question` (question or
   plan review) or an approval (`SessionStatus.pendingInteraction`), its row
-  shows a small amber Remix `flag-fill` **immediately before the Session title**
-  — the same amber as the native question prompt. The flag appears in both the
-  Running & recent card row and the native Workspaces tree row; it is
+  shows a small amber Remix `flag-fill` in its fixed leading cell — the card
+  replaces the 16 px state-glyph cell, the native Workspaces row puts the flag
+  in its fixed leading slot (title x unchanged; a before-`_title` insert is only
+  the no-slot fallback). It is the same amber as the native question prompt, is
   decorative (clicking still opens the Session and the native composer card
-  answers), up to no cap every waiting Session is flagged, and it disappears
+  answers), flags every waiting Session (no cap), and disappears
   automatically when the Session becomes current, the interaction settles, or
   the Session is archived. Client-only: no Host route, store, popup or extra
   click target.
@@ -182,7 +183,8 @@ and no dated release heading is added until the release is cut.
   single image is left entirely to the native lightbox, and page/Markdown images
   are never intercepted. The overlay uses the shell's tooltip/elevation tokens
   in both themes, is instant under reduced motion, and closes on Session
-  switch/composer unmount/plugin unload without adding a URL or history entry.
+  composer unmount or empty attachment rail (and on plugin unload), without
+  adding a URL or history entry.
 - **Interrupted sessions** — Sessions whose last turn did not finish are marked
   in the sidebar and can be continued. Detection covers **every unfinished turn
   ending**, not only Host restarts/crashes: any `turn/end` reason `error`

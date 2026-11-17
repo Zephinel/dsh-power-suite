@@ -845,8 +845,10 @@ re-open a card the user just dismissed.
   browser-only surfaces: the menu registers one captured-target provider
   (`powerSuiteSession`) that delegates to the native Session contributions and
   filters the Pin/Unpin entry, while the flags are derived from
-  `SessionStatus.pendingInteraction` and rendered inline before the Session
-  title (card and native tree rows); neither adds a Host route or store.
+  `SessionStatus.pendingInteraction` and occupy the row's fixed leading cell —
+  the card replaces its 16 px glyph cell, the native tree row puts the flag in
+  its fixed leading slot (falling back to a before-`_title` insert only when the
+  slot is absent); neither adds a Host route or store.
 - The UI element annotation mode stays browser-only: it adds no Host route,
   service, Session-log write, or profile change. Its v2 records are browser
   `localStorage` memory (capped at 100, never synced); the two modifiers,

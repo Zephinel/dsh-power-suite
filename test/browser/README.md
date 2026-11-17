@@ -569,14 +569,14 @@ committed scenario yet**:
   owner). The `--row-menu` mode below is the committed live acceptance for this
   alignment (an older round's custom `.psd-menu` popup is gone); full-mode `b2-3`
   still asserts the uniform highlight swap and no-hover-background rule.
-- **Pending-interaction notices** — a fixed 320 px stack beside the card for
-  Sessions waiting on `ask_user_question` (question / plan review) or an
-  approval, up to three cards plus "+N more", preview-only (clicking opens the
-  Session; the native composer card answers). Unit-tested (derivation,
-  current/archived filtering, cap/overflow, placement clamping) and live-probed
-  with the real component + synthetic data (13/13 checks); the end-to-end
-  `SessionStatus.pendingInteraction` show/hide path was not live-triggered in
-  this round.
+- **Pending-interaction flags** — a waiting Session gets one amber `flag-fill`
+  in the Running & recent card's fixed leading-glyph cell and in the native
+  Workspaces row's fixed leading slot (the native status glyph is hidden while
+  pending); no popup, no cap, title x unchanged. The derivation is unit-tested
+  (filters, all three kinds, status-key fallback, newest-first) and live-probed
+  with the real renderer + synthetic data (`docs/verification.md`); the
+  end-to-end `SessionStatus.pendingInteraction` show/hide path was not
+  live-triggered in a committed browser scenario.
 
 ### `--live` checks (shipped install, no client injection)
 

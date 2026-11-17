@@ -2155,6 +2155,10 @@ before it):
 
 ## 2026-11-15 — Running & recent 行操作与待回答问题提醒（feat/running-panel-ux）
 
+> **Superseded 2026-11-17:** the pending-interaction notice stack described in
+> this section was removed in favour of inline amber flags; see the
+> `2026-11-17 — Pending interactions as inline flags` section at the end.
+
 Branch `feat/running-panel-ux` (branch tip, on top of `db62343`/`0ad41a0` and
 the review-fix commits). Two additions to the Running & recent card; the plugin-owned card
 pin is **kept** (restored) and remains the single pin owner.
@@ -2903,7 +2907,8 @@ settings document or native-surface change.
   status-key `sessionId` fallback (previously the only approval fixture was
   filtered out, so it did not prove the kind).
 - `npm test` → **360/360 pass**; `npm run check` → exit 0; docs links ok
-  (23 Markdown files); pack entryCount 93.
+  (23 Markdown files); pack entryCount **95** at this tip (the two evidence
+  screenshots are packed).
 - **Live probe at code commit `06d5ac1`** on the isolated demo instance (token
   redacted, no production data; fixture ids fed through the real
   `dwPendingSessionIds` + renderer; the probe reads the `data-psd-session` card

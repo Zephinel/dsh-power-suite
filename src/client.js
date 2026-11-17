@@ -5299,6 +5299,7 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
 .psd-pending-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary);pointer-events:none}
 .dps-row-pending-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary);pointer-events:none}
+.dps-row-pending-flag-fallback{margin-inline-end:6px}
 .dps-row-pending-slot > :not(.dps-row-pending-flag){display:none!important}
 .psd-hovercard{position:fixed;z-index:1000;box-sizing:border-box;width:${DW_HOVERCARD_WIDTH}px;max-height:min(${DW_HOVERCARD_MAX_HEIGHT}px,calc(100vh - 16px));overflow-x:hidden;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-hovercard-bg,#2c2c2e);color:var(--dsw-static-neutral-bluish-00,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;font-size:12px;line-height:16px;pointer-events:none}
 .psd-hovercard::-webkit-scrollbar{display:none;width:0;height:0}
@@ -8517,7 +8518,11 @@ function dwClearNativeAtmospheres() {
                 const flags = [...row.children].filter((child) => isFlag(child))
                 if (flags.length === 0) {
                   const title = titleOf(row)
-                  if (title !== null) row.insertBefore(makeFlag(), title)
+                  if (title !== null) {
+                    const flag = makeFlag()
+                    flag.classList.add('dps-row-pending-flag-fallback')
+                    row.insertBefore(flag, title)
+                  }
                 }
               }
             } else {
@@ -8527,24 +8532,35 @@ function dwClearNativeAtmospheres() {
             }
           }
         }
-        let observedRoot = null
+        let observedRoot = document.querySelector('[class*="_sidebarCol"]')
         let frame = 0
-        const observer = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
+        const schedule = () => {
           if (frame !== 0) return
           frame = window.requestAnimationFrame(() => {
             frame = 0
-            ensureObservedRoot()
             apply()
           })
-        })
-        const ensureObservedRoot = () => {
-          const root = document.querySelector('[class*="_sidebarCol"]')
-          if (observer === null || root === observedRoot) return
-          observer.disconnect()
-          observedRoot = root
-          if (root !== null) observer.observe(root, { childList: true, subtree: true })
         }
-        ensureObservedRoot()
+        const observer = typeof MutationObserver === 'undefined' || document.body === null
+          ? null
+          : new MutationObserver((records) => {
+            const root = document.querySelector('[class*="_sidebarCol"]')
+            if (root !== observedRoot) {
+              // The shell replaced the whole column (rail toggle/remount): follow
+              // the new root; the body observer stays attached to the stable page.
+              observedRoot = root
+              schedule()
+              return
+            }
+            if (root === null) return
+            for (const record of records) {
+              if (root.contains(record.target)) {
+                schedule()
+                return
+              }
+            }
+          })
+        if (observer !== null) observer.observe(document.body, { childList: true, subtree: true })
         apply()
         return () => {
           if (frame !== 0) window.cancelAnimationFrame(frame)

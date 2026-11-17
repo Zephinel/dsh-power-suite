@@ -86,7 +86,9 @@ test('waiting Session ids cover every pending kind and skip non-actionable Sessi
 
   const statuses = new Map()
   const byId = {}
-  for (let index = 0; index < 5; index += 1) {
+  // Insert the statuses in ascending activity order so the derivation's sort is
+  // what produces the expected newest-first ids.
+  for (let index = 4; index >= 0; index -= 1) {
     const id = `session-${index}`
     statuses.set(id, { pendingInteraction: { kind: 'question', sessionId: id, questions: [{ id: 'q', question: `Q${index}` }] } })
     byId[id] = summary(id, { updatedAt: NOW - index * 1_000 })

@@ -228,8 +228,9 @@ instead of the shell's single-image lightbox:
 With a **single** pasted image the plugin does not intercept the click, so the
 shell's own single-image lightbox behaves exactly as before. Only composer
 attachment thumbnails are handled: page and Markdown images are untouched. The
-viewer is per page and closes on a Session switch, a composer unmount, or plugin
-unload; it does not add a URL or history entry.
+viewer is per page and closes when its composer unmounts, when the attachment
+rail becomes empty, and on plugin unload; it does not add a URL or history
+entry.
 
 ## Interrupted sessions
 
