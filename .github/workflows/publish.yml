@@ -81,27 +81,16 @@ jobs:
         run: npm run pack:check
 
       - name: CHANGELOG has a section for this version
-        # Two accepted shapes: a dated release heading "## [<version>] - <date>",
-        # or the version still carried by the Unreleased section (the repository
-        # keeps "Planned as version ..." there until the release is cut). A tag
-        # must never publish without a changelog record.
+        # A dated release heading "## [<version>] - <date>" is required. The
+        # release commit moves the Unreleased entries there, so a tag can never
+        # publish without a changelog record.
         run: |
           version="$(node -p "require('./package.json').version")"
-          if grep -qE "^## \[${version}([^]]*)\]" CHANGELOG.md; then
-            echo "changelog section ok: ${version}"
-            exit 0
+          if ! grep -q "^## \\[${version}\\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no \"## [${version}]\" section"
+            exit 1
           fi
-          if awk -v version="$version" '
-            /^## \[Unreleased\]/ { in_unreleased = 1; next }
-            in_unreleased && /^## / { in_unreleased = 0 }
-            in_unreleased && index($0, version) { found = 1 }
-            END { exit(found ? 0 : 1) }
-          ' CHANGELOG.md; then
-            echo "changelog: ${version} is carried by the Unreleased section"
-            exit 0
-          fi
-          echo "::error::CHANGELOG.md has no section for ${version} (expected \"## [${version}]\" or an Unreleased section naming it)"
-          exit 1
+          echo "changelog section ok: ${version}"
 
       - name: Reviewed release notes exist for this version
         # The update prompt reads these Highlights from the tag-pinned raw file;

@@ -6,12 +6,13 @@ All notable changes to this repository are documented here. The format follows
 
 ## [Unreleased]
 
-First public release, planned as version **0.1.0**. This package has never been
-published: the earlier development snapshots — `0.1.0` (2026-11-09), `0.1.1`
-(2026-11-11), and an undated `0.2.0` — were internal only, never tagged and
-never released, and their history is consolidated into this single
-first-release section together with the current work. The date is not claimed
-and no dated release heading is added until the release is cut.
+## [0.1.0] - 2026-11-17
+
+First public release. This package had no previous release: the earlier
+development snapshots — `0.1.0` (2026-11-09), `0.1.1` (2026-11-11), and an
+undated `0.2.0` — were internal only, never tagged and never released, and the
+`0.1.0-rc.0` bootstrap prerelease is not a release. Their history is
+consolidated into this first release together with the current work.
 
 ### Added
 

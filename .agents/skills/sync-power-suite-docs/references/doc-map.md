@@ -46,7 +46,7 @@ generated code, no vendored tree and no bilingual doc pair.
 | Doc / section | Class | Rule |
 | --- | --- | --- |
 | `docs/verification.md` — everything from the first dated round (`## 0.3.0 polish round acceptance …`) down | Historical evidence | Append new evidence at the end; never rewrite or delete a past round's counts, builds, md5s or conclusions. The top `## Automated` section is the only live part |
-| `CHANGELOG.md` | Historical release log (English only) | Append under `## [Unreleased]`; move entries under `## [<version>] - <UTC date>` only in the approved post-publish docs-only follow-up; never rewrite released sections. `publish.yml` accepts a dated heading or an Unreleased section naming the version |
+| `CHANGELOG.md` | Historical release log (English only) | Append under `## [Unreleased]`; release preparation moves the entries under `## [<version>] - <UTC date>` and leaves an empty `## [Unreleased]`; never rewrite released sections. `publish.yml` requires the dated heading |
 | `release-notes/<version>.md`, `<version>.en.md` | Prepared release artifact, tag-pinned once published | The update notice reads the tag's raw file, so never edit after the tag is pushed (fix with a new version). Leave published files as history |
 | `test/browser/README.md` — *Current evidence*, *Recorded evidence*, *Merged-build confirmation*, recorded runs sections | Historical evidence for specific builds and client md5s | Leave verbatim; append new records when a live run is deliberately recorded |
 | `docs/sidebar-width.md` — *Measured acceptance (2026-11-15)* | Historical measurement record | Leave; the surrounding "what changes/how it works" sections stay as-built |

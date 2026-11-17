@@ -95,17 +95,16 @@ Facts that shape the procedure:
    `node scripts/check-publish-manifest.mjs`; `publish.yml` runs the same gate
    right after the tag check and refuses a private or incomplete package before
    `npm publish`.
-3. **CHANGELOG timing (approved 2026-11-15):** keep the release entries under
-   `## [Unreleased]` through the tag and publish — `publish.yml` accepts a
-   version named in that section. After the release is published, move the
-   released entries into `## [<version>] - <UTC date>` in a docs-only follow-up
-   and leave an empty `## [Unreleased]` in place. Never rewrite an
-   already-released section.
+3. **CHANGELOG (dsh-intelligent-ui convention):** move the current
+   `## [Unreleased]` entries into `## [<version>] - <UTC date>` (the release
+   date) and leave an empty `## [Unreleased]` heading in place. `publish.yml`
+   requires the dated `## [<version>]` heading. Never rewrite an already-released
+   section.
    - **First release (0.1.0) only:** the never-published development snapshots
-     (`0.1.0`/`0.1.1` dated sections and `0.2.0` undated) are already merged
-     into the single `## [Unreleased]` section; do not recreate them as
-     separate releases. Its Highlights cover every shipped feature, not a
-     delta.
+     (`0.1.0`/`0.1.1` dated sections and `0.2.0` undated) plus the latest work
+     are already merged into the single block; move it under
+     `## [0.1.0] - <date>` and do not recreate them as separate releases. Its
+     Highlights cover every shipped feature, not a delta.
 4. `release-notes/<version>.md` (required, Chinese default) and optional
    `release-notes/<version>.en.md`:
    - `## Highlights` with **2–6 short, user-facing bullets**; the update prompt
@@ -249,13 +248,12 @@ gh run watch <run-id> --exit-status --interval 10
    curl -fsS "https://raw.githubusercontent.com/Zephinel/dsh-power-suite/v<version>/release-notes/<version>.md" >/dev/null
    curl -fsS "https://raw.githubusercontent.com/Zephinel/dsh-power-suite/v<version>/release-notes/<version>.en.md" >/dev/null
    ```
-3. Move the released entries out of `## [Unreleased]` into
-   `## [<version>] - <UTC date>` (the approved post-publish CHANGELOG move) and
-   record the release result in `docs/verification.md` (workflow run ID, npm
-   `latest`, provenance, GitHub Release URL, notes URL check) in the same
-   docs-only follow-up. Run `.agents/skills/sync-power-suite-docs/SKILL.md` in
-   delta mode for the README/CHANGELOG/verification updates in that follow-up.
-   **Do not bump the version.**
+3. Record the release result in `docs/verification.md` (workflow run ID, npm
+   `latest`, provenance, GitHub Release URL, notes URL check) in a docs-only
+   follow-up. The CHANGELOG entries were already moved under the dated heading
+   during preparation — verify the published section and run
+   `.agents/skills/sync-power-suite-docs/SKILL.md` in delta mode for the
+   README/verification updates in that follow-up. **Do not bump the version.**
 4. If the release was prompted by an issue, comment with the fixed version and
    evidence, then close it if the reporter's scenario is resolved.
 5. The update prompt only starts appearing for users after the **next** release:

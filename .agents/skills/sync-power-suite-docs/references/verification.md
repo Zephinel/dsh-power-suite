@@ -16,7 +16,7 @@ step, so no rebuild precedes the gate.
 | `npm run check:release` (`node scripts/release-check.mjs`) | `release-check: PASS (95 packaged files verified)` in about 7 s; needs `dsh` and `pnpm` on PATH; uses a throwaway `$DSH_HOME` and an isolated 127.0.0.1 Web instance | Packs the tarball, installs it into a fresh profile, and proves every packed file is byte-identical to the checkout and to the installed copy, the packed patch/Host entry name the `power-suite` row, the composed tree mounts the Loader row, the boot graph serves the installed client bundle, and uninstall removes the dependency, row and directory. Deliberately not in CI (Linux runner behaviour unverified) |
 | `node scripts/check-publish-manifest.mjs` | `publish manifest ok: @zephinel/dsh-power-suite@0.1.0` | Release readiness only (run after `"private": true` is removed): name, repository URL, `publishConfig.access`, `files` containing `release-notes`, the `check:release-notes` script. Deliberately **not** part of `npm run check` |
 | CI `.github/workflows/ci.yml` | `verify` on Node 22 and 24; `changes` classifies docs-only as `CHANGELOG.md`, `PRODUCT.md`, `docs/**`, `.agents/**`; docs-only runs only `npm run check:docs-links`; anything else runs `npm run check` plus `git diff --exit-code`; no browser job | The CI claims in README/`docs/development.md`; also why a docs-only change still fails on a broken skill link |
-| `.github/workflows/publish.yml` | Ordered gates: tag == `package.json` version → publish manifest → `npm run check` → `npm run pack:check` → CHANGELOG section (a dated `## [<version>]` heading or the version named inside `## [Unreleased]`) → `check:release-notes` → `release-notes-approval.mjs --verify` against the tagged commit body → `npm publish --provenance` → registry poll bounded to 10 minutes | The release-flow claims in `docs/development.md` and the release skill |
+| `.github/workflows/publish.yml` | Ordered gates: tag == `package.json` version → publish manifest → `npm run check` → `npm run pack:check` → CHANGELOG dated `## [<version>]` heading → `check:release-notes` → `release-notes-approval.mjs --verify` against the tagged commit body → `npm publish --provenance` → registry poll bounded to 10 minutes | The release-flow claims in `docs/development.md` and the release skill |
 | Browser suites (`test/browser/*.e2e.mjs`) | Local only; require the running DSH Web, a token URL and a Chrome binary. `annotation.e2e.mjs`: 16 scenario ids (`SCENARIO_ORDER`), options `--smoke`, `--scenario`, `--from`, `--assets`, `--client`. `sidebar.e2e.mjs`: modes `--smoke`, `--pin`, `--live`, `--layout`, `--interrupted`, `--row-menu`, `--readme-shots`, `--readme-chat`, `--readme-dashboard`, `--readme-sidebar-annotation`, `--no-shots`, `--client`. `update-prompt.e2e.mjs`: 21 checks | Live UI behavior the docs cite; any recorded pass counts and client md5s are historical evidence, not a gate |
 
 ## Docs consistency checks (manual; no guard today)
@@ -55,17 +55,14 @@ NODE
 grep -oE 'assets/[A-Za-z0-9._-]+' README.md | sort -u
 grep -oE "out: '[a-z-]+\.webp'" scripts/build-readme-bento.mjs | sort -u
 
-# 4. CHANGELOG carries the package version (local mirror of the publish gate).
+# 4. CHANGELOG carries the dated release heading (local mirror of the publish gate).
 node --input-type=module <<'NODE'
 import fs from 'node:fs'
 const version = JSON.parse(fs.readFileSync('package.json', 'utf8')).version
 const text = fs.readFileSync('CHANGELOG.md', 'utf8')
-const escaped = version.replaceAll('.', '\\.')
-const dated = new RegExp(`^## \\[${escaped}([^\\]]*)\\]`, 'm').test(text)
-const unreleasedSection = /^## \[Unreleased\]\s*([\s\S]*?)(?=^## |\s*$)/m.exec(text)
-const unreleased = unreleasedSection?.[1]?.includes(version) === true
-console.log(dated || unreleased ? `changelog ok: ${version}` : `changelog missing ${version}: add a dated section or name it under [Unreleased]`)
-if (!(dated || unreleased)) process.exitCode = 1
+const dated = new RegExp(`^## \\[${version.replaceAll('.', '\\.')}\\]`, 'm').test(text)
+console.log(dated ? `changelog ok: ${version}` : `changelog missing the dated heading for ${version}`)
+if (!dated) process.exitCode = 1
 NODE
 
 # 5. Browser-harness claim check: the scenario count and the seam story.
@@ -117,8 +114,8 @@ Also verify by hand:
    dated round in that file is history — append, never rewrite.
 3. If a test file or suite was added, keep the file count and the totals in the
    same sentence; never adjust a count by arithmetic on a previous doc value.
-4. Append the user-visible change under `## [Unreleased]` in `CHANGELOG.md`.
-   Version, release-notes and the post-publish CHANGELOG move belong to
+4. Append the user-visible change under `## [Unreleased]` in `CHANGELOG.md`;
+   the release move to the dated `## [<version>]` heading belongs to
    `.agents/skills/release-power-suite/SKILL.md`, not to a docs sync.
 5. Re-run `npm run check:docs-links` after adding or removing any Markdown file or
    image: the count and the scan set include `.agents/skills/**`.

@@ -258,11 +258,10 @@ lets the owner see which decisions were theirs.
   The `## Automated` section describes the current gates and is refreshed from
   command output; everything from the first dated round down is history — append
   new evidence, never rewrite a past round.
-- **`CHANGELOG.md` is append-only history.** Keep entries under
-  `## [Unreleased]` through the tag; move them under
-  `## [<version>] - <UTC date>` only in the approved post-publish docs-only
-  follow-up. `publish.yml` accepts either a dated heading or an `Unreleased`
-  section naming the version.
+- **`CHANGELOG.md` is append-only history.** During release preparation the
+  `Unreleased` entries move under `## [<version>] - <UTC date>` and an empty
+  `## [Unreleased]` heading stays; `publish.yml` requires the dated heading.
+  Never rewrite a released section.
 - **`release-notes/<version>{,.en}.md` are tag-pinned.** The in-app update notice
   reads them from the tag's raw GitHub URL, so a file committed under a tag is
   user-visible and must never be edited afterwards — fix a typo with a new

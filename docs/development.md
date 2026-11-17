@@ -163,9 +163,10 @@ once it exists on the registry, so the first release bootstraps it:
    `node scripts/release-notes-approval.mjs` and put the printed
    `Release-Notes-Review: sha256=<hash>` line in the release commit body — the
    publish workflow recomputes the hash from the tagged tree and refuses a
-   missing, duplicated or mismatched approval. Keep the release entries in
-   `CHANGELOG.md` under `## [Unreleased]` for now — the publish gate accepts the
-   version named there. Remove `"private": true` during preparation and run
+   missing, duplicated or mismatched approval. Move the current `## [Unreleased]` entries under
+   `## [<version>] - <UTC date>` and leave an empty `## [Unreleased]`; the
+   publish gate requires the dated heading. Remove `"private": true` during
+   preparation and run
    `node scripts/check-publish-manifest.mjs`. The in-app update notice reads the
    notes from the **tag-pinned** raw URL, so they must be committed before the
    tag.
@@ -188,8 +189,7 @@ once it exists on the registry, so the first release bootstraps it:
 
    Optionally verify the signature from a temporary install with
    `npm audit signatures`. Then create the GitHub Release from the release
-   notes, verify the tag-pinned raw notes URLs, move the released entries to a
-   dated `## [<version>] - <UTC date>` heading, and record the workflow run,
+   notes, verify the tag-pinned raw notes URLs, and record the workflow run,
    registry version and provenance in [verification.md](verification.md).
 
 Tag and CHANGELOG/GitHub Release dates use the **UTC** release date; normal

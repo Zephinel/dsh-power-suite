@@ -58,4 +58,7 @@ test('the release gates are wired into package.json and the docs', () => {
   const development = readFileSync(new URL('../docs/development.md', import.meta.url), 'utf8')
   assert.match(development, /npm run check:release/u, 'development.md documents the package-level gate')
   assert.match(development, /Release-Notes-Review: sha256=<hash>/u, 'development.md documents the approval line')
+  const changelog = readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8')
+  const dated = new RegExp(`^## \\[${manifest.version.replaceAll('.', '\\.')}\\] - `, 'm')
+  assert.match(changelog, dated, 'CHANGELOG carries the dated release heading the publish gate requires')
 })
