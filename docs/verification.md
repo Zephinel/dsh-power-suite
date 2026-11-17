@@ -3090,3 +3090,28 @@ rewritten to the canonical `moekyo <shigotods@outlook.com>` with
 - Earlier verification records that quote pre-rewrite SHAs are historical; this
   record explains the difference. Local feature branches that were never pushed
   still contain the old SHAs and should not be pushed as-is.
+
+
+## 2026-11-18 — Identity consolidation to Zephinel
+
+The repository identity was consolidated on `Zephinel <ventugem@gmail.com>`:
+every commit author/committer in the pushed history and the annotated
+`v0.1.0` tag were rewritten from the earlier `moekyo`, `rexxin` and
+`ann-impl-a` identities with `git filter-repo --mailmap`. Tree content is
+unchanged (the main tree hash `e8e71365` and the release-commit tree hash
+`f32ecb8f` are identical before and after the rewrite).
+
+- The rewritten base of `main` is `eb37c6a`; this record and the
+  `package.json` author change are committed on top of it.
+- The `v0.1.0` tag now points at the rewritten release commit `28ecb33`
+  (tag object `03fb0ab`); the release commit message and approval hash are
+  unchanged.
+- `package.json` `author` now reads `Zephinel <ventugem@gmail.com>`.
+- The pre-rewrite history is backed up in
+  `/tmp/dsh-power-suite-pre-identity2.bundle`; the SHAs recorded in the earlier
+  identity-cleanup record are stale as well.
+- npm `@zephinel/dsh-power-suite@0.1.0` was not republished: its provenance
+  attestation still references the first pre-rewrite commit `28837ba` (npm
+  metadata is immutable). Future releases use the Zephinel identity.
+- Local-only, never-pushed branches and the local git-notes ref still carry the
+  old identities until they are rebased or deleted.

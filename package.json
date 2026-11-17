@@ -76,7 +76,7 @@
     "ui-annotation",
     "sidebar-width"
   ],
-  "author": "rexxin",
+  "author": "Zephinel <ventugem@gmail.com>",
   "license": "MIT",
   "engines": {
     "node": ">=22"
