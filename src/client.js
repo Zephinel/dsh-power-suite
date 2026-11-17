@@ -8473,26 +8473,25 @@ function dwClearNativeAtmospheres() {
           flag.appendChild(svg)
           return flag
         }
-        const directChild = (row, pattern) => {
+        // Match individual class tokens (the shell hashes them, e.g.
+        // `YDXeBa_slot`), not the whole className string: our own
+        // `dps-row-pending-slot` class on the same element must not break the match.
+        const hasClassSuffix = (element, suffix) => {
+          if (!(element instanceof HTMLElement)) return false
+          for (const token of element.classList) {
+            if (token === suffix || token.endsWith(`_${suffix}`)) return true
+          }
+          return false
+        }
+        const directChild = (row, suffix) => {
           for (const child of row.children) {
-            if (typeof child.className === 'string' && pattern.test(child.className)) return child
+            if (hasClassSuffix(child, suffix)) return child
           }
           return null
         }
-        const slotOf = (row) => directChild(row, /(?:^|_)slot(?:_|$)/u)
-        const titleOf = (row) => directChild(row, /(?:^|_)title(?:_|$)/u)
-        const flagOf = (row) => {
-          const slot = slotOf(row)
-          if (slot !== null) {
-            for (const child of slot.children) {
-              if (child instanceof HTMLElement && child.classList.contains('dps-row-pending-flag')) return child
-            }
-          }
-          for (const child of row.children) {
-            if (child instanceof HTMLElement && child.classList.contains('dps-row-pending-flag')) return child
-          }
-          return null
-        }
+        const slotOf = (row) => directChild(row, 'slot')
+        const titleOf = (row) => directChild(row, 'title')
+        const isFlag = (element) => element instanceof HTMLElement && element.classList.contains('dps-row-pending-flag')
         const apply = () => {
           const root = document.querySelector('[class*="_sidebarCol"]')
           if (root === null) return
@@ -8500,23 +8499,30 @@ function dwClearNativeAtmospheres() {
             const key = row.getAttribute('data-row-key') ?? ''
             const sessionId = key.slice('session:'.length)
             const wanted = pending.has(sessionId)
-            const flag = flagOf(row)
             const slot = slotOf(row)
+            // React can recreate the row's leading slot between renders, leaving a
+            // stray flag at row level next to the fresh slot one; keep exactly one
+            // flag, inside the slot when the shell provides it.
+            const stray = [...row.children].filter((child) => isFlag(child))
+            const inSlot = slot === null ? [] : [...slot.children].filter((child) => isFlag(child))
             if (wanted) {
               row.setAttribute('data-power-suite-pending', '')
-              // Prefer the fixed 16 px leading slot: it reserves the space, so the
-              // title never shifts when the flag appears. Its native glyph is hidden
-              // while pending and restored when the flag goes away.
+              for (const extra of stray) extra.remove()
               if (slot !== null) {
                 slot.classList.add('dps-row-pending-slot')
-                if (flag === null) slot.appendChild(makeFlag())
-              } else if (flag === null) {
-                const title = titleOf(row)
-                if (title !== null) row.insertBefore(makeFlag(), title)
+                for (const extra of inSlot.slice(1)) extra.remove()
+                if (inSlot.length === 0) slot.appendChild(makeFlag())
+              } else {
+                for (const extra of inSlot) extra.remove()
+                const flags = [...row.children].filter((child) => isFlag(child))
+                if (flags.length === 0) {
+                  const title = titleOf(row)
+                  if (title !== null) row.insertBefore(makeFlag(), title)
+                }
               }
             } else {
               row.removeAttribute('data-power-suite-pending')
-              if (flag !== null) flag.remove()
+              for (const extra of [...stray, ...inSlot]) extra.remove()
               if (slot !== null) slot.classList.remove('dps-row-pending-slot')
             }
           }
