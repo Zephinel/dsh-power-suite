@@ -118,11 +118,13 @@ jobs:
         run: |
           version="$(node -p "require('./package.json').version")"
           encoded="$(node -p "require('./package.json').name.replace('/', '%2F')")"
-          # 30 x (5 s + 5 s + 10 s sleep) is bounded to 10 minutes even when the
-          # registry accepts the connection but never answers.
-          for attempt in $(seq 1 30); do
-            tags="$(curl -fsS --max-time 5 "https://registry.npmjs.org/-/package/${encoded}/dist-tags" 2>/dev/null || true)"
-            status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "https://registry.npmjs.org/${encoded}/${version}" 2>/dev/null || true)"
+          # 0.1.0's publish succeeded while this poll timed out just before the
+          # registry settled, so the window matches the intelligent-ui workflow:
+          # 60 attempts of (<=10 s + <=10 s + 10 s sleep) give propagation
+          # roughly 10+ minutes before the job reports a false failure.
+          for attempt in $(seq 1 60); do
+            tags="$(curl -fsS --max-time 10 "https://registry.npmjs.org/-/package/${encoded}/dist-tags" 2>/dev/null || true)"
+            status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "https://registry.npmjs.org/${encoded}/${version}" 2>/dev/null || true)"
             if [ "$status" = "200" ] && printf '%s' "$tags" | grep -Fq "\"latest\":\"${version}\""; then
               echo "registry: ${version} (latest; version endpoint 200)"
               exit 0
@@ -130,5 +132,5 @@ jobs:
             echo "registry not settled yet (version endpoint ${status:-none}; tags: ${tags:-none}); retrying"
             sleep 10
           done
-          echo "::error::registry verification failed after 10 minutes: expected ${version}; last tags=${tags:-none} status=${status:-none}"
+          echo "::error::registry verification failed after the bounded poll: expected ${version}; last tags=${tags:-none} status=${status:-none}"
           exit 1
