@@ -6,23 +6,23 @@ gitignored `lib/index.js` (Host ESM) and `lib/client.js` (classic browser
 script), which are the entries the published package exports:
 
 ```
-src/index.js            Host entry (Node)
-├─ host/document-store.js                shared durable-document module
-├─ features/session-artifacts/host.js    GET  /api/session-artifacts.list
+src/index.ts            Host entry (Node)
+├─ host/document-store.ts               shared durable-document module
+├─ features/session-artifacts/host.ts   GET  /api/session-artifacts.list
 │                                        GET|HEAD /api/session-artifacts.raw
 │                                        GET|HEAD /api/session-artifacts.attachment
 │                                        GET  /api/session-artifacts.preview
-├─ features/workspace-presets/host.js    GET  /api/workspace-presets.get
+├─ features/workspace-presets/host.ts   GET  /api/workspace-presets.get
 │                                        POST /api/workspace-presets.set
-├─ features/prompt-history/host.js       GET  /api/prompt-history.list
-├─ features/interrupted-sessions/host.js GET  /api/power-suite.interrupted
+├─ features/prompt-history/host.ts      GET  /api/prompt-history.list
+├─ features/interrupted-sessions/host.ts GET  /api/power-suite.interrupted
 │                                        POST /api/power-suite.continue
-├─ features/settings/host.js             GET/POST /api/power-suite.settings
-├─ features/read-acks/host.js            GET/POST /api/power-suite.read-acks
-├─ features/session-pins/host.js         GET/POST /api/power-suite.session-pins
-├─ features/sidebar-width/host.js        GET/POST /api/power-suite.sidebar-width
-├─ features/session-activity/host.js     GET  /api/power-suite.session-activity
-├─ features/update-check/host.js         GET  /api/power-suite.update
+├─ features/settings/host.ts            GET/POST /api/power-suite.settings
+├─ features/read-acks/host.ts           GET/POST /api/power-suite.read-acks
+├─ features/session-pins/host.ts        GET/POST /api/power-suite.session-pins
+├─ features/sidebar-width/host.ts       GET/POST /api/power-suite.sidebar-width
+├─ features/session-activity/host.ts    GET  /api/power-suite.session-activity
+├─ features/update-check/host.ts        GET  /api/power-suite.update
 └─ ctx.effect(...)                       every registration lives with the plugin
 
 src/client.js           Browser entry (DSH module loader)
@@ -42,7 +42,7 @@ src/client.js           Browser entry (DSH module loader)
 
 ## Host half
 
-`src/index.js` exports the stable Loader name (`power-suite`) and the union of
+`src/index.ts` exports the stable Loader name (`power-suite`) and the union of
 Host services the features may use. Each feature exports an `install<Feature>`
 function; the entry calls them inside `apply`. All routes, events, and caches
 are registered through `ctx.effect`, so unloading the plugin removes them.
@@ -52,7 +52,7 @@ behind the same browser authentication and Host/Origin fence as the rest of the
 GUI. JSON responses are `no-store`.
 
 The five simple durable stores (settings, read acknowledgements, session pins,
-sidebar width, workspace presets) share `src/host/document-store.js`. That module
+sidebar width, workspace presets) share `src/host/document-store.ts`. That module
 owns the mechanism — lazy single-flight read, coded read-error policy, serialized
 read-modify-write, an atomic 0600 temporary-sibling rename, and in-memory
 publication only after the rename — while each store supplies only its document

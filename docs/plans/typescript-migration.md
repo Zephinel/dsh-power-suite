@@ -12,7 +12,7 @@ Related: [Codebase design review](codebase-design-review.md) ·
 
 The pre-migration baseline was pure JavaScript with **no build step** (Phase 2a
 now introduces the build); `package.json`
-exports `src/index.js` and `src/client.js` directly, and everything the package
+exports `src/index.ts` and `src/client.js` directly, and everything the package
 ships is the checked-in source. The browser half is a single classic browser
 script (`src/client.js`, ~24.8k lines, ~1.2 MB, 1,595 JSDoc tags); the Host half
 is 22 ES modules under `src/features/`.
@@ -138,7 +138,7 @@ Acceptance: this plan is approved or amended; no code changes beyond the plan.
 `npm run typecheck` reports 0 errors over the Host half, `npm run check` includes
 it, `test/protocol-contract.test.js` guards the duplicated literals, and no
 build step or emitted file landed. `package.json` `files`/`exports` are unchanged;
-the packed content grows only by `src/shared/protocol.js` and the two plan
+the packed content grows only by `src/shared/protocol.ts` and the two plan
 documents (95→98 files). `src/client.js` carries a transitional `// @ts-nocheck`
 until Phase 3.
 
@@ -157,7 +157,7 @@ Acceptance:
 - `npm run check` runs the typecheck and stays green.
 - Existing packed files stay byte-identical to the checkout (`npm run
   check:release` passes with 98 files); the only packed additions are
-  `src/shared/protocol.js` and the two plan documents (95→98), and
+  `src/shared/protocol.ts` and the two plan documents (95→98), and
   `package.json` `files`/`exports` are unchanged.
 - No sourcemap, build output or package-layout change.
 - The docs-sync reference records the new guard and its expected output.
@@ -173,7 +173,7 @@ Acceptance:
   compares the packed `lib/` with a fresh build before install/boot/uninstall.
   Decisions taken: esbuild + `tsc --noEmit`, `lib/` as the published output, and
   packed files now exclude `src/` (98→75).
-- **2b (document-store extraction) done.** `src/host/document-store.js` owns the
+- **2b (document-store extraction) done.** `src/host/document-store.ts` owns the
   shared durable-document mechanism (lazy single-flight read, coded read-error
   policy, serialized read-modify-write, atomic 0600 rename, publish-after-rename)
   with `get`/`update`/`flush`; the settings, read-acks, session-pins,
@@ -181,9 +181,17 @@ Acceptance:
   their document policy. `test/document-store.test.js` covers the module
   interface; the existing store suites still pass unchanged (374/374 tests).
   The activity ledger keeps its debounced write path for now.
-- **2c (Host TypeScript conversion) pending:** convert the 22 Host modules and
-  the shared protocol typedefs to `.ts`, decide how the Node tests consume the
-  built/typed modules, and close strictness/any-budget items.
+- **2c (Host TypeScript conversion) done.** The 22 Host modules, `src/index.ts`,
+  `src/host/document-store.ts` and `src/shared/protocol.ts` are TypeScript with
+  `.ts` relative specifiers; the Node tests import the sources directly via
+  Node's native type stripping (zero build; `engines.node >= 22.18`), while
+  esbuild keeps producing the two `lib/` entries and the packed set stays
+  unchanged. `strict: true` (421 errors) is deferred to 2d; 2c carries the
+  minimal annotations needed for a clean `tsc --noEmit` plus
+  `erasableSyntaxOnly`/`verbatimModuleSyntax` guardrails.
+- **2d (strictness) pending:** `strict: true` over the Host sources is expected
+  to add roughly 421 errors (mostly implicit `any` at DSH platform boundaries);
+  it needs ambient/context types first and stays out of 2c.
 
 Introduce the build (recommended: esbuild for the browser classic script and
 `tsc --noEmit` for types; alternative: `tsc` emit for both), switch `exports` and

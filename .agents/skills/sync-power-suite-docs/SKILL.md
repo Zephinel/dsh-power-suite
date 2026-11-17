@@ -7,16 +7,16 @@ whenToUse: "同步文档, 更新文档, 检查文档, 文档落后了, 文档和
 # Sync Power Suite Docs
 
 Scope: the `dsh-power-suite` repository — one installable DSH bundle. It ships a
-Node Host half (`src/index.js`, `src/features/<name>/` and the shared
-`src/host/document-store.js`), a Web browser half
+Node Host half (`src/index.ts`, `src/features/<name>/` and the shared
+`src/host/document-store.ts`), a Web browser half
 (one `//#region feature:` group per feature in `src/client.js`), plugin display
 metadata (`locale/*.json`), the bundle patch (`cordis.patch.yml`), the release
 notes and changelog, and a documentation set (`README.md`, `docs/`,
 `PRODUCT.md`) that **ships in the npm package**, plus a repo-only
 `test/browser/README.md`. A small esbuild build (`npm run build`) produces the
 gitignored `lib/index.js` and `lib/client.js` that the npm package ships; the
-Host sources are still JavaScript in Phase 2, and there is no vendored tree or
-bilingual doc pair. DSH shell docs are out of scope.
+the Host sources are TypeScript (Phase 2c) while `src/client.js` remains the
+classic browser script, and there is no vendored tree or bilingual doc pair. DSH shell docs are out of scope.
 
 Docs split into two contracts. **As-built** docs describe what the bundle does
 now and must match the code. **As-planned** docs (proposals, roadmaps, future
@@ -132,13 +132,13 @@ Claim groups for this bundle:
 
 - **Product state and packaging**: one bundle `@zephinel/dsh-power-suite`, one
   Loader row `power-suite`, features as modules inside the package, an esbuild
-  build to the gitignored `lib/` entries, no runtime dependencies, Node.js 22+,
+  build to the gitignored `lib/` entries, no runtime dependencies, Node.js 22.18+,
   DSH 0.2.2 plugin interface (the
   Web Host used for the browser checks runs 0.2.2-rc.1), Web platform only,
   pnpm for bundle installs, Chrome optional for the browser suites, `docs/`,
   `assets/`, `locale/` and `release-notes/` ship in the package while
   `.agents/**` does not. Sources: `package.json`, `cordis.patch.yml`,
-  `src/index.js` (`name`, `inject`), `scripts/check.mjs`.
+  `src/index.ts` (`name`, `inject`), `scripts/check.mjs`.
 - **Manifest and shipped set**: name, version, description, `exports`, `files`,
   `main`, `icon`, `engines`, `dsh.client.inject`, `publishConfig`, `repository`;
   the packed file list and entry count. Sources: `package.json`,
@@ -146,10 +146,10 @@ Claim groups for this bundle:
 - **Feature inventory and navigation**: README's *Features at a glance* table,
   `docs/overview.md`'s *Features* table, `docs/README.md`'s reference list and
   `docs/usage.md`'s sections agree with each other and with the installed
-  features (`src/index.js` installers plus `//#region feature:` marks in
+  features (`src/index.ts` installers plus `//#region feature:` marks in
   `src/client.js`). The composer image gallery is a browser-only capability
   documented inside `usage.md`, not a Host feature module — count modules, not
-  table rows. Sources: `src/index.js`, `src/client.js` region marks, those docs.
+  table rows. Sources: `src/index.ts`, `src/client.js` region marks, those docs.
 - **UI copy and settings**: every quoted label comes from the inline `en`/`zh`
   dictionaries in the feature's `src/client.js` region; the settings contract
   comes from `src/features/settings/` — prompt-history modifier modes
@@ -161,8 +161,8 @@ Claim groups for this bundle:
   storage keys and caps.
 - **Routes, slots, services, storage**: `docs/architecture.md`'s Host route map,
   browser-half tree and *Slots used* table match the route strings in
-  `src/features/**/host.js`, the `ctx.slot` registrations in `src/client.js`,
-  the `inject` union in `src/index.js`, and the profile storage documents.
+  `src/features/**/host.ts`, the `ctx.slot` registrations in `src/client.js`,
+  the `inject` union in `src/index.ts`, and the profile storage documents.
   Quoted caps and limits (annotation record cap 100, read-ack entries 1000,
   prompt cap 500, sidebar-width range 264–420 px, 5 s undo, 24-candidate
   marquee, three "later" clicks, six highlights, activity-ledger caps) come from

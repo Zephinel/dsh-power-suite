@@ -150,7 +150,7 @@ There is no runtime dependency. Run `npm ci` once to install the esbuild/TypeScr
 ## Prerequisites
 
 - **DSH 0.2.2 plugin interface** — the Host and browser halves target DSH 0.2.2. The Web Host used for this repository's browser checks runs **0.2.2-rc.1**; later DSH versions are unverified. Install the CLI with `npm install -g @deepseek-ai/dsh`.
-- **Node.js 22 or newer** — `package.json` declares `engines.node >= 22`; the CI gate runs on Node 22 and 24. Run `npm ci` once for esbuild and the typecheck tooling.
+- **Node.js 22.18 or newer** — `package.json` declares `engines.node >= 22.18` (the test suite imports the TypeScript sources through Node's native type stripping); the CI gate runs on Node 22 and 24. Run `npm ci` once for esbuild and the typecheck tooling.
 - **pnpm** — needed to install profile bundles: `dsh plugin add` forwards to it, and the in-app Plugins page runs it behind its dialog.
 - **Git** — needed only to get the code; the repository sets no minimum version.
 - **Google Chrome** (optional) — only for the local browser suites; they use the standard macOS Chrome path and accept `CHROME_BIN` elsewhere.
@@ -168,13 +168,13 @@ Verified platform: macOS with DSH Web 0.2.2-rc.1. The plugin itself is a Web-pla
 
 ## Build, test and deploy
 
-The build bundles `src/index.js` and `src/client.js` into the gitignored `lib/` entries with esbuild; there are no runtime dependencies. Run the commands below from the checkout root.
+The build bundles `src/index.ts` and `src/client.js` into the gitignored `lib/` entries with esbuild; there are no runtime dependencies. Run the commands below from the checkout root.
 
 | Command | Purpose |
 |---|---|
 | `npm run build` | `node scripts/build.mjs` — esbuild bundles `src/` into the gitignored `lib/index.js` (Host ESM) and `lib/client.js` (classic browser script); `prepare` runs it before `npm pack`/`npm publish`. |
-| `npm test` | `node --test test/*.test.js` — pure-logic tests for the Host stores/routes and the browser-side derivations. |
-| `npm run typecheck` | `tsc --noEmit` — no-emit JSDoc/`checkJs` gate over the Host half (the classic browser entry is opted out until Phase 3). |
+| `npm test` | `node --test test/*.test.js` — pure-logic tests importing the TypeScript Host sources through Node's native type stripping (Node 22.18+; no build needed). |
+| `npm run typecheck` | `tsc --noEmit` — no-emit TypeScript check over the Host sources; `src/client.js` stays the classic browser script and is opted out until Phase 3. |
 | `npm run check` | The full gate: builds the entries, then runs syntax, typecheck, package manifest, docs links, Node tests and the release-notes check, then `pack:check`. |
 | `npm run pack:check` | `npm pack --dry-run --json` — inspect the published file list. |
 | `npm run check:release-notes` | Validate the tag-pinned release highlights for the package version. |

@@ -1237,7 +1237,7 @@ and inserts text through the composer that is already mounted.
 ## Architecture
 
 The feature is one region inside the plugin's single browser entry. It has no
-Host counterpart: nothing is added to `src/index.js`, `src/features/`, or the
+Host counterpart: nothing is added to `src/index.ts`, `src/features/`, or the
 package manifest.
 
 - **One region, one installer** — `//#region feature: ui element annotation` in
@@ -2530,7 +2530,7 @@ and inserts text through the composer that is already mounted.
 ## Architecture
 
 The feature is one region inside the plugin's single browser entry. It has no
-Host counterpart: nothing is added to `src/index.js`, `src/features/`, or the
+Host counterpart: nothing is added to `src/index.ts`, `src/features/`, or the
 package manifest.
 
 - **One region, one installer** — `//#region feature: ui element annotation` in

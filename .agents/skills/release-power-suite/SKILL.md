@@ -14,7 +14,7 @@ rediscover it, and keeps the human approval gates explicit.
 Facts that shape the procedure:
 
 - **Build step (Phase 2 of the TypeScript migration).** `npm run build`
-  (`scripts/build.mjs`, esbuild dev dependency) bundles `src/index.js` into the
+  (`scripts/build.mjs`, esbuild dev dependency) bundles `src/index.ts` into the
   ESM Host entry and `src/client.js` into the classic browser entry under the
   gitignored `lib/`; `prepare` builds before `npm pack`/`npm publish`, and the
   published package ships `lib/`, not `src/`. `npm run check` builds first. Local

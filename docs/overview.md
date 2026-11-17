@@ -35,10 +35,10 @@ the code the Host runs after a restart. Removing the bundle removes the plugin.
 .
   package.json              # bundle patch + exports + checks
   cordis.patch.yml          # inserts the single `power-suite` row
-  src/index.js              # Host entry: calls each feature's installer
+  src/index.ts              # Host entry: calls each feature's installer
   src/features/<name>/      # Host-side feature modules
   src/client.js             # browser entry: one `#region feature: <name>` per feature
-  src/host/document-store.js # shared durable-document module for the JSON stores
+  src/host/document-store.ts # shared durable-document module for the JSON stores
   lib/                      # gitignored build output (lib/index.js + lib/client.js)
   locale/                   # plugin display metadata (en, zh)
   docs/                     # architecture, guides, per-feature reference
@@ -47,11 +47,11 @@ the code the Host runs after a restart. Removing the bundle removes the plugin.
 
 ## Add a feature
 
-1. Host side: create `src/features/<name>/host.js` exporting
+1. Host side: create `src/features/<name>/host.ts` exporting
    `install<Name>(ctx)`; register routes, services, and events inside
-   `ctx.effect`. Call the installer from [`src/index.js`](../src/index.js) and add any new
+   `ctx.effect`. Call the installer from [`src/index.ts`](../src/index.ts) and add any new
    service names to its `inject` union. A durable Host document goes through
-   [`src/host/document-store.js`](../src/host/document-store.js) (atomic queued
+   [`src/host/document-store.ts`](../src/host/document-store.ts) (atomic queued
    writes, coded read errors) — supply decode/encode/clone/change policy instead
    of hand-rolling filesystem code.
 2. Browser side: add a `//#region feature: <name>` section to [`src/client.js`](../src/client.js)

@@ -24,14 +24,14 @@ used:
 
 | Module | Interface callers/tests must know | Implementation | Depth | Seam |
 | --- | --- | --- | --- | --- |
-| Host composition entry (`apply` in `src/index.js`) | `apply(ctx)` | calls 10 feature installers inside one plugin lifetime | deep enough | DSH Host composition |
+| Host composition entry (`apply` in `src/index.ts`) | `apply(ctx)` | calls 10 feature installers inside one plugin lifetime | deep enough | DSH Host composition |
 | Feature installers (`install<Feature>(ctx, options?)`, 10) | one function + services they rely on | routes, stores, events, SSE, caches | deep | DSH `ctx` (platform port) |
 | Durable document stores (6): settings, read-acks, session-pins, session-activity, sidebar-width, workspace-presets | per-store constants, parse/serialize, `create<Store>Store(dshHome)` returning read/update/flush/dispose | file envelope, version, caps, merge policy, atomic temp-rename, 0600, read-merge-write queue | each store is deep, but the durable mechanism is **duplicated 6 times** | profile filesystem |
 | Host HTTP routes (16) | method, path, request body shape, response shape, error codes | per-feature handlers | medium | authenticated `connection.fetch` |
 | Cross-half contract (routes, settings enums, record shapes) | the JSON on the wire and the localStorage documents | nothing owns it — declared in a Host constants module and again as literals in `src/client.js` | **shallow / no owner** | HTTP + browser storage, declared twice |
 | Browser half (`src/client.js`) | 14 slot registrations, 9 locale namespaces and the fetch route literals | 24.8k-line classic script; feature regions are comments, not modules | external interface is the platform's; internal locality is poor | DSH browser module loader |
 | Client test adapter (`test/helpers/client-module.mjs`) | `vm` sandbox options and `sourcePath` | reads the source text, stubs the browser | test adapter, not product | test-only |
-| Update checker (`src/features/update-check/checker.js`) | injectable `fetch`, cache and release-note rules | registry/raw fetches, stable-version comparison, caches, six-highlight cap | deep | true-external (npm registry / raw GitHub) |
+| Update checker (`src/features/update-check/checker.ts`) | injectable `fetch`, cache and release-note rules | registry/raw fetches, stable-version comparison, caches, six-highlight cap | deep | true-external (npm registry / raw GitHub) |
 
 ## 3. Findings
 
@@ -70,7 +70,7 @@ across all six adapters, which is exactly the current duplication. Depth earned.
 Test surface: the shared module's interface plus one policy test per adapter;
 replace the duplicated atomic-write tests instead of layering new ones on top.
 
-**Landed in Phase 2b.** `src/host/document-store.js` implements the interface
+**Landed in Phase 2b.** `src/host/document-store.ts` implements the interface
 (`get`/`update`/`flush`, with decode/encode/merge/read-error/clone policy), the
 five simple stores are adapters over it, and `test/document-store.test.js` tests
 the module interface while the existing store suites keep covering adapter
@@ -178,7 +178,7 @@ this ordering; the design changes it in three places:
    bespoke small store clearer? (The durability mechanism is identical; keep the
    adapter and let the policy be trivial.)
 3. Where does the shared protocol module live before the build makes it importable
-   by the browser half — `src/shared/protocol.js` with a Node-side contract test,
+   by the browser half — `src/shared/protocol.ts` with a Node-side contract test,
    or host-only constants plus the guard test?
 4. Do per-feature client modules expose a single `install(ctx, deps)` plus pure
    model functions, or one module per slot registration? (Recommendation: one per
@@ -191,11 +191,11 @@ this ordering; the design changes it in three places:
 - [TypeScript migration plan](typescript-migration.md)
 - [Architecture](../architecture.md) — the current Host/browser module map.
 - [Development](../development.md) — the feature recipe and checks.
-- Store implementations: [`settings/store.js`](../../src/features/settings/store.js),
-  [`read-acks/store.js`](../../src/features/read-acks/store.js),
-  [`session-pins/store.js`](../../src/features/session-pins/store.js),
-  [`session-activity/store.js`](../../src/features/session-activity/store.js),
-  [`sidebar-width/store.js`](../../src/features/sidebar-width/store.js),
-  [`workspace-presets/store.js`](../../src/features/workspace-presets/store.js).
+- Store implementations: [`settings/store.ts`](../../src/features/settings/store.ts),
+  [`read-acks/store.ts`](../../src/features/read-acks/store.ts),
+  [`session-pins/store.ts`](../../src/features/session-pins/store.ts),
+  [`session-activity/store.ts`](../../src/features/session-activity/store.ts),
+  [`sidebar-width/store.ts`](../../src/features/sidebar-width/store.ts),
+  [`workspace-presets/store.ts`](../../src/features/workspace-presets/store.ts).
 - Browser half and its test seam: [`src/client.js`](../../src/client.js),
   [`test/helpers/client-module.mjs`](../../test/helpers/client-module.mjs).

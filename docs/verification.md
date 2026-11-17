@@ -18,27 +18,32 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 
 - `npm run build` (esbuild) bundles `src/` into the gitignored `lib/index.js`
   and `lib/client.js`;
-- `node --check` on both package entries and every Host feature entry;
-- `tsc --noEmit` over the Host half (`tsconfig.json` with `allowJs`/`checkJs`;
+- `node --check` on the remaining JavaScript entry (`src/client.js`);
+- `tsc --noEmit` over the Host TypeScript sources (`src/**/*.ts`); (`tsconfig.json` with `allowJs`/`checkJs`;
   the classic browser entry opts out until Phase 3 of the migration plan);
 - package-manifest validation: exports/files/icon/cordis patch are present and
   the DSH bundle patch points at a real file;
 - local Markdown links and images (`scripts/check-docs-links.mjs`);
-- the pure-logic test suite (`node --test test/*.test.js`);
+- the pure-logic test suite (`node --test test/*.test.js`, importing the Host
+  `.ts` sources through Node's native type stripping);
 - the release-notes gate (`scripts/check-release-notes.mjs`).
 
 ### Current gates (2026-11-18, Node 24.22.3)
 
-- `npm run build`: **`lib/index.js` 104.6 kB** (Host ESM bundle) and
+- `npm run build`: **`lib/index.js` 104.4 kB** (Host ESM bundle) and
   **`lib/client.js` 957.6 kB** (classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
 - `npm test`: **374 tests, 374 passed, 0 failed**, 24 test files — Host stores/routes
   plus the browser-side derivations, the release-notes approval round-trip, the
   protocol contract guard for duplicated route/enum literals and the durable
   document-store interface.
-- `npm run typecheck`: `tsc --noEmit` clean — Phase 1 JSDoc/`checkJs` gate over the
-  Host half; `src/client.js` carries `// @ts-nocheck` until Phase 3.
-- `npm run check`: passed (`24 modules, 24 test files`); it builds `lib/` first,
+- `npm run typecheck`: `tsc --noEmit` clean over the Host TypeScript sources
+  (`src/**/*.ts`; `src/client.js` stays JavaScript and carries `// @ts-nocheck`
+  until Phase 3).
+- `rm -rf lib && node --test test/*.test.js`: **374/374** — the suite imports the
+  `.ts` sources directly (Node >= 22.18 native type stripping), so the tests need
+  no build.
+- `npm run check`: passed (`25 TypeScript modules, 1 JavaScript module(s), 24 test files`); it builds `lib/` first,
   then runs the syntax checks, the typecheck, package-manifest validation, local
   docs links, the Node suite and the release-notes gate, then `pack:check`.
 - `npm run pack:check`: **75 files**; inspect the file list rather than the byte totals

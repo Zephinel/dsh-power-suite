@@ -2,11 +2,11 @@
 
 ## Prerequisites
 
-- Node.js 22 or newer (CI runs the gate on Node 22 and 24).
+- Node.js 22.18 or newer (the tests import the TypeScript Host sources through Node's native type stripping; CI runs on Node 22 and 24).
 - npm — run `npm ci` once; it installs esbuild and TypeScript as dev dependencies.
 - A DeepSeek Harness profile that can install local bundles (`web` by default).
 
-`npm run build` bundles `src/index.js` (Host ESM) and `src/client.js` (classic
+`npm run build` bundles `src/index.ts` (Host ESM) and `src/client.js` (classic
 browser script) into the gitignored `lib/` entries with esbuild. The package has
 no runtime dependencies; `npm pack` builds through `prepare`.
 
@@ -32,8 +32,8 @@ truth and stays repo-only.
 
 ```bash
 npm run build               # esbuild: src/ → gitignored lib/index.js + lib/client.js
-npm test                    # node --test test/*.test.js
-npm run typecheck           # tsc --noEmit: no-emit checkJs gate (Phase 1; src/client.js opted out)
+npm test                    # node --test test/*.test.js: imports the .ts sources via Node >= 22.18 type stripping; no build
+npm run typecheck           # tsc --noEmit: no-emit check over the Host TypeScript sources (src/client.js opted out)
 npm run check               # build + syntax + typecheck + manifest + docs links + tests + release-notes gate, then pack:check
 npm run pack:check          # npm pack --dry-run --json (prepare builds); inspect the published file list
 npm run check:release-notes # release-notes Highlights for the current package version
@@ -211,11 +211,11 @@ releases are stable semver with an annotated `v<version>` tag.
 
 ## Adding a feature
 
-1. **Host side** — add `src/features/<name>/host.js` exporting an
+1. **Host side** — add `src/features/<name>/host.ts` exporting an
    `install<Name>(ctx)` function; create pure derivation helpers in sibling
    modules. Register routes, services, and events inside `ctx.effect`. Call the
-   installer from `src/index.js` and add any new service name to its `inject`
-   union. Durable JSON documents go through `src/host/document-store.js`; pass the
+   installer from `src/index.ts` and add any new service name to its `inject`
+   union. Durable JSON documents go through `src/host/document-store.ts`; pass the
    document policy (decode/encode/clone/change rule) instead of writing files
    directly.
 2. **Browser side** — add a `//#region feature: <name>` section to
