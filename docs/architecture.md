@@ -1,6 +1,9 @@
 # Architecture
 
-The suite is one DSH bundle with two halves that share no runtime code:
+The suite is one DSH bundle with two halves that share no runtime code. The
+checkout keeps both halves in `src/`; `npm run build` bundles them into the
+gitignored `lib/index.js` (Host ESM) and `lib/client.js` (classic browser
+script), which are the entries the published package exports:
 
 ```
 src/index.js            Host entry (Node)

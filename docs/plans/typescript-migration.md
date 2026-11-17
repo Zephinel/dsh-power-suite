@@ -10,7 +10,8 @@ Related: [Codebase design review](codebase-design-review.md) ·
 
 ## 1. Summary
 
-The repository is currently pure JavaScript with **no build step**: `package.json`
+The pre-migration baseline was pure JavaScript with **no build step** (Phase 2a
+now introduces the build); `package.json`
 exports `src/index.js` and `src/client.js` directly, and everything the package
 ships is the checked-in source. The browser half is a single classic browser
 script (`src/client.js`, ~24.8k lines, ~1.2 MB, 1,595 JSDoc tags); the Host half
@@ -162,6 +163,16 @@ Acceptance:
 - The docs-sync reference records the new guard and its expected output.
 
 ### Phase 2 — build plus Host TypeScript
+
+**Status: Phase 2a (build plumbing) implemented on `feat/typescript-phase2`
+(2026-11-18).** `npm run build` (esbuild) writes the gitignored `lib/index.js`
+and `lib/client.js`; `package.json` `main`/`exports`/`files` point at `lib/`;
+`prepare` builds before pack/publish; `npm run check` builds first; and
+`scripts/release-check.mjs` compares the packed `lib/` with a fresh build before
+install/boot/uninstall. Decisions taken: esbuild + `tsc --noEmit`, `lib/` as the
+published output, Host sources still JavaScript until Phase 2b, and packed files
+now exclude `src/` (98→75). Still pending: the shared document-store extraction
+and the 22 Host modules converted to `.ts`.
 
 Introduce the build (recommended: esbuild for the browser classic script and
 `tsc --noEmit` for types; alternative: `tsc` emit for both), switch `exports` and

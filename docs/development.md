@@ -3,10 +3,12 @@
 ## Prerequisites
 
 - Node.js 22 or newer (CI runs the gate on Node 22 and 24).
+- npm — run `npm ci` once; it installs esbuild and TypeScript as dev dependencies.
 - A DeepSeek Harness profile that can install local bundles (`web` by default).
 
-There is **no build step**: `package.json` exports `src/index.js` and
-`src/client.js` directly, and the package has no runtime dependencies.
+`npm run build` bundles `src/index.js` (Host ESM) and `src/client.js` (classic
+browser script) into the gitignored `lib/` entries with esbuild. The package has
+no runtime dependencies; `npm pack` builds through `prepare`.
 
 ## Local install loop
 
@@ -16,23 +18,26 @@ plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-
 
 The installed bundle is `@zephinel/dsh-power-suite` (Loader row `power-suite`).
 The profile keeps the package as a `link:` dependency, so the checkout itself is
-the code the Host runs. After changing Host code:
+the code the Host runs. After changing Host or browser code:
 
-1. Reload the plugin (toggle it disabled/enabled in the Plugin list, or restart
+1. `npm run build`.
+2. Reload the plugin (toggle it disabled/enabled in the Plugin list, or restart
    the Host process).
-2. Reload the Web page for browser-code changes.
+3. Reload the Web page for browser-code changes.
 
-The plugin manages no build artifacts; nothing under `src/` is generated.
+`lib/` is generated and gitignored; never commit it. `src/` is the source of
+truth and stays repo-only.
 
 ## Checks
 
 ```bash
+npm run build               # esbuild: src/ → gitignored lib/index.js + lib/client.js
 npm test                    # node --test test/*.test.js
-npm run typecheck           # tsc --noEmit: no-build checkJs gate (Phase 1; src/client.js opted out)
-npm run check               # syntax + typecheck + manifest + docs links + tests + release-notes gate, then pack:check
-npm run pack:check          # npm pack --dry-run --json; inspect the published file list
+npm run typecheck           # tsc --noEmit: no-emit checkJs gate (Phase 1; src/client.js opted out)
+npm run check               # build + syntax + typecheck + manifest + docs links + tests + release-notes gate, then pack:check
+npm run pack:check          # npm pack --dry-run --json (prepare builds); inspect the published file list
 npm run check:release-notes # release-notes Highlights for the current package version
-npm run check:release       # pack → throwaway DSH_HOME install → isolated boot → byte identity → uninstall (needs dsh + pnpm; not in CI)
+npm run check:release       # build → pack → compare lib with the build, other files with the checkout → throwaway DSH_HOME install/boot/uninstall (needs dsh + pnpm; not in CI)
 ```
 
 `npm run check` is the required gate before committing a functional change. CI
@@ -41,10 +46,10 @@ runs it on push and pull request. A docs-only change (CHANGELOG/PRODUCT/docs/`
 the typecheck. The release-notes gate runs inside `npm run check` and again in
 the publish workflow.
 
-`npm ci` installs TypeScript and `@types/node` as dev dependencies; the
-typecheck is no-build (no emitted files, no package-layout change). The classic
-browser entry stays out of the gate until Phase 3 — see
-[the TypeScript migration plan](plans/typescript-migration.md).
+`npm ci` installs esbuild, TypeScript and `@types/node` as dev dependencies;
+`npm run build` emits only the gitignored `lib/` entries, and the typecheck
+itself emits nothing. The classic browser entry stays out of the type gate until
+Phase 3 — see [the TypeScript migration plan](plans/typescript-migration.md).
 
 ## README screenshots and the Bento pipeline
 

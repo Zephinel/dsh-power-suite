@@ -12,8 +12,10 @@ Node Host half (`src/index.js` plus `src/features/<name>/`), a Web browser half
 metadata (`locale/*.json`), the bundle patch (`cordis.patch.yml`), the release
 notes and changelog, and a documentation set (`README.md`, `docs/`,
 `PRODUCT.md`) that **ships in the npm package**, plus a repo-only
-`test/browser/README.md`. There is no build step, no generated code, no vendored
-tree, and no bilingual doc pair. DSH shell docs are out of scope.
+`test/browser/README.md`. A small esbuild build (`npm run build`) produces the
+gitignored `lib/index.js` and `lib/client.js` that the npm package ships; the
+Host sources are still JavaScript in Phase 2, and there is no vendored tree or
+bilingual doc pair. DSH shell docs are out of scope.
 
 Docs split into two contracts. **As-built** docs describe what the bundle does
 now and must match the code. **As-planned** docs (proposals, roadmaps, future
@@ -90,8 +92,8 @@ An ambiguous doc class is left alone and flagged.
 ### 1. Set the frame and run the guards
 
 Load [`references/verification.md`](references/verification.md). Run
-`npm run check` when feasible (it runs `scripts/check.mjs` and then
-`npm run pack:check`; there is no build step to run first), or at least
+`npm run check` when feasible (it builds `lib/` first, then runs
+`scripts/check.mjs` and `npm run pack:check`), or at least
 `npm run check:docs-links`, `npm test` and `npm run check:release-notes`; record
 the outputs — module/test-file/test counts, docs-link file count, release-notes
 result and pack entry count become evidence. Read
@@ -128,8 +130,9 @@ coverage per doc.
 Claim groups for this bundle:
 
 - **Product state and packaging**: one bundle `@zephinel/dsh-power-suite`, one
-  Loader row `power-suite`, features as modules inside the package, no build
-  step, no runtime dependencies, Node.js 22+, DSH 0.2.2 plugin interface (the
+  Loader row `power-suite`, features as modules inside the package, an esbuild
+  build to the gitignored `lib/` entries, no runtime dependencies, Node.js 22+,
+  DSH 0.2.2 plugin interface (the
   Web Host used for the browser checks runs 0.2.2-rc.1), Web platform only,
   pnpm for bundle installs, Chrome optional for the browser suites, `docs/`,
   `assets/`, `locale/` and `release-notes/` ship in the package while
@@ -251,12 +254,12 @@ lets the owner see which decisions were theirs.
 
 ## Doc-Specific Gotchas
 
-- **No doc pairs and no build.** The docs are a single English set; do not create
-  `README.en.md`, `docs/*.en.md`, `lib/`, `vendor/` or a `docs/current-facts.json`
-  to "match" the intelligent-ui repository. Counts come from command output. A
-  no-build `tsc --noEmit` typecheck (`npm run typecheck`, part of `npm run check`)
-  exists in Phase 1; it emits nothing and does not change the package layout, and
-  `src/client.js` is opted out until Phase 3.
+- **No doc pairs; a small build exists.** The docs are a single English set; do
+  not create `README.en.md`, `docs/*.en.md`, `vendor/` or a
+  `docs/current-facts.json` to "match" the intelligent-ui repository. `npm run
+  build` emits only the gitignored `lib/` entries (Phase 2), and `npm run
+  typecheck` (`tsc --noEmit`, part of `npm run check`) emits nothing; `src/
+  client.js` is opted out until Phase 3.
 - **`docs/verification.md` is a historical evidence ledger with one live part.**
   The `## Automated` section describes the current gates and is refreshed from
   command output; everything from the first dated round down is history — append

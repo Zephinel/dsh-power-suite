@@ -38,6 +38,7 @@ the code the Host runs after a restart. Removing the bundle removes the plugin.
   src/index.js              # Host entry: calls each feature's installer
   src/features/<name>/      # Host-side feature modules
   src/client.js             # browser entry: one `#region feature: <name>` per feature
+  lib/                      # gitignored build output (lib/index.js + lib/client.js)
   locale/                   # plugin display metadata (en, zh)
   docs/                     # architecture, guides, per-feature reference
   test/                     # pure-logic tests (node --test)

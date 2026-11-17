@@ -10,17 +10,17 @@
   },
   "type": "module",
   "description": "One DeepSeek Harness Web plugin that adds session artifacts, Dynamic Workspaces, prompt history, draft attachment memory, interrupted-session recovery, UI element annotation, a Host-synced sidebar width, and their settings.",
-  "main": "./src/index.js",
+  "main": "./lib/index.js",
   "exports": {
-    ".": "./src/index.js",
-    "./client": "./src/client.js",
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.png",
     "./package.json": "./package.json"
   },
   "files": [
-    "src",
+    "lib",
     "cordis.patch.yml",
     "locale",
     "assets",
@@ -53,7 +53,9 @@
   },
   "icon": "./icon.png",
   "scripts": {
-    "check": "node scripts/check.mjs && npm run pack:check",
+    "build": "node scripts/build.mjs",
+    "prepare": "npm run build",
+    "check": "npm run build && node scripts/check.mjs && npm run pack:check",
     "test": "node --test test/*.test.js",
     "typecheck": "tsc --noEmit",
     "pack:check": "npm pack --dry-run --json",
@@ -84,6 +86,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "esbuild": "^0.28.2",
     "typescript": "^7.0.2"
   }
 }

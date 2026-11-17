@@ -16,6 +16,8 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 
 `npm run check` performs:
 
+- `npm run build` (esbuild) bundles `src/` into the gitignored `lib/index.js`
+  and `lib/client.js`;
 - `node --check` on both package entries and every Host feature entry;
 - `tsc --noEmit` over the Host half (`tsconfig.json` with `allowJs`/`checkJs`;
   the classic browser entry opts out until Phase 3 of the migration plan);
@@ -27,20 +29,24 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 
 ### Current gates (2026-11-18, Node 24.22.3)
 
+- `npm run build`: **`lib/index.js` 107.7 kB** (Host ESM bundle) and
+  **`lib/client.js` 957.6 kB** (classic-script IIFE); `lib/` is gitignored and
+  rebuilt by `npm run check` and by `npm pack`'s `prepare`.
 - `npm test`: **367 tests, 367 passed, 0 failed**, 23 test files — Host stores/routes
   plus the browser-side derivations, the release-notes approval round-trip and the
   protocol contract guard for duplicated route/enum literals.
 - `npm run typecheck`: `tsc --noEmit` clean — Phase 1 JSDoc/`checkJs` gate over the
   Host half; `src/client.js` carries `// @ts-nocheck` until Phase 3.
-- `npm run check`: passed (`24 modules, 23 test files`); it runs the syntax checks,
-  the typecheck, package-manifest validation, local docs links, the Node suite and
-  the release-notes gate, then `pack:check`.
-- `npm run pack:check`: **98 files**; inspect the file list rather than the byte totals
+- `npm run check`: passed (`24 modules, 23 test files`); it builds `lib/` first,
+  then runs the syntax checks, the typecheck, package-manifest validation, local
+  docs links, the Node suite and the release-notes gate, then `pack:check`.
+- `npm run pack:check`: **75 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).
-- `npm run check:release`: **PASS** — 98 packaged files installed into a throwaway
-  `$DSH_HOME`, byte-identical to the tarball and the checkout, the mounted
-  `power-suite` Loader row, the boot graph and served client bundle, then clean
-  uninstall (requires `dsh` + `pnpm`; intentionally not in CI).
+- `npm run check:release`: **PASS** — 75 packaged files installed into a throwaway
+  `$DSH_HOME`; the packed `lib/` matches the fresh build, every other packed file
+  is byte-identical to the tarball and the checkout, and the mounted `power-suite`
+  Loader row, the boot graph, the served client bundle and clean uninstall pass
+  (requires `dsh` + `pnpm`; intentionally not in CI).
 - `node scripts/release-notes-approval.mjs --verify`: the tagged commit's
   `Release-Notes-Review: sha256=<hash>` line is required before publishing
   (covered by `test/release-notes-approval.test.js`).

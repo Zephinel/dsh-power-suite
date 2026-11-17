@@ -8,6 +8,8 @@ All notable changes to this repository are documented here. The format follows
 
 ### Changed
 
+- **Build step (Phase 2 of the TypeScript migration).** `npm run build` (`scripts/build.mjs`, esbuild dev dependency) bundles `src/index.js` into the ESM Host entry and `src/client.js` into the classic browser entry under the gitignored `lib/`; the npm package now ships `lib/` instead of `src/`, `prepare` builds before `npm pack`/`npm publish`, `npm run check` builds first, and `npm run check:release` compares the packed `lib/` against a fresh build before installing/booting/uninstalling. Runtime behavior and UI are unchanged; esbuild is a dev dependency only.
+
 - **No-build TypeScript gate (Phase 1).** `tsconfig.json` plus `npm run typecheck`
   (`tsc --noEmit`, `allowJs`/`checkJs`) now checks the Host half through its JSDoc
   types, and `npm run check` plus CI run it. The 24.8k-line classic browser entry

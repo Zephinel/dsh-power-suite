@@ -13,10 +13,13 @@ rediscover it, and keeps the human approval gates explicit.
 
 Facts that shape the procedure:
 
-- **No build step.** `package.json` exports `src/index.js` and `src/client.js`
-  directly; there is no `lib/`, no typecheck, and no generated artifact. Local
-  gates are syntax/manifest/Node tests, the pack gate, the notes-approval check
-  and the package-level `npm run check:release`.
+- **Build step (Phase 2 of the TypeScript migration).** `npm run build`
+  (`scripts/build.mjs`, esbuild dev dependency) bundles `src/index.js` into the
+  ESM Host entry and `src/client.js` into the classic browser entry under the
+  gitignored `lib/`; `prepare` builds before `npm pack`/`npm publish`, and the
+  published package ships `lib/`, not `src/`. `npm run check` builds first. Local
+  gates are syntax/typecheck/manifest/Node tests, the pack gate, the
+  notes-approval check and the package-level `npm run check:release`.
 - **No `docs/current-facts.json`** and no packed-byte fact remeasurement. Do not
   import the intelligent-ui build/current-facts steps.
 - The in-app update prompt reads `release-notes/<version>.md` (and `.en.md`) from
@@ -118,8 +121,9 @@ Facts that shape the procedure:
    - README status block and install text (package name, first-release framing);
    - `docs/development.md` if it names a version/tag example;
    - `docs/verification.md` with the release evidence record (see step 5).
-   There is no build step and no `docs/current-facts.json` in this repository, so
-   there is no packed-fact remeasurement to run.
+   There is no `docs/current-facts.json` in this repository, so there is no
+   packed-fact remeasurement to run; `lib/` is a gitignored build output and is
+   rebuilt by `npm run check` and by `npm pack`.
 6. **Notes review gate (never skipped implicitly).** Show the complete
    `release-notes/<version>.md` Highlights (plus `.en.md` when present) to the
    owner and wait for an explicit approve-or-changes answer before section 2 —
@@ -140,13 +144,13 @@ line in its body (that commit is the one that gets tagged), then run all of
 these from it:
 
 ```bash
-npm run check                 # syntax + manifest + docs links + Node tests + release notes
+npm run check                 # builds lib/ first, then syntax + typecheck + manifest + docs links + Node tests + release notes
 npm run check:docs-links      # the docs-only link gate, recorded explicitly
 npm run check:release-notes   # Highlights in default + optional English file
 node scripts/release-notes-approval.mjs --verify  # the release commit carries the approved notes hash
 node scripts/check-publish-manifest.mjs  # after removing "private": true
-npm run pack:check            # npm pack --dry-run --json; inspect the file list
-npm run check:release         # package-level install/boot/byte-identity/uninstall (local, needs dsh + pnpm)
+npm run pack:check            # npm pack --dry-run --json (prepare builds lib/); inspect the file list
+npm run check:release         # build → pack → compare lib with the build, other files with the checkout → install/boot/uninstall (local, needs dsh + pnpm)
 git diff --check
 ```
 
@@ -281,7 +285,7 @@ gh run watch <run-id> --exit-status --interval 10
   `0.3.0`-era history) as separate releases; the first public release is 0.1.0.
 - Don't treat a short registry lag or a stale client page as a failed release;
   verify the registry endpoints first.
-- Don't add a build step or a `docs/current-facts.json` to "match" another
-  repository; this package ships `src/` directly.
+- Don't add a `docs/current-facts.json` to "match" another repository, and don't
+  commit `lib/`; the build output is gitignored and rebuilt on demand.
 - Don't change behavior to make a document match; that is implementation, not
   this skill.
