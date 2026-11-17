@@ -2,14 +2,14 @@
 
 ## Users
 
-DeepSeek Harness Web users who keep long-running sessions in a dense chat
+DeepSeek Harness users who keep long-running sessions in a dense chat
 surface: developers, analysts, and operators who need to revisit the files a
 session produced, recover work after a Host restart, replay earlier prompts, or
 give a Workspace a predictable default agent.
 
 ## Product purpose
 
-One installable plugin that makes the Web GUI slightly better at the work
+One installable plugin that makes DSH slightly better at the work
 around the conversation: seeing what a session produced, opening and
 downloading it, recovering an interrupted turn without restarting, recalling
 prompts already sent, and setting the default agent for a Workspace.
