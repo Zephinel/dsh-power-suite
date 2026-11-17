@@ -63,6 +63,9 @@ The composer keeps the work around the prompt: what you asked before, what you a
 - **Prompt history.** The configured modifier + ↑/↓ recalls prompts already sent in this Session; plain arrows keep their native behavior. A rail at the conversation's right edge lists the same prompts as ticks, oldest first, with timestamps, a full-text hover preview, an inline search and click-to-copy.
 - **Draft attachments survive Session switches.** Pasted, dropped or picked files stay with the draft when you open another Session and come back, for the page lifetime — the shell itself persists only the draft text.
 - **A viewer for pasted screenshots.** When the composer holds two or more pasted images, clicking one opens a continuous `N / M` viewer instead of the native single-image lightbox: previous/next buttons and ←/→ keys, one-step mouse-wheel navigation, Esc/backdrop/close returning focus to the thumbnail, and clamping when an image is removed while it is open (removing all closes it). A single image keeps the native lightbox.
+
+![The composer image gallery over a demo DSH session: a 1 / 2 counter at the top, next/close controls at the right and the first pasted screenshot filling the viewer](assets/readme-composer-gallery.webp)
+
 - **Interrupted Sessions are marked and recoverable.** A Session whose last turn did not finish gets an amber title mark, a hover-revealed inline **Continue** triangle and a play-shaped composer submit control. Continuing is implicit and Host-owned, and an SSE stream keeps open pages in sync across devices.
 - **Settings in one place.** The bundle's Plugins page holds the prompt-history modifier and the two retention windows for the Active/recent surfaces.
 
