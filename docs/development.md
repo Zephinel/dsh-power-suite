@@ -36,8 +36,10 @@ npm run check:release       # pack → throwaway DSH_HOME install → isolated b
 ```
 
 `npm run check` is the required gate before committing a functional change. CI
-runs it on push and pull request. The release-notes gate runs inside
-`npm run check` and again in the publish workflow.
+runs it on push and pull request. A docs-only change (CHANGELOG/PRODUCT/docs/`
+`.agents`) skips the full gate and runs only `check:docs-links`, so it also skips
+the typecheck. The release-notes gate runs inside `npm run check` and again in
+the publish workflow.
 
 `npm ci` installs TypeScript and `@types/node` as dev dependencies; the
 typecheck is no-build (no emitted files, no package-layout change). The classic

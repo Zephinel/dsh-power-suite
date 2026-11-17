@@ -27,7 +27,7 @@ owner approves it.
 | --- | --- | --- |
 | Host routes and stores | 16 `/api/**` routes and 6 persisted documents (settings, session pins, read acks, session activity, sidebar width, workspace presets) would get one typed contract instead of separate hand-written validation and client assumptions | high |
 | Shared record models | Annotation v2/v3 records, artifact rows, activity entries cross the Host/browser boundary; type drift has already appeared in docs (v2 vs v3 wording) | high |
-| Large-file refactors | `src/client.js` is where most slot/feature edits happen; a compiler catches signature and field mismatches beyond what 364 Node tests cover | medium-high |
+| Large-file refactors | `src/client.js` is where most slot/feature edits happen; a compiler catches signature and field mismatches beyond what 367 Node tests cover | medium-high |
 | Enums and constants | modifier modes, retention windows, caps (`100`, `1000`, `5000`), storage keys and route names become named types | medium-high |
 | Editor/agent feedback | `tsc --noEmit` in the gate surfaces typos and argument errors earlier, without waiting for a browser run | medium-high |
 | DSH platform APIs | the `dsh.client.inject` packages are runtime-provided and have no local type source; ambient declarations would start as `any` | low-medium |
@@ -88,7 +88,7 @@ lens to today's tree and adds three constraints to this plan:
    same durable-document contract; extract it behind one deep module (small
    interface: read / update / flush / dispose; per-document adapters keep the
    policy) in Phase 2 before converting the stores to TypeScript.
-2. **Give the cross-half contract an owner.** Fourteen route paths and the
+2. **Give the cross-half contract an owner.** Sixteen route paths and the
    settings enums are declared twice (Host constants and client literals). Phase
    1 adds a contract guard for the duplication; the shared protocol module lands
    once the build lets both halves import it.
@@ -136,8 +136,10 @@ Acceptance: this plan is approved or amended; no code changes beyond the plan.
 **Status: implemented on `feat/typescript-phase1` (2026-11-18).** Evidence:
 `npm run typecheck` reports 0 errors over the Host half, `npm run check` includes
 it, `test/protocol-contract.test.js` guards the duplicated literals, and no
-build step, emitted file or package-layout change landed. `src/client.js` carries
-a transitional `// @ts-nocheck` until Phase 3.
+build step or emitted file landed. `package.json` `files`/`exports` are unchanged;
+the packed content grows only by `src/shared/protocol.js` and the two plan
+documents (95→98 files). `src/client.js` carries a transitional `// @ts-nocheck`
+until Phase 3.
 
 Add `tsconfig.json` with `allowJs`, `checkJs`, `noEmit`; add
 `"typecheck": "tsc --noEmit"` to `package.json`; wire it into `npm run check` and
@@ -145,16 +147,18 @@ CI. Keep the build, packaging, exports and repository layout unchanged. Also lan
 the shared settings/protocol typedefs, the contract guard against duplicated
 route/enum literals, and the document-store interface design (no extraction yet).
 
-Order of tightening: Host stores and route handlers → shared schema typedefs →
-browser half pure helpers → browser DOM/slot code (may start with `// @ts-nocheck`
-on the largest region and be enabled incrementally).
+Order of tightening: Host stores and route handlers → shared schema typedefs. The
+browser half is deferred to Phase 3 (the build phase), matching the design
+review; `src/client.js` carries `// @ts-nocheck` for now.
 
 Acceptance:
 
 - `npm run check` runs the typecheck and stays green.
-- `npm run pack:check` file list and `npm run check:release` behavior are
-  unchanged (still byte-identical packed source).
-- No sourcemap, build output or package-content change.
+- Existing packed files stay byte-identical to the checkout (`npm run
+  check:release` passes with 98 files); the only packed additions are
+  `src/shared/protocol.js` and the two plan documents (95→98), and
+  `package.json` `files`/`exports` are unchanged.
+- No sourcemap, build output or package-layout change.
 - The docs-sync reference records the new guard and its expected output.
 
 ### Phase 2 — build plus Host TypeScript

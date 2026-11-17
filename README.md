@@ -145,12 +145,12 @@ git clone https://github.com/Zephinel/dsh-power-suite.git
 cd dsh-power-suite
 ```
 
-The checkout needs no `npm install` to run the checks: the package has no runtime dependencies and no build step.
+There is no build step and no runtime dependency. Run `npm ci` once in the checkout to install the TypeScript dev dependencies used by `npm run check` / `npm run typecheck`; `npm test` runs without them.
 
 ## Prerequisites
 
 - **DSH 0.2.2 plugin interface** — the Host and browser halves target DSH 0.2.2. The Web Host used for this repository's browser checks runs **0.2.2-rc.1**; later DSH versions are unverified. Install the CLI with `npm install -g @deepseek-ai/dsh`.
-- **Node.js 22 or newer** — `package.json` declares `engines.node >= 22`; the CI gate runs on Node 22 and 24.
+- **Node.js 22 or newer** — `package.json` declares `engines.node >= 22`; the CI gate runs on Node 22 and 24. Run `npm ci` once so the no-build typecheck has TypeScript.
 - **pnpm** — needed to install profile bundles: `dsh plugin add` forwards to it, and the in-app Plugins page runs it behind its dialog.
 - **Git** — needed only to get the code; the repository sets no minimum version.
 - **Google Chrome** (optional) — only for the local browser suites; they use the standard macOS Chrome path and accept `CHROME_BIN` elsewhere.

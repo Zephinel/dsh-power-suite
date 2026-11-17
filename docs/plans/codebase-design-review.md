@@ -72,7 +72,7 @@ replace the duplicated atomic-write tests instead of layering new ones on top.
 
 ### F3. The cross-half contract has no owning module
 
-Fourteen Host route paths are declared as exported constants on the Host side and
+Sixteen Host route paths are declared as exported constants on the Host side and
 again as string literals in `src/client.js`
 (`api/power-suite.settings`, `api/power-suite.read-acks`,
 `api/session-artifacts.*`, `api/workspace-presets.*`, …). The settings enums and
