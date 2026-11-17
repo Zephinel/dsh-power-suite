@@ -1,6 +1,6 @@
 # DSH Power Suite
 
-One installable DSH plugin for a growing set of small DeepSeek Harness Web GUI
+One installable DSH plugin for a growing set of small DeepSeek Harness
 enhancements. The suite is a single Loader row (`power-suite`) whose features are
 modules inside the package, so the Plugin list shows one plugin and its
 inventory grows with the suite.

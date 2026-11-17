@@ -16,7 +16,7 @@ cannot compose a Session (a broken declaration) are listed but disabled.
 
 ## What the choice applies to
 
-- Every new-conversation entry in the Web UI: the sidebar **New Session** and
+- Every new-conversation entry in DSH: the sidebar **New Session** and
   its per-Workspace button, the `New Session` header button, and the hero
   Workspace picker. The browser names the Workspace preset on the create
   request, so the Session header records it as the creation fact and a reused
@@ -73,7 +73,7 @@ them.
 - **Global-default fallback heuristic.** The creation-time Host application
   only replaces a Session that runs the deployment's current default; a Session
   composed under any other preset is treated as an explicit request and left
-  alone. Web UI creation routes through the explicit request, so it does not
+  alone. DSH creation routes through the explicit request, so it does not
   depend on this heuristic.
 - **One override per Workspace.** There is no per-directory or per-pattern
   rule, and subagent Sessions inherit their parent's composition rather than a

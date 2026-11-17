@@ -8,7 +8,7 @@
 
 **One plugin that makes DSH show the working session, not only the answer.** It adds a Running & recent panel and activity buckets to the sidebar, a Session artifacts browser, prompt recall, draft memory and a multi-image composer gallery, interrupted-session recovery, and point-and-click UI annotation — all as one `power-suite` plugin row, with no build step.
 
-Install it from npm (after the 0.1.0 release) and start the Web UI:
+Install it from npm (after the 0.1.0 release) and start DSH:
 
 ```bash
 dsh plugin --profile web add @zephinel/dsh-power-suite@0.1.0
@@ -125,7 +125,7 @@ Installation needs `pnpm` on `PATH`: `dsh plugin add` forwards to pnpm in the pr
 
 ## Quick start
 
-Start (or restart) the Web UI and open the URL it prints:
+Start (or restart) DSH and open the URL it prints:
 
 ```bash
 dsh web
@@ -185,7 +185,7 @@ There is no build step: the Host and browser entries are the checked-in ES modul
 | `npm run check:docs-links` | Verify that local Markdown links and images resolve. |
 | `npm run build:readme-bento` | Compose the README Bento images from local captures (needs Chrome). |
 
-The browser acceptance suites drive the real running Web GUI in a throwaway headless Chrome profile:
+The browser acceptance suites drive the real running DSH UI in a throwaway headless Chrome profile:
 
 ```bash
 node test/browser/sidebar.e2e.mjs --smoke      # sidebar surfaces

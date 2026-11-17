@@ -1,7 +1,7 @@
 # Update notice
 
 A DSH Power Suite feature: when a newer stable version of the bundle is
-published on npm, the Web GUI shows a small card in the bottom-right corner of
+published on npm, DSH shows a small card in the bottom-right corner of
 the page with a one-click way to open the plugin page and let DSH update it.
 
 The check is split between the two halves of the bundle: the **Host** reads the

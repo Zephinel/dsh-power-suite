@@ -1318,7 +1318,7 @@ and our card row menu and asserts the shared surface/material, item
 labels/order, shortcut hints, icon markup, separators, the Archive footer,
 Escape dismissal with focus restore, and second-row replacement.
 
-Manual checks on the running DSH Web GUI:
+Manual checks on a running DSH UI:
 
 1. On a grouped view (**WorkSpace** or **Workspace Tree**), confirm the card sits
    above the native Workspaces header and both bucket headers render as

@@ -101,7 +101,7 @@ Implementation: [`src/client.js`](../src/client.js) under its
 
 ## Verification
 
-Manual check on the running DSH Web GUI:
+Manual check on a running DSH UI:
 
 1. In Session A, paste an image (or attach a file) and type some draft text.
 2. Switch to Session B, then back to A: the text returns from the shell and the

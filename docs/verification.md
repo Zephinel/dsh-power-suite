@@ -488,7 +488,7 @@ batch removed-member serialization are unit-tested only.
 
 Date: 2026-11-12 (round-2 fix build, `fix/ui-annotation-review-fixes`). The
 feature is browser-only ([ui-annotation.md](ui-annotation.md)), so its acceptance
-run uses the real DSH Web GUI instead of a Host test:
+run uses the real DSH UI instead of a Host test:
 `test/browser/annotation.e2e.mjs` (Node 22 or newer; this run used Node 24.22.2;
 dependency-free) launches headless Google Chrome (157.0.8103.78) with a throwaway
 profile, opens the GUI served by the launchd service `com.rexxin.dsh-web`, and
@@ -689,7 +689,7 @@ Known evidence limits:
 
 ## Manual UI checks (historical record; the removed 0.3.0 Project detail page sections below are kept as history)
 
-These were exercised in the Web GUI during development:
+These were exercised in the DSH UI during development:
 
 - Artifacts panel: list, Open / Download / Copy content / Copy link actions,
   missing files hidden.
@@ -1023,7 +1023,7 @@ their feature references.
 > historical and must not be read as the shipped behavior.
 
 Independent live verification of the three `session-pin-stats` requirements against the
-**real running DSH Web GUI** (`https://192.168.5.210:3080`, launchd `com.rexxin.dsh-web`).
+**real running DSH UI** (`https://192.168.5.210:3080`, launchd `com.rexxin.dsh-web`).
 The committed harness injects this worktree's `src/client.js` into the live page with a
 loader swap (the installed checkout, the user profile and the service are never touched),
 drives it with real CDP input, runs in a throwaway headless Chrome profile and always
@@ -1981,7 +1981,7 @@ npm run check
 
 ### Real-machine evidence (Lead, 2026-11-15)
 
-The running DSH Web GUI on this machine was migrated to the renamed bundle and
+The running DSH UI on this machine was migrated to the renamed bundle and
 verified; no Host restart was needed (`plugin_manager remove_bundle` +
 `install_bundle` applied live).
 

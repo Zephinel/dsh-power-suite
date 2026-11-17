@@ -1,6 +1,6 @@
 # UI element annotation
 
-A DSH Power Suite feature: a floating launcher that turns the Web GUI into a
+A DSH Power Suite feature: a floating launcher that turns DSH into a
 point-and-click annotation surface. While the mode is on, the page makes room for
 a narrow right rail, hovering the interface outlines the element under the
 pointer, and clicking one opens a small note popover. Hover-triggered floating
@@ -1441,7 +1441,7 @@ node test/browser/annotation.e2e.mjs --smoke    # pipeline smoke only
 node test/browser/annotation.e2e.mjs --scenario 10 --no-shots  # one scenario (1-16), no captures
 ```
 
-It opens the real DSH Web GUI with a fresh Chrome profile (`--user-data-dir`),
+It opens the real DSH UI with a fresh Chrome profile (`--user-data-dir`),
 injects this checkout's `src/client.js` in place of the installed bundle for that
 page, and runs the acceptance scenarios with real CDP mouse and keyboard input at
 a 1728 x 900 viewport. The installed plugin, the user profile, and the launchd
@@ -1583,7 +1583,7 @@ build; Phase 1 evidence screenshots are kept outside the repository
 Phase 2 UX pass along with the new detail card and marks.
 
 - Prerequisites: Node 22 or newer (global WebSocket), Google Chrome (override the
-  binary with `CHROME_BIN`), and the DSH Web GUI running as
+  binary with `CHROME_BIN`), and the DSH UI served by
   `com.rexxin.dsh-web`. The token URL comes from `DSH_WEB_URL`; when it is unset
   or carries no token, the script resolves it with `~/.local/bin/dsh-web url
   --ip`. There is no npm install and no dependency to add.
@@ -2734,7 +2734,7 @@ node test/browser/annotation.e2e.mjs --smoke    # pipeline smoke only
 node test/browser/annotation.e2e.mjs --scenario 10 --no-shots  # one scenario (1-16), no captures
 ```
 
-It opens the real DSH Web GUI with a fresh Chrome profile (`--user-data-dir`),
+It opens the real DSH UI with a fresh Chrome profile (`--user-data-dir`),
 injects this checkout's `src/client.js` in place of the installed bundle for that
 page, and runs the acceptance scenarios with real CDP mouse and keyboard input at
 a 1728 x 900 viewport. The installed plugin, the user profile, and the launchd
@@ -2876,7 +2876,7 @@ build; Phase 1 evidence screenshots are kept outside the repository
 Phase 2 UX pass along with the new detail card and marks.
 
 - Prerequisites: Node 22 or newer (global WebSocket), Google Chrome (override the
-  binary with `CHROME_BIN`), and the DSH Web GUI running as
+  binary with `CHROME_BIN`), and the DSH UI served by
   `com.rexxin.dsh-web`. The token URL comes from `DSH_WEB_URL`; when it is unset
   or carries no token, the script resolves it with `~/.local/bin/dsh-web url
   --ip`. There is no npm install and no dependency to add.

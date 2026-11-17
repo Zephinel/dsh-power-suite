@@ -1,6 +1,6 @@
 # Sidebar width
 
-The Web GUI's left sidebar has a drag handle, but the shell
+The DSH left sidebar has a drag handle, but the shell
 (`@deepseek-ai/dsh-client-ui-layout`) keeps the resulting width only in page
 memory: a reload returns to the default 280 px, a new tab starts at the default,
 and closing the sidebar forgets the dragged width. This feature makes the width a

@@ -1,6 +1,6 @@
 # Browser end-to-end acceptance harness (UI element annotation)
 
-`annotation.e2e.mjs` drives the **real running DSH Web GUI** with a throwaway headless Chrome
+`annotation.e2e.mjs` drives the **real running DSH UI** with a throwaway headless Chrome
 and asserts the eleven acceptance scenarios of the UI element annotation mode
 (`/tmp/ps-annotation/CONTRACT.md` §4.2, the review-round hardening spec H1–H13, and the
 Phase 1 floating-surface / v2-record / rainbow-focus checks). It injects
@@ -60,7 +60,7 @@ node test/browser/annotation.e2e.mjs
 
 - Node.js **22 or newer** (uses the global `fetch`/`WebSocket`; verified on Node 24.22.2).
 - Google Chrome at the standard macOS path, or `CHROME_BIN` pointing at the binary.
-- The DSH Web GUI running from the existing launchd service
+- The DSH UI served by the existing launchd service
   (`com.rexxin.dsh-web`, https://192.168.5.210:3080). Do **not** restart or install anything
   for the harness.
 - A token URL: leave `DSH_WEB_URL` unset and the harness asks `~/.local/bin/dsh-web url --ip`;
@@ -1406,7 +1406,7 @@ node test/browser/sidebar.e2e.mjs --readme-dashboard --url "$URL"
 
 `update-prompt.e2e.mjs` is the local-only acceptance harness for the in-app
 update notice (`docs/update-check.md`). It is not wired into CI: it needs the
-running DSH Web GUI and a token URL, like the suites above.
+running DSH UI and a token URL, like the suites above.
 
 ```bash
 node test/browser/update-prompt.e2e.mjs

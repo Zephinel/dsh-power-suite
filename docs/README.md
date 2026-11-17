@@ -42,5 +42,5 @@ pages go deeper. They ship with the npm package.
 - [Limitations](limitations.md) — known bounds and unverified areas.
 - [Reference implementations for UI annotation](reference-libraries.md) — the
   local reference corpus behind the annotation work.
-- [Browser harness](../test/browser/README.md) — the live-GUI acceptance suites,
+- [Browser harness](../test/browser/README.md) — the live-DSH UI acceptance suites,
   their modes and their evidence.
