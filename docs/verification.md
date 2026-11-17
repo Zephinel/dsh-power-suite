@@ -3058,6 +3058,8 @@ First public release, cut from the release commit `28837ba`
   and `.en.md`.
 - GitHub Release: https://github.com/Zephinel/dsh-power-suite/releases/tag/v0.1.0
   (`0.1.0 — 2026-11-17`, both notes files as the body).
-- npm dist-tags after the release: `latest: 0.1.0`, `next: 0.1.0-rc.0` (the
-  bootstrap prerelease). The tagged artifacts were not edited after tagging; the
-  post-publish docs sync only updates the README/docs, never `release-notes/`.
+- npm state after post-release cleanup (owner, 2026-11-17): `latest: 0.1.0`
+  is the only dist-tag, the `0.0.0-stage` rehearsal version is unpublished, and
+  `0.1.0-rc.0` remains as an untagged prerelease. The tagged artifacts were not
+  edited after tagging; the post-publish docs sync only updates the
+  README/docs, never `release-notes/`.
