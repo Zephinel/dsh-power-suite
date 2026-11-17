@@ -433,65 +433,32 @@ restarted with the merged linked checkout. Until then the card is local-only.
   readable after the pointer leaves without stacking two rounded surfaces.
   Columns, indentation, child rows, and the card width are untouched.
 
-## Pending interaction notices
+## Pending interaction flags
 
 When a Session **other than the one open in the main view** is still **running**
 (`SessionStatus.running` is not `false`) and blocked waiting for a human — a
-question or plan review from `ask_user_question`, or an approval — the client's
-`SessionStatus.pendingInteraction` makes a fixed notice stack appear beside the
-Running & recent card. It is a preview surface: the
-stack never answers anything, the native composer card remains the only
-answering surface, and clicking a notice just opens that Session.
+question or plan review from `ask_user_question`, or an approval — the row shows
+a small **flag-fill icon immediately before its Session title**. There is no
+floating popup: the row itself stays the click target, and the native composer
+card remains the only place an answer is submitted.
 
-- **Trigger kinds**: the three interaction kinds are `question`, plan review
-  (`plan-review`), and `approval`. Each notice shows the kind with its own
-  **outline-family glyph** (question mark, file, shield) and label, the Session
-  title, and the first question text (for a question), the plan-review question,
-  or the approval reason — falling back to the tool name when the interaction
-  carries no text. The content column fills the fixed-width card, so the title
-  flexes, the kind label sits on the right edge and the headline wraps the full
-  width. A multi-question batch adds a `{count} questions` line.
-- **Bound to its Session row**: each notice is placed at the **height of its
-  own Session row** (card row first, native Workspaces row as fallback) instead
-  of a fixed stack position, so the notice and the Session it summarises always
-  line up while the sidebar scrolls. The card's left edge is the sidebar
-  column's right boundary — the same anchor the Session info card uses — and
-  only shifts left with the 8 px viewport clamp. The card is fixed-positioned
-  (the sidebar's scroll container cannot clip it) and re-measured on scroll,
-  resize, sidebar expansion, card height changes and row insert/removal (the
-  sidebar column is watched for late row mounts; reflows are coalesced into one
-  animation frame).
-- **Auto-reveal**: when the Session row is scrolled out of its container (or
-  otherwise outside the visible band), the stack scrolls the row's nearest
-  vertical scroller just enough to centre it before placing the notice, then
-  re-measures on the next frame and retries once for rows that mount late; a
-  per-notice revealed record means a later deliberate user scroll is not
-  overridden.
-- **Adjacent rows**: two waiting Sessions can sit in adjacent 34 px rows while a
-  notice is taller, so later cards are pushed down by just enough to avoid
-  overlap (the first stays exactly on its row) and the last card stays inside
-  the viewport.
-- **Same surface as the Session info card**: the notice reuses the info card's
-  theme-following hover-card recipe — `--dsw-hovercard-bg`, the static
-  bluish label palette (flipped to the light-theme tokens in light mode), the
-  16 px radius, lv3 shadow and 12/16 px padding — and, like the info card, it
-  does not change its background on hover (only the pointer cursor and the
-  focus ring differ), so the content never sits on a translucent wash.
-- **Stack and overflow**: up to **3** notice cards, newest activity first; the
-  rest collapse into a "+N more" line. Only the cards take the pointer; the
-  stack never steals focus and has no hover preview of its own.
-- **Auto-hide**: notices are re-derived every render from the same status
-  snapshot the native composer cards use, so a notice disappears as soon as the
-  Session becomes the one open in the main view, the interaction settles
-  (answered, cancelled, or approved), or the Session is archived. Blank and
-  subagent Sessions never get a notice, and an explicitly idle Session
-  (`running: false`) keeps only its native composer card. Because
-  `pendingInteraction` is one per
-  Session, a Session contributes at most one notice even when it has a
-  multi-question batch.
-- **Hidden with the panel**: the stack is rendered through the card's existing
-  overlay panel and inherits its visibility, so collapsing the sidebar into rail
-  mode hides the notices too (no separate sidebar DOM, no Host route).
+- **One amber flag**: every waiting kind (question, plan review, approval) uses
+  the same Remix `flag-fill` glyph in `--dsw-alias-state-warn-primary` — the
+  same amber the native question prompt uses — 12 px, inline before the title,
+  with a `Waiting for your answer` label for assistive tech. It is decorative
+  (`pointer-events: none`); clicking the row opens the Session as usual.
+- **Both row surfaces**: the flag appears in the Running & recent card row and,
+  through a small native-row decoration, in the native Workspaces tree row for
+  the same Session — so it is visible wherever the Session title is.
+- **Live derivation**: a row is flagged from the same `SessionStatus` snapshot
+  the native composer cards use and re-derived every render, so answering,
+  cancelling, or switching to the asking Session removes the flag immediately.
+  Current, idle (`running: false`), archived, blank, subagent-only and missing
+  Sessions never get a flag, and every waiting Session is flagged (no cap, no
+  "+N" line).
+- **No extra state or interaction**: the flag adds no Host route, store,
+  popup, hover card or click handler; it is removed with the panel/unmount and
+  hidden when the sidebar is in rail mode because the rows are not rendered.
 
 ## Session figures in the hover card
 
@@ -1234,15 +1201,14 @@ The native **View options** menu picks how Sessions are grouped:
   is a snapshot taken at open time, and on a DSH build without the shared
   context-menu service (`contextMenus.open`) the trigger is hidden — there is no
   custom fallback popup.
-- **The pending-interaction notice stack is preview-only.** It shows at most
-  three waiting Sessions (question, plan review, approval) and a "+N more"
-  line; it never answers anything, so answering still happens in that
-  Session's native composer card after the notice opens the Session. It exists
-  only while another Session is waiting and the sidebar/panel is visible:
-  collapsing the sidebar to rail mode hides it with the card. Only those three
-  interaction kinds are listed, and because `pendingInteraction` is one per
-  Session a multi-question batch still produces exactly one notice. The notice
-  position is fixed and re-measured, but it cannot be dismissed on its own
+- **The pending-interaction flag is preview-only.** A waiting Session (question,
+  plan review, or approval) shows one amber `flag-fill` before its title in the
+  Running & recent card and in the native Workspaces row; it never answers
+  anything, so answering still happens in that Session's native composer card
+  after clicking the row. Current, idle, archived, blank and subagent Sessions
+  get no flag, a multi-question batch still produces exactly one flag, and
+  collapsing the sidebar to rail mode hides it with the rows. The flag is
+  decorative and cannot be dismissed on its own
   (answering/settling, opening the Session, or archiving it removes it), and
   its list is limited to Sessions that are in the Session catalog — a waiting
   Session the catalog no longer lists gets no notice.

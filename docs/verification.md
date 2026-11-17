@@ -2856,117 +2856,67 @@ annotated with compact numbered marks and the rail requirement texts.
 - **No CI run exists** for this branch (no remote); `npm run check` and the
   capture passes are local.
 
-## 2026-11-17 — Pending notices bound to their Session rows (`pending-notice-align`)
+## 2026-11-17 — Pending interactions as inline flags (`pending-notice-align`)
 
-Browser-half fix round for the dynamic-Workspaces pending-interaction notices.
-No Host route, store or native-surface change.
+Follow-up to the user's review: the floating pending-interaction notices were
+replaced with one small inline flag. Browser-half only; no Host route, store,
+settings document or native-surface change.
 
-### Cause and fix
+### What changed
 
-- **The notices were a fixed stack.** One 320 px stack was positioned from the
-  Running & recent card (`panel.right + 8`, top of the card) and every notice
-  sat in that stack, so a notice could face a Session row at a completely
-  different height — and, because the anchor was card-relative, the stack
-  crossed the sidebar boundary over the conversation.
-- **Each notice is now bound to its own Session row.** A row element is resolved
-  per notice (card row `[data-psd-session]` first, native Workspaces row
-  `[data-row-key="session:<id>"]` as fallback) and the notice is fixed at that
-  row's top edge with its left edge flush against the sidebar column's right
-  boundary (the same anchor as the Session info card, with the 8 px viewport
-  clamp). The layout is recomputed on scroll/resize/sidebar and card size
-  changes, so the notice follows the row while the sidebar scrolls.
-- **Auto-reveal.** When the row is outside its scroll container's visible band,
-  `dwNoticeRevealRow` scrolls the nearest vertical scroller just enough to
-  centre it (one-frame re-measure) before placing the notice; it does not fight
-  a later deliberate user scroll. The fallback stack position is kept only when
-  the row cannot be found in the DOM at all.
-- **Hover transparency.** `.psd-notice:hover` replaced the card surface with the
-  translucent `--dsw-alias-interactive-bg-hover` (measured
-  `rgba(38, 49, 72, 0.06)`), so the page text behind the card showed through
-  while hovering. The notice now reuses the **Session info card surface** it was
-  meant to mirror — `background: var(--dsw-hovercard-bg, #2c2c2e)`, the static
-  bluish label palette, 16 px radius and 12/16 px padding, and the same
-  light-theme override group as `.psd-hovercard` — with no hover background
-  rule at all, exactly like the info card (only pointer cursor and focus ring
-  differ).
+- **No popup.** The floating `.psd-notices` stack (placement helpers, per-row
+  layout effect, auto-reveal, overlap resolution, hover surface, a11y live
+  region and the `notice.*` locale strings) is deleted. The derivation was
+  reduced to `dwPendingSessionIds(input)`: the same filtered
+  `SessionStatus.pendingInteraction` facts (question / plan review / approval,
+  running only, not current, not archived, not blank/subagent, summary exists)
+  returned as the full newest-first id list — no 3-card cap and no "+N" line.
+- **Inline amber flag.** Waiting Sessions show a 12 px Remix `flag-fill`
+  immediately before the Session title, coloured with
+  `--dsw-alias-state-warn-primary` (`--dsw-static-amber-500`; computed
+  `rgb(245, 158, 11)` in the probe) — the same amber the native question prompt
+  uses. It is decorative (`pointer-events: none`, `aria-label="Waiting for your
+  answer"`); clicking the row still opens the Session and the native composer
+  card answers.
+- **Both row surfaces.** The card row renders the flag as the first inline child
+  of its title span; a small layout effect in the dynamic-Workspaces seat inserts
+  the same flag before the native Workspaces row's `_title` element and removes
+  it again when the Session settles/archives (`MutationObserver` re-applies for
+  late rows; unmount removes every injected flag).
+- **Docs/i18n:** the dynamic-workspaces, limitations, architecture, overview and
+  README descriptions now say "pending-interaction flag" instead of the notice
+  stack; the CHANGELOG Added bullet is the flag design and the obsolete Fixed
+  bullet was dropped (unreleased history is consolidated).
 
 ### Verification
 
 - `node --check src/client.js` → OK.
-- Independent review (`PASS-WITH-FINDINGS`) was closed in the same branch:
-  sidebar-class fallback now uses the Session-info-card anchor
-  (`panel.right + 10`) instead of the row's left edge; revealed rows are tracked
-  in a ref so a later user scroll is not overridden; scroll/resize reflows are
-  coalesced into one animation frame and the sidebar column is watched with a
-  `MutationObserver` for late row mounts; the card height estimate is one shared
-  constant (`96`) for stacking and the overflow line; notices sit above the
-  hovercard (`z-index 1001`); row lookup compares attributes instead of
-  interpolating ids into selectors.
-- `node --test test/dynamic-workspaces-panel.test.js` → **7/7 pass**, including
-  per-row placement (row top → notice top, sidebar anchor → left, bottom/top
-  clamps, no-anchor fallback) and the CSS contract that hover keeps the opaque
-  layer.
-- `npm test` → **364/364 pass**; `npm run check` → exit 0; docs links ok
+- `node --test test/dynamic-workspaces-panel.test.js` → **2/2 pass**: seam shape
+  plus `dwPendingSessionIds` filters (idle/archived/blank/subagent/missing and
+  the current Session skipped, every actionable waiting Session included,
+  newest-first, no cap).
+- `npm test` → **359/359 pass**; `npm run check` → exit 0; docs links ok
   (23 Markdown files); pack entryCount 93.
-- **End-to-end live probe** (throwaway Chrome against the running GUI; token
-  redacted; the production GUI was read-only). No real Session was waiting on an
-  interaction, so the probe first picked a real card-row Session id, then
-  reloaded with a probe-only client whose `dwPendingNotices` returns one fixture
-  notice for that id — the **real `DwPendingNotices` renderer** then drew it:
-  - `sidebarRight 420`, notice `left 420` (flush), row `top 272`, notice
-    `top 272` (**same height as its Session row**, 0 px delta), one notice card;
-  - hover: `backgroundColor rgb(255, 255, 255)` → **alpha 1**, `backgroundImage
-    none` (the same info-card surface before and after hover; no page text
-    bleed-through);
-  - auto-reveal helper through the same code path: synthetic scroller 160 px
-    tall with the row 600 px down → `dwNoticeRevealRow` returned true,
-    `scrollTop 0 → 474`, row top moved 608 → 134 (centred in the scroller);
-  - two-notice probe on two adjacent card rows: first notice `top 272` = its
-    row `top 272`, second row `top 310` but its notice is pushed to `top 362`
-    (272 + 84 + 6) so the cards do not overlap; the second card's own top would
-    have overlapped the first by 27 px. Unit test
-    `dwNoticeStackCards` pins this, including the viewport clamp.
-  - Screenshot `.tmp-work/pending-notice/row-bound/notices-row-bound.png`
-    (gitignored).
-- Structural test evidence: the card row elements now carry `data-psd-session`
-  so the binding does not depend on titles/order; the native fallback uses the
-  existing `data-row-key="session:<id>"`.
-
-### Rendered scenarios (2026-11-17, isolated demo instance)
-
-A throwaway isolated DSH instance (`/tmp/ps-readme-home`, port 3199, demo
-Workspace only) was seeded with nine generic demo Sessions, and a probe-only
-client supplied fixture pending statuses through the **real** notice renderer.
-Renders (gitignored `.tmp-work/notices-render-final/`):
-
-- `01-single.png` — one notice beside its Session row: notice `left 280` =
-  sidebar right `280`, notice top equals the row top, info-card surface (light
-  theme).
-- `02-hover.png` — hover keeps the same surface (`backgroundColor
-  rgb(255,255,255)`, `backgroundImage none`, alpha 1).
-- `03-multiple.png` — three notices on adjacent rows: tops `272 / 374 / 476`
-  with heights `78 / 61 / 61`; the first stays on its row and the later cards
-  are pushed by the shared 96 px estimate + 6 px gap, so none overlap. The
-  content column stretches the card (title flexes, kind label on the right edge,
-  headline wraps full width) and all three kind glyphs are the outline family
-  (question mark, file, shield).
-- Scroll-following and auto-reveal were verified numerically by the probes
-  (scroll delta moves the notice with its row; the reveal helper scrolls
-  `0 → 474` for a row 600 px down a synthetic scroller). The isolated demo
-  tree has only a ~69 px scroll range and the shell list resets programmatic
-  scroll in this build, so a static before/after scroll screenshot was not
-  trustworthy and is not presented; the behavior is covered by the helper
-  tests and the probe numbers.
+- **Live probe** on the isolated demo instance (token redacted, no production
+  data; fixture ids fed through the real `dwPendingSessionIds` + renderer):
+  - before: `cardFlags 0`, `nativeFlags 0`, `[data-psd-notices] 0`;
+  - during (two fixture waiting Sessions): `cardFlags 2`, `nativeFlags 2`,
+    each flag `14×14`, colour `rgb(245, 158, 11)`, label
+    “Waiting for your answer”; native flag `left 36` sits before the native
+    title `left 62`; no notice element exists;
+  - after clearing the fixture: both counts back to `0`.
+  - screenshot `.tmp-work/pending-flags/pending-flags.png` (gitignored).
+- The probe used fixture pending statuses because no real Session was waiting;
+  the renderer, derivation, row decoration and removal path are the production
+  ones.
 
 ### Limits
 
-- The live probe used a probe-only fixture notice because no real Session was
-  waiting at probe time; the renderer, positioning effect, hover styles and
-  reveal helper are the production ones. Auto-reveal was proven through the
-  helper with a synthetic scroller (no naturally scrolled-out Session row was
-  available in the current demo state).
-- If a row is not mounted at all (collapsed card and folded/archived native
-  tree), the stack keeps the card-relative fallback; the next row mount
-  re-binds it.
-- Notices never open or answer a Session by themselves; clicking still opens
-  the Session and the native composer card remains the answering surface.
+- The flag is decorative and intentionally identical for question / plan review
+  / approval (per the request: one amber `flag-fill`, not per-kind shapes).
+- The native-row injection identifies the row title by the shell's stable
+  `_title` class suffix; if a future shell build renames it, only the card row
+  keeps the flag (the insertion is skipped, no crash).
+- Flags are not rendered in rail mode because the rows themselves are not
+  rendered; no Host involvement means status freshness is exactly the composer
+  cards' own snapshot refresh.

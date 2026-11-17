@@ -4799,12 +4799,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** localStorage key holding the two bucket fold states. */
     const DW_FOLD_KEY = 'power-suite.dynamic-workspaces.folds'
 
-    /** Most pending notices shown at once; the rest collapse into a "+N" line. */
-    const DW_NOTICE_LIMIT = 3
-
-    /** Estimated rendered height of one notice card (two-line headline + meta). */
-    const DW_NOTICE_CARD_HEIGHT = 96
-
     /** Captured-target kind of the card row "…" menu. The card opens the shared
      *  native context-menu popup against this plugin-owned kind; the contribution
      *  below then delegates the action list to the native `session` providers. */
@@ -4950,10 +4944,11 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       })()
     }
 
-    /** Pending-notice glyph paths (24 viewBox): question mark and shield; the plan
-     *  notice reuses the existing file glyph. */
-    const DW_NOTICE_QUESTION_PATH = 'M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM12 7C13.6569 7 15 8.34315 15 10C15 10.9819 14.5806 11.7882 13.8765 12.4056C13.4165 12.8007 13 13.3466 13 14H11C11 12.6666 11.6873 11.7354 12.4375 11.0931C12.806 10.7786 13 10.4166 13 10C13 9.44772 12.5523 9 12 9C11.4477 9 11 9.44772 11 10H9C9 8.34315 10.3431 7 12 7ZM11 15H13V17H11V15Z'
-    const DW_NOTICE_APPROVAL_PATH = 'M12 2L20 5V11C20 16.05 16.6 20.35 12 22C7.4 20.35 4 16.05 4 11V5L12 2ZM12 4.25L6 6.45V11C6 14.8 8.5 17.95 12 19.7C15.5 17.95 18 14.8 18 11V6.45L12 4.25Z'
+    /** Pending-interaction flag (24 viewBox, Remix flag-fill) shown before a
+     *  waiting Session's title in amber, the native question-prompt colour. */
+    const DW_FLAG_FILL_PATH = 'M12 2C12.5523 2 13 2.44772 13 3V4H18C19.1046 4 20 4.89543 20 6V15C20 16.1046 19.1046 17 18 17H13V21H11V17H6C4.89543 17 4 16.1046 4 15V6C4 4.89543 4.89543 4 6 4H11V3C11 2.44772 11.4477 2 12 2Z'
+
+
 
     /**
      * localStorage key caching the card's pinned main-Session ids.
@@ -5060,13 +5055,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'pin.pin': 'Pin session',
       'pin.unpin': 'Unpin session',
       'row.more': 'Session actions for {title}',
-      'notice.kind.question': 'Question',
-      'notice.kind.plan': 'Plan review',
-      'notice.kind.approval': 'Approval',
-      'notice.questions': '{count} questions',
-      'notice.overflow': '+{count} more',
-      'notice.live': '{count} Sessions are waiting for your answer',
-      'notice.region': 'Sessions waiting for your answer',
+      'row.pending': 'Waiting for your answer',
       'panel.done': 'done',
       'panel.children': '{count} subagents',
       'panel.expandChildren': 'Show subagents of {title}',
@@ -5130,13 +5119,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       'pin.pin': '固定会话',
       'pin.unpin': '取消固定',
       'row.more': '{title} 的会话操作',
-      'notice.kind.question': '提问',
-      'notice.kind.plan': '计划审批',
-      'notice.kind.approval': '权限请求',
-      'notice.questions': '{count} 个问题',
-      'notice.overflow': '还有 {count} 个',
-      'notice.live': '{count} 个 Session 正在等待你的回答',
-      'notice.region': '正在等你回答的 Session',
+      'row.pending': '正在等待你的回答',
       'panel.done': '已完成',
       'panel.children': '{count} 个子代理',
       'panel.expandChildren': '展开 {title} 的子代理',
@@ -5314,18 +5297,8 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-child-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap}
 .psd-child-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
-.psd-notices{position:fixed;inset:0;z-index:1001;pointer-events:none}
-.psd-notices-live{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-.psd-notice{position:fixed;appearance:none;display:flex;align-items:flex-start;gap:9px;box-sizing:border-box;width:320px;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-hovercard-bg,#2c2c2e);color:var(--dsw-static-neutral-bluish-00,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;text-align:left;cursor:pointer;pointer-events:auto}
-.psd-notice:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
-.psd-notice-icon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;color:var(--dsw-alias-state-business-primary)}
-.psd-notice-content{display:flex;flex:1 1 auto;flex-direction:column;gap:2px;min-width:0}
-.psd-notice-head{display:flex;align-items:baseline;gap:8px;min-width:0}
-.psd-notice-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;line-height:18px;font-weight:500;color:var(--dsw-static-neutral-bluish-00,#fff)}
-.psd-notice-kind{flex:none;color:var(--dsw-static-neutral-bluish-400,#adb2b8);font-size:11px;line-height:16px}
-.psd-notice-headline{color:var(--dsw-static-neutral-bluish-300,#cfd3d6);font-size:12px;line-height:17px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
-.psd-notice-meta{color:var(--dsw-static-neutral-bluish-400,#adb2b8);font-size:11px;line-height:15px}
-.psd-notices-overflow{position:fixed;padding:0 4px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;text-align:right;pointer-events:none}
+.psd-pending-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;margin-right:5px;color:var(--dsw-alias-state-warn-primary);vertical-align:-2px;pointer-events:none}
+.dps-row-pending-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;margin-inline-end:6px;color:var(--dsw-alias-state-warn-primary);pointer-events:none}
 .psd-hovercard{position:fixed;z-index:1000;box-sizing:border-box;width:${DW_HOVERCARD_WIDTH}px;max-height:min(${DW_HOVERCARD_MAX_HEIGHT}px,calc(100vh - 16px));overflow-x:hidden;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none;padding:12px 16px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-hovercard-bg,#2c2c2e);color:var(--dsw-static-neutral-bluish-00,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px #0003,0 0 4px #00000005,0 12px 32px #00000014);font:inherit;font-size:12px;line-height:16px;pointer-events:none}
 .psd-hovercard::-webkit-scrollbar{display:none;width:0;height:0}
 .psd-hovercard-content{display:flex;flex-direction:column;gap:8px}
@@ -5352,8 +5325,7 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 body:not([data-ds-dark-theme]) .psd-hovercard,
 body:not([data-ds-dark-theme]) .psp-rail-card,
 body:not([data-ds-dark-theme]) .psp-search-card,
-body:not([data-ds-dark-theme]) .dsa-quicklook,
-body:not([data-ds-dark-theme]) .psd-notice{
+body:not([data-ds-dark-theme]) .dsa-quicklook{
   --psd-card-divider:var(--dsw-alias-border-l2);
   --dsw-hovercard-bg:var(--dsw-alias-bg-layer-1,#fff);
   --dsw-static-neutral-bluish-00:var(--dsw-alias-label-primary,#0f1115);
@@ -6550,32 +6522,29 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
-     * Pending interactions that deserve the floating notice beside the card.
+     * Session ids waiting for a human answer, newest first.
      *
      * Reads the client's own `SessionStatus.pendingInteraction` (the same fact the
      * native composer cards use): a question / plan review / approval still waiting
-     * for the human in a Session other than the one open in the main view. The
-     * caller re-derives this every render, so answering, cancelling, switching to
-     * the asking Session, or archiving it removes the notice automatically.
+     * in a Session other than the one open in the main view. The rows render this
+     * as one flag-fill before the Session title — there is no floating popup —
+     * and re-derive every render, so answering, cancelling, switching to the
+     * asking Session, or archiving it removes the flag automatically.
      * @param {object} input - derivation input.
      * @param {object} input.list - Session list state (`byId`).
      * @param {Map | undefined} input.statuses - live Session status snapshot.
      * @param {string | null} input.currentSessionId - Session open in the main view.
      * @param {Set<string>} input.archived - archived Session ids.
      * @param {Record<string, number>} input.activity - true last-activity map.
-     * @returns {{ notices: Array<object>, overflow: number }} newest first, capped.
+     * @returns {string[]} waiting Session ids, newest activity first.
      */
-    function dwPendingNotices(input) {
+    function dwPendingSessionIds(input) {
       const { list, statuses, currentSessionId, archived, activity } = input
-      const notices = []
-      if (statuses === undefined || statuses === null || typeof statuses.forEach !== 'function') {
-        return { notices, overflow: 0 }
-      }
+      if (statuses === undefined || statuses === null || typeof statuses.forEach !== 'function') return []
+      const rows = []
       statuses.forEach((status, id) => {
         const pending = status !== null && typeof status === 'object' ? status.pendingInteraction : undefined
         if (pending === null || pending === undefined || typeof pending !== 'object') return
-        // The spec asks for notices only while the asking Session is running
-        // (an explicitly idle Session keeps its native composer card instead).
         if (status.running === false) return
         const kind = pending.kind
         if (kind !== 'question' && kind !== 'plan-review' && kind !== 'approval') return
@@ -6588,187 +6557,10 @@ function dwClearNativeAtmospheres() {
         const summary = list !== null && typeof list === 'object' && list.byId !== undefined ? list.byId[sessionId] : undefined
         if (summary === undefined || summary === null || typeof summary !== 'object' || summary.blank === true) return
         if (summary.origin === 'subagent') return
-        const questions = Array.isArray(pending.questions) ? pending.questions : []
-        const first = questions.length > 0 && questions[0] !== null && typeof questions[0] === 'object' ? questions[0] : null
-        const firstText = first !== null && typeof first.question === 'string' ? first.question.trim() : ''
-        const reasonText = typeof pending.reason === 'string' ? pending.reason.trim() : ''
-        const toolText = typeof pending.toolName === 'string' ? pending.toolName.trim() : ''
-        const headline = firstText.length > 0 ? firstText : (reasonText.length > 0 ? reasonText : toolText)
-        notices.push({
-          sessionId,
-          title: typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0
-            ? summary.displayTitle
-            : sessionId,
-          kind: kind === 'plan-review' ? 'plan' : (kind === 'approval' ? 'approval' : 'question'),
-          headline,
-          questionCount: questions.length,
-          updatedAt: dwEffectiveUpdatedAt(activity, sessionId, summary)
-        })
+        rows.push({ sessionId, updatedAt: dwEffectiveUpdatedAt(activity, sessionId, summary) })
       })
-      notices.sort((left, right) => right.updatedAt - left.updatedAt)
-      return { notices: notices.slice(0, DW_NOTICE_LIMIT), overflow: Math.max(0, notices.length - DW_NOTICE_LIMIT) }
-    }
-
-    /**
-     * Place the notice stack at the sidebar boundary without leaving the viewport.
-     *
-     * When the caller supplies the sidebar column's right edge (the same anchor the
-     * Session info card uses), the stack starts flush there instead of floating a
-     * gap past the card, so it reads as one column with the sideways cards. Without
-     * that anchor it keeps the card-relative fallback. Both axes are clamped so the
-     * stack never crosses the viewport. Pure so the browser test can pin the geometry.
-     * @param {{ left: number, right: number, top: number }} panelRect - card bounds.
-     * @param {number} viewportWidth - viewport width in CSS px.
-     * @param {number} viewportHeight - viewport height in CSS px.
-     * @param {number} [stackHeight] - estimated stack height in CSS px; the top is
-     *   clamped so the card bottom also stays inside the viewport.
-     * @param {number} [anchorLeft] - the sidebar column's right edge in CSS px; when
-     *   present the stack aligns flush to it like the Session info card.
-     * @returns {{ left: number, top: number, width: number }} fixed card box.
-     */
-    function dwNoticePlacement(panelRect, viewportWidth, viewportHeight, stackHeight, anchorLeft) {
-      const gap = 8
-      const width = Math.min(DW_HOVERCARD_WIDTH, Math.max(240, viewportWidth - gap * 2))
-      const height = typeof stackHeight === 'number' && Number.isFinite(stackHeight) && stackHeight > 0
-        ? stackHeight
-        : 80
-      let left
-      if (typeof anchorLeft === 'number' && Number.isFinite(anchorLeft)) {
-        // Flush with the sidebar column's right edge, then pull back only as far as
-        // the viewport requires (the same clamp the Session info card applies).
-        left = Math.round(anchorLeft)
-        left = Math.min(left, viewportWidth - gap - width)
-        if (left < gap) left = gap
-      } else {
-        left = Math.round(panelRect.right + gap)
-        if (left + width > viewportWidth - gap) left = Math.round(panelRect.left - width - gap)
-        if (left < gap) left = gap
-      }
-      const top = Math.round(Math.max(gap, Math.min(panelRect.top + gap, viewportHeight - gap - height)))
-      return { left, top, width }
-    }
-
-    /**
-     * Find the DOM row a pending notice belongs to.
-     *
-     * The card row is preferred (it sits next to the notices); the native tree
-     * row is the fallback when the card does not render that Session (collapsed,
-     * limited or scrolled). Matching by the row's own Session id keeps the
-     * binding independent of titles and order.
-     * @param {string} sessionId - Session id from the notice.
-     * @returns {HTMLElement | null} the row element, or null when not mounted.
-     */
-    function dwNoticeRowElement(sessionId) {
-      if (typeof document === 'undefined' || typeof sessionId !== 'string' || sessionId.length === 0) return null
-      for (const row of document.querySelectorAll('.psd-panel [data-psd-session]')) {
-        if (row instanceof HTMLElement && row.getAttribute('data-psd-session') === sessionId) return row
-      }
-      for (const row of document.querySelectorAll('[data-row-key^="session:"]')) {
-        if (row instanceof HTMLElement && row.getAttribute('data-row-key') === `session:${sessionId}`) return row
-      }
-      return null
-    }
-
-    /**
-     * Place one notice card at its Session row's height.
-     *
-     * The top edge matches the row's top edge (the Session info card uses the same
-     * anchor) and the left edge is the sidebar boundary, so a notice always lines
-     * up with the row it summarises rather than a fixed card position. The top is
-     * clamped into the viewport with room for the whole card.
-     * @param {{ top: number, left?: number }} rowRect - the row's viewport rect.
-     * @param {number} viewportWidth - viewport width in CSS px.
-     * @param {number} viewportHeight - viewport height in CSS px.
-     * @param {number | null} anchorLeft - sidebar column right edge, when known.
-     * @param {number} [cardHeight] - estimated notice height for the bottom clamp.
-     * @returns {{ left: number, top: number, width: number }} fixed card box.
-     */
-    function dwNoticePlacementForRow(rowRect, viewportWidth, viewportHeight, anchorLeft, cardHeight) {
-      const gap = 8
-      const width = Math.min(DW_HOVERCARD_WIDTH, Math.max(240, viewportWidth - gap * 2))
-      const height = typeof cardHeight === 'number' && Number.isFinite(cardHeight) && cardHeight > 0
-        ? cardHeight
-        : 96
-      let left
-      if (typeof anchorLeft === 'number' && Number.isFinite(anchorLeft)) {
-        left = Math.round(anchorLeft)
-        left = Math.min(left, viewportWidth - gap - width)
-        if (left < gap) left = gap
-      } else {
-        left = Math.round(typeof rowRect.left === 'number' && Number.isFinite(rowRect.left) ? rowRect.left : gap)
-        if (left + width > viewportWidth - gap) left = Math.max(gap, viewportWidth - gap - width)
-      }
-      const top = Math.round(Math.max(gap, Math.min(rowRect.top, viewportHeight - gap - height)))
-      return { left, top, width }
-    }
-
-    /**
-     * Resolve vertical collisions between row-aligned notice cards.
-     *
-     * Two waiting Sessions can sit in adjacent rows (34 px apart) while a notice
-     * is taller than that, so the later cards are pushed down just enough to keep
-     * the stack readable; the first card stays exactly on its Session row. Every
-     * top is clamped so the last card still fits the viewport.
-     * @param {readonly { left: number, top: number, width: number }[]} cards - row-aligned boxes.
-     * @param {number} viewportHeight - viewport height in CSS px.
-     * @param {number} [cardHeight] - estimated rendered card height in CSS px.
-     * @returns {{ left: number, top: number, width: number }[]} non-overlapping boxes.
-     */
-    function dwNoticeStackCards(cards, viewportHeight, cardHeight) {
-      if (!Array.isArray(cards) || cards.length === 0) return []
-      const gap = 6
-      const height = typeof cardHeight === 'number' && Number.isFinite(cardHeight) && cardHeight > 0
-        ? cardHeight
-        : 84
-      const placed = []
-      for (const card of cards) {
-        let top = card.top
-        for (const prior of placed) {
-          if (top < prior.top + height + gap) top = prior.top + height + gap
-        }
-        top = Math.min(top, Math.max(8, viewportHeight - 8 - height))
-        placed.push({ ...card, top })
-      }
-      return placed
-    }
-
-    /**
-     * Reveal a Session row inside its scroll container so its notice can align.
-     *
-     * No-op when the row already has room for the notice. Otherwise the nearest
-     * vertical scroller (the native sidebar column or the Workspaces tree) is
-     * scrolled just enough to centre the row, and the page is used only when no
-     * scroller exists.
-     * @param {HTMLElement | null} element - the Session row to reveal.
-     * @param {number} [cardHeight] - estimated notice height for the safe band.
-     * @returns {boolean} true when a scroll was issued (the caller re-measures).
-     */
-    function dwNoticeRevealRow(element, cardHeight) {
-      if (!(element instanceof HTMLElement)) return false
-      const margin = 8
-      const height = typeof cardHeight === 'number' && Number.isFinite(cardHeight) && cardHeight > 0
-        ? cardHeight
-        : 96
-      const rect = element.getBoundingClientRect()
-      let scroller = element.parentElement
-      while (scroller !== null) {
-        const style = window.getComputedStyle(scroller)
-        if ((style.overflowY === 'auto' || style.overflowY === 'scroll') && scroller.scrollHeight > scroller.clientHeight + 1) break
-        scroller = scroller.parentElement
-      }
-      if (scroller !== null) {
-        // Visibility is judged against the row's own scroll container: a row can be
-        // inside the viewport yet clipped by the sidebar's scroller.
-        const box = scroller.getBoundingClientRect()
-        if (rect.top >= box.top + margin && rect.top + height <= box.bottom - margin) return false
-        const desired = scroller.scrollTop + (rect.top - box.top) - (box.height - height) / 2
-        const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight)
-        scroller.scrollTop = Math.max(0, Math.min(max, desired))
-        return true
-      }
-      if (rect.top >= margin && rect.top + height <= window.innerHeight - margin) return false
-      element.scrollIntoView({ block: 'center' })
-      return true
+      rows.sort((left, right) => right.updatedAt - left.updatedAt)
+      return rows.map((row) => row.sessionId)
     }
 
     /**
@@ -7650,115 +7442,14 @@ function dwClearNativeAtmospheres() {
         t, rows, expanded, showAll, now, durations, childrenByParent, collapsedParents, acked,
         onToggle, onToggleAll, onToggleChildren, onOpen, interruptedT, onNewSession, currentSessionId,
         projections, onEnsureProjections, pinnedIds, menuSessionId, menuEnabled, onOpenSessionMenu, onTogglePin,
-        notices, noticeOverflow
+        pendingIds
       } = props
       const visible = expanded && !showAll ? rows.slice(0, DW_PANEL_LIMIT) : rows
-      // Place the pending-notice stack beside this card. Measured (never guessed)
-      // because the sidebar width, card height and viewport all change live; only
-      // the box changes, the stack itself is re-derived from the Session status.
-      const noticeKey = Array.isArray(notices) ? notices.map((notice) => notice.sessionId).join('|') : ''
-      // One placement per notice, each bound to its own Session row. Rows are
-      // preferred from the card and fall back to the native Workspaces tree; a row
-      // that is scrolled out of its container is revealed once so its notice can
-      // line up with it. The layout is fixed-positioned and re-measured on scroll,
-      // resize, sidebar/card size changes and for rows that mount a frame later.
-      const [noticeLayout, setNoticeLayout] = React.useState(null)
-      const revealedRef = React.useRef(new Set())
-      React.useLayoutEffect(() => {
-        if (noticeKey.length === 0) {
-          revealedRef.current.clear()
-          setNoticeLayout(null)
-          return undefined
-        }
-        let disposed = false
-        const frames = new Set()
-        let pendingFrame = 0
-        const revealed = revealedRef.current
-        const schedule = (fn) => {
-          const id = window.requestAnimationFrame(() => {
-            frames.delete(id)
-            if (!disposed) fn()
-          })
-          frames.add(id)
-        }
-        const schedulePlace = () => {
-          if (pendingFrame !== 0) return
-          pendingFrame = window.requestAnimationFrame(() => {
-            pendingFrame = 0
-            if (!disposed) place()
-          })
-        }
-        const place = () => {
-          const panel = panelRootRef.current
-          if (!(panel instanceof HTMLElement)) return
-          const sidebar = panel.closest('[class*="_sidebarCol"]')
-          const panelRect = panel.getBoundingClientRect()
-          // Fall back to the card's right edge + 10 like the Session info card, not the
-          // row's own left edge (which would cover the sidebar rows).
-          const anchorLeft = sidebar instanceof HTMLElement ? Math.round(sidebar.getBoundingClientRect().right) : Math.round(panelRect.right + 10)
-          const elements = notices.map((notice) => dwNoticeRowElement(notice.sessionId))
-          let issuedScroll = false
-          for (let index = 0; index < elements.length; index += 1) {
-            if (revealed.has(index)) continue
-            if (dwNoticeRevealRow(elements[index], 96)) {
-              revealed.add(index)
-              issuedScroll = true
-            }
-          }
-          const settle = () => {
-            if (disposed) return
-            const fallback = dwNoticePlacement(panelRect, window.innerWidth, window.innerHeight, 12 + Math.min(notices.length, 3) * DW_NOTICE_CARD_HEIGHT + (noticeOverflow > 0 ? 18 : 0))
-            const aligned = notices.map((notice, index) => {
-              const element = elements[index]
-              if (element === null) return { left: fallback.left, top: fallback.top + index * (DW_NOTICE_CARD_HEIGHT + 6), width: fallback.width }
-              return dwNoticePlacementForRow(element.getBoundingClientRect(), window.innerWidth, window.innerHeight, anchorLeft, 96)
-            })
-            const cards = dwNoticeStackCards(aligned, window.innerHeight, DW_NOTICE_CARD_HEIGHT)
-            const last = cards[cards.length - 1]
-            const overflow = noticeOverflow > 0
-              ? { left: last.left, top: Math.min(window.innerHeight - 8 - 18, last.top + DW_NOTICE_CARD_HEIGHT + 6), width: last.width }
-              : null
-            setNoticeLayout((current) => {
-              const same = current !== null
-                && current.cards.length === cards.length
-                && current.cards.every((card, index) => card.left === cards[index].left && card.top === cards[index].top && card.width === cards[index].width)
-                && ((current.overflow === null) === (overflow === null))
-                && (overflow === null || (current.overflow.left === overflow.left && current.overflow.top === overflow.top && current.overflow.width === overflow.width))
-              return same ? current : { cards, overflow }
-            })
-          }
-          if (issuedScroll) schedule(settle)
-          else settle()
-        }
-        place()
-        const onReflow = () => schedulePlace()
-        window.addEventListener('resize', onReflow)
-        window.addEventListener('scroll', onReflow, true)
-        const panel = panelRootRef.current
-        const observer = typeof ResizeObserver === 'undefined' || !(panel instanceof HTMLElement)
-          ? null
-          : new ResizeObserver(onReflow)
-        if (observer !== null) observer.observe(panel)
-        // Rows can mount or reorder a frame after the notices (native tree
-        // expansion, show-all, collapsed children): retry once and watch the
-        // sidebar column for late row mounts.
-        const sidebarRoot = panel.closest('[class*="_sidebarCol"]')
-        const mutations = sidebarRoot === null || typeof MutationObserver === 'undefined'
-          ? null
-          : new MutationObserver(onReflow)
-        if (mutations !== null) mutations.observe(sidebarRoot, { childList: true, subtree: true })
-        schedulePlace()
-        return () => {
-          disposed = true
-          if (pendingFrame !== 0) window.cancelAnimationFrame(pendingFrame)
-          for (const id of frames) window.cancelAnimationFrame(id)
-          frames.clear()
-          window.removeEventListener('resize', onReflow)
-          window.removeEventListener('scroll', onReflow, true)
-          if (observer !== null) observer.disconnect()
-          if (mutations !== null) mutations.disconnect()
-        }
-      }, [noticeKey, noticeOverflow, expanded])
+      // Waiting Sessions get an inline flag in front of their row title; no
+      // floating popup is rendered at all (the row itself is the actionable
+      // surface, so the flag only has to be visible).
+      const pendingKey = Array.isArray(pendingIds) ? pendingIds.join('|') : ''
+      const pendingSet = React.useMemo(() => new Set(pendingKey.length > 0 ? pendingKey.split('|') : []), [pendingKey])
       const canExpand = rows.length > DW_PANEL_LIMIT
       const anyRunning = rows.some((row) => row.state === 'running')
       const isRead = (sessionId, updatedAt) => dwIsAcked(acked, sessionId, updatedAt)
@@ -8126,7 +7817,16 @@ function dwClearNativeAtmospheres() {
                   },
                   onFocus: (event) => showHover(row, event.currentTarget),
                   onBlur: hideHover
-                }, React.createElement('span', { className: 'psd-run-title' }, row.title)))),
+                }, React.createElement('span', { className: 'psd-run-title' },
+                  pendingSet.has(row.id)
+                    ? React.createElement('span', {
+                      className: 'psd-pending-flag',
+                      role: 'img',
+                      'aria-label': t('row.pending'),
+                      title: t('row.pending')
+                    }, RemixGlyph(DW_FLAG_FILL_PATH, 12))
+                    : null,
+                  row.title)))),
               React.createElement('span', { key: 'spacer', className: 'psd-run-spacer', 'aria-hidden': true }),
               React.createElement('span', { key: 'time', className: 'psd-run-timeslot' },
                 React.createElement('span', { className: 'psd-run-time' }, time),
@@ -8236,16 +7936,6 @@ function dwClearNativeAtmospheres() {
         }
         children.push(React.createElement('div', { key: 'body', className: 'psd-panel-body' }, body))
       }
-      if (Array.isArray(notices) && notices.length > 0) {
-        children.push(React.createElement(DwPendingNotices, {
-          key: 'notices',
-          notices,
-          overflow: noticeOverflow ?? 0,
-          t,
-          onOpen,
-          layout: noticeLayout
-        }))
-      }
       if (hover !== null) {
         const row = hover.row
         const running = row.state === 'running'
@@ -8307,62 +7997,6 @@ function dwClearNativeAtmospheres() {
           }))))
       }
       return React.createElement('div', { ref: panelRootRef, className: 'psd-panel' }, children)
-    }
-
-    /**
-     * Floating stack of pending-interaction notices beside the card.
-     *
-     * Each card summarises one waiting Session (kind, title, first question) and
-     * opens that Session so the native composer card can answer it; the native card
-     * remains the only place an answer is submitted. Fixed-positioned so the
-     * sidebar's scroll container cannot clip it; only the click targets take the
-     * pointer, and focus is never stolen.
-     * @param {object} props - component props.
-     * @returns {object | null} the stack, or null when nothing is pending.
-     */
-    function DwPendingNotices({ notices, overflow, t, onOpen, layout }) {
-      if (!Array.isArray(notices) || notices.length === 0 || layout === null) return null
-      const glyphFor = (kind) => {
-        const path = kind === 'plan'
-          ? REMIX_FILE_LINE
-          : (kind === 'approval' ? DW_NOTICE_APPROVAL_PATH : DW_NOTICE_QUESTION_PATH)
-        return RemixGlyph(path, 14)
-      }
-      const cards = notices.map((notice, index) => React.createElement('button', {
-        key: notice.sessionId,
-        type: 'button',
-        className: 'psd-notice',
-        style: layout.cards[index] ?? { left: 8, top: 8, width: 320 },
-        'data-kind': notice.kind,
-        'data-psd-notice': notice.sessionId,
-        onClick: () => onOpen(notice.sessionId)
-      },
-      React.createElement('span', { className: 'psd-notice-icon', 'aria-hidden': true }, glyphFor(notice.kind)),
-      React.createElement('span', { className: 'psd-notice-content' },
-        React.createElement('span', { className: 'psd-notice-head' },
-          React.createElement('span', { className: 'psd-notice-title' }, notice.title),
-          React.createElement('span', { className: 'psd-notice-kind' }, t(`notice.kind.${notice.kind}`))),
-        notice.headline.length === 0
-          ? null
-          : React.createElement('span', { className: 'psd-notice-headline' }, notice.headline),
-        notice.kind === 'question' && notice.questionCount > 1
-          ? React.createElement('span', { className: 'psd-notice-meta' }, t('notice.questions', { count: notice.questionCount }))
-          : null)))
-      return React.createElement('div', {
-        className: 'psd-notices',
-        'data-psd-notices': '',
-        role: 'region',
-        'aria-label': t('notice.region')
-      },
-      React.createElement('span', {
-        className: 'psd-notices-live',
-        role: 'status',
-        'aria-live': 'polite'
-      }, t('notice.live', { count: notices.length + (overflow > 0 ? overflow : 0) })),
-      cards,
-      overflow > 0 && layout.overflow !== null
-        ? React.createElement('div', { className: 'psd-notices-overflow', style: layout.overflow }, t('notice.overflow', { count: overflow }))
-        : null)
     }
 
     /**
@@ -8807,13 +8441,73 @@ function dwClearNativeAtmospheres() {
       // Session status snapshot the native composer cards use, filtered to the
       // Sessions that are not open in the main view. Re-derived every render, so
       // switching to the asking Session (or the interaction settling) hides it.
-      const pendingNotices = dwPendingNotices({
+      const pendingIds = dwPendingSessionIds({
         list: sessions,
         statuses,
         currentSessionId,
         archived: archivedIds,
         activity: sessionActivity
       })
+      // Waiting Sessions also get the inline flag in the native Workspaces tree:
+      // a small amber flag-fill immediately before the Session title. No popup is
+      // rendered and the row itself stays the click target.
+      const pendingNativeKey = Array.isArray(pendingIds) ? pendingIds.join('|') : ''
+      React.useLayoutEffect(() => {
+        if (typeof document === 'undefined') return undefined
+        const pending = new Set(pendingNativeKey.length > 0 ? pendingNativeKey.split('|') : [])
+        const label = t('row.pending')
+        const makeFlag = () => {
+          const flag = document.createElement('span')
+          flag.className = 'dps-row-pending-flag'
+          flag.setAttribute('role', 'img')
+          flag.setAttribute('aria-label', label)
+          flag.title = label
+          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+          svg.setAttribute('width', '12')
+          svg.setAttribute('height', '12')
+          svg.setAttribute('viewBox', '0 0 24 24')
+          svg.setAttribute('fill', 'currentColor')
+          svg.setAttribute('aria-hidden', 'true')
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+          path.setAttribute('d', DW_FLAG_FILL_PATH)
+          svg.appendChild(path)
+          flag.appendChild(svg)
+          return flag
+        }
+        const titleOf = (row) => {
+          for (const child of row.children) {
+            if (typeof child.className === 'string' && /(?:^|_)title(?:_|$)/u.test(child.className)) return child
+          }
+          return null
+        }
+        const apply = () => {
+          for (const row of document.querySelectorAll('[data-row-key^="session:"]')) {
+            const key = row.getAttribute('data-row-key') ?? ''
+            const sessionId = key.slice('session:'.length)
+            const wanted = pending.has(sessionId)
+            const existing = row.querySelector(':scope > .dps-row-pending-flag')
+            if (wanted) {
+              row.setAttribute('data-power-suite-pending', '')
+              if (existing === null) {
+                const title = titleOf(row)
+                if (title !== null) row.insertBefore(makeFlag(), title)
+              }
+            } else {
+              row.removeAttribute('data-power-suite-pending')
+              if (existing !== null) existing.remove()
+            }
+          }
+        }
+        apply()
+        const root = document.querySelector('[class*="_sidebarCol"]')
+        const observer = root === null || typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => apply())
+        if (observer !== null) observer.observe(root, { childList: true, subtree: true })
+        return () => {
+          if (observer !== null) observer.disconnect()
+          for (const flag of document.querySelectorAll('.dps-row-pending-flag')) flag.remove()
+          for (const row of document.querySelectorAll('[data-row-key^="session:"][data-power-suite-pending]')) row.removeAttribute('data-power-suite-pending')
+        }
+      }, [pendingNativeKey, t])
       // Pinned main Sessions lead the card and never retire with time; every other
       // row keeps exactly the existing running-then-recent order. Toggling a pin
       // updates the card's own pinned document, which re-derives the row from its
@@ -9293,8 +8987,7 @@ function dwClearNativeAtmospheres() {
         menuSessionId,
         menuEnabled: contextMenus !== null && contextMenus !== undefined && typeof contextMenus.open === 'function',
         onOpenSessionMenu: openSessionMenu,
-        notices: pendingNotices.notices,
-        noticeOverflow: pendingNotices.overflow,
+        pendingIds,
         onToggle: () => setPanelExpanded((value) => !value),
         onToggleAll: () => setShowAll((value) => !value),
         onToggleChildren: (id) => setCollapsedParents((value) => {
@@ -24925,12 +24618,7 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       }
       // Row-menu and pending-notice helpers (feat/running-panel-ux).
       globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesPanel = {
-        dwPendingNotices,
-        dwNoticePlacement,
-        dwNoticePlacementForRow,
-        dwNoticeStackCards,
-        dwNoticeRowElement,
-        dwNoticeRevealRow,
+        dwPendingSessionIds
       }
       // The card row "..." menu: the plugin-owned captured-target kind the shared
       // popup opens against plus the pure delegation helpers (Pin/Unpin filtering

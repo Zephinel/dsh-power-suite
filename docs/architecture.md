@@ -27,7 +27,7 @@ src/client.js           Browser entry (DSH module loader)
 ├─ Workspace preset context-menu submenu
 ├─ Composer prompt-history keys + right-edge history rail
 ├─ Draft attachment memory seat (invisible)
-├─ Dynamic Workspaces buckets + running & recent card (pin, row menu via the native shared popup, pending notices)
+├─ Dynamic Workspaces buckets + running & recent card (pin, row menu via the native shared popup, pending-interaction flags)
 ├─ Sidebar width persistence (Host-synced width; synchronous atmosphere repaint on resize)
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
 ├─ UI element annotation mode (launcher, right rail, floating-surface picking, marks/detail card, note popover, composer reference chips, batch collection)
@@ -816,7 +816,7 @@ re-open a card the user just dismissed.
 | `contextMenus.register` (`workspace`) | Default agent preset submenu |
 | `conversation.input.overlay` | Renderless prompt-history keyboard seat, draft-attachment memory seat, and the annotation mode's Session bridge seat (Session id, input actions, and the Session's cwd/workspace label mirrored from the slot's `useSessions` hook) |
 | `conversation.input.dock` | Session hooks for the body-portaled prompt-history rail |
-| `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation (card, buckets, pin button, row "…" menu, pending-interaction notices), the UI element annotation launcher/rail/popover, and the update notice card (`power-suite.update-prompt`) |
+| `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation (card, buckets, pin button, row "…" menu, pending-interaction flags), the UI element annotation launcher/rail/popover, and the update notice card (`power-suite.update-prompt`) |
 | `plugins.bundle.config` | Plugin settings page |
 | `sidebar.session.row.leading` | Interrupted-session badge plus the hover/focus inline Continue triangle |
 
@@ -842,11 +842,12 @@ re-open a card the user just dismissed.
   button): the row "…" menu renders native action contributions but always
   filters the Pin/Unpin entry, and the card never reads or writes the native
   sidebar pin list.
-- The Dynamic Workspaces row menu and pending-interaction notices are
+- The Dynamic Workspaces row menu and pending-interaction flags are
   browser-only surfaces: the menu registers one captured-target provider
   (`powerSuiteSession`) that delegates to the native Session contributions and
-  filters the Pin/Unpin entry, while the notices never answer an interaction;
-  neither adds a Host route or store.
+  filters the Pin/Unpin entry, while the flags are derived from
+  `SessionStatus.pendingInteraction` and rendered inline before the Session
+  title (card and native tree rows); neither adds a Host route or store.
 - The UI element annotation mode stays browser-only: it adds no Host route,
   service, Session-log write, or profile change. Its v2 records are browser
   `localStorage` memory (capped at 100, never synced); the two modifiers,

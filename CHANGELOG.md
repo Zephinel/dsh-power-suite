@@ -106,20 +106,17 @@ and no dated release heading is added until the release is cut.
   The **Pin/Unpin entry is the only one filtered out** (the title-left pin
   button is the only pin owner), and keyboard navigation, focus restoration and
   dismissal come from the shell. Subagent rows have no trigger.
-- **Running & recent pending-interaction notices** — when a Session other than
+- **Running & recent pending-interaction flags** — when a Session other than
   the one open in the main view is waiting on `ask_user_question` (question or
-  plan review) or an approval (`SessionStatus.pendingInteraction`), a fixed
-  320 px stack appears beside the Running & recent card (prefers the card's
-  right edge, flips left when it does not fit, and clamps into the viewport).
-  Each card shows the kind glyph and label, the Session title, the first
-  question or reason (or the tool name), and a "{count} questions" line for
-  multi-question batches; up to three cards are shown, with a "+N more" line
-  for the rest, newest activity first. Clicking a card opens that Session — the
-  stack is **preview only**, the native composer card still answers — and a
-  notice disappears automatically when the Session becomes current, the
-  interaction settles, or the Session is archived. The stack is client-only
-  (no Host route, no sidebar nodes of its own, styles in the feature's
-  existing `<style>` block).
+  plan review) or an approval (`SessionStatus.pendingInteraction`), its row
+  shows a small amber Remix `flag-fill` **immediately before the Session title**
+  — the same amber as the native question prompt. The flag appears in both the
+  Running & recent card row and the native Workspaces tree row; it is
+  decorative (clicking still opens the Session and the native composer card
+  answers), up to no cap every waiting Session is flagged, and it disappears
+  automatically when the Session becomes current, the interaction settles, or
+  the Session is archived. Client-only: no Host route, store, popup or extra
+  click target.
 - **Prompt history** — the configured modifier + ↑/↓ recalls prompts already
   sent in this Session; plain arrows keep their original behavior. A vertical
   rail at the conversation's right edge, below the native turn rail and
@@ -548,18 +545,6 @@ and no dated release heading is added until the release is cut.
 
 ### Fixed
 
-- **Pending-interaction notice stack** — each notice is now bound to its own
-  Session row: it sits at that row's height (card row first, native Workspaces
-  row as fallback) and starts flush at the sidebar column's right edge like the
-  Session info card, instead of a fixed card-relative stack that made the
-  notice and its Session drift apart. If the row is scrolled out of its
-  container the stack scrolls it into view before placing the notice; rows that
-  are closer together than a card push the later notices down just enough to
-  avoid overlap. The card
-  now reuses the Session info card surface (`--dsw-hovercard-bg` + the static
-  label palette, 16 px radius, lv3 shadow, light-theme override) and, like the
-  info card, keeps that surface on hover instead of swapping in a translucent
-  tint, so the title/headline never show the page text behind them.
 - **Interrupted-session refresh and timing** — badges repull automatically after
   a Host restart (Connection generation reset), on focus/visibility/online, and
   on a 20 s poll instead of waiting for a Session click; parent Sessions whose

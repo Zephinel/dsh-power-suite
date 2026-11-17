@@ -232,14 +232,13 @@
   microtask so a delegated selection still lands after the outer registry
   aborts. The card's only intentional difference from the native Session menu is
   the filtered Pin/Unpin entry.
-- **The pending-interaction notice stack is preview-only.** It shows at most
-  three waiting Sessions (question, plan review, approval) and a "+N more"
-  line; it never answers anything, so answering still happens in that
-  Session's native composer card after the notice opens the Session. It exists
-  only while another Session is waiting and the sidebar/panel is visible:
-  collapsing the sidebar to rail mode hides it with the card. Only those three
-  interaction kinds are listed, and because `pendingInteraction` is one per
-  Session a multi-question batch still produces exactly one notice. The notice
+- **The pending-interaction flag is preview-only.** A waiting Session (question,
+  plan review, or approval) shows one amber `flag-fill` before its title in the
+  Running & recent card and in the native Workspaces row; it never answers
+  anything, so answering still happens in that Session's native composer card
+  after clicking the row. Current, idle, archived, blank and subagent Sessions
+  get no flag, a multi-question batch still produces exactly one flag, and
+  collapsing the sidebar to rail mode hides it with the rows. The flag
   position is fixed and re-measured, but it cannot be dismissed on its own
   (answering/settling, opening the Session, or archiving it removes it), and
   its list is limited to Sessions that are in the Session catalog — a waiting

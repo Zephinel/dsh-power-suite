@@ -1278,20 +1278,18 @@ bottom 232/232), annotation S2/S5/S8 **7/0/0 each** (9.3/8.2/12.5 s,
 
 ### Known limitations (`--pin` / `--live`)
 
-- The custom row "…" popup shows the native action labels plus a compact local
-  glyph, but **does not reproduce the native keyboard-shortcut hints**; its
-  entries are the native Session action contributions — an action a Host build
-  does not contribute is simply absent. The **Pin/Unpin entry is always filtered
-  out** by design (the title-left pin button owns pinning). The trigger keeps the
-  ordinary soft hover paint (plus the keyboard `focus-visible` ring); only the
-  rainbow row suppresses it. Every top-level row (the current rainbow row
-  included) keeps its time at rest and swaps it for the trigger on hover/focus
-  or while the menu is open, restoring it on leave; nested subagent rows have no
-  trigger.
-- The pending-interaction notice stack is preview-only: it lists at most three
-  waiting Sessions, adds a "+N more" line, and never answers an interaction; it
-  is hidden with the card in rail mode and contributes one notice per Session.
-  It is unit-tested and live-probed with synthetic data, but the real
+- The row "…" menu opens the shell's native shared context-menu popup; only the
+  **Pin/Unpin entry is filtered out** by design (the title-left pin button owns
+  pinning). The trigger keeps the ordinary soft hover paint (plus the keyboard
+  `focus-visible` ring); only the rainbow row suppresses it. Every top-level row
+  (the current rainbow row included) keeps its time at rest and swaps it for the
+  trigger on hover/focus or while the menu is open, restoring it on leave;
+  nested subagent rows have no trigger.
+- Pending interactions are **inline flags**, not a popup: a waiting Session gets
+  one amber `flag-fill` before its title in the card row and in the native
+  Workspaces row; the flag is decorative, every waiting Session is flagged (no
+  cap), and clicking the row opens the Session. It is unit-tested and
+  live-probed with synthetic data, but the real
   `SessionStatus.pendingInteraction` show/hide lifecycle is not part of a
   committed E2E scenario.
 - Host sharing and cross-device visibility require the DSH Web service restart that loads
