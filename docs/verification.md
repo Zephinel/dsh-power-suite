@@ -3014,3 +3014,20 @@ and trailing/snapping during dock or right-sidebar drags.
 - The rail inherits the native turn-rail frame's height/band; very tall native
   rails leave correspondingly less room for the prompt ticks, like the native
   column.
+
+
+## 2026-11-17 — First GitHub push and green CI
+
+The public repository `Zephinel/dsh-power-suite` was created and `main` was
+pushed at `aed9928` (2026-11-17T16:33:44Z); the default branch is `main` and
+the README clone URL now resolves. The first CI run (`44127301315`) is green on
+both matrix entries: **verify (Node 22)** in 13 s and **verify (Node 24)** in
+28 s, each running `npm run check` and `git diff --exit-code`; the docs-only
+fast path was skipped because the push contained source changes.
+
+Local evidence before the push: `npm run check` passed (24 modules, 22 test
+files, 364/364 tests, docs links 26 files, release-notes 0.1.0 6+6, pack 95
+files) and `npm run check:release` reported PASS (95 packaged files verified).
+No tag was created and nothing was published to npm: the Trusted Publishing
+bootstrap (hand-published prerelease + `npm trust`) and the `v0.1.0` release
+remain the next steps.
