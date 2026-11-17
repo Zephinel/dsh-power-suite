@@ -9,20 +9,17 @@
 
 **One plugin that makes DSH show the working session, not only the answer.** It adds a Running & recent panel and activity buckets to the sidebar, a Session artifacts browser, prompt recall, draft memory and a multi-image composer gallery, interrupted-session recovery, and point-and-click UI annotation — all as one `power-suite` plugin row, with no build step.
 
-Install it from npm (after the 0.1.0 release) and start DSH:
+Install it from npm and start DSH:
 
 ```bash
 dsh plugin --profile web add @zephinel/dsh-power-suite@0.1.0
 dsh web
 ```
 
-> **Status: release prepared, not published.** `@zephinel/dsh-power-suite@0.1.0`
-> is prepared — package metadata, the release notes and the CHANGELOG entries are
-> in place, and the repository is pushed to
-> [GitHub](https://github.com/Zephinel/dsh-power-suite) with CI on `main` — but the
-> package is **not on npm yet**. Until the first tag is published, install the
-> local checkout instead (see [Install](#install)); the in-app update notice stays
-> silent while no published version exists.
+> **Status: `0.1.0` is published on npm.** Install the released bundle with
+> `dsh plugin --profile web add @zephinel/dsh-power-suite@0.1.0` (see
+> [Install](#install)); the in-app update notice stays silent until a newer
+> stable version is published.
 
 [Overview](#overview) · [Session artifacts](#session-artifacts) · [Composer](#composer-prompt-recall-drafts-recovery) · [UI annotation](#ui-element-annotation) · [Features](#features-at-a-glance) · [Install](#install) · [Quick start](#quick-start) · [Get the code](#get-the-code) · [Prerequisites](#prerequisites) · [Build, test and deploy](#build-test-and-deploy) · [Documentation](#documentation) · [Contributing](#contributing)
 
@@ -97,7 +94,7 @@ Read more: [UI element annotation](https://github.com/Zephinel/dsh-power-suite/b
 | [Sidebar width](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/sidebar-width.md) | A Host-owned, durable left-sidebar width shared across browsers, restored after a collapse, with a flicker-free rainbow repaint. |
 | [Workspace presets](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/workspace-default-presets.md) | A Workspace context-menu submenu that sets the default agent preset for new Sessions in that Workspace. |
 | [Settings](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/settings.md) | The bundle's Plugins-page section: the prompt-history modifier and the two retention windows. |
-| [Update notice](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/update-check.md) | A bottom-right Host-checked notice for a newer published version, with the version change and release highlights; silent until the package is published. |
+| [Update notice](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/update-check.md) | A bottom-right Host-checked notice for a newer published version, with the version change and release highlights; silent until a newer version is published. |
 
 The features ship in the single bundle `@zephinel/dsh-power-suite` (Loader row `power-suite`), so they install, enable and uninstall together. The browser half attaches to the Web platform only.
 
@@ -105,7 +102,7 @@ The features ship in the single bundle `@zephinel/dsh-power-suite` (Loader row `
 
 The bundle is `@zephinel/dsh-power-suite` (Loader row `power-suite`). Install it into a DSH profile, then reload the plugin or restart the Web process so the Host half loads — a page refresh is not enough for Host code.
 
-**From npm, after the 0.1.0 release:**
+**From npm:**
 
 ```bash
 dsh plugin --profile web add @zephinel/dsh-power-suite@0.1.0
@@ -113,7 +110,7 @@ dsh plugin --profile web add @zephinel/dsh-power-suite@0.1.0
 
 Or use the in-app route: **Plugins** in the Web sidebar → **Add plugin** → enter `@zephinel/dsh-power-suite@0.1.0` → **Install** → **Enable now**.
 
-**From this checkout, available today:** in the **Plugins** page choose **Add plugin** → **Install a third-party plugin** and enter the checkout's absolute path. From an agent session the same install is:
+**From this checkout (development):** in the **Plugins** page choose **Add plugin** → **Install a third-party plugin** and enter the checkout's absolute path. From an agent session the same install is:
 
 ```text
 plugin_manager action=install_bundle target=/absolute/path/to/dsh-power-suite

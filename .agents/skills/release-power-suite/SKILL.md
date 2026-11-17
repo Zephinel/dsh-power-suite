@@ -21,8 +21,8 @@ Facts that shape the procedure:
   import the intelligent-ui build/current-facts steps.
 - The in-app update prompt reads `release-notes/<version>.md` (and `.en.md`) from
   the **tag-pinned** raw URL, so the reviewed notes are literally what users see.
-- The first public release is **0.1.0**; it absorbs all never-published
-  development history (see the first-release note in step 1).
+- `0.1.0` was the first public release (2026-11-17) and absorbed all
+  never-published development history; later releases follow semver.
 
 ## Authorization (read first)
 
@@ -48,7 +48,7 @@ Facts that shape the procedure:
 ## Preconditions
 
 1. Confirm the target version with the user (stable semver). The first public
-   release is `0.1.0`; later releases follow semver.
+   release was `0.1.0` (2026-11-17); later releases follow semver.
 2. `git status --porcelain` is empty, the branch being released is merged to
    `main`, `main` is in sync with `origin/main`, and the latest CI run on `main`
    is green. If the repository has no `origin` yet, do the first-push setup
@@ -71,8 +71,9 @@ Facts that shape the procedure:
 6. `dsh` and `pnpm` are on PATH for the local package-level gate
    (`npm run check:release`); it packs, installs into a throwaway `$DSH_HOME`,
    boots an isolated Web instance and uninstalls without touching this profile.
-7. **First publish only — bootstrap the npm package.** Trusted Publishing cannot
-   be configured until the package exists on npm, so before the first tag:
+7. **First publish only (done for 0.1.0) — bootstrap the npm package.** Trusted
+   Publishing cannot be configured until the package exists on npm, so before the
+   first tag:
    create the GitHub remote and push `main` (the workflow needs it), publish one
    prerelease by hand without claiming `latest`
    (`npm version <version>-rc.0 --no-git-tag-version && npm publish --access
@@ -100,11 +101,10 @@ Facts that shape the procedure:
    date) and leave an empty `## [Unreleased]` heading in place. `publish.yml`
    requires the dated `## [<version>]` heading. Never rewrite an already-released
    section.
-   - **First release (0.1.0) only:** the never-published development snapshots
-     (`0.1.0`/`0.1.1` dated sections and `0.2.0` undated) plus the latest work
-     are already merged into the single block; move it under
-     `## [0.1.0] - <date>` and do not recreate them as separate releases. Its
-     Highlights cover every shipped feature, not a delta.
+   - **First release (0.1.0, historical):** 0.1.0 shipped on 2026-11-17; its
+     never-published development snapshots (`0.1.0`/`0.1.1` dated sections and
+     `0.2.0` undated) were merged into one block under
+     `## [0.1.0] - 2026-11-17`. Do not recreate them as separate releases.
 4. `release-notes/<version>.md` (required, Chinese default) and optional
    `release-notes/<version>.en.md`:
    - `## Highlights` with **2–6 short, user-facing bullets**; the update prompt
@@ -226,6 +226,9 @@ gh run watch <run-id> --exit-status --interval 10
   ```
   Do **not** rerun the tag workflow to "fix" a propagation lag: it may attempt to
   republish the same version. Never delete, amend, or retag a published tag.
+  0.1.0 hit exactly this: `Publish with provenance` succeeded, the final poll
+  timed out, and the registry switched to `latest: 0.1.0` moments later — the
+  tag workflow stays red, the release is valid, and no rerun is needed.
 - Verify once settled:
   ```bash
   npm view @zephinel/dsh-power-suite version dist-tags --json --prefer-online

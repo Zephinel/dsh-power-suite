@@ -2,10 +2,10 @@
 
 ## Packaging
 
-- This checkout is installed as a local `link:` bundle in a DSH profile. The
-  package has never been published; the first npm release is planned as 0.1.0
-  (see [CHANGELOG.md](../CHANGELOG.md)). There is no build pipeline: the Host
-  and browser entries are the checked-in ES modules under `src/`.
+- This checkout is installed as a local `link:` bundle in a DSH profile, and
+  the package is published on npm as `0.1.0` (see
+  [CHANGELOG.md](../CHANGELOG.md)). There is no build pipeline: the Host and
+  browser entries are the checked-in ES modules under `src/`.
 - Only the Web platform is supported (`dsh.client.platform: "web"`). The TUI
   and other clients do not load the browser half.
 - The browser half injects DSH client packages by name; a Host composition that
@@ -99,12 +99,10 @@
 
 ## Update notice
 
-- **Silent until the package is published.** There is no npm release yet, so
-  the registry read fails and the notice never renders. The first release is
-  0.1.0 and is its own `latest`, so even after publishing, installs of 0.1.0 see
-  no prompt until a newer stable version (0.2.0) is published. A blocked
-  `registry.npmjs.org` or `raw.githubusercontent.com` also means silence, not an
-  error.
+- **Silent until a newer version is published.** `0.1.0` is its own `latest`,
+  so installs of 0.1.0 see no prompt until a newer stable version (0.2.0) is
+  published. A blocked `registry.npmjs.org` or `raw.githubusercontent.com` also
+  means silence, not an error.
 - **It never updates anything.** **更新** only opens the bundle's Plugin detail
   page through `pluginNavigation.openBundle`; DSH's plugin manager performs the
   install. A `link:` install runs the local checkout and normally already has

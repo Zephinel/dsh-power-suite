@@ -116,7 +116,8 @@ or Session id.
 
 ## Release flow
 
-The first public release is **0.1.0**; `package.json` is already at that version.
+The first public release was **0.1.0** (2026-11-17); `package.json` stays at
+that version until the next release preparation.
 Tagging and publishing are separate, explicit approvals, and the full procedure
 lives in the release skill
 ([`.agents/skills/release-power-suite/SKILL.md`](../.agents/skills/release-power-suite/SKILL.md)).
@@ -124,7 +125,7 @@ The parts that touch this document:
 
 **One-time npm setup.** Publishing uses Trusted Publishing (OIDC + provenance),
 so no npm token is stored in the repository or CI. npm can trust a package only
-once it exists on the registry, so the first release bootstraps it:
+once it exists on the registry, so the first release bootstrapped it (done for 0.1.0):
 
 1. Push `main` to the GitHub repository named in `package.json`
    (`origin`) — the publish workflow only runs there; create the repository

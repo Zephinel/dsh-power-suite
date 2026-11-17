@@ -127,9 +127,8 @@ Also verify by hand:
   `test/browser/README.md`. Only the `## Automated` section is live.
 - `docs/sidebar-width.md` *Measured acceptance (2026-11-15)* is a historical
   measurement record; the surrounding behavior sections are as-built.
-- README's status callout — "release prepared, not published" — matches this
-  checkout: the repository is pushed and CI runs on `main`, but the package is
-  not on npm. Publishing is a release-skill action.
+- README's status callout — `0.1.0` published on npm — matches this checkout;
+  publishing remains a release-skill action.
 - README's absolute GitHub URLs point at the pushed repository and are
   deliberate so the npm-rendered README can reach `docs/`; the manual check in
   the docs-consistency section maps them back onto the checkout.
@@ -147,6 +146,11 @@ Also verify by hand:
   steps into a sync here.
 - `npm run check:release` is intentionally not in CI; it is a local pre-release
   gate that needs `dsh` and `pnpm` and boots a throwaway `$DSH_HOME`.
+- The `v0.1.0` publish workflow run is red only because the final registry-poll
+  step timed out while npm was still propagating; `Publish with provenance`
+  succeeded and the registry settled right after. A red publish run is not proof
+  of a failed release — check the registry first (the poll window is now the
+  60-attempt intelligent-ui window).
 - The release-notes approval is a commit-body trailer
   (`Release-Notes-Review: sha256=<hash>`); `--verify` reads `HEAD`, so it runs
   after the release commit exists, and any notes edit changes the hash.
@@ -196,8 +200,8 @@ that authorizes those files.
    (`:1165`) — resolve against `src/client.js` (v3 document carrying v2 records)
    before quoting either.
 8. `release-notes/0.1.0.md` and `.en.md` still describe the retired Start-page
-   Artifacts card (`0.1.0.en.md:4`). They are pre-tag review text — fix through
-   the release skill before tagging; after tagging they are immutable.
+   Artifacts card (`0.1.0.en.md:4`). The `v0.1.0` tag pinned them, so they are
+   immutable history now — fix only in a new version.
 9. `docs/usage.md` has no sidebar-width or update-notice section although
     `README.md` and `docs/README.md` describe the usage page as covering every
     feature step by step; confirm with the owner whether the usage tutorial is

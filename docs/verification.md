@@ -3031,3 +3031,33 @@ files) and `npm run check:release` reported PASS (95 packaged files verified).
 No tag was created and nothing was published to npm: the Trusted Publishing
 bootstrap (hand-published prerelease + `npm trust`) and the `v0.1.0` release
 remain the next steps.
+
+
+## 2026-11-17 — 0.1.0 published to npm
+
+First public release, cut from the release commit `28837ba`
+(`chore(release): prepare 0.1.0`) whose body carries
+`Release-Notes-Review: sha256=143090e0…`.
+
+- Pre-tag gates passed locally: `npm run check` (24 modules, 22 test files,
+  364/364 tests, docs links 26, release-notes 6+6), `npm run check:release`
+  (PASS, 95 packaged files), publish-manifest gate and `git diff --check`.
+- Tag `v0.1.0` is annotated (`0.1.0 — 2026-11-17`) and points at `28837ba`.
+- Publish workflow run [44131247876](https://github.com/Zephinel/dsh-power-suite/actions/runs/44131247876):
+  all gates passed (tag/version, publish manifest, `npm run check`,
+  `pack:check`, dated CHANGELOG section, release notes, notes-approval hash) and
+  `Publish with provenance` succeeded through Trusted Publishing (OIDC).
+- The final registry-poll step timed out while npm was still propagating, so the
+  workflow run is red; the release itself is valid. Registry confirmed minutes
+  later: `latest` = `0.1.0`, version endpoint 200, SLSA provenance attestation
+  and 2 signatures; a temporary install passed `npm audit signatures` (verified
+  registry signature + attestation). The workflow's poll window was widened to
+  the intelligent-ui 60-attempt window after this false negative.
+- Tag-pinned notes return 200:
+  `raw.githubusercontent.com/Zephinel/dsh-power-suite/v0.1.0/release-notes/0.1.0.md`
+  and `.en.md`.
+- GitHub Release: https://github.com/Zephinel/dsh-power-suite/releases/tag/v0.1.0
+  (`0.1.0 — 2026-11-17`, both notes files as the body).
+- npm dist-tags after the release: `latest: 0.1.0`, `next: 0.1.0-rc.0` (the
+  bootstrap prerelease). The tagged artifacts were not edited after tagging; the
+  post-publish docs sync only updates the README/docs, never `release-notes/`.
