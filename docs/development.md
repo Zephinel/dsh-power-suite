@@ -28,7 +28,8 @@ The plugin manages no build artifacts; nothing under `src/` is generated.
 
 ```bash
 npm test                    # node --test test/*.test.js
-npm run check               # syntax + manifest + tests + release-notes gate, then pack:check
+npm run typecheck           # tsc --noEmit: no-build checkJs gate (Phase 1; src/client.js opted out)
+npm run check               # syntax + typecheck + manifest + docs links + tests + release-notes gate, then pack:check
 npm run pack:check          # npm pack --dry-run --json; inspect the published file list
 npm run check:release-notes # release-notes Highlights for the current package version
 npm run check:release       # pack → throwaway DSH_HOME install → isolated boot → byte identity → uninstall (needs dsh + pnpm; not in CI)
@@ -37,6 +38,11 @@ npm run check:release       # pack → throwaway DSH_HOME install → isolated b
 `npm run check` is the required gate before committing a functional change. CI
 runs it on push and pull request. The release-notes gate runs inside
 `npm run check` and again in the publish workflow.
+
+`npm ci` installs TypeScript and `@types/node` as dev dependencies; the
+typecheck is no-build (no emitted files, no package-layout change). The classic
+browser entry stays out of the gate until Phase 3 — see
+[the TypeScript migration plan](plans/typescript-migration.md).
 
 ## README screenshots and the Bento pipeline
 

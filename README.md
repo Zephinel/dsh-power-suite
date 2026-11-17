@@ -173,7 +173,8 @@ There is no build step: the Host and browser entries are the checked-in ES modul
 | Command | Purpose |
 |---|---|
 | `npm test` | `node --test test/*.test.js` — pure-logic tests for the Host stores/routes and the browser-side derivations. |
-| `npm run check` | The full gate: syntax, package manifest, docs links, Node tests and the release-notes check, then `pack:check`. |
+| `npm run typecheck` | `tsc --noEmit` — no-build JSDoc/`checkJs` gate over the Host half (the classic browser entry is opted out until Phase 3). |
+| `npm run check` | The full gate: syntax, typecheck, package manifest, docs links, Node tests and the release-notes check, then `pack:check`. |
 | `npm run pack:check` | `npm pack --dry-run --json` — inspect the published file list. |
 | `npm run check:release-notes` | Validate the tag-pinned release highlights for the package version. |
 | `npm run check:docs-links` | Verify that local Markdown links and images resolve. |

@@ -253,7 +253,10 @@ lets the owner see which decisions were theirs.
 
 - **No doc pairs and no build.** The docs are a single English set; do not create
   `README.en.md`, `docs/*.en.md`, `lib/`, `vendor/` or a `docs/current-facts.json`
-  to "match" the intelligent-ui repository. Counts come from command output.
+  to "match" the intelligent-ui repository. Counts come from command output. A
+  no-build `tsc --noEmit` typecheck (`npm run typecheck`, part of `npm run check`)
+  exists in Phase 1; it emits nothing and does not change the package layout, and
+  `src/client.js` is opted out until Phase 3.
 - **`docs/verification.md` is a historical evidence ledger with one live part.**
   The `## Automated` section describes the current gates and is refreshed from
   command output; everything from the first dated round down is history — append

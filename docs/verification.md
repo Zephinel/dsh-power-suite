@@ -17,20 +17,27 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 `npm run check` performs:
 
 - `node --check` on both package entries and every Host feature entry;
+- `tsc --noEmit` over the Host half (`tsconfig.json` with `allowJs`/`checkJs`;
+  the classic browser entry opts out until Phase 3 of the migration plan);
 - package-manifest validation: exports/files/icon/cordis patch are present and
   the DSH bundle patch points at a real file;
-- the pure-logic test suite (`node --test test/*.test.js`).
+- local Markdown links and images (`scripts/check-docs-links.mjs`);
+- the pure-logic test suite (`node --test test/*.test.js`);
+- the release-notes gate (`scripts/check-release-notes.mjs`).
 
-### Current gates (2026-11-17, Node 24.22.3)
+### Current gates (2026-11-18, Node 24.22.3)
 
-- `npm test`: **364 tests, 364 passed, 0 failed**, 22 test files — Host stores/routes
-  plus the browser-side derivations and the new release-notes approval round-trip.
-- `npm run check`: passed (`24 modules, 22 test files`); it runs the syntax checks,
-  package-manifest validation, local docs links, the Node suite and the
-  release-notes gate, then `pack:check`.
-- `npm run pack:check`: **95 files**; inspect the file list rather than the byte totals
+- `npm test`: **367 tests, 367 passed, 0 failed**, 23 test files — Host stores/routes
+  plus the browser-side derivations, the release-notes approval round-trip and the
+  protocol contract guard for duplicated route/enum literals.
+- `npm run typecheck`: `tsc --noEmit` clean — Phase 1 JSDoc/`checkJs` gate over the
+  Host half; `src/client.js` carries `// @ts-nocheck` until Phase 3.
+- `npm run check`: passed (`24 modules, 23 test files`); it runs the syntax checks,
+  the typecheck, package-manifest validation, local docs links, the Node suite and
+  the release-notes gate, then `pack:check`.
+- `npm run pack:check`: **98 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).
-- `npm run check:release`: **PASS** — 95 packaged files installed into a throwaway
+- `npm run check:release`: **PASS** — 98 packaged files installed into a throwaway
   `$DSH_HOME`, byte-identical to the tarball and the checkout, the mounted
   `power-suite` Loader row, the boot graph and served client bundle, then clean
   uninstall (requires `dsh` + `pnpm`; intentionally not in CI).

@@ -133,6 +133,12 @@ Acceptance: this plan is approved or amended; no code changes beyond the plan.
 
 ### Phase 1 — no-build type checking (recommended first)
 
+**Status: implemented on `feat/typescript-phase1` (2026-11-18).** Evidence:
+`npm run typecheck` reports 0 errors over the Host half, `npm run check` includes
+it, `test/protocol-contract.test.js` guards the duplicated literals, and no
+build step, emitted file or package-layout change landed. `src/client.js` carries
+a transitional `// @ts-nocheck` until Phase 3.
+
 Add `tsconfig.json` with `allowJs`, `checkJs`, `noEmit`; add
 `"typecheck": "tsc --noEmit"` to `package.json`; wire it into `npm run check` and
 CI. Keep the build, packaging, exports and repository layout unchanged. Also land

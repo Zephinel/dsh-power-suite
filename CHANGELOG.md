@@ -8,6 +8,14 @@ All notable changes to this repository are documented here. The format follows
 
 ### Changed
 
+- **No-build TypeScript gate (Phase 1).** `tsconfig.json` plus `npm run typecheck`
+  (`tsc --noEmit`, `allowJs`/`checkJs`) now checks the Host half through its JSDoc
+  types, and `npm run check` plus CI run it. The 24.8k-line classic browser entry
+  stays opted out (`// @ts-nocheck`) until Phase 3, the shared settings/protocol
+  typedefs live in `src/shared/protocol.js`, and `test/protocol-contract.test.js`
+  guards the duplicated route/enum literals. No build step, emitted files or
+  package-layout change.
+
 - **Contributor identity cleanup.** Repository history was rewritten with
   `git filter-repo --mailmap` to attribute the early `rexxin`/`ann-impl-a`
   commits to the canonical `moekyo` identity; the tree content is unchanged and

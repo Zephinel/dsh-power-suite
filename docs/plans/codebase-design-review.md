@@ -88,9 +88,10 @@ its implementation hides the wire vocabulary. It is **not** a generic fetch
 wrapper: wrapping `connection.fetch` would be a pass-through module at the
 transport seam, which is already an adapter.
 
-Until the build exists, a flat contract test can read the Host exports and assert
-the client source mentions each route/enum — a shallow guard, but it prevents new
-drift and documents the seam to deepen later.
+Until the build exists, a flat contract test reads the Host exports and asserts
+the client source matches them exactly — Phase 1 landed that guard in
+`test/protocol-contract.test.js`; it is shallow on purpose and documents the
+seam to deepen later.
 
 ### F4. The browser half exposes a test seam instead of an interface
 
