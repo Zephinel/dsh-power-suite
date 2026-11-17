@@ -13,7 +13,7 @@ export const UPDATE_ROUTE = '/api/power-suite.update'
 
 /**
  * Register the update-check route inside Connection's authentication fence.
- * @param {object} ctx - Host context carrying `connection`.
+ * @param {Record<string, any>} ctx - Host context carrying `connection`.
  * @returns {void}
  */
 export function installUpdateCheck(ctx) {

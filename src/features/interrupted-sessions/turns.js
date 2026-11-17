@@ -21,7 +21,7 @@ export const INTERRUPTED_ROUTE = '/api/power-suite.interrupted'
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {boolean} whether it is a record.
+ * @returns {value is Record<string, any>} whether it is a record.
  */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

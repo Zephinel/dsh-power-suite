@@ -44,13 +44,13 @@ export const SIDEBAR_WIDTH_READ_FAILED = 'SIDEBAR_WIDTH_READ_FAILED'
  * @returns {boolean} whether it is ENOENT.
  */
 function isNotFound(error) {
-  return error !== null && typeof error === 'object' && error.code === 'ENOENT'
+  return error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
 }
 
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {boolean} whether it is a record.
+ * @returns {value is Record<string, any>} whether it is a record.
  */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -74,7 +74,8 @@ export function defaultSidebarWidthDocument() {
  * @returns {boolean} whether it is an integer inside the accepted range.
  */
 export function isSidebarWidth(value) {
-  return Number.isInteger(value) && value >= SIDEBAR_WIDTH_MIN && value <= SIDEBAR_WIDTH_MAX
+  if (typeof value !== 'number' || !Number.isInteger(value)) return false
+  return value >= SIDEBAR_WIDTH_MIN && value <= SIDEBAR_WIDTH_MAX
 }
 
 /**
@@ -127,7 +128,7 @@ export function sidebarWidthPath(dshHome) {
  * land atomically through a temporary sibling plus rename, and publish to
  * memory only after the rename.
  * @param {string} dshHome - harness home directory.
- * @returns {{ get(): Promise<object>, set(sidebarWidth: number): Promise<object> }} the store.
+ * @returns {{ get(): Promise<{ version: number, sidebarWidth: number | null }>, set(sidebarWidth: number): Promise<void> }} the store.
  */
 export function createSidebarWidthStore(dshHome) {
   const file = sidebarWidthPath(dshHome)
@@ -146,7 +147,7 @@ export function createSidebarWidthStore(dshHome) {
           // Do NOT cache the default document: it would let a blind write
           // replace an unreadable document. The route turns this into a 500 so
           // the client keeps its cache and retries.
-          const readError = new Error('sidebar width could not be read')
+          const readError = /** @type {Error & { code: string }} */ (new Error('sidebar width could not be read'))
           readError.code = SIDEBAR_WIDTH_READ_FAILED
           throw readError
         }

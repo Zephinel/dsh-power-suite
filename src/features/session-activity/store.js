@@ -45,13 +45,13 @@ export const ACTIVITY_READ_FAILED = 'ACTIVITY_READ_FAILED'
  * @returns {boolean} whether it is ENOENT.
  */
 function isNotFound(error) {
-  return error !== null && typeof error === 'object' && error.code === 'ENOENT'
+  return error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
 }
 
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {boolean} whether it is a record.
+ * @returns {value is Record<string, any>} whether it is a record.
  */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -165,7 +165,7 @@ export function activityLedgerPath(dshHome) {
  * @param {string} dshHome - harness home directory.
  * @param {object} [options] - injection points for tests.
  * @param {number} [options.debounceMs] - durable write debounce window.
- * @returns {object} the ledger handle.
+ * @returns {Record<string, any>} the ledger handle.
  */
 export function createActivityLedger(dshHome, options = {}) {
   const file = activityLedgerPath(dshHome)
@@ -276,7 +276,7 @@ export function createActivityLedger(dshHome, options = {}) {
           // memory, reset the single-flight promise, and reject with a typed
           // error so the Host retries a later load instead of caching failure.
           loadPromise = null
-          const readError = new Error('session activity ledger could not be read')
+          const readError = /** @type {Error & { code: string }} */ (new Error('session activity ledger could not be read'))
           readError.code = ACTIVITY_READ_FAILED
           throw readError
         }

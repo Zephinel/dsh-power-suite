@@ -18,7 +18,7 @@ export const MAX_PROMPTS = 500
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {boolean} whether it is a record.
+ * @returns {value is Record<string, any>} whether it is a record.
  */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -26,7 +26,7 @@ function isRecord(value) {
 
 /**
  * Read the human prompt text recorded by one session event.
- * @param {object} event - raw session event.
+ * @param {Record<string, any>} event - raw session event.
  * @returns {string | null} the prompt text, or null when this event is not one.
  */
 export function promptTextOfEvent(event) {

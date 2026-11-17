@@ -86,7 +86,7 @@ export function releaseNotesUrl(repository, version, variant = 'default') {
 export function repositorySlug(repository) {
   const url = typeof repository === 'string'
     ? repository
-    : repository !== null && typeof repository === 'object' && typeof repository.url === 'string'
+    : repository !== null && typeof repository === 'object' && 'url' in repository && typeof repository.url === 'string'
       ? repository.url
       : undefined
   if (url === undefined) return undefined

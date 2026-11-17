@@ -1,3 +1,4 @@
+// @ts-nocheck — Phase 1 keeps the classic browser half out of the gate; it is typed in Phase 3 (docs/plans/typescript-migration.md).
 /**
  * Browser half of DSH Power Suite.
  *

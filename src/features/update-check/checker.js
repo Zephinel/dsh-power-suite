@@ -29,7 +29,7 @@ const FETCH_TIMEOUT_MS = 5_000
 const MAX_HIGHLIGHTS = 6
 
 /**
- * @typedef {object} UpdateCheckView
+ * @typedef {Record<string, any>} UpdateCheckView
  * @property {string} current - running package version; `0.0.0` when unknown.
  * @property {string | null} latest - newest stable published version, or null
  *   when it could not be read (or is not a stable version).
@@ -42,7 +42,7 @@ const MAX_HIGHLIGHTS = 6
 /**
  * Read the running package's manifest.
  * @param {URL | string} [manifestUrl] - manifest override for tests.
- * @returns {object | undefined} the parsed manifest, or undefined when it is
+ * @returns {Record<string, any> | undefined} the parsed manifest, or undefined when it is
  *   unreadable.
  */
 function readManifest(manifestUrl) {
@@ -78,7 +78,7 @@ export function releaseNotesRepository(manifestUrl) {
 
 /**
  * Registry endpoint for the running package's `latest` dist-tag.
- * @param {object | undefined} manifest - parsed running manifest.
+ * @param {Record<string, any> | undefined} manifest - parsed running manifest.
  * @returns {string | undefined} the registry URL, or undefined when the
  *   manifest names no package.
  */
@@ -164,7 +164,7 @@ export function createUpdateChecker(options = {}) {
   const read = async (variant) => {
     if (latestUrl === undefined) throw new Error('package name is unreadable')
     const response = await readResponse(fetchImpl, timeoutMs, latestUrl, 'application/json')
-    const payload = await response.json()
+    const payload = /** @type {Record<string, any>} */ (await response.json())
     const published = payload?.version
     const latest = typeof published === 'string' && parseStableVersion(published) !== undefined ? published.trim() : null
     const updateAvailable = installed !== undefined && latest !== null && isNewerStableVersion(latest, installed)
@@ -179,6 +179,7 @@ export function createUpdateChecker(options = {}) {
     }
     // An English client prefers `<version>.en.md` and falls back to the
     // reviewed default file, also when the English file has no Highlights.
+    /** @type {Array<'en' | 'default'>} */
     const variants = variant === 'en' ? ['en', 'default'] : ['default']
     for (const candidate of variants) {
       try {

@@ -53,7 +53,7 @@ function sendJson(status, payload) {
 
 /**
  * Read one Agent's running state without creating it.
- * @param {object} ctx - Host context carrying the Agent registry.
+ * @param {Record<string, any>} ctx - Host context carrying the Agent registry.
  * @param {string} sessionId - Session to inspect.
  * @returns {boolean} whether a live Agent is running.
  */
@@ -64,8 +64,8 @@ function agentRunning(ctx, sessionId) {
 
 /**
  * The public wire fields of one interruption value.
- * @param {object} value - internal value with timing fields.
- * @returns {object} the wire value.
+ * @param {Record<string, any>} value - internal value with timing fields.
+ * @returns {Record<string, any>} the wire value.
  */
 function toWire(value) {
   const { lastStartTime, lastEndTime, lastEventTime: eventTime, interruptedAt, ...wire } = value
@@ -91,7 +91,7 @@ function sendError(status, code, message) {
  * `power-suite-continue`; Chat renders it as a context row and prompt history
  * ignores it. The browser hides that internal row, leaving the continuation
  * implicit while the model still receives a user-role instruction.
- * @param {object} ctx - Host context.
+ * @param {Record<string, any>} ctx - Host context.
  * @param {Request} request - authenticated request.
  * @returns {Promise<Response>} accepted acknowledgement or a typed failure.
  */
@@ -139,7 +139,7 @@ async function handleContinue(ctx, request, readEffective, inFlight) {
       summary: summary.length > 0 ? summary.slice(0, 120) : 'Continue interrupted task'
     })
   } catch (error) {
-    const code = error !== null && typeof error === 'object' ? error.code : undefined
+    const code = error !== null && typeof error === 'object' && 'code' in error ? error.code : undefined
     if (code === 'session/not-found' || code === 'SESSION_QUERY_SESSION_NOT_FOUND') {
       return sendError(404, 'session-not-found', 'Session not found')
     }
@@ -155,7 +155,7 @@ async function handleContinue(ctx, request, readEffective, inFlight) {
 
 /**
  * Register the interruption route and its live cache maintenance.
- * @param {object} ctx - Host context.
+ * @param {Record<string, any>} ctx - Host context.
  * @returns {void}
  */
 export function installInterruptedSessions(ctx) {
@@ -173,7 +173,7 @@ export function installInterruptedSessions(ctx) {
   /**
    * Store one computed base value, evicting the oldest insert when full.
    * @param {string} sessionId - Session key.
-   * @param {object} value - wire value plus internal timing.
+   * @param {Record<string, any>} value - wire value plus internal timing.
    * @returns {void}
    */
   const remember = (sessionId, value) => {
@@ -187,7 +187,7 @@ export function installInterruptedSessions(ctx) {
   /**
    * Read one Session's interruption state from its log.
    * @param {string} sessionId - Session to inspect.
-   * @returns {Promise<object>} public value plus internal timing fields.
+   * @returns {Promise<Record<string, any>>} public value plus internal timing fields.
    */
   async function readBase(sessionId) {
     const cached = cache.get(sessionId)
@@ -215,7 +215,7 @@ export function installInterruptedSessions(ctx) {
   /**
    * Load child-session lineage. `listSessions` is body-free and cheap; the
    * promise is shared so a burst of row requests reads it once.
-   * @returns {Promise<object>} the lineage state.
+   * @returns {Promise<Record<string, any>>} the lineage state.
    */
   async function loadLineage() {
     if (Date.now() - lineage.at < LINEAGE_TTL_MS) return lineage
@@ -254,7 +254,7 @@ export function installInterruptedSessions(ctx) {
    * descendants that were active after the Session's latest completed turn.
    * @param {string} sessionId - Session to inspect.
    * @param {Set<string>} seen - recursion guard.
-   * @returns {Promise<object>} public value plus internal timing fields.
+   * @returns {Promise<Record<string, any>>} public value plus internal timing fields.
    */
   async function readEffective(sessionId, seen = new Set()) {
     if (seen.has(sessionId)) return readBase(sessionId)
@@ -357,7 +357,7 @@ export function installInterruptedSessions(ctx) {
    * @returns {Response} streaming SSE response.
    */
   function openEventStream(request) {
-    /** @type {object | null} */
+    /** @type {Record<string, any> | null} */
     let client = null
     const body = new ReadableStream({
       start(controller) {
@@ -471,7 +471,7 @@ export function installInterruptedSessions(ctx) {
       try {
         value = await readEffective(sessionId)
       } catch (error) {
-        const code = error !== null && typeof error === 'object' ? error.code : undefined
+        const code = error !== null && typeof error === 'object' && 'code' in error ? error.code : undefined
         if (code === 'SESSION_QUERY_SESSION_NOT_FOUND') {
           return sendJson(404, { code: 'session-not-found', message: 'Session not found' })
         }

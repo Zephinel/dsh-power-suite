@@ -40,7 +40,7 @@ function sendJson(status, payload) {
 
 /**
  * Register the settings route inside Connection's authentication fence.
- * @param {object} ctx - Host context carrying the connection service.
+ * @param {Record<string, any>} ctx - Host context carrying the connection service.
  * @returns {void}
  */
 export function installSettings(ctx) {

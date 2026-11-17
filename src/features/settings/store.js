@@ -13,6 +13,8 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
+/** @typedef {import('../../shared/protocol.js').Settings} Settings */
+
 /** Store schema version; bump when the shape changes. */
 export const SETTINGS_VERSION = 2
 
@@ -51,7 +53,7 @@ export const DEFAULT_ACTIVE_PROJECT_DAYS = 7
 
 /**
  * Fresh default settings.
- * @returns {{ promptHistoryModifier: string, recentSessionMinutes: number, activeProjectDays: number }} defaults.
+ * @returns {Settings} defaults.
  */
 export function defaultSettings() {
   return {
@@ -64,7 +66,7 @@ export function defaultSettings() {
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {boolean} whether it is a record.
+ * @returns {value is Record<string, any>} whether it is a record.
  */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -102,7 +104,7 @@ export function isActiveProjectDays(value) {
  * Version 1 files carry only the shortcut modifier and upgrade to defaults for
  * the window fields.
  * @param {unknown} text - file contents.
- * @returns {{ promptHistoryModifier: string, recentSessionMinutes: number, activeProjectDays: number }} settings with defaults for absent fields.
+ * @returns {Settings} settings with defaults for absent fields.
  */
 export function parseSettings(text) {
   if (typeof text !== 'string' || text.length === 0) return defaultSettings()
@@ -132,7 +134,7 @@ export function parseSettings(text) {
 
 /**
  * Serialize settings as the file format.
- * @param {{ promptHistoryModifier: string, recentSessionMinutes: number, activeProjectDays: number }} settings - settings.
+ * @param {Settings} settings - settings.
  * @returns {string} file contents ending in one newline.
  */
 export function serializeSettings(settings) {
@@ -142,7 +144,7 @@ export function serializeSettings(settings) {
 /**
  * Validate one settings patch from the page.
  * @param {unknown} patch - decoded request body.
- * @returns {{ ok: true, value: object } | { ok: false, message: string }} the accepted fields or a failure.
+ * @returns {{ ok: true, value: import('../../shared/protocol.js').SettingsPatch } | { ok: false, message: string }} the accepted fields or a failure.
  */
 export function validatePatch(patch) {
   if (!isRecord(patch)) return { ok: false, message: 'patch must be one JSON object' }
@@ -191,7 +193,7 @@ export function settingsPath(dshHome) {
  * Reads are lazy; writes serialize on one chain, land atomically through a
  * temporary sibling plus rename, and publish to memory only after the rename.
  * @param {string} dshHome - harness home directory.
- * @returns {{ get(): Promise<object>, update(patch: object): Promise<object> }} the store.
+ * @returns {{ get(): Promise<Settings>, update(patch: import('../../shared/protocol.js').SettingsPatch): Promise<void> }} the store.
  */
 export function createSettingsStore(dshHome) {
   const file = settingsPath(dshHome)

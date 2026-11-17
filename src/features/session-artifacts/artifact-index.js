@@ -31,7 +31,7 @@ const MUTATING_TOOLS = new Set(['write', 'edit', 'str_replace_editor'])
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {boolean} whether it is a record.
+ * @returns {value is Record<string, any>} whether it is a record.
  */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -167,9 +167,9 @@ function isPresentedData(value) {
 /**
  * Create or update one artifact entry, keeping the strongest facts recorded
  * for its path.
- * @param {Map<string, object>} artifacts - path-keyed entries.
+ * @param {Map<string, Record<string, any>>} artifacts - path-keyed entries.
  * @param {string} artifactPath - normalized absolute path.
- * @param {object} fact - what this event proved.
+ * @param {Record<string, any>} fact - what this event proved.
  * @returns {void}
  */
 function upsertArtifact(artifacts, artifactPath, fact) {
@@ -201,8 +201,8 @@ function upsertArtifact(artifacts, artifactPath, fact) {
 
 /**
  * Sort artifact rows newest event first, with the file name as a stable tie-break.
- * @param {Array<object>} artifacts - rows carrying numeric `seq` and a `name`.
- * @returns {Array<object>} the same array, sorted in place.
+ * @param {Array<Record<string, any>>} artifacts - rows carrying numeric `seq` and a `name`.
+ * @returns {Array<Record<string, any>>} the same array, sorted in place.
  */
 export function sortArtifactsNewestFirst(artifacts) {
   return artifacts.sort((left, right) => {
@@ -245,8 +245,8 @@ function attachmentName(name, mediaType) {
  * the panel's "prompt N" label. Identical attachment ids collapse onto their
  * most recent occurrence, so re-pasting the same image moves it to the top
  * instead of listing it twice.
- * @param {readonly object[]} events - raw session events in ascending seq order.
- * @returns {Array<object>} provided rows, newest event first.
+ * @param {readonly Record<string, any>[]} events - raw session events in ascending seq order.
+ * @returns {Array<Record<string, any>>} provided rows, newest event first.
  */
 export function foldUserAttachments(events) {
   const provided = new Map()
@@ -292,9 +292,9 @@ export function foldUserAttachments(events) {
  * results by call id; a successful result publishes one produced file. Delivery
  * declarations merge into the same path-keyed entry, so a file that was both
  * written and delivered appears once, carrying its delivery description.
- * @param {readonly object[]} events - raw session events.
+ * @param {readonly Record<string, any>[]} events - raw session events.
  * @param {string | undefined} cwd - the Session's workspace root for relative paths.
- * @returns {Array<object>} artifacts, newest turn first.
+ * @returns {Array<Record<string, any>>} artifacts, newest turn first.
  */
 export function foldArtifacts(events, cwd) {
   const calls = new Map()

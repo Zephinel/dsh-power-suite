@@ -53,13 +53,13 @@ export const PIN_OP_VALUES = ['pin', 'unpin']
  * @returns {boolean} whether it is ENOENT.
  */
 function isNotFound(error) {
-  return error !== null && typeof error === 'object' && error.code === 'ENOENT'
+  return error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
 }
 
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {boolean} whether it is a record.
+ * @returns {value is Record<string, any>} whether it is a record.
  */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -203,7 +203,7 @@ export function sessionPinsPath(dshHome) {
  * Reads are lazy; writes serialize on one chain, land atomically through a
  * temporary sibling plus rename, and publish to memory only after the rename.
  * @param {string} dshHome - harness home directory.
- * @returns {{ get(): Promise<object>, apply(ops: Array<object>): Promise<object> }} the store.
+ * @returns {{ get(): Promise<{ version: number, rev: number, pinned: string[] }>, apply(ops: Array<{ op: 'pin' | 'unpin', id: string }>): Promise<void> }} the store.
  */
 export function createSessionPinStore(dshHome) {
   const file = sessionPinsPath(dshHome)
@@ -221,7 +221,7 @@ export function createSessionPinStore(dshHome) {
         if (!isNotFound(error)) {
           // Do NOT cache an empty state: a later write would overwrite the
           // unreadable on-disk document. The route turns this into a 500.
-          const readError = new Error('pinned sessions could not be read')
+          const readError = /** @type {Error & { code: string }} */ (new Error('pinned sessions could not be read'))
           readError.code = SESSION_PINS_READ_FAILED
           throw readError
         }

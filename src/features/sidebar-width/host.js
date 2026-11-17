@@ -36,7 +36,7 @@ function sendJson(status, payload) {
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {boolean} whether it is a record.
+ * @returns {value is Record<string, any>} whether it is a record.
  */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -48,7 +48,7 @@ function isRecord(value) {
  * @returns {boolean} whether it is a read failure.
  */
 function isReadFailure(error) {
-  return error !== null && typeof error === 'object' && error.code === SIDEBAR_WIDTH_READ_FAILED
+  return error !== null && typeof error === 'object' && 'code' in error && error.code === SIDEBAR_WIDTH_READ_FAILED
 }
 
 /**
@@ -77,9 +77,9 @@ function validateSidebarWidthBody(body) {
 
 /**
  * Register the sidebar-width route inside Connection's authentication fence.
- * @param {object} ctx - Host context carrying the connection service.
+ * @param {Record<string, any>} ctx - Host context carrying the connection service.
  * @param {object} [options] - injection points for tests.
- * @param {object} [options.store] - store override with `get`/`set`.
+ * @param {Record<string, any>} [options.store] - store override with `get`/`set`.
  * @returns {void}
  */
 export function installSidebarWidth(ctx, options = {}) {

@@ -163,8 +163,8 @@ export function isActivityBearingEvent(type) {
 
 /**
  * Project one committed Session event onto a ledger entry.
- * @param {object} session - committed Session subject.
- * @param {object} event - committed Session event.
+ * @param {Record<string, any>} session - committed Session subject.
+ * @param {Record<string, any>} event - committed Session event.
  * @returns {{ sessionId: string, time: number } | null} entry, or null when ignored.
  */
 export function activityFromEvent(session, event) {
@@ -211,7 +211,7 @@ export function readCachedDocumentActivity(text) {
  * never an activity value because Host maintenance may rewrite a document long
  * after real activity. Oversized documents are skipped before they are read.
  * @param {string} dshHome - harness home directory.
- * @returns {function(string): Promise<number | null>} Session id → cached activity.
+ * @returns {(id: string) => Promise<number | null>} Session id → cached activity.
  */
 export function createProjectionCacheReader(dshHome) {
   const directory = path.join(dshHome, ...PROJECTION_CACHE_PATH)
@@ -249,10 +249,10 @@ export function createProjectionCacheReader(dshHome) {
  * are merged with max semantics, so live events recorded while the baseline
  * runs are never overwritten with older history. Listing failures leave the
  * current ledger untouched.
- * @param {object} ctx - Host context; `sessionQuery` is optional.
- * @param {object} ledger - activity ledger handle.
+ * @param {Record<string, any>} ctx - Host context; `sessionQuery` is optional.
+ * @param {Record<string, any>} ledger - activity ledger handle.
  * @param {object} [options] - injection points for tests.
- * @param {function(string): Promise<number | null>} [options.readCachedDocument] - cache reader.
+ * @param {(id: string) => Promise<number | null>} [options.readCachedDocument] - cache reader.
  * @returns {Promise<Record<string, number>>} the ledger snapshot after seeding.
  */
 export async function seedActivityBaseline(ctx, ledger, options = {}) {
@@ -295,11 +295,11 @@ export async function seedActivityBaseline(ctx, ledger, options = {}) {
 
 /**
  * Register the activity ledger lifecycle and read-only route.
- * @param {object} ctx - Host context.
+ * @param {Record<string, any>} ctx - Host context.
  * @param {object} [options] - injection points for tests.
- * @param {object} [options.ledger] - ledger handle override.
- * @param {function(string): Promise<number | null>} [options.readCachedDocument] - cache reader.
- * @param {function(object, object): Promise<unknown>} [options.seedBaseline] - seeding function override.
+ * @param {Record<string, any>} [options.ledger] - ledger handle override.
+ * @param {(id: string) => Promise<number | null>} [options.readCachedDocument] - cache reader.
+ * @param {(ctx: Record<string, any>, ledger: Record<string, any>) => Promise<unknown>} [options.seedBaseline] - seeding function override.
  * @param {number} [options.seedWaitMs] - bounded cold-request seed wait.
  * @param {number} [options.seedBackoffMs] - immediate-serve window after a seed timeout/failure.
  * @returns {void}
@@ -355,7 +355,7 @@ export function installSessionActivity(ctx, options = {}) {
         settled = true
         clearTimeout(timer)
         if (timedOut) seedBackoffUntil = Date.now() + seedBackoffMs
-        resolve()
+        resolve(undefined)
       }
       const timer = setTimeout(() => finish(true), maxMs)
       void ensureSeeded().then(() => finish(false), () => finish(true))

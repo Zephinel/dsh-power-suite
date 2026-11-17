@@ -55,6 +55,7 @@
   "scripts": {
     "check": "node scripts/check.mjs && npm run pack:check",
     "test": "node --test test/*.test.js",
+    "typecheck": "tsc --noEmit",
     "pack:check": "npm pack --dry-run --json",
     "check:release": "node scripts/release-check.mjs",
     "check:release-notes": "node scripts/check-release-notes.mjs",
@@ -80,5 +81,9 @@
   "license": "MIT",
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^7.0.2"
   }
 }

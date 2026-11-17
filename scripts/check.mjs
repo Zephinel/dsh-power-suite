@@ -48,7 +48,15 @@ for (const file of sources) {
   }
 }
 
-// 2. Manifest checks.
+// 2. No-build typecheck (Phase 1 of docs/plans/typescript-migration.md).
+const tsc = resolve(root, 'node_modules/typescript/bin/tsc')
+try {
+  run([tsc, '--noEmit'])
+} catch {
+  failures.push('typecheck failed: node node_modules/typescript/bin/tsc --noEmit')
+}
+
+// 3. Manifest checks.
 const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
 for (const [name, target] of Object.entries(pkg.exports ?? {})) {
   if (typeof target !== 'string' || target.includes('*')) continue
@@ -73,7 +81,7 @@ for (const file of ['locale/en.json', 'locale/zh.json']) {
 if (!existsSync(resolve(root, 'README.md'))) failures.push('README.md is missing')
 if (!existsSync(resolve(root, 'CHANGELOG.md'))) failures.push('CHANGELOG.md is missing')
 
-// 3. Local Markdown links and images must resolve. Kept in its own script so
+// 4. Local Markdown links and images must resolve. Kept in its own script so
 // the CI docs-only fast path can run the same check without the full gate.
 try {
   run(['scripts/check-docs-links.mjs'])
@@ -81,7 +89,7 @@ try {
   failures.push('docs link check failed: scripts/check-docs-links.mjs')
 }
 
-// 4. Tests.
+// 5. Tests.
 const testDirectory = resolve(root, 'test')
 const tests = statSync(testDirectory).isDirectory()
   ? readdirSync(testDirectory).filter((name) => name.endsWith('.test.js')).map((name) => join(testDirectory, name))
@@ -89,7 +97,7 @@ const tests = statSync(testDirectory).isDirectory()
 if (tests.length === 0) failures.push('no node:test files found under test/')
 else run(['--test', ...tests])
 
-// 5. Release-notes gate: the release must commit reviewed highlights for the
+// 6. Release-notes gate: the release must commit reviewed highlights for the
 // package version, because the in-app update prompt reads them from the
 // tag-pinned raw URL (see scripts/check-release-notes.mjs).
 try {

@@ -21,8 +21,12 @@ export const STORE_DIRECTORY = 'dsh-power-suite'
 export const STORE_FILE = 'workspace-presets.json'
 
 /**
+ * @typedef {{ version: number, workspaces: Record<string, string> }} PresetState
+ */
+
+/**
  * An empty store state.
- * @returns {object} versioned empty state.
+ * @returns {PresetState} versioned empty state.
  */
 export function emptyState() {
   return { version: STORE_VERSION, workspaces: {} }
@@ -31,7 +35,7 @@ export function emptyState() {
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {boolean} whether it is a record.
+ * @returns {value is Record<string, any>} whether it is a record.
  */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -43,7 +47,7 @@ function isRecord(value) {
  * A missing, unreadable, malformed, or wrong-version file reads as empty:
  * this map is a convenience preference, never a reason to fail a Session.
  * @param {unknown} text - file contents.
- * @returns {{ version: number, workspaces: Record<string, string> }} parsed state.
+ * @returns {PresetState} parsed state.
  */
 export function parseState(text) {
   if (typeof text !== 'string' || text.length === 0) return emptyState()
@@ -67,7 +71,7 @@ export function parseState(text) {
 
 /**
  * Serialize state as the file format.
- * @param {{ workspaces: Record<string, string> }} state - store state.
+ * @param {PresetState} state - store state.
  * @returns {string} file contents ending in one newline.
  */
 export function serializeState(state) {
@@ -76,7 +80,7 @@ export function serializeState(state) {
 
 /**
  * Read one Workspace's stored preset.
- * @param {{ workspaces: Record<string, string> }} state - store state.
+ * @param {PresetState} state - store state.
  * @param {string} workspaceId - Workspace identity.
  * @returns {string | null} the stored preset id, or null for no override.
  */
@@ -88,10 +92,10 @@ export function presetOf(state, workspaceId) {
  * Produce the state after storing or clearing one Workspace's preset.
  *
  * Returns the same object when nothing changes, so callers can skip writing.
- * @param {{ workspaces: Record<string, string> }} state - current state.
+ * @param {PresetState} state - current state.
  * @param {string} workspaceId - Workspace identity.
  * @param {string | null} preset - preset id, or null to clear the override.
- * @returns {{ workspaces: Record<string, string> }} the next state.
+ * @returns {PresetState} the next state.
  */
 export function withPreset(state, workspaceId, preset) {
   if (preset === null || preset === undefined) {
@@ -141,7 +145,7 @@ export function storePath(dshHome) {
  * Reads happen lazily; writes serialize on one chain, publish to disk before
  * memory, and land atomically through a temporary sibling plus rename.
  * @param {string} dshHome - the harness home directory.
- * @returns {{ get(workspaceId: string): Promise<string | null>, set(workspaceId: string, preset: string | null): Promise<string | null> }} the store.
+ * @returns {{ get(workspaceId: string): Promise<string | null>, set(workspaceId: string, preset: string | null): Promise<void> }} the store.
  */
 export function createPresetStore(dshHome) {
   const file = storePath(dshHome)

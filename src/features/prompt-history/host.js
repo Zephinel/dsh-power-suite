@@ -20,7 +20,7 @@ function sendJson(status, payload) {
 
 /**
  * `GET /api/prompt-history.list?sessionId=<id>` — one Session's sent prompts.
- * @param {object} ctx - Host context carrying Session query.
+ * @param {Record<string, any>} ctx - Host context carrying Session query.
  * @param {Request} request - authenticated request.
  * @returns {Promise<Response>} the prompt list or a typed failure.
  */
@@ -48,7 +48,7 @@ async function handleList(ctx, request) {
 
 /**
  * Register the history route inside Connection's authentication fence.
- * @param {object} ctx - Host context.
+ * @param {Record<string, any>} ctx - Host context.
  * @returns {void}
  */
 export function installPromptHistory(ctx) {

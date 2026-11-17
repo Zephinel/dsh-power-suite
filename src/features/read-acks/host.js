@@ -43,7 +43,7 @@ function sendJson(status, payload) {
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {boolean} whether it is a record.
+ * @returns {value is Record<string, any>} whether it is a record.
  */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -68,9 +68,9 @@ export function validateReadAckBody(body) {
 
 /**
  * Register the read-acks route inside Connection's authentication fence.
- * @param {object} ctx - Host context carrying the connection service.
+ * @param {Record<string, any>} ctx - Host context carrying the connection service.
  * @param {object} [options] - injection points for tests.
- * @param {object} [options.store] - store override with `get`/`record`.
+ * @param {Record<string, any>} [options.store] - store override with `get`/`record`.
  * @returns {void}
  */
 export function installReadAcks(ctx, options = {}) {

@@ -42,13 +42,13 @@ export const READ_ACKS_READ_FAILED = 'READ_ACKS_READ_FAILED'
  * @returns {boolean} whether it is ENOENT.
  */
 function isNotFound(error) {
-  return error !== null && typeof error === 'object' && error.code === 'ENOENT'
+  return error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
 }
 
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {boolean} whether it is a record.
+ * @returns {value is Record<string, any>} whether it is a record.
  */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -170,7 +170,7 @@ export function readAcksPath(dshHome) {
  * Reads are lazy; writes serialize on one chain, land atomically through a
  * temporary sibling plus rename, and publish to memory only after the rename.
  * @param {string} dshHome - harness home directory.
- * @returns {{ get(): Promise<Record<string, number>>, record(entries: Record<string, number>): Promise<Record<string, number>> }} the store.
+ * @returns {{ get(): Promise<Record<string, number>>, record(entries: Record<string, number>): Promise<void> }} the store.
  */
 export function createReadAckStore(dshHome) {
   const file = readAcksPath(dshHome)
@@ -188,7 +188,7 @@ export function createReadAckStore(dshHome) {
         if (!isNotFound(error)) {
           // Do NOT cache an empty state: a later record would overwrite the
           // unreadable on-disk marks. The route turns this into a retryable 500.
-          const readError = new Error('read acknowledgements could not be read')
+          const readError = /** @type {Error & { code: string }} */ (new Error('read acknowledgements could not be read'))
           readError.code = READ_ACKS_READ_FAILED
           throw readError
         }

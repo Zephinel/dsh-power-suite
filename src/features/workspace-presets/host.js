@@ -53,7 +53,7 @@ function sendJson(status, payload) {
 /**
  * Read one small JSON object request body.
  * @param {Request} request - the buffered request.
- * @returns {Promise<{ ok: true, value: object } | { ok: false, status: number, code: string, message: string }>} the decoded object or a typed failure.
+ * @returns {Promise<{ ok: true, value: Record<string, any> } | { ok: false, status: number, code: string, message: string }>} the decoded object or a typed failure.
  */
 async function readJsonObject(request) {
   const mediaType = String(request.headers.get('content-type') ?? '')
@@ -81,7 +81,7 @@ async function readJsonObject(request) {
 
 /**
  * Check that a preset id names a currently usable Agent preset.
- * @param {object} ctx - Host context carrying the preset registry.
+ * @param {Record<string, any>} ctx - Host context carrying the preset registry.
  * @param {string} preset - preset identity from the request.
  * @returns {Promise<{ ok: true } | { ok: false, status: number, code: string, message: string }>} the verdict.
  */
@@ -99,8 +99,8 @@ async function validatePreset(ctx, preset) {
 
 /**
  * `GET /api/workspace-presets.get?workspaceId=<id>` — one Workspace override.
- * @param {object} ctx - Host context.
- * @param {object} store - preset store.
+ * @param {Record<string, any>} ctx - Host context.
+ * @param {Record<string, any>} store - preset store.
  * @param {Request} request - authenticated request.
  * @returns {Promise<Response>} the stored preset.
  */
@@ -119,8 +119,8 @@ async function handleGet(ctx, store, request) {
 
 /**
  * `POST /api/workspace-presets.set` — store or clear one Workspace override.
- * @param {object} ctx - Host context.
- * @param {object} store - preset store.
+ * @param {Record<string, any>} ctx - Host context.
+ * @param {Record<string, any>} store - preset store.
  * @param {Request} request - authenticated request.
  * @returns {Promise<Response>} the stored value or a typed failure.
  */
@@ -152,9 +152,9 @@ async function handleSet(ctx, store, request) {
 /**
  * Apply one Workspace's default preset to a Session the Workspace's menu would
  * call a new conversation.
- * @param {object} ctx - Host context.
- * @param {object} store - preset store.
- * @param {object} agent - the Agent just announced by `agent/created`.
+ * @param {Record<string, any>} ctx - Host context.
+ * @param {Record<string, any>} store - preset store.
+ * @param {Record<string, any>} agent - the Agent just announced by `agent/created`.
  * @returns {Promise<void>} resolves after the preset settles or the Session is left alone.
  */
 async function applyWorkspaceDefault(ctx, store, agent) {
@@ -176,7 +176,7 @@ async function applyWorkspaceDefault(ctx, store, agent) {
 
 /**
  * Register both routes and the creation-time application.
- * @param {object} ctx - Host context.
+ * @param {Record<string, any>} ctx - Host context.
  * @returns {void}
  */
 export function installWorkspacePresets(ctx) {
