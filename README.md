@@ -5,6 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/@zephinel/dsh-power-suite?label=npm)](https://www.npmjs.com/package/@zephinel/dsh-power-suite)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![DSH](https://img.shields.io/badge/DSH-0.2.2-4f46e5)](https://www.npmjs.com/package/@deepseek-ai/dsh)
+[![ci](https://github.com/Zephinel/dsh-power-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/Zephinel/dsh-power-suite/actions/workflows/ci.yml)
 
 **One plugin that makes DSH show the working session, not only the answer.** It adds a Running & recent panel and activity buckets to the sidebar, a Session artifacts browser, prompt recall, draft memory and a multi-image composer gallery, interrupted-session recovery, and point-and-click UI annotation — all as one `power-suite` plugin row, with no build step.
 
