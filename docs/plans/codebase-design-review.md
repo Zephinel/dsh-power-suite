@@ -70,6 +70,12 @@ across all six adapters, which is exactly the current duplication. Depth earned.
 Test surface: the shared module's interface plus one policy test per adapter;
 replace the duplicated atomic-write tests instead of layering new ones on top.
 
+**Landed in Phase 2b.** `src/host/document-store.js` implements the interface
+(`get`/`update`/`flush`, with decode/encode/merge/read-error/clone policy), the
+five simple stores are adapters over it, and `test/document-store.test.js` tests
+the module interface while the existing store suites keep covering adapter
+policy. The activity ledger keeps its debounced, event-merging write path.
+
 ### F3. The cross-half contract has no owning module
 
 Sixteen Host route paths are declared as exported constants on the Host side and

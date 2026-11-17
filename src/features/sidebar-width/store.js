@@ -17,8 +17,9 @@
  * the target), so a crash can never leave half a document behind.
  */
 
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+
+import { createDocumentStore } from '../../host/document-store.js'
 
 /** Store schema version; bump when the document shape changes. */
 export const SIDEBAR_WIDTH_VERSION = 1
@@ -131,79 +132,27 @@ export function sidebarWidthPath(dshHome) {
  * @returns {{ get(): Promise<{ version: number, sidebarWidth: number | null }>, set(sidebarWidth: number): Promise<{ version: number, sidebarWidth: number | null }> }} the store.
  */
 export function createSidebarWidthStore(dshHome) {
-  const file = sidebarWidthPath(dshHome)
-  let state = null
-  let chain = Promise.resolve()
-  let loadPromise = null
-  const load = () => {
-    if (state !== null) return Promise.resolve(state)
-    if (loadPromise !== null) return loadPromise
-    const attempt = (async () => {
-      let text = ''
-      try {
-        text = await readFile(file, 'utf8')
-      } catch (error) {
-        if (!isNotFound(error)) {
-          // Do NOT cache the default document: it would let a blind write
-          // replace an unreadable document. The route turns this into a 500 so
-          // the client keeps its cache and retries.
-          const readError = /** @type {Error & { code: string }} */ (new Error('sidebar width could not be read'))
-          readError.code = SIDEBAR_WIDTH_READ_FAILED
-          throw readError
-        }
-        text = ''
-      }
-      state = parseSidebarWidthDocument(text)
-      return state
-    })()
-    loadPromise = attempt.catch((error) => {
-      // Allow a later get/set to retry the persisted read.
-      loadPromise = null
-      throw error
-    })
-    return loadPromise
-  }
-  /**
-   * Serialize one write on the store chain.
-   * @template T
-   * @param {() => Promise<T>} task - write to run after the current tail.
-   * @returns {Promise<T>} the write result.
-   */
-  const enqueue = (task) => {
-    const run = chain.then(task, task)
-    chain = run.then(
-      () => undefined,
-      () => undefined
-    )
-    return run
-  }
+  const store = createDocumentStore({
+    file: sidebarWidthPath(dshHome),
+    decode: parseSidebarWidthDocument,
+    encode: serializeSidebarWidthDocument,
+    readError: { code: SIDEBAR_WIDTH_READ_FAILED, message: 'sidebar width could not be read' },
+    clone: (value) => ({ ...value })
+  })
   return {
     async get() {
-      const current = await load()
-      return { ...current }
+      return store.get()
     },
+    /**
+     * Persist one accepted width.
+     * @param {number} sidebarWidth - integer inside the accepted range.
+     * @returns {Promise<{ version: number, sidebarWidth: number | null }>} the document after the write.
+     */
     async set(sidebarWidth) {
-      return enqueue(async () => {
-        if (!isSidebarWidth(sidebarWidth)) {
-          throw new TypeError(`sidebarWidth must be an integer between ${SIDEBAR_WIDTH_MIN} and ${SIDEBAR_WIDTH_MAX}`)
-        }
-        // Read before writing so an unreadable document is never overwritten by
-        // a blind last-write-wins write; this is the route's store-read-failed.
-        await load()
-        const next = { version: SIDEBAR_WIDTH_VERSION, sidebarWidth }
-        await mkdir(path.dirname(file), { recursive: true, mode: 0o700 })
-        const temporary = `${file}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-        try {
-          await writeFile(temporary, serializeSidebarWidthDocument(next), { encoding: 'utf8', mode: 0o600 })
-          await rename(temporary, file)
-        } catch (error) {
-          // Best-effort cleanup; the rename target is untouched by a failed write.
-          await rm(temporary, { force: true }).catch(() => {})
-          throw error
-        }
-        state = next
-        return { ...next }
-      })
+      if (!isSidebarWidth(sidebarWidth)) {
+        throw new TypeError(`sidebarWidth must be an integer between ${SIDEBAR_WIDTH_MIN} and ${SIDEBAR_WIDTH_MAX}`)
+      }
+      return store.update(() => ({ next: { version: SIDEBAR_WIDTH_VERSION, sidebarWidth } }))
     }
   }
 }

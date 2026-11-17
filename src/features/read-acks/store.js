@@ -15,8 +15,9 @@
  * has been written, so a crash can never leave half a document behind.
  */
 
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+
+import { createDocumentStore } from '../../host/document-store.js'
 
 /** Store schema version; bump when the shape changes. */
 export const READ_ACKS_VERSION = 1
@@ -173,78 +174,29 @@ export function readAcksPath(dshHome) {
  * @returns {{ get(): Promise<Record<string, number>>, record(entries: Record<string, number>): Promise<Record<string, number>> }} the store.
  */
 export function createReadAckStore(dshHome) {
-  const file = readAcksPath(dshHome)
-  let state = null
-  let chain = Promise.resolve()
-  let loadPromise = null
-  const load = () => {
-    if (state !== null) return Promise.resolve(state)
-    if (loadPromise !== null) return loadPromise
-    const attempt = (async () => {
-      let text = ''
-      try {
-        text = await readFile(file, 'utf8')
-      } catch (error) {
-        if (!isNotFound(error)) {
-          // Do NOT cache an empty state: a later record would overwrite the
-          // unreadable on-disk marks. The route turns this into a retryable 500.
-          const readError = /** @type {Error & { code: string }} */ (new Error('read acknowledgements could not be read'))
-          readError.code = READ_ACKS_READ_FAILED
-          throw readError
-        }
-        text = ''
-      }
-      const parsed = parseReadAcks(text)
-      // Single-flight means at most one parse publishes; if a newer state was
-      // nevertheless published first, merge forward instead of clobbering it.
-      state = state === null ? parsed : mergeAcked(state, parsed)
-      return state
-    })()
-    loadPromise = attempt.catch((error) => {
-      // Allow a later get/record to retry the persisted read.
-      loadPromise = null
-      throw error
-    })
-    return loadPromise
-  }
-  /**
-   * Serialize one write on the store chain.
-   * @template T
-   * @param {() => Promise<T>} task - write to run after the current tail.
-   * @returns {Promise<T>} the write result.
-   */
-  const enqueue = (task) => {
-    const run = chain.then(task, task)
-    chain = run.then(
-      () => undefined,
-      () => undefined
-    )
-    return run
-  }
+  const store = createDocumentStore({
+    file: readAcksPath(dshHome),
+    decode: parseReadAcks,
+    encode: serializeReadAcks,
+    merge: mergeAcked,
+    readError: { code: READ_ACKS_READ_FAILED, message: 'read acknowledgements could not be read' },
+    clone: (value) => ({ ...value })
+  })
   return {
     async get() {
-      return { ...(await load()) }
+      return store.get()
     },
+    /**
+     * Merge one acknowledged entry set into the durable document.
+     * @param {Record<string, number>} entries - Session id → observed updatedAt.
+     * @returns {Promise<Record<string, number>>} the document after the merge.
+     */
     async record(entries) {
-      return enqueue(async () => {
-        const current = await load()
+      return store.update((current) => {
         const next = mergeAcked(current, entries)
         const changed = Object.keys(next).length !== Object.keys(current).length
           || Object.entries(next).some(([id, baseline]) => current[id] !== baseline)
-        if (changed) {
-          await mkdir(path.dirname(file), { recursive: true, mode: 0o700 })
-          const temporary = `${file}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-          try {
-            await writeFile(temporary, serializeReadAcks(next), { encoding: 'utf8', mode: 0o600 })
-            await rename(temporary, file)
-          } catch (error) {
-            // Best-effort cleanup; the rename target is untouched by a failed write.
-            await rm(temporary, { force: true }).catch(() => {})
-            throw error
-          }
-          state = next
-        }
-        return { ...next }
+        return { next, changed }
       })
     }
   }

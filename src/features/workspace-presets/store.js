@@ -8,8 +8,9 @@
  * model or the Session log.
  */
 
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+
+import { createDocumentStore } from '../../host/document-store.js'
 
 /** Store schema version; bump when the shape changes. */
 export const STORE_VERSION = 1
@@ -148,51 +149,21 @@ export function storePath(dshHome) {
  * @returns {{ get(workspaceId: string): Promise<string | null>, set(workspaceId: string, preset: string | null): Promise<string | null> }} the store.
  */
 export function createPresetStore(dshHome) {
-  const file = storePath(dshHome)
-  let state = null
-  let chain = Promise.resolve()
-  const load = async () => {
-    if (state !== null) return state
-    let text
-    try {
-      text = await readFile(file, 'utf8')
-    } catch {
-      text = ''
-    }
-    state = parseState(text)
-    return state
-  }
-  /**
-   * Serialize one write on the store chain.
-   * @template T
-   * @param {() => Promise<T>} task - write to run after the current tail.
-   * @returns {Promise<T>} the write result.
-   */
-  const enqueue = (task) => {
-    const run = chain.then(task, task)
-    chain = run.then(
-      () => undefined,
-      () => undefined
-    )
-    return run
-  }
+  const store = createDocumentStore({
+    file: storePath(dshHome),
+    decode: parseState,
+    encode: serializeState
+  })
   return {
     async get(workspaceId) {
-      return presetOf(await load(), workspaceId)
+      return presetOf(await store.get(), workspaceId)
     },
     async set(workspaceId, preset) {
-      return enqueue(async () => {
-        const current = await load()
-        const next = withPreset(current, workspaceId, preset)
-        if (next !== current) {
-          await mkdir(path.dirname(file), { recursive: true, mode: 0o700 })
-          const temporary = `${file}.${process.pid}.${Date.now()}.tmp`
-          await writeFile(temporary, serializeState(next), { encoding: 'utf8', mode: 0o600 })
-          await rename(temporary, file)
-          state = next
-        }
-        return presetOf(next, workspaceId)
+      const next = await store.update((current) => {
+        const updated = withPreset(current, workspaceId, preset)
+        return { next: updated, changed: updated !== current }
       })
+      return presetOf(next, workspaceId)
     }
   }
 }

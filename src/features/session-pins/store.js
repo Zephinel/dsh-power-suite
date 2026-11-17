@@ -20,8 +20,9 @@
  * can never leave half a document behind.
  */
 
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+
+import { createDocumentStore } from '../../host/document-store.js'
 
 /** Store schema version; bump when the document shape changes. */
 export const SESSION_PINS_VERSION = 1
@@ -206,75 +207,27 @@ export function sessionPinsPath(dshHome) {
  * @returns {{ get(): Promise<{ version: number, rev: number, pinned: string[] }>, apply(ops: Array<{ op: 'pin' | 'unpin', id: string }>): Promise<{ version: number, rev: number, pinned: string[] }> }} the store.
  */
 export function createSessionPinStore(dshHome) {
-  const file = sessionPinsPath(dshHome)
-  let state = null
-  let chain = Promise.resolve()
-  let loadPromise = null
-  const load = () => {
-    if (state !== null) return Promise.resolve(state)
-    if (loadPromise !== null) return loadPromise
-    const attempt = (async () => {
-      let text = ''
-      try {
-        text = await readFile(file, 'utf8')
-      } catch (error) {
-        if (!isNotFound(error)) {
-          // Do NOT cache an empty state: a later write would overwrite the
-          // unreadable on-disk document. The route turns this into a 500.
-          const readError = /** @type {Error & { code: string }} */ (new Error('pinned sessions could not be read'))
-          readError.code = SESSION_PINS_READ_FAILED
-          throw readError
-        }
-        text = ''
-      }
-      const parsed = parseSessionPins(text)
-      state = state === null ? parsed : normalizeSessionPins(state)
-      return state
-    })()
-    loadPromise = attempt.catch((error) => {
-      // Allow a later get/apply to retry the persisted read.
-      loadPromise = null
-      throw error
-    })
-    return loadPromise
-  }
-  /**
-   * Serialize one write on the store chain.
-   * @template T
-   * @param {() => Promise<T>} task - write to run after the current tail.
-   * @returns {Promise<T>} the write result.
-   */
-  const enqueue = (task) => {
-    const run = chain.then(task, task)
-    chain = run.then(
-      () => undefined,
-      () => undefined
-    )
-    return run
-  }
+  const store = createDocumentStore({
+    file: sessionPinsPath(dshHome),
+    decode: parseSessionPins,
+    encode: serializeSessionPins,
+    merge: (current) => normalizeSessionPins(current),
+    readError: { code: SESSION_PINS_READ_FAILED, message: 'pinned sessions could not be read' },
+    clone: (value) => ({ ...value, pinned: value.pinned.slice() })
+  })
   return {
     async get() {
-      const current = await load()
-      return { ...current, pinned: current.pinned.slice() }
+      return store.get()
     },
+    /**
+     * Apply one validated operation batch.
+     * @param {Array<{ op: 'pin' | 'unpin', id: string }>} ops - validated operations.
+     * @returns {Promise<{ version: number, rev: number, pinned: string[] }>} the document after the batch.
+     */
     async apply(ops) {
-      return enqueue(async () => {
-        const current = await load()
+      return store.update((current) => {
         const next = applyPinOps(current, ops)
-        if (next.rev !== current.rev) {
-          await mkdir(path.dirname(file), { recursive: true, mode: 0o700 })
-          const temporary = `${file}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-          try {
-            await writeFile(temporary, serializeSessionPins(next), { encoding: 'utf8', mode: 0o600 })
-            await rename(temporary, file)
-          } catch (error) {
-            // Best-effort cleanup; the rename target is untouched by a failed write.
-            await rm(temporary, { force: true }).catch(() => {})
-            throw error
-          }
-          state = next
-        }
-        return { ...next, pinned: next.pinned.slice() }
+        return { next, changed: next.rev !== current.rev }
       })
     }
   }

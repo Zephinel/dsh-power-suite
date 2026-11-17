@@ -215,7 +215,9 @@ releases are stable semver with an annotated `v<version>` tag.
    `install<Name>(ctx)` function; create pure derivation helpers in sibling
    modules. Register routes, services, and events inside `ctx.effect`. Call the
    installer from `src/index.js` and add any new service name to its `inject`
-   union.
+   union. Durable JSON documents go through `src/host/document-store.js`; pass the
+   document policy (decode/encode/clone/change rule) instead of writing files
+   directly.
 2. **Browser side** — add a `//#region feature: <name>` section to
    `src/client.js` with its slot components, guide card, and copy; register it
    from `apply`.

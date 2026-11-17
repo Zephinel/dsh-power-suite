@@ -8,6 +8,8 @@ All notable changes to this repository are documented here. The format follows
 
 ### Changed
 
+- **Shared durable-document store.** `src/host/document-store.js` now owns the Host persistence mechanism: lazy single-flight read, coded read-error policy, serialized read-modify-write, an atomic 0600 temporary-sibling rename, and in-memory publication only after the rename. The settings, read-acks, session-pins, sidebar-width and workspace-presets stores became adapters that supply only their document policy, removing the duplicated write machinery; `test/document-store.test.js` covers the module interface. The activity ledger keeps its debounced write path for now. File formats and runtime behavior are unchanged.
+
 - **Build step (Phase 2 of the TypeScript migration).** `npm run build` (`scripts/build.mjs`, esbuild dev dependency) bundles `src/index.js` into the ESM Host entry and `src/client.js` into the classic browser entry under the gitignored `lib/`; the npm package now ships `lib/` instead of `src/`, `prepare` builds before `npm pack`/`npm publish`, `npm run check` builds first, and `npm run check:release` compares the packed `lib/` against a fresh build before installing/booting/uninstalling. Runtime behavior and UI are unchanged; esbuild is a dev dependency only.
 
 - **No-build TypeScript gate (Phase 1).** `tsconfig.json` plus `npm run typecheck`

@@ -164,15 +164,26 @@ Acceptance:
 
 ### Phase 2 — build plus Host TypeScript
 
-**Status: Phase 2a (build plumbing) implemented on `feat/typescript-phase2`
-(2026-11-18).** `npm run build` (esbuild) writes the gitignored `lib/index.js`
-and `lib/client.js`; `package.json` `main`/`exports`/`files` point at `lib/`;
-`prepare` builds before pack/publish; `npm run check` builds first; and
-`scripts/release-check.mjs` compares the packed `lib/` with a fresh build before
-install/boot/uninstall. Decisions taken: esbuild + `tsc --noEmit`, `lib/` as the
-published output, Host sources still JavaScript until Phase 2b, and packed files
-now exclude `src/` (98→75). Still pending: the shared document-store extraction
-and the 22 Host modules converted to `.ts`.
+**Status on `feat/typescript-phase2` (2026-11-18).**
+
+- **2a (build plumbing) done.** `npm run build` (esbuild) writes the gitignored
+  `lib/index.js` and `lib/client.js`; `package.json`
+  `main`/`exports`/`files` point at `lib/`; `prepare` builds before
+  pack/publish; `npm run check` builds first; `scripts/release-check.mjs`
+  compares the packed `lib/` with a fresh build before install/boot/uninstall.
+  Decisions taken: esbuild + `tsc --noEmit`, `lib/` as the published output, and
+  packed files now exclude `src/` (98→75).
+- **2b (document-store extraction) done.** `src/host/document-store.js` owns the
+  shared durable-document mechanism (lazy single-flight read, coded read-error
+  policy, serialized read-modify-write, atomic 0600 rename, publish-after-rename)
+  with `get`/`update`/`flush`; the settings, read-acks, session-pins,
+  sidebar-width and workspace-presets stores are now adapters that supply only
+  their document policy. `test/document-store.test.js` covers the module
+  interface; the existing store suites still pass unchanged (374/374 tests).
+  The activity ledger keeps its debounced write path for now.
+- **2c (Host TypeScript conversion) pending:** convert the 22 Host modules and
+  the shared protocol typedefs to `.ts`, decide how the Node tests consume the
+  built/typed modules, and close strictness/any-budget items.
 
 Introduce the build (recommended: esbuild for the browser classic script and
 `tsc --noEmit` for types; alternative: `tsc` emit for both), switch `exports` and

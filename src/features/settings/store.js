@@ -10,8 +10,9 @@
  * can never disable a feature silently at load time.
  */
 
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+
+import { createDocumentStore } from '../../host/document-store.js'
 
 /** @typedef {import('../../shared/protocol.js').Settings} Settings */
 
@@ -196,51 +197,26 @@ export function settingsPath(dshHome) {
  * @returns {{ get(): Promise<Settings>, update(patch: import('../../shared/protocol.js').SettingsPatch): Promise<Settings> }} the store.
  */
 export function createSettingsStore(dshHome) {
-  const file = settingsPath(dshHome)
-  let state = null
-  let chain = Promise.resolve()
-  const load = async () => {
-    if (state !== null) return state
-    let text
-    try {
-      text = await readFile(file, 'utf8')
-    } catch {
-      text = ''
-    }
-    state = parseSettings(text)
-    return state
-  }
-  /**
-   * Serialize one write on the store chain.
-   * @template T
-   * @param {() => Promise<T>} task - write to run after the current tail.
-   * @returns {Promise<T>} the write result.
-   */
-  const enqueue = (task) => {
-    const run = chain.then(task, task)
-    chain = run.then(
-      () => undefined,
-      () => undefined
-    )
-    return run
-  }
+  const store = createDocumentStore({
+    file: settingsPath(dshHome),
+    decode: parseSettings,
+    encode: serializeSettings,
+    clone: (value) => ({ ...value })
+  })
   return {
     async get() {
-      return { ...(await load()) }
+      return store.get()
     },
+    /**
+     * Apply one accepted patch to the settings document.
+     * @param {import('../../shared/protocol.js').SettingsPatch} patch - accepted fields.
+     * @returns {Promise<Settings>} the document after the patch.
+     */
     async update(patch) {
-      return enqueue(async () => {
-        const current = await load()
+      return store.update((current) => {
         const next = { ...current, ...patch }
         const changed = Object.keys(patch).some((field) => current[field] !== next[field])
-        if (changed) {
-          await mkdir(path.dirname(file), { recursive: true, mode: 0o700 })
-          const temporary = `${file}.${process.pid}.${Date.now()}.tmp`
-          await writeFile(temporary, serializeSettings(next), { encoding: 'utf8', mode: 0o600 })
-          await rename(temporary, file)
-          state = next
-        }
-        return { ...next }
+        return { next, changed }
       })
     }
   }

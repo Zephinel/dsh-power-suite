@@ -7,6 +7,7 @@ script), which are the entries the published package exports:
 
 ```
 src/index.js            Host entry (Node)
+├─ host/document-store.js                shared durable-document module
 ├─ features/session-artifacts/host.js    GET  /api/session-artifacts.list
 │                                        GET|HEAD /api/session-artifacts.raw
 │                                        GET|HEAD /api/session-artifacts.attachment
@@ -49,6 +50,14 @@ are registered through `ctx.effect`, so unloading the plugin removes them.
 Routes are registered with `ctx.connection.fetch.register`, which puts them
 behind the same browser authentication and Host/Origin fence as the rest of the
 GUI. JSON responses are `no-store`.
+
+The five simple durable stores (settings, read acknowledgements, session pins,
+sidebar width, workspace presets) share `src/host/document-store.js`. That module
+owns the mechanism — lazy single-flight read, coded read-error policy, serialized
+read-modify-write, an atomic 0600 temporary-sibling rename, and in-memory
+publication only after the rename — while each store supplies only its document
+policy (decode/encode/clone/change rule). The session-activity ledger keeps its
+own debounced, event-merging write path.
 
 ### Session artifacts
 

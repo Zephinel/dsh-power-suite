@@ -29,15 +29,16 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 
 ### Current gates (2026-11-18, Node 24.22.3)
 
-- `npm run build`: **`lib/index.js` 107.7 kB** (Host ESM bundle) and
+- `npm run build`: **`lib/index.js` 104.6 kB** (Host ESM bundle) and
   **`lib/client.js` 957.6 kB** (classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **367 tests, 367 passed, 0 failed**, 23 test files — Host stores/routes
-  plus the browser-side derivations, the release-notes approval round-trip and the
-  protocol contract guard for duplicated route/enum literals.
+- `npm test`: **374 tests, 374 passed, 0 failed**, 24 test files — Host stores/routes
+  plus the browser-side derivations, the release-notes approval round-trip, the
+  protocol contract guard for duplicated route/enum literals and the durable
+  document-store interface.
 - `npm run typecheck`: `tsc --noEmit` clean — Phase 1 JSDoc/`checkJs` gate over the
   Host half; `src/client.js` carries `// @ts-nocheck` until Phase 3.
-- `npm run check`: passed (`24 modules, 23 test files`); it builds `lib/` first,
+- `npm run check`: passed (`24 modules, 24 test files`); it builds `lib/` first,
   then runs the syntax checks, the typecheck, package-manifest validation, local
   docs links, the Node suite and the release-notes gate, then `pack:check`.
 - `npm run pack:check`: **75 files**; inspect the file list rather than the byte totals

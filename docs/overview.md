@@ -38,6 +38,7 @@ the code the Host runs after a restart. Removing the bundle removes the plugin.
   src/index.js              # Host entry: calls each feature's installer
   src/features/<name>/      # Host-side feature modules
   src/client.js             # browser entry: one `#region feature: <name>` per feature
+  src/host/document-store.js # shared durable-document module for the JSON stores
   lib/                      # gitignored build output (lib/index.js + lib/client.js)
   locale/                   # plugin display metadata (en, zh)
   docs/                     # architecture, guides, per-feature reference
@@ -49,7 +50,10 @@ the code the Host runs after a restart. Removing the bundle removes the plugin.
 1. Host side: create `src/features/<name>/host.js` exporting
    `install<Name>(ctx)`; register routes, services, and events inside
    `ctx.effect`. Call the installer from [`src/index.js`](../src/index.js) and add any new
-   service names to its `inject` union.
+   service names to its `inject` union. A durable Host document goes through
+   [`src/host/document-store.js`](../src/host/document-store.js) (atomic queued
+   writes, coded read errors) — supply decode/encode/clone/change policy instead
+   of hand-rolling filesystem code.
 2. Browser side: add a `//#region feature: <name>` section to [`src/client.js`](../src/client.js)
    with its tab type, guide card, slot component, and copy. The entry's `apply`
    registers each feature's contributions.
