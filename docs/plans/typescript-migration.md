@@ -261,6 +261,17 @@ now asserts that the Host set equals the shared contract and that the browser
 half contains no route literals. The settings enums/defaults and the record
 shapes remain the next contract-ownership step.
 
+**3e progress (2026-11-18).** The settings enums/defaults moved into
+`src/shared/protocol.ts` (Host store and browser entry both import them), and
+three more browser models were extracted: `src/browser/artifacts/model.ts`
+(Files ↔ Artifacts phase reducer/timings), `src/browser/interrupted-sessions/
+model.ts` (the record-only interrupted decision) and `src/browser/settings/
+model.ts` (payload filter/merge). Their tests now import the models directly and
+the `filesArtifacts` and `interruptedState` vm hooks were deleted; the settings
+and artifacts tests moved off `loadClientModule` entirely. Record shapes and the
+remaining vm hooks (`uiAnnotation`, gallery, dynamic-Workspaces, updateCheck,
+sidebarWidth probe) are the remaining Phase 3 cleanup.
+
 Decide between (a) splitting `src/client.js` by `//#region feature:` into modules
 and bundling one classic script, or (b) keeping one file and annotating it. Under
 (a), give each feature an `install(ctx, deps)` plus pure model functions, import

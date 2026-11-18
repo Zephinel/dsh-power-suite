@@ -13,7 +13,28 @@
 import path from 'node:path'
 
 import { createDocumentStore } from '../../host/document-store.ts'
-import type { PromptHistoryModifier, Settings, SettingsPatch } from '../../shared/protocol.ts'
+import {
+  ACTIVE_PROJECT_DAYS,
+  ACTIVE_PROJECT_FIELD,
+  DEFAULT_SETTINGS,
+  PROMPT_HISTORY_MODIFIERS,
+  PROMPT_HISTORY_MODIFIER_FIELD,
+  RECENT_SESSION_FIELD,
+  RECENT_SESSION_MINUTES,
+  type PromptHistoryModifier,
+  type Settings,
+  type SettingsPatch
+} from '../../shared/protocol.ts'
+
+export {
+  ACTIVE_PROJECT_DAYS,
+  ACTIVE_PROJECT_FIELD,
+  DEFAULT_SETTINGS,
+  PROMPT_HISTORY_MODIFIERS,
+  PROMPT_HISTORY_MODIFIER_FIELD,
+  RECENT_SESSION_FIELD,
+  RECENT_SESSION_MINUTES
+} from '../../shared/protocol.ts'
 
 /** Store schema version; bump when the shape changes. */
 export const SETTINGS_VERSION = 2
@@ -27,40 +48,18 @@ export const SETTINGS_DIRECTORY = 'dsh-power-suite'
 /** File name inside {@link SETTINGS_DIRECTORY}. */
 export const SETTINGS_FILE = 'settings.json'
 
-/** Modifier choices for the prompt-history shortcut. */
-export const PROMPT_HISTORY_MODIFIERS = ['primary', 'alt', 'ctrl', 'shift', 'off']
-
-/** Field carrying the prompt-history shortcut modifier. */
-export const PROMPT_HISTORY_MODIFIER_FIELD = 'promptHistoryModifier'
-
-/** Field carrying the finished-Session retention window, in minutes. */
-export const RECENT_SESSION_FIELD = 'recentSessionMinutes'
-
-/** Field carrying the Active Projects retention window, in days. */
-export const ACTIVE_PROJECT_FIELD = 'activeProjectDays'
-
-/** Accepted finished-Session retention windows, in minutes. */
-export const RECENT_SESSION_MINUTES = [60, 120, 360, 720, 1440]
-
-/** Accepted Active Projects retention windows, in days. */
-export const ACTIVE_PROJECT_DAYS = [1, 3, 7, 14, 30]
-
 /** Default finished-Session retention window in minutes. */
-export const DEFAULT_RECENT_SESSION_MINUTES = 120
+export const DEFAULT_RECENT_SESSION_MINUTES = DEFAULT_SETTINGS.recentSessionMinutes
 
 /** Default Active Projects retention window in days. */
-export const DEFAULT_ACTIVE_PROJECT_DAYS = 7
+export const DEFAULT_ACTIVE_PROJECT_DAYS = DEFAULT_SETTINGS.activeProjectDays
 
 /**
  * Fresh default settings.
  * @returns {Settings} defaults.
  */
 export function defaultSettings(): Settings {
-  return {
-    promptHistoryModifier: 'primary',
-    recentSessionMinutes: DEFAULT_RECENT_SESSION_MINUTES,
-    activeProjectDays: DEFAULT_ACTIVE_PROJECT_DAYS
-  }
+  return { ...DEFAULT_SETTINGS }
 }
 
 /**
@@ -78,7 +77,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * @returns {boolean} whether it is accepted.
  */
 export function isPromptHistoryModifier(value: unknown): value is PromptHistoryModifier {
-  return typeof value === 'string' && PROMPT_HISTORY_MODIFIERS.includes(value)
+  return typeof value === 'string' && (PROMPT_HISTORY_MODIFIERS as readonly unknown[]).includes(value)
 }
 
 /**
@@ -87,7 +86,7 @@ export function isPromptHistoryModifier(value: unknown): value is PromptHistoryM
  * @returns {boolean} whether it is accepted.
  */
 export function isRecentSessionMinutes(value: unknown): value is number {
-  return typeof value === 'number' && RECENT_SESSION_MINUTES.includes(value)
+  return typeof value === 'number' && (RECENT_SESSION_MINUTES as readonly number[]).includes(value)
 }
 
 /**
@@ -96,7 +95,7 @@ export function isRecentSessionMinutes(value: unknown): value is number {
  * @returns {boolean} whether it is accepted.
  */
 export function isActiveProjectDays(value: unknown): value is number {
-  return typeof value === 'number' && ACTIVE_PROJECT_DAYS.includes(value)
+  return typeof value === 'number' && (ACTIVE_PROJECT_DAYS as readonly number[]).includes(value)
 }
 
 /**

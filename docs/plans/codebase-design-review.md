@@ -101,8 +101,9 @@ seam to deepen later.
 
 **Phase 3d status.** The route half of this target landed: `src/shared/routes.ts`
 owns all 16 paths, both halves import it, and the contract test rejects route
-literals on either side. The settings enums/defaults and the record shapes are
-still duplicated and remain the next deepening step.
+literals on either side. The settings enums/defaults also moved into `src/shared/protocol.ts` (Phase 3e),
+so both halves now read one table. The record shapes remain the next deepening
+step.
 
 ### F4. The browser half exposes a test seam instead of an interface
 

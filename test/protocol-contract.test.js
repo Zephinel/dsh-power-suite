@@ -14,12 +14,21 @@ import { SIDEBAR_WIDTH_ROUTE } from '../src/features/sidebar-width/host.ts'
 import { SESSION_ACTIVITY_ROUTE } from '../src/features/session-activity/host.ts'
 import { UPDATE_ROUTE } from '../src/features/update-check/host.ts'
 import { ROUTES, browserRoute } from '../src/shared/routes.ts'
-import { SIDEBAR_WIDTH_ROUTE as CLIENT_SIDEBAR_WIDTH_ROUTE } from '../src/browser/sidebar-width/model.ts'
 import {
   ACTIVE_PROJECT_DAYS,
-  defaultSettings,
+  ACTIVE_PROJECT_FIELD,
+  DEFAULT_SETTINGS,
   PROMPT_HISTORY_MODIFIERS,
+  PROMPT_HISTORY_MODIFIER_FIELD,
+  RECENT_SESSION_FIELD,
   RECENT_SESSION_MINUTES
+} from '../src/shared/protocol.ts'
+import { SIDEBAR_WIDTH_ROUTE as CLIENT_SIDEBAR_WIDTH_ROUTE } from '../src/browser/sidebar-width/model.ts'
+import {
+  ACTIVE_PROJECT_DAYS as HOST_ACTIVE_PROJECT_DAYS,
+  DEFAULT_SETTINGS as HOST_DEFAULT_SETTINGS,
+  PROMPT_HISTORY_MODIFIERS as HOST_PROMPT_HISTORY_MODIFIERS,
+  RECENT_SESSION_MINUTES as HOST_RECENT_SESSION_MINUTES
 } from '../src/features/settings/store.ts'
 
 // The cross-half route vocabulary now has one owner: src/shared/routes.ts.
@@ -63,20 +72,21 @@ test('the browser half uses the shared contract and no route literals', () => {
   }
 })
 
-test('the client settings enums match the Host settings store', () => {
-  const arrayOf = (name) => {
-    const match = new RegExp(`const ${name} = \\[([^\\]]+)\\]`, 'u').exec(clientSource)
-    assert.ok(match, `${name} is missing from src/client.js`)
-    return JSON.parse(`[${match[1].replaceAll("'", '"')}]`)
+test('the settings enums/defaults have one shared owner used by both halves', () => {
+  assert.deepEqual([...PROMPT_HISTORY_MODIFIERS], ['primary', 'alt', 'ctrl', 'shift', 'off'])
+  assert.deepEqual([...RECENT_SESSION_MINUTES], [60, 120, 360, 720, 1440])
+  assert.deepEqual([...ACTIVE_PROJECT_DAYS], [1, 3, 7, 14, 30])
+  assert.deepEqual(DEFAULT_SETTINGS, { promptHistoryModifier: 'primary', recentSessionMinutes: 120, activeProjectDays: 7 })
+  assert.equal(PROMPT_HISTORY_MODIFIER_FIELD, 'promptHistoryModifier')
+  assert.equal(RECENT_SESSION_FIELD, 'recentSessionMinutes')
+  assert.equal(ACTIVE_PROJECT_FIELD, 'activeProjectDays')
+  // The Host store re-exports the very same objects; the browser imports them.
+  assert.equal(HOST_PROMPT_HISTORY_MODIFIERS, PROMPT_HISTORY_MODIFIERS)
+  assert.equal(HOST_RECENT_SESSION_MINUTES, RECENT_SESSION_MINUTES)
+  assert.equal(HOST_ACTIVE_PROJECT_DAYS, ACTIVE_PROJECT_DAYS)
+  assert.equal(HOST_DEFAULT_SETTINGS, DEFAULT_SETTINGS)
+  assert.match(clientSource, /from '\.\/shared\/protocol\.ts'/u)
+  for (const name of ['PROMPT_HISTORY_MODIFIERS', 'RECENT_SESSION_MINUTES', 'ACTIVE_PROJECT_DAYS', 'DEFAULT_SETTINGS']) {
+    assert.doesNotMatch(clientSource, new RegExp(`const ${name} = `, 'u'), `${name} must come from the shared contract`)
   }
-  assert.deepEqual(arrayOf('PROMPT_HISTORY_MODIFIERS'), PROMPT_HISTORY_MODIFIERS)
-  assert.deepEqual(arrayOf('RECENT_SESSION_MINUTES'), RECENT_SESSION_MINUTES)
-  assert.deepEqual(arrayOf('ACTIVE_PROJECT_DAYS'), ACTIVE_PROJECT_DAYS)
-})
-
-test('the client default settings match the Host defaults', () => {
-  const match = /const DEFAULT_SETTINGS = (\{[^}]*\})/u.exec(clientSource)
-  assert.ok(match, 'DEFAULT_SETTINGS is missing from src/client.js')
-  const clientDefaults = JSON.parse(match[1].replace(/([A-Za-z0-9_]+):/gu, '"$1":').replaceAll("'", '"'))
-  assert.deepEqual(clientDefaults, defaultSettings())
 })

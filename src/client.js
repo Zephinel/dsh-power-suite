@@ -28,6 +28,22 @@ import {
   serializeSidebarWidthCache,
   shouldAdoptSidebarWidth
 } from './browser/sidebar-width/model.ts'
+import {
+  ACTIVE_PROJECT_DAYS,
+  DEFAULT_SETTINGS,
+  PROMPT_HISTORY_MODIFIERS,
+  RECENT_SESSION_MINUTES
+} from './shared/protocol.ts'
+import {
+  FILES_ARTIFACTS_ENTER_MS,
+  FILES_ARTIFACTS_EXIT_MS,
+  FILES_ARTIFACTS_PHASES,
+  filesArtifactsInitialState,
+  filesArtifactsPhaseMs,
+  filesArtifactsReduce
+} from './browser/artifacts/model.ts'
+import { interruptedCardMark, interruptedIndicatorActive } from './browser/interrupted-sessions/model.ts'
+import { knownSettings, mergeSettingsPayload } from './browser/settings/model.ts'
 import { ROUTES, browserRoute } from './shared/routes.ts'
 /**
  * Browser half of DSH Power Suite.
@@ -88,15 +104,6 @@ window.__ModuleLoader__.load({
 
     /** Slot cell identity of the Files-header Artifacts action. */
     const FILES_ACTION_ID = 'power-suite.files-artifacts'
-
-    /** Files ↔ Artifacts view phases owned by the Files-header action. */
-    const FILES_ARTIFACTS_PHASES = ['files', 'opening', 'open', 'closing']
-
-    /** Enter transition length in ms (overlay fade + 14 px slide). */
-    const FILES_ARTIFACTS_ENTER_MS = 180
-
-    /** Exit transition length in ms (reverse of the enter transition). */
-    const FILES_ARTIFACTS_EXIT_MS = 160
 
     /** Authenticated exact routes registered by the Host half. */
     const LIST_ROUTE = browserRoute(ROUTES.sessionArtifactsList)
@@ -2656,54 +2663,6 @@ window.__ModuleLoader__.load({
 
     //#region feature: session artifacts — Files-header action
     /**
-     * Initial Files ↔ Artifacts view state.
-     * @returns {{ phase: string }} the initial state.
-     */
-    function filesArtifactsInitialState() {
-      return { phase: 'files' }
-    }
-
-    /**
-     * Pure phase transition for the Files-header Artifacts toggle.
-     *
-     * Phases: files → opening → open → closing → files. `toggle` flips the
-     * direction (also mid-transition), `opened`/`closed` come from the animation
-     * timer, and any Session change resets to Files.
-     * @param {{ phase: string }} state - current state.
-     * @param {{ type: string }} action - transition.
-     * @returns {{ phase: string }} next state; the same object when unchanged.
-     */
-    function filesArtifactsReduce(state, action) {
-      const phase = state !== null && typeof state === 'object' && FILES_ARTIFACTS_PHASES.includes(state.phase)
-        ? state.phase
-        : 'files'
-      const type = action !== null && typeof action === 'object' ? action.type : ''
-      if (type === 'session') return phase === 'files' ? state : { phase: 'files' }
-      if (type === 'toggle') {
-        if (phase === 'files') return { phase: 'opening' }
-        if (phase === 'opening') return { phase: 'closing' }
-        if (phase === 'closing') return { phase: 'opening' }
-        return { phase: 'closing' }
-      }
-      if (type === 'opened') return phase === 'opening' ? { phase: 'open' } : state
-      if (type === 'closed') return phase === 'closing' ? { phase: 'files' } : state
-      return state
-    }
-
-    /**
-     * Timer length of one transition phase.
-     * @param {string} phase - phase name.
-     * @param {boolean} reducedMotion - whether reduced motion is requested.
-     * @returns {number} milliseconds; 0 swaps instantly.
-     */
-    function filesArtifactsPhaseMs(phase, reducedMotion) {
-      if (reducedMotion === true) return 0
-      if (phase === 'opening') return FILES_ARTIFACTS_ENTER_MS
-      if (phase === 'closing') return FILES_ARTIFACTS_EXIT_MS
-      return 0
-    }
-
-    /**
      * The Files-header action: a native-style tool button that swaps the Files
      * pane content for the current Session's artifacts list.
      *
@@ -3406,18 +3365,6 @@ window.__ModuleLoader__.load({
     /** Host route serving and storing the suite's preference document. */
     const SETTINGS_ROUTE = browserRoute(ROUTES.settings)
 
-    /** Modifier choices accepted by the Host and shown on the page. */
-    const PROMPT_HISTORY_MODIFIERS = ['primary', 'alt', 'ctrl', 'shift', 'off']
-
-    /** Finished-Session retention windows accepted by the Host, in minutes. */
-    const RECENT_SESSION_MINUTES = [60, 120, 360, 720, 1440]
-
-    /** Active Projects retention windows accepted by the Host, in days. */
-    const ACTIVE_PROJECT_DAYS = [1, 3, 7, 14, 30]
-
-    /** Defaults used before the Host answers and by a deployment without the route. */
-    const DEFAULT_SETTINGS = { promptHistoryModifier: 'primary', recentSessionMinutes: 120, activeProjectDays: 7 }
-
     const SETTINGS_EN = {
       'history.group': 'Prompt history',
       'history.groupHint': 'Hold the chosen modifier and press ↑ or ↓ in the composer to switch between prompts already sent in this session. Plain arrows keep their normal editing behavior, including inside a recalled multi-line prompt. Primary is ⌘ on macOS and Ctrl on Windows and Linux; Alt is ⌥ on macOS and Alt on Windows and Linux.',
@@ -3536,36 +3483,6 @@ window.__ModuleLoader__.load({
           // A failing listener must not block the others.
         }
       }
-    }
-
-    /**
-     * Keep only settings fields this build understands.
-     * @param {unknown} raw - decoded settings object.
-     * @returns {object} recognized fields.
-     */
-    function knownSettings(raw) {
-      const settings = {}
-      if (raw === null || typeof raw !== 'object') return settings
-      if (PROMPT_HISTORY_MODIFIERS.includes(raw.promptHistoryModifier)) {
-        settings.promptHistoryModifier = raw.promptHistoryModifier
-      }
-      if (RECENT_SESSION_MINUTES.includes(raw.recentSessionMinutes)) {
-        settings.recentSessionMinutes = raw.recentSessionMinutes
-      }
-      if (ACTIVE_PROJECT_DAYS.includes(raw.activeProjectDays)) {
-        settings.activeProjectDays = raw.activeProjectDays
-      }
-      return settings
-    }
-
-    /**
-     * Merge one Host settings payload over the defaults.
-     * @param {unknown} payload - decoded response body.
-     * @returns {{ promptHistoryModifier: string }} the merged settings.
-     */
-    function mergeSettingsPayload(payload) {
-      const raw = payload !== null && typeof payload === 'object' ? payload.settings : undefined
-      return { ...DEFAULT_SETTINGS, ...knownSettings(raw) }
     }
 
     /**
@@ -4083,35 +4000,6 @@ window.__ModuleLoader__.load({
           setInterruptedRecord(sessionId, { status: 'error', interrupted: false })
         }
       }
-    }
-
-    /**
-     * Whether a record should render the interrupted indicator.
-     *
-     * Interrupted and running/loading are mutually exclusive in the same leading
-     * seat: after Continue the Host can still report the previous turn as
-     * interrupted while the continuation turn is running, which used to show the
-     * warning badge next to the loading spinner. The badge is therefore only
-     * valid for an idle interrupted Session (running !== true).
-     * @param {object | null} record - one interrupted record.
-     * @returns {boolean} true when the warning badge/CTA should be visible.
-     */
-    function interruptedIndicatorActive(record) {
-      return record !== null && record !== undefined && record.status === 'ready' && record.interrupted === true && record.running !== true
-    }
-
-    /**
-     * Whether one "Running & recent" card row must render the interrupted mark.
-     *
-     * Deliberately record-only: the card's own `running` flag is the combined state
-     * (own shell status OR running delegated subagent children), so gating the mark
-     * on it hid a Session whose own turn was interrupted while its children kept
-     * running. The record's own `running` already excludes the post-Continue phase.
-     * @param {object | null} record - Host interruption record.
-     * @returns {boolean} whether the card row shows the mark and its Continue CTA.
-     */
-    function interruptedCardMark(record) {
-      return interruptedIndicatorActive(record)
     }
 
     /**
@@ -24329,15 +24217,6 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         annotationChipCandidates,
         serializeAnnotationChip
       }
-      // The Files-header Artifacts toggle's pure model (phase reducer + timers).
-      globalThis.__POWER_SUITE_TEST_HOOKS__.filesArtifacts = {
-        FILES_ARTIFACTS_PHASES,
-        FILES_ARTIFACTS_ENTER_MS,
-        FILES_ARTIFACTS_EXIT_MS,
-        filesArtifactsInitialState,
-        filesArtifactsReduce,
-        filesArtifactsPhaseMs
-      }
       // The composer image gallery's pure model (index/step/sync/wheel decisions).
       globalThis.__POWER_SUITE_TEST_HOOKS__.composerImageGallery = {
         PSG_WHEEL_STEP_PX,
@@ -24384,12 +24263,6 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         dwRowMenuIsPinView,
         dwRowMenuActions,
         dwRowMenuResolve
-      }
-      // Interrupted-state decision seam: the one Host-record rule shared by the
-      // native row decoration, the card rows and the composer seat.
-      globalThis.__POWER_SUITE_TEST_HOOKS__.interruptedState = {
-        interruptedIndicatorActive,
-        interruptedCardMark
       }
       // The update prompt's pure state machine: payload validation, the
       // prompt/no-prompt decision, and the per-version later/silence state.

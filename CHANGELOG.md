@@ -12,6 +12,8 @@ All notable changes to this repository are documented here. The format follows
 
 ### Changed
 
+- **Shared settings contract and three more browser models (Phase 3e).** The settings enums/defaults now live in `src/shared/protocol.ts` and are imported by both the Host store (re-exported) and the browser entry. The Files ↔ Artifacts phase model, the interrupted-state decision and the settings payload filter/merge moved to `src/browser/artifacts/model.ts`, `src/browser/interrupted-sessions/model.ts` and `src/browser/settings/model.ts`; their tests import the models directly and the `filesArtifacts` and `interruptedState` vm hooks are gone. Behavior and copy are unchanged.
+
 - **Shared route contract (Phase 3d).** All 16 API paths now live in `src/shared/routes.ts`: Host modules re-export those constants and the browser entry/models import the same values through `browserRoute`, so no `/api/...` route literal remains in `src/client.js`. The protocol contract test asserts the Host set equals the shared contract and that the browser half contains no route literals. Paths and behavior are unchanged.
 
 - **Browser sidebar-width model (Phase 3c).** The pure sidebar-width decisions (clamp/validity, browser-cache document, Host-payload normalizer and the boot/adopt/reopen decision rules) moved from `src/client.js` to `src/browser/sidebar-width/model.ts`, with `test/sidebar-width-model.test.js` importing them directly in Node; the protocol contract test now imports the extracted browser route alongside the remaining inline literals. Attach, drag capture, persistence and the Host route are unchanged.
