@@ -184,6 +184,11 @@ import {
   reduceAnnotationState
 } from './browser/ui-annotation/reducer.ts'
 import {
+  annotationResolveStatus,
+  resolveNodeCandidate,
+  resolveRefStatus
+} from './browser/ui-annotation/resolution.ts'
+import {
   ANNOTATION_CHIP_CANDIDATE_LIMIT,
   ANNOTATION_CHIP_SOURCE,
   annotationChipCandidates,
@@ -196,6 +201,16 @@ import {
   serializeBatchRequest,
   serializeQuickReference
 } from './browser/ui-annotation/serializers.ts'
+import {
+  annotationLeafPickIndex,
+  annotationRailRightForPane,
+  annotationSurfaceLevels,
+  annotationSurfacePickLevel,
+  annotationSurfacePinEligible,
+  annotationSurfacePinEventMatches,
+  annotationSurfaceRoot,
+  bindAnnotationSurfaceDefaults
+} from './browser/ui-annotation/surface.ts'
 import { dwEffectiveUpdatedAt, dwPendingSessionIds } from './browser/dynamic-workspaces/activity.ts'
 import {
   DW_EN,
@@ -9469,9 +9484,6 @@ function dwClearNativeAtmospheres() {
     /** F2: a floating surface root needs at least this computed z-index. */
     const ANNOTATION_SURFACE_MIN_Z = 10
 
-    /** F2: inner drill levels are capped so a card with many rows stays navigable. */
-    const ANNOTATION_SURFACE_MAX_LEVELS = 12
-
     /** F1: annotation paint layer z-index: above native hover cards (100), below modals (1000)/menus (1100). */
     const ANNOTATION_PAINT_Z = 2000
 
@@ -9943,161 +9955,6 @@ function dwClearNativeAtmospheres() {
     /** A3/T36: bounded document-fallback scan (the identity constants moved to anchors.ts). */
     const ANNOTATION_FALLBACK_SCAN_MAX = 400
 
-    /**
-     * Re-resolve one ref against a live document through injected queries.
-     * @param {object} input - { candidates, expectedTag, queryAll, liveInfo }.
-     * @returns {'resolved' | 'ambiguous' | 'missing' | 'changed'} status.
-     */
-    function resolveRefStatus(input) {
-      const source = input !== null && typeof input === 'object' ? input : {}
-      const { candidates, expectedTag, queryAll, liveInfo } = source
-      const weakIdentity = source.weakIdentity === true
-      const assertQuote = typeof source.assertQuote === 'function' ? source.assertQuote : null
-      const corroborate = typeof source.corroborate === 'function' ? source.corroborate : null
-      if (typeof queryAll !== 'function') return 'missing'
-      const tag = typeof expectedTag === 'string' ? expectedTag.trim().toLowerCase() : ''
-      const ordered = Array.isArray(candidates) ? candidates.slice().sort((left, right) => (right?.reliability ?? 0) - (left?.reliability ?? 0)) : []
-      let unique = null
-      let genericMatch = null
-      // A3/T33: two-phase resolution. Phase 1 collects per-candidate hit sets and
-      // prefers the first candidate (highest tier/score) with exactly one hit;
-      // a non-unique candidate never short-circuits to Ambiguous while another
-      // candidate may still resolve uniquely.
-      let stableAmbiguity = false
-      let genericUnique = false
-      const hasStableCandidate = ordered.some((candidate) => candidate !== null && typeof candidate === 'object'
-        && (candidate.kind === 'data' || candidate.kind === 'id' || candidate.kind === 'label'))
-      /**
-       * Collect the tag-matching hits of one selector without throwing.
-       * @param {string} selector - selector to query.
-       * @returns {Array<object> | null} hits, or null when the query failed.
-       */
-      const queryTagged = (selector) => {
-        let matches
-        try {
-          matches = queryAll(selector)
-        } catch {
-          return null
-        }
-        if (matches === null || matches === undefined) return null
-        if (typeof matches[Symbol.iterator] !== 'function') return null
-        const list = []
-        for (const element of matches) {
-          if (element === null || typeof element !== 'object') continue
-          if (typeof element.tagName !== 'string') continue
-          if (tag.length === 0 || element.tagName.toLowerCase() === tag) list.push(element)
-        }
-        return list
-      }
-      // A selector verified unique at capture is the strongest locator: a single
-      // hit resolves (the liveInfo checks below still detect a changed element),
-      // several hits are genuine ambiguity, and no hit falls through to the v1
-      // candidate walk so an older locator keeps working.
-      const uniqueSelector = typeof source.uniqueSelector === 'string' && source.uniqueSelector.length > 0 ? source.uniqueSelector : ''
-      if (uniqueSelector.length > 0) {
-        const hits = queryTagged(uniqueSelector)
-        if (hits !== null && hits.length > 1) {
-          stableAmbiguity = true
-        } else if (hits !== null && hits.length === 1) {
-          // A3/T47 (R1-i): a strong identity must still resolve to an element that
-          // corroborates the captured identity. A stale/weak unique hit does not win.
-          const okayIdentity = !weakIdentity || (corroborate !== null && corroborate(hits[0]) === true)
-          const okayQuote = assertQuote === null || assertQuote(hits[0]) !== false
-          if (okayIdentity && okayQuote) unique = hits[0]
-        }
-      }
-      if (unique === null) for (const candidate of ordered) {
-        if (candidate === null || typeof candidate !== 'object' || typeof candidate.value !== 'string' || candidate.value.length === 0) continue
-        let matches
-        try {
-          matches = queryAll(candidate.value)
-        } catch {
-          continue
-        }
-        if (matches === null || matches === undefined) continue
-        if (typeof matches[Symbol.iterator] !== 'function') continue
-        const list = []
-        for (const element of matches) {
-          if (element === null || typeof element !== 'object') continue
-          if (typeof element.tagName !== 'string') continue
-          const elementTag = element.tagName.toLowerCase()
-          if (tag.length === 0 || elementTag === tag) list.push(element)
-        }
-        if (list.length === 0) continue
-        const generic = candidate.kind === 'tag' || candidate.kind === 'path' || candidate.kind === 'role' || candidate.kind === 'class'
-        if (list.length > 1) {
-          // A3/T33: record the ambiguity candidate and keep scanning — a lower-tier
-          // candidate (unique structural path, unique ancestor anchor) may still
-          // identify exactly one element.
-          // Only a genuinely identifying (stable) candidate matching several
-          // elements is CSS ambiguity; a generic role/tag matching many is weak and
-          // must fall through to corroboration/fallback (P0).
-          if (!generic) stableAmbiguity = true
-          continue
-        }
-        // Phase 2: a unique STABLE candidate wins. A unique generic candidate is
-        // remembered as the legacy generic match and the scan continues (a later
-        // stable candidate still has priority; the generic result is corroborated
-        // by text/name, never a silent identity).
-        if (generic) {
-          // A3/T47 (R1-iii): a generic/path CSS hit may only win when the captured
-          // identity is strong, or when the recorded ancestor context corroborates it
-          // AND the captured quote asserts on the candidate (reference maybeAssertQuote).
-          const element = list[0]
-          const corroborated = corroborate !== null && corroborate(element) === true
-          const quoteOk = assertQuote !== null && assertQuote(element) === true
-          const mayWin = weakIdentity !== true || (corroborated && quoteOk)
-          if (mayWin && genericMatch === null) {
-            genericMatch = element
-            genericUnique = true
-          }
-          continue
-        }
-        // Stable candidate (data/id/label): quote assertion still applies when present.
-        if (assertQuote !== null && assertQuote(list[0]) === false) continue
-        unique = list[0]
-        break
-      }
-      // A3/T33: if every viable candidate is non-unique, report genuine Ambiguous
-      // instead of corroborating an arbitrary generic first hit.
-      if (unique === null && stableAmbiguity && genericUnique !== true) return 'ambiguous'
-      if (typeof liveInfo === 'function') {
-        const probe = unique === null ? genericMatch : unique
-        if (probe !== null) {
-          if (assertQuote !== null && assertQuote(probe) === false) return 'missing'
-          const info = liveInfo(probe)
-          if (info !== null && typeof info === 'object') {
-            if (info.isConnected === false) return 'missing'
-            const expected = typeof info.expectedText === 'string' ? info.expectedText : ''
-            const actual = typeof info.textContent === 'string' ? info.textContent : ''
-            if (unique === null) {
-              // A ref whose stable identity disappeared must be corroborated by the
-              // captured text summary; with none (icon-only) a same-position
-              // replacement reads as gone. A ref that never had a stable candidate
-              // (anonymous icon-only control) still resolves on its unique generic hit.
-              if (expected.length === 0) return hasStableCandidate ? 'missing' : 'resolved'
-              return sanitizeText(actual) === sanitizeText(expected) ? 'resolved' : 'changed'
-            }
-            // Stable identity resolved. A changed accessible name means this is a
-            // different control now, even when the tag/selector still matches.
-            const expectedName = typeof info.expectedName === 'string' ? info.expectedName : ''
-            const actualName = typeof info.actualName === 'string' ? info.actualName : ''
-            if (expectedName.length > 0 && actualName.length > 0
-              && sanitizeText(actualName, 60) !== expectedName) return 'changed'
-            // A digest mismatch catches text changes beyond the 80-char summary and
-            // the captured-empty -> now-has-text case (F11).
-            const expectedDigest = typeof info.expectedDigest === 'string' ? info.expectedDigest : ''
-            const actualDigest = typeof info.actualDigest === 'string' ? info.actualDigest : ''
-            if (expectedDigest.length > 0 && actualDigest.length > 0 && expectedDigest !== actualDigest) return 'changed'
-            if (expected.length > 0 && sanitizeText(actual) !== sanitizeText(expected)) return 'changed'
-          }
-        }
-      }
-      if (unique !== null) return 'resolved'
-      if (stableAmbiguity) return 'ambiguous'
-      return genericMatch === null ? 'missing' : 'resolved'
-    }
-
     //#endregion
 
     /** Selector set of elements the picker treats as meaningful, nearest first. */
@@ -10163,30 +10020,6 @@ function dwClearNativeAtmospheres() {
         break
       }
       return current
-    }
-
-    /**
-     * A3/T68: annotation-rail right offset when the native right Sidebar (document
-     * preview / files pane) is open. The rail docks just left of that pane instead
-     * of painting over it, so preview content stays pointer-reachable. Only a
-     * visible pane flush to the viewport's right edge counts; a fullscreen pane
-     * (too wide to leave room) and absent/invalid panes keep the rail at the edge.
-     * @param {{ left?: number, right?: number, width?: number } | null} paneRect - native pane rect.
-     * @param {number} viewportWidth - viewport width.
-     * @returns {number} rail `right` offset in pixels (0 = keep the rail at the edge).
-     */
-    function annotationRailRightForPane(paneRect, viewportWidth) {
-      if (paneRect === null || typeof paneRect !== 'object') return 0
-      const width = Number(paneRect.width)
-      const left = Number(paneRect.left)
-      const right = Number(paneRect.right)
-      const viewport = Number(viewportWidth)
-      if (!Number.isFinite(width) || !Number.isFinite(left) || !Number.isFinite(right) || !Number.isFinite(viewport) || viewport <= 0) return 0
-      if (width < 120 || left < 0) return 0
-      if (Math.abs(viewport - right) > 2) return 0
-      const offset = Math.round(viewport - left)
-      if (offset <= 0 || offset > viewport * 0.7) return 0
-      return offset
     }
 
     /** @returns {{ width: number, height: number }} the current viewport size. */
@@ -10702,53 +10535,6 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
-     * The outermost floating surface of one candidate chain (F2).
-     *
-     * The hit element may be a static text row inside a body-level portal card;
-     * the first floating ancestor starts the surface run, and the run is extended
-     * upward while ancestors are themselves floating boxes, so the returned root
-     * is the whole card rather than its inner layer. Selection never crosses the
-     * root to page ancestors behind the surface.
-     * @param {Array<{ element: Element, insideComposer: boolean }>} chain - candidate chain, nearest first.
-     * @param {(element: Element) => boolean} [isFloating] - injectable predicate for unit tests.
-     * @returns {{ root: Element, index: number } | null} surface root and its chain index.
-     */
-    function annotationSurfaceRoot(chain, isFloating) {
-      const entries = Array.isArray(chain) ? chain : []
-      const floating = typeof isFloating === 'function' ? isFloating : annotationFloatingBox
-      for (let index = 0; index < entries.length; index += 1) {
-        const element = entries[index] !== null && typeof entries[index] === 'object' ? entries[index].element : null
-        if (element === null || element === undefined) continue
-        let matched
-        try {
-          matched = floating(element)
-        } catch {
-          matched = false
-        }
-        if (!matched) continue
-        let root = element
-        let rootIndex = index
-        let above = index + 1
-        while (above < entries.length) {
-          const ancestor = entries[above] !== null && typeof entries[above] === 'object' ? entries[above].element : null
-          if (ancestor === null || ancestor === undefined) break
-          let ancestorFloating
-          try {
-            ancestorFloating = floating(ancestor)
-          } catch {
-            ancestorFloating = false
-          }
-          if (!ancestorFloating) break
-          root = ancestor
-          rootIndex = above
-          above += 1
-        }
-        return { root, index: rootIndex }
-      }
-      return null
-    }
-
-    /**
      * DOM accessors used by {@link annotationSurfaceLevels}; injectable so the
      * level algorithm is unit-testable without a browser.
      * @returns {object} accessor set.
@@ -10764,45 +10550,6 @@ function dwClearNativeAtmospheres() {
         childCount: (element) => (typeof element.children?.length === 'number' ? element.children.length : 0),
         insideComposer: (element) => typeof element.closest === 'function' && element.closest('[data-conversation-region="composer"]') !== null
       }
-    }
-
-    /**
-     * Drill levels of one floating surface: the whole root first, then its inner
-     * candidate controls and text rows in document order (F2).
-     *
-     * A level is either a normal candidate (`button`, `[aria-label]`, row, …) or a
-     * text block: an element with no element children, non-empty text, and a box
-     * of at least 8×8. That second rule is what lets a hover card's title/path
-     * rows be selected even though they carry no role or aria attribute.
-     * @param {Element} root - surface root element.
-     * @param {object} [access] - accessor set (tests inject a DOM-free one).
-     * @returns {Array<{ element: Element, insideComposer: boolean }>} levels, root first, capped.
-     */
-    function annotationSurfaceLevels(root, access) {
-      if (root === null || root === undefined || typeof root !== 'object') return []
-      const api = access !== null && typeof access === 'object' ? { ...annotationSurfaceAccess(), ...access } : annotationSurfaceAccess()
-      const levels = [{ element: root, insideComposer: api.insideComposer(root) === true }]
-      const seen = new Set([root])
-      const descendants = api.descendants(root)
-      for (const element of descendants) {
-        if (levels.length >= ANNOTATION_SURFACE_MAX_LEVELS) break
-        if (element === null || element === undefined || typeof element !== 'object') continue
-        if (seen.has(element)) continue
-        if (api.isOwn(element)) continue
-        const box = api.rectOf(element)
-        if (box === null || box === undefined || box.width <= 0 || box.height <= 0) continue
-        if (!api.visible(element)) continue
-        const candidate = api.isCandidate(element) === true
-        const textBlock = !candidate
-          && api.childCount(element) === 0
-          && api.textOf(element).length > 0
-          && box.width >= 8
-          && box.height >= 8
-        if (!candidate && !textBlock) continue
-        seen.add(element)
-        levels.push({ element, insideComposer: api.insideComposer(element) === true })
-      }
-      return levels
     }
 
     /** Structural tags that are never a pick target; the walk falls through them. */
@@ -10837,267 +10584,15 @@ function dwClearNativeAtmospheres() {
       return rect.width > 0 && rect.height > 0
     }
 
-    /**
-     * A3/T34: full multi-strategy resolution. CSS candidates keep precedence; when
-     * they do not resolve (ambiguous/missing), the injected fallbacks run from the
-     * least structure-sensitive to the most: text quote (position.start as hint) →
-     * text position → XPath. Returns the winning status plus a `via` hint.
-     * @param {object} input - base resolveRefStatus input plus optional
-     *   `resolveXPath`, `resolveTextQuote`, `resolveTextPosition` functions returning
-     *   a status or null.
-     * @returns {{ status: string, via: 'css' | 'xpath' | 'text-quote' | 'text-position' }} outcome.
-     */
-    function annotationResolveStatus(input) {
-      const source = input !== null && typeof input === 'object' ? input : {}
-      const cssStatus = resolveRefStatus(source)
-      if (cssStatus === 'resolved' || cssStatus === 'changed') return { status: cssStatus, via: 'css' }
-      const fallbacks = [
-        ['resolveTextQuote', 'text-quote'],
-        ['resolveTextPosition', 'text-position'],
-        ['resolveXPath', 'xpath']
-      ]
-      let weakAmbiguity = null
-      for (const [name, via] of fallbacks) {
-        if (typeof source[name] !== 'function') continue
-        let rawStatus = null
-        try {
-          rawStatus = source[name]()
-        } catch {
-          rawStatus = null
-        }
-        // A3/T44: a resolver may return `{ status, terminal:true }` when its
-        // ambiguity is authoritative (e.g. multiple distinct targets inside the
-        // captured descendant scope). Terminal ambiguity ends the chain — later
-        // position/XPath fallbacks must never override it.
-        let terminal = false
-        let status = rawStatus
-        if (rawStatus !== null && typeof rawStatus === 'object') {
-          terminal = rawStatus.terminal === true
-          status = typeof rawStatus.status === 'string' ? rawStatus.status : null
-        }
-        if (status === 'resolved' || status === 'changed') return { status, via }
-        if (status === 'ambiguous') {
-          if (terminal) return { status: 'ambiguous', via }
-          // A3/T33: ambiguity from a WEAK strategy (xpath/position) must not stop the
-          // chain — a later text quote can still resolve uniquely.
-          if (weakAmbiguity === null) weakAmbiguity = { status: 'ambiguous', via }
-        }
-      }
-      if (weakAmbiguity !== null) return weakAmbiguity
-      return { status: cssStatus, via: 'css' }
-    }
-
-    /**
-     * A3/T30: whether the current selection should pin a detected floating surface
-     * open while its popover is being edited. Eligible = active mode, a live
-     * selection, and at least one selected ref captured inside a floating surface.
-     * @param {object} state - annotation state.
-     * @param {boolean} active - whether the mode is active.
-     * @returns {boolean} whether a surface pin is wanted.
-     */
-    function annotationSurfacePinEligible(state, active) {
-      if (active !== true || state === null || typeof state !== 'object') return false
-      const selection = Array.isArray(state.selection) ? state.selection : []
-      if (selection.length === 0) return false
-      return selection.some((ref) => ref !== null && typeof ref === 'object'
-        && ref.locator !== null && typeof ref.locator === 'object'
-        && ref.locator.surface === 'floating')
-    }
-
-    /**
-     * A3/T30: whether one leaving event must be suppressed to keep a pinned surface
-     * open. Matches events whose target or relatedTarget belongs to the pinned
-     * surface's subtree or to one of its ancestors (some menus close from an
-     * ancestor wrapper). Injection-friendly for unit tests.
-     * @param {object | null} pinned - pinned surface element.
-     * @param {object | null} target - event target.
-     * @param {object | null} related - event relatedTarget.
-     * @returns {boolean} whether the event should be swallowed.
-     */
-    function annotationSurfacePinEventMatches(pinned, target, related) {
-      if (pinned === null || pinned === undefined || typeof pinned !== 'object') return false
-      const relevant = (node) => {
-        if (node === null || node === undefined || typeof node !== 'object') return false
-        if (node === pinned) return true
-        if (typeof pinned.contains === 'function' && pinned.contains(node)) return true
-        if (typeof node.contains === 'function' && node.contains(pinned)) return true
-        return false
-      }
-      return relevant(target) || relevant(related)
-    }
-
-    /**
-     * Choose the deepest eligible element of one pointer chain (DevTools-like
-     * leaf-first picking, A3 follow-up).
-     *
-     * The chain is nearest-first, so index 0 is the element under the pointer.
-     * The walk only moves upward when that element is ineligible (own UI, zero
-     * box, structural tag) and NEVER crosses the floating-surface root: a hit
-     * inside a floating surface resolves inside the surface, and a page hit
-     * resolves within the page chain (up to the page container just below body).
-     * @param {Array<{ element: Element, insideComposer: boolean }>} chain - ancestor chain, nearest first.
-     * @param {(element: Element) => boolean} [isFloating] - injectable surface predicate for unit tests.
-     * @param {(element: Element) => boolean} [isEligible] - injectable eligibility predicate for unit tests.
-     * @returns {number} chosen chain index, or -1 when nothing is eligible.
-     */
-    function annotationLeafPickIndex(chain, isFloating, isEligible) {
-      const entries = Array.isArray(chain) ? chain : []
-      if (entries.length === 0) return -1
-      const surface = annotationSurfaceRoot(entries, isFloating)
-      const boundary = surface !== null ? Math.min(surface.index, entries.length - 1) : entries.length - 1
-      const eligible = typeof isEligible === 'function' ? isEligible : (element) => annotationLeafEligible(element)
-      for (let index = 0; index <= boundary; index += 1) {
-        const entry = entries[index]
-        const element = entry !== null && typeof entry === 'object' ? entry.element : null
-        if (element === null || element === undefined) continue
-        let ok = false
-        try {
-          ok = eligible(element) === true
-        } catch {
-          ok = false
-        }
-        if (ok) return index
-      }
-      return -1
-    }
-
-    /**
-     * Choose the level a pointer hit should preview/select inside one floating
-     * surface (A3 follow-up: inner elements are hoverable again).
-     *
-     * The hover/click target is the DEEPEST meaningful level under the pointer:
-     * the nearest level element on the hit's ancestor chain (levels already mix
-     * semantic candidates and text-block rows), then a containment fallback for
-     * wrapper-only hits, and finally the surface root itself for background or
-     * padding hits. The root keeps index 0 so Parent/Child drilling from an inner
-     * level still walks the same level table.
-     * @param {Array<{ element: Element, insideComposer: boolean }>} chain - candidate chain, nearest first.
-     * @param {Array<{ element: Element, insideComposer: boolean }>} levels - surface levels, root first.
-     * @param {(element: Element) => boolean} [isFloating] - injectable surface predicate for unit tests.
-     * @param {(element: Element) => boolean} [isSemantic] - injectable semantic-candidate predicate for unit tests.
-     * @returns {{ surface: { root: Element, index: number } | null, index: number }} chosen surface and level index (-1 without a surface).
-     */
-    function annotationSurfacePickLevel(chain, levels, isFloating, isSemantic) {
-      const entries = Array.isArray(chain) ? chain : []
-      const surface = annotationSurfaceRoot(entries, isFloating)
-      if (surface === null) return { surface: null, index: -1 }
-      const list = Array.isArray(levels) ? levels : []
-      if (list.length === 0) return { surface, index: 0 }
-      const semantic = typeof isSemantic === 'function' ? isSemantic : (element) => annotationIsCandidate(element)
-      const levelIndexByElement = new Map()
-      for (let index = 0; index < list.length; index += 1) {
-        const level = list[index]
-        const element = level !== null && typeof level === 'object' ? level.element : null
-        if (element !== null && element !== undefined) levelIndexByElement.set(element, index)
-      }
-      // Prefer the nearest SEMANTIC candidate (button/role/row/aria...): a dropdown
-      // row that is itself a control must win over the leaf text inside it.
-      let textLevelIndex = null
-      for (let index = 0; index < surface.index; index += 1) {
-        const element = entries[index] !== null && typeof entries[index] === 'object' ? entries[index].element : null
-        const levelIndex = levelIndexByElement.get(element)
-        if (levelIndex === undefined) continue
-        if (semantic(element) === true) return { surface, index: levelIndex }
-        if (textLevelIndex === null) textLevelIndex = levelIndex
-      }
-      // No semantic candidate under the pointer: fall back to the nearest
-      // text-block level (the Phase 1 drill rule) before the containment fallback.
-      if (textLevelIndex !== null) return { surface, index: textLevelIndex }
-      // Wrapper-only hit: levels are in document order (parents before children),
-      // so the LAST level containing the hit element is the deepest one.
-      const hit = entries[0] !== null && typeof entries[0] === 'object' ? entries[0].element : null
-      if (hit !== null && hit !== undefined) {
-        let deepest = 0
-        for (let index = 1; index < list.length; index += 1) {
-          const element = list[index] !== null && typeof list[index] === 'object' ? list[index].element : null
-          if (element === null || element === undefined || typeof element.contains !== 'function') continue
-          try {
-            if (element.contains(hit)) deepest = index
-          } catch {
-            // A throwing contains() cannot identify the hit; keep the previous level.
-          }
-        }
-        return { surface, index: deepest }
-      }
-      return { surface, index: 0 }
-    }
-
-    /**
-     * Resolve one unique element-like object from ordered locator candidates.
-     *
-     * Mirrors `resolveRefStatus`'s walk: a STABLE kind (`data`/`id`/`label`)
-     * matching several elements is genuine ambiguity and stops the walk; a GENERIC
-     * kind (`role`/`tag`/`path`) matching several cannot discriminate, so the walk
-     * continues to less reliable candidates. A unique match wins, and the first
-     * unique generic match is remembered as the fallback (R1).
-     *
-     * Pure: `queryAll(selector)` and `elementLike.tagName` are injected, so this is
-     * shared with the unit-test seam. A capture-verified unique selector is tried
-     * first; one hit is the node, several hits are genuine ambiguity, and no hit
-     * falls back to the ordered v1 candidates (D11).
-     * @param {{ candidates?: Array<object>, expectedTag?: string, queryAll?: Function, uniqueSelector?: string }} input - resolver input.
-     * @returns {object | null} the unique element-like object, or null.
-     */
-    function resolveNodeCandidate(input) {
-      const source = input !== null && typeof input === 'object' ? input : {}
-      const { candidates, expectedTag, queryAll } = source
-      if (typeof queryAll !== 'function') return null
-      const tag = typeof expectedTag === 'string' ? expectedTag.trim().toLowerCase() : ''
-      const ordered = Array.isArray(candidates)
-        ? candidates.slice().sort((left, right) => (right?.reliability ?? 0) - (left?.reliability ?? 0))
-        : []
-      const uniqueSelector = typeof source.uniqueSelector === 'string' && source.uniqueSelector.length > 0 ? source.uniqueSelector : ''
-      if (uniqueSelector.length > 0) {
-        let uniqueHits = null
-        try {
-          uniqueHits = queryAll(uniqueSelector)
-        } catch {
-          uniqueHits = null
-        }
-        if (uniqueHits !== null && uniqueHits !== undefined && typeof uniqueHits[Symbol.iterator] === 'function') {
-          const tagged = []
-          for (const element of uniqueHits) {
-            if (element === null || typeof element !== 'object') continue
-            if (typeof element.tagName !== 'string') continue
-            if (tag.length === 0 || element.tagName.toLowerCase() === tag) tagged.push(element)
-          }
-          if (tagged.length > 1) return null
-          if (tagged.length === 1) return tagged[0]
-        }
-      }
-      let genericMatch = null
-      for (const candidate of ordered) {
-        if (candidate === null || typeof candidate !== 'object' || typeof candidate.value !== 'string' || candidate.value.length === 0) continue
-        let matches
-        try {
-          matches = queryAll(candidate.value)
-        } catch {
-          continue
-        }
-        if (matches === null || matches === undefined) continue
-        if (typeof matches[Symbol.iterator] !== 'function') continue
-        const list = []
-        for (const element of matches) {
-          if (element === null || typeof element !== 'object') continue
-          if (typeof element.tagName !== 'string') continue
-          const elementTag = element.tagName.toLowerCase()
-          if (tag.length === 0 || elementTag === tag) list.push(element)
-        }
-        if (list.length === 0) continue
-        const generic = candidate.kind === 'tag' || candidate.kind === 'path' || candidate.kind === 'role'
-        if (list.length > 1) {
-          // Stable ambiguity is final; generic ambiguity just means "keep looking".
-          if (generic) continue
-          return null
-        }
-        if (generic) {
-          if (genericMatch === null) genericMatch = list[0]
-          continue
-        }
-        return list[0]
-      }
-      return genericMatch
-    }
+    // The surface model owns the DOM-free picker algorithms; the browser entry
+    // binds its DOM adapters once so an unparameterized call keeps the exact
+    // pre-extraction behavior (and an imported module stays inert in tests).
+    bindAnnotationSurfaceDefaults({
+      floating: annotationFloatingBox,
+      access: annotationSurfaceAccess,
+      leafEligible: annotationLeafEligible,
+      isCandidate: annotationIsCandidate
+    })
 
     /**
      * Resolve one ref to its unique live element.

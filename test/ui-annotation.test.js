@@ -98,6 +98,11 @@ import {
   reduceAnnotationState
 } from '../src/browser/ui-annotation/reducer.ts'
 import {
+  annotationResolveStatus,
+  resolveNodeCandidate,
+  resolveRefStatus
+} from '../src/browser/ui-annotation/resolution.ts'
+import {
   annotationChipCandidates,
   annotationChipRefBatch,
   annotationChipRefOf,
@@ -108,6 +113,15 @@ import {
   serializeBatchRequest,
   serializeQuickReference
 } from '../src/browser/ui-annotation/serializers.ts'
+import {
+  annotationLeafPickIndex,
+  annotationRailRightForPane,
+  annotationSurfaceLevels,
+  annotationSurfacePickLevel,
+  annotationSurfacePinEligible,
+  annotationSurfacePinEventMatches,
+  annotationSurfaceRoot
+} from '../src/browser/ui-annotation/surface.ts'
 import {
   annotationNormalizeQuoteText as normalizeAnnotationQuote,
   cssIdentifier as escapeAnnotationIdentifier,
@@ -1190,16 +1204,17 @@ if (ui === undefined) {
     const ids = (list) => list.map(chainEntry)
     const floating = (element) => element.id === 'card' || element.id === 'inner'
     // text row -> inner absolute layer -> fixed card -> static portal: root is the card.
-    const surface = ui.annotationSurfaceRoot(ids(['text', 'inner', 'card', 'portal', 'page']), floating)
+    const surface = annotationSurfaceRoot(ids(['text', 'inner', 'card', 'portal', 'page']), floating)
     assert.deepEqual(plain(surface), { root: { id: 'card' }, index: 2 })
     // A static page chain has no surface at all.
-    assert.equal(ui.annotationSurfaceRoot(ids(['button', 'static', 'page']), () => false), null)
+    assert.equal(annotationSurfaceRoot(ids(['button', 'static', 'page']), () => false), null)
     // A floating ancestor above a static break is a different run; the nearer run wins.
-    const broken = ui.annotationSurfaceRoot(ids(['text', 'inner', 'static', 'outer']), (element) => element.id === 'inner' || element.id === 'outer')
+    const broken = annotationSurfaceRoot(ids(['text', 'inner', 'static', 'outer']), (element) => element.id === 'inner' || element.id === 'outer')
     assert.deepEqual(plain(broken), { root: { id: 'inner' }, index: 1 }, 'the static ancestor ends the contiguous run')
-    // Empty chain and default DOM predicate on non-DOM objects stay inert, never throw.
-    assert.equal(ui.annotationSurfaceRoot([]), null)
-    assert.equal(ui.annotationSurfaceRoot(ids(['plain'])), null)
+    // Empty chain and the unconfigured default predicate stay inert on non-DOM
+    // objects, never throw.
+    assert.equal(annotationSurfaceRoot([]), null)
+    assert.equal(annotationSurfaceRoot(ids(['plain'])), null)
   })
 
   /**
@@ -1225,13 +1240,13 @@ if (ui === undefined) {
     const control = { id: 'control', candidate: true, text: 'Open' }
     const hidden = { id: 'hidden', hidden: true, text: 'invisible' }
     const own = { id: 'own', own: true, text: ' ours ' }
-    const levels = ui.annotationSurfaceLevels(root, surfaceAccess([title, nested, control, hidden, own]))
+    const levels = annotationSurfaceLevels(root, surfaceAccess([title, nested, control, hidden, own]))
     assert.deepEqual(plain(levels).map((level) => level.element.id), ['card', 'title', 'control'],
       'root first, then text blocks and candidates in document order; nested/own/hidden are excluded')
     assert.equal(levels[0].element, root)
-    assert.equal(ui.annotationSurfaceLevels(null, surfaceAccess([])).length, 0)
+    assert.equal(annotationSurfaceLevels(null, surfaceAccess([])).length, 0)
     const many = Array.from({ length: 30 }, (_, index) => ({ id: `row-${index}`, text: `row ${index}` }))
-    assert.equal(ui.annotationSurfaceLevels(root, surfaceAccess(many)).length, 12, 'inner levels are capped at 12')
+    assert.equal(annotationSurfaceLevels(root, surfaceAccess(many)).length, 12, 'inner levels are capped at 12')
   })
 
   test('A3 inner-first: annotationSurfacePickLevel picks the deepest level under the pointer', () => {
@@ -1245,12 +1260,12 @@ if (ui === undefined) {
     const chainOf = (...elements) => elements.map((element) => ({ element, insideComposer: false }))
     // A hit on an inner text level (and its wrapper ancestors) resolves that level.
     assert.deepEqual(
-      plain(ui.annotationSurfacePickLevel(chainOf(text, row, root, portal), levels, floating)),
+      plain(annotationSurfacePickLevel(chainOf(text, row, root, portal), levels, floating)),
       { surface: { root, index: 2 }, index: 2 }
     )
     // A hit on a wrapper that is not itself a level resolves the nearest level ancestor.
     assert.deepEqual(
-      plain(ui.annotationSurfacePickLevel(chainOf(span, row, root, portal), levels, floating)),
+      plain(annotationSurfacePickLevel(chainOf(span, row, root, portal), levels, floating)),
       { surface: { root, index: 2 }, index: 1 }
     )
     // A semantic row candidate wins over the nearer leaf text inside it (dropdown rows).
@@ -1259,18 +1274,18 @@ if (ui === undefined) {
     const rowChain = chainOf(titleLeaf, rowButton, root, portal)
     const rowLevels = [root, rowButton, titleLeaf].map((element) => ({ element, insideComposer: false }))
     assert.equal(
-      plain(ui.annotationSurfacePickLevel(rowChain, rowLevels, floating, (element) => element.id === 'row-button')).index,
+      plain(annotationSurfacePickLevel(rowChain, rowLevels, floating, (element) => element.id === 'row-button')).index,
       1,
       'a semantic row candidate outranks the nearest text leaf'
     )
     assert.equal(
-      plain(ui.annotationSurfacePickLevel(rowChain, rowLevels, floating, () => false)).index,
+      plain(annotationSurfacePickLevel(rowChain, rowLevels, floating, () => false)).index,
       2,
       'without a semantic candidate the nearest text-block level wins'
     )
     // A background/padding hit (the surface root itself) keeps the whole surface.
     assert.deepEqual(
-      plain(ui.annotationSurfacePickLevel(chainOf(root, portal), levels, floating)),
+      plain(annotationSurfacePickLevel(chainOf(root, portal), levels, floating)),
       { surface: { root, index: 0 }, index: 0 }
     )
     // Containment fallback: an unknown wrapper hit resolves the LAST containing level.
@@ -1278,15 +1293,15 @@ if (ui === undefined) {
     text.contains = () => false
     const nested = { id: 'nested', contains: (element) => element === span }
     const containmentLevels = [root, row, nested].map((element) => ({ element, insideComposer: false }))
-    assert.equal(plain(ui.annotationSurfacePickLevel(chainOf(span, root, portal), containmentLevels, floating)).index, 2)
+    assert.equal(plain(annotationSurfacePickLevel(chainOf(span, root, portal), containmentLevels, floating)).index, 2)
     // No surface at all: page chains keep the ordinary picker (index -1).
     assert.deepEqual(
-      plain(ui.annotationSurfacePickLevel(chainOf(span, row), levels, () => false)),
+      plain(annotationSurfacePickLevel(chainOf(span, row), levels, () => false)),
       { surface: null, index: -1 }
     )
     // Empty level list falls back to the surface root.
     assert.deepEqual(
-      plain(ui.annotationSurfacePickLevel(chainOf(text, root, portal), [], floating)),
+      plain(annotationSurfacePickLevel(chainOf(text, root, portal), [], floating)),
       { surface: { root, index: 1 }, index: 0 }
     )
   })
@@ -1325,24 +1340,24 @@ if (ui === undefined) {
     const chainOf = (...elements) => elements.map((element) => ({ element, insideComposer: false }))
     const none = () => false
     // The pointer chain starts at the deepest element: span/svg/path are all eligible.
-    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(span, button, section, root), none, () => true)), 0)
-    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(svg, button, section, root), none, () => true)), 0)
-    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(path, svg, button, section, root), none, () => true)), 0)
+    assert.equal(plain(annotationLeafPickIndex(chainOf(span, button, section, root), none, () => true)), 0)
+    assert.equal(plain(annotationLeafPickIndex(chainOf(svg, button, section, root), none, () => true)), 0)
+    assert.equal(plain(annotationLeafPickIndex(chainOf(path, svg, button, section, root), none, () => true)), 0)
     // An ineligible leaf (own UI / zero box / hidden) falls through to its ancestor.
     const eligibleExcept = (ids) => (element) => !ids.includes(element.id)
-    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(own, span, section), none, eligibleExcept(['own']))), 1)
-    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(hidden, button, section), none, eligibleExcept(['hidden']))), 1)
-    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(hidden, own, section), none, eligibleExcept(['hidden', 'own']))), 2)
+    assert.equal(plain(annotationLeafPickIndex(chainOf(own, span, section), none, eligibleExcept(['own']))), 1)
+    assert.equal(plain(annotationLeafPickIndex(chainOf(hidden, button, section), none, eligibleExcept(['hidden']))), 1)
+    assert.equal(plain(annotationLeafPickIndex(chainOf(hidden, own, section), none, eligibleExcept(['hidden', 'own']))), 2)
     // Nothing eligible at all → -1 (hover clears, click does not select).
-    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(hidden, own), none, none)), -1)
-    assert.equal(plain(ui.annotationLeafPickIndex([], none, none)), -1)
+    assert.equal(plain(annotationLeafPickIndex(chainOf(hidden, own), none, none)), -1)
+    assert.equal(plain(annotationLeafPickIndex([], none, none)), -1)
     // Inside a floating surface the walk never escapes the surface root.
     const card = { id: 'card' }
     const portal = { id: 'portal' }
     const floating = (element) => element.id === 'card' || element.id === 'portal'
-    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(span, card, portal, root), floating, () => true)), 0)
-    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(hidden, card, portal, root), floating, eligibleExcept(['hidden']))), 1, 'falls through to the surface root')
-    assert.equal(plain(ui.annotationLeafPickIndex(chainOf(hidden, own, card, portal), floating, eligibleExcept(['hidden', 'own']))), 2, 'surface root is the boundary; the portal above it is never picked')
+    assert.equal(plain(annotationLeafPickIndex(chainOf(span, card, portal, root), floating, () => true)), 0)
+    assert.equal(plain(annotationLeafPickIndex(chainOf(hidden, card, portal, root), floating, eligibleExcept(['hidden']))), 1, 'falls through to the surface root')
+    assert.equal(plain(annotationLeafPickIndex(chainOf(hidden, own, card, portal), floating, eligibleExcept(['hidden', 'own']))), 2, 'surface root is the boundary; the portal above it is never picked')
   })
 
   test('A3 leaf-first: annotationLeafEligible excludes own UI, structural tags and zero-box elements', () => {
@@ -1524,13 +1539,13 @@ if (ui === undefined) {
     const one = { tagName: 'BUTTON', textContent: 'New session' }
     const two = { tagName: 'BUTTON', textContent: 'New session' }
     const base = { candidates: ref.locator.candidates, expectedTag: 'button', liveInfo }
-    assert.equal(ui.resolveRefStatus({ ...base, uniqueSelector, queryAll: (selector) => (selector === uniqueSelector ? [one] : []) }), 'resolved')
-    assert.equal(ui.resolveRefStatus({ ...base, uniqueSelector, queryAll: (selector) => (selector === uniqueSelector ? [one, two] : []) }), 'ambiguous',
+    assert.equal(resolveRefStatus({ ...base, uniqueSelector, queryAll: (selector) => (selector === uniqueSelector ? [one] : []) }), 'resolved')
+    assert.equal(resolveRefStatus({ ...base, uniqueSelector, queryAll: (selector) => (selector === uniqueSelector ? [one, two] : []) }), 'ambiguous',
       'a unique selector matching several elements is real ambiguity')
     // Zero unique hits: the v1 label candidate still resolves the control.
     const labelSelector = ref.locator.candidates.find((candidate) => candidate.kind === 'label')?.value
     assert.ok(typeof labelSelector === 'string' && labelSelector.length > 0)
-    assert.equal(ui.resolveRefStatus({ ...base, uniqueSelector, queryAll: (selector) => (selector === labelSelector ? [one] : []) }), 'resolved')
+    assert.equal(resolveRefStatus({ ...base, uniqueSelector, queryAll: (selector) => (selector === labelSelector ? [one] : []) }), 'resolved')
   })
 
   test('A2: a missing ephemeral target serializes its own transient status line', () => {
@@ -1816,15 +1831,15 @@ if (ui === undefined) {
     const candidates = ref.locator.candidates
     const element = liveElement('BUTTON', 'Send')
 
-    assert.equal(ui.resolveRefStatus({ candidates, expectedTag: 'button', queryAll: () => [element] }), 'resolved')
-    assert.equal(ui.resolveRefStatus({ candidates, expectedTag: 'button', queryAll: () => [element, element] }), 'ambiguous')
-    assert.equal(ui.resolveRefStatus({ candidates, expectedTag: 'button', queryAll: () => [] }), 'missing')
+    assert.equal(resolveRefStatus({ candidates, expectedTag: 'button', queryAll: () => [element] }), 'resolved')
+    assert.equal(resolveRefStatus({ candidates, expectedTag: 'button', queryAll: () => [element, element] }), 'ambiguous')
+    assert.equal(resolveRefStatus({ candidates, expectedTag: 'button', queryAll: () => [] }), 'missing')
     // A candidate that returns a different tag does not count as a match.
-    assert.equal(ui.resolveRefStatus({ candidates, expectedTag: 'button', queryAll: () => [liveElement('DIV', 'Send')] }), 'missing')
+    assert.equal(resolveRefStatus({ candidates, expectedTag: 'button', queryAll: () => [liveElement('DIV', 'Send')] }), 'missing')
     // Candidates are tried in reliability order: the first unique hit wins.
     const bySelector = new Map()
     for (const [index, candidate] of candidates.entries()) bySelector.set(candidate.value, index === 1 ? [element] : [])
-    assert.equal(ui.resolveRefStatus({
+    assert.equal(resolveRefStatus({
       candidates,
       expectedTag: 'button',
       queryAll: (selector) => bySelector.get(selector) ?? []
@@ -1837,17 +1852,17 @@ if (ui === undefined) {
     const element = liveElement('BUTTON', 'Send')
     const input = { candidates, expectedTag: 'button', queryAll: () => [element] }
 
-    assert.equal(ui.resolveRefStatus({
+    assert.equal(resolveRefStatus({
       ...input,
       liveInfo: (matched) => ({ isConnected: matched.isConnected, textContent: matched.textContent, expectedText: ref.text })
     }), 'resolved')
 
-    assert.equal(ui.resolveRefStatus({
+    assert.equal(resolveRefStatus({
       ...input,
       liveInfo: () => ({ isConnected: true, textContent: 'Send now', expectedText: ref.text })
     }), 'changed')
 
-    assert.equal(ui.resolveRefStatus({
+    assert.equal(resolveRefStatus({
       ...input,
       liveInfo: () => ({ isConnected: false, textContent: 'Send', expectedText: ref.text })
     }), 'missing')
@@ -1866,19 +1881,19 @@ if (ui === undefined) {
     const base = { candidates: longRef.locator.candidates, expectedTag: 'button', queryAll: () => [longElement] }
 
     // Unchanged digest and accessible name keep the target resolved.
-    assert.equal(ui.resolveRefStatus({
+    assert.equal(resolveRefStatus({
       ...base,
       liveInfo: () => ({ expectedDigest: longRef.textDigest, actualDigest: ui.textDigest(longText), expectedName: 'Long target', actualName: 'Long target' })
     }), 'resolved')
 
     // A tail change beyond the 80-char display summary changes the digest.
-    assert.equal(ui.resolveRefStatus({
+    assert.equal(resolveRefStatus({
       ...base,
       liveInfo: () => ({ expectedDigest: longRef.textDigest, actualDigest: ui.textDigest(`${longText} tail`) })
     }), 'changed', 'a change outside the truncated summary still reads as changed')
 
     // The accessible name can change while the visible text stays the same.
-    assert.equal(ui.resolveRefStatus({
+    assert.equal(resolveRefStatus({
       ...base,
       liveInfo: () => ({ expectedName: 'Long target', actualName: 'Long target renamed' })
     }), 'changed', 'an aria-label change reads as changed')
@@ -1891,7 +1906,7 @@ if (ui === undefined) {
       text: '',
       textDigest: ui.textDigest('')
     })
-    assert.equal(ui.resolveRefStatus({
+    assert.equal(resolveRefStatus({
       candidates: emptyRef.locator.candidates,
       expectedTag: 'button',
       queryAll: () => [liveElement('BUTTON', 'now has text')],
@@ -1900,7 +1915,7 @@ if (ui === undefined) {
 
     // The digest must not rescue the generic-only branch (no stable candidate).
     const genericRef = refOf({ tag: 'div', role: '', name: '', component: 'container', text: '', textDigest: ui.textDigest('') })
-    assert.equal(ui.resolveRefStatus({
+    assert.equal(resolveRefStatus({
       candidates: genericRef.locator.candidates,
       expectedTag: 'div',
       queryAll: () => [liveElement('DIV', 'now has text')],
@@ -1926,7 +1941,7 @@ if (ui === undefined) {
       if (selector === 'body > div > p') return [pathMatch]
       return []
     }
-    const result = ui.resolveNodeCandidate({
+    const result = resolveNodeCandidate({
       candidates: [
         { kind: 'tag', value: 'p', reliability: 0.2 },
         { kind: 'path', value: 'body > div > p', reliability: 0.1 }
@@ -1949,7 +1964,7 @@ if (ui === undefined) {
       if (selector === stableSelector) return [stableA, stableB]
       return [generic]
     }
-    const result = ui.resolveNodeCandidate({
+    const result = resolveNodeCandidate({
       candidates: [
         { kind: 'data', value: stableSelector, reliability: 0.92 },
         { kind: 'tag', value: 'button', reliability: 0.2 }
@@ -1963,14 +1978,14 @@ if (ui === undefined) {
 
   test('R1: unique generic and unique stable matches are returned, with tag filtering', () => {
     const genericNode = resolverNode('P')
-    assert.equal(ui.resolveNodeCandidate({
+    assert.equal(resolveNodeCandidate({
       candidates: [{ kind: 'tag', value: 'p', reliability: 0.2 }],
       expectedTag: 'p',
       queryAll: () => [genericNode]
     }), genericNode, 'a unique generic match is the only match')
 
     const stableNode = resolverNode('BUTTON')
-    assert.equal(ui.resolveNodeCandidate({
+    assert.equal(resolveNodeCandidate({
       candidates: [{ kind: 'data', value: '[data-testid="x"]', reliability: 0.92 }],
       expectedTag: 'BUTTON',
       queryAll: () => [stableNode]
@@ -1978,7 +1993,7 @@ if (ui === undefined) {
 
     const expectedNode = resolverNode('P')
     const mismatchedNode = resolverNode('DIV')
-    assert.equal(ui.resolveNodeCandidate({
+    assert.equal(resolveNodeCandidate({
       candidates: [{ kind: 'tag', value: 'p', reliability: 0.2 }],
       expectedTag: 'p',
       queryAll: () => [mismatchedNode, expectedNode]
@@ -1986,14 +2001,14 @@ if (ui === undefined) {
   })
 
   test('R1: no match, invalid input, and non-node entries resolve to null', () => {
-    assert.equal(ui.resolveNodeCandidate(null), null)
-    assert.equal(ui.resolveNodeCandidate({ candidates: [], expectedTag: 'p', queryAll: () => [] }), null)
-    assert.equal(ui.resolveNodeCandidate({
+    assert.equal(resolveNodeCandidate(null), null)
+    assert.equal(resolveNodeCandidate({ candidates: [], expectedTag: 'p', queryAll: () => [] }), null)
+    assert.equal(resolveNodeCandidate({
       candidates: [{ kind: 'tag', value: 'p', reliability: 0.2 }],
       expectedTag: 'p',
       queryAll: () => []
     }), null)
-    assert.equal(ui.resolveNodeCandidate({
+    assert.equal(resolveNodeCandidate({
       candidates: [{ kind: 'tag', value: 'p', reliability: 0.2 }],
       expectedTag: 'p',
       queryAll: () => [null, 7, 'x', {}]
@@ -2006,10 +2021,10 @@ if (ui === undefined) {
     let live = [firstNode]
     let calls = 0
     const queryAll = () => { calls += 1; return live }
-    const firstResult = ui.resolveNodeCandidate({ candidates, expectedTag: 'button', queryAll })
+    const firstResult = resolveNodeCandidate({ candidates, expectedTag: 'button', queryAll })
     const replacement = resolverNode('BUTTON')
     live = [replacement]
-    const secondResult = ui.resolveNodeCandidate({ candidates, expectedTag: 'button', queryAll })
+    const secondResult = resolveNodeCandidate({ candidates, expectedTag: 'button', queryAll })
     assert.equal(firstResult, firstNode)
     assert.equal(secondResult, replacement, 'the resolver must not memoize the first hit')
     assert.equal(calls, 2, 'every call re-queries the document')
@@ -2603,7 +2618,7 @@ if (ui === undefined) {
       expectedName: '',
       actualName: ''
     })
-    const resolve = () => ui.resolveRefStatus({
+    const resolve = () => resolveRefStatus({
       candidates: [],
       expectedTag: 'li',
       uniqueSelector: selector,
@@ -2733,21 +2748,21 @@ if (ui === undefined) {
   test('A3/T30: transient-surface pinning eligibility and capture-phase event matching', () => {
     const floatingRef = { locator: { surface: 'floating' }, id: 'psa-float' }
     const pageRef = { locator: { surface: 'page' }, id: 'psa-page' }
-    assert.equal(ui.annotationSurfacePinEligible({ selection: [floatingRef] }, true), true, 'a floating selection in active mode must pin')
-    assert.equal(ui.annotationSurfacePinEligible({ selection: [pageRef, floatingRef] }, true), true, 'a mixed selection with a floating ref pins')
-    assert.equal(ui.annotationSurfacePinEligible({ selection: [pageRef] }, true), false, 'page selections never pin')
-    assert.equal(ui.annotationSurfacePinEligible({ selection: [floatingRef] }, false), false, 'pinning only happens while the mode is active')
-    assert.equal(ui.annotationSurfacePinEligible({ selection: [] }, true), false, 'empty selections never pin')
+    assert.equal(annotationSurfacePinEligible({ selection: [floatingRef] }, true), true, 'a floating selection in active mode must pin')
+    assert.equal(annotationSurfacePinEligible({ selection: [pageRef, floatingRef] }, true), true, 'a mixed selection with a floating ref pins')
+    assert.equal(annotationSurfacePinEligible({ selection: [pageRef] }, true), false, 'page selections never pin')
+    assert.equal(annotationSurfacePinEligible({ selection: [floatingRef] }, false), false, 'pinning only happens while the mode is active')
+    assert.equal(annotationSurfacePinEligible({ selection: [] }, true), false, 'empty selections never pin')
     const leaf = { name: 'leaf' }
     const inner = { name: 'inner', contains: (node) => node === leaf || node === inner }
     const pinned = { name: 'pinned', contains: (node) => node === inner || node === pinned || node === leaf }
     const wrapper = { name: 'wrapper', contains: (node) => node === pinned || node === wrapper }
     const outside = { name: 'outside', contains: (node) => node === outside }
-    assert.equal(ui.annotationSurfacePinEventMatches(pinned, inner, null), true, 'events from inside the pinned subtree are suppressed')
-    assert.equal(ui.annotationSurfacePinEventMatches(pinned, outside, leaf), true, 'events whose relatedTarget is inside are suppressed')
-    assert.equal(ui.annotationSurfacePinEventMatches(pinned, wrapper, null), true, 'events on an ancestor wrapper are suppressed')
-    assert.equal(ui.annotationSurfacePinEventMatches(pinned, outside, null), false, 'unrelated page events pass through')
-    assert.equal(ui.annotationSurfacePinEventMatches(null, leaf, null), false, 'without a pin nothing is suppressed')
+    assert.equal(annotationSurfacePinEventMatches(pinned, inner, null), true, 'events from inside the pinned subtree are suppressed')
+    assert.equal(annotationSurfacePinEventMatches(pinned, outside, leaf), true, 'events whose relatedTarget is inside are suppressed')
+    assert.equal(annotationSurfacePinEventMatches(pinned, wrapper, null), true, 'events on an ancestor wrapper are suppressed')
+    assert.equal(annotationSurfacePinEventMatches(pinned, outside, null), false, 'unrelated page events pass through')
+    assert.equal(annotationSurfacePinEventMatches(null, leaf, null), false, 'without a pin nothing is suppressed')
   })
 
   test('A3/T32: quote normalization, XPath/JS path generation, quote matching and scoring', () => {
@@ -2789,15 +2804,15 @@ if (ui === undefined) {
     assert(score('tag', 'button', 0.2) > score('path', 'div > button', 0.9), 'tag beats pure positional path')
     // Resolution order: CSS wins when resolved; otherwise XPath, then text quote, then position.
     const base = { candidates: [], expectedTag: 'span', queryAll: () => [] }
-    const cssResolved = ui.annotationResolveStatus({ ...base, candidates: [{ kind: 'data', value: '[data-x="1"]', reliability: 0.9 }], queryAll: (selector) => [{ tagName: 'SPAN', isConnected: true }] })
+    const cssResolved = annotationResolveStatus({ ...base, candidates: [{ kind: 'data', value: '[data-x="1"]', reliability: 0.9 }], queryAll: (selector) => [{ tagName: 'SPAN', isConnected: true }] })
     assert.deepEqual(plain(cssResolved), { status: 'resolved', via: 'css' })
-    const viaQuoteFirst = ui.annotationResolveStatus({ ...base, resolveXPath: () => 'resolved', resolveTextQuote: () => 'resolved' })
+    const viaQuoteFirst = annotationResolveStatus({ ...base, resolveXPath: () => 'resolved', resolveTextQuote: () => 'resolved' })
     assert.deepEqual(plain(viaQuoteFirst), { status: 'resolved', via: 'text-quote' }, 'A3/T34: text quote comes before XPath')
-    const viaQuote = ui.annotationResolveStatus({ ...base, resolveXPath: () => null, resolveTextQuote: () => 'changed', resolveTextPosition: () => 'resolved' })
+    const viaQuote = annotationResolveStatus({ ...base, resolveXPath: () => null, resolveTextQuote: () => 'changed', resolveTextPosition: () => 'resolved' })
     assert.deepEqual(plain(viaQuote), { status: 'changed', via: 'text-quote' })
-    const viaPosition = ui.annotationResolveStatus({ ...base, resolveXPath: () => null, resolveTextQuote: () => null, resolveTextPosition: () => 'ambiguous' })
+    const viaPosition = annotationResolveStatus({ ...base, resolveXPath: () => null, resolveTextQuote: () => null, resolveTextPosition: () => 'ambiguous' })
     assert.deepEqual(plain(viaPosition), { status: 'ambiguous', via: 'text-position' })
-    const allFail = ui.annotationResolveStatus({ ...base, resolveXPath: () => null, resolveTextQuote: () => null, resolveTextPosition: () => null })
+    const allFail = annotationResolveStatus({ ...base, resolveXPath: () => null, resolveTextQuote: () => null, resolveTextPosition: () => null })
     assert.deepEqual(plain(allFail), { status: 'missing', via: 'css' }, 'no fallback leaves the honest CSS result')
   })
 
@@ -2825,7 +2840,7 @@ if (ui === undefined) {
       { kind: 'label', value: '[aria-label="New session"]', reliability: 0.9 },
       { kind: 'path', value: '[data-slot="sidebar"] button:nth-of-type(1)', reliability: 0.5 }
     ]
-    assert.equal(ui.resolveRefStatus({ candidates, expectedTag: 'button', queryAll, liveInfo }), 'resolved',
+    assert.equal(resolveRefStatus({ candidates, expectedTag: 'button', queryAll, liveInfo }), 'resolved',
       'a unique lower-tier candidate must win over a non-unique aria-label')
     const ambiguousQuery = () => [
       { tagName: 'BUTTON', isConnected: true, textContent: 'A' },
@@ -2835,9 +2850,9 @@ if (ui === undefined) {
       { kind: 'label', value: '[aria-label="X"]', reliability: 0.9 },
       { kind: 'role', value: '[role="button"]', reliability: 0.5 }
     ]
-    assert.equal(ui.resolveRefStatus({ candidates: ambiguousCandidates, expectedTag: 'button', queryAll: ambiguousQuery, liveInfo }), 'ambiguous',
+    assert.equal(resolveRefStatus({ candidates: ambiguousCandidates, expectedTag: 'button', queryAll: ambiguousQuery, liveInfo }), 'ambiguous',
       'all-non-unique candidates must be honestly Ambiguous')
-    const outcome = ui.annotationResolveStatus({
+    const outcome = annotationResolveStatus({
       candidates: ambiguousCandidates,
       expectedTag: 'button',
       queryAll: ambiguousQuery,
@@ -3028,7 +3043,7 @@ if (ui === undefined) {
   test('A3/T44: authoritative (terminal) descendant ambiguity cannot be overridden by later fallbacks', () => {
     const base = { candidates: [], expectedTag: 'div', queryAll: () => [] }
     const liveInfo = () => ({ isConnected: true, textContent: '', actualDigest: '', expectedName: '', actualName: '' })
-    const terminal = ui.annotationResolveStatus({
+    const terminal = annotationResolveStatus({
       ...base,
       liveInfo,
       resolveTextQuote: () => ({ status: 'ambiguous', terminal: true }),
@@ -3039,7 +3054,7 @@ if (ui === undefined) {
       'in-scope descendant ambiguity must be terminal; text-position/xpath cannot override it')
     // Self-anchor semantics preserved: a plain weak ambiguity still lets a later
     // strategy resolve (A3/T33/T34 behavior).
-    const weak = ui.annotationResolveStatus({
+    const weak = annotationResolveStatus({
       ...base,
       liveInfo,
       resolveTextQuote: () => 'ambiguous',
@@ -3048,7 +3063,7 @@ if (ui === undefined) {
     assert.deepEqual(plain(weak), { status: 'resolved', via: 'text-position' })
     // Empty scope -> the resolver returns terminal only when the scope itself is
     // ambiguous; a normal fallback target still resolves.
-    const fallback = ui.annotationResolveStatus({
+    const fallback = annotationResolveStatus({
       ...base,
       liveInfo,
       resolveTextQuote: () => 'resolved',
@@ -3095,15 +3110,15 @@ if (ui === undefined) {
       actualName: ''
     })
     const base = { candidates, expectedTag: 'use', queryAll, liveInfo, weakIdentity: true }
-    assert.equal(ui.resolveRefStatus(base), 'missing',
+    assert.equal(resolveRefStatus(base), 'missing',
       'weak identity must not promote a same-tag generic look-alike to Resolved')
-    assert.equal(ui.resolveRefStatus({ ...base, corroborate: () => true }), 'missing',
+    assert.equal(resolveRefStatus({ ...base, corroborate: () => true }), 'missing',
       'ancestor corroboration alone does not promote an icon-only look-alike without a quote assertion')
     // R1 (ii): quote assertion rejects a structural hit whose content no longer
     // matches the captured quote, even for a strong identity.
-    assert.equal(ui.resolveRefStatus({ ...base, weakIdentity: false, assertQuote: () => false }), 'missing',
+    assert.equal(resolveRefStatus({ ...base, weakIdentity: false, assertQuote: () => false }), 'missing',
       'maybeAssertQuote must reject a mismatching structural hit')
-    assert.equal(ui.resolveRefStatus({ ...base, weakIdentity: false, assertQuote: () => true }), 'resolved',
+    assert.equal(resolveRefStatus({ ...base, weakIdentity: false, assertQuote: () => true }), 'resolved',
       'a corroborated structural hit still resolves')
     // R1 (i): stale unique selector 0 hits -> weak identity -> Missing.
     const stale = {
@@ -3112,7 +3127,7 @@ if (ui === undefined) {
       uniqueSelector: '[data-never]',
       queryAll: (selector) => (selector === '[data-never]' ? [] : [{ tagName: 'use', isConnected: true, textContent: '' }])
     }
-    assert.equal(ui.resolveRefStatus(stale), 'missing')
+    assert.equal(resolveRefStatus(stale), 'missing')
     // R2: ephemeral/floating contract — only visible CSS resolution survives.
     const floatingRef = { locator: { surface: 'floating', ephemeral: true } }
     // A3/T49: surface gone => Missing for ALL outcomes (CSS and text layer).
@@ -3184,12 +3199,12 @@ if (ui === undefined) {
   })
 
   test('A3/T68: native right-Sidebar pane rail offset geometry', () => {
-    assert.equal(ui.annotationRailRightForPane({ left: 950, right: 1728, width: 778 }, 1728), 778)
-    assert.equal(ui.annotationRailRightForPane({ left: 1200, right: 1728, width: 528 }, 1728), 528)
-    assert.equal(ui.annotationRailRightForPane(null, 1728), 0)
-    assert.equal(ui.annotationRailRightForPane({ left: 950, right: 1700, width: 750 }, 1728), 0, 'a pane not flush to the right edge does not dock the rail')
-    assert.equal(ui.annotationRailRightForPane({ left: 100, right: 1728, width: 1628 }, 1728), 0, 'a near-fullscreen pane has no room for the rail')
-    assert.equal(ui.annotationRailRightForPane({ left: 950, right: 1728, width: 60 }, 1728), 0, 'a collapsed pane is ignored')
+    assert.equal(annotationRailRightForPane({ left: 950, right: 1728, width: 778 }, 1728), 778)
+    assert.equal(annotationRailRightForPane({ left: 1200, right: 1728, width: 528 }, 1728), 528)
+    assert.equal(annotationRailRightForPane(null, 1728), 0)
+    assert.equal(annotationRailRightForPane({ left: 950, right: 1700, width: 750 }, 1728), 0, 'a pane not flush to the right edge does not dock the rail')
+    assert.equal(annotationRailRightForPane({ left: 100, right: 1728, width: 1628 }, 1728), 0, 'a near-fullscreen pane has no room for the rail')
+    assert.equal(annotationRailRightForPane({ left: 950, right: 1728, width: 60 }, 1728), 0, 'a collapsed pane is ignored')
   })
 
   //#region geometry and layout
