@@ -11,14 +11,14 @@
  * feature code can be evaluated against browser stubs and its registration
  * captured.
  *
- * ## The test seam (CONTRACT.md §3.7)
+ * ## The test seam
  *
- * The factory ends with a guarded block: when `globalThis.__POWER_SUITE_TEST_
- * HOOKS__` is an object it sets `__POWER_SUITE_TEST_HOOKS__.uiAnnotation` to an
- * object of side-effect-free helpers (`normalizeSettings`, `sanitizeText`,
- * `buildElementRef`, `reduceAnnotationState`, the serializers, the collection
- * functions, the clamp/layout math, …). Production never defines the flag, so
- * the block is inert in the browser.
+ * The 112-key annotation pass-through seam is retired; pure annotation models
+ * are imported directly by their tests. The factory still publishes the
+ * narrow, read-only diagnostics needed by the live e2e: the annotation
+ * controller's `debugFallbackScanProbe` and the sidebar-width attach `probe`.
+ * Production never defines `globalThis.__POWER_SUITE_TEST_HOOKS__`, so the block
+ * is inert in the browser.
  *
  * This helper therefore:
  *
@@ -366,23 +366,4 @@ export function createStubRequire() {
   return function stubRequire(specifier) {
     return known[specifier] ?? {}
   }
-}
-
-/**
- * Read the UI-annotation seam with a clear failure when it is missing.
- * @param {object} [hooks] - hook bag from {@link loadClientModule}.
- * @returns {object} the `uiAnnotation` seam object.
- * @throws {Error} when `src/client.js` has no seam (pre-feature state).
- */
-export function requireUiAnnotation(hooks) {
-  const bag = hooks ?? loadClientModule().hooks
-  if (!bag || typeof bag !== 'object' || bag.uiAnnotation === undefined || bag.uiAnnotation === null) {
-    const found = bag && typeof bag === 'object' ? Object.keys(bag) : []
-    throw new Error(
-      'src/client.js does not expose the UI-annotation test seam yet: '
-      + 'expected the factory to set globalThis.__POWER_SUITE_TEST_HOOKS__.uiAnnotation '
-      + `(CONTRACT.md §3.7). Hook keys found: ${found.length > 0 ? found.join(', ') : '(none)'}.`
-    )
-  }
-  return bag.uiAnnotation
 }

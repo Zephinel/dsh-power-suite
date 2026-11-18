@@ -8,7 +8,8 @@
 
 `npm run typecheck:browser` typechecks the browser entry against a DOM-lib
 profile and is gated at 0 by `npm run check` (together with the root strict
-typecheck). `npm run build` bundles `src/index.ts` (Host ESM) and the ES-module browser
+typecheck, the DOM-free `tsconfig.host.json` profile, the suppression-comment
+scan and the built `lib/client.js` execution smoke). `npm run build` bundles `src/index.ts` (Host ESM) and the ES-module browser
 entry `src/client.js` (plus `src/browser/`) into the gitignored `lib/` entries
 with esbuild; the served client is a classic-script IIFE. The package has
 no runtime dependencies; `npm pack` builds through `prepare`.

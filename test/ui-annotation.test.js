@@ -2072,10 +2072,9 @@ if (ui === undefined) {
   //#endregion
 
   test('A3/T6: the mark overlay is pointer-transparent and the detail card keeps its markers', () => {
-    const source = client.source
+    const installSource = readFileSync(new URL('../src/browser/ui-annotation/install.ts', import.meta.url), 'utf8')
     const componentsSource = readFileSync(new URL('../src/browser/ui-annotation/components.ts', import.meta.url), 'utf8')
-    assert.equal(typeof source, 'string')
-    assert.ok(source.includes("from './browser/ui-annotation/styles.ts'"), 'the annotation stylesheet is mounted from the module')
+    assert.ok(installSource.includes("from './styles.ts'"), 'the annotation stylesheet is mounted from the module')
     const css = ANNOTATION_CSS
     assert.ok(css.includes('.psa-mark{'), 'the page mark rule exists')
     const markRule = css.slice(css.indexOf('.psa-mark{'), css.indexOf('}', css.indexOf('.psa-mark{')))

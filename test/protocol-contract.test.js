@@ -113,13 +113,27 @@ test('the settings enums/defaults have one shared owner used by both halves', ()
   assert.equal(HOST_RECENT_SESSION_MINUTES, RECENT_SESSION_MINUTES)
   assert.equal(HOST_ACTIVE_PROJECT_DAYS, ACTIVE_PROJECT_DAYS)
   assert.equal(HOST_DEFAULT_SETTINGS, DEFAULT_SETTINGS)
+  const browserRoot = fileURLToPath(new URL('../src/browser', import.meta.url))
   const browserSources = [
     clientSource,
-    readFileSync(new URL('../src/browser/settings/store.ts', import.meta.url), 'utf8'),
-    readFileSync(new URL('../src/browser/settings/page.ts', import.meta.url), 'utf8')
+    ...readdirSync(browserRoot, { recursive: true })
+      .filter((name) => typeof name === 'string' && name.endsWith('.ts'))
+      .map((name) => readFileSync(join(browserRoot, name), 'utf8'))
   ].join('\n')
   assert.match(browserSources, /from '\.\.\/\.\.\/shared\/protocol\.ts'/u)
   for (const name of ['PROMPT_HISTORY_MODIFIERS', 'RECENT_SESSION_MINUTES', 'ACTIVE_PROJECT_DAYS', 'DEFAULT_SETTINGS']) {
     assert.doesNotMatch(browserSources, new RegExp(`const ${name} = `, 'u'), `${name} must come from the shared contract`)
+  }
+})
+
+
+test('Host sources never import browser modules', () => {
+  const roots = ['../src/features', '../src/host', '../src/shared'].map((relative) => fileURLToPath(new URL(relative, import.meta.url)))
+  for (const root of roots) {
+    for (const name of readdirSync(root, { recursive: true })) {
+      if (typeof name !== 'string' || !name.endsWith('.ts')) continue
+      const text = readFileSync(join(root, name), 'utf8')
+      assert.doesNotMatch(text, /from\s+['"][^'"]*\/browser\//u, `${root}/${name} must not import src/browser`)
+    }
   }
 })

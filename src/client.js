@@ -6,21 +6,10 @@ import { installQuickLook } from './browser/hover-quick-look/install.ts'
 import { createUpdateCheck } from './browser/update-check/install.ts'
 import { createSidebarWidthController } from './browser/sidebar-width/install.ts'
 import {
-  filesArtifactsInitialState,
-  filesArtifactsPhaseMs,
-  filesArtifactsReduce
-} from './browser/artifacts/model.ts'
-import {
   appUrl,
-  artifactContentKind,
-  artifactKey,
-  artifactUrl,
   attachmentUrl,
   formatBytes,
-  isImageArtifact,
-  openArtifactPreview
 } from './browser/artifacts/urls.ts'
-import { copyArtifactContent, copyText } from './browser/artifacts/clipboard.ts'
 import { ARTIFACTS_NS } from './browser/artifacts/copy.ts'
 import { createArtifactsComponents } from './browser/artifacts/panel.ts'
 import { createPromptHistorySeat } from './browser/prompt-history/seat.ts'
@@ -33,155 +22,8 @@ import { createInterruptedSessionsFeature } from './browser/interrupted-sessions
 import { createPromptHistoryPreview } from './browser/prompt-history/preview.ts'
 import { ROUTES, browserRoute } from './shared/routes.ts'
 import { createComposerImageGallery } from './browser/composer-gallery/install.ts'
-import {
-  MODIFIER_CHOICES,
-  SETTINGS_STORAGE_KEY,
-  modifierMatches,
-  parseStoredSettings,
-  resolveModifierChange,
-  serializeSettings
-} from './browser/ui-annotation/settings.ts'
-import {
-  annotationNormalizeQuoteText,
-  normalizeUserNote,
-  sanitizeAttributeName,
-  sanitizeAttributeValue,
-  sanitizeText,
-  textDigest
-} from './browser/ui-annotation/text.ts'
-import {
-  ANNOTATION_EMPTY_TEXT_DIGEST,
-  annotationAncestorTagChain,
-  annotationCopyAnchorDecision,
-  annotationDescendantAncestorMatches,
-  annotationEphemeralOutcome,
-  annotationFallbackCacheKey,
-  annotationFirstTextLeafDescendant,
-  annotationFullXPathOf,
-  annotationHasStrongIdentity,
-  annotationJsPathFor,
-  annotationRenderedTextOf,
-  annotationScopeAuthorityOutcome,
-  annotationScoreQuoteMatches,
-  annotationStatusConfidence,
-  annotationStatusLabelKey,
-  annotationTextPositionOf,
-  annotationTextQuoteOf,
-  annotationXPathOf
-} from './browser/ui-annotation/anchors.ts'
-import {
-  annotationRoutePath,
-  annotationWorkspaceLabel,
-  formatAnnotationTime,
-  normalizeAnnotationBounds,
-  sessionShortLabel
-} from './browser/ui-annotation/format.ts'
-import {
-  ANNOTATION_DETAIL_SIZE,
-  annotationSegmentDisplayLabel,
-  annotationSegmentedIndex,
-  clampDetailCardPosition,
-  clampLauncherPosition,
-  clampPopoverPosition,
-  clampPopoverPositionToViewport,
-  computeRailWidth,
-  layoutModeFor
-} from './browser/ui-annotation/geometry.ts'
-import {
-  ANNOTATION_MAX_ANCESTORS,
-  annotationIsGeneratedClass,
-  annotationLocatorText,
-  annotationStableSelectorCandidate,
-  annotationTagPath,
-  buildElementRef,
-  buildUniqueSelector,
-  describeLocator,
-  elementLabel,
-  identityKeyOf,
-  isDynamicValue,
-  isFormTag
-} from './browser/ui-annotation/identity.ts'
-import {
-  ANNOTATION_RECORD_LIMIT,
-  ANNOTATION_RECORDS_STORAGE_KEY,
-  annotationEntryOrdinals,
-  annotationFilterEntries,
-  annotationFindGroup,
-  annotationFindRecord,
-  annotationFlattenRecords,
-  annotationGroupFromSelection,
-  annotationGroupItems,
-  annotationIsGroup,
-  annotationMarkerBadgeText,
-  annotationScopeCounts,
-  annotationSelectedEntries,
-  annotationSidebarCounts,
-  annotationTotalItemCount,
-  annotationUndoRemove,
-  annotationUndoRemoveMany,
-  collectionAddGroup,
-  collectionClear,
-  parseAnnotationStore,
-  serializeAnnotationStore
-} from './browser/ui-annotation/records.ts'
-import {
-  createAnnotationState,
-  reduceAnnotationState
-} from './browser/ui-annotation/reducer.ts'
-import {
-  annotationResolveStatus,
-  resolveNodeCandidate
-} from './browser/ui-annotation/resolution.ts'
-import {
-  ANNOTATION_CHIP_CANDIDATE_LIMIT,
-  ANNOTATION_CHIP_SOURCE,
-  annotationChipCandidates,
-  annotationChipRefBatch,
-  annotationChipRefOf,
-  batchScopeSplit,
-  parseAnnotationChipRef,
-  serializeAnnotationChip,
-  serializeBatchEntries,
-  serializeQuickReference
-} from './browser/ui-annotation/serializers.ts'
-import {
-  annotationLeafPickIndex,
-  annotationRailRightForPane,
-  annotationSurfaceLevels,
-  annotationSurfacePinEligible,
-  annotationSurfacePinEventMatches,
-  annotationSurfaceRoot,
-  bindAnnotationSurfaceDefaults
-} from './browser/ui-annotation/surface.ts'
-import { ANNOTATION_CSS } from './browser/ui-annotation/styles.ts'
 import { createAnnotationComponents } from './browser/ui-annotation/components.ts'
 import { createUiAnnotationInstaller } from './browser/ui-annotation/install.ts'
-import { createAnnotationController } from './browser/ui-annotation/controller.ts'
-import {
-  ANNOTATION_CHIP_ORDER,
-  ANNOTATION_CHIP_TRIGGER,
-  ANNOTATION_NS,
-  ANNOTATION_OVERLAY_ID,
-  ANNOTATION_SEAT_ID
-} from './browser/ui-annotation/constants.ts'
-import {
-  ANNOTATION_LAUNCHER_SIZE,
-  ANNOTATION_POPOVER_SIZE,
-  annotationAccessibleName,
-  annotationBoxCandidateElements,
-  annotationCandidateChain,
-  annotationDescriptorOf,
-  annotationElementVisible,
-  annotationEventElement,
-  annotationFocusComposer,
-  annotationInsertLabels,
-  annotationLayoutFrame,
-  annotationMeasureSidebarWidths,
-  annotationRectOf,
-  annotationResolveNode,
-  annotationViewport
-} from './browser/ui-annotation/dom.ts'
-import { annotationReadStorage, annotationWriteStorage } from './browser/ui-annotation/storage.ts'
 import {
   dwNeedsProjectionRead,
   dwProjectionSections
@@ -284,7 +126,6 @@ window.__ModuleLoader__.load({
 
     /** Authenticated exact routes registered by the Host half. */
     const RAW_ROUTE = browserRoute(ROUTES.sessionArtifactsRaw)
-    const ATTACHMENT_ROUTE = browserRoute(ROUTES.sessionArtifactsAttachment)
     const PREVIEW_ROUTE = browserRoute(ROUTES.sessionArtifactsPreview)
 
     /** The bundle's npm package name: configuration slot key and settings identity. */

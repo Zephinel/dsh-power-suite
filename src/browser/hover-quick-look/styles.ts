@@ -66,4 +66,5 @@ export const QUICKLOOK_CSS = `
 .dsa-code .tok-decorator{color:var(--dsw-alias-state-warn-primary)}
 .dsa-code .tok-symbol{color:var(--dsw-alias-state-success-primary)}
 .dsa-code .tok-operator{color:var(--dsw-alias-label-tertiary)}
+.dsa-code .tok-punct{color:var(--dsw-alias-label-tertiary)}
 `

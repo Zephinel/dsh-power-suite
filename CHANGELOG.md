@@ -1,3 +1,7 @@
+### Changed
+
+- **Review hardening of the migration gates.** Added a Host-only DOM-free typecheck (`tsconfig.host.json`), a zero-tolerance `@ts-nocheck`/`@ts-ignore` scan, a vm execution smoke for the shipped `lib/client.js` (module id + factory inject/apply), full `src/browser/**` coverage for the settings-constant contract scan, a Host→browser import-boundary test, removed the entry's unused imports, restored the Quick Look `.tok-punct` rule, and cleaned the retired annotation-seam helper. Tests are now 394/394; the gate fails on injected `@ts-nocheck` and on a broken built browser bundle (verified with negative probes).
+
 # Changelog
 
 All notable changes to this repository are documented here. The format follows
@@ -17,8 +21,6 @@ All notable changes to this repository are documented here. The format follows
 - **Annotation clicks no longer throw after the identity extraction (Phase 3q).** `annotationStableSelectorCandidate` had extracted the DOM `getAttribute` method and called it unbound, so every click-based selection threw `TypeError: Illegal invocation`; it now binds the method to its element, with a regression test. The live S4 scenario returns to its baseline 2/3 (the remaining outline miss reproduces on the pre-Phase-3 client) and smoke is 6/6 with 0 page errors.
 
 - **Cache-hit percentage no longer hangs on inconsistent data (Phase 3m).** `dwCacheHitPercent` treated `cacheRead > billedInput` as a negative loop increment and never terminated; it now returns `null` for impossible/negative/non-finite inputs while all valid outputs stay byte-identical (7,389-case differential oracle). The one production call site already hides a `null` cache-hit line.
-
-### Changed
 
 - **M4 browser typing: ambient types and the dynamic-Workspaces installer.** Added vendored minimal ambient declarations (`src/browser/ambient/`: react/react-dom/ui-primitives and the DSH client context/module-loader surface) with no new npm dependency and no `any`, and moved the entire dynamic-Workspaces controller into `src/browser/dynamic-workspaces/install.ts` behind `createDynamicWorkspacesInstaller(deps) -> { install(ctx), hovercardSections }`. `src/client.js` drops from 18,624 to 15,061 lines and the browser typecheck baseline drops from 1,720 to 1,522 (dynamic region 254 -> 1); DW CSS/storage keys/DOM markers and behavior are unchanged, and live sidebar smoke/row-menu/interrupted suites pass. The stricter React inference surfaced 44 TS2322 / 7 TS2740 / 5 TS2353 null-seed state issues for M5.
 

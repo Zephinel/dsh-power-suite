@@ -36,10 +36,10 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 ### Current gates (2026-11-18, Node 24.22.3)
 
 - `npm run build`: **`lib/index.js` 105.9 kB** (Host ESM bundle) and
-  **`lib/client.js` 934.2 kB** (ESM `src/client.js` + `src/browser/` bundled to a
+  **`lib/client.js` 934.1 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **393 tests, 393 passed, 0 failed**, 28 test files — Host stores/routes
+- `npm test`: **394 tests, 394 passed, 0 failed**, 28 test files — Host stores/routes
   plus the browser-side derivations (the vm harness bundles the ESM client), the
   release-notes approval round-trip, the protocol contract guard for duplicated
   route/enum literals, the shared route and settings contracts, the durable
@@ -53,7 +53,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 - `npm run check` reports an explicit-`any` budget: **0 sites** in `src/**/*.ts`;
   the gate strips comments/strings and fails on any `any` code token (aliases,
   unions and generics included) — a lexical tripwire at 0, not a proof.
-- `rm -rf lib && node --test test/*.test.js`: **393/393** — the suite imports the
+- `rm -rf lib && node --test test/*.test.js`: **394/394** — the suite imports the
   `.ts` sources directly (Node >= 22.18 native type stripping), so the tests need
   no build.
 - `npm run check`: passed (`99 TypeScript modules, 1 JavaScript module(s), 28 test files`); it builds `lib/` first,
@@ -122,6 +122,13 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   lib, `types: []`, `dom.d.ts` excluded) now typechecks the real entry, and
   `--check` is wired into `npm run check`, so the browser profile is a hard gate
   rather than the earlier report-only ratchet.
+
+- `npm run check` also enforces: **0** `@ts-nocheck`/`@ts-ignore` comments in
+  `src/**`; a **DOM-free Host-only profile** (`tsconfig.host.json`) so the browser
+  shim cannot leak into Host code; and a **built-browser smoke** that executes the
+  shipped `lib/client.js` in a vm, asserts the DSH module id and calls the factory
+  (`inject`/`apply`) — the source e2e bundle alone no longer stands in for the
+  artifact.
 - `npm run check:release`: **PASS** — 75 packaged files installed into a throwaway
   `$DSH_HOME`; it deletes `lib/` first so `npm pack` must rebuild it through
   `prepare`, then the packed `lib/` matches the fresh build, every other packed

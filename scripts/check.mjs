@@ -15,6 +15,7 @@
  * Run with `npm run check`. CI runs the same script.
  */
 import { execFileSync } from 'node:child_process'
+import vm from 'node:vm'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -130,6 +131,29 @@ if (typecheckPassed) {
   console.log(`any budget: ${anySites} explicit any sites in src/**/*.ts (limit ${anyBudget})`)
 }
 
+// 2b. Suppression comments are never a way out of the type gate. The browser
+// entry legitimately used @ts-nocheck during the migration; that is retired, so
+// any @ts-nocheck/@ts-ignore in src is now a failure.
+{
+  const suppressionFiles = [...typeScriptSources, ...sources]
+  const suppressions = []
+  for (const file of suppressionFiles) {
+    const text = readFileSync(file, 'utf8')
+    const matches = text.match(/@ts-nocheck|@ts-ignore/gu)
+    if (matches !== null) suppressions.push(`${file.slice(root.length + 1)}: ${matches.join(', ')}`)
+  }
+  if (suppressions.length > 0) failures.push(`type suppressions are not allowed: ${suppressions.join('; ')}`)
+  console.log(`suppression budget: ${suppressions.length} @ts-nocheck/@ts-ignore comment(s) in src (limit 0)`)
+}
+
+// 2c. Host-only profile: the browser DOM shim must not leak into Host sources.
+try {
+  run([tsc, '-p', 'tsconfig.host.json', '--noEmit'])
+  console.log('host typecheck: ok (tsconfig.host.json; DOM-free profile)')
+} catch {
+  failures.push('host typecheck failed: node node_modules/typescript/bin/tsc -p tsconfig.host.json --noEmit')
+}
+
 // 3. Manifest checks.
 const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
 for (const [name, target] of Object.entries(pkg.exports ?? {})) {
@@ -212,6 +236,83 @@ if (!existsSync(resolve(root, 'CHANGELOG.md'))) failures.push('CHANGELOG.md is m
     console.log(`built-entry smoke: update route reports current=${pkg.version}`)
   } catch (error) {
     failures.push(`built-entry smoke failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+// 4b. Built browser entry: the shipped lib/client.js must execute and register
+// the DSH module loader. The source e2e harness bundles src/ separately, so
+// without this check a bundle-only regression could ship unexecuted.
+{
+  try {
+    const clientBundle = readFileSync(resolve(root, 'lib/client.js'), 'utf8')
+    const noop = () => {}
+    const proxy = new Proxy(function () {}, { get: () => proxy, apply: () => proxy, construct: () => proxy })
+    let registration = null
+    const sandbox = {
+      window: { __ModuleLoader__: { load: (value) => { registration = value } } },
+      document: {
+        addEventListener: noop,
+        removeEventListener: noop,
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        createElement: () => proxy,
+        body: proxy,
+        documentElement: proxy,
+        createTextNode: () => proxy
+      },
+      console,
+      setTimeout: () => 0,
+      clearTimeout: noop,
+      setInterval: () => 0,
+      clearInterval: noop,
+      queueMicrotask: noop,
+      requestAnimationFrame: () => 0,
+      cancelAnimationFrame: noop,
+      matchMedia: () => ({ matches: false, addEventListener: noop, removeEventListener: noop }),
+      MutationObserver: class { observe() {} disconnect() {} },
+      ResizeObserver: class { observe() {} disconnect() {} },
+      HTMLElement: class {},
+      HTMLCanvasElement: class {},
+      HTMLImageElement: class {},
+      navigator: { clipboard: { writeText: async () => {} } },
+      localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+      location: { origin: 'http://localhost' },
+      Response,
+      Headers,
+      fetch: async () => ({ ok: true, json: async () => ({}) })
+    }
+    sandbox.globalThis = sandbox
+    sandbox.self = sandbox.window
+    vm.runInNewContext(clientBundle, sandbox, { filename: 'lib/client.js' })
+    if (registration === null || registration.id !== '@zephinel/dsh-power-suite') {
+      throw new Error('built browser entry did not register the expected DSH module id')
+    }
+    const react = {
+      createElement: proxy,
+      Fragment: proxy,
+      useState: (value) => [value, noop],
+      useReducer: (_reducer, initial) => [initial, noop],
+      useRef: (value) => ({ current: value }),
+      useEffect: noop,
+      useLayoutEffect: noop,
+      useCallback: (fn) => fn,
+      useMemo: (fn) => fn(),
+      useSyncExternalStore: (getSnapshot) => getSnapshot(),
+      Component: class {},
+      memo: (component) => component,
+      forwardRef: (component) => component
+    }
+    const registrationValue = registration
+    const module = registrationValue.factory((specifier) => {
+      if (specifier === 'react') return react
+      if (specifier === 'react-dom') return { createPortal: proxy }
+      return proxy
+    })
+    if (typeof module?.apply !== 'function') throw new Error('built browser factory returned no apply()')
+    if (!Array.isArray(module.inject) || module.inject.length === 0) throw new Error('built browser factory returned no inject list')
+    console.log(`built-browser smoke: ${registrationValue.id} registered; factory exposes ${module.inject.length} injects`)
+  } catch (error) {
+    failures.push(`built-browser smoke failed: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
