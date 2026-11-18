@@ -7,7 +7,7 @@
 - A DeepSeek Harness profile that can install local bundles (`web` by default).
 
 `npm run typecheck:browser` measures the diagnostics that would appear if
-`src/client.js` dropped `// @ts-nocheck` (browser profile, temp copy) and checks
+`src/client.js` dropped `// @ts-nocheck` (browser DOM profile) and checks
 them against `scripts/browser-typecheck-baseline.json`; it is report-only and
 not part of `npm run check` yet. `npm run build` bundles `src/index.ts` (Host ESM) and the ES-module browser
 entry `src/client.js` (plus `src/browser/`) into the gitignored `lib/` entries
@@ -37,7 +37,7 @@ truth and stays repo-only.
 ```bash
 npm run build               # esbuild: src/ → gitignored lib/index.js + lib/client.js
 npm test                    # node --test test/*.test.js: imports the .ts sources via Node >= 22.18 type stripping; no build
-npm run typecheck           # tsc --noEmit: no-emit strict check over the Host TypeScript sources (src/client.js opted out)
+npm run typecheck           # tsc --noEmit: strict check over Host + browser TypeScript sources
 npm run check               # build + syntax + typecheck + manifest + built-entry smoke + docs links + tests + release-notes gate, then pack:check
 npm run pack:check          # npm pack --dry-run --json (prepare builds); inspect the published file list
 npm run check:release-notes # release-notes Highlights for the current package version

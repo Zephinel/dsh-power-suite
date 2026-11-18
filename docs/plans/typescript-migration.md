@@ -593,3 +593,20 @@ interrupted copy/icons 15, settings page 10, preset routing 10, artifacts 5
 plus non-feature helpers 29 / panel 20 / plugin 11 and 8 outside regions. The
 `@ts-nocheck` flip is the last M5 step once those reach zero and the browser
 profile is promoted into the gate.
+
+
+**M5c / Phase 3 complete (2026-11-18).** The remaining regions were extracted
+into typed `src/browser/**` modules (artifacts, workspace presets, settings,
+prompt history, interrupted sessions, draft attachments, composer gallery) and
+the browser entry was finally typed: **0 diagnostics** under
+`tsconfig.browser.json`, **0** under the root profile, `grep @ts-nocheck src`
+returns nothing, and `src/client.js` is **1,092 lines** of wiring (from 24.8k).
+The duplicate `collection.expand` key was split (`collection.expand` for the
+group control, `collection.expandNote` for the note editor; visible copy
+unchanged). `scripts/typecheck-browser-baseline.mjs` now runs the real profile
+directly (no temp-copy directive neutralisation), its baseline is `0`, and
+`npm run check` = `build && check.mjs && browser --check && pack:check`; the
+check output is `99 TypeScript modules, 1 JavaScript module(s), 28 test files`.
+Live evidence after the flip: annotation smoke 6/6, S4 7/0/0, S10 8/0/0, S12
+7/0/0, sidebar smoke 4/4, injected update-prompt 22/22, 0 page errors. Phase 4
+(version bump, release notes, publish/rollout) is the only phase left.
