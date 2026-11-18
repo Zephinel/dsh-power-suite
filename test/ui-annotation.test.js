@@ -93,6 +93,10 @@ import {
   upsertAnnotationRecord
 } from '../src/browser/ui-annotation/records.ts'
 import {
+  createAnnotationState,
+  reduceAnnotationState
+} from '../src/browser/ui-annotation/reducer.ts'
+import {
   annotationNormalizeQuoteText as normalizeAnnotationQuote,
   cssIdentifier as escapeAnnotationIdentifier,
   normalizeUserNote as normalizeAnnotationNote,
@@ -877,7 +881,7 @@ if (ui === undefined) {
   const STATE_KEYS = ['batchOpen', 'box', 'collection', 'editing', 'feedback', 'filter', 'hoverId', 'note', 'passThrough', 'phase', 'selection', 'sessionId', 'view']
 
   test('reducer starts from the frozen off state and activates to idle', () => {
-    const initial = ui.createAnnotationState()
+    const initial = createAnnotationState()
     assert.deepEqual(Object.keys(initial).sort(), STATE_KEYS)
     assert.equal(initial.phase, 'off')
     assert.equal(initial.view, 'collection', 'the managed list is the default rail body')
@@ -893,83 +897,83 @@ if (ui === undefined) {
     assert.equal(initial.feedback, null)
     assert.equal(initial.sessionId, null)
 
-    const active = ui.reduceAnnotationState(initial, { type: 'activate' })
+    const active = reduceAnnotationState(initial, { type: 'activate' })
     assert.equal(active.phase, 'idle')
     assert.equal(active.view, 'collection', 'activation shows the managed list immediately')
     assert.equal(initial.phase, 'off', 'reducer is pure')
   })
 
   test('reducer tracks hover, selects one element, edits the note, and deactivates', () => {
-    let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
-    state = ui.reduceAnnotationState(state, { type: 'hover', targetId: 'el-1' })
+    let state = reduceAnnotationState(createAnnotationState(), { type: 'activate' })
+    state = reduceAnnotationState(state, { type: 'hover', targetId: 'el-1' })
     assert.equal(state.hoverId, 'el-1')
 
     const ref = refOf({ name: 'New session' })
-    state = ui.reduceAnnotationState(state, { type: 'selectSingle', ref })
+    state = reduceAnnotationState(state, { type: 'selectSingle', ref })
     assert.equal(state.phase, 'selected')
     assert.equal(plain(state.selection).length, 1)
     assert.equal(state.selection[0].id, ref.id)
     assert.equal(state.note, '')
 
-    state = ui.reduceAnnotationState(state, { type: 'setNote', text: 'Align the icon' })
+    state = reduceAnnotationState(state, { type: 'setNote', text: 'Align the icon' })
     assert.equal(state.note, 'Align the icon')
-    state = ui.reduceAnnotationState(state, { type: 'beginEdit' })
+    state = reduceAnnotationState(state, { type: 'beginEdit' })
     assert.equal(state.editing, true)
-    state = ui.reduceAnnotationState(state, { type: 'endEdit' })
+    state = reduceAnnotationState(state, { type: 'endEdit' })
     assert.equal(state.editing, false)
 
-    state = ui.reduceAnnotationState(state, { type: 'deactivate' })
+    state = reduceAnnotationState(state, { type: 'deactivate' })
     assert.equal(state.phase, 'off')
     assert.deepEqual(plain(state.selection), [])
     assert.equal(state.note, '')
   })
 
   test('reducer multi-select toggles by identity without duplicates and derives the phase from the count', () => {
-    let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
+    let state = reduceAnnotationState(createAnnotationState(), { type: 'activate' })
     const first = refOf({ name: 'First', text: 'First' }, { order: 1 })
     const second = refOf({ name: 'Second', text: 'Second' }, { order: 2 })
 
-    state = ui.reduceAnnotationState(state, { type: 'toggleMulti', ref: first })
+    state = reduceAnnotationState(state, { type: 'toggleMulti', ref: first })
     assert.equal(state.phase, 'selected')
     assert.equal(plain(state.selection).length, 1)
 
-    state = ui.reduceAnnotationState(state, { type: 'toggleMulti', ref: second })
+    state = reduceAnnotationState(state, { type: 'toggleMulti', ref: second })
     assert.equal(state.phase, 'multi')
     assert.equal(plain(state.selection).length, 2)
 
-    state = ui.reduceAnnotationState(state, { type: 'toggleMulti', ref: second })
+    state = reduceAnnotationState(state, { type: 'toggleMulti', ref: second })
     assert.equal(state.phase, 'selected')
     assert.deepEqual(plain(state.selection).map((entry) => entry.id), [first.id], 'toggling removes, never duplicates')
 
     // The same element captured again has a different id but the same identity.
     const firstAgain = refOf({ name: 'First', text: 'First' }, { order: 8, at: 1_800_000_000_000 })
-    state = ui.reduceAnnotationState(state, { type: 'toggleMulti', ref: firstAgain })
+    state = reduceAnnotationState(state, { type: 'toggleMulti', ref: firstAgain })
     assert.deepEqual(plain(state.selection), [], 'identity-based toggle, not id-based')
 
-    state = ui.reduceAnnotationState(state, { type: 'setMulti', refs: [first, second, firstAgain, first] })
+    state = reduceAnnotationState(state, { type: 'setMulti', refs: [first, second, firstAgain, first] })
     const setIds = plain(state.selection).map((entry) => entry.id)
     assert.equal(new Set(setIds).size, setIds.length, 'setMulti never duplicates')
     assert.ok(setIds.includes(first.id) && setIds.includes(second.id))
   })
 
   test('reducer keeps the collection through deactivation and session switches', () => {
-    let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
+    let state = reduceAnnotationState(createAnnotationState(), { type: 'activate' })
     const ref = refOf({ name: 'Target' })
     const entry = entryOf(ref, 'Fix spacing')
-    state = ui.reduceAnnotationState(state, { type: 'collectionAdd', entry })
+    state = reduceAnnotationState(state, { type: 'collectionAdd', entry })
     assert.equal(plain(state.collection).length, 1)
     assert.equal(state.collection[0].note, 'Fix spacing')
 
-    const selected = ui.reduceAnnotationState(state, { type: 'selectSingle', ref: state.collection[0] })
-    const deactivated = ui.reduceAnnotationState(selected, { type: 'deactivate' })
+    const selected = reduceAnnotationState(state, { type: 'selectSingle', ref: state.collection[0] })
+    const deactivated = reduceAnnotationState(selected, { type: 'deactivate' })
     assert.equal(deactivated.phase, 'off')
     assert.equal(deactivated.view, 'collection', 'the next activation defaults to the list')
     assert.deepEqual(plain(deactivated.collection), plain(state.collection), 'collection survives deactivation')
     assert.deepEqual(plain(deactivated.selection), [])
 
-    const switched = ui.reduceAnnotationState(deactivated, { type: 'activate' })
-    const withSelection = ui.reduceAnnotationState(switched, { type: 'selectSingle', ref })
-    const switchedSession = ui.reduceAnnotationState(withSelection, { type: 'session', sessionId: SESSION_B })
+    const switched = reduceAnnotationState(deactivated, { type: 'activate' })
+    const withSelection = reduceAnnotationState(switched, { type: 'selectSingle', ref })
+    const switchedSession = reduceAnnotationState(withSelection, { type: 'session', sessionId: SESSION_B })
     assert.equal(switchedSession.sessionId, SESSION_B)
     assert.equal(switchedSession.view, 'collection', 'the list stays the default view across sessions')
     assert.deepEqual(plain(switchedSession.selection), [], 'session switch clears the selection')
@@ -977,70 +981,70 @@ if (ui === undefined) {
     assert.equal(switchedSession.note, '')
     assert.deepEqual(plain(switchedSession.collection), plain(state.collection), 'collection survives the switch')
 
-    const off = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'session', sessionId: SESSION_B })
+    const off = reduceAnnotationState(createAnnotationState(), { type: 'session', sessionId: SESSION_B })
     assert.equal(off.phase, 'off', 'a switch while inactive stays off')
   })
 
   test('reducer Esc ladder steps note -> selection -> settings -> off', () => {
     const ref = refOf({ name: 'Target' })
-    let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
-    state = ui.reduceAnnotationState(state, { type: 'selectSingle', ref })
-    state = ui.reduceAnnotationState(state, { type: 'beginEdit' })
+    let state = reduceAnnotationState(createAnnotationState(), { type: 'activate' })
+    state = reduceAnnotationState(state, { type: 'selectSingle', ref })
+    state = reduceAnnotationState(state, { type: 'beginEdit' })
 
-    state = ui.reduceAnnotationState(state, { type: 'exitOne' })
+    state = reduceAnnotationState(state, { type: 'exitOne' })
     assert.equal(state.editing, false, 'leaves the note editor first')
     assert.equal(state.phase, 'selected', 'the selection survives the first Esc')
 
-    state = ui.reduceAnnotationState(state, { type: 'exitOne' })
+    state = reduceAnnotationState(state, { type: 'exitOne' })
     assert.deepEqual(plain(state.selection), [], 'clears the selection next')
     assert.equal(state.phase, 'idle')
 
     // A3/T26: the list is the default view; settings is the only stepped-back view.
-    state = ui.reduceAnnotationState(state, { type: 'openView', view: 'settings' })
+    state = reduceAnnotationState(state, { type: 'openView', view: 'settings' })
     assert.equal(state.view, 'settings')
     assert.equal(state.phase, 'idle')
-    state = ui.reduceAnnotationState(state, { type: 'exitOne' })
+    state = reduceAnnotationState(state, { type: 'exitOne' })
     assert.equal(state.view, 'collection', 'Esc leaves settings back to the list')
     assert.equal(state.phase, 'idle')
 
-    state = ui.reduceAnnotationState(state, { type: 'exitOne' })
+    state = reduceAnnotationState(state, { type: 'exitOne' })
     assert.equal(state.phase, 'off', 'idle Esc turns the mode off')
   })
 
   test('reducer collection actions dedupe by identity and keep entries in order', () => {
-    let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
+    let state = reduceAnnotationState(createAnnotationState(), { type: 'activate' })
     const first = entryOf(refOf({ name: 'First', text: 'First' }, { order: 1 }), 'one')
     const second = entryOf(refOf({ name: 'Second', text: 'Second' }, { order: 2 }), 'two')
-    state = ui.reduceAnnotationState(state, { type: 'collectionAdd', entry: first })
-    state = ui.reduceAnnotationState(state, { type: 'collectionAdd', entry: second })
+    state = reduceAnnotationState(state, { type: 'collectionAdd', entry: first })
+    state = reduceAnnotationState(state, { type: 'collectionAdd', entry: second })
     assert.deepEqual(plain(state.collection).map((entry) => entry.note), ['one', 'two'])
 
     // Re-adding the same element updates its note in place (no duplicate row).
     const updated = entryOf(refOf({ name: 'First', text: 'First' }, { order: 1, at: 1_800_000_000_000 }), 'one updated')
-    state = ui.reduceAnnotationState(state, { type: 'collectionAdd', entry: updated })
+    state = reduceAnnotationState(state, { type: 'collectionAdd', entry: updated })
     assert.equal(plain(state.collection).length, 2)
     assert.deepEqual(plain(state.collection).map((entry) => entry.note), ['one updated', 'two'])
     assert.equal(state.collection[0].id, first.id, 'update keeps the original element identity')
 
-    state = ui.reduceAnnotationState(state, { type: 'collectionUpdateNote', refId: second.id, note: 'two updated' })
+    state = reduceAnnotationState(state, { type: 'collectionUpdateNote', refId: second.id, note: 'two updated' })
     assert.equal(state.collection[1].note, 'two updated')
 
-    state = ui.reduceAnnotationState(state, { type: 'collectionRemove', refId: first.id })
+    state = reduceAnnotationState(state, { type: 'collectionRemove', refId: first.id })
     assert.deepEqual(plain(state.collection).map((entry) => entry.note), ['two updated'])
 
-    state = ui.reduceAnnotationState(state, { type: 'collectionClear' })
+    state = reduceAnnotationState(state, { type: 'collectionClear' })
     assert.deepEqual(plain(state.collection), [])
   })
 
   test('reducer pass-through, box, and feedback are transient and never survive deactivation', () => {
-    let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
-    state = ui.reduceAnnotationState(state, { type: 'passThrough', on: true })
+    let state = reduceAnnotationState(createAnnotationState(), { type: 'activate' })
+    state = reduceAnnotationState(state, { type: 'passThrough', on: true })
     assert.equal(state.passThrough, true)
-    state = ui.reduceAnnotationState(state, { type: 'box', box: { x: 1, y: 2, width: 3, height: 4 } })
+    state = reduceAnnotationState(state, { type: 'box', box: { x: 1, y: 2, width: 3, height: 4 } })
     assert.deepEqual(plain(state.box), { x: 1, y: 2, width: 3, height: 4 })
-    state = ui.reduceAnnotationState(state, { type: 'feedback', feedback: { kind: 'info', text: 'hello', at: 1 } })
+    state = reduceAnnotationState(state, { type: 'feedback', feedback: { kind: 'info', text: 'hello', at: 1 } })
     assert.equal(state.feedback.text, 'hello')
-    state = ui.reduceAnnotationState(state, { type: 'deactivate' })
+    state = reduceAnnotationState(state, { type: 'deactivate' })
     assert.equal(state.passThrough, false)
     assert.equal(state.box, null)
     assert.equal(state.feedback, null)
@@ -1120,9 +1124,9 @@ if (ui === undefined) {
     assert.equal(seeded.list[0].note, 'keep me', 'setNote stays immutable')
 
     // The reducer collectionAdd action shares that boundary; the re-add path passes an empty note.
-    let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
-    state = ui.reduceAnnotationState(state, { type: 'collectionAdd', entry: entryOf(ref, 'reducer note') })
-    state = ui.reduceAnnotationState(state, { type: 'collectionAdd', entry: entryOf(sameElement, '') })
+    let state = reduceAnnotationState(createAnnotationState(), { type: 'activate' })
+    state = reduceAnnotationState(state, { type: 'collectionAdd', entry: entryOf(ref, 'reducer note') })
+    state = reduceAnnotationState(state, { type: 'collectionAdd', entry: entryOf(sameElement, '') })
     assert.equal(state.collection[0].note, 'reducer note', 'reducer re-add preserves the note too')
   })
 
@@ -1614,9 +1618,9 @@ if (ui === undefined) {
     const updated = collectionAdd(list, entryOf(recordAt(5), 'updated note'), 100)
     assert.equal(updated.rejected, false)
     assert.equal(updated.updated, true)
-    let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
+    let state = reduceAnnotationState(createAnnotationState(), { type: 'activate' })
     state = { ...state, collection: list }
-    const overflowState = ui.reduceAnnotationState(state, { type: 'collectionAdd', entry: entryOf(recordAt(999), 'overflow') })
+    const overflowState = reduceAnnotationState(state, { type: 'collectionAdd', entry: entryOf(recordAt(999), 'overflow') })
     assert.equal(overflowState, state, 'a refused add returns the same state reference')
   })
 
@@ -2111,37 +2115,37 @@ if (ui === undefined) {
   test('A3/T5: the new reducer actions commit, move, include, edit, remove, restore and undo', () => {
     const alpha = recordOf('Alpha')
     const beta = recordOf('Beta')
-    let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
-    state = ui.reduceAnnotationState(state, { type: 'annotationCommit', record: alpha, now: 1_000 })
+    let state = reduceAnnotationState(createAnnotationState(), { type: 'activate' })
+    state = reduceAnnotationState(state, { type: 'annotationCommit', record: alpha, now: 1_000 })
     assert.equal(state.collection.length, 1)
     assert.equal(state.collection[0].updatedAt, 1_000)
-    const again = ui.reduceAnnotationState(state, { type: 'annotationCommit', record: alpha, now: 1_000 })
+    const again = reduceAnnotationState(state, { type: 'annotationCommit', record: alpha, now: 1_000 })
     assert.equal(again.collection.length, 1, 'a re-commit of the same identity never duplicates')
     assert.equal(again.collection[0].id, state.collection[0].id, 'a re-commit keeps the record id')
-    state = ui.reduceAnnotationState(state, { type: 'annotationCommit', record: beta, now: 2_000 })
+    state = reduceAnnotationState(state, { type: 'annotationCommit', record: beta, now: 2_000 })
     assert.equal(state.collection.length, 2)
     assert.equal(state.collection[1].updatedAt, 2_000)
     assert.deepEqual(plain(state.collection.map((entry) => entry.order)), [0, 1], 'a new commit gets the next order')
 
-    state = ui.reduceAnnotationState(state, { type: 'annotationInclude', refId: beta.id, included: false })
+    state = reduceAnnotationState(state, { type: 'annotationInclude', refId: beta.id, included: false })
     assert.equal(state.collection[1].included, false)
-    state = ui.reduceAnnotationState(state, { type: 'annotationMove', refId: beta.id, delta: -1 })
+    state = reduceAnnotationState(state, { type: 'annotationMove', refId: beta.id, delta: -1 })
     assert.deepEqual(plain(state.collection.map((entry) => entry.id)), [beta.id, alpha.id])
-    state = ui.reduceAnnotationState(state, { type: 'annotationUpdateNote', refId: beta.id, note: 'edited', now: 3_000 })
+    state = reduceAnnotationState(state, { type: 'annotationUpdateNote', refId: beta.id, note: 'edited', now: 3_000 })
     assert.equal(state.collection[0].note, 'edited')
     assert.equal(state.collection[0].updatedAt, 3_000)
-    state = ui.reduceAnnotationState(state, { type: 'annotationRemove', refId: alpha.id })
+    state = reduceAnnotationState(state, { type: 'annotationRemove', refId: alpha.id })
     assert.equal(state.collection.length, 1)
-    state = ui.reduceAnnotationState(state, { type: 'annotationRestore', record: alpha, index: 1 })
+    state = reduceAnnotationState(state, { type: 'annotationRestore', record: alpha, index: 1 })
     assert.deepEqual(plain(state.collection.map((entry) => entry.id)), [beta.id, alpha.id])
     const cleared = annotationUndoRemove(state.collection, null, 'clear', 4_000)
-    const emptied = ui.reduceAnnotationState(state, { type: 'collectionClear' })
+    const emptied = reduceAnnotationState(state, { type: 'collectionClear' })
     assert.equal(emptied.collection.length, 0)
-    state = ui.reduceAnnotationState(emptied, { type: 'annotationUndo', undo: cleared.undo })
+    state = reduceAnnotationState(emptied, { type: 'annotationUndo', undo: cleared.undo })
     assert.equal(state.collection.length, 2, 'annotationUndo restores a cleared collection')
-    state = ui.reduceAnnotationState(state, { type: 'annotationUndo', undo: cleared.undo })
+    state = reduceAnnotationState(state, { type: 'annotationUndo', undo: cleared.undo })
     assert.equal(state.collection.length, 2, 'a repeated undo never duplicates records')
-    const deactivated = ui.reduceAnnotationState(state, { type: 'deactivate' })
+    const deactivated = reduceAnnotationState(state, { type: 'deactivate' })
     assert.equal(deactivated.collection.length, 2, 'records survive deactivation')
   })
 
@@ -2286,17 +2290,17 @@ if (ui === undefined) {
     const alpha = recordOf('Alpha')
     const beta = recordOf('Beta')
     const gamma = recordOf('Gamma')
-    let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
-    for (const record of [alpha, beta, gamma]) state = ui.reduceAnnotationState(state, { type: 'annotationCommit', record, now: 1_000 })
-    state = ui.reduceAnnotationState(state, {
+    let state = reduceAnnotationState(createAnnotationState(), { type: 'activate' })
+    for (const record of [alpha, beta, gamma]) state = reduceAnnotationState(state, { type: 'annotationCommit', record, now: 1_000 })
+    state = reduceAnnotationState(state, {
       type: 'annotationIncludes',
       changes: [{ refId: alpha.id, included: false }, { refId: gamma.id, included: false }]
     })
     assert.deepEqual(plain(state.collection.map((entry) => entry.included)), [false, true, false])
-    state = ui.reduceAnnotationState(state, { type: 'annotationMove', refId: gamma.id, delta: -1 })
+    state = reduceAnnotationState(state, { type: 'annotationMove', refId: gamma.id, delta: -1 })
     assert.deepEqual(plain(state.collection.map((entry) => entry.id)), [alpha.id, gamma.id, beta.id])
     assert.deepEqual(plain(state.collection.map((entry) => entry.order)), [0, 1, 2], 'the move keeps order contiguous')
-    state = ui.reduceAnnotationState(state, { type: 'annotationRemoveMany', refIds: [alpha.id, beta.id] })
+    state = reduceAnnotationState(state, { type: 'annotationRemoveMany', refIds: [alpha.id, beta.id] })
     assert.deepEqual(plain(state.collection.map((entry) => entry.id)), [gamma.id])
   })
 
