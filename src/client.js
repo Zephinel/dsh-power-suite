@@ -15,8 +15,6 @@ import {
   silenceUpdatePromptVersion
 } from './browser/update-check/model.ts'
 import {
-  SIDEBAR_WIDTH_MAX,
-  SIDEBAR_WIDTH_MIN,
   SIDEBAR_WIDTH_ROUTE,
   SIDEBAR_WIDTH_STORAGE_KEY,
   clampSidebarWidth,
@@ -22740,23 +22738,10 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         serializeAnnotationChip
       }
 
-      // Sidebar width: pure clamp/cache/payload/bootstrap/adopt decisions plus the
-      // attach probe the browser E2E reads. `sidebarWidthProbe` is read-only.
-      globalThis.__POWER_SUITE_TEST_HOOKS__.sidebarWidth = {
-        SIDEBAR_WIDTH_ROUTE,
-        SIDEBAR_WIDTH_STORAGE_KEY,
-        SIDEBAR_WIDTH_MIN,
-        SIDEBAR_WIDTH_MAX,
-        clampSidebarWidth,
-        isValidSidebarWidth,
-        parseSidebarWidthCache,
-        serializeSidebarWidthCache,
-        normalizeSidebarWidthPayload,
-        sidebarWidthBootstrap,
-        shouldAdoptSidebarWidth,
-        sidebarWidthReopenRestore,
-        probe: sidebarWidthProbe
-      }
+      // Sidebar width: only the attach probe the browser E2E reads remains a
+      // test hook; the pure decisions moved to `src/browser/sidebar-width/model.ts`
+      // and are covered there directly. `sidebarWidthProbe` is read-only.
+      globalThis.__POWER_SUITE_TEST_HOOKS__.sidebarWidth = { probe: sidebarWidthProbe }
     }
 
     //#endregion
