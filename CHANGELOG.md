@@ -12,6 +12,8 @@ All notable changes to this repository are documented here. The format follows
 
 ### Changed
 
+- **Full-suite browser e2e evidence (Phase 3j).** Independent runs at commit 5128669 (clean copies, isolated throwaway instances, current-HEAD live smoke recheck) record: update-prompt full 21/21 isolated and live; sidebar live full 68 PASS / 2 SKIP / 2 FAIL with the same two failures on the pre-Phase-3 baseline client; annotation isolated full 13 PASS / 1 SKIP / 9 FAIL with the identical baseline failure set, smoke 6/6; current HEAD live smoke 4/4, 6/6 and 21/21 with 0 page errors. No full-run failure was attributable to Phase 3; details and gaps are in docs/verification.md and the migration plan.
+
 - **Annotation settings model (Phase 3i).** The UI-annotation modifier settings (storage key, accepted choices, frozen defaults, normalize/conflict/parse/serialize/match) moved from `src/client.js` to `src/browser/ui-annotation/settings.ts`; the settings tests import it directly while the annotation test hook stays as a pass-through shim for the remaining model keys. No behavior, copy or storage-format changes.
 
 - **Pending-interaction activity model (Phase 3h).** The Running & recent panel true-last-activity timestamp and pending-interaction derivation moved to `src/browser/dynamic-workspaces/activity.ts`; its test imports the model directly and the `dynamicWorkspacesPanel` vm hook was deleted. Five hooks remain (annotation, the three other dynamic-Workspaces models, sidebar-width probe). No behavior changes.

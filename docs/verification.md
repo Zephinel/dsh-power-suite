@@ -61,15 +61,34 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   Node suite and the release-notes gate, then `pack:check`.
 - `npm run pack:check`: **75 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).
-- Browser e2e (2026-11-18): the isolated throwaway instance first produced
-  `sidebar.e2e.mjs --smoke` **4/4**, `update-prompt.e2e.mjs` **21/21**, and
-  `annotation.e2e.mjs --smoke` **5/6** (smoke-6 exactly reproduced with the
-  pre-Phase-3 baseline client, so not a regression). After restarting the live
-  `:3080` service it serves the installed `lib/client.js` classic IIFE
-  (976,585 B + source-map trailer; served text starts with the installed file)
-  and the live runs pass: `sidebar.e2e.mjs --smoke` **4/4**, `annotation.e2e.mjs
-  --smoke` **6/6**, `update-prompt.e2e.mjs` **21/21**, 0 page errors. The
-  annotation/sidebar harnesses inject the esbuild-bundled ESM worktree client.
+- Browser e2e (2026-11-18; lasts at HEAD db57252, full runs at 5128669):
+  live smoke is `sidebar.e2e.mjs --smoke` **4/4**, `annotation.e2e.mjs --smoke`
+  **6/6**, `update-prompt.e2e.mjs` **21/21**, 0 page errors. Full-suite evidence:
+  * update-prompt full: **21/21 PASS** on both the isolated throwaway instance and
+    the live GUI.
+  * sidebar full (live): **68 PASS / 2 SKIP / 2 FAIL**; the two failures
+    (`.psd-run-more` hover target moved by live row reordering, and the
+    post-Continue interrupted badge still reported as 1) are identical with the
+    pre-Phase-3 baseline client `fa48b2a` (**68/2/2**), so they are not Phase 3
+    regressions. Isolated full is data-starved (one blank Session) and not a
+    product verdict; isolated `--layout` is **12/12 PASS**, live `--interrupted`
+    is **9 PASS / 1 SKIP / 0 FAIL**.
+  * annotation full (isolated): **13 PASS / 1 SKIP / 9 FAIL**; the same nine
+    failures reproduce with the baseline client (`--from 3 --client fa48b2a`), so
+    they are environment/data-shape issues (no native scrollable region, no
+    Files guide entry, shell z-index/theme expectations) rather than Phase 3
+    regressions. Live full is not a reliable verdict (8 PASS / 1 SKIP / 14 FAIL
+    with cascade; targeted S2/S7/S8 reruns pass 7/7, baseline S2 also 7/7); smoke
+    is **6/6** on both.
+- Isolated served bundle (5128669): boot graph lists
+  `plugins/??@zephinel/dsh-power-suite/client.js&rev=29bc3dccf100`; installed
+  `lib/client.js` is 980,746 B (sha256 dffe95…), served 980,828 B = installed +
+  82 B source-map trailer; the served text starts with `"use strict";` and has
+  no top-level import/export (classic IIFE); the source map is 1,109,650 B.
+- Client-entry caveat: a long-running GUI that resolved the old `src/client.js`
+  path must be restarted after a client-entry change (the 2026-11-18 restart
+  resolved the observed ES-module boot failure); use an isolated instance when a
+  restart is not possible. The npm artifact is unaffected.
 - Client-entry caveat: a long-running GUI that resolved the old `src/client.js`
   path must be restarted after a client-entry change (the 2026-11-18 restart
   resolved the observed ES-module boot failure); use an isolated instance when a

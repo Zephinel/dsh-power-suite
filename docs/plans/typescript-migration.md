@@ -281,9 +281,9 @@ baseline client `fa48b2a`, so not a Phase 3 regression). The long-running live
 `lib/client.js` classic IIFE (976,585 B + source-map trailer) and the live runs
 pass — `sidebar --smoke` **4/4**, `annotation --smoke` **6/6**,
 `update-prompt` **21/21**, 0 page errors. The Phase 3 e2e smoke acceptance is
-therefore satisfied on the live GUI; the full modes and negative-control
-scenarios are still to be run, and the core browser-region split/type conversion
-remains open.
+therefore satisfied on the live GUI. Full-mode runs and their baseline controls
+are recorded in 3j below; the core browser-region split/type conversion remains
+open.
 
 **3g progress (2026-11-18).** The composer-gallery pure model moved to
 `src/browser/composer-gallery/model.ts` (index/step/sync/wheel decisions and
@@ -302,6 +302,19 @@ a pass-through shim for the remaining model keys. `src/client.js` drops to
 ~24.0k lines. The planned order for the rest: text/format, geometry, identity,
 records, reducer, serializers, anchors, then surface/resolution, and finally the
 annotation seam retirement in its own commit.
+
+**3j full-suite e2e evidence (2026-11-18, commit 5128669).** Independent runs
+started from clean copies (temp `$DSH_HOME`, installed tarball; current HEAD
+re-checked with live smoke): `update-prompt` full **21/21** on isolated and live;
+sidebar live full **68 PASS / 2 SKIP / 2 FAIL** with the same two failures on the
+pre-Phase-3 baseline client (**68/2/2**), isolated `--layout` **12/12**, live
+`--interrupted` **9 PASS / 1 SKIP / 0 FAIL**; annotation isolated full **13 PASS /
+1 SKIP / 9 FAIL** with the identical failure set on the baseline client, smoke
+**6/6** on both, and live full not usable as a verdict (cascade; targeted S2/S7/S8
+re-runs pass, baseline S2 passes too). Current HEAD live smoke: 4/4 sidebar,
+6/6 annotation, 21/21 update-prompt, 0 page errors. The isolated served bundle is
+the installed `lib/client.js` classic IIFE (980,746 B + 82 B source-map trailer,
+no top-level imports). No failure in the full runs was attributable to Phase 3.
 
 Decide between (a) splitting `src/client.js` by `//#region feature:` into modules
 and bundling one classic script, or (b) keeping one file and annotating it. Under

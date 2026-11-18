@@ -21,6 +21,12 @@ node test/browser/annotation.e2e.mjs
 > 2026-11-18 restart confirmed the live GUI serves `lib/client.js` and the three
 > smoke/update suites pass; repeat the restart after future entry changes.
 
+> Full suites are data-dependent: a fresh isolated profile has no running rows,
+> subagents, prompt history or Files guide entries, and the live GUI keeps
+> changing during a long run. Attribute a failure by re-running with the same
+> scenario against a classic pre-change client (`--client`); a failure that
+> reproduces there is not a Phase 3 regression.
+
 ## How it works
 
 1. Resolves a token URL for the GUI (`~/.local/bin/dsh-web url --ip`, or `DSH_WEB_URL`).
