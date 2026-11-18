@@ -93,6 +93,11 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   path must be restarted after a client-entry change (the 2026-11-18 restart
   resolved the observed ES-module boot failure); use an isolated instance when a
   restart is not possible. The npm artifact is unaffected.
+- `npm run typecheck:browser`: **1976** browser-profile diagnostics at this HEAD, matching
+  `scripts/browser-typecheck-baseline.json`; `--check` enforces the ratchet (no
+  counter above baseline) without changing the main gate. The profile is
+  `tsconfig.browser.json` (DOM lib, `types: []`, `dom.d.ts` excluded) and the
+  baseline script disables `// @ts-nocheck` only in a temp copy.
 - `npm run check:release`: **PASS** — 75 packaged files installed into a throwaway
   `$DSH_HOME`; it deletes `lib/` first so `npm pack` must rebuild it through
   `prepare`, then the packed `lib/` matches the fresh build, every other packed

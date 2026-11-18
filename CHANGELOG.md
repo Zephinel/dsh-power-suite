@@ -16,6 +16,8 @@ All notable changes to this repository are documented here. The format follows
 
 ### Changed
 
+- **Browser typecheck baseline and ratchet (Phase 3p).** Added `tsconfig.browser.json`, `scripts/typecheck-browser-baseline.mjs` and `scripts/browser-typecheck-baseline.json` (`npm run typecheck:browser`). The script disables `// @ts-nocheck` only in a temporary copy, reports browser-profile diagnostics total/per-code/per-region, refreshes with `--write`, and ratchets with `--check`. Current baseline: 1,976 diagnostics (down 508 from the pre-slice 2,484); it is report-only and does not change `npm run check`.
+
 - **Annotation reducer and serializer models (Phase 3o).** The state reducer (state creation, actions, phase/deactivate transitions) and the quick/batch/group/chip serializers (plus chip-ref round-trip/candidates) moved to `src/browser/ui-annotation/{reducer,serializers}.ts`. 11 more hook keys now come from modules while the 112-key annotation hook stays byte-identical; `src/client.js` is ~20.5k lines. Differential checks: 58 reducer sequences and 79 serializer fixtures matched the old seam; no behavior or copy changes.
 
 - **Annotation identity and record-store models (Phase 3n).** The identity/selector/locator helpers (plus the pure anchor sanitizers) moved to `src/browser/ui-annotation/identity.ts`, and the record store (normalise/parse/serialize, CRUD, undo, groups, counts/filters) moved to `records.ts`. 40 hook keys now come from modules; the 112-key annotation hook stays byte-identical as a pass-through, with 588 identity + 1,648 record differential checks against the old seam. `src/client.js` is ~21.1k lines; no behavior or copy changes.

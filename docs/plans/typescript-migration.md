@@ -332,8 +332,15 @@ record cases against the old seam. **3o progress (2026-11-18).** The annotation 
 candidates). 11 more hook keys now come from modules, still without changing the
 112-key hook block; `src/client.js` is ~20.5k lines. Differential checks: 58
 reducer action/phase sequences and 79 serializer fixtures matched the old seam.
-The planned order for the annotation rest: anchors, surface/resolution, then
-the annotation seam retirement in its own commit.
+**3p progress (2026-11-18, browser-typing M0).** Added the browser typecheck
+baseline: `tsconfig.browser.json` (DOM lib, `types: []`, `dom.d.ts` excluded),
+`scripts/typecheck-browser-baseline.mjs` (disables `@ts-nocheck` only in a temp
+copy, reports total/per-code/per-region, `--write` refreshes, `--check` ratchets)
+and `scripts/browser-typecheck-baseline.json` (1,976 diagnostics at this HEAD;
+2,484 at the pre-slice commit). The diagnostic baseline dropped by 508 with the
+identity/records/reducer/serializer extractions. It is report-only, not wired
+into `npm run check`. The planned order for the annotation rest: anchors,
+surface/resolution, then the annotation seam retirement in its own commit.
 
 **3m progress (2026-11-18).** Two follow-ups landed: `dwCacheHitPercent` is now a
 total function (inconsistent/negative/non-finite cache data returns `null`
