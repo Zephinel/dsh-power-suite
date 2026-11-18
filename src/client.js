@@ -82,6 +82,17 @@ import {
   normalizeAnnotationViewport,
   sessionShortLabel
 } from './browser/ui-annotation/format.ts'
+import {
+  ANNOTATION_DETAIL_SIZE,
+  annotationSegmentDisplayLabel,
+  annotationSegmentedIndex,
+  clampDetailCardPosition,
+  clampLauncherPosition,
+  clampPopoverPosition,
+  clampPopoverPositionToViewport,
+  computeRailWidth,
+  layoutModeFor
+} from './browser/ui-annotation/geometry.ts'
 import { dwEffectiveUpdatedAt, dwPendingSessionIds } from './browser/dynamic-workspaces/activity.ts'
 /**
  * Browser half of DSH Power Suite.
@@ -10128,9 +10139,6 @@ function dwClearNativeAtmospheres() {
     /** A3/T6: grace period before the detail card closes after the pointer leaves. */
     const ANNOTATION_DETAIL_CLOSE_DELAY_MS = 120
 
-    /** A3/T6: detail card size used before its first measurement (width is fixed). */
-    const ANNOTATION_DETAIL_SIZE = { width: 320, height: 240 }
-
     /** A3/T6: the badge requirement summary is a one-line excerpt of this many characters. */
     const ANNOTATION_MARK_SUMMARY_MAX = 18
 
@@ -13764,194 +13772,6 @@ function dwClearNativeAtmospheres() {
       return genericMatch === null ? 'missing' : 'resolved'
     }
 
-    /**
-     * A3/T55: move one segmented-control selection index (radiogroup semantics).
-     * `next`/`prev` wrap; `first`/`last` clamp; an empty list has no active index.
-     * @param {number} current - current selected index (-1 when none).
-     * @param {'next' | 'prev' | 'first' | 'last'} move - movement.
-     * @param {number} length - segment count.
-     * @returns {number} next index, or -1 for an empty list.
-     */
-    function annotationSegmentedIndex(current, move, length) {
-      const count = typeof length === 'number' && Number.isFinite(length) && length > 0 ? Math.floor(length) : 0
-      if (count === 0) return -1
-      if (move === 'first') return 0
-      if (move === 'last') return count - 1
-      const base = typeof current === 'number' && Number.isFinite(current) && current >= 0 ? Math.floor(current) : 0
-      if (move === 'prev') return ((base - 1) % count + count) % count
-      return ((base + 1) % count + count) % count
-    }
-
-    /**
-     * A3/T57: visible label for one segmented modifier option. The i18n labels are
-     * `"<symbol> / <Name>"`; segments show symbol + short name (`⌥ Alt`, `⌃ Ctrl`).
-     * Labels without a separator are returned unchanged.
-     * @param {unknown} label - dictionary label.
-     * @returns {string} display label.
-     */
-    function annotationSegmentDisplayLabel(label) {
-      const text = typeof label === 'string' ? label.trim() : ''
-      if (text.length === 0) return ''
-      const parts = text.split('/').map((part) => part.trim()).filter((part) => part.length > 0)
-      if (parts.length >= 2) return `${parts[0]} ${parts[1]}`
-      return parts[0] ?? ''
-    }
-
-    /**
-     * Clamp the launcher into the viewport with a margin.
-     * @param {{ x: number, y: number } | null} pos - desired top-left position.
-     * @param {{ width: number, height: number }} viewport - viewport size.
-     * @param {number} [size] - launcher edge length, default 40.
-     * @param {number} [margin] - minimum gap from every edge, default 8.
-     * @returns {{ x: number, y: number }} clamped position.
-     */
-    function clampLauncherPosition(pos, viewport, size, margin) {
-      const edge = typeof size === 'number' && Number.isFinite(size) && size > 0 ? size : 40
-      const gap = typeof margin === 'number' && Number.isFinite(margin) && margin >= 0 ? margin : 8
-      const width = viewport !== null && typeof viewport === 'object' && typeof viewport.width === 'number' ? viewport.width : 0
-      const height = viewport !== null && typeof viewport === 'object' && typeof viewport.height === 'number' ? viewport.height : 0
-      const maxX = Math.max(gap, width - edge - gap)
-      const maxY = Math.max(gap, height - edge - gap)
-      const rawX = pos !== null && typeof pos === 'object' && typeof pos.x === 'number' && Number.isFinite(pos.x) ? pos.x : width - edge - gap
-      const rawY = pos !== null && typeof pos === 'object' && typeof pos.y === 'number' && Number.isFinite(pos.y) ? pos.y : height - edge - gap
-      return {
-        x: Math.round(Math.min(Math.max(rawX, gap), maxX)),
-        y: Math.round(Math.min(Math.max(rawY, gap), maxY))
-      }
-    }
-
-    /**
-     * Place the popover beside a target rect, inside the viewport and left of the rail.
-     * @param {{ x: number, y: number, width: number, height: number }} rect - target rect.
-     * @param {{ width: number, height: number }} popoverSize - popover size.
-     * @param {{ width: number, height: number }} viewport - viewport size.
-     * @param {number} [railWidth] - reserved right strip width, default 0.
-     * @param {number} [margin] - minimum gap from every edge, default 8.
-     * @returns {{ x: number, y: number }} clamped position.
-     */
-    function clampPopoverPosition(rect, popoverSize, viewport, railWidth, margin) {
-      const gap = typeof margin === 'number' && Number.isFinite(margin) && margin >= 0 ? margin : 8
-      const rail = typeof railWidth === 'number' && Number.isFinite(railWidth) && railWidth > 0 ? railWidth : 0
-      const width = viewport !== null && typeof viewport === 'object' && typeof viewport.width === 'number' ? viewport.width : 0
-      const height = viewport !== null && typeof viewport === 'object' && typeof viewport.height === 'number' ? viewport.height : 0
-      const popoverWidth = popoverSize !== null && typeof popoverSize === 'object' && typeof popoverSize.width === 'number' ? popoverSize.width : 320
-      const popoverHeight = popoverSize !== null && typeof popoverSize === 'object' && typeof popoverSize.height === 'number' ? popoverSize.height : 232
-      const target = rect !== null && typeof rect === 'object' ? rect : { x: 0, y: 0, width: 0, height: 0 }
-      const targetX = typeof target.x === 'number' && Number.isFinite(target.x) ? target.x : 0
-      const targetY = typeof target.y === 'number' && Number.isFinite(target.y) ? target.y : 0
-      const targetWidth = typeof target.width === 'number' && Number.isFinite(target.width) ? target.width : 0
-      const targetHeight = typeof target.height === 'number' && Number.isFinite(target.height) ? target.height : 0
-      const maxX = Math.max(gap, width - rail - popoverWidth - gap)
-      const maxY = Math.max(gap, height - popoverHeight - gap)
-      let x = targetX + targetWidth + gap + 4
-      if (x > maxX) x = targetX - popoverWidth - gap - 4
-      let y = targetY
-      if (y > maxY) y = targetY + targetHeight - popoverHeight
-      return {
-        x: Math.round(Math.min(Math.max(x, gap), maxX)),
-        y: Math.round(Math.min(Math.max(y, gap), maxY))
-      }
-    }
-
-    /**
-     * Clamp one existing popover position into the viewport (pinned drags).
-     * Unlike {@link clampPopoverPosition} this preserves the dragged offset and
-     * only moves the popover as far as needed to stay on-screen.
-     * @param {{ x: number, y: number }} position - current popover position.
-     * @param {object} popoverSize - measured popover size.
-     * @param {object} viewport - { width, height }.
-     * @param {number} railWidth - reserved annotation rail width.
-     * @param {number} [margin] - edge margin (default 8).
-     * @returns {{ x: number, y: number }} clamped position.
-     */
-    function clampPopoverPositionToViewport(position, popoverSize, viewport, railWidth, margin) {
-      const gap = typeof margin === 'number' && Number.isFinite(margin) && margin >= 0 ? margin : 8
-      const rail = typeof railWidth === 'number' && Number.isFinite(railWidth) && railWidth > 0 ? railWidth : 0
-      const width = viewport !== null && typeof viewport === 'object' && typeof viewport.width === 'number' ? viewport.width : 0
-      const height = viewport !== null && typeof viewport === 'object' && typeof viewport.height === 'number' ? viewport.height : 0
-      const popoverWidth = popoverSize !== null && typeof popoverSize === 'object' && typeof popoverSize.width === 'number' ? popoverSize.width : 320
-      const popoverHeight = popoverSize !== null && typeof popoverSize === 'object' && typeof popoverSize.height === 'number' ? popoverSize.height : 232
-      const point = position !== null && typeof position === 'object' ? position : { x: gap, y: gap }
-      const x = typeof point.x === 'number' && Number.isFinite(point.x) ? point.x : gap
-      const y = typeof point.y === 'number' && Number.isFinite(point.y) ? point.y : gap
-      const maxX = Math.max(gap, width - rail - popoverWidth - gap)
-      const maxY = Math.max(gap, height - popoverHeight - gap)
-      return { x: Math.round(Math.min(Math.max(x, gap), maxX)), y: Math.round(Math.min(Math.max(y, gap), maxY)) }
-    }
-
-    /**
-     * Place the floating detail card beside a marked rect (A3/T6).
-     *
-     * Prefers the right side of the element aligned to its top, flips to the left
-     * when the card would cross the reserved rail strip, flips above when there is
-     * no room below, and finally clamps to an 8 px viewport margin.
-     * @param {{ x: number, y: number, width: number, height: number }} rect - mark rect.
-     * @param {{ width: number, height: number }} cardSize - measured/estimated card size.
-     * @param {{ width: number, height: number }} viewport - viewport size.
-     * @param {number} [railWidth] - reserved right strip width, default 0.
-     * @param {number} [margin] - minimum gap from every edge, default 8.
-     * @returns {{ x: number, y: number, placement: 'right' | 'left' }} clamped position.
-     */
-    function clampDetailCardPosition(rect, cardSize, viewport, railWidth, margin) {
-      const gap = typeof margin === 'number' && Number.isFinite(margin) && margin >= 0 ? margin : 8
-      const rail = typeof railWidth === 'number' && Number.isFinite(railWidth) && railWidth > 0 ? railWidth : 0
-      const width = viewport !== null && typeof viewport === 'object' && typeof viewport.width === 'number' ? viewport.width : 0
-      const height = viewport !== null && typeof viewport === 'object' && typeof viewport.height === 'number' ? viewport.height : 0
-      const cardWidth = cardSize !== null && typeof cardSize === 'object' && typeof cardSize.width === 'number' && cardSize.width > 0
-        ? cardSize.width
-        : ANNOTATION_DETAIL_SIZE.width
-      const cardHeight = cardSize !== null && typeof cardSize === 'object' && typeof cardSize.height === 'number' && cardSize.height > 0
-        ? cardSize.height
-        : ANNOTATION_DETAIL_SIZE.height
-      const target = rect !== null && typeof rect === 'object' ? rect : { x: 0, y: 0, width: 0, height: 0 }
-      const targetX = typeof target.x === 'number' && Number.isFinite(target.x) ? target.x : 0
-      const targetY = typeof target.y === 'number' && Number.isFinite(target.y) ? target.y : 0
-      const targetWidth = typeof target.width === 'number' && Number.isFinite(target.width) ? target.width : 0
-      const targetHeight = typeof target.height === 'number' && Number.isFinite(target.height) ? target.height : 0
-      const maxX = Math.max(gap, width - rail - cardWidth - gap)
-      const maxY = Math.max(gap, height - cardHeight - gap)
-      let placement = 'right'
-      let x = targetX + targetWidth + gap
-      if (x > maxX) {
-        placement = 'left'
-        x = targetX - cardWidth - gap
-      }
-      x = Math.round(Math.min(Math.max(x, gap), maxX))
-      // Align to the element's top; a card with no room below is bottom-aligned.
-      let y = targetY
-      if (y + cardHeight > height - gap) y = targetY + targetHeight - cardHeight
-      y = Math.round(Math.min(Math.max(y, gap), maxY))
-      return { x, y, placement }
-    }
-
-    /**
-     * Compute the rail width for one viewport.
-     * @param {number} viewportWidth - window inner width.
-     * @param {boolean} [collapsed] - whether the rail is collapsed to its strip, default false.
-     * @returns {number} rail width in pixels.
-     */
-    function computeRailWidth(viewportWidth, collapsed, view) {
-      if (collapsed === true) return 48
-      const width = typeof viewportWidth === 'number' && Number.isFinite(viewportWidth) ? viewportWidth : 0
-      // A3/T25: the redesigned collection sidebar needs room for readable rows and
-      // group cards; status/settings keep the compact rail.
-      if (view === 'collection' || view === 'settings') return Math.min(420, Math.max(320, Math.round(width * 0.24)))
-      return Math.min(236, Math.max(188, Math.round(width * 0.116)))
-    }
-
-    /**
-     * Decide whether the layout can shrink or the rail must float over the page.
-     * @param {number} viewportWidth - window inner width.
-     * @param {number} sidebarWidth - native left + right sidebar widths.
-     * @param {number} railWidth - rail width to reserve.
-     * @returns {'shrink' | 'overlay'} layout mode.
-     */
-    function layoutModeFor(viewportWidth, sidebarWidth, railWidth) {
-      const width = typeof viewportWidth === 'number' && Number.isFinite(viewportWidth) ? viewportWidth : 0
-      const side = typeof sidebarWidth === 'number' && Number.isFinite(sidebarWidth) ? sidebarWidth : 0
-      const rail = typeof railWidth === 'number' && Number.isFinite(railWidth) ? railWidth : 0
-      return width - side - rail >= 560 ? 'shrink' : 'overlay'
-    }
     //#endregion
 
     /** Selector set of elements the picker treats as meaningful, nearest first. */

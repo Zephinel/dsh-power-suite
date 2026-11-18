@@ -38,6 +38,16 @@ import {
   normalizeAnnotationViewport
 } from '../src/browser/ui-annotation/format.ts'
 import {
+  annotationSegmentDisplayLabel,
+  annotationSegmentedIndex,
+  clampDetailCardPosition,
+  clampLauncherPosition,
+  clampPopoverPosition,
+  clampPopoverPositionToViewport,
+  computeRailWidth,
+  layoutModeFor
+} from '../src/browser/ui-annotation/geometry.ts'
+import {
   annotationNormalizeQuoteText as normalizeAnnotationQuote,
   cssIdentifier as escapeAnnotationIdentifier,
   normalizeUserNote as normalizeAnnotationNote,
@@ -1642,9 +1652,9 @@ if (ui === undefined) {
   test('clampPopoverPositionToViewport re-clamps a pinned position and preserves in-bounds offsets', () => {
     const size = { width: 320, height: 240 }
     const viewport = { width: 1200, height: 800 }
-    assert.deepEqual(plain(ui.clampPopoverPositionToViewport({ x: 5000, y: 5000 }, size, viewport, 0)), { x: 872, y: 552 })
-    assert.deepEqual(plain(ui.clampPopoverPositionToViewport({ x: 120, y: 90 }, size, viewport, 0)), { x: 120, y: 90 })
-    assert.deepEqual(plain(ui.clampPopoverPositionToViewport({ x: -50, y: -50 }, size, viewport, 0)), { x: 8, y: 8 })
+    assert.deepEqual(plain(clampPopoverPositionToViewport({ x: 5000, y: 5000 }, size, viewport, 0)), { x: 872, y: 552 })
+    assert.deepEqual(plain(clampPopoverPositionToViewport({ x: 120, y: 90 }, size, viewport, 0)), { x: 120, y: 90 })
+    assert.deepEqual(plain(clampPopoverPositionToViewport({ x: -50, y: -50 }, size, viewport, 0)), { x: 8, y: 8 })
   })
 
   test('serializeQuickReference marks a stale single reference and follows the ZH labels', () => {
@@ -2107,18 +2117,18 @@ if (ui === undefined) {
     const viewport = { width: 1728, height: 900 }
     const card = { width: 320, height: 240 }
     const railWidth = 200
-    const right = ui.clampDetailCardPosition({ x: 100, y: 100, width: 80, height: 32 }, card, viewport, railWidth)
+    const right = clampDetailCardPosition({ x: 100, y: 100, width: 80, height: 32 }, card, viewport, railWidth)
     assert.deepEqual(plain(right), { x: 188, y: 100, placement: 'right' }, 'prefers the right side, top-aligned')
-    const left = ui.clampDetailCardPosition({ x: 1350, y: 100, width: 80, height: 32 }, card, viewport, railWidth)
+    const left = clampDetailCardPosition({ x: 1350, y: 100, width: 80, height: 32 }, card, viewport, railWidth)
     assert.equal(plain(left).placement, 'left')
     assert.equal(plain(left).x, 1022)
     assert.ok(plain(left).x + card.width <= viewport.width - railWidth - 8)
-    const above = ui.clampDetailCardPosition({ x: 100, y: 850, width: 80, height: 20 }, card, viewport, railWidth)
+    const above = clampDetailCardPosition({ x: 100, y: 850, width: 80, height: 20 }, card, viewport, railWidth)
     assert.equal(plain(above).y, 630, 'a card with no room below is bottom-aligned to the element')
     assert.ok(plain(above).y + card.height <= viewport.height - 8)
-    const clamped = ui.clampDetailCardPosition({ x: -100, y: -50, width: 40, height: 20 }, card, viewport, railWidth)
+    const clamped = clampDetailCardPosition({ x: -100, y: -50, width: 40, height: 20 }, card, viewport, railWidth)
     assert.deepEqual(plain({ x: clamped.x, y: clamped.y }), { x: 8, y: 8 })
-    const narrow = ui.clampDetailCardPosition({ x: 300, y: 100, width: 40, height: 20 }, card, { width: 400, height: 300 }, 0)
+    const narrow = clampDetailCardPosition({ x: 300, y: 100, width: 40, height: 20 }, card, { width: 400, height: 300 }, 0)
     assert.equal(plain(narrow).placement, 'left')
     assert.deepEqual(plain({ x: narrow.x, y: narrow.y }), { x: 8, y: 8 })
     for (const rect of [
@@ -2126,7 +2136,7 @@ if (ui === undefined) {
       { x: 1700, y: 890, width: 20, height: 5 },
       { x: 860, y: 450, width: 10, height: 10 }
     ]) {
-      const pos = ui.clampDetailCardPosition(rect, card, viewport, railWidth)
+      const pos = clampDetailCardPosition(rect, card, viewport, railWidth)
       assert.ok(pos.x >= 8 && pos.y >= 8, `margins respected for ${JSON.stringify(rect)}`)
       assert.ok(pos.x + card.width <= viewport.width - railWidth - 8, 'rail strip respected')
       assert.ok(pos.y + card.height <= viewport.height - 8, 'bottom margin respected')
@@ -3057,23 +3067,23 @@ if (ui === undefined) {
   })
 
   test('A3/T55: segmented-control selection index semantics', () => {
-    assert.equal(ui.annotationSegmentedIndex(0, 'next', 4), 1)
-    assert.equal(ui.annotationSegmentedIndex(3, 'next', 4), 0, 'ArrowRight wraps')
-    assert.equal(ui.annotationSegmentedIndex(0, 'prev', 4), 3, 'ArrowLeft wraps')
-    assert.equal(ui.annotationSegmentedIndex(2, 'first', 4), 0)
-    assert.equal(ui.annotationSegmentedIndex(1, 'last', 4), 3)
-    assert.equal(ui.annotationSegmentedIndex(-1, 'next', 4), 1)
-    assert.equal(ui.annotationSegmentedIndex(0, 'next', 0), -1, 'empty radiogroup has no active index')
+    assert.equal(annotationSegmentedIndex(0, 'next', 4), 1)
+    assert.equal(annotationSegmentedIndex(3, 'next', 4), 0, 'ArrowRight wraps')
+    assert.equal(annotationSegmentedIndex(0, 'prev', 4), 3, 'ArrowLeft wraps')
+    assert.equal(annotationSegmentedIndex(2, 'first', 4), 0)
+    assert.equal(annotationSegmentedIndex(1, 'last', 4), 3)
+    assert.equal(annotationSegmentedIndex(-1, 'next', 4), 1)
+    assert.equal(annotationSegmentedIndex(0, 'next', 0), -1, 'empty radiogroup has no active index')
   })
 
   test('A3/T57: modifier segment display labels keep symbols with short names', () => {
-    assert.equal(ui.annotationSegmentDisplayLabel('⌥ / Alt'), '⌥ Alt')
-    assert.equal(ui.annotationSegmentDisplayLabel('⌃ / Ctrl'), '⌃ Ctrl')
-    assert.equal(ui.annotationSegmentDisplayLabel('⌘ / Meta'), '⌘ Meta')
-    assert.equal(ui.annotationSegmentDisplayLabel('⇧ / Shift'), '⇧ Shift')
-    assert.equal(ui.annotationSegmentDisplayLabel('Ctrl'), 'Ctrl', 'labels without a separator are unchanged')
-    assert.equal(ui.annotationSegmentDisplayLabel('  '), '')
-    assert.equal(ui.annotationSegmentDisplayLabel(null), '')
+    assert.equal(annotationSegmentDisplayLabel('⌥ / Alt'), '⌥ Alt')
+    assert.equal(annotationSegmentDisplayLabel('⌃ / Ctrl'), '⌃ Ctrl')
+    assert.equal(annotationSegmentDisplayLabel('⌘ / Meta'), '⌘ Meta')
+    assert.equal(annotationSegmentDisplayLabel('⇧ / Shift'), '⇧ Shift')
+    assert.equal(annotationSegmentDisplayLabel('Ctrl'), 'Ctrl', 'labels without a separator are unchanged')
+    assert.equal(annotationSegmentDisplayLabel('  '), '')
+    assert.equal(annotationSegmentDisplayLabel(null), '')
   })
 
   test('A3/T68: native right-Sidebar pane rail offset geometry', () => {
@@ -3088,10 +3098,10 @@ if (ui === undefined) {
   //#region geometry and layout
 
   test('clampLauncherPosition keeps the launcher fully inside the viewport with an 8px margin', () => {
-    assert.deepEqual(plain(ui.clampLauncherPosition({ x: 900, y: 400 }, { width: 1728, height: 900 })), { x: 900, y: 400 })
-    assert.deepEqual(plain(ui.clampLauncherPosition({ x: 5000, y: 5000 }, { width: 1728, height: 900 })), { x: 1680, y: 852 })
-    assert.deepEqual(plain(ui.clampLauncherPosition({ x: -40, y: -40 }, { width: 1728, height: 900 })), { x: 8, y: 8 })
-    assert.deepEqual(plain(ui.clampLauncherPosition({ x: 1000, y: 700 }, { width: 1000, height: 700 })), { x: 952, y: 652 })
+    assert.deepEqual(plain(clampLauncherPosition({ x: 900, y: 400 }, { width: 1728, height: 900 })), { x: 900, y: 400 })
+    assert.deepEqual(plain(clampLauncherPosition({ x: 5000, y: 5000 }, { width: 1728, height: 900 })), { x: 1680, y: 852 })
+    assert.deepEqual(plain(clampLauncherPosition({ x: -40, y: -40 }, { width: 1728, height: 900 })), { x: 8, y: 8 })
+    assert.deepEqual(plain(clampLauncherPosition({ x: 1000, y: 700 }, { width: 1000, height: 700 })), { x: 952, y: 652 })
   })
 
   test('clampPopoverPosition keeps the popover inside the viewport and left of the rail', () => {
@@ -3104,42 +3114,42 @@ if (ui === undefined) {
       { x: 1600, y: 600, width: 80, height: 32 },
       { x: -30, y: -20, width: 80, height: 32 }
     ]) {
-      const position = ui.clampPopoverPosition(rect, popoverSize, viewport, railWidth, margin)
+      const position = clampPopoverPosition(rect, popoverSize, viewport, railWidth, margin)
       assert.ok(position.x >= margin, `x >= margin for ${JSON.stringify(rect)}`)
       assert.ok(position.y >= margin, `y >= margin for ${JSON.stringify(rect)}`)
       assert.ok(position.x + popoverSize.width <= viewport.width - railWidth - margin, 'stays left of the rail')
       assert.ok(position.y + popoverSize.height <= viewport.height - margin, 'stays inside the bottom edge')
     }
-    const beside = ui.clampPopoverPosition({ x: 100, y: 100, width: 80, height: 32 }, popoverSize, viewport, railWidth, margin)
+    const beside = clampPopoverPosition({ x: 100, y: 100, width: 80, height: 32 }, popoverSize, viewport, railWidth, margin)
     assert.ok(beside.x >= 100, 'prefers to the right of the target')
-    const noRail = ui.clampPopoverPosition({ x: 1700, y: 100, width: 20, height: 20 }, popoverSize, viewport, 0, margin)
+    const noRail = clampPopoverPosition({ x: 1700, y: 100, width: 20, height: 20 }, popoverSize, viewport, 0, margin)
     assert.ok(noRail.x + popoverSize.width <= viewport.width - margin)
   })
 
   test('computeRailWidth follows the compact clamp by default and the wide collection clamp', () => {
-    assert.equal(ui.computeRailWidth(1728), 200)
-    assert.equal(ui.computeRailWidth(1000), 188)
-    assert.equal(ui.computeRailWidth(3000), 236)
+    assert.equal(computeRailWidth(1728), 200)
+    assert.equal(computeRailWidth(1000), 188)
+    assert.equal(computeRailWidth(3000), 236)
     // A3/T25: the collection sidebar is wider: clamp(320, 24vw, 420).
-    assert.equal(ui.computeRailWidth(1728, false, 'collection'), 415)
-    assert.equal(ui.computeRailWidth(1000, false, 'collection'), 320)
-    assert.equal(ui.computeRailWidth(3000, false, 'collection'), 420)
-    assert.equal(ui.computeRailWidth(1728, true, 'collection'), 48, 'collapsed wins over the wide view')
-    assert.equal(ui.computeRailWidth(1600), Math.min(236, Math.max(188, Math.round(0.116 * 1600))))
-    assert.equal(ui.computeRailWidth(1728, true), 48)
-    assert.equal(ui.computeRailWidth(1000, true), 48)
+    assert.equal(computeRailWidth(1728, false, 'collection'), 415)
+    assert.equal(computeRailWidth(1000, false, 'collection'), 320)
+    assert.equal(computeRailWidth(3000, false, 'collection'), 420)
+    assert.equal(computeRailWidth(1728, true, 'collection'), 48, 'collapsed wins over the wide view')
+    assert.equal(computeRailWidth(1600), Math.min(236, Math.max(188, Math.round(0.116 * 1600))))
+    assert.equal(computeRailWidth(1728, true), 48)
+    assert.equal(computeRailWidth(1000, true), 48)
     for (const viewportWidth of [640, 900, 1280, 1728, 2560]) {
-      assert.equal(Number.isInteger(ui.computeRailWidth(viewportWidth)), true)
+      assert.equal(Number.isInteger(computeRailWidth(viewportWidth)), true)
     }
   })
 
   test('layoutModeFor shrinks only when 560px remain after the sidebar and rail', () => {
-    assert.equal(ui.layoutModeFor(1728, 280, 200), 'shrink')
-    assert.equal(ui.layoutModeFor(1000, 280, 200), 'overlay')
-    assert.equal(ui.layoutModeFor(1040, 280, 200), 'shrink', '560px exactly still shrinks')
-    assert.equal(ui.layoutModeFor(1039, 280, 200), 'overlay', '559px falls back to overlay')
-    assert.equal(ui.layoutModeFor(1728, 0, 200), 'shrink')
-    assert.equal(ui.layoutModeFor(500, 280, 48), 'overlay')
+    assert.equal(layoutModeFor(1728, 280, 200), 'shrink')
+    assert.equal(layoutModeFor(1000, 280, 200), 'overlay')
+    assert.equal(layoutModeFor(1040, 280, 200), 'shrink', '560px exactly still shrinks')
+    assert.equal(layoutModeFor(1039, 280, 200), 'overlay', '559px falls back to overlay')
+    assert.equal(layoutModeFor(1728, 0, 200), 'shrink')
+    assert.equal(layoutModeFor(500, 280, 48), 'overlay')
   })
 
   //#endregion
