@@ -285,6 +285,15 @@ therefore satisfied on the live GUI; the full modes and negative-control
 scenarios are still to be run, and the core browser-region split/type conversion
 remains open.
 
+**3g progress (2026-11-18).** The composer-gallery pure model moved to
+`src/browser/composer-gallery/model.ts` (index/step/sync/wheel decisions and
+thumbnail collection), and the `updateCheck` and `composerImageGallery` vm hooks
+were deleted after their tests switched to direct model imports. Six hooks
+remain: `uiAnnotation`, the four `dynamicWorkspaces*` models and the
+`sidebarWidth` probe used by the sidebar e2e. `src/client.js` is still ~24.2k
+lines and opted out of typechecking; the region split and browser typing remain
+the main Phase 3 work.
+
 Decide between (a) splitting `src/client.js` by `//#region feature:` into modules
 and bundling one classic script, or (b) keeping one file and annotating it. Under
 (a), give each feature an `install(ctx, deps)` plus pure model functions, import

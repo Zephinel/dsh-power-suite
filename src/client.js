@@ -42,6 +42,15 @@ import {
 import { interruptedCardMark, interruptedIndicatorActive } from './browser/interrupted-sessions/model.ts'
 import { mergeSettingsPayload } from './browser/settings/model.ts'
 import { ROUTES, browserRoute } from './shared/routes.ts'
+import {
+  PSG_WHEEL_COOLDOWN_MS,
+  PSG_WHEEL_STEP_PX,
+  psgClampIndex,
+  psgCollectImages,
+  psgStepIndex,
+  psgSyncState,
+  psgWheelDecision
+} from './browser/composer-gallery/model.ts'
 /**
  * Browser half of DSH Power Suite.
  *
@@ -22440,12 +22449,6 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
     /** Deepest composer region the interception is scoped to. */
     const PSG_COMPOSER_SELECTOR = '[data-conversation-region="composer"]'
 
-    /** Wheel distance that counts as one navigation gesture. */
-    const PSG_WHEEL_STEP_PX = 24
-
-    /** Minimum distance between two wheel-driven steps, in milliseconds. */
-    const PSG_WHEEL_COOLDOWN_MS = 260
-
     /** Localised copy for the gallery overlay. */
     const PSG_EN = {
       'dialog': 'Image gallery',
@@ -22466,101 +22469,6 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
     const PSG_ARROW_LEFT_LINE = 'M10.8284 12.0007L15.7782 16.9504L14.364 18.3646L8 12.0007L14.364 5.63672L15.7782 7.05093L10.8284 12.0007Z'
     const PSG_ARROW_RIGHT_LINE = 'M13.1717 12.0007L8.22192 7.05093L9.63614 5.63672L16.0001 12.0007L9.63614 18.3646L8.22192 16.9504L13.1717 12.0007Z'
     const PSG_CLOSE_LINE = 'M11.9997 10.5865L16.9495 5.63672L18.3637 7.05093L13.4139 12.0007L18.3637 16.9504L16.9495 18.3646L11.9997 13.4149L7.04996 18.3646L5.63574 16.9504L10.5855 12.0007L5.63574 7.05093L7.04996 5.63672L11.9997 10.5865Z'
-
-    /**
-     * Clamp a gallery index into `[0, count - 1]` (0 for an empty list).
-     * @param {number} index - candidate index.
-     * @param {number} count - number of images.
-     * @returns {number} the clamped index.
-     */
-    function psgClampIndex(index, count) {
-      const length = Number.isFinite(count) && count > 0 ? Math.trunc(count) : 0
-      if (length === 0) return 0
-      const value = Number.isFinite(index) ? Math.trunc(index) : 0
-      return Math.min(Math.max(0, value), length - 1)
-    }
-
-    /**
-     * Move one image in the given direction, clamped at the ends (no wrap).
-     * @param {number} index - current index.
-     * @param {number} count - number of images.
-     * @param {number} delta - positive for next, negative for previous.
-     * @returns {number} the next clamped index.
-     */
-    function psgStepIndex(index, count, delta) {
-      const length = Number.isFinite(count) && count > 0 ? Math.trunc(count) : 0
-      if (length === 0) return 0
-      const current = psgClampIndex(index, length)
-      if (delta > 0) return Math.min(current + 1, length - 1)
-      if (delta < 0) return Math.max(current - 1, 0)
-      return current
-    }
-
-    /**
-     * Reconcile an open gallery with a new rail snapshot. When the displayed image
-     * still exists its position follows that src; otherwise the index clamps into
-     * the new list (shows the neighbour). An empty list yields an empty result.
-     * @param {Array<{ src: string }>} images - fresh rail snapshot.
-     * @param {number} index - current index.
-     * @param {string} currentSrc - src currently displayed.
-     * @returns {{ images: Array<object>, index: number }} reconciled state.
-     */
-    function psgSyncState(images, index, currentSrc) {
-      const list = Array.isArray(images) ? images : []
-      if (list.length === 0) return { images: [], index: 0 }
-      if (typeof currentSrc === 'string' && currentSrc.length > 0) {
-        const found = list.findIndex((image) => image !== null && typeof image === 'object' && image.src === currentSrc)
-        if (found >= 0) return { images: list, index: found }
-      }
-      return { images: list, index: psgClampIndex(index, list.length) }
-    }
-
-    /**
-     * One wheel-gesture decision. Small deltas accumulate; a step fires once the
-     * accumulation reaches {@link PSG_WHEEL_STEP_PX} and the cooldown since the last
-     * step has elapsed (momentum events inside the cooldown are swallowed).
-     * @param {number} accumulated - pending wheel distance.
-     * @param {number} deltaY - this event's delta.
-     * @param {number} now - current timestamp (ms).
-     * @param {number} lastStepAt - timestamp of the previous step (ms).
-     * @returns {{ accum: number, step: -1 | 0 | 1, lastStepAt: number }} decision.
-     */
-    function psgWheelDecision(accumulated, deltaY, now, lastStepAt) {
-      const pending = (Number.isFinite(accumulated) ? accumulated : 0) + (Number.isFinite(deltaY) ? deltaY : 0)
-      const time = Number.isFinite(now) ? now : 0
-      const previous = Number.isFinite(lastStepAt) ? lastStepAt : Number.NEGATIVE_INFINITY
-      if (Math.abs(pending) < PSG_WHEEL_STEP_PX) return { accum: pending, step: 0, lastStepAt: previous }
-      if (time - previous < PSG_WHEEL_COOLDOWN_MS) return { accum: 0, step: 0, lastStepAt: previous }
-      return { accum: 0, step: pending > 0 ? 1 : -1, lastStepAt: time }
-    }
-
-    /**
-     * Collect the composer's openable pasted-image thumbnails in rail order.
-     * @param {Element | null} composer - composer region element.
-     * @returns {Array<{ src: string, name: string, button: HTMLElement }>} rail images.
-     */
-    function psgCollectImages(composer) {
-      const images = []
-      if (!(composer instanceof HTMLElement)) return images
-      const seen = new Set()
-      for (const button of composer.querySelectorAll('button')) {
-        if (!(button instanceof HTMLElement)) continue
-        const img = button.querySelector('img')
-        if (!(img instanceof HTMLImageElement)) continue
-        // The thumbnail button contains exactly the image; the remove button next
-        // to it has an SVG, and refused/failed uploads carry an aria-label error.
-        if (button.querySelector('svg') !== null) continue
-        if (button.hasAttribute('aria-label')) continue
-        if (button.children.length !== 1 || button.firstElementChild !== img) continue
-        const title = button.getAttribute('title')
-        if (typeof title !== 'string' || title.length === 0) continue
-        const src = img.getAttribute('src')
-        if (typeof src !== 'string' || src.length === 0 || seen.has(src)) continue
-        seen.add(src)
-        images.push({ src, name: img.getAttribute('alt') || '', button })
-      }
-      return images
-    }
 
     /** Module-level gallery store: exactly one overlay can exist. */
     let psgState = { open: false, images: [], index: 0 }
@@ -24214,16 +24122,6 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         annotationChipCandidates,
         serializeAnnotationChip
       }
-      // The composer image gallery's pure model (index/step/sync/wheel decisions).
-      globalThis.__POWER_SUITE_TEST_HOOKS__.composerImageGallery = {
-        PSG_WHEEL_STEP_PX,
-        PSG_WHEEL_COOLDOWN_MS,
-        psgClampIndex,
-        psgStepIndex,
-        psgSyncState,
-        psgWheelDecision,
-        psgCollectImages
-      }
       // The dynamic-Workspaces hover card's native figures. Kept in its own
       // namespace so the annotation seam above stays byte-for-byte stable.
       globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesStats = {
@@ -24260,20 +24158,6 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         dwRowMenuIsPinView,
         dwRowMenuActions,
         dwRowMenuResolve
-      }
-      // The update prompt's pure state machine: payload validation, the
-      // prompt/no-prompt decision, and the per-version later/silence state.
-      globalThis.__POWER_SUITE_TEST_HOOKS__.updateCheck = {
-        parseUpdatePromptState,
-        serializeUpdatePromptState,
-        decideUpdatePrompt,
-        noteUpdatePromptLater,
-        silenceUpdatePromptVersion,
-        offersSilence,
-        normalizeUpdatePayload,
-        parseStableVersion,
-        isNewerStableVersion,
-        UPDATE_STORAGE_KEY
       }
       // Sidebar width: pure clamp/cache/payload/bootstrap/adopt decisions plus the
       // attach probe the browser E2E reads. `sidebarWidthProbe` is read-only.

@@ -9,8 +9,8 @@ settings enums/defaults, re-exported by the Host modules and imported by the
 browser half.
 Browser-side pure models live under
 `src/browser/` and are imported by the entry (for example the update-prompt
-model and its stable-version math, or the sidebar-width decisions and cache
-document):
+model and its stable-version math, the sidebar-width decisions and cache
+document, or the composer-gallery index/wheel model):
 
 ```
 src/index.ts            Host entry (Node)
