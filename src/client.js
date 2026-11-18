@@ -7,12 +7,6 @@ import { installQuickLook } from './browser/hover-quick-look/install.ts'
 import { createUpdateCheck } from './browser/update-check/install.ts'
 import { createSidebarWidthController } from './browser/sidebar-width/install.ts'
 import {
-  ACTIVE_PROJECT_DAYS,
-  DEFAULT_SETTINGS,
-  PROMPT_HISTORY_MODIFIERS,
-  RECENT_SESSION_MINUTES
-} from './shared/protocol.ts'
-import {
   filesArtifactsInitialState,
   filesArtifactsPhaseMs,
   filesArtifactsReduce
@@ -31,11 +25,12 @@ import {
 import { copyArtifactContent, copyText } from './browser/artifacts/clipboard.ts'
 import { ARTIFACTS_NS } from './browser/artifacts/copy.ts'
 import { createArtifactsComponents } from './browser/artifacts/panel.ts'
+import { createSettingsPage } from './browser/settings/page.ts'
+import { createSettingsStore } from './browser/settings/store.ts'
 import { createWorkspacePresets } from './browser/workspace-presets/install.ts'
 import { REMIX_BOOK_OPEN_LINE, REMIX_DOWNLOAD_LINE, REMIX_FILE_COPY_LINE, REMIX_FILE_LINE, REMIX_LINK } from './browser/remix-icons.ts'
 import { createInterruptedSessionComponents } from './browser/interrupted-sessions/components.ts'
 import { createPromptHistoryPreview } from './browser/prompt-history/preview.ts'
-import { mergeSettingsPayload } from './browser/settings/model.ts'
 import { ROUTES, browserRoute } from './shared/routes.ts'
 import {
   PSG_WHEEL_COOLDOWN_MS,
@@ -471,7 +466,7 @@ window.__ModuleLoader__.load({
         const onKeyDown = (event) => {
           if (event.defaultPrevented || event.isComposing) return
           if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
-          if (!matchesHistoryModifier(event, currentSettings().promptHistoryModifier)) return
+          if (!settingsStore.matchesHistoryModifier(event, settingsStore.current().promptHistoryModifier)) return
           const target = event.target
           if (target === null || typeof target.closest !== 'function') return
           const editor = target.closest('[data-lexical-editor="true"]')
@@ -550,447 +545,7 @@ window.__ModuleLoader__.load({
     }
     //#endregion
 
-    //#region feature: settings — copy and shared state
-    /** Copy namespace for the Plugins-page configuration section. */
-    const SETTINGS_NS = 'powerSuiteSettings'
 
-    /** Host route serving and storing the suite's preference document. */
-    const SETTINGS_ROUTE = browserRoute(ROUTES.settings)
-
-    const SETTINGS_EN = {
-      'history.group': 'Prompt history',
-      'history.groupHint': 'Hold the chosen modifier and press ↑ or ↓ in the composer to switch between prompts already sent in this session. Plain arrows keep their normal editing behavior, including inside a recalled multi-line prompt. Primary is ⌘ on macOS and Ctrl on Windows and Linux; Alt is ⌥ on macOS and Alt on Windows and Linux.',
-      'history.label': 'Shortcut modifier',
-      'history.current': 'Current shortcut: {shortcut}',
-      'modifier.primary': '⌘ / Ctrl',
-      'modifier.alt': '⌥ / Alt',
-      'modifier.ctrl': '⌃ / Ctrl',
-      'modifier.shift': '⇧ / Shift',
-      'modifier.off': 'Off',
-      'shortcut.primary.mac': '⌘ + ↑ / ↓',
-      'shortcut.primary.other': 'Ctrl + ↑ / ↓',
-      'shortcut.alt.mac': '⌥ + ↑ / ↓',
-      'shortcut.alt.other': 'Alt + ↑ / ↓',
-      'shortcut.ctrl': 'Ctrl + ↑ / ↓',
-      'shortcut.shift.mac': '⇧ + ↑ / ↓',
-      'shortcut.shift.other': 'Shift + ↑ / ↓',
-      'shortcut.off': 'Off',
-      'dynamic.group': 'Active & recent',
-      'dynamic.groupHint': 'Choose how long a finished Session stays in the Running & recent card, and how long a project stays in Active Projects after its last activity. Running Sessions are always listed and count as active.',
-      'recent.label': 'Finished Session retention',
-      'recent.current': 'Currently {value}. Finished Sessions leave the card after this window.',
-      'recent.60': '1 hour',
-      'recent.120': '2 hours',
-      'recent.360': '6 hours',
-      'recent.720': '12 hours',
-      'recent.1440': '24 hours',
-      'active.label': 'Active project retention',
-      'active.current': 'Currently {value}. After this window the project moves to Inactive Projects.',
-      'active.1': '1 day',
-      'active.3': '3 days',
-      'active.7': '7 days',
-      'active.14': '14 days',
-      'active.30': '30 days',
-      'settings.loading': 'Loading settings…',
-      'settings.unavailable': 'Settings are unavailable. The default shortcut stays active.',
-      'settings.error': 'Could not save the setting. Try again.'
-    }
-    const SETTINGS_ZH = {
-      'history.group': '提示历史',
-      'history.groupHint': '在输入框里按住所选修饰键再按 ↑ 或 ↓，即可在本次会话已发送的提示之间切换。普通方向键保持原来的编辑行为，包括在回填的多行提示内部移动。Primary 在 macOS 上是 ⌘、在 Windows / Linux 上是 Ctrl；Alt 在 macOS 上是 ⌥、其他平台是 Alt。',
-      'history.label': '快捷键修饰键',
-      'history.current': '当前快捷键：{shortcut}',
-      'modifier.primary': '⌘ / Ctrl',
-      'modifier.alt': '⌥ / Alt',
-      'modifier.ctrl': '⌃ / Ctrl',
-      'modifier.shift': '⇧ / Shift',
-      'modifier.off': '关闭',
-      'shortcut.primary.mac': '⌘ + ↑ / ↓',
-      'shortcut.primary.other': 'Ctrl + ↑ / ↓',
-      'shortcut.alt.mac': '⌥ + ↑ / ↓',
-      'shortcut.alt.other': 'Alt + ↑ / ↓',
-      'shortcut.ctrl': 'Ctrl + ↑ / ↓',
-      'shortcut.shift.mac': '⇧ + ↑ / ↓',
-      'shortcut.shift.other': 'Shift + ↑ / ↓',
-      'shortcut.off': '已关闭',
-      'dynamic.group': '活跃与最近',
-      'dynamic.groupHint': '设置完成会话留在「进行中与最近活跃」卡片里的时长，以及项目最后一次活动后保留在活跃项目分组里的时长。进行中的会话始终显示并计为活跃。',
-      'recent.label': '完成会话保留时长',
-      'recent.current': '当前：{value}。超过后完成的会话从卡片移除。',
-      'recent.60': '1 小时',
-      'recent.120': '2 小时',
-      'recent.360': '6 小时',
-      'recent.720': '12 小时',
-      'recent.1440': '24 小时',
-      'active.label': '活跃项目保留时长',
-      'active.current': '当前：{value}。超过后项目归入非活跃项目。',
-      'active.1': '1 天',
-      'active.3': '3 天',
-      'active.7': '7 天',
-      'active.14': '14 天',
-      'active.30': '30 天',
-      'settings.loading': '正在读取设置…',
-      'settings.unavailable': '设置暂不可用，快捷键保持默认。',
-      'settings.error': '保存设置失败，请重试。'
-    }
-
-    /** @typedef {import('./shared/protocol.ts').Settings} Settings */
-    /** @typedef {import('./shared/protocol.ts').SettingsPatch} SettingsPatch */
-    /** @typedef {'promptHistoryModifier' | 'recentSessionMinutes' | 'activeProjectDays'} SettingsField */
-    /** @typedef {{ status: 'loading' | 'ready' | 'error', value: Settings }} SettingsSnapshot */
-
-    /**
-     * Host-backed settings shared by the page and the composer key handler.
-     * @type {{ snapshot: SettingsSnapshot, listeners: Set<Function>, loading: Promise<void> | null }}
-     */
-    const settingsStore = {
-      snapshot: { status: 'loading', value: { ...DEFAULT_SETTINGS } },
-      listeners: new Set(),
-      loading: null
-    }
-
-    /**
-     * Read the current shared settings snapshot.
-     * @returns {SettingsSnapshot} the snapshot.
-     */
-    function settingsSnapshot() {
-      return settingsStore.snapshot
-    }
-
-    /**
-     * Subscribe to settings changes.
-     * @param {() => void} listener - change callback.
-     * @returns {() => void} unsubscribe.
-     */
-    function subscribeSettings(listener) {
-      settingsStore.listeners.add(listener)
-      return () => {
-        settingsStore.listeners.delete(listener)
-      }
-    }
-
-    /**
-     * Publish one new settings snapshot.
-     * @param {SettingsSnapshot} snapshot - next snapshot.
-     * @returns {void}
-     */
-    function publishSettings(snapshot) {
-      settingsStore.snapshot = snapshot
-      for (const listener of [...settingsStore.listeners]) {
-        try {
-          listener()
-        } catch {
-          // A failing listener must not block the others.
-        }
-      }
-    }
-
-    /**
-     * Load the Host settings once per page.
-     * @returns {Promise<void>} resolves after the snapshot updates.
-     */
-    async function loadSettings() {
-      if (settingsStore.loading !== null) return settingsStore.loading
-      const task = (async () => {
-        try {
-          const response = await fetch(appUrl(SETTINGS_ROUTE), {
-            credentials: 'same-origin',
-            headers: { accept: 'application/json' }
-          })
-          if (!response.ok) throw new Error(`HTTP ${response.status}`)
-          const payload = await response.json()
-          publishSettings({ status: 'ready', value: mergeSettingsPayload(payload) })
-        } catch {
-          publishSettings({ status: 'error', value: { ...settingsStore.snapshot.value } })
-        } finally {
-          settingsStore.loading = null
-        }
-      })()
-      settingsStore.loading = task
-      return task
-    }
-
-    /**
-     * Save one settings patch through the Host and publish the result.
-     * @param {object} patch - recognized fields to write.
-     * @returns {Promise<boolean>} whether the Host accepted the write.
-     */
-    async function saveSettings(patch) {
-      try {
-        const response = await fetch(appUrl(SETTINGS_ROUTE), {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(patch)
-        })
-        if (!response.ok) return false
-        const payload = await response.json()
-        publishSettings({ status: 'ready', value: mergeSettingsPayload(payload) })
-        return true
-      } catch {
-        return false
-      }
-    }
-
-    /**
-     * Read the settings the features currently use, without subscribing.
-     * @returns {Settings} current settings.
-     */
-    function currentSettings() {
-      return settingsStore.snapshot.value
-    }
-
-    /**
-     * Whether this browser runs on Apple hardware, where the primary shortcut
-     * modifier is Command instead of Control.
-     * @returns {boolean} whether the platform primary modifier is Command.
-     */
-    function isApplePlatform() {
-      if (typeof navigator !== 'object' || navigator === null) return false
-      const platform = typeof navigator.userAgentData === 'object' && navigator.userAgentData !== null
-        ? String(navigator.userAgentData.platform ?? '')
-        : ''
-      if (/mac|iphone|ipad|ipod/i.test(platform)) return true
-      const legacy = String(navigator.platform ?? '')
-      if (/mac|iphone|ipad|ipod/i.test(legacy)) return true
-      return /Mac OS X|iPhone|iPad|iPod/.test(String(navigator.userAgent ?? ''))
-    }
-
-    /**
-     * Whether a keydown carries exactly the configured history modifier.
-     * @param {KeyboardEvent} event - the keydown.
-     * @param {string} mode - configured modifier mode.
-     * @returns {boolean} whether the event matches.
-     */
-    function matchesHistoryModifier(event, mode) {
-      if (mode === 'shift') {
-        return event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey
-      }
-      if (event.shiftKey) return false
-      switch (mode) {
-        case 'primary':
-          return isApplePlatform()
-            ? event.metaKey && !event.ctrlKey && !event.altKey
-            : event.ctrlKey && !event.metaKey && !event.altKey
-        case 'ctrl':
-          return event.ctrlKey && !event.metaKey && !event.altKey
-        case 'alt':
-          return event.altKey && !event.metaKey && !event.ctrlKey
-        default:
-          return false
-      }
-    }
-
-    /**
-     * One modifier mode's shortcut as displayed text.
-     * @param {Function} t - namespace-bound translate.
-     * @param {string} mode - modifier mode.
-     * @returns {string} the shortcut text.
-     */
-    function shortcutText(t, mode) {
-      switch (mode) {
-        case 'primary':
-          return t(isApplePlatform() ? 'shortcut.primary.mac' : 'shortcut.primary.other')
-        case 'alt':
-          return t(isApplePlatform() ? 'shortcut.alt.mac' : 'shortcut.alt.other')
-        case 'ctrl':
-          return t('shortcut.ctrl')
-        case 'shift':
-          return t(isApplePlatform() ? 'shortcut.shift.mac' : 'shortcut.shift.other')
-        default:
-          return t('shortcut.off')
-      }
-    }
-    //#endregion
-
-    //#region feature: settings — page
-    const SETTINGS_CSS = `
-.dps-settings{display:flex;flex-direction:column;gap:14px;max-width:620px;color:var(--dsw-alias-label-primary)}
-.dps-settings-head{display:flex;flex-direction:column;gap:3px}
-.dps-settings-title{margin:0;font-size:15px;font-weight:600;line-height:22px}
-.dps-settings-hint{margin:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
-.dps-settings-group{display:flex;flex-direction:column;gap:10px;padding-top:14px;border-top:1px solid var(--dsw-alias-border-l1)}
-.dps-settings-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 16px;padding:14px 16px;border-radius:16px;background:var(--dsw-alias-bg-module-platform,var(--dsw-alias-bg-layer-2));box-shadow:0 1px 2px rgb(0 0 0 / 3%)}
-.dps-settings-copy{min-width:0}
-.dps-settings-label{font-size:13px;font-weight:500;line-height:20px}
-.dps-settings-note{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary)}
-.dps-settings-note[data-error=true]{color:var(--dsw-alias-state-error-primary)}
-.dps-choice{display:inline-flex;align-items:center;gap:2px;flex:none;margin:0;padding:2px;border:0;border-radius:10px;background:var(--dsw-alias-bg-layer-2)}
-.dps-choice-option{position:relative;display:inline-flex;align-items:center;border-radius:8px;cursor:pointer}
-.dps-choice-option input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
-.dps-choice-text{white-space:nowrap;padding:4px 10px;border-radius:8px;font-size:12.5px;line-height:18px;color:var(--dsw-alias-label-secondary)}
-.dps-choice-option[data-selected=true] .dps-choice-text{background:var(--dsw-alias-bg-layer-4,var(--dsw-alias-bg-layer-3));color:var(--dsw-alias-label-primary)}
-.dps-choice-option input:disabled+.dps-choice-text{opacity:.5;cursor:default}
-.dps-visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-`
-
-    /**
-     * Render the bundle's configuration on its Plugins-page detail page.
-     *
-     * One group holds the prompt-history shortcut modifier. The page reads the
-     * shared Host-backed settings store, so a successful write updates both this
-     * page and the composer key handler in the same turn.
-     * @param {object} props - bundle-config owner props plus the injected locale seat.
-     * @returns {object} the settings section.
-     */
-    function PowerSuiteSettingsPage(props) {
-      const t = props.t ?? ((key) => key)
-      const snapshot = React.useSyncExternalStore(subscribeSettings, settingsSnapshot, settingsSnapshot)
-      const [saving, setSaving] = React.useState(false)
-      const [failed, setFailed] = React.useState(false)
-      const ready = snapshot.status === 'ready'
-      const locked = !ready || saving
-      const current = snapshot.value.promptHistoryModifier
-      const currentText = shortcutText(t, current)
-      const currentRecent = snapshot.value.recentSessionMinutes
-      const currentActive = snapshot.value.activeProjectDays
-      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
-      const pageRef = React.useRef(null)
-
-      // The bundle page draws the package README above this configuration
-      // section. The suite's settings surface is self-contained, so the
-      // document is hidden while the section is mounted and restored on unmount.
-      React.useEffect(() => {
-        const page = pageRef.current
-        if (!(page instanceof HTMLElement)) return undefined
-        const config = page.closest('[data-plugin-config]')
-        const sections = config?.parentElement
-        if (!(sections instanceof HTMLElement)) return undefined
-        const hidden = []
-        for (const child of Array.from(sections.children)) {
-          if (child instanceof HTMLElement && child.hasAttribute('data-detail-document')) {
-            hidden.push({ element: child, display: child.style.display })
-            child.style.display = 'none'
-          }
-        }
-        return () => {
-          for (const entry of hidden) entry.element.style.display = entry.display
-        }
-      }, [])
-
-      /**
-       * Persist one settings patch.
-       * @param {SettingsPatch} patch - recognized fields to write.
-       * @param {SettingsField} field - field the patch changes.
-       * @returns {void}
-       */
-      function choosePatch(patch, field) {
-        if (locked || patch[field] === snapshot.value[field]) return
-        setSaving(true)
-        setFailed(false)
-        saveSettings(patch).then((accepted) => {
-          setSaving(false)
-          if (!accepted) setFailed(true)
-        })
-      }
-
-      let note = null
-      let noteIsError = false
-      if (failed) {
-        note = t('settings.error')
-        noteIsError = true
-      } else if (snapshot.status === 'error') {
-        note = t('settings.unavailable')
-      }
-
-      const modifierOptions = PROMPT_HISTORY_MODIFIERS.map((mode) => React.createElement('label', {
-        key: mode,
-        className: 'dps-choice-option psf-rainbow-focus',
-        'data-selected': mode === current ? 'true' : undefined
-      },
-      React.createElement('input', {
-        type: 'radio',
-        name: 'dsh-power-suite-history-modifier',
-        value: mode,
-        checked: mode === current,
-        disabled: locked,
-        onChange: () => choosePatch({ promptHistoryModifier: mode }, 'promptHistoryModifier')
-      }),
-      React.createElement('span', { className: 'dps-choice-text' }, t(`modifier.${mode}`))))
-
-      const recentOptions = RECENT_SESSION_MINUTES.map((minutes) => React.createElement('label', {
-        key: minutes,
-        className: 'dps-choice-option psf-rainbow-focus',
-        'data-selected': minutes === currentRecent ? 'true' : undefined
-      },
-      React.createElement('input', {
-        type: 'radio',
-        name: 'dsh-power-suite-recent-session-window',
-        value: String(minutes),
-        checked: minutes === currentRecent,
-        disabled: locked,
-        onChange: () => choosePatch({ recentSessionMinutes: minutes }, 'recentSessionMinutes')
-      }),
-      React.createElement('span', { className: 'dps-choice-text' }, t(`recent.${minutes}`))))
-
-      const activeOptions = ACTIVE_PROJECT_DAYS.map((days) => React.createElement('label', {
-        key: days,
-        className: 'dps-choice-option psf-rainbow-focus',
-        'data-selected': days === currentActive ? 'true' : undefined
-      },
-      React.createElement('input', {
-        type: 'radio',
-        name: 'dsh-power-suite-active-project-window',
-        value: String(days),
-        checked: days === currentActive,
-        disabled: locked,
-        onChange: () => choosePatch({ activeProjectDays: days }, 'activeProjectDays')
-      }),
-      React.createElement('span', { className: 'dps-choice-text' }, t(`active.${days}`))))
-
-      return React.createElement('section', { className: 'dps-settings', ref: pageRef },
-        React.createElement('style', null, SETTINGS_CSS),
-        React.createElement('div', { className: 'dps-settings-head' },
-          React.createElement('h3', { className: 'dps-settings-title' }, t('history.group')),
-          React.createElement('p', { className: 'dps-settings-hint' }, t('history.groupHint'))),
-        React.createElement('div', { className: 'dps-settings-row' },
-          React.createElement('div', { className: 'dps-settings-copy' },
-            React.createElement('div', { className: 'dps-settings-label' }, t('history.label')),
-            React.createElement('p', { className: 'dps-settings-hint' }, t('history.current', { shortcut: currentText }))),
-          React.createElement('fieldset', { className: 'dps-choice', disabled: locked },
-            React.createElement('legend', { className: 'dps-visually-hidden' }, t('history.label')),
-            modifierOptions)),
-        React.createElement('div', { className: 'dps-settings-group' },
-          React.createElement('div', { className: 'dps-settings-head' },
-            React.createElement('h3', { className: 'dps-settings-title' }, t('dynamic.group')),
-            React.createElement('p', { className: 'dps-settings-hint' }, t('dynamic.groupHint'))),
-          React.createElement('div', { className: 'dps-settings-row' },
-            React.createElement('div', { className: 'dps-settings-copy' },
-              React.createElement('div', { className: 'dps-settings-label' }, t('recent.label')),
-              React.createElement('p', { className: 'dps-settings-hint' }, t('recent.current', { value: t(`recent.${currentRecent}`) }))),
-            React.createElement('fieldset', { className: 'dps-choice', disabled: locked },
-              React.createElement('legend', { className: 'dps-visually-hidden' }, t('recent.label')),
-              recentOptions)),
-          React.createElement('div', { className: 'dps-settings-row' },
-            React.createElement('div', { className: 'dps-settings-copy' },
-              React.createElement('div', { className: 'dps-settings-label' }, t('active.label')),
-              React.createElement('p', { className: 'dps-settings-hint' }, t('active.current', { value: t(`active.${currentActive}`) }))),
-            React.createElement('fieldset', { className: 'dps-choice', disabled: locked },
-              React.createElement('legend', { className: 'dps-visually-hidden' }, t('active.label')),
-              activeOptions))),
-        note === null ? null : React.createElement('p', {
-          className: 'dps-settings-note',
-          role: 'status',
-          'data-error': noteIsError ? 'true' : undefined
-        }, note))
-    }
-
-    /**
-     * Register the Plugins-page configuration section and its dictionaries.
-     * @param {object} ctx - client root context.
-     * @returns {void}
-     */
-    function installSettingsPage(ctx) {
-      const t = ctx.locale.bind(SETTINGS_NS)
-      ctx.effect(() => ctx.locale.register(SETTINGS_NS, { en: SETTINGS_EN, zh: SETTINGS_ZH }), 'power-suite: settings dictionaries')
-      ctx.effect(() => ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
-        name: 'plugins.bundle.config',
-        key: PACKAGE_NAME,
-        inject: () => ({ t })
-      }, PowerSuiteSettingsPage)), 'power-suite: settings page')
-      loadSettings()
-    }
-    //#endregion
 
     //#region feature: interrupted sessions — copy, icons, shared state
     /** Copy namespace for the interrupted-task affordances. */
@@ -2851,6 +2406,21 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     const workspacePresets = createWorkspacePresets({ React })
     //#endregion
 
+    //#region feature: settings — page
+    //
+    // The Host-backed settings store and the Plugins-page section live in
+    // `src/browser/settings/{store,page}.ts`: the entry creates one store with
+    // the app URL builder and hands it to the page installer. Copy, CSS, slot
+    // key and the shared snapshot behavior are unchanged; this region is a
+    // wiring point.
+    const settingsStore = createSettingsStore({ appUrl })
+    const settingsPage = createSettingsPage({
+      React,
+      store: settingsStore,
+      packageName: PACKAGE_NAME
+    })
+    //#endregion
+
     //#region plugin
     /**
      * Register dictionaries, the page type, and its Session-scoped body.
@@ -2896,7 +2466,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         formatBytes,
         icons: { file: REMIX_FILE_LINE, open: REMIX_BOOK_OPEN_LINE, download: REMIX_DOWNLOAD_LINE }
       })
-      installSettingsPage(ctx)
+      settingsPage.installSettingsPage(/** @type {import('./browser/settings/page.ts').SettingsPageContext} */ (ctx))
       installComposerImageGallery(ctx)
       installUpdatePrompt(/** @type {import('./browser/update-check/install.ts').UpdateCheckContext} */ (ctx))
       uiAnnotationInstaller.install(/** @type {import('./browser/ui-annotation/install.ts').UiAnnotationContext} */ (ctx))
