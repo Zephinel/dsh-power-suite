@@ -12,6 +12,8 @@ All notable changes to this repository are documented here. The format follows
 
 ### Changed
 
+- **Annotation text/format/geometry models (Phase 3k).** The annotation sanitizer/redaction/digest/attribute/quote helpers, the label/format helpers and the clamp/rail/layout/segmented helpers moved to `src/browser/ui-annotation/{text,format,geometry}.ts`; their tests import the modules directly while the 112-key annotation hook stays a pass-through shim. `src/client.js` drops to ~23,580 lines; no behavior or copy changes.
+
 - **Full-suite browser e2e evidence (Phase 3j).** Independent runs at commit 5128669 (clean copies, isolated throwaway instances, current-HEAD live smoke recheck) record: update-prompt full 21/21 isolated and live; sidebar live full 68 PASS / 2 SKIP / 2 FAIL with the same two failures on the pre-Phase-3 baseline client; annotation isolated full 13 PASS / 1 SKIP / 9 FAIL with the identical baseline failure set, smoke 6/6; current HEAD live smoke 4/4, 6/6 and 21/21 with 0 page errors. No full-run failure was attributable to Phase 3; details and gaps are in docs/verification.md and the migration plan.
 
 - **Annotation settings model (Phase 3i).** The UI-annotation modifier settings (storage key, accepted choices, frozen defaults, normalize/conflict/parse/serialize/match) moved from `src/client.js` to `src/browser/ui-annotation/settings.ts`; the settings tests import it directly while the annotation test hook stays as a pass-through shim for the remaining model keys. No behavior, copy or storage-format changes.

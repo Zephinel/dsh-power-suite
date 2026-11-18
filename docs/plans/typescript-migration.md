@@ -299,9 +299,16 @@ the main Phase 3 work.
 frozen defaults, normalize/conflict/parse/serialize/match); the five settings
 tests import the module directly while the 112-key annotation test hook stays as
 a pass-through shim for the remaining model keys. `src/client.js` drops to
-~24.0k lines. The planned order for the rest: text/format, geometry, identity,
-records, reducer, serializers, anchors, then surface/resolution, and finally the
-annotation seam retirement in its own commit.
+~24.0k lines. **3k progress (2026-11-18).** The first three follow-up annotation slices landed:
+`src/browser/ui-annotation/text.ts` (sanitizer/redaction/digest/attribute/
+CSS-identifier/quote helpers), `format.ts` (short labels, workspace/route
+labels, time/join, bounds/viewport normalization) and `geometry.ts` (clamps,
+rail width, layout mode, segmented index/label). Tests import them directly; the
+112-key annotation hook remains a pass-through shim and `annotationRailRightForPane`
+stays in the controller section for a later small slice. `src/client.js` is now
+~23,580 lines. The planned order for the rest: identity, records, reducer,
+serializers, anchors, surface/resolution, then the annotation seam retirement in
+its own commit.
 
 **3j full-suite e2e evidence (2026-11-18, commit 5128669).** Independent runs
 started from clean copies (temp `$DSH_HOME`, installed tarball; current HEAD
