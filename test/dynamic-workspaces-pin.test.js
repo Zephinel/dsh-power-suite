@@ -36,6 +36,7 @@
  * seeding a corrupt raw document, which the old vm seam could not do).
  */
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { loadClientModule } from './helpers/client-module.mjs'
 import { ROUTES, browserRoute } from '../src/shared/routes.ts'
@@ -50,6 +51,9 @@ import {
 
 /** The browser entry, read for source-level wiring/regression assertions. */
 const client = loadClientModule()
+
+/** The extracted dynamic-Workspaces controller, read for its own wiring assertions. */
+const dynamicSource = readFileSync(new URL('../src/browser/dynamic-workspaces/install.ts', import.meta.url), 'utf8')
 
 /** Fixed clock used by every row fixture (2025-10-09T08:53:20Z). */
 const NOW = 1_760_000_000_000
@@ -192,29 +196,28 @@ function cacheView(cache) {
 }
 
 test('the card-owned pin syncs through the panel route, never through the native sidebar pin', () => {
-  const source = client.source
   // Panel-owned Host-shared state: the suite's own route, request helpers, local
   // cache, and the first-contact migration flag that merges pre-restart pins.
   assert.equal(browserRoute(ROUTES.sessionPins), 'api/power-suite.session-pins', 'the shared contract owns the panel route')
-  assert.match(source, /ROUTES\.sessionPins/, 'the client talks to the panel route through the shared contract')
-  assert.match(source, /dwFetchPinnedSessions/, 'the client has the Host GET helper')
-  assert.match(source, /dwPostPinOps/, 'the client has the Host POST helper')
-  assert.match(source, /dwReadPinCache/, 'the client paints from the local cache')
-  assert.match(source, /dwWritePinCache/, 'the client persists the local cache')
-  assert.match(source, /migrated/, 'the first-contact migration state exists')
+  assert.match(dynamicSource, /ROUTES\.sessionPins/, 'the controller talks to the panel route through the shared contract')
+  assert.match(dynamicSource, /dwFetchPinnedSessions/, 'the controller has the Host GET helper')
+  assert.match(dynamicSource, /dwPostPinOps/, 'the controller has the Host POST helper')
+  assert.match(dynamicSource, /dwReadPinCache/, 'the controller paints from the local cache')
+  assert.match(dynamicSource, /dwWritePinCache/, 'the controller persists the local cache')
+  assert.match(dynamicSource, /migrated/, 'the first-contact migration state exists')
   // The native sidebar pin (and its Workspaces snapshot field) must never drive
   // the card: those are project-organisation pins, not card pins.
-  assert.doesNotMatch(source, /uiWorkspace\.(?:pinSession|unpinSession)/, 'the card must not toggle the native sidebar pin')
+  assert.doesNotMatch(dynamicSource, /uiWorkspace\.(?:pinSession|unpinSession)/, 'the card must not toggle the native sidebar pin')
   assert.doesNotMatch(
-    source,
+    dynamicSource,
     /(?:workspaceSnapshot|WorkspaceSnapshot)[^\n]{0,40}\.pinnedSessionIds/,
     'the card must not read the native pinnedSessionIds snapshot'
   )
   // The pre-final round's helpers are gone.
-  assert.doesNotMatch(source, /dwReadPinnedIds|dwWritePinnedIds/, 'the removed host-pin helpers must not reappear')
-  // Requirement 2's native hover-figure wiring is untouched.
-  assert.match(source, /sidebar\.session\.row\.hover/, 'the native hover-figure slot registration stays')
-  assert.match(source, /psd-native-hover-figures/, 'the native hover-figure DOM anchor stays')
+  assert.doesNotMatch(dynamicSource, /dwReadPinnedIds|dwWritePinnedIds/, 'the removed host-pin helpers must not reappear')
+  // Requirement 2's native hover-figure wiring is untouched in the entry.
+  assert.match(client.source, /sidebar\.session\.row\.hover/, 'the native hover-figure slot registration stays')
+  assert.match(client.source, /psd-native-hover-figures/, 'the native hover-figure DOM anchor stays')
 })
 
 test('pinned ids sanitize from arrays and legacy objects, drop junk, dedupe, and bound', () => {
@@ -469,7 +472,7 @@ test('EN and ZH dictionaries define the same pin keys', () => {
 })
 
 test('requirement 1: the running-card status dot opts out of the shell superellipse', () => {
-  const source = client.source
+  const source = dynamicSource
   // The shell theme applies `corner-shape: superellipse(1.5)` to every element,
   // which renders a plain `border-radius: 50%` dot as a squircle; the plugin dot
   // must explicitly ask for a round corner shape.

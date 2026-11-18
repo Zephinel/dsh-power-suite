@@ -19,6 +19,7 @@
  * and the section-omission rules deterministic.
  */
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { loadClientModule } from './helpers/client-module.mjs'
 import {
@@ -35,8 +36,11 @@ import {
   dwProjectionSections
 } from '../src/browser/dynamic-workspaces/stats.ts'
 
-/** The browser entry, read for source-level identity-glyph regressions. */
+/** The browser entry, read for the extracted-controller binding. */
 const client = loadClientModule()
+
+/** The extracted dynamic-Workspaces controller, read for identity-glyph regressions. */
+const dynamicSource = readFileSync(new URL('../src/browser/dynamic-workspaces/install.ts', import.meta.url), 'utf8')
 
 /**
  * Build a translate seat from one dictionary map exactly like the locale
@@ -326,7 +330,7 @@ test('one-shot projection read is only requested for unseeded idle records', () 
 })
 
 test('identity glyphs are swapped without touching the rest of the marker recipe', () => {
-  const source = client.source
+  const source = dynamicSource
   // Header all-complete indicator: DeepSeek brand glyph in the same 14 px slot.
   assert.match(source, /className: 'psd-spark' \}, RemixGlyph\(DW_DEEPSEEK_FILL, 14\)\)/)
   // Read/acknowledged parent row: the sparkling glyph fills the 16 px leading

@@ -19,7 +19,7 @@ declare class Element {
   querySelectorAll(selector: string): ElementList
   getAttribute(name: string): string | null
   hasAttribute(name: string): boolean
-  readonly children: ArrayLike<Element>
+  readonly children: ElementList
   readonly firstElementChild: Element | null
 }
 
@@ -39,19 +39,152 @@ declare class HTMLImageElement extends HTMLElement {}
  * cover the same call sites under the Host profile (`lib: ES2023`), which is
  * also where `localStorage` already comes from `@types/node`.
  */
+
+/**
+ * Extended, still minimal DOM surface for the browser controllers that mount
+ * their own DOM (dynamic Workspaces, and the canvas atmosphere renderer).
+ *
+ * `tsconfig.browser.json` excludes this file and uses the full DOM lib; the
+ * Host profile (`lib: ES2023`) uses these declarations only so the browser
+ * modules stay in the root typecheck. Members are structural and cover exactly
+ * what those modules call.
+ */
+
+interface ElementStyle {
+  display: string
+  order: string
+  flexDirection: string
+  setProperty(name: string, value: string): void
+}
+
+interface ElementClassList extends Iterable<string> {
+  add(...tokens: string[]): void
+  remove(...tokens: string[]): void
+  contains(token: string): boolean
+}
+
+interface DOMRectLike {
+  readonly width: number
+  readonly height: number
+  readonly top: number
+  readonly right: number
+  readonly bottom: number
+  readonly left: number
+}
+
+interface Element {
+  className: string
+  readonly classList: ElementClassList
+  readonly style: ElementStyle
+  readonly children: ElementList
+  readonly childElementCount: number
+  readonly firstElementChild: Element | null
+  readonly firstChild: Element | null
+  readonly isConnected: boolean
+  readonly scrollWidth: number
+  readonly clientWidth: number
+  textContent: string | null
+  setAttribute(name: string, value: string): void
+  removeAttribute(name: string): void
+  appendChild(node: Element): Element
+  insertBefore(node: Element, child: Element | null): Element
+  remove(): void
+  closest(selector: string): Element | null
+  contains(node: object | null): boolean
+  getBoundingClientRect(): DOMRectLike
+}
+
+interface HTMLElement {
+  readonly dataset: Record<string, string | undefined>
+  readonly offsetHeight: number
+  title: string
+  focus(): void
+  focus(options?: { preventScroll?: boolean }): void
+}
+
+declare class HTMLCanvasElement extends HTMLElement {
+  width: number
+  height: number
+  getContext(contextId: '2d', options?: { alpha?: boolean }): CanvasRenderingContext2D | null
+}
+
+interface CanvasGradient {
+  addColorStop(offset: number, color: string): void
+}
+
+interface CanvasRenderingContext2D {
+  globalCompositeOperation: string
+  fillStyle: string | CanvasGradient
+  font: string
+  clearRect(x: number, y: number, width: number, height: number): void
+  fillRect(x: number, y: number, width: number, height: number): void
+  createLinearGradient(x0: number, y0: number, x1: number, y1: number): CanvasGradient
+  createRadialGradient(x0: number, y0: number, r0: number, x1: number, y1: number, r1: number): CanvasGradient
+  beginPath(): void
+  arc(x: number, y: number, radius: number, startAngle: number, endAngle: number): void
+  fill(): void
+  measureText(text: string): { readonly width: number }
+}
+
+interface ResizeObserver {
+  observe(target: Element): void
+  disconnect(): void
+}
+
+declare var ResizeObserver: {
+  new (callback: () => void): ResizeObserver
+}
+
+interface MutationObserver {
+  observe(target: object, options?: Record<string, unknown>): void
+  disconnect(): void
+}
+
+declare var MutationObserver: {
+  new (callback: (records: Array<{ readonly target: object }>) => void): MutationObserver
+}
+
+/** Keyboard events consumed by the root profile's document listeners. */
+declare class KeyboardEvent {
+  readonly key: string
+  preventDefault(): void
+  stopPropagation(): void
+}
+
 declare var document: {
   readonly visibilityState: string
+  readonly hidden: boolean
+  readonly body: HTMLElement
+  readonly head: HTMLElement
+  readonly documentElement: HTMLElement
   querySelector(selector: string): Element | null
-  addEventListener(type: string, listener: () => void): void
-  removeEventListener(type: string, listener: () => void): void
+  querySelectorAll(selector: string): ElementList
+  getElementById(id: string): HTMLElement | null
+  createElement(tag: 'canvas'): HTMLCanvasElement
+  createElement(tag: string): HTMLElement
+  createElementNS(namespace: string, tag: string): Element
+  addEventListener(type: string, listener: (event: never) => void, options?: boolean | Record<string, unknown>): void
+  removeEventListener(type: string, listener: (event: never) => void, options?: boolean | Record<string, unknown>): void
 }
 
 declare var window: {
   readonly innerWidth: number
-  requestAnimationFrame(callback: () => void): number
+  readonly innerHeight: number
+  readonly devicePixelRatio: number
+  readonly localStorage: {
+    getItem(key: string): string | null
+    setItem(key: string, value: string): void
+  }
+  requestAnimationFrame(callback: (time: number) => void): number
   cancelAnimationFrame(handle: number): void
-  addEventListener(type: string, listener: () => void): void
-  removeEventListener(type: string, listener: () => void): void
+  setTimeout(callback: () => void, delay?: number): number
+  clearTimeout(handle: number): void
+  setInterval(callback: () => void, delay?: number): number
+  clearInterval(handle: number): void
+  matchMedia(query: string): { readonly matches: boolean, addEventListener(type: string, listener: () => void): void, removeEventListener(type: string, listener: () => void): void }
+  getComputedStyle(element: Element): { readonly font: string }
+  addEventListener(type: string, listener: (event: never) => void, options?: boolean | Record<string, unknown>): void
+  removeEventListener(type: string, listener: (event: never) => void, options?: boolean | Record<string, unknown>): void
 }
 
 declare function matchMedia(query: string): { readonly matches: boolean }
