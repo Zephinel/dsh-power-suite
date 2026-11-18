@@ -32,6 +32,15 @@ import {
   resolveModifierChange as resolveAnnotationModifier,
   serializeSettings as serializeAnnotationSettings
 } from '../src/browser/ui-annotation/settings.ts'
+import {
+  annotationNormalizeQuoteText as normalizeAnnotationQuote,
+  cssIdentifier as escapeAnnotationIdentifier,
+  normalizeUserNote as normalizeAnnotationNote,
+  sanitizeAttributeName as sanitizeAnnotationAttributeName,
+  sanitizeAttributeValue as sanitizeAnnotationAttributeValue,
+  sanitizeText as sanitizeAnnotationText,
+  textDigest as annotationTextDigest
+} from '../src/browser/ui-annotation/text.ts'
 
 /** One materialization of the browser module; the seam is read from it. */
 const client = loadClientModule()
@@ -437,73 +446,73 @@ if (ui === undefined) {
   //#region sanitization
 
   test('sanitizeText collapses whitespace, strips control characters, and truncates at 80 with an ellipsis', () => {
-    assert.equal(ui.sanitizeText('  hello \n\t  world  '), 'hello world')
-    assert.equal(ui.sanitizeText('\u200Bzero\u200Dwidth\uFEFF'), 'zero width')
-    assert.equal(ui.sanitizeText('line\u0000one\u0007two'), 'line one two')
-    assert.equal(ui.sanitizeText(''), '')
-    assert.equal(ui.sanitizeText(null), '')
-    assert.equal(ui.sanitizeText(undefined), '')
-    assert.equal(ui.sanitizeText(42), '')
+    assert.equal(sanitizeAnnotationText('  hello \n\t  world  '), 'hello world')
+    assert.equal(sanitizeAnnotationText('\u200Bzero\u200Dwidth\uFEFF'), 'zero width')
+    assert.equal(sanitizeAnnotationText('line\u0000one\u0007two'), 'line one two')
+    assert.equal(sanitizeAnnotationText(''), '')
+    assert.equal(sanitizeAnnotationText(null), '')
+    assert.equal(sanitizeAnnotationText(undefined), '')
+    assert.equal(sanitizeAnnotationText(42), '')
 
     const long = 'word '.repeat(40).trim()
-    const truncated = ui.sanitizeText(long)
+    const truncated = sanitizeAnnotationText(long)
     assert.ok(truncated.length <= 81, `truncated length ${truncated.length}`)
     assert.ok(truncated.length >= 79, 'keeps most of the 80-character budget')
     assert.ok(truncated.endsWith('…'), 'marks the truncation with an ellipsis')
-    const shortLimit = ui.sanitizeText(long, 10)
+    const shortLimit = sanitizeAnnotationText(long, 10)
     assert.ok(shortLimit.endsWith('…'))
     assert.ok(shortLimit.length <= 11)
-    assert.equal(ui.sanitizeText('short', 80), 'short')
+    assert.equal(sanitizeAnnotationText('short', 80), 'short')
   })
 
   test('sanitizeText redacts secret-shaped values and emails', () => {
-    const email = ui.sanitizeText('mail alice@example.com now')
+    const email = sanitizeAnnotationText('mail alice@example.com now')
     assert.ok(!email.includes('alice@example.com'))
     assert.ok(email.includes('mail') && email.includes('now'))
 
-    const bearer = ui.sanitizeText('Authorization: Bearer abcdef1234567890')
+    const bearer = sanitizeAnnotationText('Authorization: Bearer abcdef1234567890')
     assert.ok(!bearer.includes('abcdef1234567890'))
 
-    const apiKey = ui.sanitizeText('key sk-ABCDEF0123456789ghij')
+    const apiKey = sanitizeAnnotationText('key sk-ABCDEF0123456789ghij')
     assert.ok(!apiKey.includes('ABCDEF0123456789ghij'))
 
-    const hex = ui.sanitizeText('token deadbeefdeadbeefdeadbeefdeadbeef')
+    const hex = sanitizeAnnotationText('token deadbeefdeadbeefdeadbeefdeadbeef')
     assert.ok(!hex.includes('deadbeefdeadbeefdeadbeefdeadbeef'))
 
-    const base64 = ui.sanitizeText('c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0')
+    const base64 = sanitizeAnnotationText('c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0')
     assert.ok(!base64.includes('c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0'))
 
-    assert.equal(ui.sanitizeText('New session'), 'New session')
+    assert.equal(sanitizeAnnotationText('New session'), 'New session')
   })
 
   test('sanitizeAttributeName drops credential-shaped names and keeps DOM identity attributes', () => {
     for (const denied of ['token', 'data-token', 'Secret', 'user-password', 'passwd', 'authorization', 'Cookie', 'X-Auth-Token']) {
-      assert.equal(ui.sanitizeAttributeName(denied), null, `${denied} is denied`)
+      assert.equal(sanitizeAnnotationAttributeName(denied), null, `${denied} is denied`)
     }
     for (const kept of ['data-row-key', 'data-conversation-region', 'aria-label', 'role', 'id', 'name']) {
-      assert.equal(ui.sanitizeAttributeName(kept), kept, `${kept} is kept`)
+      assert.equal(sanitizeAnnotationAttributeName(kept), kept, `${kept} is kept`)
     }
     // Classes are never captured: hashed class names must not become locators.
     for (const deniedClassy of ['class', 'style', 'onclick', 'sessionKey']) {
-      assert.equal(ui.sanitizeAttributeName(deniedClassy), null, `${deniedClassy} is denied`)
+      assert.equal(sanitizeAnnotationAttributeName(deniedClassy), null, `${deniedClassy} is denied`)
     }
   })
 
   test('sanitizeAttributeValue drops Bearer/sk-/long base64-hex values and keeps ordinary values', () => {
-    assert.equal(ui.sanitizeAttributeValue('aria-label', 'New session'), 'New session')
-    assert.equal(ui.sanitizeAttributeValue('data-row-key', REAL_ROW_KEY), REAL_ROW_KEY)
-    assert.equal(ui.sanitizeAttributeValue('role', 'button'), 'button')
-    assert.equal(ui.sanitizeAttributeValue('aria-label', 'Bearer abcdef1234567890'), null)
-    assert.equal(ui.sanitizeAttributeValue('data-key', 'sk-ABCDEF0123456789'), null)
-    assert.equal(ui.sanitizeAttributeValue('value', 'deadbeefdeadbeefdeadbeefdeadbeef'), null)
-    assert.equal(ui.sanitizeAttributeValue('value', 'c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0'), null)
-    assert.equal(ui.sanitizeAttributeValue('token', 'anything'), null)
+    assert.equal(sanitizeAnnotationAttributeValue('aria-label', 'New session'), 'New session')
+    assert.equal(sanitizeAnnotationAttributeValue('data-row-key', REAL_ROW_KEY), REAL_ROW_KEY)
+    assert.equal(sanitizeAnnotationAttributeValue('role', 'button'), 'button')
+    assert.equal(sanitizeAnnotationAttributeValue('aria-label', 'Bearer abcdef1234567890'), null)
+    assert.equal(sanitizeAnnotationAttributeValue('data-key', 'sk-ABCDEF0123456789'), null)
+    assert.equal(sanitizeAnnotationAttributeValue('value', 'deadbeefdeadbeefdeadbeefdeadbeef'), null)
+    assert.equal(sanitizeAnnotationAttributeValue('value', 'c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0'), null)
+    assert.equal(sanitizeAnnotationAttributeValue('token', 'anything'), null)
   })
 
   test('F1: sensitive or generated ids never become id candidates or identity keys', () => {
     const sensitiveIds = ['alice@example.com', 'sk-live-ZYXWVUTS9876543210', 'deadbeefdeadbeefdeadbeefdeadbeef']
     for (const id of sensitiveIds) {
-      assert.equal(ui.sanitizeAttributeValue('id', id), null, `the authoritative sanitizer rejects ${id}`)
+      assert.equal(sanitizeAnnotationAttributeValue('id', id), null, `the authoritative sanitizer rejects ${id}`)
     }
     for (const id of [...sensitiveIds, ':r1:', '_Row_1a2b3c']) {
       const candidates = ui.selectorCandidates(descriptorOf({ tag: 'button', id, name: 'Secret target' }))
@@ -517,7 +526,7 @@ if (ui === undefined) {
       }
     }
     // An ordinary authored id is still a stable locator (F1 must not over-filter).
-    assert.equal(ui.sanitizeAttributeValue('id', 'composer-send'), 'composer-send')
+    assert.equal(sanitizeAnnotationAttributeValue('id', 'composer-send'), 'composer-send')
     const ordinary = refOf({ tag: 'button', id: 'composer-send', name: 'Send', text: 'Send' })
     assert.equal(ordinary.locator.candidates.find((candidate) => candidate.kind === 'id')?.value, '#composer-send')
     assert.equal(ui.identityKeyOf(ordinary), 'id:#composer-send')
@@ -534,14 +543,14 @@ if (ui === undefined) {
       ['data-sidebar-toggle', 'sidebar']
     ]
     for (const [name, value] of allowListed) {
-      assert.equal(ui.sanitizeAttributeValue(name, value), value, `${name} keeps its stable value`)
+      assert.equal(sanitizeAnnotationAttributeValue(name, value), value, `${name} keeps its stable value`)
     }
     const bareUuid = '123e4567-e89b-12d3-a456-426614174000'
-    assert.equal(ui.sanitizeAttributeValue('data-row-key', bareUuid), bareUuid, 'a bare UUID is a stable key shape')
+    assert.equal(sanitizeAnnotationAttributeValue('data-row-key', bareUuid), bareUuid, 'a bare UUID is a stable key shape')
     // The allow-list is not a secret-laundering channel.
     for (const value of ['Bearer abcdef1234567890', 'sk-live-ZYXWVUTS9876543210', 'deadbeefdeadbeefdeadbeefdeadbeef']) {
-      assert.equal(ui.sanitizeAttributeValue('data-row-key', value), null, 'an allow-listed name still rejects secret shapes')
-      assert.equal(ui.sanitizeAttributeValue('data-unknown', value), null, 'unknown attributes still reject secret shapes')
+      assert.equal(sanitizeAnnotationAttributeValue('data-row-key', value), null, 'an allow-listed name still rejects secret shapes')
+      assert.equal(sanitizeAnnotationAttributeValue('data-unknown', value), null, 'unknown attributes still reject secret shapes')
     }
     const rowCandidates = ui.selectorCandidates(descriptorOf({
       tag: 'div',
@@ -559,17 +568,17 @@ if (ui === undefined) {
   })
 
   test('R2: the real data-conversation-session shape and row keys survive; secret vectors still denied', () => {
-    assert.equal(ui.sanitizeAttributeValue('data-conversation-session', SESSION_A), SESSION_A, 'real session-<uuid> attribute value')
-    assert.equal(ui.sanitizeAttributeValue('data-row-key', REAL_ROW_KEY), REAL_ROW_KEY)
-    assert.equal(ui.sanitizeAttributeValue('data-row-key', REAL_WORKSPACE_KEY), REAL_WORKSPACE_KEY)
-    assert.equal(ui.sanitizeAttributeValue('data-row-key', `session:${SESSION_B}`), `session:${SESSION_B}`)
+    assert.equal(sanitizeAnnotationAttributeValue('data-conversation-session', SESSION_A), SESSION_A, 'real session-<uuid> attribute value')
+    assert.equal(sanitizeAnnotationAttributeValue('data-row-key', REAL_ROW_KEY), REAL_ROW_KEY)
+    assert.equal(sanitizeAnnotationAttributeValue('data-row-key', REAL_WORKSPACE_KEY), REAL_WORKSPACE_KEY)
+    assert.equal(sanitizeAnnotationAttributeValue('data-row-key', `session:${SESSION_B}`), `session:${SESSION_B}`)
     // The narrow namespace allowance is only for known stable attributes.
-    assert.equal(ui.sanitizeAttributeValue('data-unknown', SESSION_A), null, 'unknown attributes do not get the session namespace allowance')
+    assert.equal(sanitizeAnnotationAttributeValue('data-unknown', SESSION_A), null, 'unknown attributes do not get the session namespace allowance')
     // Old denials keep working on both known and unknown attributes.
     const secrets = ['Bearer abcdef1234567890', 'sk-ABCDEF0123456789', 'deadbeefdeadbeefdeadbeefdeadbeef', 'c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0', 'alice@example.com']
     for (const value of secrets) {
-      assert.equal(ui.sanitizeAttributeValue('data-conversation-session', value), null, `the known session attribute still rejects ${value.slice(0, 12)}…`)
-      assert.equal(ui.sanitizeAttributeValue('data-unknown', value), null, `unknown attributes still reject ${value.slice(0, 12)}…`)
+      assert.equal(sanitizeAnnotationAttributeValue('data-conversation-session', value), null, `the known session attribute still rejects ${value.slice(0, 12)}…`)
+      assert.equal(sanitizeAnnotationAttributeValue('data-unknown', value), null, `unknown attributes still reject ${value.slice(0, 12)}…`)
     }
   })
 
@@ -581,16 +590,16 @@ if (ui === undefined) {
       'eyJhbGciOiJub25lIn0.eyJzdWIiOiJ1c2VyIn0.abc'
     ]
     for (const value of denied) {
-      assert.equal(ui.sanitizeAttributeValue('aria-label', value), null, `${value.slice(0, 12)}… denied on aria-label`)
-      assert.equal(ui.sanitizeAttributeValue('data-testid', value), null, `${value.slice(0, 12)}… denied on data-testid`)
+      assert.equal(sanitizeAnnotationAttributeValue('aria-label', value), null, `${value.slice(0, 12)}… denied on aria-label`)
+      assert.equal(sanitizeAnnotationAttributeValue('data-testid', value), null, `${value.slice(0, 12)}… denied on data-testid`)
     }
     // The lowercase vectors from round 1 stay denied.
     for (const value of ['sk-ABCDEF0123456789', 'Bearer abcdef1234567890', 'alice@example.com']) {
-      assert.equal(ui.sanitizeAttributeValue('aria-label', value), null)
+      assert.equal(sanitizeAnnotationAttributeValue('aria-label', value), null)
     }
     // Benign values are not over-filtered by the broader credential shapes.
     for (const value of ['SKU list', 'Task list', 'New session', 'composer-send']) {
-      assert.equal(ui.sanitizeAttributeValue('aria-label', value), value)
+      assert.equal(sanitizeAnnotationAttributeValue('aria-label', value), value)
     }
   })
 
@@ -600,16 +609,16 @@ if (ui === undefined) {
 
   test('F11: textDigest is deterministic FNV-1a 32-bit hex over sanitized text', () => {
     // The standard FNV-1a 32-bit test vectors pin the algorithm, not just determinism.
-    assert.equal(ui.textDigest(''), '811c9dc5', 'empty input is the FNV offset basis')
-    assert.equal(ui.textDigest('a'), 'e40c292c')
-    assert.equal(ui.textDigest('foobar'), 'bf9cf968')
-    assert.equal(ui.textDigest('  Ship   it  now  '), ui.textDigest('Ship it now'), 'whitespace-collapsed')
-    assert.match(ui.textDigest('anything'), /^[0-9a-f]{8}$/, 'lowercase zero-padded 8-hex')
-    assert.notEqual(ui.textDigest('first'), ui.textDigest('second'))
-    assert.equal(ui.textDigest(null), '', 'non-strings digest to empty')
-    assert.equal(ui.textDigest(42), '')
-    assert.equal(ui.textDigest('\u200B\uFEFF'), '811c9dc5', 'zero-width-only input sanitizes to empty')
-    assert.match(ui.textDigest('word '.repeat(1000).trim()), /^[0-9a-f]{8}$/, 'long input stays bounded and deterministic')
+    assert.equal(annotationTextDigest(''), '811c9dc5', 'empty input is the FNV offset basis')
+    assert.equal(annotationTextDigest('a'), 'e40c292c')
+    assert.equal(annotationTextDigest('foobar'), 'bf9cf968')
+    assert.equal(annotationTextDigest('  Ship   it  now  '), annotationTextDigest('Ship it now'), 'whitespace-collapsed')
+    assert.match(annotationTextDigest('anything'), /^[0-9a-f]{8}$/, 'lowercase zero-padded 8-hex')
+    assert.notEqual(annotationTextDigest('first'), annotationTextDigest('second'))
+    assert.equal(annotationTextDigest(null), '', 'non-strings digest to empty')
+    assert.equal(annotationTextDigest(42), '')
+    assert.equal(annotationTextDigest('\u200B\uFEFF'), '811c9dc5', 'zero-width-only input sanitizes to empty')
+    assert.match(annotationTextDigest('word '.repeat(1000).trim()), /^[0-9a-f]{8}$/, 'long input stays bounded and deterministic')
   })
 
   //#endregion
@@ -1590,10 +1599,10 @@ if (ui === undefined) {
   })
 
   test('normalizeUserNote strips NUL/C0 controls but preserves tab, spaces and line breaks', () => {
-    const normalized = ui.normalizeUserNote('a\u0000b\u0001c\t  d\r\ne\u007f')
+    const normalized = normalizeAnnotationNote('a\u0000b\u0001c\t  d\r\ne\u007f')
     assert.equal(normalized, 'abc\t  d\ne')
-    assert.equal(ui.normalizeUserNote(null), '')
-    assert.equal(ui.normalizeUserNote(''), '')
+    assert.equal(normalizeAnnotationNote(null), '')
+    assert.equal(normalizeAnnotationNote(''), '')
   })
 
   test('cssIdentifier/escapeSelectorValue use the platform CSS.escape when present', () => {
@@ -1621,8 +1630,8 @@ if (ui === undefined) {
   })
 
   test('cssIdentifier keeps its conservative fallback when the platform CSS is absent', () => {
-    assert.equal(ui.cssIdentifier('123abc'), '\\31 23abc')
-    assert.equal(ui.cssIdentifier('#123abc'), '\\#123abc')
+    assert.equal(escapeAnnotationIdentifier('123abc'), '\\31 23abc')
+    assert.equal(escapeAnnotationIdentifier('#123abc'), '\\#123abc')
   })
 
   test('clampPopoverPositionToViewport re-clamps a pinned position and preserves in-bounds offsets', () => {
@@ -2644,9 +2653,9 @@ if (ui === undefined) {
   })
 
   test('A3/T32: quote normalization, XPath/JS path generation, quote matching and scoring', () => {
-    assert.equal(ui.annotationNormalizeQuoteText('  a \n  b  '), 'a b')
-    assert.equal(ui.annotationNormalizeQuoteText('abcdef', 3), 'abc')
-    assert.equal(ui.annotationNormalizeQuoteText(null), '')
+    assert.equal(normalizeAnnotationQuote('  a \n  b  '), 'a b')
+    assert.equal(normalizeAnnotationQuote('abcdef', 3), 'abc')
+    assert.equal(normalizeAnnotationQuote(null), '')
     // Fake DOM tree: body > div (id-less) with two spans; the second span's XPath.
     const makeElement = (tag, parent) => {
       const element = {
