@@ -11,6 +11,10 @@
  * route belong to `test/browser/sidebar.e2e.mjs` (`lw-*` checks) and
  * `test/sidebar-width.test.js` (Host store/route).
  *
+ * The pure decisions now live in `src/browser/sidebar-width/model.ts` with
+ * direct Node coverage in `test/sidebar-width-model.test.js`; this file keeps
+ * exercising the browser controller seam.
+ *
  * The seam is inert in production: `__POWER_SUITE_TEST_HOOKS__` only exists in
  * the harness.
  */

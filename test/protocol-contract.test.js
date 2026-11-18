@@ -13,6 +13,7 @@ import { SESSION_PINS_ROUTE } from '../src/features/session-pins/host.ts'
 import { SIDEBAR_WIDTH_ROUTE } from '../src/features/sidebar-width/host.ts'
 import { SESSION_ACTIVITY_ROUTE } from '../src/features/session-activity/host.ts'
 import { UPDATE_ROUTE } from '../src/features/update-check/host.ts'
+import { SIDEBAR_WIDTH_ROUTE as CLIENT_SIDEBAR_WIDTH_ROUTE } from '../src/browser/sidebar-width/model.ts'
 import {
   ACTIVE_PROJECT_DAYS,
   defaultSettings,
@@ -20,9 +21,10 @@ import {
   RECENT_SESSION_MINUTES
 } from '../src/features/settings/store.ts'
 
-// The browser half is a classic script that cannot import the Host constants
-// until the build exists (docs/plans/typescript-migration.md), so Phase 1 keeps
-// one shallow guard: the client copy must stay exactly equal to the Host sets.
+// Phase 3 splits the browser half into modules: route literals still inline in
+// src/client.js are read from source, and routes that already moved into
+// src/browser/**/*.ts are imported here until the shared contract module owns
+// them. Either way the browser copy must stay exactly equal to the Host sets.
 
 const clientSource = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8')
 
@@ -49,6 +51,7 @@ const clientRoutes = new Set(
   [...clientSource.matchAll(/['"`](\/?api\/[A-Za-z0-9.-]+)['"`]/gu)]
     .map((match) => match[1].replace(/^\//u, ''))
 )
+clientRoutes.add(CLIENT_SIDEBAR_WIDTH_ROUTE.replace(/^\//u, ''))
 
 test('the client route literals match the Host route constants', () => {
   assert.deepEqual([...clientRoutes].sort(), [...hostRoutes].sort())

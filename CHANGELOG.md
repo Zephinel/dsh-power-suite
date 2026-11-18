@@ -12,6 +12,8 @@ All notable changes to this repository are documented here. The format follows
 
 ### Changed
 
+- **Browser sidebar-width model (Phase 3c).** The pure sidebar-width decisions (clamp/validity, browser-cache document, Host-payload normalizer and the boot/adopt/reopen decision rules) moved from `src/client.js` to `src/browser/sidebar-width/model.ts`, with `test/sidebar-width-model.test.js` importing them directly in Node; the protocol contract test now imports the extracted browser route alongside the remaining inline literals. Attach, drag capture, persistence and the Host route are unchanged.
+
 - **Browser update-prompt model (Phase 3b).** The pure update-prompt state machine moved from `src/client.js` to `src/browser/update-check/model.ts` and is now covered by `test/update-check-model.test.js` importing it directly in Node (the vm seam only covers the browser controller). No prompt behavior, copy or storage format changes.
 
 - **Browser half module seam (Phase 3a).** The browser entry is now an ES module (`src/client.js` plus `src/browser/`) that esbuild bundles into the served classic-script IIFE. The first pure model moved to `src/browser/update-check/versions.ts` (stable-version math, imported by the entry instead of duplicated inline); the unit-test harness bundles the ESM entry with esbuild before vm evaluation while still exposing the raw source to source-level assertions, and the browser e2e harness bundles it before injection (classic baseline copies still work). No UI, copy, slot or behavior changes; the remaining feature regions are still in place and will be split in 3b.

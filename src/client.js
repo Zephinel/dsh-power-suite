@@ -14,6 +14,20 @@ import {
   serializeUpdatePromptState,
   silenceUpdatePromptVersion
 } from './browser/update-check/model.ts'
+import {
+  SIDEBAR_WIDTH_MAX,
+  SIDEBAR_WIDTH_MIN,
+  SIDEBAR_WIDTH_ROUTE,
+  SIDEBAR_WIDTH_STORAGE_KEY,
+  clampSidebarWidth,
+  isValidSidebarWidth,
+  normalizeSidebarWidthPayload,
+  parseSidebarWidthCache,
+  sidebarWidthBootstrap,
+  sidebarWidthReopenRestore,
+  serializeSidebarWidthCache,
+  shouldAdoptSidebarWidth
+} from './browser/sidebar-width/model.ts'
 /**
  * Browser half of DSH Power Suite.
  *
@@ -23477,16 +23491,6 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
     // writes. When the seat shape changes the feature stays inert
     // (`probe().attached === false`) instead of guessing.
 
-    /** Host route serving and storing the durable sidebar-width document. */
-    const SIDEBAR_WIDTH_ROUTE = 'api/power-suite.sidebar-width'
-
-    /** Per-origin browser cache of the last known width and sync state. */
-    const SIDEBAR_WIDTH_STORAGE_KEY = 'power-suite.sidebar-width'
-
-    /** Width bounds; mirrors the shell's `clampWidth(px, 264, 420)` contract. */
-    const SIDEBAR_WIDTH_MIN = 264
-    const SIDEBAR_WIDTH_MAX = 420
-
     /** Debounce for persisting one drag gesture (300 ms after the last change). */
     const SIDEBAR_WIDTH_SAVE_DEBOUNCE_MS = 300
 
@@ -23516,140 +23520,6 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       syncState: 'idle',
       cache: { sidebarWidth: null, pending: false }
     }
-
-    //#region feature: sidebar width — pure decisions
-
-    /**
-     * Clamp one candidate width into the shell's sidebar range.
-     * @param {unknown} value - candidate width in px.
-     * @returns {number | null} integer px inside the range, or null when not a finite number.
-     */
-    function clampSidebarWidth(value) {
-      if (typeof value !== 'number' || !Number.isFinite(value)) return null
-      return Math.min(SIDEBAR_WIDTH_MAX, Math.max(SIDEBAR_WIDTH_MIN, Math.round(value)))
-    }
-
-    /**
-     * Whether one value is already a persistable sidebar width.
-     * @param {unknown} value - candidate width.
-     * @returns {boolean} integer inside [264, 420].
-     */
-    function isValidSidebarWidth(value) {
-      return typeof value === 'number' && Number.isInteger(value)
-        && value >= SIDEBAR_WIDTH_MIN && value <= SIDEBAR_WIDTH_MAX
-    }
-
-    /**
-     * The empty browser-cache document.
-     * @returns {{ sidebarWidth: number | null, pending: boolean }} defaults.
-     */
-    function emptySidebarWidthCache() {
-      return { sidebarWidth: null, pending: false }
-    }
-
-    /**
-     * Parse the browser-cache document. Malformed text, an unknown version and
-     * an out-of-range or non-integer width all read as the default document.
-     * @param {unknown} text - localStorage payload.
-     * @returns {{ sidebarWidth: number | null, pending: boolean }} parsed cache.
-     */
-    function parseSidebarWidthCache(text) {
-      if (typeof text !== 'string' || text.length === 0) return emptySidebarWidthCache()
-      let parsed = null
-      try {
-        parsed = JSON.parse(text)
-      } catch {
-        return emptySidebarWidthCache()
-      }
-      if (parsed === null || typeof parsed !== 'object' || parsed.version !== 1) return emptySidebarWidthCache()
-      return {
-        sidebarWidth: isValidSidebarWidth(parsed.sidebarWidth) ? parsed.sidebarWidth : null,
-        pending: parsed.pending === true
-      }
-    }
-
-    /**
-     * Serialize the browser-cache document (always version 1).
-     * @param {unknown} cache - `{ sidebarWidth, pending }`.
-     * @returns {string} JSON text.
-     */
-    function serializeSidebarWidthCache(cache) {
-      const source = cache !== null && typeof cache === 'object' ? cache : {}
-      return JSON.stringify({
-        version: 1,
-        sidebarWidth: isValidSidebarWidth(source.sidebarWidth) ? source.sidebarWidth : null,
-        pending: source.pending === true
-      })
-    }
-
-    /**
-     * Validate one Host GET/POST response body. A `null` width is a valid
-     * "nothing stored yet" document; a wrong version, a missing field or an
-     * out-of-range/non-integer width is a protocol failure.
-     * @param {unknown} payload - decoded JSON body.
-     * @returns {{ ok: boolean, sidebarWidth: number | null }} normalized payload.
-     */
-    function normalizeSidebarWidthPayload(payload) {
-      const invalid = { ok: false, sidebarWidth: null }
-      if (payload === null || typeof payload !== 'object') return invalid
-      if (payload.version !== 1) return invalid
-      if (!Object.hasOwn(payload, 'sidebarWidth')) return invalid
-      if (payload.sidebarWidth === null) return { ok: true, sidebarWidth: null }
-      if (!isValidSidebarWidth(payload.sidebarWidth)) return invalid
-      return { ok: true, sidebarWidth: payload.sidebarWidth }
-    }
-
-    /**
-     * Decide whether boot should re-apply the cached width over the shell's
-     * in-memory default. A collapsed sidebar stays collapsed and a live drag is
-     * never fought; only a valid cached width that differs from the live
-     * preference is written.
-     * @param {{ cacheWidth?: unknown, currentWidth?: unknown, dragging?: unknown }} input - boot facts.
-     * @returns {{ apply: number | null }} width to apply, or null for no write.
-     */
-    function sidebarWidthBootstrap(input) {
-      const facts = input !== null && typeof input === 'object' ? input : {}
-      if (facts.dragging === true) return { apply: null }
-      if (!isValidSidebarWidth(facts.cacheWidth)) return { apply: null }
-      if (typeof facts.currentWidth !== 'number' || !Number.isFinite(facts.currentWidth) || facts.currentWidth <= 0) {
-        return { apply: null }
-      }
-      return { apply: Math.round(facts.currentWidth) === facts.cacheWidth ? null : facts.cacheWidth }
-    }
-
-    /**
-     * Decide whether one remote width may overwrite the live preference.
-     * Adopting while collapsed would expand the sidebar against the user and
-     * adopting during a drag would fight the pointer; an unchanged width is a
-     * no-op. Unadopted remote widths are still remembered by the caller.
-     * @param {{ currentWidth?: unknown, remoteWidth?: unknown, dragging?: unknown }} input - adoption facts.
-     * @returns {boolean} whether the remote width may be applied now.
-     */
-    function shouldAdoptSidebarWidth(input) {
-      const facts = input !== null && typeof input === 'object' ? input : {}
-      if (facts.dragging === true) return false
-      if (!isValidSidebarWidth(facts.remoteWidth)) return false
-      if (typeof facts.currentWidth !== 'number' || !Number.isFinite(facts.currentWidth) || facts.currentWidth <= 0) {
-        return false
-      }
-      return Math.round(facts.currentWidth) !== facts.remoteWidth
-    }
-
-    /**
-     * Decide whether a `0 -> positive` shell toggle must re-apply the durable
-     * width. The native toggle writes the contract default (280) on reopen, but
-     * a persisted preference wins; a real drag is never fought.
-     * @param {{ preferenceWidth?: unknown, width?: unknown, dragging?: unknown }} input - reopen facts.
-     * @returns {number | null} width to re-apply, or null for no write.
-     */
-    function sidebarWidthReopenRestore(input) {
-      const facts = input !== null && typeof input === 'object' ? input : {}
-      if (facts.dragging === true) return null
-      if (!isValidSidebarWidth(facts.preferenceWidth)) return null
-      if (typeof facts.width !== 'number' || !Number.isFinite(facts.width) || facts.width <= 0) return null
-      return Math.round(facts.width) === facts.preferenceWidth ? null : facts.preferenceWidth
-    }
-    //#endregion
 
     //#region feature: sidebar width — cache and store seam
 

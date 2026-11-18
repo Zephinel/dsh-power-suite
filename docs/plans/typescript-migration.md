@@ -245,6 +245,14 @@ browser controller still owns. Remaining 3b work: extract the remaining
 delete the `__POWER_SUITE_TEST_HOOKS__` seams as each feature lands, and re-run
 the three browser e2e suites against the bundled artifact.
 
+**3c progress (2026-11-18).** The sidebar-width pure decisions moved to
+`src/browser/sidebar-width/model.ts` (clamp/validity, cache document, Host
+payload normalizer and the boot/adopt/reopen decisions), with
+`test/sidebar-width-model.test.js` importing it directly in Node. The protocol
+contract guard now imports the extracted browser route constant alongside the
+remaining inline client literals, so the contract seam keeps covering both
+locations while the split continues.
+
 Decide between (a) splitting `src/client.js` by `//#region feature:` into modules
 and bundling one classic script, or (b) keeping one file and annotating it. Under
 (a), give each feature an `install(ctx, deps)` plus pure model functions, import
