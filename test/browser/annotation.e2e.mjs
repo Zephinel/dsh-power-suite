@@ -283,6 +283,10 @@ async function launchChrome(opts) {
     '--mute-audio',
     '--no-proxy-server',
     '--disable-background-networking',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-features=CalculateNativeWinOcclusion',
     '--disable-component-update',
     '--disable-sync',
     '--disable-default-apps',
@@ -8509,6 +8513,12 @@ async function runScenarios(harness, results, opts) {
     // state-independent scenarios (7, 8, 9) one at a time.
     if (opts.scenario !== null && id !== opts.scenario) continue
     if (opts.from !== null && id < opts.from) continue
+    // Headless can mark a background target hidden (for example after a native
+    // shortcut), which freezes CSS transitions and document.timeline. Keep the
+    // target frontmost, focused and active before every scenario.
+    await harness.page.send('Page.bringToFront').catch(() => {})
+    await harness.page.send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {})
+    await harness.page.send('Page.setWebLifecycleState', { state: 'active' }).catch(() => {})
     await results.check(id, SCENARIO_TITLES[id], async () => {
       try {
         return await scenarios[id]()
