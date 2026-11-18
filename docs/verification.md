@@ -36,7 +36,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 ### Current gates (2026-11-18, Node 24.22.3)
 
 - `npm run build`: **`lib/index.js` 105.9 kB** (Host ESM bundle) and
-  **`lib/client.js` 937.3 kB** (ESM `src/client.js` + `src/browser/` bundled to a
+  **`lib/client.js` 937.4 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
 - `npm test`: **392 tests, 392 passed, 0 failed**, 28 test files — Host stores/routes
@@ -80,12 +80,15 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   * annotation: after the harness fixes `--scenario 4` is **7/0/0** (composer is
     intentionally not a selection target, so the three surfaces now exclude it),
     `--scenario 13` is **7 PASS / 1 SKIP**, `--scenario 10` is **8/0/0** with the
-    product's intentional paint z-index **2000**, and smoke is **6/6**. S12 still
-    fails on the theme contract: the shell native hover card now follows the
-    theme (light: white) while the annotation surface stays fixed dark, so the
-    harness keeps its surface-vs-native assertion and this needs an owner
-    decision. Isolated full was data-starved; live full is not a reliable
-    verdict.
+    product's intentional paint z-index **2000**, and smoke is **6/6**. S12
+    (**7/0/0**) now passes: the owner chose theme-following annotation surfaces,
+    so `.psa-popover`/`.psa-detail-card`/`.psa-note-editor` use the shell
+    light tokens in light mode and keep the #2C2C2E recipe in dark; the scenario
+    compares each theme's surfaces with that theme's native hover card. Fixing
+    that path also exposed and fixed a real `copyAnchorText` bug (undeclared
+    `text`/`source` under strict mode made the XPath copy toast throw
+    `ReferenceError`). Isolated full was data-starved; live full is not a
+    reliable verdict.
   * `annotation.e2e.mjs --bootstrap` is an opt-in isolated-profile preparation:
     it dismisses the localized first-run dialogs and best-effort seeds blank
     Sessions until the existing scroll probe succeeds (default runs unchanged).

@@ -412,7 +412,9 @@ exposes no rename/archive/fork action, so a second blank Session (and thus the
 native scroll region for S3/S8) cannot be created through headless CDP; the run
 records this limitation and still fails at the scenario's own assertion instead
 of skipping it. S16 workspace files and S11 running activity remain unseeded;
-S12 also needs the owner theme decision.
+S12's owner decision landed: annotation surfaces now follow the theme (light
+shell tokens, dark #2C2C2E) and S12 passes 7/0/0; the path also exposed a real
+`copyAnchorText` strict-mode bug (undeclared `text`/`source`), now fixed.
 
 **3m progress (2026-11-18).** Two follow-ups landed: `dwCacheHitPercent` is now a
 total function (inconsistent/negative/non-finite cache data returns `null`

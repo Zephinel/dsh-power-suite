@@ -11347,8 +11347,8 @@ function dwClearNativeAtmospheres() {
         }
         const storedText = full ? '' : (kind === 'xpath' ? (typeof locator.xpath === 'string' ? locator.xpath : '') : (typeof locator.jsPath === 'string' ? locator.jsPath : ''))
         const decision = annotationCopyAnchorDecision({ liveText, storedText, full })
-        text = decision.text
-        source = decision.source
+        const text = decision.text
+        const source = decision.source
         if (typeof text !== 'string' || text.length === 0) {
           feedback(t(failKey), 'error')
           return false
@@ -15499,7 +15499,22 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
    paints var(--dsw-shadow-lv3), no border. Do not use the small tooltip bubble
    token here: --dsw-alias-tooltip-bg flips to #43454a in the dark theme and would
    diverge from the native hover card. */
-.psa-popover,.psa-detail-card,.psa-note-editor{background:var(--dsw-hovercard-bg,#2C2C2E);border:0;box-shadow:var(--dsw-shadow-lv3,none);backdrop-filter:none;-webkit-backdrop-filter:none;color:var(--dsw-static-neutral-bluish-00)}
+.psa-popover,.psa-detail-card,.psa-note-editor{background:var(--dsw-hovercard-bg,#2C2C2E);border:0;box-shadow:var(--dsw-shadow-lv3,none);backdrop-filter:none;-webkit-backdrop-filter:none;color:var(--dsw-alias-label-primary,#f9fafb)}
+/* Light theme: the annotation floating surfaces follow the shell surface/label
+   tokens, matching the native session-row hover card (owner decision). Dark
+   keeps the original #2C2C2E recipe byte-identical through the fallback values. */
+body:not([data-ds-dark-theme]) .psa-popover,
+body:not([data-ds-dark-theme]) .psa-detail-card,
+body:not([data-ds-dark-theme]) .psa-note-editor,
+body:not([data-ds-dark-theme]) .psa-settings-popover{
+  --dsw-static-neutral-bluish-00:var(--dsw-alias-label-primary,#0f1115);
+  --dsw-static-neutral-bluish-300:var(--dsw-alias-label-secondary,#61666b);
+  --dsw-static-neutral-bluish-400:var(--dsw-alias-label-tertiary,#81858c);
+  background:var(--dsw-alias-bg-layer-1,#fff);
+  color:var(--dsw-alias-label-primary,#0f1115);
+  border:0;
+  box-shadow:var(--dsw-shadow-lv3,none);
+}
 .psa-popover .psa-muted,.psa-detail-card .psa-muted,.psa-note-editor .psa-muted{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 64%,transparent)}
 .psa-popover .psa-popover-ref,.psa-popover .psa-popover-status{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 72%,transparent)}
 .psa-detail-card .psa-detail-label,.psa-detail-card .psa-detail-meta{color:color-mix(in srgb,var(--dsw-static-neutral-bluish-00) 64%,transparent)}

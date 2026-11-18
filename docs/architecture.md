@@ -431,7 +431,7 @@ white surface with the light label tokens (title `#0f1115`, secondary
 `--dsw-hovercard-bg` recipe; a minimal scoped light-mode override themes the
 native shell session-info card as well. The same theme-following recipe is used
 by the other plugin tooltip-like surfaces (Artifact Quick Look, prompt-history
-cards), while annotation popover/detail cards keep their separate fixed recipe.
+cards, and the annotation popover/detail/note surfaces).
 Running & recent row titles and minor icons use the native Workspace
 title/icon tokens in light mode (brand glyph stays primary; dark unchanged), and
 both the plugin and native session-info cards share the 320 px width. The figures come from the injected `sessions` service's

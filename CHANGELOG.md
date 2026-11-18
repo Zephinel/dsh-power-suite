@@ -12,6 +12,8 @@ All notable changes to this repository are documented here. The format follows
 
 ### Fixed
 
+- **Theme-following annotation surfaces and strict-mode copy fix (Phase 3x).** The annotation popover, detail card and note editor now follow the owner-chosen theme contract: light mode uses the shell surface/label tokens (white surface, light labels) while dark keeps the #2C2C2E recipe, matching the native session-row hover card per theme; S12 now passes 7/0/0. The same path exposed a real `copyAnchorText` bug where `text`/`source` were assigned without declaration, so every copy-XPath click threw `ReferenceError` under the strict bundle and showed the wrong toast; both are now declared. No other copy/slot changes.
+
 - **Annotation clicks no longer throw after the identity extraction (Phase 3q).** `annotationStableSelectorCandidate` had extracted the DOM `getAttribute` method and called it unbound, so every click-based selection threw `TypeError: Illegal invocation`; it now binds the method to its element, with a regression test. The live S4 scenario returns to its baseline 2/3 (the remaining outline miss reproduces on the pre-Phase-3 client) and smoke is 6/6 with 0 page errors.
 
 - **Cache-hit percentage no longer hangs on inconsistent data (Phase 3m).** `dwCacheHitPercent` treated `cacheRead > billedInput` as a negative loop increment and never terminated; it now returns `null` for impossible/negative/non-finite inputs while all valid outputs stay byte-identical (7,389-case differential oracle). The one production call site already hides a `null` cache-hit line.

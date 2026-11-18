@@ -1119,8 +1119,9 @@ insertion, and the composer keeps focus so the human can edit before sending.
 The rail header has a small **info (i) icon** (Remix information-line) that opens
 a transient, **borderless** modifier-settings popover anchored to it (no settings
 view, gear page, or rail navigation step). The popover uses the plugin hovercard
-style — background `var(--dsw-hovercard-bg,#2C2C2E)`, no border, 14px radius,
-`--dsw-shadow-lv3`, white 12px text — and holds the two interaction modifier rows.
+style — theme-following surface (light: shell layer-1/label tokens; dark: the
+`#2C2C2E` hover-card recipe), no border, 14px radius, `--dsw-shadow-lv3`, 12px
+text — and holds the two interaction modifier rows.
 Each row is a **custom segmented control** (radiogroup with four always-visible
 segments): there is no dropdown, listbox, native `<select>` or OS menu anywhere.
 
@@ -1134,8 +1135,8 @@ tabbable (the checked one). The track has a subtle `rgba(255,255,255,.06)`
 background with a 1px alpha border and 9px radius; the checked segment uses a
 subtle primary accent tint (`color-mix(..., var(--dsw-alias-state-business-primary), 30%)
 with white text), hover uses `rgba(255,255,255,.08)`, and focus uses the rainbow
-ring instead of a solid outline; dark and light themes keep the hovercard popover
-tokens. Keyboard: ArrowLeft/Right and ArrowUp/Down move the selection with
+ring instead of a solid outline; the popover follows the active theme tokens
+(light shell surface/label, dark #2C2C2E/white). Keyboard: ArrowLeft/Right and ArrowUp/Down move the selection with
 wrap-around, Home/End jump to the first/last segment, Enter/Space selects;
 selection is persisted immediately (`power-suite.ui-annotation.settings`) and
 conflicts move the other modifier with inline feedback. Esc closes the popover
@@ -1267,18 +1268,15 @@ package manifest.
   the requirement popover (`.psa-popover`), the hover detail card
   (`.psa-detail-card`), and the expanded note editor (`.psa-note-editor`) are
   deliberately **not** panel cards. They copy the shell's own session-row hover
-  preview card exactly: `background: var(--dsw-hovercard-bg, #2C2C2E)`,
-  `box-shadow: var(--dsw-shadow-lv3)`, no border, no `backdrop-filter`, and a
-  near-white content color. That hover-card background is a **fixed `#2C2C2E` in
-  both themes** (the native card defines the custom property on itself and does
-  not flip it for dark mode), so the annotation cards stay `#2C2C2E` in light and
-  dark instead of following `--dsw-alias-tooltip-bg` (whose dark value is
-  `#43454a`). Their inputs/buttons are tinted from the same near-white label color
-  so they stay readable on that background. The rail, launcher, marks, and the
-  undo toast keep the panel recipe. E2E scenario 12 discovers the real native
-  hover-card stylesheet rule, measures its computed background/shadow, and asserts
-  the computed background/shadow/border/backdrop of all three surfaces match it in
-  both emulated themes (expected background `rgb(44, 44, 46)` in both).
+  preview card per theme: light mode uses the shell surface/label tokens
+  (`--dsw-alias-bg-layer-1`, label primary/secondary/tertiary), dark mode keeps
+  the `#2C2C2E` recipe; both use `box-shadow: var(--dsw-shadow-lv3)`, no border,
+  no `backdrop-filter`, and `--dsw-alias-label-primary` content color. The rail,
+  launcher, marks, and undo toast keep the panel recipe. E2E scenario 12 discovers
+  the real native hover-card stylesheet rule, measures its computed
+  background/shadow, and asserts the computed background/color/shadow/border/
+  backdrop of all three surfaces match that theme's native card (light
+  `rgb(255,255,255)`, dark `rgb(44,44,46)`).
 - **Selector escaping** — candidate selectors use `globalThis.CSS` when
   available and a small fallback otherwise; the fallback escapes a leading digit
   as a hex escape (`#123abc` → `#\31 23abc`) rather than producing an invalid
@@ -2563,18 +2561,15 @@ package manifest.
   the requirement popover (`.psa-popover`), the hover detail card
   (`.psa-detail-card`), and the expanded note editor (`.psa-note-editor`) are
   deliberately **not** panel cards. They copy the shell's own session-row hover
-  preview card exactly: `background: var(--dsw-hovercard-bg, #2C2C2E)`,
-  `box-shadow: var(--dsw-shadow-lv3)`, no border, no `backdrop-filter`, and a
-  near-white content color. That hover-card background is a **fixed `#2C2C2E` in
-  both themes** (the native card defines the custom property on itself and does
-  not flip it for dark mode), so the annotation cards stay `#2C2C2E` in light and
-  dark instead of following `--dsw-alias-tooltip-bg` (whose dark value is
-  `#43454a`). Their inputs/buttons are tinted from the same near-white label color
-  so they stay readable on that background. The rail, launcher, marks, and the
-  undo toast keep the panel recipe. E2E scenario 12 discovers the real native
-  hover-card stylesheet rule, measures its computed background/shadow, and asserts
-  the computed background/shadow/border/backdrop of all three surfaces match it in
-  both emulated themes (expected background `rgb(44, 44, 46)` in both).
+  preview card per theme: light mode uses the shell surface/label tokens
+  (`--dsw-alias-bg-layer-1`, label primary/secondary/tertiary), dark mode keeps
+  the `#2C2C2E` recipe; both use `box-shadow: var(--dsw-shadow-lv3)`, no border,
+  no `backdrop-filter`, and `--dsw-alias-label-primary` content color. The rail,
+  launcher, marks, and undo toast keep the panel recipe. E2E scenario 12 discovers
+  the real native hover-card stylesheet rule, measures its computed
+  background/shadow, and asserts the computed background/color/shadow/border/
+  backdrop of all three surfaces match that theme's native card (light
+  `rgb(255,255,255)`, dark `rgb(44,44,46)`).
 - **Selector escaping** — candidate selectors use `globalThis.CSS` when
   available and a small fallback otherwise; the fallback escapes a leading digit
   as a hex escape (`#123abc` → `#\31 23abc`) rather than producing an invalid

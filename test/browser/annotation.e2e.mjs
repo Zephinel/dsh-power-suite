@@ -8479,31 +8479,26 @@ async function checkAnnotationHovercardRecipe(h) {
   await h.page.pressKey('escape')
   await sleep(250)
   // 4. Assert both themes against the native session-row hover-card recipe.
-  // Owner decision (theme contract), left unchanged on purpose: the shell's native
-  // hover card now follows the light theme through the `._card_bgejw_9` override
-  // (measured in the sidebar suite as light #FFF / dark #2C2C2E), while the
-  // annotation `.psa-*` surfaces still use the fixed #2C2C2E recipe (the plugin's
-  // light-mode override covers `.psd-*`/`.psp-*`/`.dsa-*`, not `.psa-*`). Strict
-  // surface-vs-native parity therefore fails in light mode until the product adds
-  // that light override; weakening the comparison here would hide the mismatch.
-  const expectedBackground = 'rgb(44, 44, 46)' // #2C2C2E, the annotation recipe
+  // Owner decision: annotation floating surfaces follow the shell theme, like the
+  // native hover card (light #FFF / dark #2C2C2E), so compare each theme's
+  // surfaces against that theme's native card instead of hardcoding one color.
   for (const [themeName, measured] of [['light', light], ['dark', dark]]) {
     const native = measured.native
     assert(native !== null, `the native DSH hover-card rule (--dsw-hovercard-bg) was not found in the ${themeName} theme`)
-    assertEqual(native.backgroundColor, expectedBackground, `${themeName}: the native hover card must paint #2C2C2E`)
     assert(native.boxShadow !== 'none', `${themeName}: the native hover card must paint --dsw-shadow-lv3`)
     for (const [surfaceName, surface] of [['popover', measured.popover], ['detailCard', measured.detailCard], ['noteEditor', measured.noteEditor]]) {
       assert(surface !== null, `${surfaceName} is missing in the ${themeName} theme`)
       assertEqual(surface.backgroundColor, native.backgroundColor, `${themeName}: ${surfaceName} background must match the native hover-card recipe`)
-      assertEqual(surface.color, 'rgb(255, 255, 255)', `${themeName}: ${surfaceName} content color must stay near-white on the hover-card background`)
+      assertEqual(surface.color, native.color, `${themeName}: ${surfaceName} content color must match the native hover card`)
       assertEqual(surface.borderTopWidth, '0px', `${themeName}: ${surfaceName} must not paint the old 1px border`)
       assertEqual(surface.boxShadow, native.boxShadow, `${themeName}: ${surfaceName} must paint the native --dsw-shadow-lv3 shadow`)
       assertEqual(surface.backdropFilter, 'none', `${themeName}: ${surfaceName} must not add a backdrop filter`)
     }
   }
-  assertEqual(dark.native.backgroundColor, light.native.backgroundColor, 'the native hover-card background is fixed (#2C2C2E) in both themes')
-  assertEqual(light.popover.backgroundColor, expectedBackground, 'light theme popover background must be the native #2C2C2E')
-  assertEqual(dark.popover.backgroundColor, expectedBackground, 'dark theme popover background must stay the native #2C2C2E (no theme flip)')
+  assertEqual(light.native.backgroundColor, 'rgb(255, 255, 255)', 'light theme native hover card must follow the shell surface')
+  assertEqual(dark.native.backgroundColor, 'rgb(44, 44, 46)', 'dark theme native hover card must keep #2C2C2E')
+  assertEqual(light.popover.backgroundColor, 'rgb(255, 255, 255)', 'light theme popover background must follow the shell surface')
+  assertEqual(dark.popover.backgroundColor, 'rgb(44, 44, 46)', 'dark theme popover background must stay #2C2C2E')
   return { light, dark }
 }
 
