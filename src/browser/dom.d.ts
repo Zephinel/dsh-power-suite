@@ -8,6 +8,8 @@
  * modules.
  */
 
+declare class Node {}
+
 declare class ElementList implements Iterable<Element> {
   readonly length: number
   [index: number]: Element
@@ -92,6 +94,8 @@ interface Element {
   remove(): void
   closest(selector: string): Element | null
   matches(selector: string): boolean
+  addEventListener(type: string, listener: (event: never) => void, options?: boolean | Record<string, unknown>): void
+  removeEventListener(type: string, listener: (event: never) => void, options?: boolean | Record<string, unknown>): void
   contains(node: object | null): boolean
   getBoundingClientRect(): DOMRectLike
 }
@@ -99,6 +103,9 @@ interface Element {
 interface HTMLElement {
   readonly dataset: Record<string, string | undefined>
   readonly offsetHeight: number
+  readonly scrollHeight: number
+  readonly clientHeight: number
+  scrollTop: number
   title: string
   type: string
   focus(): void
@@ -211,7 +218,7 @@ declare var window: {
   setInterval(callback: () => void, delay?: number): number
   clearInterval(handle: number): void
   matchMedia(query: string): { readonly matches: boolean, addEventListener(type: string, listener: () => void): void, removeEventListener(type: string, listener: () => void): void }
-  getComputedStyle(element: Element): { readonly font: string }
+  getComputedStyle(element: Element): { readonly font: string, readonly position: string, readonly width: string }
   addEventListener(type: string, listener: (event: never) => void, options?: boolean | Record<string, unknown>): void
   removeEventListener(type: string, listener: (event: never) => void, options?: boolean | Record<string, unknown>): void
 }
