@@ -1,10 +1,11 @@
 /**
  * Unit tests for the update prompt's pure state machine.
  *
- * `src/client.js` is a browser classic script with no import surface, so
- * `test/helpers/client-module.mjs` evaluates it in a `node:vm` sandbox with the
- * test-hook flag set and materializes the plugin factory. Everything asserted
- * here comes from `hooks.updateCheck`: response validation, the prompt decision
+ * The pure model lives in `src/browser/update-check/model.ts` and has direct
+ * Node coverage in `test/update-check-model.test.js`; this file keeps asserting
+ * the browser controller seam through `hooks.updateCheck` by evaluating the ESM
+ * client in a `node:vm` sandbox (the harness bundles it with esbuild first).
+ * Everything asserted here comes from `hooks.updateCheck`: response validation, the prompt decision
  * (no-update reset / silenced version / later-count rules), the per-version
  * "later" counter, and the persisted state document. The controller's timer,
  * fetch and the `shell.overlay` card belong to the browser and are covered by

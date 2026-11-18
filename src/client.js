@@ -4,6 +4,16 @@
 // the DSH shell loads. Pure browser models live under src/browser/ and are
 // imported here instead of being redefined inline.
 import { isNewerStableVersion, parseStableVersion } from './browser/update-check/versions.ts'
+import {
+  UPDATE_STORAGE_KEY,
+  decideUpdatePrompt,
+  normalizeUpdatePayload,
+  noteUpdatePromptLater,
+  offersSilence,
+  parseUpdatePromptState,
+  serializeUpdatePromptState,
+  silenceUpdatePromptVersion
+} from './browser/update-check/model.ts'
 /**
  * Browser half of DSH Power Suite.
  *
@@ -23009,23 +23019,11 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
     /** Slot cell identity of the prompt overlay. */
     const UPDATE_SLOT_ID = 'power-suite.update-prompt'
 
-    /** `localStorage` key holding this browser's prompt state. */
-    const UPDATE_STORAGE_KEY = 'power-suite.update-prompt'
-
     /** Delay before the single check each page load runs (ms). */
     const UPDATE_PROMPT_DELAY_MS = 1500
 
     /** Upper bound for the one Host check request; dispose aborts it immediately. */
     const UPDATE_CHECK_TIMEOUT_MS = 8000
-
-    /** Highest number of release-note highlights the prompt shows. */
-    const UPDATE_HIGHLIGHTS_MAX = 6
-
-    /** "Later" clicks after which the prompt offers "do not remind". */
-    const UPDATE_LATER_LIMIT = 3
-
-    /** Schema version of the stored state; other versions read as empty. */
-    const UPDATE_STATE_SCHEMA = 1
 
     /**
      * Short package name used by the English title. It matches `locale/en.json`'s
@@ -23054,164 +23052,6 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       'dontRemind': '不再提醒',
       'highlights': '更新要点',
       'noHighlights': '该版本未提供更新要点，可在插件详情页查看完整说明。'
-    }
-
-    /**
-     * Keep only non-empty text highlights, capped at the prompt limit.
-     * @param {unknown} value - candidate highlight list.
-     * @returns {string[]} usable highlights.
-     */
-    function normalizeUpdateHighlights(value) {
-      if (!Array.isArray(value)) return []
-      const highlights = []
-      for (const point of value) {
-        if (typeof point !== 'string') continue
-        const text = point.trim()
-        if (text.length === 0) continue
-        highlights.push(text)
-        if (highlights.length === UPDATE_HIGHLIGHTS_MAX) break
-      }
-      return highlights
-    }
-
-    /**
-     * Validate one Host update answer. Anything unusable reads as "no prompt":
-     * a failed route, a prerelease target, or a missing running version all
-     * stay silent (plan §4.5).
-     * @param {unknown} raw - parsed JSON body of {@link UPDATE_ROUTE}.
-     * @returns {{ current: string, latest: string, updateAvailable: true, highlights: string[] } | null} normalized view.
-     */
-    function normalizeUpdatePayload(raw) {
-      if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null
-      if (raw.updateAvailable !== true) return null
-      if (typeof raw.current !== 'string') return null
-      if (typeof raw.latest !== 'string' || parseStableVersion(raw.latest) === null) return null
-      return {
-        current: raw.current,
-        latest: raw.latest,
-        updateAvailable: true,
-        highlights: normalizeUpdateHighlights(raw.highlights)
-      }
-    }
-
-    /**
-     * Later clicks counted for one version; a different version restarts the count.
-     * @param {object} state - persisted prompt state.
-     * @param {string} version - version the prompt is about.
-     * @returns {number} clicks recorded for that version.
-     */
-    function laterClicksFor(state, version) {
-      if (state === null || typeof state !== 'object') return 0
-      if (state.laterVersion !== version) return 0
-      return typeof state.laterClicks === 'number' && Number.isSafeInteger(state.laterClicks) && state.laterClicks >= 0
-        ? state.laterClicks
-        : 0
-    }
-
-    /**
-     * Decide what one update answer does to the prompt (plan §4.4).
-     * @param {object | null} view - Host answer; normalized or raw.
-     * @param {object} state - persisted prompt state.
-     * @returns {{ action: 'none', state: object }
-     *   | { action: 'prompt', state: object, prompt: { current: string, latest: string, highlights: string[] }, canSilence: boolean }} decision.
-     */
-    function decideUpdatePrompt(view, state) {
-      const current = state !== null && typeof state === 'object' ? state : {}
-      if (view === null || typeof view !== 'object' || Array.isArray(view)) return { action: 'none', state: current }
-      const running = typeof view.current === 'string' ? view.current : ''
-      // An unreadable placeholder or a prerelease running version never prompts
-      // and never clears the recorded cycle.
-      if (parseStableVersion(running) === null || running === '0.0.0') return { action: 'none', state: current }
-      const latest = typeof view.latest === 'string' ? view.latest : ''
-      // `latest: null` means the registry read failed: keep the cycle so a
-      // network blip does not lose a silence or a later-click count.
-      if (parseStableVersion(latest) === null) return { action: 'none', state: current }
-      // A route that clearly answered "already current" retires the cycle.
-      if (!isNewerStableVersion(latest, running)) return { action: 'none', state: {} }
-      if (view.updateAvailable !== true) return { action: 'none', state: current }
-      if (current.silencedVersion === latest) return { action: 'none', state: current }
-      return {
-        action: 'prompt',
-        state: current,
-        prompt: { current: running, latest, highlights: normalizeUpdateHighlights(view.highlights) },
-        canSilence: offersSilence(current, latest)
-      }
-    }
-
-    /**
-     * Record one "later" click for the version the prompt showed.
-     * @param {object} state - persisted prompt state.
-     * @param {string} version - version whose prompt was dismissed.
-     * @returns {object} the next state.
-     */
-    function noteUpdatePromptLater(state, version) {
-      const base = state !== null && typeof state === 'object' ? state : {}
-      return { ...base, laterVersion: version, laterClicks: laterClicksFor(base, version) + 1 }
-    }
-
-    /**
-     * Silence the exact version the user asked to stop hearing about; a newer
-     * version prompts again.
-     * @param {object} state - persisted prompt state.
-     * @param {string} version - version to silence.
-     * @returns {{ silencedVersion: string }} the next state.
-     */
-    function silenceUpdatePromptVersion(state, version) {
-      return { silencedVersion: version }
-    }
-
-    /**
-     * Whether the prompt should offer its "do not remind" action.
-     * @param {object} state - persisted prompt state.
-     * @param {string} version - version the prompt is about.
-     * @returns {boolean} true from the configured later-click count on.
-     */
-    function offersSilence(state, version) {
-      return laterClicksFor(state, version) >= UPDATE_LATER_LIMIT
-    }
-
-    /**
-     * Parse one stored state document. Corrupt, foreign, or future documents
-     * reset to empty instead of throwing or migrating.
-     * @param {string | null | undefined} raw - `localStorage` value.
-     * @returns {{ laterVersion?: string, laterClicks?: number, silencedVersion?: string }} usable state.
-     */
-    function parseUpdatePromptState(raw) {
-      if (typeof raw !== 'string' || raw.length === 0) return {}
-      let parsed
-      try {
-        parsed = JSON.parse(raw)
-      } catch {
-        return {}
-      }
-      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-      if (parsed.schema !== UPDATE_STATE_SCHEMA) return {}
-      const state = {}
-      if (parseStableVersion(parsed.laterVersion) !== null
-        && typeof parsed.laterClicks === 'number'
-        && Number.isSafeInteger(parsed.laterClicks)
-        && parsed.laterClicks >= 0) {
-        state.laterVersion = parsed.laterVersion
-        state.laterClicks = parsed.laterClicks
-      }
-      if (parseStableVersion(parsed.silencedVersion) !== null) state.silencedVersion = parsed.silencedVersion
-      return state
-    }
-
-    /**
-     * Serialize the persisted state, always tagged with the schema version.
-     * @param {object} state - prompt state.
-     * @returns {string} the JSON document written to `localStorage`.
-     */
-    function serializeUpdatePromptState(state) {
-      const source = state !== null && typeof state === 'object' ? state : {}
-      const payload = { schema: UPDATE_STATE_SCHEMA }
-      if (parseStableVersion(source.laterVersion) !== null) {
-        payload.laterVersion = source.laterVersion
-        payload.laterClicks = laterClicksFor(source, source.laterVersion)
-      }
-      if (parseStableVersion(source.silencedVersion) !== null) payload.silencedVersion = source.silencedVersion
-      return JSON.stringify(payload)
     }
 
     /**

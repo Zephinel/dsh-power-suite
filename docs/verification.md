@@ -39,10 +39,11 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   **`lib/client.js` 957.7 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **377 tests, 377 passed, 0 failed**, 24 test files — Host stores/routes
+- `npm test`: **382 tests, 382 passed, 0 failed**, 25 test files — Host stores/routes
   plus the browser-side derivations (the vm harness bundles the ESM client), the
   release-notes approval round-trip, the protocol contract guard for duplicated
-  route/enum literals and the durable document-store interface.
+  route/enum literals, the durable document-store interface, and direct Node tests
+  for the extracted browser update-prompt model.
 - `npm run typecheck`: `tsc --noEmit --strict` clean over the Host TypeScript
   sources (`src/**/*.ts`; the ESM browser entry `src/client.js` + `src/browser/`
   still carries `// @ts-nocheck` until the Phase 3 split completes).
@@ -52,7 +53,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 - `rm -rf lib && node --test test/*.test.js`: **377/377** — the suite imports the
   `.ts` sources directly (Node >= 22.18 native type stripping), so the tests need
   no build.
-- `npm run check`: passed (`28 TypeScript modules, 1 JavaScript module(s), 24 test files`); it builds `lib/` first,
+- `npm run check`: passed (`29 TypeScript modules, 1 JavaScript module(s), 25 test files`); it builds `lib/` first,
   then runs the syntax checks, the typecheck, package-manifest validation, the
   built-entry smoke (update route reports `current=0.1.0`), local docs links, the
   Node suite and the release-notes gate, then `pack:check`.
