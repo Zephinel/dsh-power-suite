@@ -11556,7 +11556,6 @@ async function runInterruptedModeChecks({ page, results, state }) {
     const hooks = globalThis.__POWER_SUITE_TEST_HOOKS__
     return {
       interruptedSessions: hooks !== undefined && hooks !== null && hooks.interruptedSessions !== undefined && hooks.interruptedSessions !== null ? Object.keys(hooks.interruptedSessions) : null,
-      interruptedState: hooks !== undefined && hooks !== null && hooks.interruptedState !== undefined && hooks.interruptedState !== null ? Object.keys(hooks.interruptedState) : null,
     }
   }).catch(() => null)
   state.interrupted.seams = seamState

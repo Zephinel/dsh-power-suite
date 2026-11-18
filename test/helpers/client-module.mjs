@@ -5,11 +5,11 @@
  *
  * ## Why vm
  *
- * `src/client.js` is a classic browser script, not a module: it immediately
- * calls `window.__ModuleLoader__.load({ id, factory })` and the DSH shell later
- * invokes `factory(require)`. There is no build step and no `export` to import,
- * so the only portable way to reach the feature code from `node:test` is to
- * evaluate the file against browser stubs and grab the registration object.
+ * `src/client.js` is an ES module that calls `window.__ModuleLoader__.load({
+ * id, factory })`; the DSH shell later invokes `factory(require)`. The entry and
+ * its `src/browser/` imports are bundled with esbuild for the vm, so the
+ * feature code can be evaluated against browser stubs and its registration
+ * captured.
  *
  * ## The test seam (CONTRACT.md §3.7)
  *
@@ -52,7 +52,7 @@
  * Keep this file side-effect-free: it is loaded by the unit-test file only,
  * never by `src/**`, and never by the browser bundle.
  */
-import { readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
@@ -164,8 +164,6 @@ function createBrowserStubs(registrationBox, shared) {
  *   (null when `options.source` was injected) for source-level regression
  *   assertions such as the popover edit wiring or region-marker balance.
  */
-const bundledCache = new Map()
-
 /**
  * Bundle the ESM entry with esbuild so a classic-script vm can evaluate it.
  * Classic sources (baseline copies, injected text) are returned unchanged.
@@ -176,10 +174,7 @@ const bundledCache = new Map()
 function evaluableSource(sourcePath, source) {
   if (!/(^|\n)\s*import\s/u.test(source)) return source
   if (sourcePath !== null) {
-    const mtimeMs = statSync(sourcePath).mtimeMs
-    const key = `${sourcePath}:${mtimeMs}`
-    const cached = bundledCache.get(key)
-    if (cached !== undefined) return cached
+    // No cache: a long-lived test process must see edits to model modules.
     const result = buildSync({
       entryPoints: [sourcePath],
       bundle: true,
@@ -189,9 +184,7 @@ function evaluableSource(sourcePath, source) {
       target: 'es2022',
       logLevel: 'silent'
     })
-    const bundled = result.outputFiles[0].text
-    bundledCache.set(key, bundled)
-    return bundled
+    return result.outputFiles[0].text
   }
   const result = buildSync({
     stdin: {

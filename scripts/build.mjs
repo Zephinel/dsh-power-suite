@@ -63,6 +63,8 @@ if (typeof host.apply !== 'function') throw new Error('build: Host entry has no 
 
 // The browser entry must still hand the DSH loader its id/factory object.
 const client = await readFile(join(outDir, 'client.js'), 'utf8')
+if (!client.startsWith('"use strict";')) throw new Error('build: client entry is not a classic-script IIFE')
+if (/^\s*(?:import|export)\s/mu.test(client)) throw new Error('build: client entry still contains a top-level import/export')
 if (!/__ModuleLoader__\.load\(\{\s*id:\s*"@zephinel\/dsh-power-suite"/.test(client)) {
   throw new Error('build: browser entry no longer calls the DSH module loader with the package id')
 }

@@ -2,9 +2,9 @@
  * Materialize the browser entry for e2e injection.
  *
  * Phase 3 turns `src/client.js` into an ES module that imports browser-side
- * models; the e2e harness injects code with indirect `eval`, which cannot run
- * `import` statements. Bundle the entry with esbuild (a dev dependency) into a
- * classic IIFE first. Classic baseline copies (for example a pre-change client
+ * models; the e2e harness evaluates the injected text as a classic script,
+ * which cannot run `import` statements. Bundle the entry with esbuild (a dev
+ * dependency) into a classic IIFE first. Classic baseline copies (for example a pre-change client
  * passed with `--client`) are returned unchanged.
  */
 import { readFile } from 'node:fs/promises'

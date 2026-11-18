@@ -35,15 +35,12 @@ import {
   RECENT_SESSION_MINUTES
 } from './shared/protocol.ts'
 import {
-  FILES_ARTIFACTS_ENTER_MS,
-  FILES_ARTIFACTS_EXIT_MS,
-  FILES_ARTIFACTS_PHASES,
   filesArtifactsInitialState,
   filesArtifactsPhaseMs,
   filesArtifactsReduce
 } from './browser/artifacts/model.ts'
 import { interruptedCardMark, interruptedIndicatorActive } from './browser/interrupted-sessions/model.ts'
-import { knownSettings, mergeSettingsPayload } from './browser/settings/model.ts'
+import { mergeSettingsPayload } from './browser/settings/model.ts'
 import { ROUTES, browserRoute } from './shared/routes.ts'
 /**
  * Browser half of DSH Power Suite.

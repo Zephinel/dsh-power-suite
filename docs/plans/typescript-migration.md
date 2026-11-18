@@ -279,9 +279,11 @@ installed): `sidebar.e2e.mjs --smoke` **4/4 PASS**, `update-prompt.e2e.mjs`
 **21/21 PASS**, `annotation.e2e.mjs --smoke` **5/6** with `smoke-6` timing out
 when the launcher click does not enter annotation mode. Re-running the same
 smoke with the pre-Phase-3 baseline client (`fa48b2a`) reproduces exactly the
-same 5/6, so that failure is a headless/harness limitation rather than a Phase 3
-regression. The live server needs a restart (or a fresh instance) before its
-served entry becomes `lib/client.js`.
+same 5/6, so that failure is pre-existing under this harness (root cause not
+established) rather than a Phase 3 regression. The live `:3080` server still resolves the old `src/client.js` entry path; it now
+also serves the new ES-module source, so the live plugin fails to boot until
+that service is restarted (the isolated instance and the npm artifact are
+unaffected).
 
 Decide between (a) splitting `src/client.js` by `//#region feature:` into modules
 and bundling one classic script, or (b) keeping one file and annotating it. Under

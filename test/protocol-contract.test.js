@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { test } from 'node:test'
+import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 
 import { ATTACHMENT_ROUTE, LIST_ROUTE, PREVIEW_ROUTE, RAW_ROUTE } from '../src/features/session-artifacts/artifact-index.ts'
 import { GET_ROUTE as PRESET_GET_ROUTE, SET_ROUTE as PRESET_SET_ROUTE } from '../src/features/workspace-presets/host.ts'
@@ -61,6 +63,22 @@ const sharedRoutes = new Set(Object.values(ROUTES).map((route) => route.replace(
 
 test('the Host route constants re-export the shared contract', () => {
   assert.deepEqual([...hostRoutes].sort(), [...sharedRoutes].sort())
+})
+
+const srcRoot = fileURLToPath(new URL('../src', import.meta.url))
+const routeLiteral = /['"]\/?api\/[A-Za-z0-9.-]+['"]/gu
+
+test('no TypeScript module outside the shared owner carries a route literal', () => {
+  const files = readdirSync(srcRoot, { recursive: true })
+    .filter((name) => typeof name === 'string' && name.endsWith('.ts'))
+  assert.ok(files.length > 20, 'expected to scan the TypeScript modules')
+  for (const relative of files) {
+    if (relative === join('shared', 'routes.ts')) continue
+    const text = readFileSync(join(srcRoot, relative), 'utf8')
+    const literals = [...text.matchAll(routeLiteral)].map((match) => match[0])
+    assert.deepEqual(literals, [], `${relative} contains a route literal`)
+  }
+  assert.equal(new Set(Object.values(ROUTES)).size, Object.values(ROUTES).length, 'route paths must be unique')
 })
 
 test('the browser half uses the shared contract and no route literals', () => {

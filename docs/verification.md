@@ -36,10 +36,10 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 ### Current gates (2026-11-18, Node 24.22.3)
 
 - `npm run build`: **`lib/index.js` 105.9 kB** (Host ESM bundle) and
-  **`lib/client.js` 958.3 kB** (ESM `src/client.js` + `src/browser/` bundled to a
+  **`lib/client.js` 958.5 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **389 tests, 389 passed, 0 failed**, 27 test files — Host stores/routes
+- `npm test`: **390 tests, 390 passed, 0 failed**, 27 test files — Host stores/routes
   plus the browser-side derivations (the vm harness bundles the ESM client), the
   release-notes approval round-trip, the protocol contract guard for duplicated
   route/enum literals, the shared route and settings contracts, the durable
@@ -52,7 +52,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 - `npm run check` reports an explicit-`any` budget: **0 sites** in `src/**/*.ts`;
   the gate strips comments/strings and fails on any `any` code token (aliases,
   unions and generics included) — a lexical tripwire at 0, not a proof.
-- `rm -rf lib && node --test test/*.test.js`: **377/377** — the suite imports the
+- `rm -rf lib && node --test test/*.test.js`: **390/390** — the suite imports the
   `.ts` sources directly (Node >= 22.18 native type stripping), so the tests need
   no build.
 - `npm run check`: passed (`34 TypeScript modules, 1 JavaScript module(s), 27 test files`); it builds `lib/` first,
@@ -64,9 +64,15 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 - Browser e2e (isolated throwaway `$DSH_HOME`, current tarball): `sidebar.e2e.mjs
   --smoke` **4/4 PASS**; `update-prompt.e2e.mjs` **21/21 PASS**;
   `annotation.e2e.mjs --smoke` **5/6** (`smoke-6` launcher-click timeout, exactly
-  reproduced with the pre-Phase-3 baseline client `fa48b2a`, so not a
-  regression); served plugin entry comes from `lib/client.js` (958.3 kB) and the
+  reproduced with the pre-Phase-3 baseline client `fa48b2a`, so not a Phase 3
+  regression; the root cause is pre-existing under this harness and not
+  established); served plugin entry comes from `lib/client.js` (958.5 kB) and the
   annotation/sidebar harness injects the esbuild-bundled ESM worktree client.
+- Live `:3080` caveat: its long-running server still resolves the old
+  `src/client.js` entry path, which is now an ES module, so the live plugin
+  currently fails to boot (`Cannot use import statement outside a module`);
+  restart the service (or use an isolated instance) before testing the live GUI.
+  The npm artifact and the isolated-instance evidence above are unaffected.
 - `npm run check:release`: **PASS** — 75 packaged files installed into a throwaway
   `$DSH_HOME`; it deletes `lib/` first so `npm pack` must rebuild it through
   `prepare`, then the packed `lib/` matches the fresh build, every other packed

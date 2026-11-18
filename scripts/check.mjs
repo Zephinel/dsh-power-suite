@@ -3,8 +3,8 @@
  * Repository gate:
  *   1. syntax-check the remaining checked-in JavaScript entries (src/client.js);
  *      TypeScript sources are parsed by the typecheck instead;
- *   2. no-build typecheck (`tsc --noEmit --strict`) over the Host TypeScript
- *      sources, and fail when an explicit `any` token re-enters them;
+ *   2. no-build typecheck (`tsc --noEmit --strict`) over the TypeScript sources,
+ *      and fail when an explicit `any` token re-enters them;
  *   3. validate the bundle manifest, exports, icon, locale, and cordis patch;
  *   4. built-entry smoke: the bundled Host sees its own package, and its update
  *      route reports the running version (not a bundle-relative 0.0.0);
@@ -94,7 +94,9 @@ function requirePath(relative, label) {
   if (!existsSync(resolve(root, relative))) failures.push(`${label} is missing: ${relative}`)
 }
 
-// 1. Syntax checks (JavaScript entries only; tsc parses the TypeScript sources).
+// 1. Syntax checks for the remaining JavaScript source. `node --check` parses it
+// with the package's ESM mode; the build guard separately proves the served
+// lib/client.js is a classic-script IIFE.
 const sources = collectFiles(resolve(root, 'src'), '.js')
 const typeScriptSources = collectFiles(resolve(root, 'src'), '.ts')
 for (const file of sources) {
@@ -121,7 +123,7 @@ try {
   failures.push('typecheck failed: node node_modules/typescript/bin/tsc --noEmit')
 }
 if (typecheckPassed) {
-  console.log('typecheck: ok (tsc --noEmit --strict; src/client.js opted out until Phase 3)')
+  console.log('typecheck: ok (tsc --noEmit --strict; browser entry opted out until the Phase 3 split completes)')
   const anyBudget = 0
   const anySites = countAnySites(typeScriptSources)
   if (anySites > anyBudget) failures.push(`explicit-any budget exceeded: ${anySites} site(s) > ${anyBudget} allowed`)

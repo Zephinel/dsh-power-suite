@@ -8,8 +8,11 @@
  */
 import {
   ACTIVE_PROJECT_DAYS,
+  ACTIVE_PROJECT_FIELD,
   DEFAULT_SETTINGS,
   PROMPT_HISTORY_MODIFIERS,
+  PROMPT_HISTORY_MODIFIER_FIELD,
+  RECENT_SESSION_FIELD,
   RECENT_SESSION_MINUTES,
   type Settings
 } from '../../shared/protocol.ts'
@@ -23,14 +26,14 @@ export function knownSettings(raw: unknown): Partial<Settings> {
   const settings: Partial<Settings> = {}
   if (raw === null || typeof raw !== 'object') return settings
   const value = raw as Record<string, unknown>
-  if ((PROMPT_HISTORY_MODIFIERS as readonly unknown[]).includes(value.promptHistoryModifier)) {
-    settings.promptHistoryModifier = value.promptHistoryModifier as Settings['promptHistoryModifier']
+  if ((PROMPT_HISTORY_MODIFIERS as readonly unknown[]).includes(value[PROMPT_HISTORY_MODIFIER_FIELD])) {
+    settings[PROMPT_HISTORY_MODIFIER_FIELD] = value[PROMPT_HISTORY_MODIFIER_FIELD] as Settings['promptHistoryModifier']
   }
-  if ((RECENT_SESSION_MINUTES as readonly unknown[]).includes(value.recentSessionMinutes)) {
-    settings.recentSessionMinutes = value.recentSessionMinutes as number
+  if ((RECENT_SESSION_MINUTES as readonly unknown[]).includes(value[RECENT_SESSION_FIELD])) {
+    settings[RECENT_SESSION_FIELD] = value[RECENT_SESSION_FIELD] as number
   }
-  if ((ACTIVE_PROJECT_DAYS as readonly unknown[]).includes(value.activeProjectDays)) {
-    settings.activeProjectDays = value.activeProjectDays as number
+  if ((ACTIVE_PROJECT_DAYS as readonly unknown[]).includes(value[ACTIVE_PROJECT_FIELD])) {
+    settings[ACTIVE_PROJECT_FIELD] = value[ACTIVE_PROJECT_FIELD] as number
   }
   return settings
 }

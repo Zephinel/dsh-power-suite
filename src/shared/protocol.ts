@@ -1,10 +1,10 @@
 /**
  * Shared Host/browser protocol types.
  *
- * Phase 2 of the TypeScript migration: the Host half imports these types
- * directly. Once the browser half becomes modules (Phase 3) it can import the
- * same vocabulary; today it still duplicates literals guarded by
- * `test/protocol-contract.test.js`.
+ * Shared by both halves: the Host feature modules import these types and
+ * constants directly, and the browser entry/browser models import the settings
+ * enums/defaults (Phase 3). `test/protocol-contract.test.js` asserts that the
+ * constants have this single owner.
  *
  * @module
  */

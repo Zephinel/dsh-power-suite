@@ -14,9 +14,10 @@ node test/browser/annotation.e2e.mjs
 ```
 
 > If the running GUI predates a change to the plugin client entry (`exports`/
-> `lib/`), it can keep serving the old `src/client.js`. Restart the GUI (or run
-> these suites against an isolated throwaway DSH web instance) before trusting a
-> boot/injection failure.
+> `lib/`), it keeps resolving the old `src/client.js` path. After Phase 3 that
+> path is an ES module, so the live plugin fails to boot until the GUI is
+> restarted (or these suites run against an isolated throwaway DSH web
+> instance); do not mistake that boot failure for a harness regression.
 
 ## How it works
 

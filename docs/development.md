@@ -6,8 +6,9 @@
 - npm — run `npm ci` once; it installs esbuild and TypeScript as dev dependencies.
 - A DeepSeek Harness profile that can install local bundles (`web` by default).
 
-`npm run build` bundles `src/index.ts` (Host ESM) and `src/client.js` (classic
-browser script) into the gitignored `lib/` entries with esbuild. The package has
+`npm run build` bundles `src/index.ts` (Host ESM) and the ES-module browser
+entry `src/client.js` (plus `src/browser/`) into the gitignored `lib/` entries
+with esbuild; the served client is a classic-script IIFE. The package has
 no runtime dependencies; `npm pack` builds through `prepare`.
 
 ## Local install loop
