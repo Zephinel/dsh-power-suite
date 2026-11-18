@@ -420,13 +420,16 @@ shell tokens, dark #2C2C2E) and S12 passes 7/0/0; the path also exposed a real
 surfaces follow the theme (light shell surface/label tokens, dark #2C2C2E,
 S12 7/0/0), and the dark atmosphere was iterated toward the light-mode pastel
 reference. Final recipe: screen blend with `saturate(1.1) brightness(1.4)`, wrapper opacity
-0.55 base / 0.62 hover, white veil scrim 0.12/0.06, and an even-rainbow renderer
-(one blob per palette hue in eight evenly spaced lanes plus a stronger full-width
-wash, instead of the former randomized 9-blob layout that skewed red/purple).
-The light theme shares the same 8-lane renderer with its multiply/white-veil
-recipe. The sampled hue path is ~9/40/86/136/180/217/260/293 degrees. `b4-5` and
-`b4-9` pass; dark title contrast is 2.7:1, the accepted trade-off for the bright
-pastel pill. Other live full-run failures (`b1-3`, `b3-1/b3-2`, `b5-5`,
+0.55 base / 0.62 hover, white veil scrim 0.12/0.06, and an even-rainbow renderer:
+eight constant-HSL hues (S=0.82, L=0.62) anchored in eight evenly spaced lanes,
+with two drifting blobs per hue (main + satellite), breathing radius/alpha and a
+soft wash so the colors still smoke and diffuse instead of freezing into bands;
+a per-hue alpha trim compensates for red/violet reading hotter and cyan cooler.
+The light theme shares the same renderer with its multiply/white-veil recipe; the
+sampled hue path stays even (~9/40/86/136/180/217/260/293 degrees) and the
+12-sample averaged lane saturation/lightness stays roughly 0.51-0.67 / 0.58-0.68.
+`b4-5` and `b4-9` pass; dark title contrast is 2.7:1, the accepted trade-off for
+the bright pastel pill. Other live full-run failures (`b1-3`, `b3-1/b3-2`, `b5-5`,
 `c2-1`, `c4-4`) are intermittent GUI-data/state issues, not this change. The
 annotation click-selection regression from the identity extraction remains
 covered by the new click-select smoke.

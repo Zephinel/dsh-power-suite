@@ -5328,15 +5328,21 @@ body:not([data-ds-dark-theme]) .psd-row-action:focus-visible{color:var(--dsw-ali
 `
 
 /** Prism palette of the atmosphere renderer (V3 shader rainbow stops). */
+// Eight hues at a constant HSL saturation/lightness (S=0.82, L=0.62), so the
+// rainbow lanes share the same color attributes instead of some hues reading
+// heavier than others. Keep the order red -> magenta for an even hue path.
+/** Per-hue radiance trim: after the blobs mix, red/violet read hotter and cyan
+ *  reads cooler in H/S/L, so scale each hue's blob alpha to even the lanes out. */
+const DW_ATMOS_HUE_ALPHA = [0.78, 1.02, 0.92, 1.16, 1.30, 1.04, 0.94, 0.94]
 const DW_ATMOS_PALETTE = [
-  [255, 61, 122],
-  [255, 140, 61],
-  [255, 212, 89],
-  [92, 227, 122],
-  [59, 235, 217],
-  [61, 156, 255],
-  [148, 89, 255],
-  [250, 97, 199]
+  [238, 79, 79],
+  [238, 198, 79],
+  [158, 238, 79],
+  [79, 238, 118],
+  [79, 238, 238],
+  [79, 118, 238],
+  [158, 79, 238],
+  [238, 79, 198]
 ]
 
 /** Baseline atmosphere config adapted from the V3 design doc (smoke mode). */
@@ -5368,17 +5374,35 @@ function dwAtmosphereMount(host) {
     const value = Math.sin(seed * 127.1 + 311.7) * 43758.5453
     return value - Math.floor(value)
   }
-  // One blob per palette hue, anchored in an evenly spaced lane across the row.
-  // The former randomized 9-blob layout let a few hued blobs dominate the pill
-  // (the user saw mostly red/purple); even lanes plus the full-width wash keep the
-  // rainbow balanced end to end.
-  const blobs = DW_ATMOS_PALETTE.map((_, index) => ({
-    phase: (index / DW_ATMOS_PALETTE.length) * Math.PI * 2,
-    speed: 0.38 + noise(index + 2) * 0.32,
-    size: 0.46 + noise(index + 3) * 0.22,
-    hue: index,
-    lane: (index + 0.5) / DW_ATMOS_PALETTE.length
-  }))
+  // Two drifting blobs per palette hue: an anchored main blob plus a smaller,
+  // faster satellite. Eight evenly spaced lanes keep the hue path even, while the
+  // wide sway/rise, breathing radius/alpha and soft overlapping edges preserve the
+  // original smoke-like diffusion instead of freezing the rainbow into bands.
+  const blobs = DW_ATMOS_PALETTE.flatMap((_, index) => {
+    const lane = (index + 0.5) / DW_ATMOS_PALETTE.length
+    return [
+      {
+        phase: (index / DW_ATMOS_PALETTE.length) * Math.PI * 2,
+        speed: 0.34 + noise(index + 2) * 0.28,
+        size: 0.50 + noise(index + 3) * 0.20,
+        hue: index,
+        lane,
+        sway: 0.13 + noise(index + 4) * 0.06,
+        rise: 0.30 + noise(index + 5) * 0.12,
+        alpha: 0.26
+      },
+      {
+        phase: (index / DW_ATMOS_PALETTE.length) * Math.PI * 2 + 1.7,
+        speed: 0.24 + noise(index + 9) * 0.26,
+        size: 0.34 + noise(index + 10) * 0.16,
+        hue: index,
+        lane: Math.min(0.94, Math.max(0.06, lane + (index % 2 === 0 ? -0.07 : 0.07))),
+        sway: 0.16 + noise(index + 11) * 0.06,
+        rise: 0.34 + noise(index + 12) * 0.14,
+        alpha: 0.16
+      }
+    ]
+  })
   let raf = 0
   let lastFrame = 0
   let lastDraw = 0
@@ -5410,7 +5434,7 @@ function dwAtmosphereMount(host) {
     const span = Math.max(width, height)
     // A low broad wash keeps the whole pill tinted, not just the blob cores.
     const wash = ctx.createLinearGradient(0, 0, width, 0)
-    const washAlpha = Math.min(0.32, 0.40 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.spread * DW_ATMOS_CONFIG.blend)
+    const washAlpha = Math.min(0.22, 0.28 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.spread * DW_ATMOS_CONFIG.blend)
     for (let index = 0; index < DW_ATMOS_PALETTE.length; index += 1) {
       const color = DW_ATMOS_PALETTE[index]
       wash.addColorStop(index / (DW_ATMOS_PALETTE.length - 1), `rgba(${color[0]},${color[1]},${color[2]},${washAlpha.toFixed(3)})`)
@@ -5422,20 +5446,24 @@ function dwAtmosphereMount(host) {
     // blobs paint over each other (not additive) so their hues stay saturated
     // instead of summing to white; the CSS blend then applies the theme recipe.
     ctx.globalCompositeOperation = 'source-over'
-    const breath = 1 + DW_ATMOS_CONFIG.breathing * 0.11 * Math.sin(time * 0.37)
+    const breath = 1 + 0.30 * Math.sin(time * 0.43) + 0.12 * Math.sin(time * 0.19 + 1.4)
     for (const blob of blobs) {
       const color = DW_ATMOS_PALETTE[blob.hue]
       const lane = Math.min(1, Math.max(0, blob.lane
-        + 0.07 * Math.sin(time * blob.speed * DW_ATMOS_CONFIG.drift + blob.phase)
-        + 0.035 * Math.sin(time * 0.23 * DW_ATMOS_CONFIG.stirring + blob.phase * 1.7)))
+        + blob.sway * Math.sin(time * blob.speed * DW_ATMOS_CONFIG.drift + blob.phase)
+        + 0.055 * Math.sin(time * 0.21 * DW_ATMOS_CONFIG.stirring + blob.phase * 1.7)))
       const cx = width * lane
-      const cy = height * (0.5 + 0.24 * Math.cos(time * blob.speed * 0.8 * DW_ATMOS_CONFIG.drift + blob.phase * 1.3))
-      const radius = Math.max(2, span * blob.size * (0.55 + 0.12 * Math.sin(time * 0.31 + blob.phase)))
-      const alpha = Math.min(0.55, 0.26 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.vibrance * DW_ATMOS_CONFIG.blend * breath)
+      const cy = height * (0.5
+        + blob.rise * Math.cos(time * blob.speed * 0.75 * DW_ATMOS_CONFIG.drift + blob.phase * 1.3)
+        + 0.12 * Math.sin(time * 0.17 + blob.phase * 0.7))
+      const radius = Math.max(2, span * blob.size
+        * (0.55 + 0.20 * Math.sin(time * 0.37 + blob.phase)
+          + 0.06 * Math.sin(time * 0.12 + blob.phase * 1.9)))
+      const alpha = Math.min(0.48, blob.alpha * DW_ATMOS_HUE_ALPHA[blob.hue] * 0.68 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.vibrance * DW_ATMOS_CONFIG.blend * breath)
       const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius)
       gradient.addColorStop(0, `rgba(${color[0]},${color[1]},${color[2]},${alpha.toFixed(3)})`)
-      gradient.addColorStop(0.35, `rgba(${color[0]},${color[1]},${color[2]},${(alpha * 0.86).toFixed(3)})`)
-      gradient.addColorStop(0.62, `rgba(${color[0]},${color[1]},${color[2]},${(alpha * 0.34).toFixed(3)})`)
+      gradient.addColorStop(0.30, `rgba(${color[0]},${color[1]},${color[2]},${(alpha * 0.84).toFixed(3)})`)
+      gradient.addColorStop(0.60, `rgba(${color[0]},${color[1]},${color[2]},${(alpha * 0.30).toFixed(3)})`)
       gradient.addColorStop(1, `rgba(${color[0]},${color[1]},${color[2]},0)`)
       ctx.fillStyle = gradient
       ctx.beginPath()
