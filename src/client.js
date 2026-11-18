@@ -5288,10 +5288,10 @@ html[data-input-modality='keyboard'] .psd-child-current:focus-within > *:not(.ps
    recipe: the canvas keeps the screen blend but is less saturated and brighter,
    the wrapper is slightly less opaque, and the scrim is a soft white veil
    instead of a dark one (user request: lighten it, reference the light mode). */
-body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.18) brightness(1.16)}
-body[data-ds-dark-theme] .psd-atmos{opacity:.48}
-body[data-ds-dark-theme] .psd-run-current:hover .psd-atmos,body[data-ds-dark-theme] .psd-child-current:hover .psd-atmos,body[data-ds-dark-theme] [data-psd-current-workspace='true']:hover .psd-atmos,body[data-ds-dark-theme] [data-psd-current-session='true']:hover .psd-atmos{opacity:.56}
-body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(255,255,255,.30),rgba(255,255,255,.18))}
+body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.02) brightness(1.12)}
+body[data-ds-dark-theme] .psd-atmos{opacity:.40}
+body[data-ds-dark-theme] .psd-run-current:hover .psd-atmos,body[data-ds-dark-theme] .psd-child-current:hover .psd-atmos,body[data-ds-dark-theme] [data-psd-current-workspace='true']:hover .psd-atmos,body[data-ds-dark-theme] [data-psd-current-session='true']:hover .psd-atmos{opacity:.48}
+body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(255,255,255,.38),rgba(255,255,255,.24))}
 /* Light-mode readability (user fix). The multiply canvas over the light surface
    turned the pill into a medium saturated tone; the shell's tertiary time/icons
    and the hover-revealed row actions then nearly vanished. In light mode the
@@ -5368,11 +5368,16 @@ function dwAtmosphereMount(host) {
     const value = Math.sin(seed * 127.1 + 311.7) * 43758.5453
     return value - Math.floor(value)
   }
-  const blobs = Array.from({ length: 9 }, (_, index) => ({
-    phase: noise(index + 1) * Math.PI * 2,
-    speed: 0.42 + noise(index + 2) * 0.62,
-    size: 0.5 + noise(index + 3) * 0.42,
-    hue: index % DW_ATMOS_PALETTE.length
+  // One blob per palette hue, anchored in an evenly spaced lane across the row.
+  // The former randomized 9-blob layout let a few hued blobs dominate the pill
+  // (the user saw mostly red/purple); even lanes plus the full-width wash keep the
+  // rainbow balanced end to end.
+  const blobs = DW_ATMOS_PALETTE.map((_, index) => ({
+    phase: (index / DW_ATMOS_PALETTE.length) * Math.PI * 2,
+    speed: 0.38 + noise(index + 2) * 0.32,
+    size: 0.46 + noise(index + 3) * 0.22,
+    hue: index,
+    lane: (index + 0.5) / DW_ATMOS_PALETTE.length
   }))
   let raf = 0
   let lastFrame = 0
@@ -5405,7 +5410,7 @@ function dwAtmosphereMount(host) {
     const span = Math.max(width, height)
     // A low broad wash keeps the whole pill tinted, not just the blob cores.
     const wash = ctx.createLinearGradient(0, 0, width, 0)
-    const washAlpha = Math.min(0.22, 0.15 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.spread * DW_ATMOS_CONFIG.blend)
+    const washAlpha = Math.min(0.32, 0.40 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.spread * DW_ATMOS_CONFIG.blend)
     for (let index = 0; index < DW_ATMOS_PALETTE.length; index += 1) {
       const color = DW_ATMOS_PALETTE[index]
       wash.addColorStop(index / (DW_ATMOS_PALETTE.length - 1), `rgba(${color[0]},${color[1]},${color[2]},${washAlpha.toFixed(3)})`)
@@ -5420,10 +5425,13 @@ function dwAtmosphereMount(host) {
     const breath = 1 + DW_ATMOS_CONFIG.breathing * 0.11 * Math.sin(time * 0.37)
     for (const blob of blobs) {
       const color = DW_ATMOS_PALETTE[blob.hue]
-      const cx = width * (0.5 + 0.34 * Math.sin(time * blob.speed * DW_ATMOS_CONFIG.drift + blob.phase) + 0.09 * Math.sin(time * 0.23 * DW_ATMOS_CONFIG.stirring + blob.phase * 1.7))
-      const cy = height * (0.5 + 0.32 * Math.cos(time * blob.speed * 0.8 * DW_ATMOS_CONFIG.drift + blob.phase * 1.3) + 0.08 * Math.sin(time * 0.19 + blob.phase))
-      const radius = Math.max(2, span * blob.size * (0.5 + 0.16 * Math.sin(time * 0.31 + blob.phase)))
-      const alpha = Math.min(0.85, 0.44 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.vibrance * DW_ATMOS_CONFIG.blend * breath)
+      const lane = Math.min(1, Math.max(0, blob.lane
+        + 0.07 * Math.sin(time * blob.speed * DW_ATMOS_CONFIG.drift + blob.phase)
+        + 0.035 * Math.sin(time * 0.23 * DW_ATMOS_CONFIG.stirring + blob.phase * 1.7)))
+      const cx = width * lane
+      const cy = height * (0.5 + 0.24 * Math.cos(time * blob.speed * 0.8 * DW_ATMOS_CONFIG.drift + blob.phase * 1.3))
+      const radius = Math.max(2, span * blob.size * (0.55 + 0.12 * Math.sin(time * 0.31 + blob.phase)))
+      const alpha = Math.min(0.55, 0.26 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.vibrance * DW_ATMOS_CONFIG.blend * breath)
       const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius)
       gradient.addColorStop(0, `rgba(${color[0]},${color[1]},${color[2]},${alpha.toFixed(3)})`)
       gradient.addColorStop(0.35, `rgba(${color[0]},${color[1]},${color[2]},${(alpha * 0.86).toFixed(3)})`)
