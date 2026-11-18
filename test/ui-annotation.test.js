@@ -1009,10 +1009,11 @@ if (ui === undefined) {
 
   test('candidate-chain creation collects elements only (no descriptor build)', () => {
     const source = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8')
-    const start = source.indexOf('function annotationCandidateChain')
-    const end = source.indexOf('function annotationIsCandidate')
+    const domSource = readFileSync(new URL('../src/browser/ui-annotation/dom.ts', import.meta.url), 'utf8')
+    const start = domSource.indexOf('export function annotationCandidateChain')
+    const end = domSource.indexOf('export function annotationIsCandidate')
     assert.ok(start > 0 && end > start, 'candidate chain sources are present')
-    const body = source.slice(start, end)
+    const body = domSource.slice(start, end)
     assert.ok(!body.includes('annotationDescriptorOf('), 'chain creation must not build descriptors')
     assert.ok(body.includes('insideComposer'), 'chain entries carry composer membership only')
     const refStart = source.indexOf('function refForLevel')
@@ -1189,12 +1190,12 @@ if (ui === undefined) {
   })
 
   test('A3 leaf-first: annotationLeafEligible excludes own UI, structural tags and zero-box elements', () => {
-    const source = client.source
-    const start = source.indexOf('function annotationLeafEligible')
+    const source = readFileSync(new URL('../src/browser/ui-annotation/dom.ts', import.meta.url), 'utf8')
+    const start = source.indexOf('export function annotationLeafEligible')
     assert.ok(start >= 0, 'the eligibility helper exists')
-    const nextFunction = source.indexOf('\\n    function ', start + 'function annotationLeafEligible'.length)
+    const nextFunction = source.indexOf('\nexport function ', start + 'export function annotationLeafEligible'.length)
     const body = source.slice(start, nextFunction > 0 ? nextFunction : source.length)
-    assert.ok(body.includes("element.closest('[data-psa-own]')"), 'own annotation UI is excluded from leaf picks')
+    assert.ok(body.includes("closest('[data-psa-own]')"), 'own annotation UI is excluded from leaf picks')
     assert.ok(body.includes('ANNOTATION_INELIGIBLE_TAGS.has(tag)'), 'structural tags are excluded')
     assert.ok(body.includes('annotationElementVisible(element)'), 'invisible/zero-box elements are excluded')
     const tagsStart = source.indexOf('const ANNOTATION_INELIGIBLE_TAGS')
@@ -1203,8 +1204,8 @@ if (ui === undefined) {
     for (const tag of ['html', 'body', 'script', 'style', 'head', 'title']) {
       assert.ok(tags.includes(`'${tag}'`), `${tag} must be ineligible as a leaf pick`)
     }
-    const startNodeStart = source.indexOf('function annotationStartNode')
-    const startNodeEnd = source.indexOf('\\n    function ', startNodeStart + 'function annotationStartNode'.length)
+    const startNodeStart = source.indexOf('export function annotationStartNode')
+    const startNodeEnd = source.indexOf('\nexport function ', startNodeStart + 'export function annotationStartNode'.length)
     const startNode = source.slice(startNodeStart, startNodeEnd > 0 ? startNodeEnd : source.length)
     assert.ok(startNode.includes('data-lexical-editor'), 'the composer exception (editable contents resolve to the composer region) is kept')
     assert.ok(startNode.includes('data-conversation-region="composer"'), 'composer internals resolve to the composer region')
