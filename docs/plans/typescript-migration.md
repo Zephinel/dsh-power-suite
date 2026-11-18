@@ -576,3 +576,20 @@ presets menu 22, prompt history 20, draft attachment 17, interrupted copy/icons
 15, settings page 10, preset routing 10, artifacts 5; non-feature helpers 29 /
 panel 20 / plugin 15. The browser profile is still report-only and
 `@ts-nocheck` remains until M5a lands.
+
+
+**M5a progress (2026-11-18).** The last big region left `src/client.js`: annotation
+styles/DOM/picker/storage/constants/types, the 5.2k-line controller, the React
+surface and the installer now live under `src/browser/ui-annotation/`
+(`createAnnotationController`, `createAnnotationComponents`,
+`createUiAnnotationInstaller`). `src/client.js` is **4,348 lines** (from 12,019)
+and the browser baseline drops **1,211 -> 197**; annotation region 1,012 -> 2
+(only the pre-existing duplicate `collection.expand` copy key, untouched until
+the copy owner decision). The debug probe and slot/DOM/storage contracts stay
+intact: live annotation smoke 6/6, S4 7/0/0, S10 8/0/0 (one live-flake retry),
+S12 7/0/0, sidebar smoke 4/4. Remaining diagnostics are small region shims:
+composer gallery 24, presets menu 22, prompt history 20, draft attachment 17,
+interrupted copy/icons 15, settings page 10, preset routing 10, artifacts 5
+plus non-feature helpers 29 / panel 20 / plugin 11 and 8 outside regions. The
+`@ts-nocheck` flip is the last M5 step once those reach zero and the browser
+profile is promoted into the gate.

@@ -3,37 +3,32 @@
   "generatedBy": "scripts/typecheck-browser-baseline.mjs",
   "profile": "tsconfig.browser.json",
   "typescript": "7.0.2",
-  "generatedAt": "2026-11-18T18:08:13.084Z",
-  "gitHead": "a7cdc85",
+  "generatedAt": "2026-11-18T18:15:02.193Z",
+  "gitHead": "0aa4624",
   "clientJs": {
-    "lines": 12019,
-    "bytes": 580800
+    "lines": 4348,
+    "bytes": 205125
   },
-  "total": 1211,
+  "total": 197,
   "byCode": {
-    "TS2339": 761,
-    "TS7005": 213,
-    "TS7006": 111,
-    "TS7034": 49,
-    "TS2322": 31,
-    "TS2345": 21,
+    "TS2339": 116,
+    "TS7006": 34,
+    "TS2322": 13,
+    "TS2345": 7,
+    "TS7005": 7,
     "TS18048": 4,
     "TS2349": 4,
-    "TS2740": 4,
-    "TS2353": 3,
+    "TS7034": 4,
     "TS2551": 3,
     "TS1117": 2,
-    "TS18046": 1,
     "TS2538": 1,
-    "TS2769": 1,
     "TS2810": 1,
     "TS7031": 1
   },
   "byFile": {
-    "src/client.js": 1211
+    "src/client.js": 197
   },
   "byFeature": {
-    "ui element annotation": 1012,
     "composer image gallery": 24,
     "workspace default presets — menu": 22,
     "prompt history": 20,
@@ -43,10 +38,10 @@
     "workspace default presets — creation routing": 10,
     "session artifacts — Files-header action": 5,
     "settings — copy and shared state": 3,
+    "ui element annotation": 2,
     "dynamic workspaces": 1
   },
   "byRegion": {
-    "feature: ui element annotation": 1009,
     "helpers": 29,
     "feature: composer image gallery": 24,
     "feature: workspace default presets — menu": 22,
@@ -54,12 +49,12 @@
     "panel": 20,
     "feature: draft attachment memory": 17,
     "feature: interrupted sessions — copy, icons, shared state": 15,
-    "plugin": 15,
+    "plugin": 11,
     "feature: settings — page": 10,
     "feature: workspace default presets — creation routing": 10,
     "feature: session artifacts — Files-header action": 5,
     "feature: settings — copy and shared state": 3,
-    "feature: ui element annotation > ui element annotation — pure model": 3,
+    "feature: ui element annotation > ui element annotation — pure model": 2,
     "feature: dynamic workspaces": 1
   },
   "unattributed": {
