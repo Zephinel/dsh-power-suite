@@ -1016,10 +1016,11 @@ if (ui === undefined) {
     const body = domSource.slice(start, end)
     assert.ok(!body.includes('annotationDescriptorOf('), 'chain creation must not build descriptors')
     assert.ok(body.includes('insideComposer'), 'chain entries carry composer membership only')
-    const refStart = source.indexOf('function refForLevel')
-    const refEnd = source.indexOf('function pickLevels')
+    const controllerSource = readFileSync(new URL('../src/browser/ui-annotation/controller.ts', import.meta.url), 'utf8')
+    const refStart = controllerSource.indexOf('function refForLevel')
+    const refEnd = controllerSource.indexOf('function pickLevels')
     assert.ok(refStart > 0 && refEnd > refStart, 'level ref sources are present')
-    const refBody = source.slice(refStart, refEnd)
+    const refBody = controllerSource.slice(refStart, refEnd)
     assert.ok(refBody.includes('annotationDescriptorOf(element'), 'chosen descriptor is built lazily')
     assert.ok(refBody.includes('chain.slice(1, 3)'), 'at most two context ancestors get descriptors')
   })
@@ -1136,7 +1137,7 @@ if (ui === undefined) {
   })
 
   test('A3 leaf-first: pickLevels uses the full ancestor chain and the deepest eligible element', () => {
-    const source = client.source
+    const source = readFileSync(new URL('../src/browser/ui-annotation/controller.ts', import.meta.url), 'utf8')
     const start = source.indexOf('function pickLevels')
     assert.ok(start >= 0, 'the controller pickLevels exists')
     const nextFunction = source.indexOf('\\n      function ', start + 'function pickLevels'.length)
@@ -1146,8 +1147,8 @@ if (ui === undefined) {
     assert.ok(pickBody.includes('entries.slice(0, Math.min(surface.index + 1, entries.length))'), 'the surface boundary is kept (never escapes the root)')
     assert.ok(pickBody.includes("surface: 'floating'"), 'surface metadata is preserved')
     assert.ok(pickBody.includes('parentStep: 1'), 'Parent walks up the full chain (deepest first)')
-    assert.ok(source.includes('function shiftChain(delta)'), 'the Parent/Child control still exists')
-    const shiftStart = source.indexOf('function shiftChain(delta)')
+    assert.ok(/function shiftChain\(delta: number\)/.test(source), 'the Parent/Child control still exists')
+    const shiftStart = source.indexOf('function shiftChain(delta: number)')
     const shiftEnd = source.indexOf('\\n      function ', shiftStart + 'function shiftChain'.length)
     const shiftBody = source.slice(shiftStart, shiftEnd > 0 ? shiftEnd : source.length)
     assert.ok(shiftBody.includes('lastPick.index + delta * lastPick.parentStep'), 'Parent/Child walks the same chain table')
@@ -2100,11 +2101,12 @@ if (ui === undefined) {
     assert.ok(seat.includes('props.useSessions'), 'the seat must read the slot contract useSessions hook')
     assert.ok(seat.includes('sessionCwd'), 'the seat must derive the Session cwd')
     assert.ok(seat.includes('annotationBridge.sessionCwd'), 'the seat must mirror cwd into the bridge')
-    const identityStart = source.indexOf('function sessionIdentity')
-    const identityEnd = source.indexOf('\n      function ', identityStart + 'function sessionIdentity'.length)
-    const identity = source.slice(identityStart, identityEnd > 0 ? identityEnd : source.length)
-    assert.ok(identity.includes('annotationBridge.sessionCwd'), 'record capture must prefer the bridged cwd')
-    assert.ok(identity.includes('annotationWorkspaceLabel(annotationBridge.sessionCwd)'), 'the workspace label is the bridged cwd basename')
+    const controllerSource = readFileSync(new URL('../src/browser/ui-annotation/controller.ts', import.meta.url), 'utf8')
+    const identityStart = controllerSource.indexOf('function sessionIdentity')
+    const identityEnd = controllerSource.indexOf('\n  function ', identityStart + 'function sessionIdentity'.length)
+    const identity = controllerSource.slice(identityStart, identityEnd > 0 ? identityEnd : controllerSource.length)
+    assert.ok(identity.includes('bridge.sessionCwd'), 'record capture must prefer the bridged cwd')
+    assert.ok(identity.includes('annotationWorkspaceLabel(bridge.sessionCwd)'), 'the workspace label is the bridged cwd basename')
     assert.ok(identity.includes('annotationIdentityWarned'), 'the fallback failure is reported once instead of swallowed')
     assert.ok(source.includes('const annotationBridge = { sessionId: null, inputActions: null, sessionCwd: null }'),
       'the bridge declares the cwd slot explicitly')
@@ -2282,9 +2284,10 @@ if (ui === undefined) {
     assert.ok(factory.includes('showGroupTitle: false'),
       'the source must not render a custom group header (the shell has no annotation menu title and the raw source name would leak)')
     assert.ok(factory.includes('current.chipCandidates(sessionId)'), 'candidates come from the controller helper')
-    const candidatesStart = source.indexOf('function chipCandidates(sessionId)')
-    const candidatesEnd = source.indexOf('\n      function ', candidatesStart + 'function chipCandidates(sessionId)'.length)
-    const controllerCandidates = source.slice(candidatesStart, candidatesEnd > 0 ? candidatesEnd : source.length)
+    const controllerSource = readFileSync(new URL('../src/browser/ui-annotation/controller.ts', import.meta.url), 'utf8')
+    const candidatesStart = controllerSource.indexOf('function chipCandidates(')
+    const candidatesEnd = controllerSource.indexOf('\n  /**', candidatesStart + 'function chipCandidates('.length)
+    const controllerCandidates = controllerSource.slice(candidatesStart, candidatesEnd > 0 ? candidatesEnd : controllerSource.length)
     assert.ok(controllerCandidates.includes("t('chip.candidateLabel')"), 'candidates must use the localized self-identifying label template')
     assert.ok(controllerCandidates.includes('annotationChipCandidates'), 'candidates come from the pure helper')
     assert.ok(source.includes("'chip.candidateLabel': 'UI annotation · {name}'"), 'the EN candidate label prefix exists')
@@ -2320,15 +2323,19 @@ if (ui === undefined) {
     assert.ok(ANNOTATION_CSS.includes('.psa-launcher[data-psa-launcher-hidden=true]{'), 'the hidden launcher CSS exists')
     assert.ok(ANNOTATION_CSS.includes('transition:opacity 180ms ease,transform 180ms ease'), 'the hide/show transition exists')
     assert.ok(ANNOTATION_CSS.includes('.psa-launcher{transition:none}'), 'reduced motion disables the launcher hide/show transition')
-    assert.ok(source.includes('idleLauncherPosition = snapshot().launcherPosition'), 'activation remembers the idle floating position')
-    assert.ok(source.includes('clampLauncherPosition(restoreLauncher, annotationViewport(), ANNOTATION_LAUNCHER_SIZE)'),
+    const controllerSource = readFileSync(new URL('../src/browser/ui-annotation/controller.ts', import.meta.url), 'utf8')
+    assert.ok(controllerSource.includes('idleLauncherPosition = snapshot().launcherPosition'), 'activation remembers the idle floating position')
+    assert.ok(controllerSource.includes('clampLauncherPosition(restoreLauncher, annotationViewport(), ANNOTATION_LAUNCHER_SIZE)'),
       'deactivation restores the remembered idle position')
-    for (const marker of ['function requestExit()', 'function confirmExitClear()', 'function cancelExitConfirm()', 'function AnnotationExitConfirm', "'data-psa-exit-clear': '',", "'data-psa-exit-cancel': '',", 'data-psa-exit-confirm']) {
+    for (const marker of ['function requestExit()', 'function confirmExitClear()', 'function cancelExitConfirm()']) {
+      assert.ok(controllerSource.includes(marker), `exit confirmation must include ${marker}`)
+    }
+    for (const marker of ['function AnnotationExitConfirm', "'data-psa-exit-clear': '',", "'data-psa-exit-cancel': '',", 'data-psa-exit-confirm']) {
       assert.ok(source.includes(marker), `exit confirmation must include ${marker}`)
     }
-    const confirmStart = source.indexOf('function confirmExitClear()')
-    const confirmEnd = source.indexOf('\n      /**', confirmStart)
-    const confirm = source.slice(confirmStart, confirmEnd > 0 ? confirmEnd : source.length)
+    const confirmStart = controllerSource.indexOf('function confirmExitClear()')
+    const confirmEnd = controllerSource.indexOf('\n  /**', confirmStart)
+    const confirm = controllerSource.slice(confirmStart, confirmEnd > 0 ? confirmEnd : controllerSource.length)
     assert.ok(confirm.includes("dispatch({ type: 'collectionClear' })"), 'confirming must clear all records')
     assert.ok(confirm.includes('flushAnnotationRecords()'), 'confirming must flush the empty persisted document')
     assert.ok(confirm.includes('deactivate()'), 'confirming must exit the mode')
@@ -2399,9 +2406,10 @@ if (ui === undefined) {
     assert(component.includes("annotationLocatorText(record)"), 'the preview shows the recorded locator')
     assert(component.includes("t('detail.position')"), 'the preview shows the captured position box')
     assert(component.includes("controller.statusOf(record)"), 'the preview shows the live resolution status')
-    const controllerStart = source.indexOf('function onChipPointerOver')
-    const controllerEnd = source.indexOf('\n      /**', controllerStart)
-    const controller = source.slice(controllerStart, controllerEnd > 0 ? controllerEnd : source.length)
+    const controllerSource = readFileSync(new URL('../src/browser/ui-annotation/controller.ts', import.meta.url), 'utf8')
+    const controllerStart = controllerSource.indexOf('function onChipPointerOver')
+    const controllerEnd = controllerSource.indexOf('\n  /**', controllerStart)
+    const controller = controllerSource.slice(controllerStart, controllerEnd > 0 ? controllerEnd : controllerSource.length)
     assert(controller.includes("'[data-composer-chip=\"ui-annotation\"]'"),
       'only chips rendered with our source get the preview (shell data attribute, no shell modification)')
     assert(controller.includes('chipPreviewModel'), 'the preview reads the local collection, not the network')
@@ -2409,11 +2417,9 @@ if (ui === undefined) {
       'the preview CSS must be pointer-transparent')
     assert(source.includes("document.addEventListener('pointerout'"), 'leaving the chip hides the preview')
     assert(source.includes("document.addEventListener('pointermove'"), 'a stationary re-show after Esc is supported')
-    assert(source.includes('function onChipScroll'), 'scrolling a chip ancestor hides the preview')
-    const keyStart = source.indexOf('function onKeyDown(event)')
-    const keyEnd = source.indexOf('\n      function ', keyStart)
-    const keyBody = source.slice(keyStart, keyEnd > 0 ? keyEnd : source.length)
-    assert(keyBody.includes('chipPreview !== null') && keyBody.includes('hideChipPreview()'),
+    assert(controllerSource.includes('function onChipScroll'), 'scrolling a chip ancestor hides the preview')
+    assert.ok(source.includes('const hadPreview = annotationController.hideChipPreview()')
+      && source.includes('if (hadPreview) {'),
       'Esc closes the chip preview before the mode Esc ladder')
   })
 
@@ -3108,8 +3114,9 @@ if (ui === undefined) {
     assert.ok(/beginEdit/.test(popover) && /endEdit/.test(popover), 'the textarea handlers dispatch the editing actions')
     // The reducer tests above are only meaningful if production actually dispatches
     // these actions; the wiring lives in the controller beginEdit/endEdit methods.
-    assert.match(source, /type:\s*'beginEdit'/, 'the controller dispatches beginEdit')
-    assert.match(source, /type:\s*'endEdit'/, 'the controller dispatches endEdit')
+    const controllerSource = readFileSync(new URL('../src/browser/ui-annotation/controller.ts', import.meta.url), 'utf8')
+    assert.match(controllerSource, /type:\s*'beginEdit'/, 'the controller dispatches beginEdit')
+    assert.match(controllerSource, /type:\s*'endEdit'/, 'the controller dispatches endEdit')
   })
 
   test('F16: annotation region markers are balanced and closed before the plugin region', () => {
