@@ -222,6 +222,8 @@ declare var document: {
 }
 
 declare var window: {
+  /** The shell's classic-script module loader. */
+  readonly __ModuleLoader__: DshModuleLoader
   readonly innerWidth: number
   readonly innerHeight: number
   readonly devicePixelRatio: number

@@ -98,13 +98,20 @@ test('the settings enums/defaults have one shared owner used by both halves', ()
   assert.equal(PROMPT_HISTORY_MODIFIER_FIELD, 'promptHistoryModifier')
   assert.equal(RECENT_SESSION_FIELD, 'recentSessionMinutes')
   assert.equal(ACTIVE_PROJECT_FIELD, 'activeProjectDays')
-  // The Host store re-exports the very same objects; the browser imports them.
+  // The Host store re-exports the very same objects; the browser modules import
+  // them. The entry no longer needs a direct import because the settings page
+  // and store moved under src/browser/settings/.
   assert.equal(HOST_PROMPT_HISTORY_MODIFIERS, PROMPT_HISTORY_MODIFIERS)
   assert.equal(HOST_RECENT_SESSION_MINUTES, RECENT_SESSION_MINUTES)
   assert.equal(HOST_ACTIVE_PROJECT_DAYS, ACTIVE_PROJECT_DAYS)
   assert.equal(HOST_DEFAULT_SETTINGS, DEFAULT_SETTINGS)
-  assert.match(clientSource, /from '\.\/shared\/protocol\.ts'/u)
+  const browserSources = [
+    clientSource,
+    readFileSync(new URL('../src/browser/settings/store.ts', import.meta.url), 'utf8'),
+    readFileSync(new URL('../src/browser/settings/page.ts', import.meta.url), 'utf8')
+  ].join('\n')
+  assert.match(browserSources, /from '\.\.\/\.\.\/shared\/protocol\.ts'/u)
   for (const name of ['PROMPT_HISTORY_MODIFIERS', 'RECENT_SESSION_MINUTES', 'ACTIVE_PROJECT_DAYS', 'DEFAULT_SETTINGS']) {
-    assert.doesNotMatch(clientSource, new RegExp(`const ${name} = `, 'u'), `${name} must come from the shared contract`)
+    assert.doesNotMatch(browserSources, new RegExp(`const ${name} = `, 'u'), `${name} must come from the shared contract`)
   }
 })

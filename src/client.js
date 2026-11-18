@@ -1,4 +1,3 @@
-// @ts-nocheck — Phase 3 keeps the browser half out of the type gate while its entries are split into modules; see docs/plans/typescript-migration.md.
 //
 // The entry is an ES module: the build bundles it into the classic-script IIFE
 // the DSH shell loads. Pure browser models live under src/browser/ and are
@@ -223,11 +222,12 @@ import { createNativeSessionHoverFigures } from './browser/native-session-hover-
 
 window.__ModuleLoader__.load({
   id: '@zephinel/dsh-power-suite',
-  factory: (require) => {
+  factory: (/** @type {DshRequire} */ require) => {
     const React = require('react')
     const ReactDOM = require('react-dom')
     // The shell seeds this module into every Web bundle; keep the feature
     // declarative when a foreign host omits it instead of failing to load.
+    /** @type {Partial<typeof import('@deepseek-ai/dsh-client-ui-primitives')>} */
     const uiPrimitives = (() => {
       try {
         return require('@deepseek-ai/dsh-client-ui-primitives')
@@ -238,9 +238,9 @@ window.__ModuleLoader__.load({
     /** The shell's own state/loading indicator, with a static fallback dot. */
     const StateDot = typeof uiPrimitives.StateDot === 'function'
       ? uiPrimitives.StateDot
-      : ({ size }) => React.createElement('span', {
+      : (/** @type {{ size?: number }} */ props) => React.createElement('span', {
         'aria-hidden': true,
-        style: { display: 'inline-block', width: size ?? 10, height: size ?? 10, borderRadius: '50%', background: 'currentColor', opacity: 0.45 }
+        style: { display: 'inline-block', width: props.size ?? 10, height: props.size ?? 10, borderRadius: '50%', background: 'currentColor', opacity: 0.45 }
       })
 
     /**
@@ -291,9 +291,25 @@ window.__ModuleLoader__.load({
     const PACKAGE_NAME = '@zephinel/dsh-power-suite'
 
     /**
-     * The browser global plus the optional end-to-end test seam installed by the
-     * browser harness before load; production never defines it.
-     * @type {typeof globalThis & { __POWER_SUITE_TEST_HOOKS__?: Record<string, object> }}
+     * The documented test seams installed by the browser harness before load;
+     * production never defines them.
+     * @typedef {object} InterruptedTestHook
+     * @property {(sessionId: string, patch: Record<string, unknown>) => unknown} set
+     * @property {(sessionId: string) => void} clear
+     * @property {(sessionId: string) => unknown} record
+     * @property {() => void} sync
+     *
+     * @typedef {object} PowerSuiteTestHooks
+     * @property {InterruptedTestHook} [interruptedSessions]
+     * @property {{ debugFallbackScanProbe: () => unknown }} [uiAnnotation]
+     * @property {{ probe: () => unknown }} [sidebarWidth]
+     */
+    /**
+     * The browser global plus the optional end-to-end test seams installed by
+     * the browser harness before load; production never defines them.
+     * @type {typeof globalThis & {
+     *   __POWER_SUITE_TEST_HOOKS__?: Record<string, Record<string, unknown>> & PowerSuiteTestHooks
+     * }}
      */
     const testHookHost = globalThis
 
@@ -995,7 +1011,7 @@ window.__ModuleLoader__.load({
     //#region plugin
     /**
      * Register dictionaries, the page type, and its Session-scoped body.
-     * @param {object} ctx - client root context.
+     * @param {DshClientContext} ctx - client root context.
      * @returns {void}
      */
     function apply(ctx) {
@@ -1019,15 +1035,15 @@ window.__ModuleLoader__.load({
           sync: () => interruptedSessions.store.syncInterruptedRows()
         }
       }
-      artifactsFeature.installArtifacts(/** @type {import('./browser/artifacts/panel.ts').ArtifactsContext} */ (ctx))
+      artifactsFeature.installArtifacts(/** @type {DshModuleContext<import('./browser/artifacts/panel.ts').ArtifactsContext>} */ (ctx))
       workspacePresets.installWorkspacePresetMenu(/** @type {import('./browser/workspace-presets/install.ts').WorkspacePresetsContext} */ (ctx), appUrl)
       workspacePresets.installWorkspacePresetRouting(/** @type {import('./browser/workspace-presets/install.ts').WorkspacePresetsContext} */ (ctx), appUrl)
-      promptHistory.installPromptHistory(/** @type {import('./browser/prompt-history/seat.ts').PromptHistorySeatContext} */ (ctx))
-      installPromptHistoryPreview(/** @type {import('./browser/prompt-history/preview.ts').PromptHistoryPreviewContext} */ (ctx))
-      draftAttachments.installDraftAttachmentMemory(/** @type {import('./browser/draft-attachments/install.ts').DraftAttachmentContext} */ (ctx))
-      dynamicWorkspacesInstaller.install(/** @type {import('./browser/dynamic-workspaces/install.ts').DynamicWorkspacesContext} */ (ctx))
-      installSessionHoverFigures(/** @type {import('./browser/native-session-hover-figures/install.ts').NativeSessionHoverFiguresContext} */ (ctx))
-      interruptedSessions.installInterruptedSessions(/** @type {import('./browser/interrupted-sessions/components.ts').InterruptedSessionComponentsContext} */ (ctx))
+      promptHistory.installPromptHistory(/** @type {DshModuleContext<import('./browser/prompt-history/seat.ts').PromptHistorySeatContext>} */ (ctx))
+      installPromptHistoryPreview(/** @type {DshModuleContext<import('./browser/prompt-history/preview.ts').PromptHistoryPreviewContext>} */ (ctx))
+      draftAttachments.installDraftAttachmentMemory(/** @type {DshModuleContext<import('./browser/draft-attachments/install.ts').DraftAttachmentContext>} */ (ctx))
+      dynamicWorkspacesInstaller.install(/** @type {DshModuleContext<import('./browser/dynamic-workspaces/install.ts').DynamicWorkspacesContext>} */ (ctx))
+      installSessionHoverFigures(/** @type {DshModuleContext<import('./browser/native-session-hover-figures/install.ts').NativeSessionHoverFiguresContext>} */ (ctx))
+      interruptedSessions.installInterruptedSessions(/** @type {DshModuleContext<import('./browser/interrupted-sessions/components.ts').InterruptedSessionComponentsContext>} */ (ctx))
       installQuickLook(/** @type {import('./browser/hover-quick-look/install.ts').HoverQuickLookContext} */ (ctx), {
         t,
         appUrl,

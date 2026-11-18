@@ -1559,14 +1559,14 @@ if (ui === undefined) {
       if (previousCss === undefined) delete globalThis.CSS
       else globalThis.CSS = previousCss
     }
-    // escapeSelectorValue is a controller-local helper; assert at the source
-    // level that it uses the same platform path.
-    const source = client.source
+    // escapeSelectorValue now lives in the interrupted-session state module;
+    // assert at the source level that it uses the same platform path.
+    const source = readFileSync(new URL('../src/browser/interrupted-sessions/state.ts', import.meta.url), 'utf8')
     const start = source.indexOf('function escapeSelectorValue')
     const end = source.indexOf('function ', start + 10)
     assert.ok(start > 0, 'escapeSelectorValue exists')
     const body = source.slice(start, end)
-    assert.ok(body.includes('globalThis.CSS'), 'escapeSelectorValue uses the platform CSS global')
+    assert.match(body, /globalThis[\s\S]{0,160}\.CSS/, 'escapeSelectorValue uses the platform CSS global')
     assert.ok(!/typeof CSS\s*===/.test(body), 'escapeSelectorValue no longer tests the shadowed local CSS string')
   })
 

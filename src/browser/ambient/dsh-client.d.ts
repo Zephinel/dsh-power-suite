@@ -113,6 +113,15 @@ interface DshInputTriggersService {
   registerSource(source: unknown): () => void
 }
 
+/**
+ * The entry's documented loose context narrowed to one module's declared slice.
+ *
+ * The module contexts describe the same runtime object more precisely, so the
+ * two declarations cannot overlap structurally; this alias keeps the boundary
+ * assertion explicit instead of widening a module contract.
+ */
+type DshModuleContext<T> = DshClientContext & T
+
 /** The client root context handed to the browser entry's `apply(ctx)`. */
 interface DshClientContext {
   effect(setup: () => (() => void) | void, label?: string): void
