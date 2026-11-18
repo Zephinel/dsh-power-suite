@@ -42,7 +42,7 @@ the code the Host runs after `npm run build` and a restart (the Host loads
   src/browser/              # browser-side modules imported by the entry (update-check, sidebar-width,
                             #   artifacts, interrupted-sessions, settings, composer-gallery,
                             #   dynamic-workspaces (activity, stats, pin, rows, row-menu),
-                            #   ui-annotation settings/text/format/geometry/identity/records)
+                            #   ui-annotation settings/text/format/geometry/identity/records/reducer/serializers)
   src/shared/routes.ts      # cross-half route contract (16 API paths)
   src/host/document-store.ts # shared durable-document module for the JSON stores
   src/host/context.ts        # minimal structural Host context

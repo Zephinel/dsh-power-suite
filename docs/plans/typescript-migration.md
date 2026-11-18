@@ -326,9 +326,14 @@ and `records.ts` (v2/v3 document normalise/parse/serialize, collection CRUD,
 undo, groups, counts/filters and include/order helpers). 40 hook keys now come
 from modules while the 112-key hook block stays byte-identical as a pass-through;
 `src/client.js` is ~21.1k lines. Differential checks: 588 identity + 1,648
-record cases against the old seam. The planned order for the annotation rest:
-reducer, serializers, anchors, surface/resolution, then the annotation seam
-retirement in its own commit.
+record cases against the old seam. **3o progress (2026-11-18).** The annotation reducer and serializers landed:
+`reducer.ts` (state creation, action reducer, phase/deactivate transitions) and
+`serializers.ts` (quick/batch/group/chip serialization, chip-ref round-trip and
+candidates). 11 more hook keys now come from modules, still without changing the
+112-key hook block; `src/client.js` is ~20.5k lines. Differential checks: 58
+reducer action/phase sequences and 79 serializer fixtures matched the old seam.
+The planned order for the annotation rest: anchors, surface/resolution, then
+the annotation seam retirement in its own commit.
 
 **3m progress (2026-11-18).** Two follow-ups landed: `dwCacheHitPercent` is now a
 total function (inconsistent/negative/non-finite cache data returns `null`
