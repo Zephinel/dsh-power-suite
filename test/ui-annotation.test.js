@@ -97,6 +97,17 @@ import {
   reduceAnnotationState
 } from '../src/browser/ui-annotation/reducer.ts'
 import {
+  annotationChipCandidates,
+  annotationChipRefBatch,
+  annotationChipRefOf,
+  batchScopeSplit,
+  parseAnnotationChipRef,
+  serializeAnnotationChip,
+  serializeBatchEntries,
+  serializeBatchRequest,
+  serializeQuickReference
+} from '../src/browser/ui-annotation/serializers.ts'
+import {
   annotationNormalizeQuoteText as normalizeAnnotationQuote,
   cssIdentifier as escapeAnnotationIdentifier,
   normalizeUserNote as normalizeAnnotationNote,
@@ -1502,11 +1513,11 @@ if (ui === undefined) {
 
   test('A2: a missing ephemeral target serializes its own transient status line', () => {
     const floating = refOf({ name: 'Hover card row' }, { surface: 'floating' })
-    const text = ui.serializeQuickReference({ ...floating, status: 'missing' }, 'Fix the row', EN_LABELS)
+    const text = serializeQuickReference({ ...floating, status: 'missing' }, 'Fix the row', EN_LABELS)
     const lines = text.replace(/\n+$/, '').split('\n')
     assert.equal(lines[4], EN_LABELS.statusEphemeral)
     const page = refOf({ name: 'Toolbar button' })
-    const pageLines = ui.serializeQuickReference({ ...page, status: 'missing' }, 'Fix it', EN_LABELS).replace(/\n+$/, '').split('\n')
+    const pageLines = serializeQuickReference({ ...page, status: 'missing' }, 'Fix it', EN_LABELS).replace(/\n+$/, '').split('\n')
     assert.equal(pageLines[4], EN_LABELS.status)
   })
 
@@ -1630,7 +1641,7 @@ if (ui === undefined) {
 
   test('serializeQuickReference emits the four documented EN lines and the empty-note placeholder', () => {
     const ref = refOf({ tag: 'button', name: 'New session', text: 'New session' })
-    const text = ui.serializeQuickReference(ref, 'Align it with the row', EN_LABELS)
+    const text = serializeQuickReference(ref, 'Align it with the row', EN_LABELS)
     const lines = text.replace(/\n+$/, '').split('\n')
     assert.equal(lines.length, 4)
     assert.equal(lines[0], `${EN_LABELS.title} · ${elementLabel(ref)}`)
@@ -1638,7 +1649,7 @@ if (ui === undefined) {
     assert.match(lines[2], new RegExp(`^${EN_LABELS.session} \\S+ · ${EN_LABELS.time}$`))
     assert.equal(lines[3], `${EN_LABELS.note} Align it with the row`)
 
-    const empty = ui.serializeQuickReference(ref, '', EN_LABELS)
+    const empty = serializeQuickReference(ref, '', EN_LABELS)
     assert.ok(empty.replace(/\n+$/, '').endsWith(`${EN_LABELS.note} ${EN_LABELS.emptyNote}`))
   })
 
@@ -1646,14 +1657,14 @@ if (ui === undefined) {
     const ref = refOf({ tag: 'button', name: 'New session', text: 'New session' })
     const longToken = 'x'.repeat(500)
     const note = `data-psa-launcher https://example.com/path?q=1 123e4567-e89b-12d3-a456-426614174000 user@example.com ${longToken}\nsecond line\r\nthird line`
-    const quick = ui.serializeQuickReference(ref, note, EN_LABELS)
+    const quick = serializeQuickReference(ref, note, EN_LABELS)
     for (const fragment of ['data-psa-launcher', 'https://example.com/path?q=1', '123e4567-e89b-12d3-a456-426614174000', 'user@example.com', longToken]) {
       assert.ok(quick.includes(fragment), `quick reference must preserve ${fragment.slice(0, 24)}`)
     }
     assert.ok(!quick.includes('[redacted]'), 'user note must not run through the page-text scrubber')
     assert.ok(quick.includes('second line\nthird line'), 'multi-line note preserved with normalized LF')
 
-    const batch = ui.serializeBatchRequest([{ ref, note }], EN_LABELS)
+    const batch = serializeBatchRequest([{ ref, note }], EN_LABELS)
     for (const fragment of ['data-psa-launcher', 'https://example.com/path?q=1', longToken]) {
       assert.ok(batch.includes(fragment), `batch request must preserve ${fragment.slice(0, 24)}`)
     }
@@ -1709,7 +1720,7 @@ if (ui === undefined) {
   test('serializeQuickReference marks a stale single reference and follows the ZH labels', () => {
     const stale = refOf({ tag: 'button', name: 'Gone', text: 'Gone' })
     stale.status = 'missing'
-    const staleText = ui.serializeQuickReference(stale, 'note', EN_LABELS)
+    const staleText = serializeQuickReference(stale, 'note', EN_LABELS)
     assert.ok(staleText.includes(EN_LABELS.status), 'a stale single reference carries its status line')
 
     const ZH_LABELS = {
@@ -1722,7 +1733,7 @@ if (ui === undefined) {
       status: '状态：目标已无法定位（仅保留定位符）'
     }
     const ref = refOf({ tag: 'button', name: 'New session', text: 'New session' })
-    const text = ui.serializeQuickReference(ref, '对齐行高', ZH_LABELS).replace(/\n+$/, '')
+    const text = serializeQuickReference(ref, '对齐行高', ZH_LABELS).replace(/\n+$/, '')
     const lines = text.split('\n')
     assert.equal(lines[0], `${ZH_LABELS.title} · ${elementLabel(ref)}`)
     assert.equal(lines[1], `${ZH_LABELS.reference}${describeLocator(ref)}`, 'a full-width colon takes no space')
@@ -1734,7 +1745,7 @@ if (ui === undefined) {
     const first = refOf({ name: 'First', text: 'First' }, { order: 1 })
     const second = refOf({ name: 'Second', text: 'Second' }, { order: 2 })
     second.status = 'missing'
-    const text = ui.serializeBatchRequest([
+    const text = serializeBatchRequest([
       { ref: first, note: 'do the first thing' },
       { ref: second, note: '' }
     ], EN_LABELS)
@@ -1755,19 +1766,19 @@ if (ui === undefined) {
     const current = refOf({ name: 'Current', text: 'Current' }, { sessionId: SESSION_A })
     const other = refOf({ name: 'Other', text: 'Other' }, { sessionId: SESSION_B })
     const items = [{ ref: current, note: '' }, { ref: other, note: 'from elsewhere' }]
-    const split = ui.batchScopeSplit(items, SESSION_A)
+    const split = batchScopeSplit(items, SESSION_A)
     assert.equal(split.current.length, 1)
     assert.equal(split.other.length, 1)
     assert.equal(split.current[0].ref.id, current.id)
     assert.equal(split.other[0].ref.id, other.id)
 
     const labels = { ...EN_LABELS, skippedCount: split.other.length }
-    const withOther = ui.serializeBatchRequest(split.current, labels)
+    const withOther = serializeBatchRequest(split.current, labels)
     assert.ok(withOther.includes('(1 annotation(s) from other sessions skipped)'), withOther)
     assert.ok(withOther.includes(elementLabel(current)))
     assert.ok(!withOther.includes(elementLabel(other)))
 
-    const onlyCurrent = ui.serializeBatchRequest(split.current, { ...EN_LABELS, skippedCount: 0 })
+    const onlyCurrent = serializeBatchRequest(split.current, { ...EN_LABELS, skippedCount: 0 })
     assert.ok(!/from other sessions skipped/.test(onlyCurrent))
   })
 
@@ -2307,91 +2318,91 @@ if (ui === undefined) {
   test('T9: annotation chip refs round-trip for single and batch group chips', () => {
     const alpha = recordOf('Alpha', SESSION_A, { note: 'first' })
     const beta = recordOf('Beta')
-    const single = ui.annotationChipRefOf(alpha)
+    const single = annotationChipRefOf(alpha)
     assert.equal(single.source, 'ui-annotation')
     assert.equal(single.ref, alpha.id)
     assert.equal(single.label, 'Alpha')
     assert.equal(single.clipboardText, '@Alpha')
-    assert.deepEqual(plain(ui.parseAnnotationChipRef(single.ref)), { kind: 'single', id: alpha.id })
+    assert.deepEqual(plain(parseAnnotationChipRef(single.ref)), { kind: 'single', id: alpha.id })
 
-    const batch = ui.annotationChipRefBatch([alpha, beta], 'UI annotations × 2')
+    const batch = annotationChipRefBatch([alpha, beta], 'UI annotations × 2')
     assert.equal(batch.source, 'ui-annotation')
     assert.equal(batch.ref, `batch:${alpha.id}|${beta.id}`)
     assert.equal(batch.label, 'UI annotations × 2')
     assert.equal(batch.clipboardText, '@UI annotations × 2')
-    assert.deepEqual(plain(ui.parseAnnotationChipRef(batch.ref)), { kind: 'batch', ids: [alpha.id, beta.id] })
-    assert.deepEqual(plain(ui.parseAnnotationChipRef('batch:')), { kind: 'batch', ids: [] })
-    assert.equal(ui.parseAnnotationChipRef('nonsense'), null)
-    assert.equal(ui.parseAnnotationChipRef(''), null)
-    assert.equal(ui.parseAnnotationChipRef(null), null)
-    assert.deepEqual(plain(ui.parseAnnotationChipRef(`batch:${alpha.id}|not-an-id|${beta.id}`).ids), [alpha.id, beta.id], 'invalid ids are dropped from a batch ref')
+    assert.deepEqual(plain(parseAnnotationChipRef(batch.ref)), { kind: 'batch', ids: [alpha.id, beta.id] })
+    assert.deepEqual(plain(parseAnnotationChipRef('batch:')), { kind: 'batch', ids: [] })
+    assert.equal(parseAnnotationChipRef('nonsense'), null)
+    assert.equal(parseAnnotationChipRef(''), null)
+    assert.equal(parseAnnotationChipRef(null), null)
+    assert.deepEqual(plain(parseAnnotationChipRef(`batch:${alpha.id}|not-an-id|${beta.id}`).ids), [alpha.id, beta.id], 'invalid ids are dropped from a batch ref')
   })
 
   test('T9/D8: annotationChipCandidates lists current-Session records only, described and capped', () => {
     const alpha = recordOf('Alpha', SESSION_A, { note: 'Fix the toolbar\nwith more detail' })
     const beta = recordOf('Beta')
     const other = recordOf('Gamma', SESSION_B)
-    const candidates = ui.annotationChipCandidates([alpha, beta, other], SESSION_A)
+    const candidates = annotationChipCandidates([alpha, beta, other], SESSION_A)
     assert.deepEqual(plain(candidates.map((candidate) => candidate.name)), ['Alpha', 'Beta'])
     assert.deepEqual(plain(candidates.map((candidate) => candidate.value)), [alpha.id, beta.id], 'the pick value is the record id')
     assert.equal(candidates[0].description, 'Fix the toolbar', 'the description is the first requirement line')
     assert.equal(candidates[1].description, undefined)
-    assert.deepEqual(plain(ui.annotationChipCandidates([other], SESSION_A)), [], 'no current-Session record hides the group')
-    const prefixed = ui.annotationChipCandidates([alpha, beta], SESSION_A, 20, 'UI annotation · {name}')
+    assert.deepEqual(plain(annotationChipCandidates([other], SESSION_A)), [], 'no current-Session record hides the group')
+    const prefixed = annotationChipCandidates([alpha, beta], SESSION_A, 20, 'UI annotation · {name}')
     assert.deepEqual(plain(prefixed.map((candidate) => candidate.name)), ['Alpha', 'Beta'], 'the pick/search name stays the raw element label')
     assert.deepEqual(plain(prefixed.map((candidate) => candidate.label)), ['UI annotation · Alpha', 'UI annotation · Beta'],
       'the rendered row self-identifies in the mixed @ list')
     assert.equal(prefixed[0].description, 'Fix the toolbar')
     const many = []
     for (let index = 0; index < 25; index += 1) many.push(recordOf(`Record ${index}`))
-    assert.equal(ui.annotationChipCandidates(many, SESSION_A).length, 20, 'D8 caps the group at 20 candidates')
-    assert.equal(ui.annotationChipCandidates(many, SESSION_A, 5).length, 5)
+    assert.equal(annotationChipCandidates(many, SESSION_A).length, 20, 'D8 caps the group at 20 candidates')
+    assert.equal(annotationChipCandidates(many, SESSION_A, 5).length, 5)
   })
 
   test('T9: serializeAnnotationChip reuses the existing quick-reference and batch formats', () => {
     const alpha = recordOf('Alpha', SESSION_A, { note: 'Fix the toolbar' })
     const beta = recordOf('Beta', SESSION_A, { note: 'Fix the footer' })
     const resolved = () => 'resolved'
-    const single = ui.serializeAnnotationChip(alpha.id, [alpha, beta], EN_LABELS, resolved)
+    const single = serializeAnnotationChip(alpha.id, [alpha, beta], EN_LABELS, resolved)
     assert.equal(single.missing, 0)
     assert.equal(single.remaining, 1)
-    assert.equal(plain(single.text), plain(ui.serializeQuickReference({ ...alpha, status: 'resolved' }, 'Fix the toolbar', EN_LABELS)))
+    assert.equal(plain(single.text), plain(serializeQuickReference({ ...alpha, status: 'resolved' }, 'Fix the toolbar', EN_LABELS)))
     const batchRef = `batch:${alpha.id}|${beta.id}`
-    const batch = ui.serializeAnnotationChip(batchRef, [alpha, beta], EN_LABELS, resolved)
+    const batch = serializeAnnotationChip(batchRef, [alpha, beta], EN_LABELS, resolved)
     assert.equal(batch.missing, 0)
     assert.equal(batch.remaining, 2)
-    const expected = ui.serializeBatchRequest([
+    const expected = serializeBatchRequest([
       { ref: { ...alpha, status: 'resolved' }, note: 'Fix the toolbar' },
       { ref: { ...beta, status: 'resolved' }, note: 'Fix the footer' }
     ], { ...EN_LABELS, skippedCount: 0, removedCount: 0 })
     assert.equal(plain(batch.text), plain(expected))
-    assert.equal(ui.serializeAnnotationChip('nonsense', [alpha], EN_LABELS, resolved).text, null)
+    assert.equal(serializeAnnotationChip('nonsense', [alpha], EN_LABELS, resolved).text, null)
   })
 
   test('T9/D9: deleted batch members are skipped with an honest removed line; a missing single fails', () => {
     const alpha = recordOf('Alpha', SESSION_A, { note: 'keep' })
     const labels = { ...EN_LABELS, removed: '({count} deleted annotation(s) skipped)', noRemaining: '(nothing remains)' }
     const resolved = () => 'resolved'
-    const partial = ui.serializeAnnotationChip(`batch:${alpha.id}|psa-gone-one`, [alpha], labels, resolved)
+    const partial = serializeAnnotationChip(`batch:${alpha.id}|psa-gone-one`, [alpha], labels, resolved)
     assert.equal(partial.missing, 1)
     assert.equal(partial.remaining, 1)
     assert.ok(plain(partial.text).includes('(1 deleted annotation(s) skipped)'), 'the removed count is stated')
     assert.ok(plain(partial.text).includes('1. Alpha'), 'the surviving record is still serialized')
     assert.ok(!plain(partial.text).includes('2. '), 'no block is emitted for a deleted record')
-    const gone = ui.serializeAnnotationChip(`batch:psa-gone-one|psa-gone-two`, [alpha], labels, resolved)
+    const gone = serializeAnnotationChip(`batch:psa-gone-one|psa-gone-two`, [alpha], labels, resolved)
     assert.equal(gone.missing, 2)
     assert.equal(gone.remaining, 0)
     assert.equal(plain(gone.text), '(nothing remains)\n')
-    const missingSingle = ui.serializeAnnotationChip('psa-gone-one', [alpha], EN_LABELS, resolved)
+    const missingSingle = serializeAnnotationChip('psa-gone-one', [alpha], EN_LABELS, resolved)
     assert.equal(missingSingle.text, null, 'a missing single chip returns null so the controller throws/chip goes invalid')
   })
 
   test('T9: serializeBatchRequest keeps the existing format and adds the removed line only when asked', () => {
     const alpha = recordOf('Alpha')
     const items = [{ ref: { ...alpha, status: 'resolved' }, note: 'n' }]
-    const base = ui.serializeBatchRequest(items, EN_LABELS)
+    const base = serializeBatchRequest(items, EN_LABELS)
     assert.ok(!plain(base).includes('no longer exist'), 'no removed line without removedCount')
-    const withRemoved = ui.serializeBatchRequest(items, { ...EN_LABELS, removedCount: 2, skippedCount: 1 })
+    const withRemoved = serializeBatchRequest(items, { ...EN_LABELS, removedCount: 2, skippedCount: 1 })
     assert.ok(plain(withRemoved).includes('(2 annotation(s) no longer exist and were skipped)'))
     assert.ok(plain(withRemoved).includes(EN_LABELS.skipped.replace('{count}', '1')))
     assert.ok(plain(withRemoved).indexOf('no longer exist') < plain(withRemoved).indexOf('other sessions'), 'removed line precedes the skip line')
@@ -2420,10 +2431,10 @@ if (ui === undefined) {
     const source = {
       trigger: '@',
       name: 'ui-annotation',
-      candidates: (sessionId) => ui.annotationChipCandidates([recordOf('Alpha')], sessionId),
-      parse: ui.parseAnnotationChipRef,
-      batch: (records) => ui.annotationChipRefBatch(records, 'UI annotations × 2'),
-      serialize: (ref) => ui.serializeAnnotationChip(ref, [recordOf('Alpha')], EN_LABELS, () => 'resolved')
+      candidates: (sessionId) => annotationChipCandidates([recordOf('Alpha')], sessionId),
+      parse: parseAnnotationChipRef,
+      batch: (records) => annotationChipRefBatch(records, 'UI annotations × 2'),
+      serialize: (ref) => serializeAnnotationChip(ref, [recordOf('Alpha')], EN_LABELS, () => 'resolved')
     }
     assert.equal(source.trigger, '@')
     assert.equal(source.name, 'ui-annotation')
@@ -2656,7 +2667,7 @@ if (ui === undefined) {
 
   test('A3/T24: a group batch serializes the shared requirement + numbered element references', () => {
     const group = annotationGroupFromSelection([recordAt(2), recordAt(3)], 'Shared batch requirement', SESSION_A, 1, 'psa-group-serialize')
-    const text = ui.serializeBatchEntries([group], {
+    const text = serializeBatchEntries([group], {
       groupHeader: 'Group',
       groupRequirement: 'Requirement:',
       groupReference: 'Element:',
@@ -2670,7 +2681,7 @@ if (ui === undefined) {
     assert(/Reference:/.test(text), 'each element keeps its locator reference line')
     assert(!/Note:/.test(text), 'group items must not use per-item Note lines')
     // A single in the same batch keeps its Note line.
-    const mixed = ui.serializeBatchEntries([recordAt(1), group], { reference: 'Reference:', note: 'Note:', batchHeader: 'Batch' }, () => 'resolved')
+    const mixed = serializeBatchEntries([recordAt(1), group], { reference: 'Reference:', note: 'Note:', batchHeader: 'Batch' }, () => 'resolved')
     assert(/1\. /.test(mixed) && /Note:/.test(mixed), `single item block missing: ${mixed}`)
     assert(/Group · 2 items/.test(mixed), 'group block still present in a mixed batch')
   })

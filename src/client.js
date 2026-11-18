@@ -157,6 +157,19 @@ import {
   createAnnotationState,
   reduceAnnotationState
 } from './browser/ui-annotation/reducer.ts'
+import {
+  ANNOTATION_CHIP_CANDIDATE_LIMIT,
+  ANNOTATION_CHIP_SOURCE,
+  annotationChipCandidates,
+  annotationChipRefBatch,
+  annotationChipRefOf,
+  batchScopeSplit,
+  parseAnnotationChipRef,
+  serializeAnnotationChip,
+  serializeBatchEntries,
+  serializeBatchRequest,
+  serializeQuickReference
+} from './browser/ui-annotation/serializers.ts'
 import { dwEffectiveUpdatedAt, dwPendingSessionIds } from './browser/dynamic-workspaces/activity.ts'
 import {
   DW_EN,
@@ -9421,20 +9434,11 @@ function dwClearNativeAtmospheres() {
     const ANNOTATION_BATCH_POPOVER_SIZE = { width: 320, height: 240 }
 
 
-    /** A3/T9: the composer trigger source that owns annotation reference chips. */
-    const ANNOTATION_CHIP_SOURCE = 'ui-annotation'
-
     /** A3/T9: trigger character the annotation source binds to (`@`). */
     const ANNOTATION_CHIP_TRIGGER = '@'
 
     /** A3/T9: menu order after the native `@reference` group. */
     const ANNOTATION_CHIP_ORDER = 900
-
-    /** A3/T9: at most this many current-Session candidates appear in the menu (D8). */
-    const ANNOTATION_CHIP_CANDIDATE_LIMIT = 20
-
-    /** A3/T9: a batch chip ref is `batch:<id>|<id>…`. */
-    const ANNOTATION_CHIP_BATCH_PREFIX = 'batch:'
 
     /** F2: a floating surface root needs at least this computed z-index. */
     const ANNOTATION_SURFACE_MIN_Z = 10
@@ -10591,347 +10595,6 @@ function dwClearNativeAtmospheres() {
         at = normalized.indexOf(exact, at + 1)
       }
       return matches === 1
-    }
-
-    /**
-     * Serialize one batch group block (A3/T24): the shared requirement first, then
-     * the numbered element references with their honest status lines (no per-item
-     * Note lines, because items have no individual requirements).
-     * @param {object} group - group entry.
-     * @param {Array<object>} items - [{ ref: { ...record, status } }] children.
-     * @param {object} labels - insertion labels (reference/status/groupHeader/items).
-     * @returns {string} group block text (no trailing blank line).
-     */
-    function serializeGroupBlock(group, items, labels) {
-      const source = labels !== null && typeof labels === 'object' ? labels : {}
-      const reference = typeof source.reference === 'string' ? source.reference : 'Reference:'
-      const requirementLabel = typeof source.groupRequirement === 'string' ? source.groupRequirement : 'Requirement:'
-      const referenceLabel = typeof source.groupReference === 'string' ? source.groupReference : 'Element:'
-      const groupHeader = typeof source.groupHeader === 'string' ? source.groupHeader : 'Group'
-      const statusLabel = typeof source.status === 'string' ? source.status : 'Status: target no longer resolves (locator only)'
-      const statusEphemeral = typeof source.statusEphemeral === 'string' ? source.statusEphemeral : 'Status: transient surface no longer present (locator only)'
-      const statusAmbiguous = typeof source.statusAmbiguous === 'string' ? source.statusAmbiguous : 'Status: target matches more than one element (locator only)'
-      const statusChanged = typeof source.statusChanged === 'string' ? source.statusChanged : 'Status: target content changed'
-      const requirement = normalizeUserNote(annotationIsGroup(group) ? group.requirement : '')
-      const lines = [`${groupHeader} · ${items.length} ${source.itemsCountLabel ?? 'items'}`]
-      lines.push(`   ${annotationJoinLabel(requirementLabel, requirement || (typeof source.emptyNote === 'string' ? source.emptyNote : '—'))}`)
-      items.forEach((item, index) => {
-        const ref = item !== null && typeof item === 'object' && item.ref !== null && typeof item.ref === 'object' ? item.ref : item
-        if (ref === null || typeof ref !== 'object') return
-        lines.push(`   ${index + 1}. ${annotationJoinLabel(referenceLabel, elementLabel(ref))}`)
-        lines.push(`      ${annotationJoinLabel(reference, describeLocator(ref))}`)
-        const status = ref.status
-        const ephemeral = ref.locator !== null && typeof ref.locator === 'object' && ref.locator.ephemeral === true
-        if (status === 'missing') lines.push(`      ${ephemeral ? statusEphemeral : statusLabel}`)
-        else if (status === 'ambiguous') lines.push(`      ${statusAmbiguous}`)
-        else if (status === 'changed') lines.push(`      ${statusChanged}`)
-      })
-      return lines.join('\n')
-    }
-
-    /**
-     * The chip reference (ReferenceInsert) for one annotation record (A3/T9).
-     * @param {object} record - annotation record.
-     * @returns {{ source: string, ref: string, label: string, clipboardText: string }} chip insertion.
-     */
-    function annotationChipRefOf(record) {
-      const label = elementLabel(record) || 'UI annotation'
-      return {
-        source: ANNOTATION_CHIP_SOURCE,
-        ref: typeof record?.id === 'string' ? record.id : '',
-        label,
-        clipboardText: `@${label}`
-      }
-    }
-
-    /**
-     * The ONE group chip reference for a batch insert (D2: per-item chips rejected).
-     * @param {Array<object>} records - selected current-Session records, insertion order.
-     * @param {string} label - localized batch label (`UI annotations × N`).
-     * @returns {{ source: string, ref: string, label: string, clipboardText: string }} chip insertion.
-     */
-    function annotationChipRefBatch(entries, label) {
-      const ids = (Array.isArray(entries) ? entries : [])
-        .map((entry) => (entry !== null && typeof entry === 'object' ? entry.id : null))
-        .filter((id) => typeof id === 'string' && ANNOTATION_CHIP_REF_PATTERN.test(id))
-      const text = typeof label === 'string' && label.length > 0 ? label : `UI annotations × ${ids.length}`
-      return {
-        source: ANNOTATION_CHIP_SOURCE,
-        ref: `${ANNOTATION_CHIP_BATCH_PREFIX}${ids.join('|')}`,
-        label: text,
-        clipboardText: `@${text}`
-      }
-    }
-
-    /**
-     * Parse one annotation chip ref (`<record-id>` or `batch:<id>|<id>…`).
-     * @param {unknown} ref - chip ref string.
-     * @returns {{ kind: 'single', id: string } | { kind: 'batch', ids: Array<string> } | null} parsed ref.
-     */
-    function parseAnnotationChipRef(ref) {
-      if (typeof ref !== 'string' || ref.length === 0) return null
-      if (ref.startsWith(ANNOTATION_CHIP_BATCH_PREFIX)) {
-        const ids = ref.slice(ANNOTATION_CHIP_BATCH_PREFIX.length).split('|').filter((id) => ANNOTATION_CHIP_REF_PATTERN.test(id))
-        return { kind: 'batch', ids }
-      }
-      return ANNOTATION_CHIP_REF_PATTERN.test(ref) ? { kind: 'single', id: ref } : null
-    }
-
-    /**
-     * Menu candidates for the annotation `@` group: current-Session records only,
-     * insertion order, capped at D8's 20 (an empty list means the group is absent).
-     * @param {Array<object>} list - collection entries.
-     * @param {string | null} sessionId - current Session identity.
-     * @param {number} [limit] - maximum candidates, default 20.
-     * @param {string} [labelTemplate] - optional display-label template with `{name}`;
-     *   the source uses it so annotation rows are identifiable in the mixed `@` list
-     *   without a custom group header (the shell's slash menu has no title slot for us).
-     * @returns {Array<{ name: string, label: string, description?: string, value: string }>} candidates.
-     */
-    function annotationChipCandidates(collection, sessionId, limit, labelTemplate) {
-      const cap = typeof limit === 'number' && Number.isFinite(limit) && limit > 0 ? Math.round(limit) : ANNOTATION_CHIP_CANDIDATE_LIMIT
-      const candidates = []
-      const list = annotationFlattenRecords(Array.isArray(collection)
-        ? collection.filter((entry) => entry === null || typeof entry !== 'object' || entry.included !== false)
-        : [])
-      for (const entry of list) {
-        if (candidates.length >= cap) break
-        if (entry === null || typeof entry !== 'object') continue
-        const entrySession = entry.session !== null && typeof entry.session === 'object' ? entry.session.sessionId ?? null : null
-        if (typeof sessionId !== 'string' || sessionId.length === 0 || entrySession !== sessionId) continue
-        if (typeof entry.id !== 'string' || !ANNOTATION_CHIP_REF_PATTERN.test(entry.id)) continue
-        const label = elementLabel(entry) || 'UI annotation'
-        const displayLabel = typeof labelTemplate === 'string' && labelTemplate.length > 0
-          ? labelTemplate.replace('{name}', label)
-          : label
-        const excerpt = annotationMarkerBadgeText(entry.note).text
-        // `name` stays the raw element label so search and exact-match keep working;
-        // only the rendered row is prefixed.
-        const candidate = { name: label, label: displayLabel, value: entry.id }
-        if (excerpt.length > 0) candidate.description = excerpt
-        candidates.push(candidate)
-      }
-      return candidates
-    }
-
-    /**
-     * Serialize one annotation chip to the model text the existing Phase 1
-     * serializers produce (A3/T9): a single chip == quick-reference block, a batch
-     * chip == one ordered batch request. Deleted batch members are skipped and
-     * counted honestly; a single missing record returns `text: null` so the
-     * controller can fail the send instead of silently downgrading (D9).
-     * @param {unknown} ref - chip ref.
-     * @param {Array<object>} list - current collection entries.
-     * @param {object} labels - insertion labels plus `removed`/`noRemaining`.
-     * @param {(record: object) => string} [statusOf] - live status resolver.
-     * @returns {{ text: string | null, missing: number, remaining: number }} serialization result.
-     */
-    function serializeAnnotationChip(ref, list, labels, statusOf) {
-      const source = labels !== null && typeof labels === 'object' ? labels : {}
-      const parsed = parseAnnotationChipRef(ref)
-      const records = Array.isArray(list) ? list : []
-      const resolveStatus = typeof statusOf === 'function' ? statusOf : () => 'resolved'
-      if (parsed === null) return { text: null, missing: 0, remaining: 0 }
-      if (parsed.kind === 'single') {
-        const record = records.find((entry) => entry !== null && typeof entry === 'object' && entry.id === parsed.id)
-        if (record === undefined) return { text: null, missing: 1, remaining: 0 }
-        return {
-          text: serializeQuickReference({ ...record, status: resolveStatus(record) }, record.note ?? '', source),
-          missing: 0,
-          remaining: 1
-        }
-      }
-      const byId = new Map()
-      for (const entry of records) {
-        if (entry !== null && typeof entry === 'object' && typeof entry.id === 'string') byId.set(entry.id, entry)
-      }
-      const found = []
-      for (const id of parsed.ids) {
-        const entry = byId.get(id)
-        if (entry !== undefined) found.push(entry)
-      }
-      const missing = parsed.ids.length - found.length
-      if (found.length === 0) {
-        const line = typeof source.noRemaining === 'string' ? source.noRemaining : '(no annotations remain)'
-        return { text: `${line}\n`, missing, remaining: 0 }
-      }
-      const remaining = found.reduce((sum, entry) => sum + (annotationIsGroup(entry) ? annotationGroupItems(entry).length : 1), 0)
-      return {
-        text: serializeBatchEntries(found, { ...source, skippedCount: 0, removedCount: missing }, resolveStatus),
-        missing,
-        remaining
-      }
-    }
-
-    /**
-     * Serialize one quick-reference insertion block.
-     * @param {object} ref - ElementRef.
-     * @param {string} note - requested change.
-     * @param {object} labels - { title, reference, session, noSession, note, emptyNote, time? }.
-     * @returns {string} insertion text, trailing newline included.
-     */
-    function serializeQuickReference(ref, note, labels) {
-      const source = labels !== null && typeof labels === 'object' ? labels : {}
-      const title = typeof source.title === 'string' ? source.title : 'UI annotation'
-      const reference = typeof source.reference === 'string' ? source.reference : 'Reference:'
-      const sessionLabel = typeof source.session === 'string' ? source.session : 'Session:'
-      const noteLabel = typeof source.note === 'string' ? source.note : 'Note:'
-      const emptyNote = typeof source.emptyNote === 'string' ? source.emptyNote : '—'
-      const timeText = typeof source.time === 'string' ? source.time : formatAnnotationTime(ref?.at)
-      const sessionText = sessionShortLabel(ref?.session?.sessionId) || (typeof source.noSession === 'string' ? source.noSession : '—')
-      const noteText = normalizeUserNote(note) || emptyNote
-      const lines = [
-        `${title} · ${elementLabel(ref)}`,
-        annotationJoinLabel(reference, describeLocator(ref)),
-        annotationJoinLabel(sessionLabel, `${sessionText} · ${timeText}`),
-        annotationJoinLabel(noteLabel, noteText)
-      ]
-      // A stale or ambiguous target is called out explicitly, locator only. A
-      // transient floating-surface target says it is gone, not that it moved.
-      const status = ref !== null && typeof ref === 'object' ? ref.status : undefined
-      const ephemeral = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object'
-        && ref.locator.ephemeral === true
-      if (status === 'missing') {
-        lines.push(ephemeral && typeof source.statusEphemeral === 'string'
-          ? source.statusEphemeral
-          : (typeof source.status === 'string' ? source.status : 'Status: target no longer resolves (locator only)'))
-      }
-      else if (status === 'ambiguous') lines.push(typeof source.statusAmbiguous === 'string' ? source.statusAmbiguous : 'Status: target matches more than one element (locator only)')
-      else if (status === 'changed') lines.push(typeof source.statusChanged === 'string' ? source.statusChanged : 'Status: target content changed')
-      lines.push('')
-      return lines.join('\n')
-    }
-
-    /**
-     * Serialize the ordered batch request.
-     * @param {Array<object>} items - [{ ref, note }] in collection order.
-     * @param {object} labels - batch labels plus optional `skippedCount`.
-     * @returns {string} insertion text, trailing newline included.
-     */
-    function serializeBatchRequest(items, labels) {
-      const source = labels !== null && typeof labels === 'object' ? labels : {}
-      const batchHeader = typeof source.batchHeader === 'string'
-        ? source.batchHeader
-        : 'Please adjust the UI elements below. Each item lists its reference and the requested change.'
-      const reference = typeof source.reference === 'string' ? source.reference : 'Reference:'
-      const noteLabel = typeof source.note === 'string' ? source.note : 'Note:'
-      const emptyNote = typeof source.emptyNote === 'string' ? source.emptyNote : '—'
-      const statusLabel = typeof source.status === 'string' ? source.status : 'Status: target no longer resolves (locator only)'
-      const statusEphemeral = typeof source.statusEphemeral === 'string'
-        ? source.statusEphemeral
-        : 'Status: transient surface no longer present (locator only)'
-      const statusAmbiguous = typeof source.statusAmbiguous === 'string' ? source.statusAmbiguous : 'Status: target matches more than one element (locator only)'
-      const statusChanged = typeof source.statusChanged === 'string' ? source.statusChanged : 'Status: target content changed'
-      const skippedTemplate = typeof source.skipped === 'string' ? source.skipped : '({count} annotation(s) from other sessions skipped)'
-      const skippedCount = typeof source.skippedCount === 'number' && Number.isFinite(source.skippedCount) && source.skippedCount > 0
-        ? Math.round(source.skippedCount)
-        : 0
-      const removedTemplate = typeof source.removed === 'string' ? source.removed : '({count} annotation(s) no longer exist and were skipped)'
-      const removedCount = typeof source.removedCount === 'number' && Number.isFinite(source.removedCount) && source.removedCount > 0
-        ? Math.round(source.removedCount)
-        : 0
-      const lines = [batchHeader]
-      if (removedCount > 0) {
-        lines.push('')
-        lines.push(removedTemplate.replace('{count}', String(removedCount)))
-      }
-      if (skippedCount > 0) {
-        lines.push('')
-        lines.push(skippedTemplate.replace('{count}', String(skippedCount)))
-      }
-      lines.push('')
-      const entries = Array.isArray(items) ? items : []
-      entries.forEach((item, index) => {
-        const ref = item !== null && typeof item === 'object' && item.ref !== null && typeof item.ref === 'object' ? item.ref : item
-        const note = item !== null && typeof item === 'object' && typeof item.note === 'string' ? item.note : (ref?.note ?? '')
-        const label = elementLabel(ref)
-        lines.push(`${index + 1}. ${label}`)
-        lines.push(`   ${annotationJoinLabel(reference, describeLocator(ref))}`)
-        lines.push(`   ${annotationJoinLabel(noteLabel, normalizeUserNote(note) || emptyNote)}`)
-        const status = ref !== null && typeof ref === 'object' ? ref.status : undefined
-        const ephemeral = ref !== null && typeof ref === 'object' && ref.locator !== null && typeof ref.locator === 'object'
-          && ref.locator.ephemeral === true
-        if (status === 'missing') lines.push(`   ${ephemeral ? statusEphemeral : statusLabel}`)
-        else if (status === 'ambiguous') lines.push(`   ${statusAmbiguous}`)
-        else if (status === 'changed') lines.push(`   ${statusChanged}`)
-        if (index < entries.length - 1) lines.push('')
-      })
-      lines.push('')
-      return lines.join('\n')
-    }
-
-    /**
-     * A3/T24: serialize a mixed batch of singles and groups as ONE request.
-     * Singles keep their Quick-reference item block; each group emits its shared
-     * requirement header and numbered element references (no per-item Note lines).
-     * @param {Array<object>} entries - top-level singles/groups, insertion order.
-     * @param {object} labels - insertion labels plus skippedCount/removedCount.
-     * @param {(record: object) => string} [statusOf] - live status resolver.
-     * @returns {string} insertion text, trailing newline included.
-     */
-    function serializeBatchEntries(entries, labels, statusOf) {
-      const source = labels !== null && typeof labels === 'object' ? labels : {}
-      const list = Array.isArray(entries) ? entries : []
-      const resolveStatus = typeof statusOf === 'function' ? statusOf : () => 'resolved'
-      const lines = [typeof source.batchHeader === 'string'
-        ? source.batchHeader
-        : 'Please adjust the UI elements below. Each item lists its reference and the requested change.']
-      const skippedCount = typeof source.skippedCount === 'number' && Number.isFinite(source.skippedCount) && source.skippedCount > 0
-        ? Math.round(source.skippedCount)
-        : 0
-      const removedCount = typeof source.removedCount === 'number' && Number.isFinite(source.removedCount) && source.removedCount > 0
-        ? Math.round(source.removedCount)
-        : 0
-      if (removedCount > 0) {
-        lines.push('')
-        lines.push(String(source.removed ?? '({count} annotation(s) no longer exist and were skipped)').replace('{count}', String(removedCount)))
-      }
-      if (skippedCount > 0) {
-        lines.push('')
-        lines.push(String(source.skipped ?? '({count} annotation(s) from other sessions skipped)').replace('{count}', String(skippedCount)))
-      }
-      lines.push('')
-      let number = 0
-      for (const entry of list) {
-        if (entry === null || typeof entry !== 'object') continue
-        if (annotationIsGroup(entry)) {
-          const items = annotationGroupItems(entry).map((item) => ({ ref: { ...item, status: resolveStatus(item) } }))
-          lines.push('')
-          lines.push(serializeGroupBlock(entry, items, source))
-        } else {
-          number += 1
-          const ref = { ...entry, status: resolveStatus(entry) }
-          lines.push(`${number}. ${elementLabel(ref)}`)
-          lines.push(`   ${annotationJoinLabel(source.reference ?? 'Reference:', describeLocator(ref))}`)
-          lines.push(`   ${annotationJoinLabel(source.note ?? 'Note:', normalizeUserNote(ref.note) || (source.emptyNote ?? '—'))}`)
-          const status = ref.status
-          const ephemeral = ref.locator !== null && typeof ref.locator === 'object' && ref.locator.ephemeral === true
-          if (status === 'missing') lines.push(`   ${ephemeral ? (source.statusEphemeral ?? 'Status: transient surface no longer present (locator only)') : (source.status ?? 'Status: target no longer resolves (locator only)')}`)
-          else if (status === 'ambiguous') lines.push(`   ${source.statusAmbiguous ?? 'Status: target matches more than one element (locator only)'}`)
-          else if (status === 'changed') lines.push(`   ${source.statusChanged ?? 'Status: target content changed'}`)
-          lines.push('')
-        }
-      }
-      return lines.join('\n')
-    }
-
-    /**
-     * Split entries into the current Session and all other Sessions, keeping order.
-     * @param {Array<object>} items - [{ ref, note }] or bare ElementRefs.
-     * @param {string | null} sessionId - current Session identity.
-     * @returns {{ current: Array<object>, other: Array<object> }} the two ordered lists.
-     */
-    function batchScopeSplit(items, sessionId) {
-      const entries = Array.isArray(items) ? items : []
-      const current = []
-      const other = []
-      for (const item of entries) {
-        const ref = item !== null && typeof item === 'object' && item.ref !== null && typeof item.ref === 'object' ? item.ref : item
-        const refSession = ref !== null && typeof ref === 'object' && ref.session !== null && typeof ref.session === 'object' ? ref.session.sessionId ?? null : null
-        if (typeof sessionId === 'string' && sessionId.length > 0 && refSession === sessionId) current.push(item)
-        else other.push(item)
-      }
-      return { current, other }
     }
 
     /**
