@@ -88,6 +88,7 @@ interface Element {
   readonly firstElementChild: Element | null
   readonly firstChild: Element | null
   readonly nextSibling: Element | null
+  readonly nextElementSibling: Element | null
   readonly isConnected: boolean
   readonly scrollWidth: number
   readonly clientWidth: number
@@ -216,6 +217,7 @@ declare var window: {
     getItem(key: string): string | null
     setItem(key: string, value: string): void
   }
+  open(url: string, target: string, features: string): unknown
   requestAnimationFrame(callback: (time: number) => void): number
   cancelAnimationFrame(handle: number): void
   setTimeout(callback: () => void, delay?: number): number
