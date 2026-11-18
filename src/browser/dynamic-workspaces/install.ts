@@ -51,6 +51,9 @@ import {
 } from './stats.ts'
 import type { ProjectionSections } from './stats.ts'
 
+/** Copy namespace for the dynamic Workspace buckets and the running panel. */
+export const DW_NS = 'dynamicWorkspaces'
+
 /** Element type produced by the shell's React runtime. */
 type ReactElement = import('react').ReactElement
 
@@ -298,6 +301,8 @@ export interface DynamicWorkspacesDeps {
 /** The installer the browser entry keeps for its `apply` pass. */
 export interface DynamicWorkspacesInstaller {
   install(ctx: DynamicWorkspacesContext): void
+  /** Native-figure sections shared with the shell's Session hover-card seat. */
+  hovercardSections: (props: { sections: ProjectionSections, t: Translate }) => ReactElement | null
 }
 
 /**
@@ -328,9 +333,6 @@ export function createDynamicWorkspacesInstaller(deps: DynamicWorkspacesDeps): D
     interruptedNamespace,
     testHookHost
   } = deps
-
-    /** Copy namespace for the dynamic Workspace buckets and the running panel. */
-    const DW_NS = 'dynamicWorkspaces'
 
     /** Seat identity of the frame-wide seat that owns this feature's DOM work. */
     const DW_SEAT = 'power-suite.dynamic-workspaces'
@@ -3957,5 +3959,5 @@ function dwClearNativeAtmospheres() {
         })
       }, 'power-suite: session row menu')
     }
-  return { install: installDynamicWorkspaces }
+  return { install: installDynamicWorkspaces, hovercardSections: DwHovercardProjectionSections }
 }

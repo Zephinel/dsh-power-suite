@@ -158,36 +158,11 @@ import {
   annotationSurfaceRoot,
   bindAnnotationSurfaceDefaults
 } from './browser/ui-annotation/surface.ts'
-import { dwEffectiveUpdatedAt, dwPendingSessionIds } from './browser/dynamic-workspaces/activity.ts'
 import {
-  DW_EN,
-  DW_ZH,
-  dwBilledInputTokens,
-  dwCacheHitPercent,
-  dwContextOccupancy,
-  dwFormatCompactTokens,
-  dwFormatExactTokens,
-  dwFormatStatsDuration,
-  dwFormatTps,
   dwNeedsProjectionRead,
   dwProjectionSections
 } from './browser/dynamic-workspaces/stats.ts'
-import {
-  DW_PIN_MAX_PENDING,
-  DW_PIN_VERSION,
-  dwPinEffectiveIds,
-  dwPinPanelRows,
-  dwReadPinCache,
-  dwSanitizePinnedIds,
-  dwWritePinCache
-} from './browser/dynamic-workspaces/pin.ts'
-import {
-  dwOwningWorkspace,
-  dwSessionRunning,
-  dwWorkspaceLabel
-} from './browser/dynamic-workspaces/rows.ts'
-import { DW_ROW_MENU_TARGET, dwRowMenuResolve } from './browser/dynamic-workspaces/row-menu.ts'
-import { createDynamicWorkspacesInstaller } from './browser/dynamic-workspaces/install.ts'
+import { DW_NS, createDynamicWorkspacesInstaller } from './browser/dynamic-workspaces/install.ts'
 /**
  * Browser half of DSH Power Suite.
  *
@@ -4949,7 +4924,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       return React.createElement('div', {
         className: 'psd-native-hover-figures',
         'data-psd-native-figures': ''
-      }, React.createElement(DwHovercardProjectionSections, {
+      }, React.createElement(dynamicWorkspacesInstaller.hovercardSections, {
         sections: dwProjectionSections(values),
         t
       }))
@@ -4961,9 +4936,9 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      * @returns {void}
      */
     function installSessionHoverFigures(ctx) {
-      // `installDynamicWorkspaces` runs first in `apply`, so the `DW_NS`
-      // dictionaries and the shared `.psd-hovercard-section*` styles it injects
-      // are already installed when this seat renders.
+      // `dynamicWorkspacesInstaller.install` runs first in `apply`, so the
+      // `DW_NS` dictionaries and the shared `.psd-hovercard-section*` styles the
+      // installer registers are already installed when this seat renders.
       const t = ctx.locale.bind(DW_NS)
       const ensureProjections = (sessionId) => {
         const sessions = ctx.sessions

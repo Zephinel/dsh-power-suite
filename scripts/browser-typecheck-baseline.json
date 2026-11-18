@@ -3,13 +3,13 @@
   "generatedBy": "scripts/typecheck-browser-baseline.mjs",
   "profile": "tsconfig.browser.json",
   "typescript": "7.0.2",
-  "generatedAt": "2026-11-18T17:03:21.481Z",
-  "gitHead": "32cc5e5",
+  "generatedAt": "2026-11-18T17:13:25.431Z",
+  "gitHead": "1f91879",
   "clientJs": {
-    "lines": 15086,
-    "bytes": 727717
+    "lines": 15061,
+    "bytes": 727086
   },
-  "total": 1524,
+  "total": 1522,
   "byCode": {
     "TS2339": 973,
     "TS7005": 227,
@@ -25,7 +25,6 @@
     "TS2531": 3,
     "TS2551": 3,
     "TS1117": 2,
-    "TS2552": 2,
     "TS18046": 1,
     "TS2532": 1,
     "TS2538": 1,
@@ -35,7 +34,7 @@
     "TS7031": 1
   },
   "byFile": {
-    "src/client.js": 1524
+    "src/client.js": 1522
   },
   "byFeature": {
     "ui element annotation": 1012,
@@ -48,7 +47,7 @@
     "prompt history": 20,
     "draft attachment memory": 17,
     "interrupted sessions — copy, icons, shared state": 15,
-    "native session hover figures": 13,
+    "native session hover figures": 11,
     "settings — page": 10,
     "workspace default presets — creation routing": 10,
     "session artifacts — Files-header action": 5,
@@ -69,7 +68,7 @@
     "feature: draft attachment memory": 17,
     "feature: interrupted sessions — copy, icons, shared state": 15,
     "plugin": 15,
-    "feature: native session hover figures": 13,
+    "feature: native session hover figures": 11,
     "feature: settings — page": 10,
     "feature: workspace default presets — creation routing": 10,
     "feature: session artifacts — Files-header action": 5,
