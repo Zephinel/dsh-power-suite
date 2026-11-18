@@ -544,3 +544,18 @@ interrupted components 59, prompt-history preview 57, update check 37; React's
 stricter ambient inference surfaced 44 TS2322 / 7 TS2740 / 5 TS2353 null-seed
 state issues for M5. The browser profile is still report-only; M5 must decide
 whether to promote it into `npm run check` or split a browser project.
+
+
+**M4b progress (2026-11-18).** The hover quick look moved into
+`src/browser/hover-quick-look/` (`install.ts` state machine/listeners/DOM, pure
+`model.ts`, `markdown.ts`, `highlight.ts`, `styles.ts`, and a narrow local
+`dom.ts` interface), removing 1,537 lines from `src/client.js` (now **13,534**
+lines). Hover diagnostics dropped from 147 to 0; the browser baseline is now
+**1,375** (from 1,522; 1,720 before M4) and the TS module count is 64. A CDP
+focus probe on the base and extracted client produced byte-identical card facts
+(role/name/meta/note, actions, resize aria, Esc/anchor switching, Markdown/JSON
+highlight spans); live smoke is 4/4 and a full sidebar rerun is recorded in the
+Lead's integration log. Remaining top regions: annotation controller 1,006,
+interrupted components 47, prompt-history preview 37, update check 37; the
+strict React inference's null-seed state errors remain for M5, and the browser
+profile is still report-only.
