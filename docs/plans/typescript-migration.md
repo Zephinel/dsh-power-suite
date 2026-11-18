@@ -528,3 +528,19 @@ the developer-facing change without user-facing behavior claims.
 
 No calendar estimate is claimed here; the phases are ordered so each one can stop
 without leaving `main` broken.
+
+
+**M4 progress (2026-11-18).** Browser typing moved from 1,720 to **1,522**
+diagnostics while `src/client.js` dropped to **15,061 lines**. Added vendored
+ambient types under `src/browser/ambient/` (minimal `react`, `react-dom`,
+`ui-primitives` and DSH `ctx`/`__ModuleLoader__` surfaces; no npm dependency, no
+`any`), wired into both tsconfig profiles, and extracted the whole dynamic-
+Workspaces controller into `src/browser/dynamic-workspaces/install.ts`
+(`createDynamicWorkspacesInstaller(deps) -> { install(ctx), hovercardSections }`):
+the dynamic-Workspaces region is now 254 -> 1 diagnostics, DW_CSS/keys/markers are
+byte-identical, and live smoke/row-menu/interrupted suites pass. Remaining top
+regions: annotation controller 1,012, hover quick look 147 (being extracted),
+interrupted components 59, prompt-history preview 57, update check 37; React's
+stricter ambient inference surfaced 44 TS2322 / 7 TS2740 / 5 TS2353 null-seed
+state issues for M5. The browser profile is still report-only; M5 must decide
+whether to promote it into `npm run check` or split a browser project.
