@@ -419,9 +419,9 @@ shell tokens, dark #2C2C2E) and S12 passes 7/0/0; the path also exposed a real
 **3y progress (2026-11-18).** Owner visual decisions landed: annotation
 surfaces follow the theme (light shell surface/label tokens, dark #2C2C2E,
 S12 7/0/0), and the dark atmosphere was iterated toward the light-mode pastel
-reference. Final recipe: screen blend with `saturate(1.15) brightness(1.45)`, wrapper
-opacity 0.58 base / 0.64 hover, white veil scrim 0.08/0.04, and a **2D fBm flow
-field**: eight OKLCH hues (light L=0.76/C=0.26, dark L=0.76/C=0.16 at hues
+reference. Final recipe: screen blend with `saturate(1.3) brightness(1.35)`, wrapper
+opacity 0.62 base / 0.68 hover, white veil scrim 0.04/0.02, and a **2D fBm flow
+field**: eight OKLCH hues (light L=0.76/C=0.26, dark L=0.76/C=0.24 at hues
 20/65/110/150/195/245/290/330, using the browser's `oklch()` gamut mapping);
 the light recipe also got a slightly stronger canvas (saturate 1.35, opacity
 0.60, veil 0.48/0.36) and the dark recipe opacity 0.62/0.68 so light is less

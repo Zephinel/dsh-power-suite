@@ -5288,10 +5288,10 @@ html[data-input-modality='keyboard'] .psd-child-current:focus-within > *:not(.ps
    recipe: the canvas keeps the screen blend but is less saturated and brighter,
    the wrapper is slightly less opaque, and the scrim is a soft white veil
    instead of a dark one (user request: lighten it, reference the light mode). */
-body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.15) brightness(1.45)}
+body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.30) brightness(1.35)}
 body[data-ds-dark-theme] .psd-atmos{opacity:.62}
 body[data-ds-dark-theme] .psd-run-current:hover .psd-atmos,body[data-ds-dark-theme] .psd-child-current:hover .psd-atmos,body[data-ds-dark-theme] [data-psd-current-workspace='true']:hover .psd-atmos,body[data-ds-dark-theme] [data-psd-current-session='true']:hover .psd-atmos{opacity:.68}
-body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(255,255,255,.08),rgba(255,255,255,.04))}
+body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(255,255,255,.04),rgba(255,255,255,.02))}
 /* Light-mode readability (user fix). The multiply canvas over the light surface
    turned the pill into a medium saturated tone; the shell's tertiary time/icons
    and the hover-revealed row actions then nearly vanished. In light mode the
@@ -5337,7 +5337,7 @@ body:not([data-ds-dark-theme]) .psd-row-action:focus-visible{color:var(--dsw-ali
 const DW_ATMOS_HUES = [20, 65, 110, 150, 195, 245, 290, 330]
 const DW_ATMOS_PALETTES = {
   light: DW_ATMOS_HUES.map((hue) => ({ l: 0.76, c: 0.26, hue })),
-  dark: DW_ATMOS_HUES.map((hue) => ({ l: 0.76, c: 0.16, hue }))
+  dark: DW_ATMOS_HUES.map((hue) => ({ l: 0.76, c: 0.24, hue }))
 }
 /** Per-hue radiance trim: after the blobs mix, red/violet read hotter and cyan
  *  reads cooler, so scale each hue's blob alpha to even the lanes out. */
