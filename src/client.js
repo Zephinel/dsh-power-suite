@@ -11,7 +11,6 @@ import {
   filesArtifactsPhaseMs,
   filesArtifactsReduce
 } from './browser/artifacts/model.ts'
-import { interruptedCardMark, interruptedIndicatorActive } from './browser/interrupted-sessions/model.ts'
 import {
   appUrl,
   artifactContentKind,
@@ -30,7 +29,7 @@ import { createSettingsPage } from './browser/settings/page.ts'
 import { createSettingsStore } from './browser/settings/store.ts'
 import { createWorkspacePresets } from './browser/workspace-presets/install.ts'
 import { REMIX_BOOK_OPEN_LINE, REMIX_DOWNLOAD_LINE, REMIX_FILE_COPY_LINE, REMIX_FILE_LINE, REMIX_LINK } from './browser/remix-icons.ts'
-import { createInterruptedSessionComponents } from './browser/interrupted-sessions/components.ts'
+import { createInterruptedSessionsFeature } from './browser/interrupted-sessions/install.ts'
 import { createPromptHistoryPreview } from './browser/prompt-history/preview.ts'
 import { ROUTES, browserRoute } from './shared/routes.ts'
 import {
@@ -274,6 +273,22 @@ window.__ModuleLoader__.load({
         : React.createElement('g', { transform: `translate(12 12) scale(${scale}) translate(-12 -12)` }, shape))
     }
 
+    /**
+     * Render one inline Remix icon seat (path + size) for the components.
+     * @param {{ path: string, size?: number }} props - icon props.
+     * @returns {import('react').ReactElement} the SVG element.
+     */
+    function RemixIcon(props) {
+      return React.createElement('svg', {
+        viewBox: '0 0 24 24',
+        width: props.size ?? 16,
+        height: props.size ?? 16,
+        fill: 'currentColor',
+        'aria-hidden': 'true',
+        focusable: 'false'
+      }, React.createElement('path', { d: props.path }))
+    }
+
     /** Authenticated exact routes registered by the Host half. */
     const RAW_ROUTE = browserRoute(ROUTES.sessionArtifactsRaw)
     const ATTACHMENT_ROUTE = browserRoute(ROUTES.sessionArtifactsAttachment)
@@ -301,621 +316,46 @@ window.__ModuleLoader__.load({
 
 
 
-    //#region feature: interrupted sessions — copy, icons, shared state
-    /** Copy namespace for the interrupted-task affordances. */
-    const INTERRUPTED_NS = 'powerSuiteInterrupted'
-
-    /** Host route reporting one Session's last-turn state. */
-    const INTERRUPTED_ROUTE = browserRoute(ROUTES.interrupted)
-    /** Host SSE route broadcasting turn-boundary interruptions. */
-    const INTERRUPTED_EVENTS_ROUTE = browserRoute(ROUTES.interruptedEvents)
-    /** Host route resuming one Session through a non-human context message. */
-    const CONTINUE_ROUTE = browserRoute(ROUTES.continue)
-
-    const INTERRUPTED_EN = {
-      'badge.aria': 'Task did not finish',
-      'badge.title': 'The last task did not finish. Hover this session to continue it.',
-      'badge.title.subagent': 'A delegated subagent task did not finish. Hover this session to continue it.',
-      'continue.aria': 'Continue the unfinished task',
-      'continue.prompt': 'Continue the unfinished task.',
-      'continue.summary': 'Continue unfinished task',
-      'continue.failed': 'Could not continue the task. Try again.'
-    }
-    const INTERRUPTED_ZH = {
-      'badge.aria': '任务未完成',
-      'badge.title': '上一个任务未完成，悬停此会话可继续。',
-      'badge.title.subagent': '委派的子任务未完成，悬停此会话可继续。',
-      'continue.aria': '继续未完成的任务',
-      'continue.prompt': '继续完成上一个任务。',
-      'continue.summary': '继续未完成的任务',
-      'continue.failed': '继续任务失败，请重试。'
-    }
-
-    // Remix Icon path data (Apache-2.0, https://remixicon.com), inlined so the
-    // plugin renders offline without a package or a sprite dependency.
-    const REMIX_WARNING_FILL = 'M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM11 15V17H13V15H11ZM11 7V13H13V7H11Z'
-    const REMIX_PLAY_FILL = 'M19.376 12.4161L8.77735 19.4818C8.54759 19.635 8.23715 19.5729 8.08397 19.3432C8.02922 19.261 8 19.1645 8 19.0658V4.93433C8 4.65818 8.22386 4.43433 8.5 4.43433C8.59871 4.43433 8.69522 4.46355 8.77735 4.5183L19.376 11.584C19.6057 11.7372 19.6678 12.0477 19.5146 12.2774C19.478 12.3323 19.4309 12.3795 19.376 12.4161Z'
-    const REMIX_PLAY_CIRCLE_FILL = 'M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM10.6219 8.41459C10.5562 8.37078 10.479 8.34741 10.4 8.34741C10.1791 8.34741 10 8.52649 10 8.74741V15.2526C10 15.3316 10.0234 15.4088 10.0672 15.4745C10.1897 15.6583 10.4381 15.708 10.6219 15.5854L15.5008 12.3328C15.5447 12.3035 15.5824 12.2658 15.6117 12.2219C15.7343 12.0381 15.6846 11.7897 15.5008 11.6672L10.6219 8.41459Z'
-
-    /**
-     * Render one inline Remix icon.
-     * @param {object} props - icon props.
-     * @returns {object} the SVG element.
-     */
-    function RemixIcon(props) {
-      return React.createElement('svg', {
-        viewBox: '0 0 24 24',
-        width: props.size ?? 16,
-        height: props.size ?? 16,
-        fill: 'currentColor',
-        'aria-hidden': 'true',
-        focusable: 'false'
-      }, React.createElement('path', { d: props.path }))
-    }
-
-    /**
-     * Escape one value for an attribute selector.
-     * @param {string} value - raw value.
-     * @returns {string} selector-safe text.
-     */
-    function escapeSelectorValue(value) {
-      const platformCss = typeof globalThis !== 'undefined' ? globalThis.CSS : undefined
-      if (typeof platformCss === 'object' && platformCss !== null && typeof platformCss.escape === 'function') return platformCss.escape(value)
-      return String(value).replace(/["\\]/g, '\\$&')
-    }
-
-    /**
-     * Browser-facing interruption state, shared by row badges, the row CTA, and
-     * the composer seat. Reads run two at a time so one sidebar pass never floods
-     * the Host with log reads.
-     */
-    const interruptedStore = {
-      records: new Map(),
-      listeners: new Set(),
-      watchers: new Map(),
-      pollTimer: null,
-      version: 0,
-      queue: [],
-      active: 0,
-      maxActive: 2,
-      inflight: new Set()
-    }
-
-    /**
-     * Read the shared change counter.
-     * @returns {number} current version.
-     */
-    function interruptedVersion() {
-      return interruptedStore.version
-    }
-
-    /**
-     * Subscribe to interruption-state changes.
-     * @param {() => void} listener - change callback.
-     * @returns {() => void} unsubscribe.
-     */
-    function subscribeInterrupted(listener) {
-      interruptedStore.listeners.add(listener)
-      return () => {
-        interruptedStore.listeners.delete(listener)
-      }
-    }
-
-    /**
-     * Publish one store change.
-     * @returns {void}
-     */
-    function notifyInterrupted() {
-      interruptedStore.version += 1
-      for (const listener of [...interruptedStore.listeners]) {
-        try {
-          listener()
-        } catch {
-          // One failing subscriber must not block the others.
-        }
-      }
-    }
-
-    /**
-     * Write or clear one Session record.
-     * @param {string} sessionId - Session identity.
-     * @param {object | null} record - next record.
-     * @returns {void}
-     */
-    function setInterruptedRecord(sessionId, record) {
-      if (record === null) interruptedStore.records.delete(sessionId)
-      else interruptedStore.records.set(sessionId, { ...record, at: Date.now() })
-      notifyInterrupted()
-    }
-
-    /**
-     * Read one cached Session record.
-     * @param {string} sessionId - Session identity.
-     * @returns {import('./browser/interrupted-sessions/model.ts').InterruptedRecord | null} the record, when known.
-     */
-    function interruptedRecord(sessionId) {
-      return interruptedStore.records.get(sessionId) ?? null
-    }
-
-    /**
-     * Queue one Host read unless the Session is already known or loading.
-     * @param {string} sessionId - Session identity.
-     * @param {{ force?: boolean, refreshHost?: boolean }} options - force bypasses the cache; refreshHost asks the Host to recompute.
-     * @returns {void}
-     */
-    function ensureInterrupted(sessionId, options = {}) {
-      const force = options.force === true
-      const refreshHost = options.refreshHost === true
-      const existing = interruptedStore.records.get(sessionId)
-      if (existing !== undefined && !force) return
-      if (existing?.status === 'loading' && !force) return
-      if (interruptedStore.inflight.has(sessionId)) return
-      interruptedStore.inflight.add(sessionId)
-      // A forced refresh must not downgrade a known-good badge to loading:
-      // keep the current record visible until the new answer replaces it.
-      if (existing === undefined) {
-        setInterruptedRecord(sessionId, { status: 'loading', interrupted: false })
-      }
-      interruptedStore.queue.push({ sessionId, force, refreshHost })
-      drainInterruptedQueue()
-    }
-
-    /**
-     * Run queued Host reads within the concurrency bound.
-     * @returns {void}
-     */
-    function drainInterruptedQueue() {
-      while (interruptedStore.active < interruptedStore.maxActive && interruptedStore.queue.length > 0) {
-        const job = interruptedStore.queue.shift()
-        interruptedStore.active += 1
-        loadInterrupted(job.sessionId, job.force, job.refreshHost).finally(() => {
-          interruptedStore.active -= 1
-          interruptedStore.inflight.delete(job.sessionId)
-          drainInterruptedQueue()
-        })
-      }
-    }
-
-    /**
-     * Read one Session's interruption state from the Host.
-     * @param {string} sessionId - Session identity.
-     * @param {boolean} force - ask the Host to bypass its cache.
-     * @param {boolean} refreshHost - also send `refresh=1` when forced.
-     * @returns {Promise<void>} resolves after the record lands.
-     */
-    async function loadInterrupted(sessionId, force, refreshHost) {
-      try {
-        const query = `sessionId=${encodeURIComponent(sessionId)}${force && refreshHost ? '&refresh=1' : ''}`
-        const response = await fetch(appUrl(`${INTERRUPTED_ROUTE}?${query}`), {
-          credentials: 'same-origin',
-          headers: { accept: 'application/json' }
-        })
-        if (response.status === 404) {
-          setInterruptedRecord(sessionId, { status: 'missing', interrupted: false })
-          return
-        }
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const payload = await response.json()
-        setInterruptedRecord(sessionId, {
-          status: 'ready',
-          interrupted: payload?.interrupted === true,
-          turn: typeof payload?.turn === 'number' ? payload.turn : null,
-          running: payload?.running === true,
-          open: payload?.open === true,
-          reason: typeof payload?.reason === 'string' ? payload.reason : null,
-          subagent: payload?.subagent === true
-        })
-      } catch {
-        const existing = interruptedRecord(sessionId)
-        if (existing === null || existing.status !== 'ready') {
-          setInterruptedRecord(sessionId, { status: 'error', interrupted: false })
-        }
-      }
-    }
-
-    /**
-     * Locally settle a record after an action the Host has not observed yet.
-     * @param {string} sessionId - Session identity.
-     * @param {boolean} interrupted - next interruption flag.
-     * @returns {void}
-     */
-    function markInterrupted(sessionId, interrupted) {
-      const existing = interruptedRecord(sessionId) ?? {}
-      setInterruptedRecord(sessionId, { ...existing, status: 'ready', interrupted })
-    }
-
-    /**
-     * Optimistically settle the record right after a Continue request succeeds:
-     * the interruption is being resumed, so the badge/CTA disappears and the row
-     * is running until the Host's next answer reconciles the record.
-     * @param {string} sessionId - Session identity.
-     * @returns {void}
-     */
-    function markContinued(sessionId) {
-      const existing = interruptedRecord(sessionId) ?? {}
-      setInterruptedRecord(sessionId, { ...existing, status: 'ready', interrupted: false, running: true })
-    }
-
-    /**
-     * Ask the Host to recompute one record.
-     * @param {string} sessionId - Session identity.
-     * @returns {void}
-     */
-    function refreshInterrupted(sessionId) {
-      ensureInterrupted(sessionId, { force: true, refreshHost: false })
-    }
-
-    /**
-     * Refresh every Session already known to the browser. After a reconnect the
-     * previous records can all be stale, including rows that are not mounted.
-     * @returns {void}
-     */
-    function refreshAllInterrupted() {
-      const ids = new Set([...interruptedStore.watchers.keys(), ...interruptedStore.records.keys()])
-      for (const sessionId of ids) {
-        ensureInterrupted(sessionId, { force: true, refreshHost: false })
-      }
-    }
-
-    /**
-     * Start or stop the shared poll as watched Sessions come and go.
-     * @returns {void}
-     */
-    function ensureInterruptedPolling() {
-      if (interruptedStore.watchers.size === 0) {
-        if (interruptedStore.pollTimer !== null) {
-          window.clearInterval(interruptedStore.pollTimer)
-          interruptedStore.pollTimer = null
-        }
-        return
-      }
-      if (interruptedStore.pollTimer !== null) return
-      interruptedStore.pollTimer = window.setInterval(refreshAllInterrupted, 20000)
-    }
-
-    /**
-     * Keep one mounted component's Session fresh while it stays mounted.
-     * @param {string} sessionId - Session identity.
-     * @returns {() => void} unwatch.
-     */
-    function watchInterrupted(sessionId) {
-      interruptedStore.watchers.set(sessionId, (interruptedStore.watchers.get(sessionId) ?? 0) + 1)
-      ensureInterruptedPolling()
-      return () => {
-        const remaining = (interruptedStore.watchers.get(sessionId) ?? 1) - 1
-        if (remaining <= 0) interruptedStore.watchers.delete(sessionId)
-        else interruptedStore.watchers.set(sessionId, remaining)
-        ensureInterruptedPolling()
-      }
-    }
-
-    /**
-     * Subscribe one component to a Session's interruption record.
-     * @param {string} sessionId - Session identity.
-     * @param {boolean} autoFetch - whether the first mount asks the Host.
-     * @returns {object | null} the record.
-     */
-    function useInterruptedRecord(sessionId, autoFetch = true) {
-      React.useSyncExternalStore(subscribeInterrupted, interruptedVersion, interruptedVersion)
-      React.useEffect(() => {
-        if (!autoFetch) return undefined
-        ensureInterrupted(sessionId)
-        return watchInterrupted(sessionId)
-      }, [sessionId, autoFetch])
-      return interruptedRecord(sessionId)
-    }
-
-    /** Pending request that a freshly opened Conversation should continue. */
-    const continueRequest = { pending: null }
-
-    /** The mounted composer's continue handler, if a Conversation is open. */
-    const continueRuntime = { current: null, pending: false }
-
-    /** Services captured at install time for row actions and DOM decoration. */
-    const interruptedRuntime = { uiWorkspace: null, t: null, hideContinuationRows: null, continueTimes: [] }
-
-    /** localStorage key: when this browser sent an implicit continuation. */
-    const CONTINUE_TIMES_KEY = 'dsh-power-suite.continue-times'
-
-    /**
-     * Read the recent implicit-continuation timestamps.
-     * @returns {number[]} epoch milliseconds, pruned to the last ten minutes.
-     */
-    function loadContinueTimes() {
-      try {
-        const parsed = JSON.parse(localStorage.getItem(CONTINUE_TIMES_KEY) ?? '[]')
-        if (!Array.isArray(parsed)) return []
-        const cutoff = Date.now() - 10 * 60 * 1000
-        return parsed.filter((value) => typeof value === 'number' && Number.isFinite(value) && value >= cutoff)
-      } catch {
-        return []
-      }
-    }
-
-    /**
-     * Remember one implicit continuation so its turn-trigger row can be hidden
-     * after the React tree renders it (and after a page reload).
-     * @param {number} at - epoch milliseconds when the request was sent.
-     * @returns {void}
-     */
-    function rememberContinueTime(at) {
-      const cutoff = Date.now() - 10 * 60 * 1000
-      interruptedRuntime.continueTimes = [...interruptedRuntime.continueTimes, at]
-        .filter((value) => value >= cutoff)
-      try {
-        localStorage.setItem(CONTINUE_TIMES_KEY, JSON.stringify(interruptedRuntime.continueTimes))
-      } catch {
-        // Storage may be unavailable; the in-memory value still applies.
-      }
-    }
-
-    /**
-     * Start continuing one Session from a row action.
-     *
-     * When that Session is not already the open conversation this opens it
-     * first; the renderless composer seat (InterruptedContinueSeat) observes the
-     * pending request and sends the continuation once the Session is open and
-     * idle. The row CTA never sends into a different Session.
-     * @param {string} sessionId - Session identity.
-     * @returns {void}
-     */
-    function requestContinue(sessionId) {
-      const runtime = continueRuntime.current
-      if (runtime !== null && runtime.sessionId === sessionId) {
-        runtime.run()
-        return
-      }
-      continueRequest.pending = { sessionId, at: Date.now() }
-      const ui = interruptedRuntime.uiWorkspace
-      if (ui !== null && typeof ui.openSession === 'function') ui.openSession(sessionId)
-    }
-    //#endregion
-
-    //#region feature: interrupted sessions — styles
-    const PLAY_MASK = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="${REMIX_PLAY_FILL}"/></svg>`)}")`
-
-    const INTERRUPTED_CSS = `
-/* Interrupted native Session rows keep the shell's own hover surface and title;
-   hovering only reveals the inline Continue triangle in the leading status cell.
-   The old opaque ::before mask and the first/last-child z-index lift are gone: the
-   mask erased the title/time on hover, and its positional "first child" selector
-   caught the injected rainbow atmosphere wrapper (current Session row) and turned
-   it from an absolute background layer into an in-flow pill that pushed the badge
-   and collapsed the title (user report). The native leading cell is a fixed 16 px
-   status column; it widens for this row so the 22 px triangle has room and the
-   title slides right instead of being clipped. */
-[data-row-key^="session:"][data-power-suite-interrupted]{position:relative}
-[data-row-key^="session:"][data-power-suite-interrupted]>span:has(.dps-row-interrupted){width:auto;justify-content:flex-start}
-.dps-row-interrupted{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;color:var(--dsw-alias-state-warn-primary);pointer-events:none;flex:none}
-/* The leading cell's width snaps rather than animates: the shell's title
-   marquee measures scrollWidth - clientWidth once on pointerenter, so an
-   animated cell would leave the marquee 22 px short (and a title whose rest
-   overflow is just above the shell's 8 px threshold would not marquee at all).
-   Only the triangle's opacity animates. */
-.dps-row-continue-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:0;height:22px;margin:0;overflow:hidden;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
-[data-row-key^="session:"][data-power-suite-interrupted]:hover .dps-row-continue-slot,
-html[data-input-modality='keyboard'] [data-row-key^="session:"][data-power-suite-interrupted]:focus-within .dps-row-continue-slot{width:22px;opacity:1;pointer-events:auto}
-@media (prefers-reduced-motion: reduce){
-  [data-row-key^="session:"][data-power-suite-interrupted] .dps-row-continue-slot,
-  [data-row-key^="session:"][data-power-suite-interrupted]:hover .dps-row-continue-slot,
-  [data-row-key^="session:"][data-power-suite-interrupted]:focus-within .dps-row-continue-slot{transition:none}
-}
-.dps-row-continue{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;flex:none;opacity:1;pointer-events:auto}
-.dps-row-continue svg{display:block;flex:none}
-.dps-row-continue:hover{background:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);color:var(--dsw-alias-label-primary)}
-.dps-row-continue:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
-/* Hide only the native status dots that render directly under this cell while
-   the native row still believes it is running (the decorator inserts the warning
-   in their place). The idle leading seat is mounted through a display:contents
-   slot wrapper shared with other plugins (e.g. the schedule clock mark and the
-   liveshare fork mark), so the wrapper and everything inside it must stay
-   untouched. */
-[data-row-key^="session:"][data-power-suite-interrupted]>span:has(.dps-row-interrupted)>*:not(.dps-row-interrupted):not(.dps-row-continue-slot):not(span[data-slot]){display:none!important}
-body:not([data-ds-dark-theme]) [data-psd-current-workspace='true'] .dps-row-interrupted,
-body:not([data-ds-dark-theme]) [data-psd-current-session='true'] .dps-row-interrupted{color:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 72%,var(--dsw-alias-label-primary))}
-html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] button[class$="_primary"]>svg{display:none!important}
-html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] button[class$="_primary"]::before{content:"";display:block;width:16px;height:16px;background-color:currentColor;-webkit-mask:${PLAY_MASK} center/contain no-repeat;mask:${PLAY_MASK} center/contain no-repeat}
-`
-    //#endregion
-
-    /**
-     * Build one standalone inline Remix icon for dynamically decorated rows
-     * (the same 14 px markup the React slot path renders).
-     * @param {string} path - Remix icon path data.
-     * @returns {SVGElement} the icon.
-     */
-    function interruptedDecorIcon(path) {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-      svg.setAttribute('viewBox', '0 0 24 24')
-      svg.setAttribute('width', '14')
-      svg.setAttribute('height', '14')
-      svg.setAttribute('fill', 'currentColor')
-      svg.setAttribute('aria-hidden', 'true')
-      const shape = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-      shape.setAttribute('d', path)
-      svg.appendChild(shape)
-      return svg
-    }
-
-    /**
-     * Build one standalone warning icon element for dynamically decorated rows.
-     * @returns {SVGElement} the icon.
-     */
-    function interruptedDecorBadgeIcon() {
-      return interruptedDecorIcon(REMIX_WARNING_FILL)
-    }
-
-    /**
-     * Build the dynamic Continue CTA for a native row the shell still renders as
-     * running.
-     *
-     * It mirrors the `InterruptedBadge` slot markup (`span.dps-row-continue-slot`
-     * around `button.dps-row-continue`) so the existing reveal CSS applies on
-     * both paths, and its click goes through the shared {@link requestContinue}
-     * handshake: this decoration never sends a continuation itself.
-     * @param {Function} t - interrupted-feature translate.
-     * @param {string} sessionId - Session identity.
-     * @returns {HTMLSpanElement} the Continue slot.
-     */
-    function interruptedDecorContinueSlot(t, sessionId) {
-      const slot = document.createElement('span')
-      slot.className = 'dps-row-continue-slot'
-      slot.setAttribute('data-dynamic-continue', 'true')
-      const button = document.createElement('button')
-      button.type = 'button'
-      button.className = 'dps-row-continue'
-      button.title = t('continue.aria')
-      button.setAttribute('aria-label', t('continue.aria'))
-      button.appendChild(interruptedDecorIcon(REMIX_PLAY_FILL))
-      button.addEventListener('click', (event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        // Resolve the Session from the live row at click time: a native row element
-        // is the shell's to reuse, so the captured id is only the fallback.
-        const row = button.closest('[data-row-key^="session:"]')
-        const key = row === null ? '' : row.getAttribute('data-row-key') ?? ''
-        const target = key.startsWith('session:') ? key.slice('session:'.length) : ''
-        requestContinue(target.length > 0 ? target : sessionId)
-      })
-      slot.appendChild(button)
-      return slot
-    }
-
-    /**
-     * Fetch interruption state for every Session row currently in the sidebar.
-     * Running rows do not mount the custom leading slot, so without this walk
-     * they would never get a record and the stale-spinner replacement could not
-     * run after a reconnect.
-     * @returns {void}
-     */
-    function discoverInterruptedRows() {
-      for (const row of document.querySelectorAll('[data-row-key^="session:"]')) {
-        const key = row.getAttribute('data-row-key')
-        if (key === null) continue
-        const sessionId = key.slice('session:'.length)
-        if (sessionId.length === 0) continue
-        if (interruptedStore.records.has(sessionId) || interruptedStore.inflight.has(sessionId)) continue
-        ensureInterrupted(sessionId)
-      }
-    }
-
-    /**
-     * Keep native Session rows visually in sync with the Host interruption state.
-     *
-     * The shell only renders the custom leading slot for idle rows; a row that
-     * the native client still believes is running renders its own green spinner
-     * and no leading slot. This decoration places the warning badge AND its hover
-     * Continue CTA in that native leading span and hides the stale spinner, so the
-     * interrupted state is visible immediately after a reconnect rather than after
-     * opening the Session. Both injected parts carry their own marker attributes
-     * so the slot path's markup is never mistaken for this decoration.
-     * @returns {void}
-     */
-    function syncInterruptedRows() {
-      const t = interruptedRuntime.t
-      if (t === null) return
-      for (const [sessionId, record] of interruptedStore.records) {
-        const row = document.querySelector(`[data-row-key="session:${escapeSelectorValue(sessionId)}"]`)
-        if (row === null) continue
-        const interrupted = interruptedIndicatorActive(record)
-        if (interrupted !== true) {
-          row.removeAttribute('data-power-suite-interrupted')
-          for (const element of row.querySelectorAll('[data-dynamic-badge="true"], [data-dynamic-continue="true"]')) element.remove()
-          continue
-        }
-        row.setAttribute('data-power-suite-interrupted', '')
-        // The rainbow-atmosphere wrapper is injected as the row's first child; the
-        // stale-spinner badge and its Continue CTA must land in the native leading
-        // cell instead, never inside the atmosphere layer.
-        const leading = [...row.children].find((child) => !child.hasAttribute('data-psd-atmos')) ?? null
-        if (leading === null) continue
-        // A row the shell renders as idle mounts the custom leading slot, which
-        // owns the same badge + Continue pair. Keep that pair and drop dynamic
-        // leftovers from an earlier running render (a row can move from running to
-        // idle between two syncs).
-        const persistent = [...row.querySelectorAll('.dps-row-interrupted')]
-          .find((badge) => badge.getAttribute('data-dynamic-badge') !== 'true')
-        if (persistent !== undefined) {
-          for (const element of row.querySelectorAll('[data-dynamic-badge="true"], [data-dynamic-continue="true"]')) element.remove()
-          continue
-        }
-        let badge = leading.querySelector('.dps-row-interrupted[data-dynamic-badge="true"]')
-        if (badge === null) {
-          badge = document.createElement('span')
-          badge.className = 'dps-row-interrupted'
-          badge.setAttribute('data-dynamic-badge', 'true')
-          badge.setAttribute('role', 'img')
-          badge.appendChild(interruptedDecorBadgeIcon())
-          leading.insertBefore(badge, leading.firstChild)
-        }
-        for (const duplicate of [...leading.querySelectorAll('.dps-row-interrupted[data-dynamic-badge="true"]')]) {
-          if (duplicate !== badge) duplicate.remove()
-        }
-        const badgeAria = t('badge.aria')
-        if (badge.getAttribute('aria-label') !== badgeAria) badge.setAttribute('aria-label', badgeAria)
-        const badgeTitle = record.subagent === true ? t('badge.title.subagent') : t('badge.title')
-        if (badge.getAttribute('title') !== badgeTitle) badge.setAttribute('title', badgeTitle)
-        const continueLabel = t('continue.aria')
-        let slot = leading.querySelector('.dps-row-continue-slot[data-dynamic-continue="true"]')
-        if (slot === null) {
-          slot = interruptedDecorContinueSlot(t, sessionId)
-          leading.insertBefore(slot, badge.nextSibling)
-        }
-        for (const duplicate of [...leading.querySelectorAll('.dps-row-continue-slot[data-dynamic-continue="true"]')]) {
-          if (duplicate !== slot) duplicate.remove()
-        }
-        const button = slot.querySelector('.dps-row-continue')
-        if (button !== null) {
-          if (button.getAttribute('title') !== continueLabel) button.title = continueLabel
-          if (button.getAttribute('aria-label') !== continueLabel) button.setAttribute('aria-label', continueLabel)
-        }
-      }
-      for (const row of document.querySelectorAll('[data-row-key^="session:"][data-power-suite-interrupted]')) {
-        const key = row.getAttribute('data-row-key')
-        if (key === null) continue
-        const sessionId = key.slice('session:'.length)
-        const record = interruptedStore.records.get(sessionId)
-        if (interruptedIndicatorActive(record)) continue
-        row.removeAttribute('data-power-suite-interrupted')
-        for (const element of row.querySelectorAll('[data-dynamic-badge="true"], [data-dynamic-continue="true"]')) element.remove()
-      }
-    }
-
-    //#region feature: interrupted sessions — components
+    //#region feature: settings — page
     //
-    // Both seats and their installer live in
-    // `src/browser/interrupted-sessions/components.ts`: the entry only binds the
-    // shared store, the continue handshake boxes, the row helpers and the copy
-    // dictionaries it already owns, then installs the seats in `apply`. Props,
-    // DOM markers, effects, slot ids/order and copy stay unchanged; this region
-    // is a wiring point.
-    const { installInterruptedSessions } = createInterruptedSessionComponents({
+    // The Host-backed settings store and the Plugins-page section live in
+    // `src/browser/settings/{store,page}.ts`: the entry creates one store with
+    // the app URL builder and hands it to the page installer. Copy, CSS, slot
+    // key and the shared snapshot behavior are unchanged; this region is a
+    // wiring point.
+    const settingsStore = createSettingsStore({ appUrl })
+    const settingsPage = createSettingsPage({
+      React,
+      store: settingsStore,
+      packageName: PACKAGE_NAME
+    })
+    //#endregion
+
+    //#region feature: interrupted sessions
+    //
+    // The store, decorator, copy, icons, stylesheet and seats live in
+    // `src/browser/interrupted-sessions/{state,install,components}.ts`: the
+    // entry only binds the React runtime, the inline icon seat and the app URL
+    // builder. Storage key, DOM markers, slot ids/order and copy are unchanged;
+    // this region is a wiring point.
+    const interruptedSessions = createInterruptedSessionsFeature({
       React,
       RemixIcon,
-      remixWarningFill: REMIX_WARNING_FILL,
-      remixPlayFill: REMIX_PLAY_FILL,
-      requestContinue,
-      useInterruptedRecord,
-      escapeSelectorValue,
+      appUrl
+    })
+    //#endregion
+
+    //#region feature: prompt history
+    //
+    // The invisible composer seat, its keydown capture and the Host reader live
+    // in `src/browser/prompt-history/seat.ts`: the entry only binds the React
+    // runtime, the app URL builder and the shared settings store, then installs
+    // the seat in `apply`. Slot id/order and behavior are unchanged; this
+    // region is a wiring point.
+    const promptHistory = createPromptHistorySeat({
+      React,
       appUrl,
-      continueRoute: CONTINUE_ROUTE,
-      rememberContinueTime,
-      markContinued,
-      refreshInterrupted,
-      subscribeInterrupted,
-      discoverInterruptedRows,
-      syncInterruptedRows,
-      refreshAllInterrupted,
-      loadContinueTimes,
-      interruptedNamespace: INTERRUPTED_NS,
-      interruptedEn: INTERRUPTED_EN,
-      interruptedZh: INTERRUPTED_ZH,
-      interruptedCss: INTERRUPTED_CSS,
-      interruptedEventsRoute: INTERRUPTED_EVENTS_ROUTE,
-      interruptedStore,
-      interruptedRuntime,
-      continueRequest,
-      continueRuntime
+      settings: settingsStore
     })
     //#endregion
 
@@ -935,18 +375,18 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       RemixIcon,
       StateDot,
       appUrl,
-      subscribeSettings,
-      settingsSnapshot,
-      subscribeInterrupted,
-      interruptedVersion,
-      interruptedRecord,
-      ensureInterrupted,
-      watchInterrupted,
-      refreshInterrupted,
-      requestContinue,
-      remixPlayFill: REMIX_PLAY_FILL,
-      remixWarningFill: REMIX_WARNING_FILL,
-      interruptedNamespace: INTERRUPTED_NS,
+      subscribeSettings: settingsStore.subscribe,
+      settingsSnapshot: settingsStore.snapshot,
+      subscribeInterrupted: interruptedSessions.store.subscribeInterrupted,
+      interruptedVersion: interruptedSessions.store.interruptedVersion,
+      interruptedRecord: interruptedSessions.store.interruptedRecord,
+      ensureInterrupted: interruptedSessions.store.ensureInterrupted,
+      watchInterrupted: interruptedSessions.store.watchInterrupted,
+      refreshInterrupted: interruptedSessions.store.refreshInterrupted,
+      requestContinue: interruptedSessions.store.requestContinue,
+      remixPlayFill: interruptedSessions.remixPlayFill,
+      remixWarningFill: interruptedSessions.remixWarningFill,
+      interruptedNamespace: interruptedSessions.namespace,
       testHookHost
     })
     //#endregion
@@ -979,7 +419,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       React,
       ReactDOM,
       RemixGlyph,
-      readPromptHistoryEntries
+      readPromptHistoryEntries: promptHistory.readPromptHistoryEntries
     })
     //#endregion
 
@@ -2160,34 +1600,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     const workspacePresets = createWorkspacePresets({ React })
     //#endregion
 
-    //#region feature: settings — page
-    //
-    // The Host-backed settings store and the Plugins-page section live in
-    // `src/browser/settings/{store,page}.ts`: the entry creates one store with
-    // the app URL builder and hands it to the page installer. Copy, CSS, slot
-    // key and the shared snapshot behavior are unchanged; this region is a
-    // wiring point.
-    const settingsStore = createSettingsStore({ appUrl })
-    const settingsPage = createSettingsPage({
-      React,
-      store: settingsStore,
-      packageName: PACKAGE_NAME
-    })
-    //#endregion
 
-    //#region feature: prompt history
-    //
-    // The invisible composer seat, its keydown capture and the Host reader live
-    // in `src/browser/prompt-history/seat.ts`: the entry only binds the React
-    // runtime, the app URL builder and the shared settings store, then installs
-    // the seat in `apply`. Slot id/order and behavior are unchanged; this
-    // region is a wiring point.
-    const promptHistory = createPromptHistorySeat({
-      React,
-      appUrl,
-      settings: settingsStore
-    })
-    //#endregion
 
     //#region plugin
     /**
@@ -2204,16 +1617,16 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       if (testHooks !== null && typeof testHooks === 'object') {
         testHooks.interruptedSessions = {
           set: (sessionId, patch) => {
-            setInterruptedRecord(sessionId, { status: 'ready', interrupted: false, running: false, ...patch })
-            syncInterruptedRows()
-            return interruptedRecord(sessionId)
+            interruptedSessions.store.setInterruptedRecord(sessionId, { status: 'ready', interrupted: false, running: false, ...patch })
+            interruptedSessions.store.syncInterruptedRows()
+            return interruptedSessions.store.interruptedRecord(sessionId)
           },
           clear: (sessionId) => {
-            interruptedStore.records.delete(sessionId)
-            syncInterruptedRows()
+            interruptedSessions.store.interruptedStore.records.delete(sessionId)
+            interruptedSessions.store.syncInterruptedRows()
           },
-          record: (sessionId) => interruptedRecord(sessionId),
-          sync: () => syncInterruptedRows()
+          record: (sessionId) => interruptedSessions.store.interruptedRecord(sessionId),
+          sync: () => interruptedSessions.store.syncInterruptedRows()
         }
       }
       artifactsFeature.installArtifacts(/** @type {import('./browser/artifacts/panel.ts').ArtifactsContext} */ (ctx))
@@ -2224,7 +1637,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       installDraftAttachmentMemory(ctx)
       dynamicWorkspacesInstaller.install(/** @type {import('./browser/dynamic-workspaces/install.ts').DynamicWorkspacesContext} */ (ctx))
       installSessionHoverFigures(/** @type {import('./browser/native-session-hover-figures/install.ts').NativeSessionHoverFiguresContext} */ (ctx))
-      installInterruptedSessions(/** @type {import('./browser/interrupted-sessions/components.ts').InterruptedSessionComponentsContext} */ (ctx))
+      interruptedSessions.installInterruptedSessions(/** @type {import('./browser/interrupted-sessions/components.ts').InterruptedSessionComponentsContext} */ (ctx))
       installQuickLook(/** @type {import('./browser/hover-quick-look/install.ts').HoverQuickLookContext} */ (ctx), {
         t,
         appUrl,
