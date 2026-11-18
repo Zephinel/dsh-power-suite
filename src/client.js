@@ -51,6 +51,16 @@ import {
   psgSyncState,
   psgWheelDecision
 } from './browser/composer-gallery/model.ts'
+import {
+  ANNOTATION_DEFAULT_SETTINGS,
+  MODIFIER_CHOICES,
+  SETTINGS_STORAGE_KEY,
+  modifierMatches,
+  normalizeSettings,
+  parseStoredSettings,
+  resolveModifierChange,
+  serializeSettings
+} from './browser/ui-annotation/settings.ts'
 import { dwEffectiveUpdatedAt, dwPendingSessionIds } from './browser/dynamic-workspaces/activity.ts'
 /**
  * Browser half of DSH Power Suite.
@@ -10072,7 +10082,6 @@ function dwClearNativeAtmospheres() {
     const ANNOTATION_SEAT_ID = 'power-suite.ui-annotation-seat'
 
     /** Browser-owned persistence keys. The mode itself is intentionally not restored. */
-    const SETTINGS_STORAGE_KEY = 'power-suite.ui-annotation.settings'
     const LAUNCHER_STORAGE_KEY = 'power-suite.ui-annotation.launcher'
     const RAIL_STORAGE_KEY = 'power-suite.ui-annotation.rail-collapsed'
 
@@ -10147,15 +10156,6 @@ function dwClearNativeAtmospheres() {
      * region only dispatches the state (D3: ownership split).
      */
     const ANNOTATION_STATE_EVENT = 'power-suite:ui-annotation-state'
-
-    /** The two configurable modifiers, in native select order. */
-    const MODIFIER_CHOICES = ['alt', 'ctrl', 'meta', 'shift']
-
-    /** Defaults: Alt/Option passes clicks through, Shift adds to the selection. */
-    const ANNOTATION_DEFAULT_SETTINGS = Object.freeze({
-      passThroughModifier: 'alt',
-      multiModifier: 'shift'
-    })
 
     /** Copy for the UI element annotation mode. */
     const ANNOTATION_EN = {
@@ -10828,83 +10828,6 @@ function dwClearNativeAtmospheres() {
       }
       if (SENSITIVE_ATTRIBUTE_VALUES.test(trimmed)) return null
       return trimmed
-    }
-
-    /**
-     * Merge raw persisted settings with defaults, keeping the modifiers distinct.
-     * @param {unknown} raw - parsed value or anything else.
-     * @returns {{ passThroughModifier: string, multiModifier: string }} normalized settings.
-     */
-    function normalizeSettings(raw) {
-      const source = raw !== null && typeof raw === 'object' ? raw : {}
-      let passThroughModifier = MODIFIER_CHOICES.includes(source.passThroughModifier)
-        ? source.passThroughModifier
-        : ANNOTATION_DEFAULT_SETTINGS.passThroughModifier
-      let multiModifier = MODIFIER_CHOICES.includes(source.multiModifier)
-        ? source.multiModifier
-        : ANNOTATION_DEFAULT_SETTINGS.multiModifier
-      if (multiModifier === passThroughModifier) {
-        multiModifier = MODIFIER_CHOICES.find((choice) => choice !== passThroughModifier) ?? ANNOTATION_DEFAULT_SETTINGS.multiModifier
-      }
-      return { passThroughModifier, multiModifier }
-    }
-
-    /**
-     * Apply one modifier choice and move the other field off a collision.
-     * @param {object} settings - current settings.
-     * @param {'passThroughModifier' | 'multiModifier'} field - changed field.
-     * @param {unknown} value - requested modifier id.
-     * @returns {{ settings: object, adjustedField?: string }} next settings, plus the moved field.
-     */
-    function resolveModifierChange(settings, field, value) {
-      const current = normalizeSettings(settings)
-      if (field !== 'passThroughModifier' && field !== 'multiModifier') return { settings: current }
-      if (!MODIFIER_CHOICES.includes(value)) return { settings: current }
-      const otherField = field === 'passThroughModifier' ? 'multiModifier' : 'passThroughModifier'
-      const next = { ...current, [field]: value }
-      if (next[otherField] === value) {
-        next[otherField] = MODIFIER_CHOICES.find((choice) => choice !== value) ?? current[otherField]
-        return { settings: next, adjustedField: otherField }
-      }
-      return { settings: next }
-    }
-
-    /**
-     * Parse the persisted settings document.
-     * @param {string | null} text - raw localStorage value.
-     * @returns {{ passThroughModifier: string, multiModifier: string }} normalized settings.
-     */
-    function parseStoredSettings(text) {
-      if (typeof text !== 'string' || text.length === 0) return normalizeSettings(null)
-      try {
-        return normalizeSettings(JSON.parse(text))
-      } catch {
-        return normalizeSettings(null)
-      }
-    }
-
-    /**
-     * Serialize settings for localStorage, normalized.
-     * @param {object} settings - settings to store.
-     * @returns {string} JSON document.
-     */
-    function serializeSettings(settings) {
-      return JSON.stringify(normalizeSettings(settings))
-    }
-
-    /**
-     * Whether a keyboard or mouse event carries one configured modifier.
-     * @param {object} eventLike - event with altKey/ctrlKey/metaKey/shiftKey.
-     * @param {string} modifier - modifier id from `MODIFIER_CHOICES`.
-     * @returns {boolean} whether the modifier is held.
-     */
-    function modifierMatches(eventLike, modifier) {
-      if (eventLike === null || typeof eventLike !== 'object') return false
-      if (modifier === 'alt') return eventLike.altKey === true
-      if (modifier === 'ctrl') return eventLike.ctrlKey === true
-      if (modifier === 'meta') return eventLike.metaKey === true
-      if (modifier === 'shift') return eventLike.shiftKey === true
-      return false
     }
 
     /**

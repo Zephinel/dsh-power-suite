@@ -1694,8 +1694,9 @@ the Web page after upgrading the package's browser code. The feature adds no
 route and no service, so a Host that predates this version still serves it.
 
 Implementation: browser region [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js) under its
-`feature: ui element annotation` region, pure model helpers in the same region
-and the shared test seam, tests
+`feature: ui element annotation` region; the modifier-settings helpers live in
+`src/browser/ui-annotation/settings.ts`, the remaining pure model helpers stay in
+the same region with the shared test seam, tests
 [`test/ui-annotation.test.js`](../test/ui-annotation.test.js), browser
 acceptance `test/browser/`.
 
@@ -2987,8 +2988,9 @@ the Web page after upgrading the package's browser code. The feature adds no
 route and no service, so a Host that predates this version still serves it.
 
 Implementation: browser region [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js) under its
-`feature: ui element annotation` region, pure model helpers in the same region
-and the shared test seam, tests
+`feature: ui element annotation` region; the modifier-settings helpers live in
+`src/browser/ui-annotation/settings.ts`, the remaining pure model helpers stay in
+the same region with the shared test seam, tests
 [`test/ui-annotation.test.js`](../test/ui-annotation.test.js), browser
 acceptance `test/browser/`.
 

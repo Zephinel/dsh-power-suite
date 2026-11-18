@@ -22,6 +22,16 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { loadClientModule } from './helpers/client-module.mjs'
+import {
+  ANNOTATION_DEFAULT_SETTINGS as SETTINGS_DEFAULTS,
+  MODIFIER_CHOICES as SETTINGS_MODIFIERS,
+  SETTINGS_STORAGE_KEY as ANNOTATION_SETTINGS_KEY,
+  modifierMatches as matchesModifier,
+  normalizeSettings as normalizeAnnotationSettings,
+  parseStoredSettings as parseAnnotationSettings,
+  resolveModifierChange as resolveAnnotationModifier,
+  serializeSettings as serializeAnnotationSettings
+} from '../src/browser/ui-annotation/settings.ts'
 
 /** One materialization of the browser module; the seam is read from it. */
 const client = loadClientModule()
@@ -340,29 +350,29 @@ if (ui === undefined) {
   //#region settings
 
   test('settings defaults are the frozen Alt/Shift pair in a ui-annotation storage record', () => {
-    assert.deepEqual(plain(ui.DEFAULT_SETTINGS), { passThroughModifier: 'alt', multiModifier: 'shift' })
-    assert.deepEqual(plain(ui.MODIFIER_CHOICES), MODIFIER_IDS)
-    assert.equal(ui.SETTINGS_STORAGE_KEY, 'power-suite.ui-annotation.settings')
+    assert.deepEqual(plain(SETTINGS_DEFAULTS), { passThroughModifier: 'alt', multiModifier: 'shift' })
+    assert.deepEqual(plain(SETTINGS_MODIFIERS), MODIFIER_IDS)
+    assert.equal(ANNOTATION_SETTINGS_KEY, 'power-suite.ui-annotation.settings')
   })
 
   test('normalizeSettings keeps valid values, falls back for invalid ones, and never returns equal modifiers', () => {
-    const defaults = plain(ui.DEFAULT_SETTINGS)
+    const defaults = plain(SETTINGS_DEFAULTS)
     for (const raw of [undefined, null, 'nonsense', {}, [], 42]) {
-      assert.deepEqual(plain(ui.normalizeSettings(raw)), defaults, `defaults for ${JSON.stringify(raw)}`)
+      assert.deepEqual(plain(normalizeAnnotationSettings(raw)), defaults, `defaults for ${JSON.stringify(raw)}`)
     }
 
-    const changed = ui.normalizeSettings({ [PASS_FIELD]: 'ctrl' })
+    const changed = normalizeAnnotationSettings({ [PASS_FIELD]: 'ctrl' })
     assert.deepEqual(plain(changed), { passThroughModifier: 'ctrl', multiModifier: 'shift' })
     assert.deepEqual(Object.keys(changed).sort(), Object.keys(defaults).sort(), 'only known fields survive')
 
-    assert.deepEqual(plain(ui.normalizeSettings({ [PASS_FIELD]: 'hyper', [MULTI_FIELD]: 42 })), defaults)
-    assertModifiersDiffer(ui.normalizeSettings({ [PASS_FIELD]: 'shift' }), 'stored conflict resolves to different modifiers')
-    assertModifiersDiffer(ui.normalizeSettings({ [MULTI_FIELD]: 'alt' }), 'the other conflict direction resolves too')
+    assert.deepEqual(plain(normalizeAnnotationSettings({ [PASS_FIELD]: 'hyper', [MULTI_FIELD]: 42 })), defaults)
+    assertModifiersDiffer(normalizeAnnotationSettings({ [PASS_FIELD]: 'shift' }), 'stored conflict resolves to different modifiers')
+    assertModifiersDiffer(normalizeAnnotationSettings({ [MULTI_FIELD]: 'alt' }), 'the other conflict direction resolves too')
   })
 
   test('resolveModifierChange applies a valid choice and resolves an equal-modifier conflict', () => {
-    const defaults = ui.DEFAULT_SETTINGS
-    const changed = ui.resolveModifierChange(defaults, PASS_FIELD, 'ctrl')
+    const defaults = SETTINGS_DEFAULTS
+    const changed = resolveAnnotationModifier(defaults, PASS_FIELD, 'ctrl')
     assert.equal(changed.settings[PASS_FIELD], 'ctrl')
     assert.equal(changed.settings[MULTI_FIELD], 'shift')
     assertModifiersDiffer(changed.settings, 'valid change stays valid')
@@ -370,7 +380,7 @@ if (ui === undefined) {
     assert.equal(defaults[PASS_FIELD], 'alt', 'input settings are not mutated')
 
     // Choosing the sibling's current modifier must not save an equal pair.
-    const conflict = ui.resolveModifierChange(defaults, PASS_FIELD, 'shift')
+    const conflict = resolveAnnotationModifier(defaults, PASS_FIELD, 'shift')
     assertModifiersDiffer(conflict.settings, 'a conflict keeps the pair distinct')
     if (conflict.settings[PASS_FIELD] === 'shift') {
       assert.equal(conflict.settings[MULTI_FIELD] !== 'shift', true)
@@ -380,14 +390,14 @@ if (ui === undefined) {
     }
 
     for (const id of ['ctrl', 'meta', 'shift']) {
-      const result = ui.resolveModifierChange(defaults, MULTI_FIELD, id)
+      const result = resolveAnnotationModifier(defaults, MULTI_FIELD, id)
       assertModifiersDiffer(result.settings, `multi -> ${id} keeps the pair distinct`)
       assert.equal(result.settings[PASS_FIELD], 'alt')
       assert.equal(result.settings[MULTI_FIELD], id)
       assert.equal(result.adjustedField, undefined)
     }
     // 'alt' is the pass-through default, so that choice moves the sibling instead.
-    const altChoice = ui.resolveModifierChange(defaults, MULTI_FIELD, 'alt')
+    const altChoice = resolveAnnotationModifier(defaults, MULTI_FIELD, 'alt')
     assertModifiersDiffer(altChoice.settings, 'multi -> alt keeps the pair distinct')
     assert.equal(altChoice.settings[MULTI_FIELD], 'alt')
     assert.equal(altChoice.settings[PASS_FIELD] !== 'alt', true)
@@ -395,31 +405,31 @@ if (ui === undefined) {
   })
 
   test('parseStoredSettings reads defaults from absent/malformed text and round-trips serialized settings', () => {
-    const defaults = plain(ui.DEFAULT_SETTINGS)
+    const defaults = plain(SETTINGS_DEFAULTS)
     for (const text of [null, undefined, '', 'not json', 'null', '[]', '{}', '{"version":999}']) {
-      assert.deepEqual(plain(ui.parseStoredSettings(text)), defaults, `defaults for ${JSON.stringify(text)}`)
+      assert.deepEqual(plain(parseAnnotationSettings(text)), defaults, `defaults for ${JSON.stringify(text)}`)
     }
-    const stored = { ...ui.DEFAULT_SETTINGS, [PASS_FIELD]: 'ctrl', [MULTI_FIELD]: 'meta' }
-    const text = ui.serializeSettings(stored)
+    const stored = { ...SETTINGS_DEFAULTS, [PASS_FIELD]: 'ctrl', [MULTI_FIELD]: 'meta' }
+    const text = serializeAnnotationSettings(stored)
     assert.equal(typeof text, 'string')
     assert.ok(text.length > 0)
-    assert.deepEqual(plain(ui.parseStoredSettings(text)), plain(ui.normalizeSettings(stored)), 'round-trips')
-    assert.equal(ui.serializeSettings(ui.normalizeSettings(stored)), text, 'serialization is deterministic')
+    assert.deepEqual(plain(parseAnnotationSettings(text)), plain(normalizeAnnotationSettings(stored)), 'round-trips')
+    assert.equal(serializeAnnotationSettings(normalizeAnnotationSettings(stored)), text, 'serialization is deterministic')
     const corrupt = JSON.stringify({ settings: { [PASS_FIELD]: 'bogus', [MULTI_FIELD]: 'none' } })
-    assertModifiersDiffer(ui.parseStoredSettings(corrupt), 'a corrupt record still yields a valid pair')
+    assertModifiersDiffer(parseAnnotationSettings(corrupt), 'a corrupt record still yields a valid pair')
   })
 
   test('modifierMatches maps each configured modifier to its event flag', () => {
     for (const id of MODIFIER_IDS) {
-      assert.equal(ui.modifierMatches(modifierEvent(id), id), true, `${id} matches its held flag`)
-      assert.equal(ui.modifierMatches(modifierEvent(), id), false, `${id} does not match a bare event`)
+      assert.equal(matchesModifier(modifierEvent(id), id), true, `${id} matches its held flag`)
+      assert.equal(matchesModifier(modifierEvent(), id), false, `${id} does not match a bare event`)
       for (const other of MODIFIER_IDS) {
         if (other === id) continue
-        assert.equal(ui.modifierMatches(modifierEvent(other), id), false, `${id} ignores ${other}`)
+        assert.equal(matchesModifier(modifierEvent(other), id), false, `${id} ignores ${other}`)
       }
     }
-    assert.equal(ui.modifierMatches(modifierEvent('alt'), 'hyper'), false)
-    assert.equal(ui.modifierMatches({}, 'alt'), false)
+    assert.equal(matchesModifier(modifierEvent('alt'), 'hyper'), false)
+    assert.equal(matchesModifier({}, 'alt'), false)
   })
 
   //#endregion

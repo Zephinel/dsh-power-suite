@@ -12,6 +12,8 @@ All notable changes to this repository are documented here. The format follows
 
 ### Changed
 
+- **Annotation settings model (Phase 3i).** The UI-annotation modifier settings (storage key, accepted choices, frozen defaults, normalize/conflict/parse/serialize/match) moved from `src/client.js` to `src/browser/ui-annotation/settings.ts`; the settings tests import it directly while the annotation test hook stays as a pass-through shim for the remaining model keys. No behavior, copy or storage-format changes.
+
 - **Pending-interaction activity model (Phase 3h).** The Running & recent panel true-last-activity timestamp and pending-interaction derivation moved to `src/browser/dynamic-workspaces/activity.ts`; its test imports the model directly and the `dynamicWorkspacesPanel` vm hook was deleted. Five hooks remain (annotation, the three other dynamic-Workspaces models, sidebar-width probe). No behavior changes.
 
 - **Composer gallery model and two more hook removals (Phase 3g).** The composer image-gallery pure model (index clamping, step direction, rail reconciliation, wheel debounce and thumbnail collection) moved to `src/browser/composer-gallery/model.ts`. Its tests and the update-prompt tests now import the models directly, so the `composerImageGallery` and `updateCheck` vm hooks were deleted; six hooks remain (annotation, four dynamic-Workspaces models, sidebar-width probe). No behavior or copy changes.

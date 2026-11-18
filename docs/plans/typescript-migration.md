@@ -294,6 +294,15 @@ remain: `uiAnnotation`, `dynamicWorkspacesStats`, `dynamicWorkspacesPin`,
 lines and opted out of typechecking; the region split and browser typing remain
 the main Phase 3 work.
 
+**3i progress (2026-11-18).** The annotation modifier-settings model moved to
+`src/browser/ui-annotation/settings.ts` (storage key, modifier choices,
+frozen defaults, normalize/conflict/parse/serialize/match); the five settings
+tests import the module directly while the 112-key annotation test hook stays as
+a pass-through shim for the remaining model keys. `src/client.js` drops to
+~24.0k lines. The planned order for the rest: text/format, geometry, identity,
+records, reducer, serializers, anchors, then surface/resolution, and finally the
+annotation seam retirement in its own commit.
+
 Decide between (a) splitting `src/client.js` by `//#region feature:` into modules
 and bundling one classic script, or (b) keeping one file and annotating it. Under
 (a), give each feature an `install(ctx, deps)` plus pure model functions, import

@@ -10,8 +10,8 @@ browser half.
 Browser-side pure models live under
 `src/browser/` and are imported by the entry (for example the update-prompt
 model and its stable-version math, the sidebar-width decisions and cache
-document, the composer-gallery index/wheel model, or the Running & recent
-pending-interaction/activity derivation):
+document, the composer-gallery index/wheel model, the Running & recent
+pending-interaction/activity derivation, or the annotation modifier settings):
 
 ```
 src/index.ts            Host entry (Node)

@@ -55,7 +55,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 - `rm -rf lib && node --test test/*.test.js`: **390/390** — the suite imports the
   `.ts` sources directly (Node >= 22.18 native type stripping), so the tests need
   no build.
-- `npm run check`: passed (`37 TypeScript modules, 1 JavaScript module(s), 27 test files`); it builds `lib/` first,
+- `npm run check`: passed (`38 TypeScript modules, 1 JavaScript module(s), 27 test files`); it builds `lib/` first,
   then runs the syntax checks, the typecheck, package-manifest validation, the
   built-entry smoke (update route reports `current=0.1.0`), local docs links, the
   Node suite and the release-notes gate, then `pack:check`.
