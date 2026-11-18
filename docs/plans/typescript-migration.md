@@ -318,6 +318,14 @@ with the hooks (no behavior assertions lost), so the suite is 385 tests. The
 planned order for the annotation rest: identity, records, reducer, serializers,
 anchors, surface/resolution, then the annotation seam retirement in its own commit.
 
+**3m progress (2026-11-18).** Two follow-ups landed: `dwCacheHitPercent` is now a
+total function (inconsistent/negative/non-finite cache data returns `null`
+instead of looping forever; valid outputs unchanged, with a 7,389-case
+differential oracle), and the `sidebarWidth` vm hook was trimmed to just the
+e2e `probe` (its pure helpers/constants now come only from
+`src/browser/sidebar-width/model.ts` in direct tests). Only the `uiAnnotation`
+hook and the sidebar probe remain.
+
 **3j full-suite e2e evidence (2026-11-18, commit 5128669).** Independent runs
 started from clean copies (temp `$DSH_HOME`, installed tarball; current HEAD
 re-checked with live smoke): `update-prompt` full **21/21** on isolated and live;

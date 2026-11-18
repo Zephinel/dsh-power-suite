@@ -10,7 +10,13 @@ All notable changes to this repository are documented here. The format follows
 
 - **Bundled update check reports the running version.** `src/features/update-check/checker.ts` now resolves the package manifest through the package self-reference (`import.meta.resolve`) instead of a path relative to the source module, so the bundled `lib/index.js` reads its own package.json and the update prompt shows the installed version. The build probes that resolution from inside `lib/`, and `npm run check:release` now deletes `lib/` before `npm pack` to prove `prepare` rebuilds it.
 
+### Fixed
+
+- **Cache-hit percentage no longer hangs on inconsistent data (Phase 3m).** `dwCacheHitPercent` treated `cacheRead > billedInput` as a negative loop increment and never terminated; it now returns `null` for impossible/negative/non-finite inputs while all valid outputs stay byte-identical (7,389-case differential oracle). The one production call site already hides a `null` cache-hit line.
+
 ### Changed
+
+- **Sidebar-width hook trimmed to the e2e probe (Phase 3m).** The `sidebarWidth` vm hook now exposes only the read-only attach `probe`; its constants and pure helpers are asserted directly from `src/browser/sidebar-width/model.ts`. Only the `uiAnnotation` hook and the sidebar probe remain.
 
 - **Dynamic-Workspaces stats/pin/row-menu models (Phase 3l).** The session-figure formatters and copy dictionaries, the card-owned pin cache/effective/panel-row logic (with shared row primitives in `rows.ts`) and the row-menu delegation/resolution moved to `src/browser/dynamic-workspaces/{stats,pin,rows,row-menu}.ts`; the three vm hooks were deleted and their tests import the modules directly. Only the `uiAnnotation` and `sidebarWidth` hooks remain; `src/client.js` is ~22.8k lines. Three seam-only tests were removed (no behavior assertions lost); no behavior, copy or storage-format changes.
 
