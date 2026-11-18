@@ -121,6 +121,7 @@ import {
   dwSessionRunning,
   dwWorkspaceLabel
 } from './browser/dynamic-workspaces/rows.ts'
+import { DW_ROW_MENU_TARGET, dwRowMenuResolve } from './browser/dynamic-workspaces/row-menu.ts'
 /**
  * Browser half of DSH Power Suite.
  *
@@ -4794,150 +4795,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** localStorage key holding the two bucket fold states. */
     const DW_FOLD_KEY = 'power-suite.dynamic-workspaces.folds'
 
-    /** Captured-target kind of the card row "…" menu. The card opens the shared
-     *  native context-menu popup against this plugin-owned kind; the contribution
-     *  below then delegates the action list to the native `session` providers. */
-    const DW_ROW_MENU_TARGET = 'powerSuiteSession'
-
     /** Registration identity of this feature's contribution in the shared menu registry. */
     const DW_ROW_MENU_PROVIDER = 'power-suite.session-row-menu'
-
-    /**
-     * Whether one native Session action view is a Pin/Unpin entry.
-     *
-     * The card owns pinning through its title-left pin button, so the row menu
-     * keeps filtering these two views out — by the native action id suffix
-     * (`session.pin/pin`, `session.pin/unpin`) or, if a shell build gives the
-     * entry a different id, by its native icon key.
-     * @param {object | null | undefined} view - one native MenuActionView.
-     * @returns {boolean} true for a Pin/Unpin view.
-     */
-    function dwRowMenuIsPinView(view) {
-      if (view === null || view === undefined || typeof view !== 'object') return false
-      const actionKey = String(view.id ?? '').split('/').pop()
-      if (actionKey === 'pin' || actionKey === 'unpin') return true
-      const iconKey = view.icon !== null && typeof view.icon === 'object' ? String(view.icon.key ?? '') : ''
-      return iconKey === 'workspace.pin' || iconKey === 'workspace.unpin'
-    }
-
-    /**
-     * Map native Session menu views to delegating shared-popup actions.
-     *
-     * The shared popup renders the actions handed to it, so the native
-     * presentation fields (label, icon key, command id for the shortcut hint,
-     * disabled/danger flags, the separator and footer positions, and nested
-     * children) are copied verbatim. Selection is delegated: each mapped
-     * `run` calls the nested native resolution's `select` with the ORIGINAL
-     * (namespaced) view id, so the native behavior and any plugin-contributed
-     * action keep working. Pin/Unpin views are filtered out and invalid entries
-     * are skipped.
-     * @param {readonly object[] | null | undefined} views - native MenuActionViews.
-     * @param {Function} select - nested resolution's `select(id)`.
-     * @returns {object[]} delegating MenuActions in native order.
-     */
-    function dwRowMenuActions(views, select) {
-      if (!Array.isArray(views)) return []
-      const runSelection = typeof select === 'function' ? select : () => {}
-      const actions = []
-      for (const view of views) {
-        if (view === null || view === undefined || typeof view !== 'object') continue
-        if (typeof view.id !== 'string' || view.id.length === 0) continue
-        if (dwRowMenuIsPinView(view)) continue
-        const action = {
-          id: view.id,
-          label: typeof view.label === 'string' ? view.label : '',
-          run: () => runSelection(view.id)
-        }
-        // Only copy presentation fields the native view actually carries; the
-        // popup's own defaults then match a native contribution without them.
-        if (view.commandId !== undefined) action.commandId = view.commandId
-        if (view.icon !== undefined) action.icon = view.icon
-        if (view.disabled !== undefined) action.disabled = view.disabled
-        if (view.danger !== undefined) action.danger = view.danger
-        if (view.separatorBefore !== undefined) action.separatorBefore = view.separatorBefore
-        if (view.afterContent !== undefined) action.afterContent = view.afterContent
-        if (Array.isArray(view.children)) action.children = dwRowMenuActions(view.children, select)
-        actions.push(action)
-      }
-      return actions
-    }
-
-    /** Budget for the nested native resolution to publish its actions. */
-    const DW_ROW_MENU_RESOLVE_BUDGET_MS = 800
-
-    /**
-     * Resolve one card row menu's delegating action list from the native Session target.
-     *
-     * The nested occurrence is owned by this call: it is disposed when the outer
-     * preparation is aborted (dismissal, unload or a newer opening) or when the
-     * resolution fails; a selection disposes it through the outer registry. The
-     * dispose is deferred by one microtask because the outer registry aborts the
-     * provider signal BEFORE it invokes the selected action's `run`, and the nested
-     * `select` would otherwise be refused by the already-aborted nested lifetime.
-     * The nested `ready` wait is bounded so one slow native provider cannot empty the
-     * whole menu (the shared popup would otherwise show nothing).
-     * @param {object | null | undefined} contextMenus - shared menu service.
-     * @param {unknown} value - our captured target value (`{ sessionId, displayTitle }`).
-     * @param {AbortSignal | null | undefined} signal - outer preparation signal.
-     * @param {number} [budgetMs] - bounded wait for the nested providers.
-     * @returns {Promise<object[]>} delegating MenuActions in native order (pin filtered).
-     */
-    function dwRowMenuResolve(contextMenus, value, signal, budgetMs = DW_ROW_MENU_RESOLVE_BUDGET_MS) {
-      const source = value !== null && typeof value === 'object' ? value : {}
-      const sessionId = typeof source.sessionId === 'string' ? source.sessionId : ''
-      if (sessionId.length === 0) return Promise.resolve([])
-      if (contextMenus === null || contextMenus === undefined || typeof contextMenus !== 'object') return Promise.resolve([])
-      if (typeof contextMenus.resolve !== 'function') return Promise.resolve([])
-      const displayTitle = typeof source.displayTitle === 'string' ? source.displayTitle : ''
-      let resolution
-      try {
-        resolution = contextMenus.resolve({ kind: 'session', value: { sessionId, displayTitle } })
-      } catch {
-        return Promise.resolve([])
-      }
-      if (resolution === null || resolution === undefined || typeof resolution !== 'object') return Promise.resolve([])
-      let released = false
-      const release = () => {
-        if (released) return
-        released = true
-        try {
-          if (typeof resolution.dispose === 'function') resolution.dispose()
-        } catch {
-          // A withdrawn occurrence needs no second dispose.
-        }
-      }
-      if (signal === null || signal === undefined || signal.aborted === true) {
-        release()
-        return Promise.resolve([])
-      }
-      signal.addEventListener('abort', () => { queueMicrotask(release) }, { once: true })
-      return (async () => {
-        try {
-          await new Promise((settle) => {
-            let done = false
-            const finish = () => {
-              if (done) return
-              done = true
-              clearTimeout(timer)
-              settle()
-            }
-            const timer = setTimeout(finish, Math.max(1, Number.isFinite(budgetMs) ? budgetMs : DW_ROW_MENU_RESOLVE_BUDGET_MS))
-            Promise.resolve(resolution.ready).then(finish, finish)
-          })
-          if (signal.aborted === true) return []
-          const views = typeof resolution.source?.getSnapshot === 'function' ? resolution.source.getSnapshot() : []
-          return dwRowMenuActions(views, (id) => {
-            try {
-              resolution.select(id)
-            } catch {
-              // A dismissed occurrence refuses selection; the popup is closing.
-            }
-          })
-        } catch {
-          return []
-        }
-      })()
-    }
 
     /** Pending-interaction flag (24 viewBox, Remix flag-fill) shown before a
      *  waiting Session's title in amber, the native question-prompt colour. */
@@ -22881,15 +22740,6 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         serializeAnnotationChip
       }
 
-      // The card row "..." menu: the plugin-owned captured-target kind the shared
-      // popup opens against plus the pure delegation helpers (Pin/Unpin filtering
-      // and native MenuActionView -> delegating MenuAction mapping).
-      globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesRowMenu = {
-        DW_ROW_MENU_TARGET,
-        dwRowMenuIsPinView,
-        dwRowMenuActions,
-        dwRowMenuResolve
-      }
       // Sidebar width: pure clamp/cache/payload/bootstrap/adopt decisions plus the
       // attach probe the browser E2E reads. `sidebarWidthProbe` is read-only.
       globalThis.__POWER_SUITE_TEST_HOOKS__.sidebarWidth = {
