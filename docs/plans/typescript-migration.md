@@ -379,8 +379,19 @@ intentional paint z-index 2000. Post-fix live evidence: sidebar full **70 PASS /
 1 SKIP / 1 FAIL** (`b4-5` dark atmosphere saturation is pre-existing/owner
 triage), annotation smoke **6/6**, S4 **7/0/0**, S13 **7 PASS / 1 SKIP**, S10
 **8/0/0**; S12 remains an owner theme-contract decision (native hover card now
-follows the theme while the annotation surface stays fixed dark). Next: browser
-typing milestones (M1 mechanical fixes) and the remaining owner decisions.
+follows the theme while the annotation surface stays fixed dark). **3u progress (2026-11-18, browser-typing M1).** Cleared 112 mechanical
+diagnostics (1,885 → 1,773): `RemixGlyph` optional `scale` (51 call sites),
+stale JSDoc/signatures (`readWorkspacePreset.signal`, `copyAnchorText.options`,
+`hideChipPreview`, `dwPostReadAcks` return shape, `ensureInterrupted.refreshHost`,
+settings snapshot typedefs), dictionary index signatures (~25), and a typed
+`testHookHost` alias for the test-hook bridge (~6). No behavior/copy changes and
+no new suppressions. Remaining diagnostics are concentrated in
+`require('react')`/`window.__ModuleLoader__` untyped boundaries and unannotated
+record/closure state (TS2339 1,058, TS7005 264, TS7006 248, TS7034 69,
+TS2322 48); further reduction needs React/DSH ambient types (owner supply-chain
+decision) or the M2/M3 module splits. Next: M2 sidebar controller extraction and
+the remaining owner decisions (S12 theme contract, b4-5 atmosphere threshold,
+full-e2e data fixtures).
 
 **3m progress (2026-11-18).** Two follow-ups landed: `dwCacheHitPercent` is now a
 total function (inconsistent/negative/non-finite cache data returns `null`
