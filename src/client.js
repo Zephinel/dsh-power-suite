@@ -51,6 +51,7 @@ import {
   psgSyncState,
   psgWheelDecision
 } from './browser/composer-gallery/model.ts'
+import { dwEffectiveUpdatedAt, dwPendingSessionIds } from './browser/dynamic-workspaces/activity.ts'
 /**
  * Browser half of DSH Power Suite.
  *
@@ -6449,48 +6450,6 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
-     * Session ids waiting for a human answer, newest first.
-     *
-     * Reads the client's own `SessionStatus.pendingInteraction` (the same fact the
-     * native composer cards use): a question / plan review / approval still waiting
-     * in a Session other than the one open in the main view. The rows render this
-     * as one flag-fill before the Session title — there is no floating popup —
-     * and re-derive every render, so answering, cancelling, switching to the
-     * asking Session, or archiving it removes the flag automatically.
-     * @param {object} input - derivation input.
-     * @param {object} input.list - Session list state (`byId`).
-     * @param {Map | undefined} input.statuses - live Session status snapshot.
-     * @param {string | null} input.currentSessionId - Session open in the main view.
-     * @param {Set<string>} input.archived - archived Session ids.
-     * @param {Record<string, number>} input.activity - true last-activity map.
-     * @returns {string[]} waiting Session ids, newest activity first.
-     */
-    function dwPendingSessionIds(input) {
-      const { list, statuses, currentSessionId, archived, activity } = input
-      if (statuses === undefined || statuses === null || typeof statuses.forEach !== 'function') return []
-      const rows = []
-      statuses.forEach((status, id) => {
-        const pending = status !== null && typeof status === 'object' ? status.pendingInteraction : undefined
-        if (pending === null || pending === undefined || typeof pending !== 'object') return
-        if (status.running === false) return
-        const kind = pending.kind
-        if (kind !== 'question' && kind !== 'plan-review' && kind !== 'approval') return
-        const sessionId = typeof pending.sessionId === 'string' && pending.sessionId.length > 0
-          ? pending.sessionId
-          : (typeof id === 'string' ? id : '')
-        if (sessionId.length === 0) return
-        if (typeof currentSessionId === 'string' && currentSessionId.length > 0 && sessionId === currentSessionId) return
-        if (archived !== undefined && archived !== null && typeof archived.has === 'function' && archived.has(sessionId)) return
-        const summary = list !== null && typeof list === 'object' && list.byId !== undefined ? list.byId[sessionId] : undefined
-        if (summary === undefined || summary === null || typeof summary !== 'object' || summary.blank === true) return
-        if (summary.origin === 'subagent') return
-        rows.push({ sessionId, updatedAt: dwEffectiveUpdatedAt(activity, sessionId, summary) })
-      })
-      rows.sort((left, right) => right.updatedAt - left.updatedAt)
-      return rows.map((row) => row.sessionId)
-    }
-
-    /**
      * Sessions that keep a Workspace Active: running now, or last active
      * inside the retention window.
      * @param {object} list - Session list state.
@@ -6883,31 +6842,6 @@ function dwClearNativeAtmospheres() {
       if (pending.size <= DW_ACK_MAX_ENTRIES) return pending
       const entries = [...pending.entries()].sort((left, right) => (right[1] - left[1]) || left[0].localeCompare(right[0]))
       return new Map(entries.slice(0, DW_ACK_MAX_ENTRIES))
-    }
-
-    /**
-     * Last observed activity for one Session.
-     *
-     * The catalog summary's `updatedAt` is the last *prompt* time, which is
-     * stale for a turn that ran for hours. The Host activity route carries the
-     * real latest model-visible activity, so the card prefers whichever is
-     * newer and falls back to the summary when the route is unavailable (older
-     * Host).
-     * @param {Record<string, number>} activity - Host activity map.
-     * @param {string} sessionId - Session identity.
-     * @param {object | undefined} summary - catalog session summary.
-     * @returns {number} effective epoch milliseconds, 0 when neither source has one.
-     */
-    function dwEffectiveUpdatedAt(activity, sessionId, summary) {
-      const summaryAt = summary !== null && typeof summary === 'object'
-        && typeof summary.updatedAt === 'number' && Number.isFinite(summary.updatedAt)
-        ? summary.updatedAt
-        : 0
-      const hostAt = activity !== null && typeof activity === 'object'
-        && typeof activity[sessionId] === 'number' && Number.isFinite(activity[sessionId])
-        ? activity[sessionId]
-        : 0
-      return Math.max(summaryAt, hostAt)
     }
 
     /**
@@ -24145,10 +24079,6 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         dwReadPinCache,
         dwWritePinCache,
         dwPinPanelRows
-      }
-      // Row-menu and pending-notice helpers (feat/running-panel-ux).
-      globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesPanel = {
-        dwPendingSessionIds
       }
       // The card row "..." menu: the plugin-owned captured-target kind the shared
       // popup opens against plus the pure delegation helpers (Pin/Unpin filtering

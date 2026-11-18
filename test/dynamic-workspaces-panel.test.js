@@ -1,42 +1,20 @@
 /**
- * Unit tests for the Running & recent card's native-pin ordering and the
- * pending-interaction flag derivation (`pending-notice-align` inline-flag design).
+ * Unit tests for the Running & recent card's pending-interaction derivation.
  *
- * `src/client.js` is a browser classic script materialized in a `node:vm`
- * sandbox by `test/helpers/client-module.mjs`; the helpers are read from the
- * `dynamicWorkspacesPanel` test-hook namespace.
- *
- * Notices are derived from the client's own `SessionStatus.pendingInteraction`
- * (question / plan-review / approval) and are preview-only — the native composer
- * card remains the answering surface. Pin coverage lives in
- * `test/dynamic-workspaces-pin.test.js` (the card-owned pin document).
+ * The pure model lives in `src/browser/dynamic-workspaces/activity.ts`; this
+ * file imports it directly. Notices come from the client's own
+ * `SessionStatus.pendingInteraction` (question / plan-review / approval) and are
+ * preview-only. Pin coverage lives in `test/dynamic-workspaces-pin.test.js`.
  */
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { loadClientModule } from './helpers/client-module.mjs'
+import { dwPendingSessionIds } from '../src/browser/dynamic-workspaces/activity.ts'
 
-const client = loadClientModule()
-/** Copy a sandbox-realm value into this realm for strict deep equality. */
+/** Copy a value for strict deep equality. */
 const plain = (value) => structuredClone(value)
-const production = loadClientModule({ hooksFlag: false })
-const panel = client.hooks?.dynamicWorkspacesPanel
 
 /** Fixed clock used by every fixture (2025-10-09T08:53:20Z). */
 const NOW = 1_760_000_000_000
-
-/** Functions the seam must expose. */
-const SEAM_KEYS = ['dwPendingSessionIds']
-
-/**
- * Read one helper off the panel seam with a clear failure.
- * @param {string} name - seam key.
- * @returns {Function} the helper.
- */
-function helper(name) {
-  assert.notEqual(panel, undefined, 'hooks.dynamicWorkspacesPanel is missing from src/client.js')
-  assert.equal(typeof panel[name], 'function', `hooks.dynamicWorkspacesPanel.${name} is not a function`)
-  return panel[name]
-}
 
 /** Session-list summary fixture. */
 function summary(id, overrides = {}) {
@@ -48,16 +26,8 @@ function summary(id, overrides = {}) {
   }
 }
 
-test('the panel seam exposes the pending-flag helper', () => {
-  assert.notEqual(panel, undefined, 'hooks.dynamicWorkspacesPanel is missing')
-  for (const name of SEAM_KEYS) {
-    assert.equal(typeof panel[name], 'function', `${name} is exported through the seam`)
-  }
-  assert.equal(production.hooks, undefined, 'the test-hook seam stays inert when the flag is not set')
-})
-
 test('waiting Session ids cover every pending kind and skip non-actionable Sessions', () => {
-  const derive = helper('dwPendingSessionIds')
+  const derive = dwPendingSessionIds
   const filtered = derive({
     list: {
       byId: {
@@ -99,7 +69,7 @@ test('waiting Session ids cover every pending kind and skip non-actionable Sessi
 })
 
 test('approval/plan-review kinds and the status-id fallback keep their flag', () => {
-  const derive = helper('dwPendingSessionIds')
+  const derive = dwPendingSessionIds
   const run = derive({
     list: { byId: { approval: summary('approval', { updatedAt: NOW }), plan: summary('plan', { updatedAt: NOW - 1_000 }) } },
     statuses: new Map([
