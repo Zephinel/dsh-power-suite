@@ -165,6 +165,18 @@ declare var MutationObserver: {
   new (callback: (records: MutationRecordLike[]) => void): MutationObserver
 }
 
+/** Minimal FileList surface the draft-memory capture listener reads. */
+interface FileListLike extends Iterable<File> {
+  readonly length: number
+  [index: number]: File
+}
+
+/** File input the draft-memory change listener narrows to. */
+declare class HTMLInputElement extends HTMLElement {
+  readonly type: string
+  readonly files: FileListLike
+}
+
 /** Button state the interrupted composer seat reads and resets. */
 declare class HTMLButtonElement extends HTMLElement {
   disabled: boolean
