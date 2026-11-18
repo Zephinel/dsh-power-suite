@@ -278,11 +278,20 @@ function dwDisplayPercentUnits(units: number, decimalPlaces: number): string {
  * Display-ready cache-hit share that never rounds a partial hit up to 100
  * (the native honesty case: 999 999 / 1 000 000 reads `99.9999`, not
  * `100`). A full hit returns `100`; no billed input returns null.
+ *
+ * Total for inconsistent readings as well: a cache-read count above the
+ * billed input total (impossible when the prompt-side buckets are disjoint),
+ * a negative count, or a non-finite number returns null — there is no honest
+ * share to show, and the row is simply omitted. The share is never clamped to
+ * 100, because that would turn bad data into a perfect hit.
  * @param cacheReadTokens - prompt tokens served from cache.
  * @param billedInputTokens - all prompt-side billing buckets.
- * @returns percentage text without the percent sign.
+ * @returns percentage text without the percent sign, or null when unknown.
  */
 export function dwCacheHitPercent(cacheReadTokens: number, billedInputTokens: number): string | null {
+  if (!Number.isFinite(cacheReadTokens) || !Number.isFinite(billedInputTokens)) return null
+  if (cacheReadTokens < 0 || billedInputTokens < 0) return null
+  if (cacheReadTokens > billedInputTokens) return null
   if (billedInputTokens === 0) return null
   const missedInputTokens = billedInputTokens - cacheReadTokens
   if (missedInputTokens === 0) return '100'

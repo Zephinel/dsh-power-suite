@@ -137,6 +137,112 @@ test('cache-hit percentage is honest about partial hits', () => {
   assert.equal(dwCacheHitPercent(39590528, 426524 + 39590528 + 0), String(Math.round(ratio * 100)))
 })
 
+/**
+ * The pre-fix cache-hit recipe, frozen as a behaviour oracle. For consistent
+ * readings (0 <= cacheRead <= billed) the total function must keep returning
+ * exactly these strings; the copy is never used for inconsistent input
+ * because the old loop did not terminate there.
+ * @param {number} cacheReadTokens - prompt tokens served from cache.
+ * @param {number} billedInputTokens - all prompt-side billing buckets.
+ * @returns {string | null} percentage text without the percent sign.
+ */
+function legacyCacheHitPercent(cacheReadTokens, billedInputTokens) {
+  if (billedInputTokens === 0) return null
+  const missedInputTokens = billedInputTokens - cacheReadTokens
+  if (missedInputTokens === 0) return '100'
+  const roundedUnits = legacyRoundedPercentUnits(cacheReadTokens, billedInputTokens, 0)
+  if (roundedUnits < 100) return legacyDisplayPercentUnits(roundedUnits, 0)
+  let distinguishingPlaces = 1
+  let scaledDoubleGap = missedInputTokens * 200
+  const denominatorTens = Math.floor(billedInputTokens / 10)
+  while (scaledDoubleGap <= denominatorTens) {
+    scaledDoubleGap *= 10
+    distinguishingPlaces += 1
+  }
+  const denominatorOnes = billedInputTokens % 10
+  let roundedLoss = 5
+  for (let loss = 1; loss < 5; loss += 1) {
+    const factor = loss * 2 + 1
+    const threshold = factor * denominatorTens + Math.floor(factor * denominatorOnes / 10)
+    if (scaledDoubleGap <= threshold) {
+      roundedLoss = loss
+      break
+    }
+  }
+  return `99.${'9'.repeat(distinguishingPlaces - 1)}${10 - roundedLoss}`
+}
+
+/** Pre-fix bisection rounding, copied verbatim for the oracle. */
+function legacyRoundedPercentUnits(cacheReadTokens, denominator, decimalPlaces) {
+  const scale = (decimalPlaces === 0 ? 1 : 10) * 100
+  const doubledScale = scale * 2
+  const denominatorQuotient = Math.floor(denominator / doubledScale)
+  const denominatorRemainder = denominator % doubledScale
+  let lower = 0
+  let upper = scale
+  while (lower < upper) {
+    const candidate = Math.floor((lower + upper + 1) / 2)
+    const factor = candidate * 2 - 1
+    if (cacheReadTokens >= factor * denominatorQuotient + Math.ceil(factor * denominatorRemainder / doubledScale)) lower = candidate
+    else upper = candidate - 1
+  }
+  return lower
+}
+
+/** Pre-fix percentage display, copied verbatim for the oracle. */
+function legacyDisplayPercentUnits(units, decimalPlaces) {
+  if (decimalPlaces === 0) return String(units)
+  const whole = Math.floor(units / 10)
+  const tenths = units % 10
+  return tenths === 0 ? String(whole) : `${whole}.${tenths}`
+}
+
+test('cache-hit percentage is total for inconsistent cache data', () => {
+  // A cache-read count above the billed input total is impossible (the buckets
+  // are disjoint). Before the guard, `missedInputTokens` went negative and the
+  // 99.9… precision loop never terminated, hanging the hover card.
+  assert.equal(dwCacheHitPercent(200, 100), null)
+  assert.equal(dwCacheHitPercent(101, 100), null)
+  assert.equal(dwCacheHitPercent(1, 0), null)
+  // Negative and non-finite readings have no honest share either.
+  assert.equal(dwCacheHitPercent(-1, 100), null)
+  assert.equal(dwCacheHitPercent(50, -100), null)
+  assert.equal(dwCacheHitPercent(Number.NaN, 100), null)
+  assert.equal(dwCacheHitPercent(100, Number.NaN), null)
+  assert.equal(dwCacheHitPercent(Number.POSITIVE_INFINITY, 100), null)
+  assert.equal(dwCacheHitPercent(100, Number.POSITIVE_INFINITY), null)
+  // Consistent readings keep the exact previous output.
+  assert.equal(dwCacheHitPercent(1000, 1000), '100')
+  assert.equal(dwCacheHitPercent(960, 1000), '96')
+  assert.equal(dwCacheHitPercent(999999, 1000000), '99.9999')
+})
+
+test('cache-hit percentage matches the pre-fix recipe for consistent data', () => {
+  let compared = 0
+  for (let billed = 0; billed <= 120; billed += 1) {
+    for (let cacheRead = 0; cacheRead <= billed; cacheRead += 1) {
+      assert.equal(
+        dwCacheHitPercent(cacheRead, billed),
+        legacyCacheHitPercent(cacheRead, billed),
+        `consistent input ${cacheRead}/${billed} changed`
+      )
+      compared += 1
+    }
+  }
+  for (const [cacheRead, billed] of [
+    [1, 3], [1, 1000], [999, 1000], [9999, 10000], [999999, 1000000],
+    [999999999, 1000000000], [426524, 40017052], [39590528, 40017052]
+  ]) {
+    assert.equal(
+      dwCacheHitPercent(cacheRead, billed),
+      legacyCacheHitPercent(cacheRead, billed),
+      `consistent input ${cacheRead}/${billed} changed`
+    )
+    compared += 1
+  }
+  assert.equal(compared, 7389, 'grid coverage')
+})
+
 test('billed input and context occupancy follow the native seams', () => {
   assert.equal(dwBilledInputTokens({ uncachedInputTokens: 1, cacheReadTokens: 2, cacheWriteTokens: 3 }), 6)
   assert.equal(dwContextOccupancy(null), null)
