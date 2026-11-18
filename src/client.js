@@ -25,6 +25,7 @@ import {
 import { copyArtifactContent, copyText } from './browser/artifacts/clipboard.ts'
 import { ARTIFACTS_NS } from './browser/artifacts/copy.ts'
 import { createArtifactsComponents } from './browser/artifacts/panel.ts'
+import { createPromptHistorySeat } from './browser/prompt-history/seat.ts'
 import { createSettingsPage } from './browser/settings/page.ts'
 import { createSettingsStore } from './browser/settings/store.ts'
 import { createWorkspacePresets } from './browser/workspace-presets/install.ts'
@@ -297,253 +298,6 @@ window.__ModuleLoader__.load({
 
 
 
-    //#region feature: prompt history
-    /** Seat identity of the composer overlay registration. */
-    const PROMPT_HISTORY_SEAT = 'power-suite.prompt-history'
-
-    /** Host route returning one Session's complete sent-prompt history. */
-    const PROMPT_HISTORY_ROUTE = browserRoute(ROUTES.promptHistoryList)
-
-    /**
-     * Whether a composer menu or listbox owns arrow keys right now.
-     * @returns {boolean} whether Up/Down belong to an open popup.
-     */
-    function arrowMenuOpen() {
-      return document.querySelector('[data-trigger-menu], [role="listbox"], [role="menu"]') !== null
-    }
-
-    /**
-     * Read one Session's prompt history entries from the Host.
-     * @param {string} sessionId - Session identity.
-     * @returns {Promise<Array<{ seq: number, text: string, at?: number }>>} prompts oldest first; empty on failure.
-     */
-    async function readPromptHistoryEntries(sessionId) {
-      try {
-        const response = await fetch(`${appUrl(PROMPT_HISTORY_ROUTE)}?sessionId=${encodeURIComponent(sessionId)}`, {
-          credentials: 'same-origin',
-          headers: { accept: 'application/json' }
-        })
-        if (!response.ok) return []
-        const value = await response.json()
-        if (value === null || typeof value !== 'object' || !Array.isArray(value.prompts)) return []
-        const prompts = []
-        for (const entry of value.prompts) {
-          if (entry === null || typeof entry !== 'object' || typeof entry.text !== 'string' || entry.text.length === 0) continue
-          const prompt = { seq: typeof entry.seq === 'number' ? entry.seq : 0, text: entry.text }
-          // The Host may report the prompt's epoch-ms `at`; older Hosts omit it,
-          // in which case the preview simply hides every timestamp surface.
-          if (typeof entry.at === 'number' && Number.isFinite(entry.at)) prompt.at = entry.at
-          prompts.push(prompt)
-        }
-        return prompts
-      } catch {
-        return []
-      }
-    }
-
-    /**
-     * Read one Session's prompt history from the Host.
-     * @param {string} sessionId - Session identity.
-     * @returns {Promise<string[]>} prompt texts oldest first; empty on failure.
-     */
-    async function readPromptHistory(sessionId) {
-      const prompts = await readPromptHistoryEntries(sessionId)
-      return prompts.map((prompt) => prompt.text)
-    }
-
-    /**
-     * Invisible composer seat that owns prompt-history key handling.
-     *
-     * It renders nothing. Its effect watches the focused Lexical composer and
-     * turns the primary-modifier Up/Down into prompt-history switching. Plain
-     * arrows keep their original caret behavior; a recalled multi-line prompt
-     * is skipped as one history entry instead of moving the caret inside it.
-     * Any edit or submit leaves browsing. The list comes from the Host, not
-     * from the loaded chat window, so earlier pages are recallable too.
-     * @param {object} props - standard session slot props.
-     * @returns {null} no DOM.
-     */
-    function PromptHistorySeat(props) {
-      const { sessionId, useInput, inputActions } = props
-      const draft = useInput((state) => state.draft)
-      const phase = useInput((state) => state.phase)
-      const browsing = React.useRef({ index: null, saved: '', recalled: null })
-      const history = React.useRef({ prompts: [], ready: false, loading: null, sessionId: null, generation: 0 })
-      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
-      const anchor = React.useRef(null)
-      const latest = React.useRef({ draft, phase, sessionId })
-      latest.current.draft = draft
-      latest.current.phase = phase
-      latest.current.sessionId = sessionId
-
-      const load = React.useCallback(() => {
-        const target = sessionId
-        const state = history.current
-        if (state.sessionId !== target) return Promise.resolve(state.prompts)
-        if (state.loading !== null) return state.loading
-        const generation = state.generation
-        const task = readPromptHistory(target).then((prompts) => {
-          // A stale response from a previous Session must never write into the
-          // new Session's cache, even if it resolves after the switch.
-          const current = history.current
-          if (current.generation !== generation || current.sessionId !== target) return current.prompts
-          current.loading = null
-          if (prompts.length > 0 || !current.ready) {
-            current.prompts = prompts
-            current.ready = true
-          }
-          return current.prompts
-        }, () => {
-          const current = history.current
-          if (current.generation !== generation || current.sessionId !== target) return current.prompts
-          current.loading = null
-          return current.prompts
-        })
-        state.loading = task
-        return task
-      }, [sessionId])
-
-      React.useEffect(() => {
-        const generation = history.current.generation + 1
-        history.current = { prompts: [], ready: false, loading: null, sessionId, generation }
-        browsing.current = { index: null, saved: '', recalled: null }
-        load()
-        return () => {
-          // Invalidate any response that arrives after this Session unmounts.
-          history.current.generation += 1
-        }
-      }, [sessionId, load])
-
-      React.useEffect(() => {
-        browsing.current = { index: null, saved: '', recalled: null }
-      }, [sessionId])
-
-      React.useEffect(() => {
-        if (browsing.current.index === null) return
-        if (draft !== browsing.current.recalled) {
-          browsing.current = { index: null, saved: '', recalled: null }
-        }
-      }, [draft])
-
-      const previousPhase = React.useRef(phase)
-      React.useEffect(() => {
-        const before = previousPhase.current
-        previousPhase.current = phase
-        if (phase !== 'plain') {
-          browsing.current = { index: null, saved: '', recalled: null }
-          return
-        }
-        if (before !== 'plain') load()
-      }, [phase, load])
-
-      React.useEffect(() => {
-        /**
-         * Commit one prompt (or the saved draft) into the editor.
-         * @param {string} text - draft text to place.
-         * @returns {void}
-         */
-        const recall = (text) => {
-          browsing.current.recalled = text
-          inputActions.setDraft(text)
-        }
-        /**
-         * Start browsing from the current draft, whatever it holds.
-         * @param {readonly string[]} prompts - history oldest first.
-         * @returns {void}
-         */
-        const beginBrowsing = (prompts) => {
-          if (browsing.current.index !== null) return
-          if (prompts.length === 0) return
-          browsing.current.saved = latest.current.draft
-          browsing.current.index = prompts.length - 1
-          recall(prompts[browsing.current.index])
-        }
-        /**
-         * Handle one keydown captured before Lexical moves the caret.
-         * @param {KeyboardEvent} event - the composer keydown.
-         * @returns {void}
-         */
-        const onKeyDown = (event) => {
-          if (event.defaultPrevented || event.isComposing) return
-          if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
-          if (!settingsStore.matchesHistoryModifier(event, settingsStore.current().promptHistoryModifier)) return
-          const target = event.target
-          if (target === null || typeof target.closest !== 'function') return
-          const editor = target.closest('[data-lexical-editor="true"]')
-          if (editor === null) return
-          const region = editor.closest('[data-conversation-region="composer"]')
-          if (region === null) return
-          const own = anchor.current === null ? null : anchor.current.closest('[data-conversation-region="composer"]')
-          if (own !== null && own !== region) return
-          const occurrence = editor.closest('[data-conversation-session]')
-          const currentSession = latest.current.sessionId
-          if (occurrence !== null && currentSession !== undefined && occurrence.getAttribute('data-conversation-session') !== currentSession) return
-          if (arrowMenuOpen()) return
-          const state = latest.current
-          const list = history.current.prompts
-          const browse = browsing.current
-          if (browse.index !== null && (browse.index >= list.length || list.length === 0)) {
-            browsing.current = { index: null, saved: '', recalled: null }
-            return
-          }
-          if (event.key === 'ArrowUp') {
-            if (browse.index !== null) {
-              if (browse.index > 0) {
-                browse.index -= 1
-                recall(list[browse.index])
-              }
-              event.preventDefault()
-              event.stopPropagation()
-              return
-            }
-            event.preventDefault()
-            event.stopPropagation()
-            if (history.current.ready) {
-              beginBrowsing(history.current.prompts)
-              return
-            }
-            load().then(beginBrowsing)
-            return
-          }
-          if (browse.index === null) return
-          if (browse.index < list.length - 1) {
-            browse.index += 1
-            recall(list[browse.index])
-          } else {
-            const saved = browse.saved
-            browsing.current = { index: null, saved: '', recalled: null }
-            recall(saved)
-          }
-          event.preventDefault()
-          event.stopPropagation()
-        }
-        document.addEventListener('keydown', onKeyDown, true)
-        return () => document.removeEventListener('keydown', onKeyDown, true)
-      }, [inputActions, load])
-
-      // A zero-size anchor keeps each seat bound to the composer occurrence it
-      // rendered in, so a second mounted composer of the same Session never
-      // handles the same key twice.
-      return React.createElement('span', {
-        ref: anchor,
-        style: { display: 'none' },
-        'aria-hidden': true
-      })
-    }
-
-    /**
-     * Contribute the invisible prompt-history composer seat.
-     * @param {object} ctx - client root context.
-     * @returns {void}
-     */
-    function installPromptHistory(ctx) {
-      ctx.effect(() => ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({
-        name: 'conversation.input.overlay',
-        id: PROMPT_HISTORY_SEAT,
-        order: 40
-      }, PromptHistorySeat)), 'power-suite: prompt history seat')
-    }
-    //#endregion
 
 
 
@@ -2421,6 +2175,20 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     })
     //#endregion
 
+    //#region feature: prompt history
+    //
+    // The invisible composer seat, its keydown capture and the Host reader live
+    // in `src/browser/prompt-history/seat.ts`: the entry only binds the React
+    // runtime, the app URL builder and the shared settings store, then installs
+    // the seat in `apply`. Slot id/order and behavior are unchanged; this
+    // region is a wiring point.
+    const promptHistory = createPromptHistorySeat({
+      React,
+      appUrl,
+      settings: settingsStore
+    })
+    //#endregion
+
     //#region plugin
     /**
      * Register dictionaries, the page type, and its Session-scoped body.
@@ -2451,7 +2219,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       artifactsFeature.installArtifacts(/** @type {import('./browser/artifacts/panel.ts').ArtifactsContext} */ (ctx))
       workspacePresets.installWorkspacePresetMenu(/** @type {import('./browser/workspace-presets/install.ts').WorkspacePresetsContext} */ (ctx), appUrl)
       workspacePresets.installWorkspacePresetRouting(/** @type {import('./browser/workspace-presets/install.ts').WorkspacePresetsContext} */ (ctx), appUrl)
-      installPromptHistory(ctx)
+      promptHistory.installPromptHistory(/** @type {import('./browser/prompt-history/seat.ts').PromptHistorySeatContext} */ (ctx))
       installPromptHistoryPreview(/** @type {import('./browser/prompt-history/preview.ts').PromptHistoryPreviewContext} */ (ctx))
       installDraftAttachmentMemory(ctx)
       dynamicWorkspacesInstaller.install(/** @type {import('./browser/dynamic-workspaces/install.ts').DynamicWorkspacesContext} */ (ctx))
