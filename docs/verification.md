@@ -139,6 +139,68 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   `Release-Notes-Review: sha256=<hash>` line is required before publishing
   (covered by `test/release-notes-approval.test.js`).
 
+## Full e2e evidence (2026-11-18, Phase 3 tip)
+
+Branch `feat/typescript-phase3` at `5527db7` (harness fixes later committed as
+`afa000c`), Node 24.22.3, launchd GUI on port 3080. The live GUI still installs
+the published **0.1.0**; annotation/sidebar harnesses inject this worktree's
+`src/client.js` bundle, so those suites exercise the tip source. The isolated
+run installed the tip tarball in a throwaway DSH_HOME.
+
+### Live GUI full suites
+
+- `sidebar.e2e.mjs --no-shots`: **70 PASS / 2 SKIP / 0 FAIL**, exit 0, 0 page
+  errors; the two SKIPs are the explicit data-dependent rows (cold subagent,
+  `--no-shots` gallery). After the harness corrections below (dark atmosphere
+  contract, b4-4 `finally` cleanup, prompt-rail explicit skips) this is stable;
+  the two full runs before the fixes were 61 PASS / 3 SKIP / 8 FAIL with the same
+  failures caused by OS-dark theme state and a missing prompt rail.
+- `annotation.e2e.mjs --no-shots`: **19 PASS / 1 SKIP / 3 FAIL**, exit 1,
+  0 page errors, 0 real network failures. This is an improvement on the same tip
+  before the visibility hardening (9 PASS / 1 SKIP / 13 FAIL). The three red rows
+  are S10 (page-record re-resolve after reload), S12 (marks after reload) and S14
+  (persistence count) — all three pass when run individually
+  (`--scenario 10` 8/0/0, `--scenario 12` 7/0/0, `--scenario 14` 7/0/0). Their
+  full-run failures carry a current-session id different from the records'
+  session and a synthetic-record count; the long live run was concurrently
+  switched by GUI/user activity, so these are cross-scenario live-state failures,
+  not product regressions. S13f is the documented SKIP (chip fallback cannot be
+  forced against the live composer services).
+- Chrome flags `--disable-background-timer-throttling`,
+  `--disable-renderer-backgrounding`, `--disable-backgrounding-occluded-windows`
+  and per-scenario `Page.bringToFront` / focus emulation / active lifecycle fixed
+  the S3 hidden-page transition freeze; S3 then passes standalone and in sequence.
+
+### Isolated tip artifact and suites
+
+- Clean `git archive 5527db7` build: `lib/index.js` 105.9 kB, `lib/client.js`
+  934.1 kB; `npm pack` produced a **75-file, 4,601,858 B** tarball, sha256
+  `2997d77f330bb0f6f1c25b98d7b53e26757e21a2b03983ae3060c9ee626a177d`.
+- Throwing away the tarball-installed client: served bytes 956,644 B; the
+  installed `lib/client.js` (956,562 B) is an exact byte prefix, the remaining
+  82 B are the combo separator + source-map trailer; classic `"use strict"`,
+  no top-level imports, DSH module id present; source map 1,091,536 B; page boot
+  mounts the launcher and the five plugin styles with 0 page exceptions.
+- `update-prompt.e2e.mjs` against the installed tip: **21/21**, 0 page errors.
+- `sidebar --smoke`: **4/4**; `sidebar --layout` on a fresh profile initially
+  **8/4** because the first-run Get started modal mask intercepts the drag; the
+  same harness with the throwaway bootstrap modal dismissal reaches **12/12**.
+  The repo harness does not yet have `sidebar --bootstrap`; this is a documented
+  fresh-profile limitation, not a product failure.
+- `annotation --smoke`: **6/6** with `--bootstrap` (5/6 without it on a fresh
+  profile, blocked by the same modal); S4 7/7; S10 7 PASS / 1 SKIP; S12 6/7
+  (fresh-profile text-quote ambiguity), all with 0 page errors.
+
+### Reproduction notes
+
+- Live full runs are not deterministic while the GUI is in active human use; the
+  deterministic artifact/update evidence above is the release-critical proof.
+  For a fully green live full annotation run, either run against an isolated
+  cloned profile or re-run when the GUI is idle and treat the reload scenarios
+  as the residual risk.
+- Non-gating noise: DSH telemetry `ws://127.0.0.1:9230/ingest` 403 responses
+  (WebSocket, not plugin JavaScript).
+
 ### Historical baseline evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round — the
 counts below were current when that round closed and are kept as history, not as
 current state):
