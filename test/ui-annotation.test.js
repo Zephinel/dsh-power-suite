@@ -117,6 +117,27 @@ import {
   sanitizeText as sanitizeAnnotationText,
   textDigest as annotationTextDigest
 } from '../src/browser/ui-annotation/text.ts'
+import {
+  annotationAncestorTagChain,
+  annotationCopyAnchorDecision,
+  annotationDescendantAncestorMatches,
+  annotationDisambiguateQuote,
+  annotationEphemeralOutcome,
+  annotationFallbackCacheKey,
+  annotationFullXPathOf,
+  annotationHasStrongIdentity,
+  annotationJsPathFor,
+  annotationLevenshteinWithin,
+  annotationRenderTextChunks,
+  annotationRenderedTextRepeatCount,
+  annotationScopeAuthorityOutcome,
+  annotationScoreQuoteMatches,
+  annotationStatusConfidence,
+  annotationStatusLabelKey,
+  annotationStructuralFallbackStatus,
+  annotationTextQuoteMatches,
+  annotationXPathOf
+} from '../src/browser/ui-annotation/anchors.ts'
 
 /** One materialization of the browser module; the seam is read from it. */
 const client = loadClientModule()
@@ -2750,16 +2771,16 @@ if (ui === undefined) {
     const spanSecond = makeElement('span', div)
     spanFirst.previousElementSibling = null
     spanSecond.previousElementSibling = spanFirst
-    const xpath = ui.annotationXPathOf(spanSecond)
+    const xpath = annotationXPathOf(spanSecond)
     assert.equal(xpath, '/html[1]/body[1]/div[1]/span[2]', `xpath generation wrong: ${xpath}`)
-    const jsSelector = ui.annotationJsPathFor({ selector: '#target' })
+    const jsSelector = annotationJsPathFor({ selector: '#target' })
     assert.equal(jsSelector, 'document.querySelector("#target")')
-    const jsXPath = ui.annotationJsPathFor({ xpath })
+    const jsXPath = annotationJsPathFor({ xpath })
     assert(jsXPath.startsWith('document.evaluate(') && jsXPath.includes('XPathResult.FIRST_ORDERED_NODE_TYPE'), `js path fallback wrong: ${jsXPath}`)
     const quote = { exact: 'unique phrase', prefix: 'start ', suffix: ' end' }
-    assert.equal(ui.annotationTextQuoteMatches('start unique phrase end', quote), true)
-    assert.equal(ui.annotationTextQuoteMatches('start unique phrase end and start unique phrase end', quote), false, 'two matches must not resolve')
-    assert.equal(ui.annotationTextQuoteMatches('other unique phrase end', quote), false, 'prefix mismatch must not resolve')
+    assert.equal(annotationTextQuoteMatches('start unique phrase end', quote), true)
+    assert.equal(annotationTextQuoteMatches('start unique phrase end and start unique phrase end', quote), false, 'two matches must not resolve')
+    assert.equal(annotationTextQuoteMatches('other unique phrase end', quote), false, 'prefix mismatch must not resolve')
     const score = (kind, value, reliability) => annotationSelectorScore({ kind, value, reliability })
     assert(score('data', '[data-slot="x"]', 0.9) > score('role', '[role="button"]', 0.9), 'stable data beats semantic roles')
     assert(score('label', '[aria-label="X"]', 0.9) > score('role', '[role="button"]', 0.9), 'aria labels beat semantic roles')
@@ -2848,7 +2869,7 @@ if (ui === undefined) {
 
   test('A3/T34: rendered text offsets, quote disambiguation, scoring, full XPath and cache keys', () => {
     // W3 rendered text: block boundary contributes one space + raw offset mapping.
-    const rendered = ui.annotationRenderTextChunks([
+    const rendered = annotationRenderTextChunks([
       { text: '  line one ', rawStart: 0 },
       { text: 'line two', blockBefore: true, rawStart: 11 }
     ])
@@ -2857,29 +2878,29 @@ if (ui === undefined) {
       [{ start: 0, end: 8, rawStart: 0 }, { start: 9, end: 17, rawStart: 11 }])
     // W1 disambiguation: duplicate exact text requires context to become unique.
     const scope = 'alpha beta alpha beta gamma'
-    const quote = ui.annotationDisambiguateQuote(scope, 'alpha beta', 11, 20)
+    const quote = annotationDisambiguateQuote(scope, 'alpha beta', 11, 20)
     assert(quote !== null, 'a unique context should produce a quote')
     assert.equal(quote.exact, 'alpha beta')
     assert(quote.prefix.length > 0 || quote.suffix.length > 0, 'expanded context expected')
-    assert.equal(ui.annotationDisambiguateQuote('aa aa', 'aa', 0, 2), null, 'unresolvable duplicate text must drop the quote')
+    assert.equal(annotationDisambiguateQuote('aa aa', 'aa', 0, 2), null, 'unresolvable duplicate text must drop the quote')
     // W2 scoring thresholds: exact full context ≈1, small edit in 0.5..0.85, unrelated low.
     const full = 'start unique phrase end'
-    const scored = ui.annotationScoreQuoteMatches(full, { exact: 'unique phrase', prefix: 'start ', suffix: ' end' })
+    const scored = annotationScoreQuoteMatches(full, { exact: 'unique phrase', prefix: 'start ', suffix: ' end' })
     assert(scored.length === 1 && scored[0].score >= 0.85, `exact quote with context should score high: ${JSON.stringify(scored)}`)
-    const edited = ui.annotationScoreQuoteMatches('start unique phras end', { exact: 'unique phrase', prefix: 'start ', suffix: ' end' })
+    const edited = annotationScoreQuoteMatches('start unique phras end', { exact: 'unique phrase', prefix: 'start ', suffix: ' end' })
     assert(edited.length === 1 && edited[0].score >= 0.5 && edited[0].score < 0.85, `small edit should land in 0.5..0.85: ${JSON.stringify(edited)}`)
-    assert.equal(ui.annotationLevenshteinWithin('abc', 'abd', 2), 1)
-    assert.equal(ui.annotationLevenshteinWithin('abc', 'xyz', 1), 2, 'bounded distance exceeds the bound')
+    assert.equal(annotationLevenshteinWithin('abc', 'abd', 2), 1)
+    assert.equal(annotationLevenshteinWithin('abc', 'xyz', 1), 2, 'bounded distance exceeds the bound')
     // P2 full XPath never short-circuits on ids.
     const makeElement = (tag, parent) => ({ tagName: tag.toUpperCase(), parentElement: parent ?? null, previousElementSibling: null, getAttribute: () => 'stable-id' })
     const html = makeElement('html')
     const body = makeElement('body', html)
     const div = makeElement('div', body)
-    assert.equal(ui.annotationFullXPathOf(div), '/html[1]/body[1]/div[1]')
-    assert.equal(ui.annotationXPathOf(div), '//*[@id="stable-id"]', 'optimized XPath still uses the id short-circuit')
+    assert.equal(annotationFullXPathOf(div), '/html[1]/body[1]/div[1]')
+    assert.equal(annotationXPathOf(div), '//*[@id="stable-id"]', 'optimized XPath still uses the id short-circuit')
     // P1.5 cache key: same record + same revision shares, revision change invalidates.
-    assert.equal(ui.annotationFallbackCacheKey('psa-1', 7), 'psa-1:7')
-    assert.equal(ui.annotationFallbackCacheKey('psa-1', 8), 'psa-1:8')
+    assert.equal(annotationFallbackCacheKey('psa-1', 7), 'psa-1:7')
+    assert.equal(annotationFallbackCacheKey('psa-1', 8), 'psa-1:8')
   })
 
   test('annotationStableSelectorCandidate keeps DOM getAttribute bound to its element', () => {
@@ -2906,27 +2927,27 @@ if (ui === undefined) {
       },
       text: '', textDigest: '811c9dc5'
     }
-    assert.equal(ui.annotationHasStrongIdentity(iconRecord), false, 'empty text + tag-derived name is not identity')
-    assert.equal(ui.annotationStructuralFallbackStatus(iconRecord, 'resolved'), 'changed', 'weak identity must not claim Resolved via XPath/text-position')
-    assert.equal(ui.annotationStructuralFallbackStatus(iconRecord, 'changed'), 'changed')
+    assert.equal(annotationHasStrongIdentity(iconRecord), false, 'empty text + tag-derived name is not identity')
+    assert.equal(annotationStructuralFallbackStatus(iconRecord, 'resolved'), 'changed', 'weak identity must not claim Resolved via XPath/text-position')
+    assert.equal(annotationStructuralFallbackStatus(iconRecord, 'changed'), 'changed')
     const textRecord = { ...iconRecord, text: 'New session', textDigest: 'deadbeef' }
-    assert.equal(ui.annotationHasStrongIdentity(textRecord), true)
-    assert.equal(ui.annotationStructuralFallbackStatus(textRecord, 'resolved'), 'resolved')
+    assert.equal(annotationHasStrongIdentity(textRecord), true)
+    assert.equal(annotationStructuralFallbackStatus(textRecord, 'resolved'), 'resolved')
     const namedRecord = { ...iconRecord, locator: { ...iconRecord.locator, name: 'Close dialog' } }
-    assert.equal(ui.annotationHasStrongIdentity(namedRecord), true, 'a real accessible name is identity')
+    assert.equal(annotationHasStrongIdentity(namedRecord), true, 'a real accessible name is identity')
     const uniqueRecord = { ...iconRecord, locator: { ...iconRecord.locator, uniqueSelector: '[data-testid="close"]', uniqueVerified: true } }
-    assert.equal(ui.annotationHasStrongIdentity(uniqueRecord), true, 'a verified unique locator is identity')
+    assert.equal(annotationHasStrongIdentity(uniqueRecord), true, 'a verified unique locator is identity')
     // Copy decision: live-first, saved fallback, full XPath only with a live node.
-    assert.deepEqual(plain(ui.annotationCopyAnchorDecision({ liveText: 'document.querySelector("#x")', storedText: 'saved', full: false })),
+    assert.deepEqual(plain(annotationCopyAnchorDecision({ liveText: 'document.querySelector("#x")', storedText: 'saved', full: false })),
       { text: 'document.querySelector("#x")', source: 'live' })
-    assert.deepEqual(plain(ui.annotationCopyAnchorDecision({ liveText: '', storedText: '/html[1]/body[1]/div[1]', full: false })),
+    assert.deepEqual(plain(annotationCopyAnchorDecision({ liveText: '', storedText: '/html[1]/body[1]/div[1]', full: false })),
       { text: '/html[1]/body[1]/div[1]', source: 'saved' })
-    assert.deepEqual(plain(ui.annotationCopyAnchorDecision({ liveText: '', storedText: '/saved', full: true })),
+    assert.deepEqual(plain(annotationCopyAnchorDecision({ liveText: '', storedText: '/saved', full: true })),
       { text: '', source: 'none' }, 'full XPath is never fabricated from a saved anchor')
   })
 
   test('A3/T36: rendered-text whitespace separators and quote context round-trip', () => {
-    const rendered = ui.annotationRenderTextChunks([
+    const rendered = annotationRenderTextChunks([
       { text: 'Hello', rawStart: 0, rawEnd: 5 },
       { text: ' ', rawStart: 5, rawEnd: 6 },
       { text: 'world', rawStart: 6, rawEnd: 11 }
@@ -2948,14 +2969,14 @@ if (ui === undefined) {
 
   test('A3/T38: rendered repeat count, descendant climb matching, confidence labels', () => {
     // ⑤ rendered climb counting is separator-aware.
-    const rendered = ui.annotationRenderTextChunks([
+    const rendered = annotationRenderTextChunks([
       { text: 'Hello', rawStart: 0, rawEnd: 5 },
       { text: 'world', blockBefore: true, rawStart: 5, rawEnd: 10 },
       { text: ' Hello world ', rawStart: 10, rawEnd: 23 }
     ])
     assert.equal(rendered.text, 'Hello world Hello world')
-    assert.equal(ui.annotationRenderedTextRepeatCount(rendered.text, 'Hello world'), 2)
-    assert.equal(ui.annotationRenderedTextRepeatCount(rendered.text, 'missing'), 0)
+    assert.equal(annotationRenderedTextRepeatCount(rendered.text, 'Hello world'), 2)
+    assert.equal(annotationRenderedTextRepeatCount(rendered.text, 'missing'), 0)
     // ③ descendant ancestor signature matching (tag + recorded stable attrs).
     const descendantRef = {
       tag: 'div',
@@ -2967,24 +2988,24 @@ if (ui === undefined) {
         anchorSignature: { tag: 'div', attrs: [{ name: 'data-card', value: 'unique' }] }
       }
     }
-    assert.equal(ui.annotationDescendantAncestorMatches(descendantRef, { tag: 'div', attrs: { 'data-card': 'unique' } }), true)
-    assert.equal(ui.annotationDescendantAncestorMatches(descendantRef, { tag: 'div', attrs: { 'data-card': 'other' } }), false, 'signature mismatch must not match')
-    assert.equal(ui.annotationDescendantAncestorMatches(descendantRef, { tag: 'section', attrs: { 'data-card': 'unique' } }), false, 'tag mismatch must not match')
-    assert.equal(ui.annotationDescendantAncestorMatches({ tag: 'div', locator: { tag: 'div' } }, { tag: 'div', attrs: {} }), false, 'leaf/self anchors never climb')
+    assert.equal(annotationDescendantAncestorMatches(descendantRef, { tag: 'div', attrs: { 'data-card': 'unique' } }), true)
+    assert.equal(annotationDescendantAncestorMatches(descendantRef, { tag: 'div', attrs: { 'data-card': 'other' } }), false, 'signature mismatch must not match')
+    assert.equal(annotationDescendantAncestorMatches(descendantRef, { tag: 'section', attrs: { 'data-card': 'unique' } }), false, 'tag mismatch must not match')
+    assert.equal(annotationDescendantAncestorMatches({ tag: 'div', locator: { tag: 'div' } }, { tag: 'div', attrs: {} }), false, 'leaf/self anchors never climb')
     // Run→ancestor climb is represented by validate + climb helpers in the controller;
     // here we pin the tag-chain shape and signature contract.
     const fakeLeaf = { tagName: 'SPAN', parentElement: { tagName: 'P', parentElement: { tagName: 'DIV', parentElement: null } } }
-    assert.deepEqual(plain(ui.annotationAncestorTagChain(fakeLeaf, fakeLeaf.parentElement.parentElement)), ['p', 'div'])
+    assert.deepEqual(plain(annotationAncestorTagChain(fakeLeaf, fakeLeaf.parentElement.parentElement)), ['p', 'div'])
     // ② weak-identity confidence + i18n label mapping (statuses unchanged).
     const iconRef = { tag: 'button', locator: { tag: 'button', role: 'button', name: 'button', uniqueSelector: null, uniqueVerified: false }, text: '', textDigest: '811c9dc5' }
     const strongRef = { ...iconRef, text: 'Close', textDigest: 'deadbeef' }
-    assert.equal(ui.annotationStatusConfidence(iconRef, { status: 'changed', via: 'xpath' }), 'weak')
-    assert.equal(ui.annotationStatusConfidence(iconRef, { status: 'changed', via: 'text-position' }), 'weak')
-    assert.equal(ui.annotationStatusConfidence(iconRef, { status: 'changed', via: 'text-quote' }), 'weak', 'A3/T49: weak identity + quote Changed is Unverifiable')
-    assert.equal(ui.annotationStatusConfidence(strongRef, { status: 'changed', via: 'xpath' }), 'strong')
-    assert.equal(ui.annotationStatusLabelKey('changed', 'weak'), 'status.unverifiableWeak')
-    assert.equal(ui.annotationStatusLabelKey('changed', 'strong'), 'popover.status.changed')
-    assert.equal(ui.annotationStatusLabelKey('resolved', 'weak'), 'popover.status.resolved')
+    assert.equal(annotationStatusConfidence(iconRef, { status: 'changed', via: 'xpath' }), 'weak')
+    assert.equal(annotationStatusConfidence(iconRef, { status: 'changed', via: 'text-position' }), 'weak')
+    assert.equal(annotationStatusConfidence(iconRef, { status: 'changed', via: 'text-quote' }), 'weak', 'A3/T49: weak identity + quote Changed is Unverifiable')
+    assert.equal(annotationStatusConfidence(strongRef, { status: 'changed', via: 'xpath' }), 'strong')
+    assert.equal(annotationStatusLabelKey('changed', 'weak'), 'status.unverifiableWeak')
+    assert.equal(annotationStatusLabelKey('changed', 'strong'), 'popover.status.changed')
+    assert.equal(annotationStatusLabelKey('resolved', 'weak'), 'popover.status.resolved')
     // Descendant-anchor metadata persists (capture-side fields).
     const descRef = refOf({
       tag: 'div',
@@ -3040,7 +3061,7 @@ if (ui === undefined) {
   test('A3/T42: captured scope is authoritative for descendant text anchors', () => {
     const a = { id: 'scope-a-target' }
     const b = { id: 'doc-b-target' }
-    const decide = (inScope, fallback) => plain(ui.annotationScopeAuthorityOutcome({ inScope, fallback }))
+    const decide = (inScope, fallback) => plain(annotationScopeAuthorityOutcome({ inScope, fallback }))
     // 1) unique in-scope target + out-of-scope duplicate → the scope target wins.
     assert.deepEqual(decide({ targets: [a], ambiguous: false }, { targets: [a, b], ambiguous: false }),
       { source: 'scope', target: a, ambiguous: false })
@@ -3095,21 +3116,21 @@ if (ui === undefined) {
     // R2: ephemeral/floating contract — only visible CSS resolution survives.
     const floatingRef = { locator: { surface: 'floating', ephemeral: true } }
     // A3/T49: surface gone => Missing for ALL outcomes (CSS and text layer).
-    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'changed', via: 'text-quote' })),
+    assert.deepEqual(plain(annotationEphemeralOutcome(floatingRef, { status: 'changed', via: 'text-quote' })),
       { status: 'missing', via: 'text-quote' }, 'surface gone + text-quote Changed must be Missing')
-    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'text-quote' })),
+    assert.deepEqual(plain(annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'text-quote' })),
       { status: 'missing', via: 'text-quote' }, 'surface gone + text-quote Resolved must be Missing')
-    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'css' })),
+    assert.deepEqual(plain(annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'css' })),
       { status: 'missing', via: 'css' }, 'surface gone + CSS outcome must be Missing')
     // Surface present => honest text/CSS outcomes retained.
-    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'changed', via: 'text-quote' }, true)),
+    assert.deepEqual(plain(annotationEphemeralOutcome(floatingRef, { status: 'changed', via: 'text-quote' }, true)),
       { status: 'changed', via: 'text-quote' }, 'A3/T49: still-present surface keeps honest text Changed')
-    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'css' }, true)),
+    assert.deepEqual(plain(annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'css' }, true)),
       { status: 'resolved', via: 'css' }, 'still-present surface keeps CSS resolution')
-    assert.deepEqual(plain(ui.annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'text-quote' }, true)),
+    assert.deepEqual(plain(annotationEphemeralOutcome(floatingRef, { status: 'resolved', via: 'text-quote' }, true)),
       { status: 'resolved', via: 'text-quote' })
     const pageRef = { locator: { surface: 'page', ephemeral: false } }
-    assert.deepEqual(plain(ui.annotationEphemeralOutcome(pageRef, { status: 'changed', via: 'xpath' })),
+    assert.deepEqual(plain(annotationEphemeralOutcome(pageRef, { status: 'changed', via: 'xpath' })),
       { status: 'changed', via: 'xpath' })
   })
 
@@ -3131,13 +3152,13 @@ if (ui === undefined) {
     // matchQuote recall: an edit larger than the old 40%/32 bound is still Changed.
     const longQuote = 'the quick brown fox jumps over the lazy dog'
     const edited = 'the quick brown fix jumps over the lazy dag'
-    const matches = ui.annotationScoreQuoteMatches(edited, { exact: longQuote })
+    const matches = annotationScoreQuoteMatches(edited, { exact: longQuote })
     assert(matches.length === 1 && matches[0].score >= 0.5 && matches[0].score < 0.85,
       `a broader approximate scan should find a Changed-range match: ${JSON.stringify(matches)}`)
     // Distance-faded hint: a match near the hint scores higher than a far one.
     const text = 'context one target phrase here and target phrase again later'
-    const near = ui.annotationScoreQuoteMatches(text, { exact: 'target phrase' }, text.indexOf('target phrase'))
-    const far = ui.annotationScoreQuoteMatches(text, { exact: 'target phrase' }, 0)
+    const near = annotationScoreQuoteMatches(text, { exact: 'target phrase' }, text.indexOf('target phrase'))
+    const far = annotationScoreQuoteMatches(text, { exact: 'target phrase' }, 0)
     assert(near[0].score > far[near[0].index === far[0].index ? 1 : 0].score || near[0].index === far[0].index,
       'the hint must fade with distance, not add a binary bonus')
   })
