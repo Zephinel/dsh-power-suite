@@ -73,6 +73,15 @@ import {
   sanitizeText,
   textDigest
 } from './browser/ui-annotation/text.ts'
+import {
+  annotationJoinLabel,
+  annotationRoutePath,
+  annotationWorkspaceLabel,
+  formatAnnotationTime,
+  normalizeAnnotationBounds,
+  normalizeAnnotationViewport,
+  sessionShortLabel
+} from './browser/ui-annotation/format.ts'
 import { dwEffectiveUpdatedAt, dwPendingSessionIds } from './browser/dynamic-workspaces/activity.ts'
 /**
  * Browser half of DSH Power Suite.
@@ -10655,81 +10664,6 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
-     * Short display form of one Session identity.
-     *
-     * DSH Session ids carry a `session-` prefix followed by a UUID; the prefix
-     * is dropped so two Sessions never render the same `session-` stem.
-     * @param {unknown} sessionId - Session identity.
-     * @returns {string} eight compact characters, or an empty string.
-     */
-    function sessionShortLabel(sessionId) {
-      if (typeof sessionId !== 'string' || sessionId.length === 0) return ''
-      const bare = sessionId.startsWith('session-') ? sessionId.slice('session-'.length) : sessionId
-      const compact = bare.replace(/[^0-9A-Za-z]/g, '')
-      if (compact.length > 0) return compact.slice(0, 8)
-      return sessionId.slice(0, 8)
-    }
-
-    /**
-     * Workspace display label derived from one Session's working directory.
-     *
-     * The full `cwd` is persisted (D6) so a record can name its Workspace across
-     * reloads; only the basename is shown. Trailing separators are ignored and
-     * both platforms' separators are accepted.
-     * @param {unknown} cwd - absolute working directory.
-     * @returns {string | null} display label, or null when unavailable.
-     */
-    function annotationWorkspaceLabel(cwd) {
-      if (typeof cwd !== 'string' || cwd.length === 0) return null
-      const parts = cwd.split(/[\\/]+/).filter((part) => part.length > 0)
-      const label = parts.length > 0 ? parts[parts.length - 1] : ''
-      if (label.length === 0) return null
-      return label.length > 80 ? `${label.slice(0, 79)}…` : label
-    }
-
-    /**
-     * Normalize one navigation pathname for the persisted record.
-     *
-     * Only the pathname is kept: query strings and fragments can carry tokens and
-     * are never stored (D11 privacy contract).
-     * @param {unknown} pathname - location.pathname or a raw route string.
-     * @returns {string} `/`-leading path without query/fragment.
-     */
-    function annotationRoutePath(pathname) {
-      if (typeof pathname !== 'string' || pathname.length === 0) return '/'
-      const cut = pathname.split(/[?#]/)[0]
-      const path = cut.startsWith('/') ? cut : `/${cut}`
-      return path.length > 300 ? path.slice(0, 300) : path
-    }
-
-    /**
-     * Format one epoch-ms timestamp as local 24-hour HH:MM.
-     * @param {unknown} at - epoch milliseconds.
-     * @returns {string} clock label.
-     */
-    function formatAnnotationTime(at) {
-      const value = typeof at === 'number' && Number.isFinite(at) ? at : Date.now()
-      const date = new Date(value)
-      const pad = (part) => String(part).padStart(2, '0')
-      return `${pad(date.getHours())}:${pad(date.getMinutes())}`
-    }
-
-    /**
-     * Join one colon-bearing label with its value. A full-width Chinese colon
-     * takes no following space; an ASCII colon takes one.
-     * @param {string} label - localized label such as `Reference:` / `定位：`.
-     * @param {string} value - the value after the colon.
-     * @returns {string} one formatted line fragment.
-     */
-    function annotationJoinLabel(label, value) {
-      const text = typeof label === 'string' ? label.trimEnd() : ''
-      if (text.length === 0) return value
-      if (text.endsWith('：')) return `${text}${value}`
-      if (text.endsWith(':')) return `${text} ${value}`
-      return `${text}: ${value}`
-    }
-
-    /**
      * One short random token for a ref id.
      * @param {number} length - token length.
      * @returns {string} lowercase alphanumeric token.
@@ -10738,31 +10672,6 @@ function dwClearNativeAtmospheres() {
       let token = ''
       while (token.length < length) token += Math.random().toString(36).slice(2)
       return token.slice(0, length)
-    }
-
-    /**
-     * Normalize one bounds rectangle into plain rounded numbers.
-     * @param {unknown} bounds - possibly partial rectangle.
-     * @returns {{ x: number, y: number, width: number, height: number } | null} normalized rectangle.
-     */
-    function normalizeAnnotationBounds(bounds) {
-      if (bounds === null || typeof bounds !== 'object') return null
-      const parts = ['x', 'y', 'width', 'height'].map((key) => (typeof bounds[key] === 'number' && Number.isFinite(bounds[key]) ? Math.round(bounds[key]) : null))
-      if (parts.some((part) => part === null)) return null
-      return { x: parts[0], y: parts[1], width: parts[2], height: parts[3] }
-    }
-
-    /**
-     * Normalize one captured viewport size.
-     * @param {unknown} viewport - possibly partial `{ width, height }`.
-     * @returns {{ width: number, height: number } | null} normalized size, or null.
-     */
-    function normalizeAnnotationViewport(viewport) {
-      if (viewport === null || typeof viewport !== 'object') return null
-      const width = typeof viewport.width === 'number' && Number.isFinite(viewport.width) && viewport.width > 0 ? Math.round(viewport.width) : null
-      const height = typeof viewport.height === 'number' && Number.isFinite(viewport.height) && viewport.height > 0 ? Math.round(viewport.height) : null
-      if (width === null || height === null) return null
-      return { width, height }
     }
 
     /**

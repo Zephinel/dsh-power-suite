@@ -33,6 +33,11 @@ import {
   serializeSettings as serializeAnnotationSettings
 } from '../src/browser/ui-annotation/settings.ts'
 import {
+  annotationRoutePath,
+  annotationWorkspaceLabel,
+  normalizeAnnotationViewport
+} from '../src/browser/ui-annotation/format.ts'
+import {
   annotationNormalizeQuoteText as normalizeAnnotationQuote,
   cssIdentifier as escapeAnnotationIdentifier,
   normalizeUserNote as normalizeAnnotationNote,
@@ -1375,19 +1380,19 @@ if (ui === undefined) {
   })
 
   test('A2: workspace label and route path helpers keep identity local and query-free', () => {
-    assert.equal(ui.annotationWorkspaceLabel('/Users/me/projects/dsh-power-suite'), 'dsh-power-suite')
-    assert.equal(ui.annotationWorkspaceLabel('/Users/me/projects/dsh-power-suite/'), 'dsh-power-suite')
-    assert.equal(ui.annotationWorkspaceLabel('C:\\work\\plugin'), 'plugin')
-    assert.equal(ui.annotationWorkspaceLabel(''), null)
-    assert.equal(ui.annotationWorkspaceLabel(null), null)
-    assert.equal(ui.annotationWorkspaceLabel('x'.repeat(120)).length, 80)
-    assert.equal(ui.annotationRoutePath('/session/abc'), '/session/abc')
-    assert.equal(ui.annotationRoutePath('/session/abc?token=secret#x'), '/session/abc')
-    assert.equal(ui.annotationRoutePath(''), '/')
-    assert.equal(ui.annotationRoutePath('plugins'), '/plugins')
-    assert.deepEqual(plain(ui.normalizeAnnotationViewport({ width: 1728, height: 900 })), { width: 1728, height: 900 })
-    assert.equal(ui.normalizeAnnotationViewport({ width: 0, height: 900 }), null)
-    assert.equal(ui.normalizeAnnotationViewport(null), null)
+    assert.equal(annotationWorkspaceLabel('/Users/me/projects/dsh-power-suite'), 'dsh-power-suite')
+    assert.equal(annotationWorkspaceLabel('/Users/me/projects/dsh-power-suite/'), 'dsh-power-suite')
+    assert.equal(annotationWorkspaceLabel('C:\\work\\plugin'), 'plugin')
+    assert.equal(annotationWorkspaceLabel(''), null)
+    assert.equal(annotationWorkspaceLabel(null), null)
+    assert.equal(annotationWorkspaceLabel('x'.repeat(120)).length, 80)
+    assert.equal(annotationRoutePath('/session/abc'), '/session/abc')
+    assert.equal(annotationRoutePath('/session/abc?token=secret#x'), '/session/abc')
+    assert.equal(annotationRoutePath(''), '/')
+    assert.equal(annotationRoutePath('plugins'), '/plugins')
+    assert.deepEqual(plain(normalizeAnnotationViewport({ width: 1728, height: 900 })), { width: 1728, height: 900 })
+    assert.equal(normalizeAnnotationViewport({ width: 0, height: 900 }), null)
+    assert.equal(normalizeAnnotationViewport(null), null)
   })
 
   test('A2: describeLocator and annotationLocatorText prefer the verified unique selector', () => {
