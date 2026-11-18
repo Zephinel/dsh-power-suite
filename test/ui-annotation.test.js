@@ -48,6 +48,18 @@ import {
   layoutModeFor
 } from '../src/browser/ui-annotation/geometry.ts'
 import {
+  annotationIsGeneratedClass,
+  annotationLocatorText,
+  annotationSelectorScore,
+  buildElementRef,
+  buildStableAncestors,
+  buildUniqueSelector,
+  describeLocator,
+  elementLabel,
+  identityKeyOf,
+  selectorCandidates
+} from '../src/browser/ui-annotation/identity.ts'
+import {
   annotationNormalizeQuoteText as normalizeAnnotationQuote,
   cssIdentifier as escapeAnnotationIdentifier,
   normalizeUserNote as normalizeAnnotationNote,
@@ -324,7 +336,7 @@ if (ui === undefined) {
    * @returns {object} ElementRef.
    */
   function refOf(descriptorOverrides = {}, contextOverrides = {}) {
-    return ui.buildElementRef(descriptorOf(descriptorOverrides), {
+    return buildElementRef(descriptorOf(descriptorOverrides), {
       sessionId: SESSION_A,
       at: 1_700_000_000_000,
       order: 1,
@@ -530,10 +542,10 @@ if (ui === undefined) {
       assert.equal(sanitizeAnnotationAttributeValue('id', id), null, `the authoritative sanitizer rejects ${id}`)
     }
     for (const id of [...sensitiveIds, ':r1:', '_Row_1a2b3c']) {
-      const candidates = ui.selectorCandidates(descriptorOf({ tag: 'button', id, name: 'Secret target' }))
+      const candidates = selectorCandidates(descriptorOf({ tag: 'button', id, name: 'Secret target' }))
       assert.equal(candidates.some((candidate) => candidate.kind === 'id'), false, `no id candidate for ${id}`)
       const ref = refOf({ tag: 'button', id, name: 'Secret target', text: 'Secret target' })
-      assert.equal(ui.identityKeyOf(ref).startsWith('id:'), false, `no id-based identity for ${id}`)
+      assert.equal(identityKeyOf(ref).startsWith('id:'), false, `no id-based identity for ${id}`)
       for (const candidate of ref.locator.candidates) {
         assert.ok(!candidate.value.includes('alice@example.com'), `email id leaked into ${candidate.value}`)
         assert.ok(!candidate.value.includes('sk-live'), `secret id leaked into ${candidate.value}`)
@@ -544,7 +556,7 @@ if (ui === undefined) {
     assert.equal(sanitizeAnnotationAttributeValue('id', 'composer-send'), 'composer-send')
     const ordinary = refOf({ tag: 'button', id: 'composer-send', name: 'Send', text: 'Send' })
     assert.equal(ordinary.locator.candidates.find((candidate) => candidate.kind === 'id')?.value, '#composer-send')
-    assert.equal(ui.identityKeyOf(ordinary), 'id:#composer-send')
+    assert.equal(identityKeyOf(ordinary), 'id:#composer-send')
   })
 
   test('F2: known stable data attributes keep real row-key values while other secrets stay filtered', () => {
@@ -567,7 +579,7 @@ if (ui === undefined) {
       assert.equal(sanitizeAnnotationAttributeValue('data-row-key', value), null, 'an allow-listed name still rejects secret shapes')
       assert.equal(sanitizeAnnotationAttributeValue('data-unknown', value), null, 'unknown attributes still reject secret shapes')
     }
-    const rowCandidates = ui.selectorCandidates(descriptorOf({
+    const rowCandidates = selectorCandidates(descriptorOf({
       tag: 'div',
       component: 'row',
       attrs: [{ name: 'data-row-key', value: REAL_ROW_KEY }]
@@ -576,7 +588,7 @@ if (ui === undefined) {
     assert.ok(dataCandidate !== undefined, 'the real row key yields a data candidate')
     assert.equal(dataCandidate.value, `[data-row-key="${REAL_ROW_KEY}"]`)
     assert.equal(
-      ui.identityKeyOf(refOf({ tag: 'div', component: 'row', attrs: [{ name: 'data-row-key', value: REAL_ROW_KEY }] })),
+      identityKeyOf(refOf({ tag: 'div', component: 'row', attrs: [{ name: 'data-row-key', value: REAL_ROW_KEY }] })),
       `data:[data-row-key="${REAL_ROW_KEY}"]`,
       'the identity key is built from the surviving row key'
     )
@@ -652,7 +664,7 @@ if (ui === undefined) {
       ],
       component: 'row'
     })
-    const candidates = ui.selectorCandidates(rowDescriptor)
+    const candidates = selectorCandidates(rowDescriptor)
     assert.ok(Array.isArray(candidates) && candidates.length > 0)
     let previousReliability = Number.POSITIVE_INFINITY
     for (const candidate of candidates) {
@@ -669,11 +681,11 @@ if (ui === undefined) {
       assert.ok(!/_[A-Za-z0-9]{4,}/.test(candidate.value), `no hashed class token in ${candidate.value}`)
       assert.ok(!candidate.value.includes('<'), 'never serializes node HTML')
     }
-    assert.deepEqual(plain(ui.selectorCandidates(rowDescriptor)), plain(candidates), 'candidate list is deterministic')
+    assert.deepEqual(plain(selectorCandidates(rowDescriptor)), plain(candidates), 'candidate list is deterministic')
   })
 
   test('selectorCandidates fall back to id/tag for a plain control and never use nth-child alone', () => {
-    const candidates = ui.selectorCandidates(descriptorOf({
+    const candidates = selectorCandidates(descriptorOf({
       tag: 'button',
       id: 'composer-send',
       name: 'Send',
@@ -715,8 +727,8 @@ if (ui === undefined) {
 
     const again = refOf({ tag: 'button', role: 'button', name: 'New session', text: 'New session' }, { at: 1_800_000_000_000, order: 7 })
     assert.notEqual(ref.id, again.id, 'ids are per capture')
-    assert.equal(ui.identityKeyOf(ref), ui.identityKeyOf(again), 'identity survives time and order')
-    assert.equal(ui.identityKeyOf(ref), ref.locator.key)
+    assert.equal(identityKeyOf(ref), identityKeyOf(again), 'identity survives time and order')
+    assert.equal(identityKeyOf(ref), ref.locator.key)
   })
 
   test('buildElementRef keeps row/region/input identity while never carrying input values', () => {
@@ -731,7 +743,7 @@ if (ui === undefined) {
     assert.equal(row.component, 'row')
     assert.ok(row.locator.candidates.some((candidate) => candidate.value.includes(REAL_ROW_KEY)))
     const sameRow = refOf(rowDescriptor, { order: 9, at: 1_900_000_000_000 })
-    assert.equal(ui.identityKeyOf(row), ui.identityKeyOf(sameRow), 'the row key does not depend on capture order')
+    assert.equal(identityKeyOf(row), identityKeyOf(sameRow), 'the row key does not depend on capture order')
 
     const composer = refOf({
       tag: 'div',
@@ -765,7 +777,7 @@ if (ui === undefined) {
     const editable = refOf(editableDescriptor)
     assert.equal(editable.component, 'editable')
     assert.equal(editable.text, '', 'contenteditable contents are never read')
-    assert.equal(ui.identityKeyOf(editable), ui.identityKeyOf(refOf(editableDescriptor, { at: 1_900_000_000_000, order: 12 })))
+    assert.equal(identityKeyOf(editable), identityKeyOf(refOf(editableDescriptor, { at: 1_900_000_000_000, order: 12 })))
   })
 
   test('F3: aria-label-only identity keys include structural context and survive re-selection', () => {
@@ -779,10 +791,10 @@ if (ui === undefined) {
     }, context)
     const closeA = makeClose(pathA)
     const closeB = makeClose(pathB)
-    assert.equal(ui.identityKeyOf(closeA), `label:[aria-label="Close"]|button|${pathA}`, 'label keys carry tag and path')
-    assert.equal(ui.identityKeyOf(closeB), `label:[aria-label="Close"]|button|${pathB}`)
-    assert.notEqual(ui.identityKeyOf(closeA), ui.identityKeyOf(closeB), 'two Close buttons are not the same identity')
-    assert.equal(ui.identityKeyOf(closeA), ui.identityKeyOf(makeClose(pathA, { at: 1_800_000_000_000, order: 7 })), 're-selection keeps the identity')
+    assert.equal(identityKeyOf(closeA), `label:[aria-label="Close"]|button|${pathA}`, 'label keys carry tag and path')
+    assert.equal(identityKeyOf(closeB), `label:[aria-label="Close"]|button|${pathB}`)
+    assert.notEqual(identityKeyOf(closeA), identityKeyOf(closeB), 'two Close buttons are not the same identity')
+    assert.equal(identityKeyOf(closeA), identityKeyOf(makeClose(pathA, { at: 1_800_000_000_000, order: 7 })), 're-selection keeps the identity')
   })
 
   test('F11: ElementRef carries a top-level textDigest for the full sanitized text', () => {
@@ -811,17 +823,17 @@ if (ui === undefined) {
 
   test('describeLocator and elementLabel summarize a ref for the popover and serializer', () => {
     const button = refOf({ tag: 'button', role: 'button', name: 'New session', text: 'New session' })
-    const locator = ui.describeLocator(button)
+    const locator = describeLocator(button)
     assert.equal(typeof locator, 'string')
     assert.ok(locator.length > 0)
     assert.ok(locator.includes('button'))
-    const label = ui.elementLabel(button)
+    const label = elementLabel(button)
     assert.equal(typeof label, 'string')
     assert.ok(label.includes('New session'))
 
     const unnamed = refOf({ tag: 'div', role: '', name: '', text: '', component: 'container' })
-    assert.ok(ui.elementLabel(unnamed).length > 0, 'falls back to a structural label')
-    assert.ok(ui.describeLocator(unnamed).length > 0)
+    assert.ok(elementLabel(unnamed).length > 0, 'falls back to a structural label')
+    assert.ok(describeLocator(unnamed).length > 0)
   })
 
   //#endregion
@@ -1303,7 +1315,7 @@ if (ui === undefined) {
     }
     const selfSelector = 'button[data-slot="sidebar.new-session"]'
     assert.deepEqual(
-      plain(ui.buildUniqueSelector(selfDescriptor, (selector) => (selector === selfSelector ? [node('BUTTON')] : []))),
+      plain(buildUniqueSelector(selfDescriptor, (selector) => (selector === selfSelector ? [node('BUTTON')] : []))),
       { selector: selfSelector, verified: true }
     )
     // Duplicate aria-label -> anchored structural path, never a class name.
@@ -1313,22 +1325,22 @@ if (ui === undefined) {
       anchorPaths: [{ selector: 'div[data-slot="sidebar"]', steps: [{ tag: 'div', index: 1 }, { tag: 'button', index: 1 }] }]
     }
     const anchoredSelector = 'div[data-slot="sidebar"] > div:nth-of-type(1) > button:nth-of-type(1)'
-    const anchored = ui.buildUniqueSelector(duplicateDescriptor, (selector) => {
+    const anchored = buildUniqueSelector(duplicateDescriptor, (selector) => {
       if (selector === 'button[aria-label="New session"]') return [node('BUTTON'), node('BUTTON')]
       if (selector === anchoredSelector) return [node('BUTTON')]
       return []
     })
     assert.deepEqual(plain(anchored), { selector: anchoredSelector, verified: true })
     // Nothing unique -> honest null, never an unverified guess.
-    assert.deepEqual(plain(ui.buildUniqueSelector(duplicateDescriptor, () => [node('BUTTON'), node('BUTTON')])), { selector: null, verified: false })
+    assert.deepEqual(plain(buildUniqueSelector(duplicateDescriptor, () => [node('BUTTON'), node('BUTTON')])), { selector: null, verified: false })
     // A generated id is not used as an anchor, and no query engine -> no selector.
-    const dynamicId = ui.buildUniqueSelector({ tag: 'div', attrs: [{ name: 'id', value: ':r7:' }], anchorPaths: [] }, () => [node('DIV')])
+    const dynamicId = buildUniqueSelector({ tag: 'div', attrs: [{ name: 'id', value: ':r7:' }], anchorPaths: [] }, () => [node('DIV')])
     assert.deepEqual(plain(dynamicId), { selector: null, verified: false })
-    assert.deepEqual(plain(ui.buildUniqueSelector({ tag: 'div', attrs: [], anchorPaths: [] })), { selector: null, verified: false })
+    assert.deepEqual(plain(buildUniqueSelector({ tag: 'div', attrs: [], anchorPaths: [] })), { selector: null, verified: false })
   })
 
   test('A2: buildStableAncestors keeps only sanitized identity attributes, bounded to three', () => {
-    const ancestors = ui.buildStableAncestors([
+    const ancestors = buildStableAncestors([
       { tag: 'DIV', attrs: [{ name: 'data-slot', value: 'sidebar' }, { name: 'class', value: 'x' }, { name: 'style', value: 'y' }] },
       { tag: 'div', attrs: [{ name: 'id', value: ':r4:' }] },
       { tag: 'div', attrs: [{ name: 'aria-label', value: 'Session card' }] },
@@ -1340,11 +1352,11 @@ if (ui === undefined) {
     assert.deepEqual(plain(ancestors[1]), { tag: 'div', attrs: { 'aria-label': 'Session card' } })
     assert.deepEqual(plain(ancestors[2]), { tag: 'span', attrs: { 'data-row-key': REAL_ROW_KEY } })
     // A secret-shaped aria-label is rejected by the attribute sanitizer, so that ancestor is dropped.
-    assert.deepEqual(plain(ui.buildStableAncestors([
+    assert.deepEqual(plain(buildStableAncestors([
       { tag: 'div', attrs: [{ name: 'aria-label', value: 'mail alice@example.com' }] },
       { tag: 'body', attrs: [{ name: 'data-slot', value: 'root' }] }
     ])), [])
-    assert.deepEqual(plain(ui.buildStableAncestors(null)), [])
+    assert.deepEqual(plain(buildStableAncestors(null)), [])
   })
 
   test('A2: buildElementRef v2 carries identity/surface fields and no HTML, styles or query expressions', () => {
@@ -1413,12 +1425,12 @@ if (ui === undefined) {
       uniqueSelector: 'div[data-slot="sidebar"] > div:nth-of-type(1) > button:nth-of-type(1)',
       uniqueVerified: true
     })
-    assert.ok(ui.describeLocator(ref).includes('div[data-slot="sidebar"]'))
-    assert.equal(ui.annotationLocatorText(ref), 'div[data-slot="sidebar"] > div:nth-of-type(1) > button:nth-of-type(1)')
+    assert.ok(describeLocator(ref).includes('div[data-slot="sidebar"]'))
+    assert.equal(annotationLocatorText(ref), 'div[data-slot="sidebar"] > div:nth-of-type(1) > button:nth-of-type(1)')
     const fallback = refOf({ tag: 'button', name: 'Save', attrs: [{ name: 'aria-label', value: 'Save' }] })
-    assert.equal(ui.annotationLocatorText(fallback), '[aria-label="Save"]', 'best ordered candidate when no unique selector exists')
+    assert.equal(annotationLocatorText(fallback), '[aria-label="Save"]', 'best ordered candidate when no unique selector exists')
     const structural = refOf({ tag: 'div', role: '', name: '', component: 'container' })
-    assert.equal(ui.annotationLocatorText(structural), 'div', 'the structural path is the last locator fallback')
+    assert.equal(annotationLocatorText(structural), 'div', 'the structural path is the last locator fallback')
   })
 
   test('A2: resolveRefStatus prefers a verified unique selector and falls back to v1 candidates', () => {
@@ -1584,8 +1596,8 @@ if (ui === undefined) {
     const text = ui.serializeQuickReference(ref, 'Align it with the row', EN_LABELS)
     const lines = text.replace(/\n+$/, '').split('\n')
     assert.equal(lines.length, 4)
-    assert.equal(lines[0], `${EN_LABELS.title} · ${ui.elementLabel(ref)}`)
-    assert.equal(lines[1], `${EN_LABELS.reference} ${ui.describeLocator(ref)}`)
+    assert.equal(lines[0], `${EN_LABELS.title} · ${elementLabel(ref)}`)
+    assert.equal(lines[1], `${EN_LABELS.reference} ${describeLocator(ref)}`)
     assert.match(lines[2], new RegExp(`^${EN_LABELS.session} \\S+ · ${EN_LABELS.time}$`))
     assert.equal(lines[3], `${EN_LABELS.note} Align it with the row`)
 
@@ -1675,8 +1687,8 @@ if (ui === undefined) {
     const ref = refOf({ tag: 'button', name: 'New session', text: 'New session' })
     const text = ui.serializeQuickReference(ref, '对齐行高', ZH_LABELS).replace(/\n+$/, '')
     const lines = text.split('\n')
-    assert.equal(lines[0], `${ZH_LABELS.title} · ${ui.elementLabel(ref)}`)
-    assert.equal(lines[1], `${ZH_LABELS.reference}${ui.describeLocator(ref)}`, 'a full-width colon takes no space')
+    assert.equal(lines[0], `${ZH_LABELS.title} · ${elementLabel(ref)}`)
+    assert.equal(lines[1], `${ZH_LABELS.reference}${describeLocator(ref)}`, 'a full-width colon takes no space')
     assert.match(lines[2], /^会话：\S+ · 14:05$/)
     assert.equal(lines[3], `备注：对齐行高`)
   })
@@ -1693,8 +1705,8 @@ if (ui === undefined) {
     assert.ok(text.startsWith(`${EN_LABELS.batchHeader}\n\n`))
     assert.ok(text.indexOf('1. ') > 0)
     assert.ok(text.indexOf('2. ') > text.indexOf('1. '), 'numbered in collection order')
-    assert.ok(text.includes(`${ui.elementLabel(first)}`))
-    assert.ok(text.includes(`${ui.elementLabel(second)}`))
+    assert.ok(text.includes(`${elementLabel(first)}`))
+    assert.ok(text.includes(`${elementLabel(second)}`))
     assert.ok(text.includes('do the first thing'))
     assert.ok(text.includes(`${EN_LABELS.note} ${EN_LABELS.emptyNote}`), 'empty-note placeholder')
     assert.ok(text.includes(`   ${EN_LABELS.status}`), 'stale marker line')
@@ -1715,8 +1727,8 @@ if (ui === undefined) {
     const labels = { ...EN_LABELS, skippedCount: split.other.length }
     const withOther = ui.serializeBatchRequest(split.current, labels)
     assert.ok(withOther.includes('(1 annotation(s) from other sessions skipped)'), withOther)
-    assert.ok(withOther.includes(ui.elementLabel(current)))
-    assert.ok(!withOther.includes(ui.elementLabel(other)))
+    assert.ok(withOther.includes(elementLabel(current)))
+    assert.ok(!withOther.includes(elementLabel(other)))
 
     const onlyCurrent = ui.serializeBatchRequest(split.current, { ...EN_LABELS, skippedCount: 0 })
     assert.ok(!/from other sessions skipped/.test(onlyCurrent))
@@ -2432,14 +2444,15 @@ if (ui === undefined) {
       ]
     }
     const queried = []
-    const unique = ui.buildUniqueSelector(descriptor, (selector) => {
+    const unique = buildUniqueSelector(descriptor, (selector) => {
       queried.push(selector)
       return selector === expected ? [{ tagName: 'LI' }] : []
     })
     assert.equal(unique.verified, true, 'the message-anchored selector must verify as unique')
     assert.equal(unique.selector, expected, 'capture must use the stable message/turn anchor first, not the chat-region nth path')
     assert(queried.some((selector) => selector.includes('data-chat-node-key="node-7"')), 'the real chat-node anchor was never tried')
-    const source = client.source
+    // The three anchor lists moved with the identity model; assert them there.
+    const source = readFileSync(new URL('../src/browser/ui-annotation/identity.ts', import.meta.url), 'utf8')
     for (const [listName, attr] of [
       ['UNIQUE_SELECTOR_ATTRIBUTES', 'data-chat-node-key'],
       ['UNIQUE_SELECTOR_ATTRIBUTES', 'data-chat-anchor-key'],
@@ -2698,7 +2711,7 @@ if (ui === undefined) {
     assert.equal(ui.annotationTextQuoteMatches('start unique phrase end', quote), true)
     assert.equal(ui.annotationTextQuoteMatches('start unique phrase end and start unique phrase end', quote), false, 'two matches must not resolve')
     assert.equal(ui.annotationTextQuoteMatches('other unique phrase end', quote), false, 'prefix mismatch must not resolve')
-    const score = (kind, value, reliability) => ui.annotationSelectorScore({ kind, value, reliability })
+    const score = (kind, value, reliability) => annotationSelectorScore({ kind, value, reliability })
     assert(score('data', '[data-slot="x"]', 0.9) > score('role', '[role="button"]', 0.9), 'stable data beats semantic roles')
     assert(score('label', '[aria-label="X"]', 0.9) > score('role', '[role="button"]', 0.9), 'aria labels beat semantic roles')
     assert(score('role', '[role="button"]', 0.5) > score('tag', 'button', 0.9), 'semantic role beats positional tag')
@@ -2768,10 +2781,10 @@ if (ui === undefined) {
 
   test('A3/T33: generated/hashed classes are rejected while authored classes are kept', () => {
     for (const className of ['_card_bgejw_9', '_portal_bgejw_96', 'YDXeBa_sessionRow', 'hHd-Xa_brand', 'wSkVaW_body', 'psd-hoverPath']) {
-      assert.equal(ui.annotationIsGeneratedClass(className), true, `generated class not rejected: ${className}`)
+      assert.equal(annotationIsGeneratedClass(className), true, `generated class not rejected: ${className}`)
     }
     for (const className of ['annotation-row', 'is-active', 'card', 'workspace-row', 'block__element--modifier']) {
-      assert.equal(ui.annotationIsGeneratedClass(className), false, `stable class wrongly rejected: ${className}`)
+      assert.equal(annotationIsGeneratedClass(className), false, `stable class wrongly rejected: ${className}`)
     }
     const ref = refOf({
       tag: 'button',
@@ -3038,7 +3051,7 @@ if (ui === undefined) {
   })
 
   test('A3/T49: role+name tier, selector length penalty, matchQuote recall/hint', () => {
-    const score = (candidate) => ui.annotationSelectorScore(candidate)
+    const score = (candidate) => annotationSelectorScore(candidate)
     const dataScore = score({ kind: 'data', value: '[data-testid="x"]', reliability: 0.9 })
     const roleNameScore = score({ kind: 'label', value: '[role="button"][aria-label="Close"]', reliability: 0.9 })
     const idScore = score({ kind: 'id', value: '#close', reliability: 0.9 })
