@@ -890,6 +890,18 @@ function injectorSource(clientSource) {
 // Results table
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * Internal signal: one check discovered it cannot run in this live data state.
+ * Throwing it from a check callback records exactly ONE SKIP row (never a SKIP
+ * plus a PASS under the same id).
+ */
+class CheckSkip extends Error {
+  constructor(reason) {
+    super(reason)
+    this.name = 'CheckSkip'
+  }
+}
+
 class Results {
   constructor() {
     this.rows = []
@@ -902,6 +914,11 @@ class Results {
       this.rows.push({ id, title, pass: true, detail: detail ? short(detail) : '', ms: Date.now() - started })
       log(`PASS  ${id}  ${title}${detail ? ` — ${short(detail)}` : ''}`)
     } catch (error) {
+      if (error instanceof CheckSkip) {
+        this.rows.push({ id, title, pass: true, skipped: true, detail: error.message, ms: Date.now() - started })
+        log(`SKIP  ${id}  ${title} — ${error.message}`)
+        return
+      }
       const detail = error?.message || String(error)
       this.rows.push({ id, title, pass: false, detail, ms: Date.now() - started })
       log(`FAIL  ${id}  ${title} — ${short(detail, 400)}`)
@@ -2549,6 +2566,11 @@ async function runLayoutChecks({ page, results, state }) {
     await sleep(250)
     const before = await page.eval(probe.panelGeometry)
     const parentIndex = state.geometry.rows.findIndex((row) => row.kind === 'parent')
+    // `panelGeometry` returns a title OBJECT ({rect, style, text, ...}); the row
+    // helpers match on the plain title string, so pass `.text` (a JSON-stringified
+    // object can never equal the rendered row title).
+    const parentTitle = state.geometry.rows[parentIndex]?.title?.text ?? ''
+    assert(parentTitle.length > 0, 'the parent row title text is missing for the row-menu check')
     const hoveredIndex = before.rows.findIndex((row) => row.kind === 'parent')
     const parentRowIndex = before.rows.slice(0, hoveredIndex).filter((row) => row.kind === 'parent').length
     const menuFactsOf = (rowIndex) => page.eval((index) => {
@@ -2617,7 +2639,7 @@ async function runLayoutChecks({ page, results, state }) {
     assertEqual(hoveredMenu.morePointerEvents, 'auto', `the "…" trigger must be interactive on highlight (${hoveredMenu.morePointerEvents})`)
     // Ordinary rows paint the same soft hover background as their New session
     // control; the rainbow row suppresses it and keeps only brightness(1.2).
-    const trigger = await hoverCardControl(page, 'parent', state.geometry.rows[parentIndex].title, '.psd-run-more')
+    const trigger = await hoverCardControl(page, 'parent', parentTitle, '.psd-run-more')
     if (hoveredMenu.current) {
       assertEqual(trigger.background, 'rgba(0, 0, 0, 0)', `the rainbow row's "…" trigger must paint no hover background (${trigger.background})`)
       assertEqual(trigger.filter, 'brightness(1.2)', `the rainbow row's "…" trigger hover must keep its brightness suppression (filter ${trigger.filter})`)
@@ -2639,8 +2661,8 @@ async function runLayoutChecks({ page, results, state }) {
         timeOpacity: time === null ? null : getComputedStyle(time).opacity,
         moreVisibility: more === null ? null : getComputedStyle(more).visibility,
       }
-    }, state.geometry.rows[parentIndex].title)
-    assert(restored !== null, `the hovered row "${short(state.geometry.rows[parentIndex].title, 40)}" disappeared after the pointer left`)
+    }, parentTitle)
+    assert(restored !== null, `the hovered row "${short(parentTitle, 40)}" disappeared after the pointer left`)
     assertEqual(restored.timeOpacity, '1', `the time must return after the pointer leaves (opacity ${restored.timeOpacity})`)
     const hoveredMargin = Number(before.rows[hoveredIndex].titleMarginLeft ?? before.rows[hoveredIndex].titleShift ?? 0)
     return `rest: time visible / "…" hidden; hover: time hidden / "…" visible with the ordinary hover paint${hoveredMenu.current ? ' suppressed on the rainbow row (brightness(1.2))' : ''}; columns fixed (time ${before.rows[0].time.rect.right}, action ${before.rows[0].actions.rect.right}, disclosure ${before.rows[0].toggle.right}); hovered title slid ${before.rows[hoveredIndex].title.rect.left} -> ${during.rows[hoveredIndex].title.rect.left} = 25 − rest marginLeft ${hoveredMargin} (two-phase reveal); subagent rows have no trigger; leaving restores the time`
@@ -3918,9 +3940,10 @@ async function runFocusChecks({ page, results, state }) {
       }
     })
     if (rail.present !== true || rail.marks.length < 2) {
-      results.skip('b3-3', 'prompt-history rail lists the oldest tick first with the newest visible at its foot',
-        `the prompt-history rail currently has ${rail.present === true ? rail.marks.length : 0} tick(s) in this environment; at least two are needed to verify the reversed order. Explicit SKIP, not a pass.`)
-      return
+      // Throw the SKIP signal so the wrapping results.check records exactly one
+      // SKIP row for b3-3 (previously results.skip() inside the callback added a
+      // second, passing row under the same id).
+      throw new CheckSkip(`the prompt-history rail currently has ${rail.present === true ? rail.marks.length : 0} tick(s) in this environment; at least two are needed to verify the reversed order. Explicit SKIP, not a pass.`)
     }
     const indices = rail.marks.map((mark) => mark.index)
     for (let index = 1; index < indices.length; index += 1) {
@@ -4087,12 +4110,21 @@ async function runInterruptedChecks({ page, results, state }) {
     // consistency fix, an interrupted-idle record on a row the shell still renders as
     // running legitimately shows the warning badge AND the Continue slot side by side.
     const peerSvgs = lead === null ? [] : [...lead.querySelectorAll('svg')].filter((svg) => svg.closest('.dps-row-interrupted') === null && svg.closest('.dps-row-continue-slot') === null)
+    // Only the shell's RUNNING indicator may coexist with the interrupted badge.
+    // The shell paints a themed state DOT on idle rows; counting every peer SVG
+    // therefore reported a false second indicator. The spinner carries the shell's
+    // _spinner_* class (and data-state="ongoing").
+    const spinnerSvgs = peerSvgs.filter((svg) => {
+      const className = String(svg.getAttribute('class') ?? '')
+      return className.includes('_spinner') || svg.getAttribute('data-state') === 'ongoing'
+    })
     return {
       record,
       interruptedAttr: row.hasAttribute('data-power-suite-interrupted'),
       badges: badges.length,
       badgeText: badges.map((badge) => (badge.textContent || '').trim()).join('|'),
       peerSvgDisplays: peerSvgs.map((svg) => getComputedStyle(svg).display),
+      spinnerCount: spinnerSvgs.filter((svg) => getComputedStyle(svg).display !== 'none').length,
     }
   }`
   const apply = async (key, patch) => page.eval(
@@ -4116,6 +4148,32 @@ async function runInterruptedChecks({ page, results, state }) {
     }`,
     key
   )
+  // Read-only facts (does not re-seed the record). `hook.set` updates the external
+  // store synchronously, but the React row (useSyncExternalStore) commits on a later
+  // frame: an immediate read can still observe the previous badge for ~16 ms.
+  const read = async (key) => page.eval(`(key) => (${factsScript})(key)`, key)
+  /**
+   * Poll the rendered row until the predicate holds, bounded by the given timeout.
+   * Used so every assertion samples AFTER the React commit, never in the same JS
+   * task that seeded the record.
+   * @param {string} key - native row key.
+   * @param {(facts: object) => boolean} predicate - expected rendered state.
+   * @param {{ timeout?: number, label?: string }} options - poll bound/label.
+   * @returns {Promise<object>} the last facts.
+   */
+  const waitSettled = async (key, predicate, { timeout = 800, label = 'interrupted row commit' } = {}) => {
+    const deadline = Date.now() + timeout
+    let facts = await read(key)
+    while (!predicate(facts) && Date.now() < deadline) {
+      await sleep(16)
+      facts = await read(key)
+    }
+    return facts
+  }
+  const settledFacts = {
+    interrupted: (facts) => facts.interruptedAttr === true && facts.badges >= 1,
+    cleared: (facts) => facts.interruptedAttr === false && facts.badges === 0,
+  }
   const clear = async (key) => page.eval(
     `(key) => { globalThis.__POWER_SUITE_TEST_HOOKS__?.interruptedSessions?.clear(key.replace(/^session:/, '')) }`,
     key
@@ -4139,33 +4197,45 @@ async function runInterruptedChecks({ page, results, state }) {
     const key = await pickRow()
     assert(key, 'no native Session row to seed an interrupted record on')
     try {
-      const idle = await apply(key, { interrupted: true, running: false })
+      await apply(key, { interrupted: true, running: false })
+      const idle = await waitSettled(key, settledFacts.interrupted)
       assert(!idle.unavailable, 'interrupted test seam unavailable')
       assertEqual(idle.interruptedAttr, true, 'before Continue: the interrupted row must carry the interrupted attribute')
       assert(idle.badges >= 1, `before Continue: exactly one interrupted indicator expected, got ${idle.badges}`)
-      const continued = await applyContinue(key)
-      assertEqual(continued.interruptedAttr, false, 'immediately after Continue: the interrupted attribute must be cleared')
-      assertEqual(continued.badges, 0, `immediately after Continue: the interrupted badge must be gone, got ${continued.badges}`)
-      const stale = await apply(key, { interrupted: true, running: true })
+      await applyContinue(key)
+      // The optimistic settle clears the attribute synchronously, but an idle row's
+      // persistent leading-slot badge unmounts only after the external-store commit.
+      // Bound the wait (500-800 ms) and then assert the committed state.
+      const continued = await waitSettled(key, settledFacts.cleared, { timeout: 800, label: 'Continue commit' })
+      assertEqual(continued.interruptedAttr, false, 'after Continue: the interrupted attribute must be cleared')
+      assertEqual(continued.badges, 0, `after Continue: the interrupted badge must be gone, got ${continued.badges}`)
+      await apply(key, { interrupted: true, running: true })
+      const stale = await waitSettled(key, settledFacts.cleared)
       assertEqual(stale.interruptedAttr, false, 'stale-Host (interrupted while running): attribute must stay cleared — the two indicators must never coexist')
       assertEqual(stale.badges, 0, `stale-Host (interrupted while running): no interrupted badge may render while running, got ${stale.badges}`)
       for (const display of stale.peerSvgDisplays) {
         assert(display !== 'none', 'while running, the native loading indicator must not be hidden by the stale-spinner rule')
       }
-      const done = await apply(key, { interrupted: false, running: false })
+      await apply(key, { interrupted: false, running: false })
+      const done = await waitSettled(key, settledFacts.cleared)
       assertEqual(done.interruptedAttr, false, 'completed: no interrupted attribute')
       assertEqual(done.badges, 0, 'completed: no interrupted badge')
       // Poll-style sampling across the Continue transition: never both indicators.
+      // Each sample is taken AFTER the record's commit (the previous sample cannot
+      // leak its badge into the next one), and only the shell spinner counts as the
+      // second indicator — an idle row's state dot does not.
       let coexist = 0
+      let sampledSpinner = 0
       for (let i = 0; i < 20; i += 1) {
-        const sample = i % 2 === 0 ? await apply(key, { interrupted: true, running: false }) : await apply(key, { interrupted: false, running: true })
-        const visible = sample.badges + sample.peerSvgDisplays.filter((display) => display !== 'none').length
-        if (sample.badges > 0 && sample.record?.running === true) coexist += 1
-        if (visible > 1) coexist += 1
+        const patch = i % 2 === 0 ? { interrupted: true, running: false } : { interrupted: false, running: true }
+        await apply(key, patch)
+        const sample = await waitSettled(key, patch.running ? settledFacts.cleared : settledFacts.interrupted, { timeout: 500, label: `transition sample ${i}` })
+        if (sample.spinnerCount > 0) sampledSpinner += 1
+        if (sample.badges > 0 && sample.spinnerCount > 0) coexist += 1
         await sleep(60)
       }
-      assertEqual(coexist, 0, `poll sampling caught ${coexist} sample(s) with two leading indicators at once`)
-      return `idle interrupted: badge ${idle.badges} + attr; after Continue: badge ${continued.badges} no attr; stale interrupted+running: badge ${stale.badges} no attr (peer svg ${stale.peerSvgDisplays.join(',') || 'n/a'}); completed: badge ${done.badges}; 20 transition samples, 0 coexistence`
+      assertEqual(coexist, 0, `poll sampling caught ${coexist} sample(s) with the interrupted badge and the shell spinner at once`)
+      return `idle interrupted: badge ${idle.badges} + attr; after Continue (post-commit): badge ${continued.badges} no attr; stale interrupted+running: badge ${stale.badges} no attr (peer svg ${stale.peerSvgDisplays.join(',') || 'n/a'}); completed: badge ${done.badges}; 20 post-commit transition samples (spinner seen ${sampledSpinner}), 0 coexistence`
     } finally {
       await clear(key)
       await sleep(250)

@@ -1548,6 +1548,36 @@ const probes = {
     return null
   },
 
+  /**
+   * A stable native non-composer target for annotation selection: a real header
+   * button (e.g. Open right sidebar). It carries an accessible name, never opens a
+   * session-row hover card (which can pin over the composer in annotation mode),
+   * and is not inside the composer's intentionally unclickable region.
+   */
+  nativeHeaderButtonPoint: () => {
+    const candidates = []
+    const header = document.querySelector('[data-slot="conversation.header"]')
+    if (header !== null) candidates.push(...header.querySelectorAll('button[aria-label]'))
+    for (const label of ['Open right sidebar', 'Close right sidebar']) {
+      candidates.push(...document.querySelectorAll(`button[aria-label="${label}"]`))
+    }
+    for (const button of candidates) {
+      const rect = button.getBoundingClientRect()
+      const style = getComputedStyle(button)
+      if (rect.width <= 0 || rect.height <= 0) continue
+      if (style.display === 'none' || style.visibility === 'hidden') continue
+      if (rect.left < 400 || rect.top < 0 || rect.bottom > innerHeight) continue
+      return {
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+        label: button.getAttribute('aria-label'),
+        left: Math.round(rect.left),
+        top: Math.round(rect.top),
+      }
+    }
+    return null
+  },
+
   sidebarState: () => ({
     collapseButtons: document.querySelectorAll('button[aria-label="Collapse sidebar"]').length,
     openButtons: document.querySelectorAll('button[aria-label="Open sidebar"]').length,
@@ -3855,6 +3885,7 @@ function buildScenarios(harness) {
 
     4: async () => {
       await h.ensureModeOn()
+      await h.ensureSidebarExpanded()
       await h.ensureConversation()
       await h.ensureStatusPanel()
       await h.clearSelection()
@@ -3865,10 +3896,12 @@ function buildScenarios(harness) {
       const newSession = await h.nativeNewSessionRect()
       assert(newSession, 'native New Session button not found')
       targets.push({ name: 'New session', point: newSession })
-      // 2) the composer region
-      const composerRegion = await h.page.findRect('[data-conversation-region="composer"]')
-      assert(composerRegion, 'composer region not found')
-      targets.push({ name: 'composer region', point: composerRegion })
+      // 2) a native workspace row. The product intentionally blocks annotation
+      // clicks inside the composer (eventInsideComposer/blockEvent), so the former
+      // composer-region target could never produce a selection.
+      const headerButton = await h.page.eval(probes.nativeHeaderButtonPoint)
+      assert(headerButton, 'native conversation-header button not found')
+      targets.push({ name: `header button (${headerButton.label})`, point: headerButton })
       // 3) a real sidebar session row (left edge, so the row itself is the candidate)
       const row = await h.page.eval(probes.sessionRowPoint, sessionId)
       assert(row, 'sidebar session row not found')
@@ -5331,9 +5364,11 @@ function buildScenarios(harness) {
       await sleep(300)
       const overlayActive = await h.page.eval(probes.paintLayerState)
       const hovercardActive = await h.page.eval(probes.syntheticHovercardStyle)
-      assertEqual(overlayActive.inlineZ, '150', 'F1: [data-shell-overlay] inline z-index is not 150 while active')
+      // F1 pins the product's annotation paint-layer constant (ANNOTATION_PAINT_Z):
+      // 2000, intentionally above the native hover card (120) and shell menus.
+      assertEqual(overlayActive.inlineZ, '2000', 'F1: [data-shell-overlay] inline z-index is not 2000 while active')
       assertEqual(overlayActive.inlinePriority, 'important', 'F1: the paint-layer raise is not !important')
-      assertEqual(overlayActive.computedZ, '150', 'F1: computed paint-layer z-index is not 150')
+      assertEqual(overlayActive.computedZ, '2000', 'F1: computed paint-layer z-index is not 2000')
       assertEqual(overlayActive.raised, 'true', 'F1: data-psa-raised marker missing while active')
       assertEqual(hovercardActive.pointerEvents, 'auto', 'F4: [data-psd-hovercard] did not become pointer-interactive in annotation mode')
       assertEqual(hovercardActive.zIndex, '120', 'F4: [data-psd-hovercard] z-index is not 120 in annotation mode')
@@ -5970,7 +6005,7 @@ function buildScenarios(harness) {
       assertEqual(finalOverlay.raised, null, 'the scenario cleanup left data-psa-raised behind')
       const finalHovercard = await h.page.eval(probes.syntheticHovercardStyle)
       assertEqual(finalHovercard, null, 'the synthetic hovercard leaked after cleanup')
-      return `F1 z=150/restore exact; F2 ${surfaceEvidence}; F3 stationary recompute; F4 state events + [data-psd-hovercard] pe/z (real-card marker sampled while no card is showing: ${realHovercardPresent ? 'present' : 'not observed'}; the merged pin/select is asserted by 10b); A2 uniqueSelector ${short(String(pageRecord.uniqueSelector).slice(0, 48))}; D1 reload kept ${reloadedEntries.length} records with resolved+missing; D15 refused at ${cappedEntries.length}`
+      return `F1 z=2000/restore exact; F2 ${surfaceEvidence}; F3 stationary recompute; F4 state events + [data-psd-hovercard] pe/z (real-card marker sampled while no card is showing: ${realHovercardPresent ? 'present' : 'not observed'}; the merged pin/select is asserted by 10b); A2 uniqueSelector ${short(String(pageRecord.uniqueSelector).slice(0, 48))}; D1 reload kept ${reloadedEntries.length} records with resolved+missing; D15 refused at ${cappedEntries.length}`
     },
 
     11: async () => {
@@ -7143,9 +7178,11 @@ function buildScenarios(harness) {
       await h.page.waitFor(`document.querySelectorAll('[data-psa-mark]').length === 1`, { timeout: 6000, label: 'first page mark for the chip scenario' })
 
       // Record 2: Quick reference — commits the annotation AND inserts the native chip.
-      const composerRegion = await h.page.findRect('[data-conversation-region="composer"]')
-      assert(composerRegion, 'composer region not found for the chip scenario')
-      await selectAndType(composerRegion, 'Chip requirement two')
+      // Use a non-composer surface: the product intentionally blocks annotation clicks
+      // inside the composer, so it can never open a popover/selection.
+      const headerButton = await h.page.eval(probes.nativeHeaderButtonPoint)
+      assert(headerButton, 'native conversation-header button not found for the chip scenario')
+      await selectAndType(headerButton, 'Chip requirement two')
       await h.click('[data-psa-quick-ref]')
       await h.page.waitFor(
         `document.querySelectorAll('[data-conversation-region="composer"] [data-lexical-editor="true"] [data-lexical-decorator="true"]').length >= 1`,
@@ -7314,6 +7351,11 @@ function buildScenarios(harness) {
         `the removed chip text still appears in the draft: ${short(afterChipDelete.text)}`)
       assertEqual((await h.transcript()).messages, transcriptBeforeChipRemove.messages,
         'chip removal sent a message')
+      // The pointer still sits where the removed chip was; after the layout shift it
+      // can land on the surviving chip (which legitimately shows its own ×). Park
+      // the pointer first, then assert the removed chip's affordance is gone.
+      await h.page.moveTo(700, 160)
+      await sleep(200)
       assertEqual(await h.page.eval(probes.chipDelete), null, 'the × affordance stayed visible after removal')
       // The editor mutation is one undo step (Lexical history): Ctrl+Z restores it.
       await h.page.evaluate(`(() => { const editor = document.querySelector('[data-conversation-region="composer"] [data-lexical-editor="true"]'); if (editor !== null) editor.focus(); return true })()`)
@@ -8318,7 +8360,14 @@ async function checkAnnotationHovercardRecipe(h) {
   await h.page.pressKey('escape')
   await sleep(250)
   // 4. Assert both themes against the native session-row hover-card recipe.
-  const expectedBackground = 'rgb(44, 44, 46)' // #2C2C2E, fixed by the native card in BOTH themes
+  // Owner decision (theme contract), left unchanged on purpose: the shell's native
+  // hover card now follows the light theme through the `._card_bgejw_9` override
+  // (measured in the sidebar suite as light #FFF / dark #2C2C2E), while the
+  // annotation `.psa-*` surfaces still use the fixed #2C2C2E recipe (the plugin's
+  // light-mode override covers `.psd-*`/`.psp-*`/`.dsa-*`, not `.psa-*`). Strict
+  // surface-vs-native parity therefore fails in light mode until the product adds
+  // that light override; weakening the comparison here would hide the mismatch.
+  const expectedBackground = 'rgb(44, 44, 46)' // #2C2C2E, the annotation recipe
   for (const [themeName, measured] of [['light', light], ['dark', dark]]) {
     const native = measured.native
     assert(native !== null, `the native DSH hover-card rule (--dsw-hovercard-bg) was not found in the ${themeName} theme`)
