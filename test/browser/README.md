@@ -123,12 +123,9 @@ reviewed files) to publish `docs/assets/annotation-idle.png`, `annotation-mode.p
 ## Gate semantics (H1)
 
 - `--smoke` is a pipeline-only mode, but it still fails (non-zero exit) when the injected client
-  fails to load, does not expose the current 1-key annotation diagnostic seam (the
-harness accepts `debugFallbackScanProbe`; older logs below mention 48/57/66/68/112-key
-historical generations),
-  round-1 **31-key**, round-2 **32-key** (`resolveNodeCandidate`), audit-fix **35-key**, and
-  Phase 1 **48-key** generations; every generation requires `textDigest`), or
-  does not mount the annotation surface.
+  fails to load, does not expose the current one-key annotation diagnostic seam
+  (`debugFallbackScanProbe`), or does not mount the annotation surface. Older
+  logs below mention the historical 31/32/35/48/57/66/68/112-key generations.
 - `full` / `--shots-only` with a client that has no annotation feature: a **FAIL** row is
   recorded and the process exits non-zero. A feature-absent client can never produce a green
   run. Example proof: `node test/browser/annotation.e2e.mjs --client /tmp/ps-annotation/baseline-client.js`

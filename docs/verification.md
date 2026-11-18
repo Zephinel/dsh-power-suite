@@ -19,10 +19,10 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 - `npm run build` (esbuild) bundles `src/` into the gitignored `lib/index.js`
   and `lib/client.js`;
 - `node --check` on the remaining JavaScript entry (`src/client.js`);
-- `tsc --noEmit` in **strict** mode over the Host TypeScript sources
-  (`src/**/*.ts`; `tsconfig.json` keeps `allowJs`/`checkJs` for the browser entry —
-  ESM `src/client.js` plus `src/browser/` modules, bundled to a classic script —
-  which opts out until the Phase 3 split completes);
+- `tsc --noEmit` in **strict** mode over **all** Host and browser sources
+  (`src/**/*.ts` plus the `allowJs`/`checkJs` entry `src/client.js` and
+  `src/browser/` modules) — no `@ts-nocheck`; the separate DOM-lib profile
+  (`npm run typecheck:browser`) is also gated at 0 by `npm run check`;
 - package-manifest validation: exports/files/icon/cordis patch are present and
   the DSH bundle patch points at a real file;
 - local Markdown links and images (`scripts/check-docs-links.mjs`);
@@ -39,7 +39,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   **`lib/client.js` 934.2 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **392 tests, 392 passed, 0 failed**, 28 test files — Host stores/routes
+- `npm test`: **393 tests, 393 passed, 0 failed**, 28 test files — Host stores/routes
   plus the browser-side derivations (the vm harness bundles the ESM client), the
   release-notes approval round-trip, the protocol contract guard for duplicated
   route/enum literals, the shared route and settings contracts, the durable
@@ -53,7 +53,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 - `npm run check` reports an explicit-`any` budget: **0 sites** in `src/**/*.ts`;
   the gate strips comments/strings and fails on any `any` code token (aliases,
   unions and generics included) — a lexical tripwire at 0, not a proof.
-- `rm -rf lib && node --test test/*.test.js`: **392/392** — the suite imports the
+- `rm -rf lib && node --test test/*.test.js`: **393/393** — the suite imports the
   `.ts` sources directly (Node >= 22.18 native type stripping), so the tests need
   no build.
 - `npm run check`: passed (`99 TypeScript modules, 1 JavaScript module(s), 28 test files`); it builds `lib/` first,
@@ -73,15 +73,16 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
     the DOM before React committed and now samples after commit with bounded
     polling and only counts the shell spinner). `b4-5` and `b4-9` pass after the
     owner-requested lighter dark-atmosphere recipe: screen blend,
-    `saturate(1.15) brightness(1.45)`, wrapper opacity 0.58 base / 0.64 hover,
-    white veil scrim 0.08/0.04, eight OKLCH hues (light L=0.76/C=0.26, dark
+    `saturate(1.3) brightness(1.35)`, wrapper opacity 0.62 base / 0.68 hover,
+    white veil scrim 0.04/0.02, eight OKLCH hues (light L=0.76/C=0.26, dark
     L=0.76/C=0.24 at hues 20/65/110/150/195/245/290/330) painted through the
     browser's `oklch()`/gamut mapping, and two blobs per hue advected by a
     low-frequency 3-octave fBm curl field. A stronger wash plus smaller/softer
     blobs keep the canvas saturation at ~0.5-0.66 (b4-1/b4-3 pass) while the
     smoke still diffuses. The light theme uses the same renderer with
     its multiply/white-veil recipe. Dark title contrast lands at 2.5:1 and the
-    scenario records that as the accepted trade-off for the lighter pill. The live full run still varies
+    scenario records that as the accepted trade-off for the lighter pill (light
+    compositing: saturate 1.35, opacity 0.60, veil 0.48/0.36). The live full run still varies
     with GUI data/state (`b1-3`, `b3-1/b3-2`, `b5-5`, `c2-1`, `c4-4` were observed
     intermittently), so its pass count is not a stable single number; isolated
     full is data-starved, isolated `--layout` is **12/12**, live `--interrupted`

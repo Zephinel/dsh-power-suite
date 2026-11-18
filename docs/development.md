@@ -6,10 +6,9 @@
 - npm — run `npm ci` once; it installs esbuild and TypeScript as dev dependencies.
 - A DeepSeek Harness profile that can install local bundles (`web` by default).
 
-`npm run typecheck:browser` measures the diagnostics that would appear if
-`src/client.js` dropped `// @ts-nocheck` (browser DOM profile) and checks
-them against `scripts/browser-typecheck-baseline.json`; it is report-only and
-not part of `npm run check` yet. `npm run build` bundles `src/index.ts` (Host ESM) and the ES-module browser
+`npm run typecheck:browser` typechecks the browser entry against a DOM-lib
+profile and is gated at 0 by `npm run check` (together with the root strict
+typecheck). `npm run build` bundles `src/index.ts` (Host ESM) and the ES-module browser
 entry `src/client.js` (plus `src/browser/`) into the gitignored `lib/` entries
 with esbuild; the served client is a classic-script IIFE. The package has
 no runtime dependencies; `npm pack` builds through `prepare`.
@@ -59,7 +58,7 @@ including the opaque `FsTarget`/`FileInfo` shapes) and `src/host/errors.ts`
 `npm run build` emits only the gitignored `lib/` entries, and the typecheck
 itself emits nothing. The browser entry is an ES module (`src/client.js` plus
 `src/browser/`) that the build bundles into the classic script the shell loads;
-it stays out of the type gate until the Phase 3 split completes — see
+it is now part of both typecheck gates — see
 [the TypeScript migration plan](plans/typescript-migration.md). The unit-test
 harness and the browser e2e harness bundle that ESM source with esbuild before
 evaluating/injecting it.

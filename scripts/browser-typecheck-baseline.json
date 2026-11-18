@@ -3,8 +3,8 @@
   "generatedBy": "scripts/typecheck-browser-baseline.mjs",
   "profile": "tsconfig.browser.json",
   "typescript": "7.0.2",
-  "generatedAt": "2026-11-18T18:54:54.153Z",
-  "gitHead": "31d9aff",
+  "generatedAt": "2026-11-18T19:27:20.039Z",
+  "gitHead": "596dc0c",
   "clientJs": {
     "lines": 1092,
     "bytes": 52836

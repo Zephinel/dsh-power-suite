@@ -66,7 +66,15 @@ test('the Host route constants re-export the shared contract', () => {
 })
 
 const srcRoot = fileURLToPath(new URL('../src', import.meta.url))
-const routeLiteral = /['"]\/?api\/[A-Za-z0-9.-]+['"]/gu
+// Route literals live in code, not JSDoc examples; strip comments before scanning
+// so a doc sentence such as `GET /api/file` is not treated as a contract leak.
+const stripComments = (text) => text
+  .replace(/\/\*[\s\S]*?\*\//gu, '')
+  .replace(/(^|[^:])\/\/.*$/gmu, '$1')
+const routeLiteral = /['"`]\/?api\/[A-Za-z0-9.-]+['"`]/gu
+test('the route-literal scanner catches template literals too', () => {
+  assert.deepEqual([...("const route = `/api/power-suite.example`".matchAll(routeLiteral))].map((match) => match[0]), ['`/api/power-suite.example`'])
+})
 
 test('no TypeScript module outside the shared owner carries a route literal', () => {
   const files = readdirSync(srcRoot, { recursive: true })
@@ -74,7 +82,7 @@ test('no TypeScript module outside the shared owner carries a route literal', ()
   assert.ok(files.length > 20, 'expected to scan the TypeScript modules')
   for (const relative of files) {
     if (relative === join('shared', 'routes.ts')) continue
-    const text = readFileSync(join(srcRoot, relative), 'utf8')
+    const text = stripComments(readFileSync(join(srcRoot, relative), 'utf8'))
     const literals = [...text.matchAll(routeLiteral)].map((match) => match[0])
     assert.deepEqual(literals, [], `${relative} contains a route literal`)
   }
@@ -82,7 +90,7 @@ test('no TypeScript module outside the shared owner carries a route literal', ()
 })
 
 test('the browser half uses the shared contract and no route literals', () => {
-  const literals = [...clientSource.matchAll(/['"`]\/?api\/[A-Za-z0-9.-]+['"`]/gu)]
+  const literals = [...stripComments(clientSource).matchAll(/['"`]\/?api\/[A-Za-z0-9.-]+['"`]/gu)]
   assert.deepEqual(literals.map((match) => match[0]), [])
   assert.equal(CLIENT_SIDEBAR_WIDTH_ROUTE, browserRoute(ROUTES.sidebarWidth))
   for (const route of Object.values(ROUTES)) {

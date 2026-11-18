@@ -1,8 +1,9 @@
 # TypeScript migration plan
 
-Status: **proposed (as-planned)** — 2026-11-18. Owner approval is required before
-Phase 2. This document records the plan only; no runtime behavior, build step or
-release pipeline changes are made by it.
+Status: **Phase 1–3 complete (as-built)** — 2026-11-18. Phase 4 (release and
+rollout) is pending. The plan text below is kept as historical context; the
+as-built state is described by the dated progress sections and
+`docs/verification.md`.
 
 Related: [Codebase design review](codebase-design-review.md) ·
 [Development](../development.md) · [Architecture](../architecture.md) ·
@@ -542,8 +543,8 @@ byte-identical, and live smoke/row-menu/interrupted suites pass. Remaining top
 regions: annotation controller 1,012, hover quick look 147 (being extracted),
 interrupted components 59, prompt-history preview 57, update check 37; React's
 stricter ambient inference surfaced 44 TS2322 / 7 TS2740 / 5 TS2353 null-seed
-state issues for M5. The browser profile is still report-only; M5 must decide
-whether to promote it into `npm run check` or split a browser project.
+state issues for M5. (At that point the browser profile was still report-only; the
+final M5c slice later promoted it into `npm run check`.)
 
 
 **M4b progress (2026-11-18).** The hover quick look moved into
@@ -570,7 +571,7 @@ preview (`src/browser/prompt-history/preview.ts`) and the update-check UI
 `model.ts`). The browser baseline dropped **1,375 -> 1,211** (native figures 11->0,
 interrupted 59->0, prompt preview 57->0, update 37->0) and the TS module count is
 68; preview/update CSS, copy keys, slot ids and DOM markers are unchanged, and
-live smoke 4/4, interrupted 9/1/0, update-prompt 22/22 (injected harness) pass.
+live smoke 4/4, interrupted 9/1/0, update-prompt 21/21 (standard harness) pass.
 Remaining top region: annotation controller 1,012, then composer gallery 24,
 presets menu 22, prompt history 20, draft attachment 17, interrupted copy/icons
 15, settings page 10, preset routing 10, artifacts 5; non-feature helpers 29 /
@@ -608,5 +609,5 @@ directly (no temp-copy directive neutralisation), its baseline is `0`, and
 `npm run check` = `build && check.mjs && browser --check && pack:check`; the
 check output is `99 TypeScript modules, 1 JavaScript module(s), 28 test files`.
 Live evidence after the flip: annotation smoke 6/6, S4 7/0/0, S10 8/0/0, S12
-7/0/0, sidebar smoke 4/4, injected update-prompt 22/22, 0 page errors. Phase 4
+7/0/0, sidebar smoke 4/4, standard update-prompt 21/21, 0 page errors. Phase 4
 (version bump, release notes, publish/rollout) is the only phase left.
