@@ -28,6 +28,7 @@ import {
   filesArtifactsReduce
 } from './browser/artifacts/model.ts'
 import { interruptedCardMark, interruptedIndicatorActive } from './browser/interrupted-sessions/model.ts'
+import { createInterruptedSessionComponents } from './browser/interrupted-sessions/components.ts'
 import { mergeSettingsPayload } from './browser/settings/model.ts'
 import { ROUTES, browserRoute } from './shared/routes.ts'
 import {
@@ -2980,338 +2981,41 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     }
 
     //#region feature: interrupted sessions — components
-    /**
-     * Always-visible interruption mark in a Session row's leading seat: the cell
-     * left of the title, where an idle row shows its status dot.
-     * @param {object} props - row seat props plus the injected locale seat.
-     * @returns {object | null} the mark, when the Session was interrupted.
-     */
-    function InterruptedBadge(props) {
-      const { sessionId, t } = props
-      const record = useInterruptedRecord(sessionId)
-      const interrupted = interruptedIndicatorActive(record)
-      React.useEffect(() => {
-        const row = document.querySelector(`[data-row-key="session:${escapeSelectorValue(sessionId)}"]`)
-        if (row === null) return undefined
-        if (!interrupted) {
-          row.removeAttribute('data-power-suite-interrupted')
-          return undefined
-        }
-        row.setAttribute('data-power-suite-interrupted', '')
-        return () => row.removeAttribute('data-power-suite-interrupted')
-      }, [sessionId, interrupted])
-      if (!interrupted) return null
-      return React.createElement(React.Fragment, null,
-        React.createElement('span', {
-          className: 'dps-row-interrupted',
-          role: 'img',
-          'aria-label': t('badge.aria'),
-          title: record.subagent === true ? t('badge.title.subagent') : t('badge.title')
-        }, React.createElement(RemixIcon, { path: REMIX_WARNING_FILL, size: 14 })),
-        React.createElement('span', { className: 'dps-row-continue-slot' },
-          React.createElement('button', {
-            type: 'button',
-            className: 'dps-row-continue',
-            title: t('continue.aria'),
-            'aria-label': t('continue.aria'),
-            onClick: (event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              requestContinue(sessionId)
-            }
-          }, React.createElement(RemixIcon, { path: REMIX_PLAY_FILL, size: 14 }))))
-    }
-
-    /**
-     * Renderless composer seat owning the interrupted-session affordance for the
-     * open Conversation: mark the shell, turn the submit control into a play
-     * control, and run the continue action from a row CTA, a pending request, or
-     * the play control itself.
-     * @param {object} props - overlay seat props plus the injected locale seat.
-     * @returns {null} this seat renders nothing.
-     */
-    function InterruptedContinueSeat(props) {
-      const { sessionId, useInput, inputActions, t } = props
-      const draft = useInput((state) => state.draft)
-      const phase = useInput((state) => state.phase)
-      const record = useInterruptedRecord(sessionId, true)
-      const interrupted = interruptedIndicatorActive(record)
-      const latest = React.useRef({})
-      latest.current = { sessionId, draft, phase, interrupted, inputActions, t }
-
-      const run = React.useCallback(() => {
-        const now = latest.current
-        if (now.interrupted !== true) return false
-        if (now.phase !== 'plain') return false
-        if (now.draft.trim() !== '') return false
-        if (continueRuntime.pending === true) return false
-        const target = now.sessionId
-        const sentAt = Date.now()
-        continueRuntime.pending = true
-        fetch(appUrl(CONTINUE_ROUTE), {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'content-type': 'application/json', accept: 'application/json' },
-          body: JSON.stringify({
-            sessionId: target,
-            prompt: now.t('continue.prompt'),
-            summary: now.t('continue.summary')
-          })
-        }).then((response) => {
-          if (!response.ok) throw new Error(`HTTP ${response.status}`)
-          rememberContinueTime(sentAt)
-          interruptedRuntime.hideContinuationRows?.()
-          markContinued(target)
-          window.setTimeout(() => refreshInterrupted(target), 2500)
-        }).catch(() => {
-          refreshInterrupted(target)
-          if (typeof now.inputActions?.notify === 'function') {
-            now.inputActions.notify('error', now.t('continue.failed'))
-          }
-        }).finally(() => {
-          continueRuntime.pending = false
-        })
-        return true
-      }, [])
-
-      React.useEffect(() => {
-        refreshInterrupted(sessionId)
-      }, [sessionId])
-
-      React.useEffect(() => {
-        continueRuntime.current = { sessionId, interrupted, run }
-        return () => {
-          if (continueRuntime.current !== null && continueRuntime.current.sessionId === sessionId) {
-            continueRuntime.current = null
-          }
-        }
-      }, [sessionId, interrupted, run])
-
-      React.useEffect(() => {
-        const pending = continueRequest.pending
-        if (pending === null || pending.sessionId !== sessionId) return
-        if (Date.now() - pending.at > 30000) {
-          continueRequest.pending = null
-          return
-        }
-        if (record === null || record.status === 'loading') return
-        if (!interrupted) {
-          continueRequest.pending = null
-          return
-        }
-        if (phase !== 'plain') return
-        continueRequest.pending = null
-        run()
-      }, [sessionId, record, interrupted, phase, run])
-
-      React.useEffect(() => {
-        if (!interrupted) return undefined
-        document.documentElement.dataset.powerSuiteInterrupted = 'true'
-        const scope = document.querySelector('[data-conversation-region="composer"]')
-        const button = scope === null ? null : scope.querySelector('button[class$="_primary"]')
-        // Keep the empty-draft submit enabled while the Session is interrupted.
-        // The shell owns the original attributes again on its next render, so this
-        // effect never restores a stale label over the running Stop control.
-        const apply = () => {
-          if (!(button instanceof HTMLButtonElement)) return
-          if (button.disabled) button.disabled = false
-          if (button.getAttribute('aria-label') !== t('continue.aria')) button.setAttribute('aria-label', t('continue.aria'))
-          if (button.getAttribute('title') !== t('continue.aria')) button.title = t('continue.aria')
-        }
-        apply()
-        const observer = button instanceof HTMLButtonElement ? new MutationObserver(apply) : null
-        if (observer !== null) observer.observe(button, { attributes: true, attributeFilter: ['disabled', 'aria-label', 'title'] })
-        const onClick = (event) => {
-          const now = latest.current
-          if (now.interrupted !== true || now.phase !== 'plain' || now.draft.trim() !== '') return
-          const target = event.target instanceof Element ? event.target.closest('button') : null
-          if (target === null || button === null || target !== button) return
-          event.preventDefault()
-          event.stopPropagation()
-          run()
-        }
-        document.addEventListener('click', onClick, true)
-        return () => {
-          document.removeEventListener('click', onClick, true)
-          if (observer !== null) observer.disconnect()
-          delete document.documentElement.dataset.powerSuiteInterrupted
-        }
-      }, [interrupted, sessionId, run, t])
-
-      return null
-    }
-
-    /**
-     * Register the interrupted-session affordances.
-     * @param {object} ctx - client root context.
-     * @returns {void}
-     */
-    function installInterruptedSessions(ctx) {
-      const t = ctx.locale.bind(INTERRUPTED_NS)
-      interruptedRuntime.uiWorkspace = ctx.uiWorkspace
-      interruptedRuntime.t = t
-      interruptedRuntime.continueTimes = loadContinueTimes()
-      ctx.effect(() => ctx.locale.register(INTERRUPTED_NS, { en: INTERRUPTED_EN, zh: INTERRUPTED_ZH }), 'power-suite: interrupted dictionaries')
-      ctx.effect(() => {
-        let timer = null
-        const schedule = () => {
-          if (timer !== null) return
-          timer = window.setTimeout(() => {
-            timer = null
-            discoverInterruptedRows()
-            syncInterruptedRows()
-          }, 80)
-        }
-        const touchesSessionRow = (records) => records.some((record) => {
-          const target = record.target
-          if (target instanceof Element && target.closest('[data-row-key^="session:"]') !== null) return true
-          for (const node of record.addedNodes) {
-            if (!(node instanceof Element)) continue
-            if (node.matches('[data-row-key^="session:"]') || node.querySelector('[data-row-key^="session:"]') !== null) return true
-          }
-          return false
-        })
-        const unsubscribe = subscribeInterrupted(schedule)
-        const observer = new MutationObserver((records) => {
-          if (touchesSessionRow(records)) schedule()
-        })
-        observer.observe(document.body, { childList: true, subtree: true })
-        schedule()
-        return () => {
-          unsubscribe()
-          observer.disconnect()
-          if (timer !== null) window.clearTimeout(timer)
-        }
-      }, 'power-suite: interrupted row decoration')
-      ctx.effect(() => {
-        const refresh = () => refreshAllInterrupted()
-        const onVisibility = () => {
-          if (document.visibilityState === 'visible') refresh()
-        }
-        document.addEventListener('visibilitychange', onVisibility)
-        window.addEventListener('focus', refresh)
-        window.addEventListener('online', refresh)
-        return () => {
-          document.removeEventListener('visibilitychange', onVisibility)
-          window.removeEventListener('focus', refresh)
-          window.removeEventListener('online', refresh)
-        }
-      }, 'power-suite: interrupted refresh cues')
-      ctx.effect(() => {
-        // Every established Connection generation means the Host may have
-        // restarted; wire-derived interruption state must be repulled.
-        const dispose = ctx.on('connection/reset', () => refreshAllInterrupted())
-        return typeof dispose === 'function' ? dispose : undefined
-      }, 'power-suite: interrupted connection reset')
-      ctx.effect(() => {
-        // Near-real-time cross-device invalidation over the Host's SSE stream.
-        // EventSource auto-reconnects; the 20 s poll above stays as fallback for
-        // browsers without EventSource (or when the stream is unavailable).
-        if (typeof EventSource !== 'function') return undefined
-        let source = null
-        try {
-          source = new EventSource(appUrl(INTERRUPTED_EVENTS_ROUTE), { withCredentials: true })
-        } catch {
-          return undefined
-        }
-        const onOpen = () => refreshAllInterrupted()
-        const onInterrupted = (message) => {
-          let payload = null
-          try {
-            payload = JSON.parse(typeof message?.data === 'string' ? message.data : '')
-          } catch {
-            return
-          }
-          if (payload === null || typeof payload !== 'object') return
-          const candidates = [payload.sessionId, payload.parentSession]
-          for (const sessionId of candidates) {
-            if (typeof sessionId !== 'string' || sessionId.length === 0) continue
-            if (interruptedStore.watchers.has(sessionId) || interruptedStore.records.has(sessionId)) {
-              refreshInterrupted(sessionId)
-            }
-          }
-        }
-        source.addEventListener('open', onOpen)
-        source.addEventListener('interrupted', onInterrupted)
-        return () => {
-          source.removeEventListener('open', onOpen)
-          source.removeEventListener('interrupted', onInterrupted)
-          source.close()
-        }
-      }, 'power-suite: interrupted SSE stream')
-      ctx.effect(() => {
-        /**
-         * The injected context producer renders as a native ContextInjectionRow.
-         * Its source label is the element text; `data-context-source` itself is a
-         * boolean marker. Hide the smallest ancestor that contains both the label
-         * and the injection body, without depending on hashed CSS-module classes.
-         * @param {Element} source - the `[data-context-source]` element.
-         * @returns {void}
-         */
-        const hideOne = (source) => {
-          if ((source.textContent ?? '').trim() !== 'power-suite-continue') return
-          const body = source.closest('[data-context-injection-body]')
-          if (body === null) {
-            const trigger = source.closest('[data-turn-trigger]')
-            if (trigger instanceof HTMLElement) trigger.style.display = 'none'
-            return
-          }
-          let row = source.parentElement
-          while (row !== null && !row.contains(body)) row = row.parentElement
-          if (row instanceof HTMLElement) row.style.display = 'none'
-        }
-        const hideOneTrigger = (section) => {
-          const time = section.querySelector('time[datetime]')
-          const at = time === null ? Number.NaN : Date.parse(time.getAttribute('datetime') ?? '')
-          if (Number.isNaN(at)) return
-          // A continuation starts immediately after its request; hide only the
-          // turn-trigger card correlated with one of our recent requests.
-          if (interruptedRuntime.continueTimes.some((sentAt) => at >= sentAt - 1500 && at <= sentAt + 20000)) {
-            section.style.display = 'none'
-          }
-        }
-        const hideIn = (node) => {
-          if (!(node instanceof Element)) return
-          if (node.hasAttribute('data-context-source')) hideOne(node)
-          for (const source of node.querySelectorAll('[data-context-source]')) hideOne(source)
-          if (node.matches('section[data-turn-trigger]')) hideOneTrigger(node)
-          for (const trigger of node.querySelectorAll('section[data-turn-trigger]')) hideOneTrigger(trigger)
-        }
-        const scan = () => hideIn(document.body)
-        interruptedRuntime.hideContinuationRows = scan
-        scan()
-        const observer = new MutationObserver((records) => {
-          for (const record of records) {
-            for (const added of record.addedNodes) hideIn(added)
-            hideIn(record.target)
-          }
-        })
-        observer.observe(document.body, { childList: true, subtree: true })
-        return () => {
-          observer.disconnect()
-          if (interruptedRuntime.hideContinuationRows === scan) interruptedRuntime.hideContinuationRows = null
-        }
-      }, 'power-suite: hide implicit continuation rows')
-      ctx.effect(() => {
-        const tag = document.createElement('style')
-        tag.dataset.powerSuiteCss = 'interrupted'
-        tag.textContent = INTERRUPTED_CSS
-        document.head.appendChild(tag)
-        return () => tag.remove()
-      }, 'power-suite: interrupted styles')
-      ctx.effect(() => ctx.slots.inject('sidebar.session.row.leading', () => ctx.slots.register({
-        name: 'sidebar.session.row.leading',
-        id: 'power-suite.interrupted-badge',
-        order: 20,
-        inject: () => ({ t })
-      }, InterruptedBadge)), 'power-suite: interrupted badge')
-      ctx.effect(() => ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({
-        name: 'conversation.input.overlay',
-        id: 'power-suite.interrupted-continue-seat',
-        order: 30,
-        inject: () => ({ t })
-      }, InterruptedContinueSeat)), 'power-suite: interrupted continue seat')
-    }
+    //
+    // Both seats and their installer live in
+    // `src/browser/interrupted-sessions/components.ts`: the entry only binds the
+    // shared store, the continue handshake boxes, the row helpers and the copy
+    // dictionaries it already owns, then installs the seats in `apply`. Props,
+    // DOM markers, effects, slot ids/order and copy stay unchanged; this region
+    // is a wiring point.
+    const { installInterruptedSessions } = createInterruptedSessionComponents({
+      React,
+      RemixIcon,
+      remixWarningFill: REMIX_WARNING_FILL,
+      remixPlayFill: REMIX_PLAY_FILL,
+      requestContinue,
+      useInterruptedRecord,
+      escapeSelectorValue,
+      appUrl,
+      continueRoute: CONTINUE_ROUTE,
+      rememberContinueTime,
+      markContinued,
+      refreshInterrupted,
+      subscribeInterrupted,
+      discoverInterruptedRows,
+      syncInterruptedRows,
+      refreshAllInterrupted,
+      loadContinueTimes,
+      interruptedNamespace: INTERRUPTED_NS,
+      interruptedEn: INTERRUPTED_EN,
+      interruptedZh: INTERRUPTED_ZH,
+      interruptedCss: INTERRUPTED_CSS,
+      interruptedEventsRoute: INTERRUPTED_EVENTS_ROUTE,
+      interruptedStore,
+      interruptedRuntime,
+      continueRequest,
+      continueRuntime
+    })
     //#endregion
 
     //#region feature: dynamic workspaces

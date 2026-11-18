@@ -80,6 +80,7 @@ interface Element {
   readonly childElementCount: number
   readonly firstElementChild: Element | null
   readonly firstChild: Element | null
+  readonly nextSibling: Element | null
   readonly isConnected: boolean
   readonly scrollWidth: number
   readonly clientWidth: number
@@ -90,6 +91,7 @@ interface Element {
   insertBefore(node: Element, child: Element | null): Element
   remove(): void
   closest(selector: string): Element | null
+  matches(selector: string): boolean
   contains(node: object | null): boolean
   getBoundingClientRect(): DOMRectLike
 }
@@ -98,6 +100,7 @@ interface HTMLElement {
   readonly dataset: Record<string, string | undefined>
   readonly offsetHeight: number
   title: string
+  type: string
   focus(): void
   focus(options?: { preventScroll?: boolean }): void
 }
@@ -135,13 +138,39 @@ declare var ResizeObserver: {
   new (callback: () => void): ResizeObserver
 }
 
+interface MutationRecordLike {
+  readonly target: object
+  readonly addedNodes: ArrayLike<object>
+}
+
 interface MutationObserver {
   observe(target: object, options?: Record<string, unknown>): void
   disconnect(): void
 }
 
 declare var MutationObserver: {
-  new (callback: (records: Array<{ readonly target: object }>) => void): MutationObserver
+  new (callback: (records: MutationRecordLike[]) => void): MutationObserver
+}
+
+/** Button state the interrupted composer seat reads and resets. */
+declare class HTMLButtonElement extends HTMLElement {
+  disabled: boolean
+}
+
+/** SSE message surface the interrupted refresh stream reads. */
+interface EventSourceMessage {
+  readonly data: unknown
+}
+
+/** Minimal EventSource surface the interrupted refresh stream uses. */
+interface EventSource {
+  addEventListener(type: string, listener: (message: EventSourceMessage) => void): void
+  removeEventListener(type: string, listener: (message: EventSourceMessage) => void): void
+  close(): void
+}
+
+declare var EventSource: {
+  new (url: string, init?: { withCredentials?: boolean }): EventSource
 }
 
 /** Keyboard events consumed by the root profile's document listeners. */
