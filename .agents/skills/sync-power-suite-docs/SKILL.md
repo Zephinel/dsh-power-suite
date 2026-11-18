@@ -9,14 +9,15 @@ whenToUse: "同步文档, 更新文档, 检查文档, 文档落后了, 文档和
 Scope: the `dsh-power-suite` repository — one installable DSH bundle. It ships a
 Node Host half (`src/index.ts`, `src/features/<name>/` and the shared
 `src/host/document-store.ts`, `src/host/context.ts`, `src/host/errors.ts`), a Web browser half
-(one `//#region feature:` group per feature in `src/client.js`), plugin display
+(one `//#region feature:` group per feature in the ESM `src/client.js`, with browser modules under `src/browser/`; esbuild bundles it to the classic script), plugin display
 metadata (`locale/*.json`), the bundle patch (`cordis.patch.yml`), the release
 notes and changelog, and a documentation set (`README.md`, `docs/`,
 `PRODUCT.md`) that **ships in the npm package**, plus a repo-only
 `test/browser/README.md`. A small esbuild build (`npm run build`) produces the
 gitignored `lib/index.js` and `lib/client.js` that the npm package ships; the
-Host sources are TypeScript (Phase 2c) while `src/client.js` remains the
-classic browser script, and there is no vendored tree or bilingual doc pair. DSH shell docs are out of scope.
+Host sources are TypeScript (Phase 2c); the browser entry is an ES module tree
+bundled to a classic script (Phase 3a), and there is no vendored tree or binary
+asset pipeline; there is no bilingual doc pair. DSH shell docs are out of scope.
 
 Docs split into two contracts. **As-built** docs describe what the bundle does
 now and must match the code. **As-planned** docs (proposals, roadmaps, future

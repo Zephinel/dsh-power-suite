@@ -172,9 +172,9 @@ The build bundles `src/index.ts` and `src/client.js` into the gitignored `lib/` 
 
 | Command | Purpose |
 |---|---|
-| `npm run build` | `node scripts/build.mjs` — esbuild bundles `src/` into the gitignored `lib/index.js` (Host ESM) and `lib/client.js` (classic browser script); `prepare` runs it before `npm pack`/`npm publish`. |
+| `npm run build` | `node scripts/build.mjs` — esbuild bundles `src/` into the gitignored `lib/index.js` (Host ESM) and `lib/client.js` (browser entry: ESM source plus `src/browser/` modules, bundled to a classic script); `prepare` runs it before `npm pack`/`npm publish`. |
 | `npm test` | `node --test test/*.test.js` — pure-logic tests importing the TypeScript Host sources through Node's native type stripping (Node 22.18+; no build needed). |
-| `npm run typecheck` | `tsc --noEmit` — no-emit **strict** TypeScript check over the Host sources; `src/client.js` stays the classic browser script and is opted out until Phase 3. |
+| `npm run typecheck` | `tsc --noEmit` — no-emit **strict** TypeScript check over the Host sources; `src/client.js` stays opted out until the Phase 3 split completes. |
 | `npm run check` | The full gate: builds the entries, then runs syntax, typecheck, package manifest, docs links, Node tests and the release-notes check, then `pack:check`. |
 | `npm run pack:check` | `npm pack --dry-run --json` — inspect the published file list. |
 | `npm run check:release-notes` | Validate the tag-pinned release highlights for the package version. |

@@ -38,7 +38,8 @@ the code the Host runs after `npm run build` and a restart (the Host loads
   cordis.patch.yml          # inserts the single `power-suite` row
   src/index.ts              # Host entry: calls each feature's installer
   src/features/<name>/      # Host-side feature modules
-  src/client.js             # browser entry: one `#region feature: <name>` per feature
+  src/client.js             # browser entry (ESM): one `#region feature: <name>` per feature
+  src/browser/              # browser-side modules imported by the entry
   src/host/document-store.ts # shared durable-document module for the JSON stores
   src/host/context.ts        # minimal structural Host context
   src/host/errors.ts         # unknown-thrown-value helpers

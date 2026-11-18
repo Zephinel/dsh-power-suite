@@ -5,7 +5,8 @@
 - This checkout is installed as a local `link:` bundle in a DSH profile, and
   the package is published on npm as `0.1.0` (see
   [CHANGELOG.md](../CHANGELOG.md)). `npm run build` bundles `src/` into the
-  gitignored `lib/` entries (Host ESM plus the classic browser script); the npm
+  gitignored `lib/` entries (Host ESM plus the browser entry bundled to a classic
+  script); the npm
   package ships `lib/`, while `src/` stays repo-only.
 - Only the Web platform is supported (`dsh.client.platform: "web"`). The TUI
   and other clients do not load the browser half.

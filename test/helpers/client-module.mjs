@@ -41,12 +41,22 @@
  * browser. If the factory top-level starts touching a new browser global, add
  * the smallest stub below instead of weakening the harness.
  *
- * Keep this file dependency-free and side-effect-free: it is loaded by the
- * unit-test file only, never by `src/**`, and never by the browser bundle.
+ * ## ESM source
+ *
+ * Phase 3 turns the browser entry into an ES module that imports browser-side
+ * models. A classic-script vm cannot execute bare `import` statements, so when
+ * the entry contains one the harness bundles it with esbuild (already a dev
+ * dependency) before evaluation. The returned `source` stays the raw file text
+ * for source-level regression assertions.
+ *
+ * Keep this file side-effect-free: it is loaded by the unit-test file only,
+ * never by `src/**`, and never by the browser bundle.
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
+import { buildSync } from 'esbuild'
 
 /**
  * Absolute path of the worktree's browser entry: the normal unit-test subject,
@@ -154,10 +164,57 @@ function createBrowserStubs(registrationBox, shared) {
  *   (null when `options.source` was injected) for source-level regression
  *   assertions such as the popover edit wiring or region-marker balance.
  */
+const bundledCache = new Map()
+
+/**
+ * Bundle the ESM entry with esbuild so a classic-script vm can evaluate it.
+ * Classic sources (baseline copies, injected text) are returned unchanged.
+ * @param {string | null} sourcePath - file the source came from, or null.
+ * @param {string} source - raw source text.
+ * @returns {string} source text suitable for vm evaluation.
+ */
+function evaluableSource(sourcePath, source) {
+  if (!/(^|\n)\s*import\s/u.test(source)) return source
+  if (sourcePath !== null) {
+    const mtimeMs = statSync(sourcePath).mtimeMs
+    const key = `${sourcePath}:${mtimeMs}`
+    const cached = bundledCache.get(key)
+    if (cached !== undefined) return cached
+    const result = buildSync({
+      entryPoints: [sourcePath],
+      bundle: true,
+      write: false,
+      format: 'iife',
+      platform: 'browser',
+      target: 'es2022',
+      logLevel: 'silent'
+    })
+    const bundled = result.outputFiles[0].text
+    bundledCache.set(key, bundled)
+    return bundled
+  }
+  const result = buildSync({
+    stdin: {
+      contents: source,
+      loader: 'js',
+      resolveDir: dirname(CLIENT_SOURCE_PATH),
+      sourcefile: 'client.js'
+    },
+    bundle: true,
+    write: false,
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2022',
+    logLevel: 'silent'
+  })
+  return result.outputFiles[0].text
+}
+
 export function loadClientModule(options = {}) {
   const injectedSource = typeof options.source === 'string'
   const sourcePath = injectedSource ? null : resolveSourcePath(options)
   const source = injectedSource ? options.source : readFileSync(sourcePath, 'utf8')
+  const evaluated = evaluableSource(sourcePath, source)
 
   const registrationBox = { current: null }
   const document = {
@@ -229,7 +286,7 @@ export function loadClientModule(options = {}) {
   sandbox.globalThis = sandbox
 
   vm.createContext(sandbox)
-  vm.runInContext(source, sandbox, { filename: 'src/client.js' })
+  vm.runInContext(evaluated, sandbox, { filename: 'src/client.js' })
 
   const registration = registrationBox.current
   const hooks = sandbox.__POWER_SUITE_TEST_HOOKS__

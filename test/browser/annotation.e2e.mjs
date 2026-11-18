@@ -46,6 +46,7 @@ import { existsSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readClientForInjection } from './bundle-client.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const WORKTREE = path.resolve(HERE, '..', '..')
@@ -8985,7 +8986,7 @@ async function main() {
   log('DSH Power Suite — UI annotation live E2E')
   log(`node: ${process.version}`)
   log(`client: ${opts.clientPath}`)
-  const clientSource = await readFile(opts.clientPath, 'utf8')
+  const clientSource = await readClientForInjection(opts.clientPath)
   log(`client size: ${(clientSource.length / 1024).toFixed(0)} KiB`)
 
   const url = await resolveGuiUrl(opts)

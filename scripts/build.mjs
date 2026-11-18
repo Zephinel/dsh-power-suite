@@ -3,12 +3,11 @@
  * Build the two package entries into the gitignored `lib/` directory.
  *
  * The package ships built entry points so the Host can become TypeScript in
- * Phase 2 while the published file layout stays a normal bundle:
+ * Phase 2 and the browser half is a module tree bundled to a classic script:
  *
  *   lib/index.js   Host entry, ESM bundle (platform node, node builtins external)
- *   lib/client.js  browser entry, classic-script IIFE. The current monolith is
- *                  authored as one classic script; esbuild only wraps it until
- *                  Phase 3 splits it into modules.
+ *   lib/client.js  browser entry: ESM `src/client.js` plus the modules under
+ *                  `src/browser/`, bundled into one classic-script IIFE.
  *
  * The build is deterministic: no timestamps, no absolute paths and no source
  * maps. `npm run check` builds first; `prepare` builds before `npm pack` and

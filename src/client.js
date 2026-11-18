@@ -1,4 +1,9 @@
-// @ts-nocheck — Phase 1 keeps the classic browser half out of the gate; it is typed in Phase 3 (docs/plans/typescript-migration.md).
+// @ts-nocheck — Phase 3 keeps the browser half out of the type gate while its entries are split into modules; see docs/plans/typescript-migration.md.
+//
+// The entry is an ES module: the build bundles it into the classic-script IIFE
+// the DSH shell loads. Pure browser models live under src/browser/ and are
+// imported here instead of being redefined inline.
+import { isNewerStableVersion, parseStableVersion } from './browser/update-check/versions.ts'
 /**
  * Browser half of DSH Power Suite.
  *
@@ -23049,45 +23054,6 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       'dontRemind': '不再提醒',
       'highlights': '更新要点',
       'noHighlights': '该版本未提供更新要点，可在插件详情页查看完整说明。'
-    }
-
-    /**
-     * Parse a stable `major.minor.patch` version. Pre-release and build suffixes
-     * never name an update target (plan §4.3).
-     * @param {unknown} value - candidate version.
-     * @returns {{ major: number, minor: number, patch: number } | null} parsed parts, or null.
-     */
-    function parseStableVersion(value) {
-      if (typeof value !== 'string') return null
-      // Mirrored (not shared) from the Host half in
-      // src/features/update-check/version.js; keep the rules identical
-      // (trim + three safe integers). The test seam cross-checks both tables.
-      const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value.trim())
-      if (match === null) return null
-      const version = {
-        major: Number.parseInt(match[1], 10),
-        minor: Number.parseInt(match[2], 10),
-        patch: Number.parseInt(match[3], 10)
-      }
-      if (!Number.isSafeInteger(version.major)
-        || !Number.isSafeInteger(version.minor)
-        || !Number.isSafeInteger(version.patch)) return null
-      return version
-    }
-
-    /**
-     * Whether `latest` is a stable version strictly newer than `current`.
-     * @param {unknown} latest - candidate newer version.
-     * @param {unknown} current - running version.
-     * @returns {boolean} true only when both parse and `latest > current`.
-     */
-    function isNewerStableVersion(latest, current) {
-      const newer = parseStableVersion(latest)
-      const running = parseStableVersion(current)
-      if (newer === null || running === null) return false
-      if (newer.major !== running.major) return newer.major > running.major
-      if (newer.minor !== running.minor) return newer.minor > running.minor
-      return newer.patch > running.patch
     }
 
     /**

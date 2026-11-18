@@ -5,7 +5,9 @@ and asserts the eleven acceptance scenarios of the UI element annotation mode
 (`/tmp/ps-annotation/CONTRACT.md` §4.2, the review-round hardening spec H1–H13, and the
 Phase 1 floating-surface / v2-record / rainbow-focus checks). It injects
 this worktree's `src/client.js` into the live page without touching the installed checkout, the
-profile or the launchd service.
+profile or the launchd service. Since Phase 3 the entry is an ES module, so the harness first
+bundles it (and `src/browser/`) into a classic script with esbuild; classic baseline copies
+passed with `--client` still inject unchanged.
 
 ```bash
 node test/browser/annotation.e2e.mjs
@@ -17,7 +19,8 @@ node test/browser/annotation.e2e.mjs
 2. Launches headless Chrome with a fresh `--user-data-dir` and `--remote-debugging-port=0`,
    connects over the Chrome DevTools Protocol with Node's global `WebSocket` (no packages).
 3. Sets a 1728x900 CSS viewport (`Emulation.setDeviceMetricsOverride`).
-4. Injects this worktree's `src/client.js` with `Page.addScriptToEvaluateOnNewDocument`: the
+4. Bundles this worktree's `src/client.js` entry (and its `src/browser/` modules) with esbuild, then
+   injects the classic-script result with `Page.addScriptToEvaluateOnNewDocument`: the
    script wraps `window.__ModuleLoader__.load` and replaces only the
    `@zephinel/dsh-power-suite` registration factory, so the real DSH shell loads our browser code
    with a real context, real session and real composer. It also sets
@@ -66,7 +69,7 @@ node test/browser/annotation.e2e.mjs
 - A token URL: leave `DSH_WEB_URL` unset and the harness asks `~/.local/bin/dsh-web url --ip`;
   a `DSH_WEB_URL` without `token=` is treated as unauthenticated and the harness falls back to
   the CLI. The token is always redacted from output.
-- The worktree client (`src/client.js`) must contain the feature; the harness injects it
+- The worktree client (`src/client.js` plus `src/browser/`) must contain the feature; the harness bundles and injects it
   read-only and never edits `src/**`.
 
 ## Options
@@ -76,7 +79,7 @@ node test/browser/annotation.e2e.mjs                 full run: smoke + 11 scenar
 node test/browser/annotation.e2e.mjs --smoke         pipeline + feature-surface smoke only
 node test/browser/annotation.e2e.mjs --shots-only    five screenshots only (no scenario assertions)
 node test/browser/annotation.e2e.mjs --assets        write screenshots to docs/assets instead of /tmp
-node test/browser/annotation.e2e.mjs --client PATH   inject a different client.js (e.g. a baseline)
+node test/browser/annotation.e2e.mjs --client PATH   inject a different classic client.js (e.g. a baseline; ESM entries are bundled)
 node test/browser/annotation.e2e.mjs --scenario 8    run exactly one scenario (validation: 1..16)
 node test/browser/annotation.e2e.mjs --from 7        run scenarios 7-10 and 15 (ids in SCENARIO_ORDER)
 node test/browser/annotation.e2e.mjs --no-shots      skip screenshots

@@ -225,6 +225,19 @@ Acceptance:
 
 ### Phase 3 — browser half
 
+**Status (3a, 2026-11-18): the module seam is in place on
+`feat/typescript-phase3`.** `src/client.js` is now an ES module bundled by
+esbuild into the served classic-script IIFE; the first pure model moved to
+`src/browser/update-check/versions.ts` (stable-version math) and is imported by
+the entry instead of being duplicated inline. Because a classic-script vm cannot
+execute `import`, the unit-test harness now bundles the entry with esbuild before
+evaluation (returning the raw source for source-level assertions), and the
+browser e2e harness bundles it before injection; pre-change classic baseline
+copies still run unchanged. Remaining 3b work: split the `//#region feature:`
+groups into `install(ctx, deps)` + pure model modules, delete the
+`__POWER_SUITE_TEST_HOOKS__` seams as each feature lands, and re-run the three
+browser e2e suites against the bundled artifact.
+
 Decide between (a) splitting `src/client.js` by `//#region feature:` into modules
 and bundling one classic script, or (b) keeping one file and annotating it. Under
 (a), give each feature an `install(ctx, deps)` plus pure model functions, import

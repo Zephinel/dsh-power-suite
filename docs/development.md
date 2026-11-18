@@ -53,8 +53,12 @@ lexical tripwire, not a proof: implicit `any` is already covered by `strict`. DS
 including the opaque `FsTarget`/`FileInfo` shapes) and `src/host/errors.ts`
 (unknown thrown values). `npm ci` installs esbuild, TypeScript and `@types/node` as dev dependencies;
 `npm run build` emits only the gitignored `lib/` entries, and the typecheck
-itself emits nothing. The classic browser entry stays out of the type gate until
-Phase 3 — see [the TypeScript migration plan](plans/typescript-migration.md).
+itself emits nothing. The browser entry is an ES module (`src/client.js` plus
+`src/browser/`) that the build bundles into the classic script the shell loads;
+it stays out of the type gate until the Phase 3 split completes — see
+[the TypeScript migration plan](plans/typescript-migration.md). The unit-test
+harness and the browser e2e harness bundle that ESM source with esbuild before
+evaluating/injecting it.
 
 ## README screenshots and the Bento pipeline
 
