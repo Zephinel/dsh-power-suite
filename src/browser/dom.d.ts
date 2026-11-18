@@ -10,6 +10,11 @@
 
 declare class Node {}
 
+/** Fetch cache mode the update check sets on its one Host request. */
+interface RequestInit {
+  cache?: string
+}
+
 declare class ElementList implements Iterable<Element> {
   readonly length: number
   [index: number]: Element

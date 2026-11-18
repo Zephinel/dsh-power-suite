@@ -27,8 +27,11 @@ import {
   parseStableVersion as hostParseStableVersion
 } from '../src/features/update-check/version.ts'
 
-/** Raw browser-entry source for the region-level guard. */
+/** Raw browser-entry source for the module-binding guard. */
 const clientSource = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8')
+
+/** The extracted update-check controller/card, read for the region-level guard. */
+const updateInstallSource = readFileSync(new URL('../src/browser/update-check/install.ts', import.meta.url), 'utf8')
 
 /** Copy a realm value for strict deep equality. */
 const plain = (value) => structuredClone(value)
@@ -165,18 +168,12 @@ function payload(overrides = {}) {
 
   //#region source-level safety
   test('the update check renders only through shell.overlay and never inserts sidebar DOM', () => {
-    const source = clientSource
-    const start = source.indexOf('//#region feature: update check')
-    // The next feature marker is a stable end boundary; a bare `//#endregion`
-    // search would break if an inner region marker were added later.
-    const end = source.indexOf('//#region plugin', start)
-    assert.ok(start >= 0, 'the update check region exists')
-    assert.ok(end > start, 'the update check region closes before the plugin region')
-    const region = source.slice(start, end)
-    assert.ok(region.includes("ctx.slots.inject('shell.overlay'"), 'the card is an additive shell.overlay entry')
-    assert.ok(!region.includes('insertBefore'), 'the region never inserts a node next to a native sibling')
-    assert.ok(!region.includes('document.body'), 'nothing is appended to the shell body')
-    assert.ok(!region.includes('MutationObserver'), 'the region does not observe or patch the shell tree')
+    assert.match(clientSource, /createUpdateCheck/, 'the entry still binds the update-check module')
+    const source = updateInstallSource
+    assert.ok(source.includes("ctx.slots.inject('shell.overlay'"), 'the card is an additive shell.overlay entry')
+    assert.ok(!source.includes('insertBefore'), 'the module never inserts a node next to a native sibling')
+    assert.ok(!source.includes('document.body'), 'nothing is appended to the shell body')
+    assert.ok(!source.includes('MutationObserver'), 'the module does not observe or patch the shell tree')
   })
   //#endregion
 
