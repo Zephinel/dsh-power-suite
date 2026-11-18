@@ -86,6 +86,13 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
     harness keeps its surface-vs-native assertion and this needs an owner
     decision. Isolated full was data-starved; live full is not a reliable
     verdict.
+  * `annotation.e2e.mjs --bootstrap` is an opt-in isolated-profile preparation:
+    it dismisses the localized first-run dialogs and best-effort seeds blank
+    Sessions until the existing scroll probe succeeds (default runs unchanged).
+    Live `--bootstrap --smoke` passes 6/6; on a fresh isolated profile it
+    dismisses Preview Notice but cannot create a second blank Session (one blank
+    draft per workspace), so S3/S8 still fail at the scroll-region assertion and
+    S16/S11 remain data-limited.
   * Regression guard: the identity extraction briefly broke all click selection
     (unbound DOM `getAttribute`); the new click-select smoke would have caught it
     while the old smoke passed 6/6. Fixed in `bfaf0d4` with a unit regression.

@@ -101,6 +101,19 @@ node test/browser/annotation.e2e.mjs --keep-open     leave Chrome running (print
 node test/browser/annotation.e2e.mjs --headful       show the browser window
 ```
 
+**Isolated-profile bootstrap (opt-in).** `--bootstrap` only prepares data and leaves the default
+run unchanged. It dismisses the localized first-run **Preview Notice** and **Get started**
+dialogs with real CDP pointer clicks (and repeats the per-document Get started dismissal after
+a scenario reload), then checks the native scroll probe used by S3/S8. If that probe is empty it
+tries to create blank Sessions through the native New Session button, capped by
+`--bootstrap-sessions N` (0-100, default 40; `0` keeps the modal fix and disables seeding) and
+stops as soon as the probe succeeds. On a fresh isolated profile the scroll target is still
+unreachable: DSH reuses one blank draft per workspace, a blank row exposes no
+rename/archive/fork action, and adding a second workspace needs the Host-native directory
+picker that headless CDP cannot drive. The run logs the dismissed dialogs, created Session ids,
+and that limitation, then continues; S3/S8 still fail at their own scrollable-region assertion
+rather than being skipped.
+
 Environment: `DSH_WEB_URL` (token URL override), `CHROME_BIN` (Chrome binary override).
 
 Default screenshots are written to `<tmpdir>/psa-e2e-shots/`; use `--assets` (or copy the

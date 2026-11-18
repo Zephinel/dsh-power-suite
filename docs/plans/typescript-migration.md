@@ -400,8 +400,19 @@ ctx/store/DOM unit tests; `npm test` is 392. The browser baseline dropped from
 same seven environment/data failures on the base commit, not a regression.
 Remaining diagnostics are the annotation controller (owner needs a React/DSH
 ambient-type decision), dynamic workspaces 244, hover 147, interrupted 47,
-prompt-history preview 37 and update check 37. Next: owner decisions (S12 theme,
-b4-5 atmosphere, ambient types) and the e2e fixture work.
+prompt-history preview 37 and update check 37. **3w progress (2026-11-18).** Added an opt-in `--bootstrap`/`--bootstrap-sessions`
+mode to the annotation e2e: it dismisses the localized first-run Preview
+Notice/Get started dialogs with real pointer clicks (re-armed after scenario
+reloads) and best-effort creates blank Sessions through the native New Session
+button until the existing scroll probe succeeds. Default runs are unchanged.
+Live verification: `--bootstrap --smoke` is 6/6 and reports the already-present
+scrollable sidebar (no Sessions created). Isolated verification: the Preview
+Notice is dismissed, but DSH keeps one blank draft per workspace and a blank row
+exposes no rename/archive/fork action, so a second blank Session (and thus the
+native scroll region for S3/S8) cannot be created through headless CDP; the run
+records this limitation and still fails at the scenario's own assertion instead
+of skipping it. S16 workspace files and S11 running activity remain unseeded;
+S12 also needs the owner theme decision.
 
 **3m progress (2026-11-18).** Two follow-ups landed: `dwCacheHitPercent` is now a
 total function (inconsistent/negative/non-finite cache data returns `null`

@@ -22,7 +22,8 @@
  * (scenario 2 creates a second one as part of its own pass-through assertion; scenario 7
  * creates a third to prove native clicking works again after exit). The created
  * `data-conversation-session` ids are printed for cleanup; no other session, setting or file is
- * touched.
+ * touched. With `--bootstrap`, first-run dialogs are dismissed and the native New Session
+ * button may create additional blank sessions (ids printed, capped by `--bootstrap-sessions`).
  *
  * Usage:
  *   node test/browser/annotation.e2e.mjs                 # full run: smoke + 9 scenarios + shots
@@ -30,6 +31,7 @@
  *   node test/browser/annotation.e2e.mjs --client /tmp/baseline-client.js
  *   node test/browser/annotation.e2e.mjs --no-shots      # skip docs/assets screenshots
  *   node test/browser/annotation.e2e.mjs --scenario 4    # run only scenario 4 (plus smoke)
+ *   node test/browser/annotation.e2e.mjs --bootstrap     # dismiss first-run modals + seed blank sessions
  *   node test/browser/annotation.e2e.mjs --keep-open     # leave Chrome running for inspection
  *   node test/browser/annotation.e2e.mjs --headful       # show the browser window
  *
@@ -158,6 +160,17 @@ function parseArgs(argv) {
     scenario: null,
     from: null,
     url: null,
+    bootstrap: false,
+    bootstrapSessions: 40,
+  }
+  const parseBootstrapSessions = (raw) => {
+    const value = Number(raw)
+    if (!Number.isInteger(value) || value < 0 || value > 100) {
+      const error = new Error(`invalid --bootstrap-sessions "${raw}": expected an integer in the 0..100 range`)
+      error.exitCode = 2
+      throw error
+    }
+    return value
   }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -167,6 +180,9 @@ function parseArgs(argv) {
     else if (arg === '--headful') opts.headful = true
     else if (arg === '--assets') opts.assets = true
     else if (arg === '--shots-only') { opts.shotsOnly = true; opts.mode = 'shots' }
+    else if (arg === '--bootstrap') opts.bootstrap = true
+    else if (arg === '--bootstrap-sessions') { opts.bootstrapSessions = parseBootstrapSessions(argv[++i]); opts.bootstrap = true }
+    else if (arg.startsWith('--bootstrap-sessions=')) { opts.bootstrapSessions = parseBootstrapSessions(arg.slice('--bootstrap-sessions='.length)); opts.bootstrap = true }
     else if (arg === '--client') opts.clientPath = path.resolve(argv[++i])
     else if (arg.startsWith('--client=')) opts.clientPath = path.resolve(arg.slice('--client='.length))
     else if (arg === '--scenario') opts.scenario = argv[++i]
@@ -176,7 +192,8 @@ function parseArgs(argv) {
     else if (arg === '--url') opts.url = argv[++i]
     else if (arg.startsWith('--url=')) opts.url = arg.slice('--url='.length)
     else if (arg === '--help' || arg === '-h') {
-      console.log('usage: node test/browser/annotation.e2e.mjs [--smoke] [--shots-only] [--assets] [--client path] [--no-shots] [--scenario N|--from N] [--keep-open] [--headful] [--url TOKEN_URL]')
+      console.log('usage: node test/browser/annotation.e2e.mjs [--smoke] [--shots-only] [--assets] [--client path] [--no-shots] [--scenario N|--from N] [--bootstrap] [--bootstrap-sessions N] [--keep-open] [--headful] [--url TOKEN_URL]')
+      console.log('       --bootstrap dismisses the first-run Preview Notice / Get started dialogs, then creates blank Sessions through the native New Session button until the session list is scrollable (no-op when it already is); --bootstrap-sessions N caps the attempts (0..100, default 40, implies --bootstrap)')
       process.exit(0)
     } else {
       throw new Error(`unknown argument: ${arg}`)
@@ -456,6 +473,7 @@ class Page {
     this.networkEnabled = false
     this.networkEnableError = null
     this.origin = null
+    this.dismissFirstRunOnReload = false
     this._requestUrls = new Map()
     this.logEntries = []
     this._subscriptions = [
@@ -616,6 +634,12 @@ class Page {
 
   async reload() {
     await this.send('Page.reload', { ignoreCache: false })
+    // --bootstrap keeps later reloads usable too: the first-run Get started dialog is
+    // per-document, so scenarios that reload (S8) would otherwise be blocked by its mask.
+    if (this.dismissFirstRunOnReload === true) {
+      await this.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready after reload (bootstrap)' })
+      await dismissFirstRunDialogs(this)
+    }
   }
 
   async setViewport(width, height) {
@@ -1072,6 +1096,67 @@ const pageProbe = {
       width: Math.round(hit.r.width),
       height: Math.round(hit.r.height),
     }
+  },
+
+  /**
+   * The first-run onboarding modal that blocks pointer automation. DSH renders it as a
+   * role=dialog + aria-modal=true layer with one localized title; every locale ships the
+   * same two steps (Preview Notice, then Get started). Detection is text/role based, and
+   * the returned button is the modal's first enabled control (Continue / Close).
+   * @returns {{kind: string, title: string, button: {x: number, y: number} | null} | null} modal facts.
+   */
+  firstRunModal: () => {
+    const titles = {
+      welcome: [
+        'Preview Notice',
+        '预览版说明',
+        'プレビューに関するお知らせ',
+        'Aviso previo',
+        "Avis d'aperçu",
+        'Vorschauhinweis',
+        'Уведомление о предварительном просмотре',
+        'Aviso de visualização',
+      ],
+      onboarding: [
+        'Get started',
+        '开始使用',
+        'はじめに',
+        'empezar',
+        'Commencez',
+        'Fangen Sie an',
+        'Начать',
+        'Comece',
+      ],
+    }
+    const normalize = (value) => String(value || '').replace(/[’‘]/g, "'").replace(/\s+/g, ' ').trim().toLowerCase()
+    const known = Object.fromEntries(
+      Object.entries(titles).map(([kind, list]) => [kind, list.map(normalize)])
+    )
+    for (const dialog of document.querySelectorAll('[role="dialog"][aria-modal="true"]')) {
+      const rect = dialog.getBoundingClientRect()
+      if (rect.width < 100 || rect.height < 80) continue
+      const style = getComputedStyle(dialog)
+      if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) continue
+      const title = dialog.getAttribute('aria-label') || dialog.querySelector('h2')?.innerText || ''
+      const key = normalize(title)
+      const kind = Object.keys(known).find((name) => known[name].includes(key))
+      if (kind === undefined) continue
+      const button = [...dialog.querySelectorAll('button')].find((candidate) => {
+        const buttonRect = candidate.getBoundingClientRect()
+        const buttonStyle = getComputedStyle(candidate)
+        return !candidate.disabled && buttonRect.width > 0 && buttonRect.height > 0
+          && buttonStyle.display !== 'none' && buttonStyle.visibility !== 'hidden'
+      })
+      return {
+        kind,
+        title: String(title).trim(),
+        button: button === undefined ? null : {
+          x: Math.round(button.getBoundingClientRect().left + button.getBoundingClientRect().width / 2),
+          y: Math.round(button.getBoundingClientRect().top + button.getBoundingClientRect().height / 2),
+        },
+      }
+    }
+    return null
   },
 }
 
@@ -8953,6 +9038,152 @@ async function writeScreenshots(shots, opts, state) {
   return shotsDir
 }
 
+// ---------------------------------------------------------------------------------------------
+// Opt-in bootstrap (first-run data preparation; default runs never enter this section)
+// ---------------------------------------------------------------------------------------------
+
+/** Wait up to `timeoutMs` for a recognized first-run modal, polling the live DOM. */
+async function waitForFirstRunModal(page, timeoutMs) {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const modal = await page.eval(pageProbe.firstRunModal)
+    if (modal !== null || Date.now() >= deadline) return modal
+    await sleep(250)
+  }
+}
+
+/**
+ * Dismiss the localized first-run onboarding steps (Preview Notice, then Get started) with
+ * real CDP pointer clicks. Missing modals are a no-op; a modal that cannot be dismissed is a
+ * clear bootstrap failure, never a silent skip.
+ * @param {Page} page - attached page.
+ * @returns {Promise<string[]>} dismissed modal titles in order.
+ */
+async function dismissFirstRunDialogs(page) {
+  const dismissed = []
+  let lastTitle = null
+  for (let round = 0; round < 4; round++) {
+    // The welcome step loads after the shell; allow it to arrive before declaring "absent".
+    const modal = await waitForFirstRunModal(page, round === 0 ? 3000 : 1500)
+    if (modal === null) break
+    if (modal.title === lastTitle) {
+      throw new Error(
+        `bootstrap: the first-run "${modal.title}" modal is still present after a real pointer click on its ` +
+          'dismiss button; the notice could not be acknowledged'
+      )
+    }
+    assert(
+      modal.button !== null,
+      `bootstrap: the first-run "${modal.title}" modal exposes no enabled dismiss button`
+    )
+    await page.clickAt(modal.button.x, modal.button.y)
+    lastTitle = modal.title
+    dismissed.push(modal.title)
+    await sleep(500)
+  }
+  const leftover = await page.eval(pageProbe.firstRunModal)
+  assert(
+    leftover === null,
+    `bootstrap: the first-run "${leftover?.title ?? 'unknown'}" modal still blocks the page after dismissing ` +
+      `${dismissed.length} dialog(s): ${dismissed.join(' -> ') || 'none'}`
+  )
+  return dismissed
+}
+
+/**
+ * Opt-in preparation for a fresh profile: dismiss first-run dialogs, then try to make the
+ * native session list scrollable by creating blank Sessions through the native New Session
+ * button. The probe is the same one `installScrollProbe` accepts for S3/S8. This is a
+ * best-effort data step: when DSH declines to create a second blank draft, the limitation is
+ * recorded and the run continues (scenarios still fail at their own assertions; nothing is
+ * skipped or weakened).
+ * @param {Page} page - attached page.
+ * @param {object} state - run state (created ids are tracked for cleanup).
+ * @param {{bootstrapSessions: number}} opts - parsed CLI options.
+ * @returns {Promise<object>} bootstrap summary.
+ */
+async function runBootstrap(page, state, opts) {
+  log('\n=== Bootstrap: first-run preparation (opt-in) ===')
+  const summary = { dialogs: [], created: [], scrollable: null, limitation: null }
+  state.bootstrap = summary
+
+  await page.waitForFn(pageProbe.appReady, [], { timeout: 60000, label: 'app ready before bootstrap' })
+  // The sign-in step is mounted per document; re-arm the dismissal for scenario reloads too.
+  page.dismissFirstRunOnReload = true
+  summary.dialogs = await dismissFirstRunDialogs(page)
+  if (summary.dialogs.length === 0) log('bootstrap: no first-run onboarding modal present')
+  else log(`bootstrap: dismissed ${summary.dialogs.length} first-run modal(s): ${summary.dialogs.join(' -> ')}`)
+  await sleep(400)
+
+  // Idempotent: an already-scrollable session list is left untouched.
+  const initial = await page.eval(probes.installScrollProbe)
+  if (initial !== null) {
+    summary.scrollable = initial
+    log(
+      `bootstrap: native scrollable region already available (${initial.kind}, ` +
+        `${initial.scrollHeight - initial.clientHeight}px overflow); no Sessions created`
+    )
+    return summary
+  }
+
+  if (opts.bootstrapSessions === 0) {
+    summary.limitation = 'session seeding disabled by --bootstrap-sessions 0'
+    log(`bootstrap: ${summary.limitation}`)
+    return summary
+  }
+
+  let previous = await page.evaluate(
+    `document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') ?? null`
+  )
+  for (let attempt = 1; attempt <= opts.bootstrapSessions; attempt++) {
+    const button = await page.eval(pageProbe.newSessionButton)
+    assert(button !== null, 'bootstrap: native New Session button not found')
+    await page.clickAt(button.x, button.y)
+
+    let sessionId = previous
+    const deadline = Date.now() + 8000
+    while (Date.now() < deadline) {
+      await sleep(250)
+      sessionId = await page.evaluate(
+        `document.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session') ?? null`
+      )
+      if (sessionId !== null && sessionId !== previous) break
+    }
+    if (sessionId === null || sessionId === previous) {
+      summary.limitation =
+        'the native New Session action re-focused the existing blank draft instead of creating another Session; ' +
+        'DSH keeps one blank draft per workspace and a blank row exposes no rename/archive/fork action, so a second ' +
+        'blank Session needs another workspace (its picker is a Host-native dialog that headless CDP cannot drive) ' +
+        'or a sent message'
+      break
+    }
+    trackSession(state, sessionId, 'bootstrap-new-session')
+    summary.created.push(sessionId)
+    previous = sessionId
+    await sleep(500)
+    const scrollable = await page.eval(probes.installScrollProbe)
+    if (scrollable !== null) {
+      summary.scrollable = scrollable
+      break
+    }
+  }
+
+  if (summary.created.length === 0) {
+    log(`bootstrap: no blank Session could be created — ${summary.limitation ?? 'cap reached'}`)
+  } else if (summary.scrollable === null) {
+    log(
+      `bootstrap: created ${summary.created.length} blank Session(s), but the native session list is still not ` +
+        `scrollable — ${summary.limitation ?? 'attempt cap reached'}`
+    )
+  } else {
+    log(
+      `bootstrap: created ${summary.created.length} blank Session(s); native scrollable region ready ` +
+        `(${summary.scrollable.kind}, ${summary.scrollable.scrollHeight - summary.scrollable.clientHeight}px overflow)`
+    )
+  }
+  return summary
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2))
   const started = Date.now()
@@ -8979,6 +9210,7 @@ async function main() {
     screenshots: [],
     shotsSessionId: null,
     clearedStorageKeys: [],
+    bootstrap: null,
   }
   const results = new Results()
   let fatal = null
@@ -8995,6 +9227,8 @@ async function main() {
     const cdp = await CdpConnection.connect(chrome.wsUrl)
     page = await Page.open(cdp, url, injectorSource(clientSource))
     log('page: opened, waiting for the DSH shell…')
+
+    if (opts.bootstrap) await runBootstrap(page, state, opts)
 
     await runSmoke({ page, results, state })
     if (!page.networkEnabled) {
@@ -9085,6 +9319,18 @@ async function main() {
   for (const sessionId of uniqueSessions) {
     const source = state.sessionSources instanceof Map ? state.sessionSources.get(sessionId) : undefined
     log(`  ${sessionId}${source ? ` — ${source}` : ''}`)
+  }
+  if (state.bootstrap !== null) {
+    const bootstrap = state.bootstrap
+    const dialogs = bootstrap.dialogs.length > 0 ? ` (${bootstrap.dialogs.join(' -> ')})` : ''
+    const scrollable = bootstrap.scrollable === null
+      ? 'NO'
+      : `yes (${bootstrap.scrollable.kind}, ${bootstrap.scrollable.scrollHeight - bootstrap.scrollable.clientHeight}px overflow)`
+    log(
+      `bootstrap: dialogs dismissed=${bootstrap.dialogs.length}${dialogs}, ` +
+        `blank sessions created=${bootstrap.created.length}, native scrollable region=${scrollable}`
+    )
+    if (bootstrap.limitation !== null) log(`bootstrap limitation: ${bootstrap.limitation}`)
   }
   if (state.shotsSessionId !== null) log(`screenshots session: ${state.shotsSessionId}`)
   if (state.clearedStorageKeys.length > 0) log(`cleared annotation localStorage: ${state.clearedStorageKeys.join(', ')}`)
