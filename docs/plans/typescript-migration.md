@@ -359,8 +359,16 @@ test (live S4 back to baseline 2/3, smoke 6/6, 0 page errors).
 leaf-pick/pin eligibility/event-matching and rail-right geometry), with the DOM
 predicates bound once in the factory so no-argument behavior is unchanged. Only
 `debugFallbackScanProbe` remains inline in the hook shim; `src/client.js` is
-~19.3k lines and the browser typecheck baseline is 1,885. Next: retire the
-annotation seam, then continue the browser typing milestones.
+~19.3k lines and the browser typecheck baseline is 1,885. **3s progress (2026-11-18).** The annotation seam was retired:
+`__POWER_SUITE_TEST_HOOKS__.uiAnnotation` is now a single controller diagnostic
+(`debugFallbackScanProbe`); the 111 pass-through keys and their frozen
+SEAM_EXPORTS/ARITIES/generation contract were deleted, and the tests consume the
+modules directly. `src/client.js` is ~19.2k lines; the server bundle is 936.8 kB.
+Live `annotation --smoke` passes 6/6 with the 1-key seam (smoke-3 now asserts
+that shape) and `--scenario 14` passes 7/7. The remaining gap to fully removing
+the hook is `debugFallbackScanProbe` reading controller counters, used by the
+fallback/diagnostic coverage. Next: browser typing milestones (M1 mechanical
+fixes) and the e2e harness corrections already identified.
 
 **3m progress (2026-11-18).** Two follow-ups landed: `dwCacheHitPercent` is now a
 total function (inconsistent/negative/non-finite cache data returns `null`

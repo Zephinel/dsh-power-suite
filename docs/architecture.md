@@ -662,7 +662,8 @@ resolver re-finds the live node from the ordered candidates so scroll-frame
 lookups stay bounded without trusting a stale first hit. The reducer (`off | idle |
 inspect | selected | multi | collection`, a settings view flag, and transient
 pass-through/boxing/drag states) is a pure function covered by the Node suite
-through the factory's test seam.
+through direct module imports; the factory test seam is retired except for the
+`debugFallbackScanProbe` controller diagnostic.
 
 Candidate picking treats **floating surfaces** as first-class: a chain whose
 live hit is inside a contiguous `position: fixed|absolute` region with computed

@@ -110,7 +110,9 @@ reviewed files) to publish `docs/assets/annotation-idle.png`, `annotation-mode.p
 ## Gate semantics (H1)
 
 - `--smoke` is a pipeline-only mode, but it still fails (non-zero exit) when the injected client
-  fails to load, does not expose a documented test-seam generation (the harness accepts the
+  fails to load, does not expose the current 1-key annotation diagnostic seam (the
+harness accepts `debugFallbackScanProbe`; older logs below mention 48/57/66/68/112-key
+historical generations),
   round-1 **31-key**, round-2 **32-key** (`resolveNodeCandidate`), audit-fix **35-key**, and
   Phase 1 **48-key** generations; every generation requires `textDigest`), or
   does not mount the annotation surface.

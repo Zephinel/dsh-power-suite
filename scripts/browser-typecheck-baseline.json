@@ -3,11 +3,11 @@
   "generatedBy": "scripts/typecheck-browser-baseline.mjs",
   "profile": "tsconfig.browser.json",
   "typescript": "7.0.2",
-  "generatedAt": "2026-11-18T11:45:21.946Z",
-  "gitHead": "c15113b",
+  "generatedAt": "2026-11-18T12:07:47.838Z",
+  "gitHead": "5328866",
   "clientJs": {
-    "lines": 19307,
-    "bytes": 951150
+    "lines": 19158,
+    "bytes": 946703
   },
   "total": 1885,
   "byCode": {

@@ -1363,8 +1363,10 @@ package manifest.
 - **Test seam** — at the end of the factory, when
   `globalThis.__POWER_SUITE_TEST_HOOKS__` exists (set only by the test harness
   and the E2E injector), the factory publishes its pure helpers under
-  `__POWER_SUITE_TEST_HOOKS__.uiAnnotation` (**48 keys**, the Phase 1 generation;
-  previous generations were 31/32/35): settings normalization and modifier
+  `__POWER_SUITE_TEST_HOOKS__.uiAnnotation` (**1 diagnostic key**,
+  `debugFallbackScanProbe`; the former 112-key pass-through, itself grown from
+  the Phase 1 48-key generation, was retired in Phase 3 and the helpers below are
+  covered by direct module imports): settings normalization and modifier
   conflict resolution, text/attribute sanitizers, selector candidates,
   `buildElementRef`, a deterministic text digest, a DOM node resolver, locator
   descriptions, the reducer, quick-reference and batch serializers,
@@ -2658,8 +2660,10 @@ package manifest.
 - **Test seam** — at the end of the factory, when
   `globalThis.__POWER_SUITE_TEST_HOOKS__` exists (set only by the test harness
   and the E2E injector), the factory publishes its pure helpers under
-  `__POWER_SUITE_TEST_HOOKS__.uiAnnotation` (**48 keys**, the Phase 1 generation;
-  previous generations were 31/32/35): settings normalization and modifier
+  `__POWER_SUITE_TEST_HOOKS__.uiAnnotation` (**1 diagnostic key**,
+  `debugFallbackScanProbe`; the former 112-key pass-through, itself grown from
+  the Phase 1 48-key generation, was retired in Phase 3 and the helpers below are
+  covered by direct module imports): settings normalization and modifier
   conflict resolution, text/attribute sanitizers, selector candidates,
   `buildElementRef`, a deterministic text digest, a DOM node resolver, locator
   descriptions, the reducer, quick-reference and batch serializers,
