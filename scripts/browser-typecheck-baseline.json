@@ -3,22 +3,22 @@
   "generatedBy": "scripts/typecheck-browser-baseline.mjs",
   "profile": "tsconfig.browser.json",
   "typescript": "7.0.2",
-  "generatedAt": "2026-11-18T11:28:19.041Z",
-  "gitHead": "f692b1a",
+  "generatedAt": "2026-11-18T11:45:21.946Z",
+  "gitHead": "c15113b",
   "clientJs": {
-    "lines": 19812,
-    "bytes": 978691
+    "lines": 19307,
+    "bytes": 951150
   },
-  "total": 1928,
+  "total": 1885,
   "byCode": {
-    "TS2339": 1095,
+    "TS2339": 1062,
     "TS7005": 264,
-    "TS7006": 257,
+    "TS7006": 253,
     "TS7034": 69,
     "TS2322": 57,
     "TS2554": 56,
-    "TS2345": 37,
-    "TS7053": 27,
+    "TS2345": 33,
+    "TS7053": 25,
     "TS18047": 10,
     "TS2740": 6,
     "TS7017": 6,
@@ -42,10 +42,10 @@
     "TS2810": 1
   },
   "byFile": {
-    "src/client.js": 1928
+    "src/client.js": 1885
   },
   "byFeature": {
-    "ui element annotation": 1097,
+    "ui element annotation": 1054,
     "dynamic workspaces": 279,
     "hover quick look": 151,
     "sidebar width": 53,
@@ -64,7 +64,7 @@
     "settings — copy and shared state": 5
   },
   "byRegion": {
-    "feature: ui element annotation": 1082,
+    "feature: ui element annotation": 1051,
     "feature: dynamic workspaces": 279,
     "feature: hover quick look": 151,
     "feature: sidebar width > feature: sidebar width — install": 48,
@@ -78,7 +78,6 @@
     "feature: interrupted sessions — copy, icons, shared state": 20,
     "plugin": 20,
     "feature: draft attachment memory": 17,
-    "feature: ui element annotation > ui element annotation — pure model": 15,
     "feature: native session hover figures": 11,
     "feature: prompt history": 11,
     "feature: settings — page": 11,
@@ -86,6 +85,7 @@
     "feature: session artifacts — Files-header action": 6,
     "feature: settings — copy and shared state": 5,
     "feature: sidebar width > feature: sidebar width — cache and store seam": 5,
+    "feature: ui element annotation > ui element annotation — pure model": 3,
     "icons": 2
   },
   "unattributed": {

@@ -353,6 +353,15 @@ the identity extraction: the extracted DOM `getAttribute` was called unbound and
 broke every click selection (`Illegal invocation`), now bound with a regression
 test (live S4 back to baseline 2/3, smoke 6/6, 0 page errors).
 
+**3r progress (2026-11-18).** The resolution/surface slice landed:
+`resolution.ts` (`resolveRefStatus`, `resolveNodeCandidate`,
+`annotationResolveStatus`) and `surface.ts` (surface root/levels/pick-level/
+leaf-pick/pin eligibility/event-matching and rail-right geometry), with the DOM
+predicates bound once in the factory so no-argument behavior is unchanged. Only
+`debugFallbackScanProbe` remains inline in the hook shim; `src/client.js` is
+~19.3k lines and the browser typecheck baseline is 1,885. Next: retire the
+annotation seam, then continue the browser typing milestones.
+
 **3m progress (2026-11-18).** Two follow-ups landed: `dwCacheHitPercent` is now a
 total function (inconsistent/negative/non-finite cache data returns `null`
 instead of looping forever; valid outputs unchanged, with a 7,389-case
