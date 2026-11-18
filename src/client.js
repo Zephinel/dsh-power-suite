@@ -267,6 +267,13 @@ window.__ModuleLoader__.load({
     /** The bundle's npm package name: configuration slot key and settings identity. */
     const PACKAGE_NAME = '@zephinel/dsh-power-suite'
 
+    /**
+     * The browser global plus the optional end-to-end test seam installed by the
+     * browser harness before load; production never defines it.
+     * @type {typeof globalThis & { __POWER_SUITE_TEST_HOOKS__?: Record<string, object> }}
+     */
+    const testHookHost = globalThis
+
     //#region copy
     const EN = {
       'panel.title': 'Artifacts',
@@ -510,6 +517,7 @@ window.__ModuleLoader__.load({
      * @param {string} path - Remix path data.
      * @param {number} size - pixel size.
      * @param {string} [className] - optional class.
+     * @param {number} [scale] - optional inner-path scale; omitted keeps 1:1.
      * @returns {object} the SVG element.
      */
     function RemixGlyph(path, size, className, scale) {
@@ -999,7 +1007,7 @@ window.__ModuleLoader__.load({
 .dsa-code .tok-punct{color:var(--dsw-alias-label-tertiary)}
 `
 
-    /** Extension → highlighter language. */
+    /** Extension → highlighter language. @type {Record<string, string>} */
     const QUICKLOOK_LANGUAGES = {
       js: 'js', mjs: 'js', cjs: 'js', jsx: 'js',
       ts: 'ts', tsx: 'ts', mts: 'ts', cts: 'ts',
@@ -1026,7 +1034,7 @@ window.__ModuleLoader__.load({
       csv: '', tsv: '', txt: '', log: '', text: ''
     }
 
-    /** Common fence aliases → canonical language ids. */
+    /** Common fence aliases → canonical language ids. @type {Record<string, string>} */
     const QUICKLOOK_LANGUAGE_ALIASES = {
       javascript: 'js', js: 'js', node: 'js',
       typescript: 'ts', ts: 'ts',
@@ -1044,7 +1052,7 @@ window.__ModuleLoader__.load({
       toml: 'toml', ini: 'ini', c: 'c', h: 'c'
     }
 
-    /** Per-language keyword and builtin sets. Booleans are handled separately. */
+    /** Per-language keyword and builtin sets. Booleans are handled separately. @type {Record<string, { keywords: string[], builtins: string[] }>} */
     const QUICKLOOK_KEYWORDS = {
       js: {
         keywords: ['const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'do', 'class', 'extends', 'import', 'export', 'from', 'default', 'async', 'await', 'new', 'this', 'typeof', 'instanceof', 'in', 'of', 'try', 'catch', 'finally', 'throw', 'switch', 'case', 'break', 'continue', 'delete', 'void', 'yield', 'static', 'get', 'set', 'super'],
@@ -2625,6 +2633,7 @@ window.__ModuleLoader__.load({
       // delivered); provided rows are the attachments the user supplied.
       const generatedCount = artifacts.filter((artifact) => artifact.provided !== true).length
       const providedCount = artifacts.length - generatedCount
+      /** @type {Record<string, number>} */
       const filterCounts = { all: artifacts.length, generated: generatedCount, provided: providedCount }
       const shownArtifacts = filter === 'all'
         ? artifacts
@@ -2992,7 +3001,7 @@ window.__ModuleLoader__.load({
     //#endregion
 
     //#region feature: workspace default presets — menu
-    /** Built-in preset ids whose display names the host UI localizes itself. */
+    /** Built-in preset ids whose display names the host UI localizes itself. @type {Record<string, string>} */
     const BUILT_IN_NAME_KEYS = {
       standard: 'preset.standard',
       ptc: 'preset.ptc',
@@ -3060,7 +3069,7 @@ window.__ModuleLoader__.load({
     /**
      * Read one Workspace's stored default preset.
      * @param {string} workspaceId - Workspace identity.
-     * @param {AbortSignal} signal - menu preparation cancellation.
+     * @param {AbortSignal} [signal] - menu preparation cancellation.
      * @returns {Promise<string | null>} the stored preset id, or null for none.
      */
     async function readWorkspacePreset(workspaceId, signal) {
@@ -3595,7 +3604,15 @@ window.__ModuleLoader__.load({
       'settings.error': '保存设置失败，请重试。'
     }
 
-    /** Host-backed settings shared by the page and the composer key handler. */
+    /** @typedef {import('./shared/protocol.ts').Settings} Settings */
+    /** @typedef {import('./shared/protocol.ts').SettingsPatch} SettingsPatch */
+    /** @typedef {'promptHistoryModifier' | 'recentSessionMinutes' | 'activeProjectDays'} SettingsField */
+    /** @typedef {{ status: 'loading' | 'ready' | 'error', value: Settings }} SettingsSnapshot */
+
+    /**
+     * Host-backed settings shared by the page and the composer key handler.
+     * @type {{ snapshot: SettingsSnapshot, listeners: Set<Function>, loading: Promise<void> | null }}
+     */
     const settingsStore = {
       snapshot: { status: 'loading', value: { ...DEFAULT_SETTINGS } },
       listeners: new Set(),
@@ -3604,7 +3621,7 @@ window.__ModuleLoader__.load({
 
     /**
      * Read the current shared settings snapshot.
-     * @returns {{ status: string, value: { promptHistoryModifier: string } }} the snapshot.
+     * @returns {SettingsSnapshot} the snapshot.
      */
     function settingsSnapshot() {
       return settingsStore.snapshot
@@ -3624,7 +3641,7 @@ window.__ModuleLoader__.load({
 
     /**
      * Publish one new settings snapshot.
-     * @param {{ status: string, value: object }} snapshot - next snapshot.
+     * @param {SettingsSnapshot} snapshot - next snapshot.
      * @returns {void}
      */
     function publishSettings(snapshot) {
@@ -3687,7 +3704,7 @@ window.__ModuleLoader__.load({
 
     /**
      * Read the settings the features currently use, without subscribing.
-     * @returns {{ promptHistoryModifier: string }} current settings.
+     * @returns {Settings} current settings.
      */
     function currentSettings() {
       return settingsStore.snapshot.value
@@ -3822,8 +3839,8 @@ window.__ModuleLoader__.load({
 
       /**
        * Persist one settings patch.
-       * @param {object} patch - recognized fields to write.
-       * @param {string} field - field the patch changes.
+       * @param {SettingsPatch} patch - recognized fields to write.
+       * @param {SettingsField} field - field the patch changes.
        * @returns {void}
        */
       function choosePatch(patch, field) {
@@ -4083,7 +4100,7 @@ window.__ModuleLoader__.load({
     /**
      * Queue one Host read unless the Session is already known or loading.
      * @param {string} sessionId - Session identity.
-     * @param {{ force?: boolean }} options - force bypasses the cache.
+     * @param {{ force?: boolean, refreshHost?: boolean }} options - force bypasses the cache; refreshHost asks the Host to recompute.
      * @returns {void}
      */
     function ensureInterrupted(sessionId, options = {}) {
@@ -4123,6 +4140,7 @@ window.__ModuleLoader__.load({
      * Read one Session's interruption state from the Host.
      * @param {string} sessionId - Session identity.
      * @param {boolean} force - ask the Host to bypass its cache.
+     * @param {boolean} refreshHost - also send `refresh=1` when forced.
      * @returns {Promise<void>} resolves after the record lands.
      */
     async function loadInterrupted(sessionId, force, refreshHost) {
@@ -5338,7 +5356,7 @@ const DW_ATMOS_CONFIG = { intensity: 0.64, spread: 1.18, drift: 1.2, stirring: 0
  * renderer per highlighted row; no RAFs for non-highlighted rows. A hidden tab
  * pauses the loop, reduced motion draws a single static frame.
  * @param {HTMLElement} host - the .psd-atmos wrapper.
- * @returns {{ destroy: Function }} disposer.
+ * @returns {{ destroy: () => void }} disposer.
  */
 function dwAtmosphereMount(host) {
   const canvas = document.createElement('canvas')
@@ -5502,12 +5520,17 @@ function DwAtmosphere() {
     React.createElement('span', { className: 'psd-atmos-scrim', 'aria-hidden': true }))
 }
 
-/** Native-row atmosphere instances, keyed by marker kind. */
+/**
+ * One injected native-row atmosphere instance.
+ * @typedef {{ host: HTMLElement, wrapper: HTMLElement, renderer: { destroy: () => void }, attr: string }} DwNativeAtmosphere
+ */
+
+/** Native-row atmosphere instances, keyed by marker kind. @type {Record<string, DwNativeAtmosphere | null>} */
 const dwNativeAtmospheres = { workspace: null, session: null }
 
 /**
  * Destroy one injected native-row atmosphere (renderer + wrapper + marker).
- * @param {{ host: HTMLElement, wrapper: HTMLElement, renderer: object, attr: string }} record - instance.
+ * @param {DwNativeAtmosphere} record - instance.
  * @returns {void}
  */
 function dwClearNativeAtmosphere(record) {
@@ -5897,6 +5920,7 @@ function dwClearNativeAtmospheres() {
      */
     function dwWriteBucketCache(cache) {
       try {
+        /** @type {Record<string, 'active' | 'inactive'>} */
         const workspaces = {}
         for (const [id, active] of cache) workspaces[id] = active ? 'active' : 'inactive'
         window.localStorage.setItem(DW_BUCKET_KEY, JSON.stringify({ version: DW_BUCKET_VERSION, workspaces }))
@@ -5984,6 +6008,7 @@ function dwClearNativeAtmospheres() {
      */
     function dwWriteAckedBaselines(baselines) {
       try {
+        /** @type {Record<string, number>} */
         const acked = {}
         for (const [id, at] of baselines) {
           if (typeof id !== 'string' || id.length === 0) continue
@@ -6002,6 +6027,7 @@ function dwClearNativeAtmospheres() {
      * @returns {Record<string, number>} valid id → baseline entries.
      */
     function dwSanitizeAckEntries(value) {
+      /** @type {Record<string, number>} */
       const entries = {}
       if (value === null || typeof value !== 'object' || Array.isArray(value)) return entries
       for (const [id, baseline] of Object.entries(value)) {
@@ -6050,6 +6076,7 @@ function dwClearNativeAtmospheres() {
      * @returns {Record<string, number>} the entries.
      */
     function dwAckedRecords(baselines) {
+      /** @type {Record<string, number>} */
       const entries = {}
       for (const [id, baseline] of baselines) entries[id] = baseline
       return entries
@@ -6104,7 +6131,7 @@ function dwClearNativeAtmospheres() {
      * Merge local baselines into the Host document. Failures are silent so an
      * older Host keeps the local-only behavior.
      * @param {Record<string, number>} entries - increased local baselines.
-     * @returns {Promise<Record<string, number> | null>} the merged entries or null.
+     * @returns {Promise<{ merged: Record<string, number> | null, status: number, retryable: boolean }>} merged entries, HTTP status, and retryability.
      */
     async function dwPostReadAcks(entries) {
       const controller = new AbortController()
@@ -6150,7 +6177,9 @@ function dwClearNativeAtmospheres() {
      * @returns {Array<Record<string, number>>} batches, each under the entry and byte caps.
      */
     function dwAckPushBatches(pending) {
+      /** @type {Array<Record<string, number>>} */
       const batches = []
+      /** @type {Record<string, number>} */
       let batch = {}
       let entries = 0
       let bytes = 0
@@ -6198,6 +6227,7 @@ function dwClearNativeAtmospheres() {
      * @returns {Record<string, number>} merged/pruned map.
      */
     function dwMergeActivityMaps(previous, incoming, sessionIds) {
+      /** @type {Record<string, number>} */
       const next = {}
       if (previous !== null && typeof previous === 'object') {
         for (const [id, time] of Object.entries(previous)) {
@@ -6238,6 +6268,7 @@ function dwClearNativeAtmospheres() {
         const payload = await response.json()
         const sessions = payload !== null && typeof payload === 'object' ? payload.sessions : null
         if (sessions === null || typeof sessions !== 'object' || Array.isArray(sessions)) return null
+        /** @type {Record<string, number>} */
         const activity = {}
         for (const [id, at] of Object.entries(sessions)) {
           if (typeof id !== 'string' || id.length === 0) continue
@@ -7805,7 +7836,7 @@ function dwClearNativeAtmospheres() {
       // row maps to and a scoped patch/restore on the live projection snapshot, so
       // the E2E harness can prove the open card re-reads pushed projection frames
       // (no polling involved) without waiting for real model activity.
-      const liveHooks = globalThis.__POWER_SUITE_TEST_HOOKS__
+      const liveHooks = testHookHost.__POWER_SUITE_TEST_HOOKS__
       if (liveHooks !== null && typeof liveHooks === 'object') {
         const stash = new Map()
         liveHooks.dynamicWorkspacesLive = {
@@ -7860,6 +7891,7 @@ function dwClearNativeAtmospheres() {
       // flip a read row back to unread.
       React.useEffect(() => {
         if (sessions === null || typeof sessions !== 'object' || !Array.isArray(sessions.ids) || sessions.ids.length === 0) return
+        /** @type {Record<string, number>} */
         const raised = {}
         let changed = false
         const next = new Map(ackedBaselines)
@@ -10859,11 +10891,11 @@ function dwClearNativeAtmospheres() {
 
       /**
        * Merge a patch into the snapshot and notify React.
-       * @param {object} patch - partial snapshot.
+       * @param {Record<string, unknown>} patch - partial snapshot.
        * @returns {void}
        */
       function publish(patch) {
-        const current = snapshot()
+        const current = /** @type {Record<string, unknown>} */ (snapshot())
         let changed = false
         for (const key of Object.keys(patch)) {
           if (patch[key] !== current[key]) {
@@ -11298,6 +11330,7 @@ function dwClearNativeAtmospheres() {
        * A3/T32: shared clipboard path for the XPath/JS-path actions.
        * @param {string | undefined} refId - record id or undefined for the selection.
        * @param {'xpath' | 'jsPath'} kind - which anchor to copy.
+       * @param {{ full?: boolean }} [options] - `full` requests the full XPath.
        * @returns {Promise<boolean>} whether the copy succeeded.
        */
       async function copyAnchorText(refId, kind, options) {
@@ -11623,6 +11656,7 @@ function dwClearNativeAtmospheres() {
         let current = leaf !== null && leaf !== undefined ? leaf.parentElement : null
         let depth = 0
         while (current !== null && current !== undefined && current !== document.body && depth < 16) {
+          /** @type {Record<string, string>} */
           const attrs = {}
           try {
             for (const attr of Array.from(current.attributes ?? [])) attrs[attr.name] = attr.value
@@ -14492,7 +14526,7 @@ function dwClearNativeAtmospheres() {
             } catch {
               // fall through to hide
             }
-            hideChipPreview('over-miss')
+            hideChipPreview()
           }
           return
         }
@@ -14501,7 +14535,7 @@ function dwClearNativeAtmospheres() {
         if (editor === null) return
         const model = chipPreviewModel(chip)
         if (model === null) {
-          hideChipPreview('no-model')
+          hideChipPreview()
           return
         }
         const rect = chip.getBoundingClientRect()
@@ -15990,6 +16024,11 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       const scopeCounts = annotationScopeCounts(entries, sessionId)
       const filter = state.filter === 'single' || state.filter === 'group' ? state.filter : 'all'
       const filtered = annotationFilterEntries(entries, filter)
+      /**
+       * @param {'all' | 'single' | 'group'} key - filter id.
+       * @param {number} count - rendered count.
+       * @returns {object} one filter chip.
+       */
       const filterLabel = (key, count) => React.createElement('button', {
         key,
         type: 'button',
@@ -19084,7 +19123,7 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       // Documented test seam: seed/settle one interrupted record and re-sync the
       // native row decoration, so the E2E can exercise the interrupted-idle,
       // continued-running and completed phases without sending a real Continue.
-      const testHooks = globalThis.__POWER_SUITE_TEST_HOOKS__
+      const testHooks = testHookHost.__POWER_SUITE_TEST_HOOKS__
       if (testHooks !== null && typeof testHooks === 'object') {
         testHooks.interruptedSessions = {
           set: (sessionId, patch) => {
@@ -19133,9 +19172,9 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
     // 112-key pass-through is not republished here. Production never defines the
     // flag, so this block is inert.
     if (typeof globalThis !== 'undefined'
-      && typeof globalThis.__POWER_SUITE_TEST_HOOKS__ === 'object'
-      && globalThis.__POWER_SUITE_TEST_HOOKS__ !== null) {
-      globalThis.__POWER_SUITE_TEST_HOOKS__.uiAnnotation = {
+      && typeof testHookHost.__POWER_SUITE_TEST_HOOKS__ === 'object'
+      && testHookHost.__POWER_SUITE_TEST_HOOKS__ !== null) {
+      testHookHost.__POWER_SUITE_TEST_HOOKS__.uiAnnotation = {
         debugFallbackScanProbe: () => (annotationController !== null && annotationController !== undefined
           && typeof annotationController.debugFallbackScanProbe === 'function'
           ? annotationController.debugFallbackScanProbe()
@@ -19145,7 +19184,7 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       // Sidebar width: only the attach probe the browser E2E reads remains a
       // test hook; the pure decisions moved to `src/browser/sidebar-width/model.ts`
       // and are covered there directly. `sidebarWidthProbe` is read-only.
-      globalThis.__POWER_SUITE_TEST_HOOKS__.sidebarWidth = { probe: sidebarWidthProbe }
+      testHookHost.__POWER_SUITE_TEST_HOOKS__.sidebarWidth = { probe: sidebarWidthProbe }
     }
 
     //#endregion
