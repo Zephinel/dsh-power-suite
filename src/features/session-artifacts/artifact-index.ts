@@ -31,9 +31,9 @@ const MUTATING_TOOLS = new Set(['write', 'edit', 'str_replace_editor'])
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {value is Record<string, any>} whether it is a record.
+ * @returns {value is Record<string, unknown>} whether it is a record.
  */
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -42,7 +42,7 @@ function isRecord(value: unknown): value is Record<string, any> {
  * @param {unknown} value - recorded argument.
  * @returns {string | null} the path text, if any.
  */
-function pathValue(value: any) {
+function pathValue(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value : null
 }
 
@@ -55,7 +55,7 @@ function pathValue(value: any) {
  * @param {unknown} argsRaw - raw JSON argument text.
  * @returns {string | null} the path argument, when the call mutates a file.
  */
-export function mutationPath(name: any, argsRaw: any) {
+export function mutationPath(name: string, argsRaw: unknown): string | null {
   if (typeof argsRaw !== 'string') return null
   let args
   try {
@@ -109,7 +109,7 @@ export function mutationPath(name: any, argsRaw: any) {
  * @param {string | undefined} cwd - the Session's workspace root.
  * @returns {string | null} the normalized absolute path, or null when unresolvable.
  */
-export function resolveArtifactPath(recordPath: any, cwd: any) {
+export function resolveArtifactPath(recordPath: string, cwd: string | null | undefined) {
   const value = pathValue(recordPath)
   if (value === null) return null
   if (path.isAbsolute(value)) return path.normalize(value)
@@ -125,8 +125,8 @@ export function resolveArtifactPath(recordPath: any, cwd: any) {
  * @param {string | undefined} cwd - the Session's workspace root.
  * @returns {string | null} the normalized absolute path.
  */
-function mutationResultPath(argumentPath: any, meta: any, cwd: any) {
-  if (isRecord(meta) && Object.hasOwn(meta, 'path')) {
+function mutationResultPath(argumentPath: string, meta: unknown, cwd: string | null | undefined) {
+  if (isRecord(meta) && Object.hasOwn(meta, 'path') && typeof meta.path === 'string') {
     const recorded = resolveArtifactPath(meta.path, cwd)
     if (recorded !== null) return recorded
   }
@@ -138,7 +138,7 @@ function mutationResultPath(argumentPath: any, meta: any, cwd: any) {
  * @param {unknown} value - decoded `files` member.
  * @returns {value is { path: string, description?: string }} whether it is usable.
  */
-function isPresentedFile(value: any) {
+function isPresentedFile(value: unknown): value is { path: string, description?: string } {
   if (!isRecord(value)) return false
   const { path: declaredPath, description } = value
   return (
@@ -153,7 +153,7 @@ function isPresentedFile(value: any) {
  * @param {unknown} value - decoded event data.
  * @returns {value is { turn: number, files: unknown[] }} whether it is usable.
  */
-function isPresentedData(value: any) {
+function isPresentedData(value: unknown): value is { turn: number, files: unknown[] } {
   if (!isRecord(value)) return false
   const { turn, files } = value
   return (
@@ -167,12 +167,35 @@ function isPresentedData(value: any) {
 /**
  * Create or update one artifact entry, keeping the strongest facts recorded
  * for its path.
- * @param {Map<string, Record<string, any>>} artifacts - path-keyed entries.
+ * @param {Map<string, Record<string, unknown>>} artifacts - path-keyed entries.
  * @param {string} artifactPath - normalized absolute path.
- * @param {Record<string, any>} fact - what this event proved.
+ * @param {Record<string, unknown>} fact - what this event proved.
  * @returns {void}
  */
-function upsertArtifact(artifacts: any, artifactPath: any, fact: any) {
+export interface ArtifactRow {
+  path: string
+  name: string
+  attachmentId?: string
+  mediaType?: string
+  bytes?: number
+  width?: number
+  height?: number
+  promptOrdinal?: number
+  mime?: string
+  previewable?: boolean
+  missing?: boolean
+  description?: string
+  presented?: boolean
+  generated?: boolean
+  provided?: boolean
+  tool?: string
+  turn?: number
+  seq: number
+}
+
+type ArtifactFact = Partial<Pick<ArtifactRow, 'description' | 'presented' | 'generated' | 'tool' | 'turn' | 'seq'>>
+
+function upsertArtifact(artifacts: Map<string, ArtifactRow>, artifactPath: string, fact: ArtifactFact): void {
   const entry = artifacts.get(artifactPath)
   if (entry === undefined) {
     artifacts.set(artifactPath, {
@@ -183,7 +206,7 @@ function upsertArtifact(artifacts: any, artifactPath: any, fact: any) {
       generated: fact.generated === true,
       tool: fact.tool,
       turn: fact.turn,
-      seq: fact.seq
+      seq: fact.seq ?? 0
     })
     return
   }
@@ -195,17 +218,17 @@ function upsertArtifact(artifacts: any, artifactPath: any, fact: any) {
   }
   if (fact.generated === true) entry.generated = true
   if (fact.tool !== undefined && entry.tool === undefined) entry.tool = fact.tool
-  if (fact.turn > entry.turn) entry.turn = fact.turn
-  if (fact.seq > entry.seq) entry.seq = fact.seq
+  if (fact.turn !== undefined && fact.turn > (entry.turn ?? 0)) entry.turn = fact.turn
+  if (fact.seq !== undefined && fact.seq > entry.seq) entry.seq = fact.seq
 }
 
 /**
  * Sort artifact rows newest event first, with the file name as a stable tie-break.
- * @param {Array<Record<string, any>>} artifacts - rows carrying numeric `seq` and a `name`.
- * @returns {Array<Record<string, any>>} the same array, sorted in place.
+ * @param {Array<Record<string, unknown>>} artifacts - rows carrying numeric `seq` and a `name`.
+ * @returns {Array<Record<string, unknown>>} the same array, sorted in place.
  */
-export function sortArtifactsNewestFirst(artifacts: any) {
-  return artifacts.sort((left: any, right: any) => {
+export function sortArtifactsNewestFirst(artifacts: ArtifactRow[]): ArtifactRow[] {
+  return artifacts.sort((left: ArtifactRow, right: ArtifactRow) => {
     if (right.seq !== left.seq) return right.seq - left.seq
     return left.name.localeCompare(right.name)
   })
@@ -216,7 +239,7 @@ export function sortArtifactsNewestFirst(artifacts: any) {
  * @param {unknown} value - recorded metadata.
  * @returns {number | undefined} a finite non-negative number, or undefined.
  */
-function attachmentNumber(value: any) {
+function attachmentNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
 }
 
@@ -226,7 +249,7 @@ function attachmentNumber(value: any) {
  * @param {unknown} mediaType - recorded media type.
  * @returns {string} a non-empty display name.
  */
-function attachmentName(name: any, mediaType: any) {
+function attachmentName(name: unknown, mediaType: string | undefined) {
   if (typeof name === 'string' && name.trim().length > 0) return name
   if (typeof mediaType === 'string' && mediaType.startsWith('image/')) {
     const extension = mediaType === 'image/jpeg' ? 'jpg' : mediaType.slice('image/'.length)
@@ -245,10 +268,10 @@ function attachmentName(name: any, mediaType: any) {
  * the panel's "prompt N" label. Identical attachment ids collapse onto their
  * most recent occurrence, so re-pasting the same image moves it to the top
  * instead of listing it twice.
- * @param {readonly Record<string, any>[]} events - raw session events in ascending seq order.
- * @returns {Array<Record<string, any>>} provided rows, newest event first.
+ * @param {readonly Record<string, unknown>[]} events - raw session events in ascending seq order.
+ * @returns {Array<Record<string, unknown>>} provided rows, newest event first.
  */
-export function foldUserAttachments(events: any) {
+export function foldUserAttachments(events: readonly Record<string, unknown>[]): ArtifactRow[] {
   const provided = new Map()
   let promptOrdinal = 0
   for (const event of events) {
@@ -292,11 +315,11 @@ export function foldUserAttachments(events: any) {
  * results by call id; a successful result publishes one produced file. Delivery
  * declarations merge into the same path-keyed entry, so a file that was both
  * written and delivered appears once, carrying its delivery description.
- * @param {readonly Record<string, any>[]} events - raw session events.
+ * @param {readonly Record<string, unknown>[]} events - raw session events.
  * @param {string | undefined} cwd - the Session's workspace root for relative paths.
- * @returns {Array<Record<string, any>>} artifacts, newest turn first.
+ * @returns {Array<Record<string, unknown>>} artifacts, newest turn first.
  */
-export function foldArtifacts(events: any, cwd: any) {
+export function foldArtifacts(events: readonly Record<string, unknown>[], cwd: string | null | undefined): ArtifactRow[] {
   const calls = new Map()
   const artifacts = new Map()
   for (const event of events) {
@@ -357,7 +380,7 @@ export function foldArtifacts(events: any, cwd: any) {
  * @returns {{ mime: string, previewable: boolean }} the response type and whether
  * the browser renders it inline rather than downloading it.
  */
-export function artifactKind(name: any) {
+export function artifactKind(name: string) {
   const extension = path.extname(name).slice(1).toLowerCase()
   switch (extension) {
     case 'html':
@@ -450,7 +473,7 @@ export function artifactKind(name: any) {
  * @param {string} name - file name.
  * @returns {'text' | 'image' | 'media' | 'pdf' | 'html' | 'binary'} the preview kind.
  */
-export function previewKindOf(name: any) {
+export function previewKindOf(name: string) {
   const kind = artifactKind(name)
   if (!kind.previewable) return 'binary'
   const mime = kind.mime
@@ -471,7 +494,7 @@ export function previewKindOf(name: any) {
  * @param {string} name - suggested file name.
  * @returns {string} the header value.
  */
-export function contentDisposition(type: any, name: any) {
+export function contentDisposition(type: string, name: string) {
   const fallback = name.replace(/[^\x20-\x7e]|["\\]/g, '_') || 'artifact'
   const encoded = encodeURIComponent(name).replace(
     /['()*]/g,

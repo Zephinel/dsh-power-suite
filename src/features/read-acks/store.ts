@@ -17,6 +17,8 @@
 
 import path from 'node:path'
 
+import { isNotFound } from '../../host/errors.ts'
+
 import { createDocumentStore } from '../../host/document-store.ts'
 
 /** Store schema version; bump when the shape changes. */
@@ -38,20 +40,11 @@ export const MAX_SESSION_ID_LENGTH = 200
 export const READ_ACKS_READ_FAILED = 'READ_ACKS_READ_FAILED'
 
 /**
- * Whether one filesystem error means "document absent" (legitimately empty).
- * @param {unknown} error - thrown error.
- * @returns {boolean} whether it is ENOENT.
- */
-function isNotFound(error: any) {
-  return error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
-}
-
-/**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {value is Record<string, any>} whether it is a record.
+ * @returns {value is Record<string, unknown>} whether it is a record.
  */
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -191,7 +184,7 @@ export function createReadAckStore(dshHome: string) {
      * @param {Record<string, number>} entries - Session id → observed updatedAt.
      * @returns {Promise<Record<string, number>>} the document after the merge.
      */
-    async record(entries: any) {
+    async record(entries: Record<string, number>) {
       return store.update((current) => {
         const next = mergeAcked(current, entries)
         const changed = Object.keys(next).length !== Object.keys(current).length

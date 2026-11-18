@@ -6,6 +6,7 @@
  * failed registry read is a `latest: null` answer, not an error surface.
  */
 
+import { type HostContext } from '../../host/context.ts'
 import { createUpdateChecker } from './checker.ts'
 
 /** Same-origin exact route serving the cached update check. */
@@ -13,16 +14,16 @@ export const UPDATE_ROUTE = '/api/power-suite.update'
 
 /**
  * Register the update-check route inside Connection's authentication fence.
- * @param {Record<string, any>} ctx - Host context carrying `connection`.
+ * @param {Record<string, unknown>} ctx - Host context carrying `connection`.
  * @returns {void}
  */
-export function installUpdateCheck(ctx: any) {
+export function installUpdateCheck(ctx: HostContext) {
   const check = createUpdateChecker()
   ctx.effect(() => ctx.connection.fetch.register({
     path: UPDATE_ROUTE,
     methods: ['GET'],
     requestBody: 'buffered',
-    fetch: async (request: any) => {
+    fetch: async (request: Request) => {
       const language = new URL(request.url).searchParams.get('lang')
       return Response.json(await check(language), { headers: { 'cache-control': 'no-store' } })
     }

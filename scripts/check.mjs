@@ -80,7 +80,10 @@ try {
 }
 if (typecheckPassed) {
   console.log('typecheck: ok (tsc --noEmit --strict; src/client.js opted out until Phase 3)')
-  console.log(`any budget: ${countAnySites(typeScriptSources)} explicit any sites in src/**/*.ts (tracked, not gated)`)
+  const anyBudget = 0
+  const anySites = countAnySites(typeScriptSources)
+  if (anySites > anyBudget) failures.push(`explicit-any budget exceeded: ${anySites} site(s) > ${anyBudget} allowed`)
+  console.log(`any budget: ${anySites} explicit any sites in src/**/*.ts (limit ${anyBudget})`)
 }
 
 // 3. Manifest checks.

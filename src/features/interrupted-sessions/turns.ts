@@ -21,9 +21,9 @@ export const INTERRUPTED_ROUTE = '/api/power-suite.interrupted'
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {value is Record<string, any>} whether it is a record.
+ * @returns {value is Record<string, unknown>} whether it is a record.
  */
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -39,7 +39,7 @@ function isRecord(value: unknown): value is Record<string, any> {
  * @param {string | null} cause - cancellation cause of an `aborted` ending.
  * @returns {boolean} whether the task can be resumed.
  */
-function interruptedEnd(kind: any, cause: any) {
+function interruptedEnd(kind: string | null, cause: string | null): boolean {
   if (kind === 'interrupted' || kind === 'error' || kind === 'max-tokens') return true
   return kind === 'aborted' && (cause === 'disposed' || cause === 'legacy')
 }
@@ -49,7 +49,7 @@ function interruptedEnd(kind: any, cause: any) {
  * @param {unknown} reason - `turn/end` data.reason.
  * @returns {boolean} whether the task can be resumed after this ending.
  */
-export function isInterruptedEnd(reason: any) {
+export function isInterruptedEnd(reason: unknown): boolean {
   if (!isRecord(reason) || typeof reason.kind !== 'string') return false
   const cause = isRecord(reason.reason) && typeof reason.reason.kind === 'string' ? reason.reason.kind : null
   return interruptedEnd(reason.kind, cause)
@@ -60,7 +60,14 @@ export function isInterruptedEnd(reason: any) {
  * @param {readonly object[]} events - raw events in ascending sequence order.
  * @returns {{ turn: number | null, open: boolean, endReason: string | null, endCause: string | null }} the last turn.
  */
-export function lastTurnState(events: any) {
+export interface LastTurnState {
+  turn: number | null
+  open: boolean
+  endReason: string | null
+  endCause: string | null
+}
+
+export function lastTurnState(events: unknown): LastTurnState {
   let turn = null
   let endReason = null
   let endCause = null
@@ -90,7 +97,7 @@ export function lastTurnState(events: any) {
  * @param {boolean} running - whether the Session currently owns a running Agent.
  * @returns {boolean} whether its last task was interrupted.
  */
-export function isInterrupted(state: any, running: any) {
+export function isInterrupted(state: LastTurnState, running: boolean): boolean {
   if (state.turn === null) return false
   if (state.open) return running !== true
   return interruptedEnd(state.endReason, state.endCause)
@@ -102,7 +109,7 @@ export function isInterrupted(state: any, running: any) {
  * @param {boolean} running - whether the Session currently runs.
  * @returns {{ interrupted: boolean, running: boolean, turn: number | null, reason: string | null, open: boolean }} the wire value.
  */
-export function describeInterruption(state: any, running: any) {
+export function describeInterruption(state: LastTurnState, running: boolean) {
   return {
     interrupted: isInterrupted(state, running),
     running,
@@ -117,7 +124,7 @@ export function describeInterruption(state: any, running: any) {
  * @param {readonly object[]} events - raw events in ascending sequence order.
  * @returns {number | null} epoch milliseconds, or null for an empty/invalid log.
  */
-export function lastEventTime(events: any) {
+export function lastEventTime(events: unknown): number | null {
   if (!Array.isArray(events)) return null
   let latest = null
   for (const event of events) {
@@ -132,7 +139,7 @@ export function lastEventTime(events: any) {
  * @param {readonly object[]} events - raw events in ascending sequence order.
  * @returns {number | null} epoch milliseconds, or null when no turn started.
  */
-export function lastTurnStartTime(events: any) {
+export function lastTurnStartTime(events: unknown): number | null {
   if (!Array.isArray(events)) return null
   let latest = null
   for (const event of events) {
@@ -147,7 +154,7 @@ export function lastTurnStartTime(events: any) {
  * @param {readonly object[]} events - raw events in ascending sequence order.
  * @returns {number | null} epoch milliseconds, or null when no turn ended.
  */
-export function lastTurnEndTime(events: any) {
+export function lastTurnEndTime(events: unknown): number | null {
   if (!Array.isArray(events)) return null
   let latest = null
   for (const event of events) {
@@ -174,7 +181,7 @@ export function lastTurnEndTime(events: any) {
  * @param {number | null} childLastTime - child's newest event timestamp.
  * @returns {boolean} whether the parent should inherit the child interruption.
  */
-export function subagentInterruptionAfter(parentStartTime: any, parentEndTime: any, childInterrupted: any, childRunning: any, childStartTime: any, childLastTime: any) {
+export function subagentInterruptionAfter(parentStartTime: number | null, parentEndTime: number | null, childInterrupted: boolean, childRunning: boolean, childStartTime: number | null, childLastTime: number | null): boolean {
   if (childRunning) return false
   if (childInterrupted !== true) return false
   const startedDuringLastTurn = typeof parentStartTime === 'number'

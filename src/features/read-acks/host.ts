@@ -10,9 +10,11 @@
  * document back.
  */
 
+import { type HostContext } from '../../host/context.ts'
 import os from 'node:os'
 import path from 'node:path'
 import { READ_ACKS_READ_FAILED, createReadAckStore, isAckBaseline, isSessionId } from './store.ts'
+import { errorCode } from '../../host/errors.ts'
 
 /** Route serving and merging the read-acks document. */
 export const READ_ACKS_ROUTE = '/api/power-suite.read-acks'
@@ -36,16 +38,16 @@ export function harnessHome() {
  * @param {unknown} payload - JSON body.
  * @returns {Response} the response.
  */
-function sendJson(status: any, payload: any) {
+function sendJson(status: number, payload: unknown) {
   return Response.json(payload, { status, headers: { 'cache-control': 'no-store' } })
 }
 
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {value is Record<string, any>} whether it is a record.
+ * @returns {value is Record<string, unknown>} whether it is a record.
  */
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -54,7 +56,7 @@ function isRecord(value: unknown): value is Record<string, any> {
  * @param {unknown} body - decoded request body.
  * @returns {{ ok: true, value: Record<string, number> } | { ok: false, message: string }} accepted entries or a failure.
  */
-export function validateReadAckBody(body: any) {
+export function validateReadAckBody(body: unknown): { ok: true; value: Record<string, number> } | { ok: false; message: string } {
   if (!isRecord(body)) return { ok: false, message: 'request body must be one JSON object' }
   if (!isRecord(body.acked)) return { ok: false, message: '"acked" must be one JSON object' }
   const acked: Record<string, number> = {}
@@ -68,13 +70,13 @@ export function validateReadAckBody(body: any) {
 
 /**
  * Register the read-acks route inside Connection's authentication fence.
- * @param {Record<string, any>} ctx - Host context carrying the connection service.
+ * @param {Record<string, unknown>} ctx - Host context carrying the connection service.
  * @param {object} [options] - injection points for tests.
- * @param {Record<string, any>} [options.store] - store override with `get`/`record`.
+ * @param {Record<string, unknown>} [options.store] - store override with `get`/`record`.
  * @returns {void}
  */
 export function installReadAcks(
-  ctx: any,
+  ctx: HostContext,
   options: { store?: ReturnType<typeof createReadAckStore> } = {}
 ) {
   const store = options.store ?? createReadAckStore(harnessHome())
@@ -82,12 +84,12 @@ export function installReadAcks(
     path: READ_ACKS_ROUTE,
     methods: ['GET', 'POST'],
     requestBody: 'buffered',
-    fetch: async (request: any) => {
+    fetch: async (request: Request) => {
       if (request.method === 'GET') {
         try {
           return sendJson(200, { acked: await store.get() })
-        } catch (error: any) {
-          if (error !== null && typeof error === 'object' && error.code === READ_ACKS_READ_FAILED) {
+        } catch (error: unknown) {
+          if (errorCode(error) === READ_ACKS_READ_FAILED) {
             return sendJson(500, { code: 'store-read-failed', message: 'read acknowledgements could not be read' })
           }
           return sendJson(500, { code: 'store-failed', message: 'read acknowledgements could not be served' })
@@ -119,10 +121,10 @@ export function installReadAcks(
       let acked
       try {
         acked = await store.record(verdict.value)
-      } catch (error: any) {
+      } catch (error: unknown) {
         // A read failure means the on-disk marks could not be merged safely; do
         // not overwrite them. The client treats both 5xx shapes as retryable.
-        if (error !== null && typeof error === 'object' && error.code === READ_ACKS_READ_FAILED) {
+        if (errorCode(error) === READ_ACKS_READ_FAILED) {
           return sendJson(500, { code: 'store-read-failed', message: 'read acknowledgements could not be read' })
         }
         // A disk/permission failure must keep the documented error contract;

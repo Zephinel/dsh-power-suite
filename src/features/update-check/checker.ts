@@ -54,10 +54,10 @@ export interface UpdateCheckerOptions {
 /**
  * Read the running package's manifest.
  * @param {URL | string} [manifestUrl] - manifest override for tests.
- * @returns {Record<string, any> | undefined} the parsed manifest, or undefined when it is
+ * @returns {Record<string, unknown> | undefined} the parsed manifest, or undefined when it is
  *   unreadable.
  */
-function readManifest(manifestUrl?: URL | string): Record<string, any> | undefined {
+function readManifest(manifestUrl?: URL | string): Record<string, unknown> | undefined {
   const source = manifestUrl ?? DEFAULT_MANIFEST_URL
   try {
     const parsed = JSON.parse(readFileSync(source, 'utf8'))
@@ -90,11 +90,11 @@ export function releaseNotesRepository(manifestUrl?: URL | string): string | und
 
 /**
  * Registry endpoint for the running package's `latest` dist-tag.
- * @param {Record<string, any> | undefined} manifest - parsed running manifest.
+ * @param {Record<string, unknown> | undefined} manifest - parsed running manifest.
  * @returns {string | undefined} the registry URL, or undefined when the
  *   manifest names no package.
  */
-function registryLatestUrl(manifest?: Record<string, any>): string | undefined {
+function registryLatestUrl(manifest?: Record<string, unknown>): string | undefined {
   const name = manifest?.name
   if (typeof name !== 'string' || name.trim() === '') return undefined
   return `https://registry.npmjs.org/${name.trim().replace(/\//gu, '%2F')}/latest`
@@ -108,7 +108,7 @@ function registryLatestUrl(manifest?: Record<string, any>): string | undefined {
  * @param {string} accept - accepted content type.
  * @returns {Promise<Response>} the successful response.
  */
-async function readResponse(fetchImpl: any, timeoutMs: any, url: any, accept: any) {
+async function readResponse(fetchImpl: typeof fetch, timeoutMs: number, url: string, accept: string) {
   const response = await fetchImpl(url, {
     headers: { accept },
     signal: AbortSignal.timeout(timeoutMs)
@@ -160,8 +160,8 @@ export function createUpdateChecker(options: UpdateCheckerOptions = {}): (langua
    * @param {'default' | 'en'} variant - notes variant to read.
    * @returns {Promise<string[]>} plain-text points; possibly empty.
    */
-  const readHighlights = async (latest: any, variant: any) => {
-    const response = await readResponse(fetchImpl, timeoutMs, releaseNotesUrl(repository, latest, variant), 'text/plain')
+  const readHighlights = async (latest: string, variant: 'default' | 'en') => {
+    const response = await readResponse(fetchImpl, timeoutMs, releaseNotesUrl(repository ?? '', latest, variant), 'text/plain')
     return parseHighlights(await response.text()).slice(0, MAX_HIGHLIGHTS)
   }
 
@@ -171,10 +171,10 @@ export function createUpdateChecker(options: UpdateCheckerOptions = {}): (langua
    * @returns {Promise<{ view: UpdateCheckView, notesRead: boolean }>} the view
    *   plus whether its highlights source was successfully read.
    */
-  const read = async (variant: any) => {
+  const read = async (variant: string) => {
     if (latestUrl === undefined) throw new Error('package name is unreadable')
     const response = await readResponse(fetchImpl, timeoutMs, latestUrl, 'application/json')
-    const payload = /** @type {Record<string, any>} */ (await response.json())
+    const payload = (await response.json()) as Record<string, unknown>
     const published = payload?.version
     const latest = typeof published === 'string' && parseStableVersion(published) !== undefined ? published.trim() : null
     const updateAvailable = installed !== undefined && latest !== null && isNewerStableVersion(latest, installed)
@@ -190,7 +190,7 @@ export function createUpdateChecker(options: UpdateCheckerOptions = {}): (langua
     // An English client prefers `<version>.en.md` and falls back to the
     // reviewed default file, also when the English file has no Highlights.
     /** @type {Array<'en' | 'default'>} */
-    const variants = variant === 'en' ? ['en', 'default'] : ['default']
+    const variants: Array<'default' | 'en'> = variant === 'en' ? ['en', 'default'] : ['default']
     for (const candidate of variants) {
       try {
         const highlights = await readHighlights(latest, candidate)
@@ -205,7 +205,7 @@ export function createUpdateChecker(options: UpdateCheckerOptions = {}): (langua
   }
 
   return async (language) => {
-    const variant = releaseNotesVariant(language)
+    const variant = releaseNotesVariant(language ?? null)
     const at = now()
     const hit = cached.get(variant)
     if (hit !== undefined && at - hit.at < hit.ttl) return hit.view

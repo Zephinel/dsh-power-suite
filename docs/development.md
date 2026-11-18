@@ -46,8 +46,10 @@ runs it on push and pull request. A docs-only change (CHANGELOG/PRODUCT/docs/`
 the typecheck. The release-notes gate runs inside `npm run check` and again in
 the publish workflow.
 
-`npm run check` reports an explicit-`any` budget for `src/**/*.ts` (currently 335 sites, mostly DSH
-platform boundaries); it is tracked, not gated. `npm ci` installs esbuild, TypeScript and `@types/node` as dev dependencies;
+`npm run check` reports an explicit-`any` budget for `src/**/*.ts` (currently 0
+sites) and fails if a new `: any`, `as any` or `Record<string, any>` re-enters the
+Host TypeScript sources. DSH platform boundaries use `src/host/context.ts`
+(structural Host context) and `src/host/errors.ts` (unknown thrown values). `npm ci` installs esbuild, TypeScript and `@types/node` as dev dependencies;
 `npm run build` emits only the gitignored `lib/` entries, and the typecheck
 itself emits nothing. The classic browser entry stays out of the type gate until
 Phase 3 — see [the TypeScript migration plan](plans/typescript-migration.md).

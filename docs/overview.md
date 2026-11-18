@@ -40,6 +40,8 @@ the code the Host runs after `npm run build` and a restart (the Host loads
   src/features/<name>/      # Host-side feature modules
   src/client.js             # browser entry: one `#region feature: <name>` per feature
   src/host/document-store.ts # shared durable-document module for the JSON stores
+  src/host/context.ts        # minimal structural Host context
+  src/host/errors.ts         # unknown-thrown-value helpers
   lib/                      # gitignored build output (lib/index.js + lib/client.js)
   locale/                   # plugin display metadata (en, zh)
   docs/                     # architecture, guides, per-feature reference

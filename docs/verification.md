@@ -34,7 +34,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 
 ### Current gates (2026-11-18, Node 24.22.3)
 
-- `npm run build`: **`lib/index.js` 104.6 kB** (Host ESM bundle) and
+- `npm run build`: **`lib/index.js` 104.9 kB** (Host ESM bundle) and
   **`lib/client.js` 957.7 kB** (classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
 - `npm test`: **377 tests, 377 passed, 0 failed**, 24 test files — Host stores/routes
@@ -44,12 +44,13 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 - `npm run typecheck`: `tsc --noEmit --strict` clean over the Host TypeScript
   sources (`src/**/*.ts`; `src/client.js` stays JavaScript and carries
   `// @ts-nocheck` until Phase 3).
-- `npm run check` also reports an explicit-`any` budget: **335 sites** in
-  `src/**/*.ts` (mostly DSH platform boundaries), tracked but not gated.
+- `npm run check` reports an explicit-`any` budget: **0 sites** in `src/**/*.ts`;
+  the gate fails when `: any`, `as any` or `Record<string, any>` re-enters the
+  Host TypeScript sources (ratchet at 0).
 - `rm -rf lib && node --test test/*.test.js`: **377/377** — the suite imports the
   `.ts` sources directly (Node >= 22.18 native type stripping), so the tests need
   no build.
-- `npm run check`: passed (`25 TypeScript modules, 1 JavaScript module(s), 24 test files`); it builds `lib/` first,
+- `npm run check`: passed (`27 TypeScript modules, 1 JavaScript module(s), 24 test files`); it builds `lib/` first,
   then runs the syntax checks, the typecheck, package-manifest validation, the
   built-entry smoke (update route reports `current=0.1.0`), local docs links, the
   Node suite and the release-notes gate, then `pack:check`.

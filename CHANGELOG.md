@@ -12,7 +12,9 @@ All notable changes to this repository are documented here. The format follows
 
 ### Changed
 
-- **Strict TypeScript Host (Phase 2d).** `tsconfig.json` now enables `strict: true` and the Host sources pass `tsc --noEmit --strict`; explicit `any` remains only at DSH platform boundaries (and other dynamic seams), and `npm run check` reports the count as a tracked budget (335 sites). No runtime behavior or package layout changes; this closes Phase 2 of the migration.
+- **Zero explicit `any` in the Host (typing cleanup).** The remaining 335 explicit `any` sites were removed: `src/host/context.ts` now models the DSH Host context (effects, events, route registration, fs/sessionQuery/agents/preset/workspace services), `src/host/errors.ts` reads `code`/`message` off unknown thrown values, and stores, artifact folds, the activity ledger and event callbacks use real document/row/handle interfaces. `npm run check` now fails if `: any`, `as any` or `Record<string, any>` re-enters `src/**/*.ts` (ratchet at 0). Runtime behavior is unchanged (377/377 tests).
+
+- **Strict TypeScript Host (Phase 2d).** `tsconfig.json` now enables `strict: true` and the Host sources pass `tsc --noEmit --strict`; explicit `any` was kept only at DSH platform boundaries (and other dynamic seams) at that point, with the count tracked as a budget (335 sites; eliminated in the follow-up cleanup above). No runtime behavior or package layout changes; this closes Phase 2 of the migration.
 
 - **Host half is now TypeScript (Phase 2c).** `src/index.ts`, `src/features/**/*.ts`, `src/host/document-store.ts` and `src/shared/protocol.ts` replace the Host JavaScript modules, with `.ts` import specifiers and real type annotations for the boundaries that previously relied on JSDoc. The Node tests import the sources directly through Node's native type stripping (zero build; `engines.node >= 22.18`), while esbuild still bundles the two `lib/` entries, so the published file set is unchanged. `strict: true` is deferred to Phase 2d.
 

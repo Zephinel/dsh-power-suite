@@ -7,6 +7,7 @@
  * lifetime to this entry.
  */
 
+import type { HostContext } from './host/context.ts'
 import { installInterruptedSessions } from './features/interrupted-sessions/host.ts'
 import { installPromptHistory } from './features/prompt-history/host.ts'
 import { installReadAcks } from './features/read-acks/host.ts'
@@ -43,7 +44,7 @@ export const inject = [
  * @param {object} ctx - Host context.
  * @returns {void}
  */
-export function apply(ctx: any) {
+export function apply(ctx: HostContext) {
   installSessionArtifacts(ctx)
   installWorkspacePresets(ctx)
   installPromptHistory(ctx)

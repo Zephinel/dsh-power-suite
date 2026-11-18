@@ -14,6 +14,7 @@
  * keeps it. A Workspace without an override follows the global default.
  */
 
+import { type HostContext } from '../../host/context.ts'
 import os from 'node:os'
 import path from 'node:path'
 import { createPresetStore, shouldApplyPreset } from './store.ts'
@@ -43,7 +44,7 @@ function harnessHome() {
  * @param {unknown} payload - JSON body.
  * @returns {Response} the response.
  */
-function sendJson(status: any, payload: any) {
+function sendJson(status: number, payload: unknown) {
   return Response.json(payload, {
     status,
     headers: { 'cache-control': 'no-store' }
@@ -53,9 +54,21 @@ function sendJson(status: any, payload: any) {
 /**
  * Read one small JSON object request body.
  * @param {Request} request - the buffered request.
- * @returns {Promise<{ ok: true, value: Record<string, any> } | { ok: false, status: number, code: string, message: string }>} the decoded object or a typed failure.
+ * @returns {Promise<{ ok: true, value: Record<string, unknown> } | { ok: false, status: number, code: string, message: string }>} the decoded object or a typed failure.
  */
-async function readJsonObject(request: any) {
+interface JsonBodySuccess {
+  ok: true
+  value: Record<string, unknown>
+}
+
+interface JsonBodyFailure {
+  ok: false
+  status: number
+  code: string
+  message: string
+}
+
+async function readJsonObject(request: Request): Promise<JsonBodySuccess | JsonBodyFailure> {
   const mediaType = String(request.headers.get('content-type') ?? '')
     .split(';', 1)[0]
     .trim()
@@ -76,18 +89,22 @@ async function readJsonObject(request: any) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return { ok: false, status: 400, code: 'bad-request', message: 'request body must be one JSON object' }
   }
-  return { ok: true, value }
+  return { ok: true, value: value as Record<string, unknown> }
 }
 
 /**
  * Check that a preset id names a currently usable Agent preset.
- * @param {Record<string, any>} ctx - Host context carrying the preset registry.
+ * @param {Record<string, unknown>} ctx - Host context carrying the preset registry.
  * @param {string} preset - preset identity from the request.
  * @returns {Promise<{ ok: true } | { ok: false, status: number, code: string, message: string }>} the verdict.
  */
-async function validatePreset(ctx: any, preset: any) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+async function validatePreset(ctx: HostContext, preset: string): Promise<{ ok: true } | { ok: false; status: number; code: string; message: string }> {
   const presets = await ctx.agentPresets.list()
-  const row = presets.find((entry: any) => entry.id === preset)
+  const row = presets.find((entry: unknown) => isRecord(entry) && entry.id === preset)
   if (row === undefined) {
     return { ok: false, status: 400, code: 'preset-not-found', message: `No agent preset named "${preset}"` }
   }
@@ -99,12 +116,12 @@ async function validatePreset(ctx: any, preset: any) {
 
 /**
  * `GET /api/workspace-presets.get?workspaceId=<id>` — one Workspace override.
- * @param {Record<string, any>} ctx - Host context.
- * @param {Record<string, any>} store - preset store.
+ * @param {Record<string, unknown>} ctx - Host context.
+ * @param {Record<string, unknown>} store - preset store.
  * @param {Request} request - authenticated request.
  * @returns {Promise<Response>} the stored preset.
  */
-async function handleGet(ctx: any, store: any, request: any) {
+async function handleGet(ctx: HostContext, store: ReturnType<typeof createPresetStore>, request: Request) {
   const url = new URL(request.url)
   const workspaceId = url.searchParams.get('workspaceId')
   if (workspaceId === null || workspaceId.trim().length === 0) {
@@ -119,12 +136,12 @@ async function handleGet(ctx: any, store: any, request: any) {
 
 /**
  * `POST /api/workspace-presets.set` — store or clear one Workspace override.
- * @param {Record<string, any>} ctx - Host context.
- * @param {Record<string, any>} store - preset store.
+ * @param {Record<string, unknown>} ctx - Host context.
+ * @param {Record<string, unknown>} store - preset store.
  * @param {Request} request - authenticated request.
  * @returns {Promise<Response>} the stored value or a typed failure.
  */
-async function handleSet(ctx: any, store: any, request: any) {
+async function handleSet(ctx: HostContext, store: ReturnType<typeof createPresetStore>, request: Request) {
   const body = await readJsonObject(request)
   if (body.ok === false) {
     return sendJson(body.status, { code: body.code, message: body.message })
@@ -152,15 +169,20 @@ async function handleSet(ctx: any, store: any, request: any) {
 /**
  * Apply one Workspace's default preset to a Session the Workspace's menu would
  * call a new conversation.
- * @param {Record<string, any>} ctx - Host context.
- * @param {Record<string, any>} store - preset store.
- * @param {Record<string, any>} agent - the Agent just announced by `agent/created`.
+ * @param {Record<string, unknown>} ctx - Host context.
+ * @param {Record<string, unknown>} store - preset store.
+ * @param {Record<string, unknown>} agent - the Agent just announced by `agent/created`.
  * @returns {Promise<void>} resolves after the preset settles or the Session is left alone.
  */
-async function applyWorkspaceDefault(ctx: any, store: any, agent: any) {
+interface AgentEvent {
+  session?: { header?: Record<string, unknown> }
+}
+
+async function applyWorkspaceDefault(ctx: HostContext, store: ReturnType<typeof createPresetStore>, agent: AgentEvent) {
   const session = agent?.session
   if (session === undefined || session === null) return
   const header = session.header
+  if (header === undefined) return
   if (header.origin === 'subagent') return
   if (typeof header.delegationDepth === 'number' && header.delegationDepth > 0) return
   if (typeof header.cwd !== 'string' || header.cwd.length === 0) return
@@ -169,6 +191,7 @@ async function applyWorkspaceDefault(ctx: any, store: any, agent: any) {
   if (workspace === undefined) return
   const target = await store.get(workspace.id)
   if (target === null) return
+  if (typeof target !== 'string') return
   const current = ctx.agentPresets.presetForSession(session)
   if (!shouldApplyPreset({ current, globalDefault: ctx.agentPresets.defaultId, target })) return
   await ctx.agentPresets.select(agent, target)
@@ -176,24 +199,24 @@ async function applyWorkspaceDefault(ctx: any, store: any, agent: any) {
 
 /**
  * Register both routes and the creation-time application.
- * @param {Record<string, any>} ctx - Host context.
+ * @param {Record<string, unknown>} ctx - Host context.
  * @returns {void}
  */
-export function installWorkspacePresets(ctx: any) {
+export function installWorkspacePresets(ctx: HostContext) {
   const store = createPresetStore(harnessHome())
   ctx.effect(() => ctx.connection.fetch.register({
     path: GET_ROUTE,
     methods: ['GET'],
     requestBody: 'buffered',
-    fetch: (request: any) => handleGet(ctx, store, request)
+    fetch: (request: Request) => handleGet(ctx, store, request)
   }), `power-suite: workspace-presets GET ${GET_ROUTE}`)
   ctx.effect(() => ctx.connection.fetch.register({
     path: SET_ROUTE,
     methods: ['POST'],
     requestBody: 'buffered',
-    fetch: (request: any) => handleSet(ctx, store, request)
+    fetch: (request: Request) => handleSet(ctx, store, request)
   }), `power-suite: workspace-presets POST ${SET_ROUTE}`)
-  ctx.on('agent/created', async ({ agent }: { agent: any }) => {
+  ctx.on('agent/created', async ({ agent }: { agent: AgentEvent }) => {
     try {
       await applyWorkspaceDefault(ctx, store, agent)
     } catch {

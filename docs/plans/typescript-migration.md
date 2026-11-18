@@ -192,7 +192,16 @@ Acceptance:
 - **2d (strictness) done.** `tsconfig.json` now sets `strict: true`; the Host
   sources pass `tsc --noEmit` cleanly, with explicit `any` kept only at DSH
   platform boundaries (and other genuinely dynamic seams) and counted as a
-  tracked budget (`npm run check` prints 335 sites). This closes Phase 2.
+  tracked budget (then 335 sites). This closes Phase 2; the follow-up cleanup
+  drove the budget to zero (see 2e).
+- **2e (Host type-surface cleanup) done.** Removed the remaining 335 explicit
+  `any` sites: added `src/host/context.ts` (minimal structural DSH `HostContext`:
+  effects, events, route registration and the fs/sessionQuery/agents/preset/
+  workspace services), `src/host/errors.ts` (`errorCode`/`errorMessage`/
+  `isNotFound` for unknown thrown values), real document/ops interfaces for every
+  store, `ArtifactRow`/`SessionSnapshot` fold types, an `ActivityLedgerHandle`
+  and typed event callbacks. `npm run check` now fails when `: any`, `as any` or
+  `Record<string, any>` re-enters `src/**/*.ts` (ratchet at 0).
 
 Introduce the build (recommended: esbuild for the browser classic script and
 `tsc --noEmit` for types; alternative: `tsc` emit for both), switch `exports` and

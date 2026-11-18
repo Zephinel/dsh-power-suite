@@ -66,9 +66,9 @@ export function defaultSettings(): Settings {
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {value is Record<string, any>} whether it is a record.
+ * @returns {value is Record<string, unknown>} whether it is a record.
  */
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -86,7 +86,7 @@ export function isPromptHistoryModifier(value: unknown): value is PromptHistoryM
  * @param {unknown} value - candidate.
  * @returns {boolean} whether it is accepted.
  */
-export function isRecentSessionMinutes(value: any) {
+export function isRecentSessionMinutes(value: unknown): value is number {
   return typeof value === 'number' && RECENT_SESSION_MINUTES.includes(value)
 }
 
@@ -95,7 +95,7 @@ export function isRecentSessionMinutes(value: any) {
  * @param {unknown} value - candidate.
  * @returns {boolean} whether it is accepted.
  */
-export function isActiveProjectDays(value: any) {
+export function isActiveProjectDays(value: unknown): value is number {
   return typeof value === 'number' && ACTIVE_PROJECT_DAYS.includes(value)
 }
 
@@ -184,7 +184,7 @@ export function validatePatch(patch: unknown): { ok: true; value: SettingsPatch 
  * @param {string} dshHome - harness home directory.
  * @returns {string} absolute file path.
  */
-export function settingsPath(dshHome: any) {
+export function settingsPath(dshHome: string) {
   return path.join(dshHome, SETTINGS_DIRECTORY, SETTINGS_FILE)
 }
 
@@ -196,7 +196,7 @@ export function settingsPath(dshHome: any) {
  * @param {string} dshHome - harness home directory.
  * @returns {{ get(): Promise<Settings>, update(patch: import('../../shared/protocol.ts').SettingsPatch): Promise<Settings> }} the store.
  */
-export function createSettingsStore(dshHome: any) {
+export function createSettingsStore(dshHome: string) {
   const store = createDocumentStore({
     file: settingsPath(dshHome),
     decode: parseSettings,

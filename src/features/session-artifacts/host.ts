@@ -21,8 +21,11 @@
  * adds authority beyond the Session APIs the same browser can already call.
  */
 
+import { type HostContext, type SessionSnapshot } from '../../host/context.ts'
+import type { ArtifactRow } from './artifact-index.ts'
 import { Buffer } from 'node:buffer'
 import path from 'node:path'
+import { errorCode, errorMessage } from '../../host/errors.ts'
 import {
   ATTACHMENT_ROUTE,
   LIST_ROUTE,
@@ -53,12 +56,19 @@ const IMAGE_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'ima
  *
  * The suite stays loadable in a composition without durable attachments:
  * provided rows are then omitted instead of breaking the entry's dependencies.
- * @param {Record<string, any>} ctx - Host context.
- * @returns {Record<string, any> | null} the attachment service, or null.
+ * @param {Record<string, unknown>} ctx - Host context.
+ * @returns {Record<string, unknown> | null} the attachment service, or null.
  */
-function attachmentCapability(ctx: any) {
+interface AttachmentService {
+  readImage(ref: Record<string, unknown>, signal: AbortSignal): Promise<{ data: Uint8Array, ref: { mediaType: string } }>
+  readFileStream(ref: unknown, signal: AbortSignal): AsyncIterable<Uint8Array>
+  imageHostPath(ref: unknown): unknown
+  fileHostPath(ref: unknown): unknown
+}
+
+function attachmentCapability(ctx: HostContext): AttachmentService | null {
   try {
-    return ctx.get('attachments') ?? null
+    return (ctx.get('attachments') ?? null) as AttachmentService | null
   } catch {
     return null
   }
@@ -71,7 +81,7 @@ function attachmentCapability(ctx: any) {
  * @param {number} minimum - smallest accepted value.
  * @returns {number | null} the parsed value, or null when absent or malformed.
  */
-function queryInteger(url: any, parameter: any, minimum: any) {
+function queryInteger(url: URL, parameter: string, minimum: number) {
   const raw = url.searchParams.get(parameter)
   if (raw === null || !/^\d+$/.test(raw)) return null
   const value = Number(raw)
@@ -87,7 +97,7 @@ function queryInteger(url: any, parameter: any, minimum: any) {
  * @param {Uint8Array} bytes - object bytes.
  * @returns {string | null} the detected media type, if recognized.
  */
-function sniffMediaType(bytes: any) {
+function sniffMediaType(bytes: Uint8Array) {
   if (bytes.length >= 8 &&
     bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
     bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) {
@@ -118,9 +128,9 @@ function sniffMediaType(bytes: any) {
  * @param {unknown} error - the caught failure.
  * @returns {Response} the response.
  */
-function attachmentFailure(request: any, error: any) {
+function attachmentFailure(request: Request, error: unknown) {
   if (request.signal.aborted) return sendJson(499, { code: 'aborted', message: 'request aborted' })
-  const code = error !== null && typeof error === 'object' && 'code' in error ? error.code : undefined
+  const code = errorCode(error)
   if (code === 'INVALID_ATTACHMENT_REF') {
     return sendJson(400, { code: 'bad-request', message: 'Invalid attachment reference' })
   }
@@ -132,12 +142,12 @@ function attachmentFailure(request: any, error: any) {
 
 /**
  * Read one verbatim stored file through the attachment store's verified stream.
- * @param {Record<string, any>} attachments - attachment service.
- * @param {Record<string, any>} ref - durable file reference.
+ * @param {Record<string, unknown>} attachments - attachment service.
+ * @param {Record<string, unknown>} ref - durable file reference.
  * @param {AbortSignal} signal - request cancellation.
  * @returns {Promise<Uint8Array>} the verified bytes.
  */
-async function readAttachmentFile(attachments: any, ref: any, signal: any) {
+async function readAttachmentFile(attachments: AttachmentService, ref: unknown, signal: AbortSignal) {
   const chunks = []
   let total = 0
   for await (const chunk of attachments.readFileStream(ref, signal)) {
@@ -158,7 +168,7 @@ async function readAttachmentFile(attachments: any, ref: any, signal: any) {
  * @param {unknown} payload - JSON body.
  * @returns {Response} the response.
  */
-function sendJson(status: any, payload: any) {
+function sendJson(status: number, payload: unknown) {
   return Response.json(payload, {
     status,
     headers: { 'cache-control': 'no-store' }
@@ -167,13 +177,13 @@ function sendJson(status: any, payload: any) {
 
 /**
  * Build one user-provided attachment row with its current size and existence.
- * @param {Record<string, any>} ctx - Host context carrying the filesystem.
- * @param {Record<string, any>} attachments - attachment service.
- * @param {Record<string, any>} artifact - provided entry from the session log fold.
+ * @param {Record<string, unknown>} ctx - Host context carrying the filesystem.
+ * @param {Record<string, unknown>} attachments - attachment service.
+ * @param {Record<string, unknown>} artifact - provided entry from the session log fold.
  * @param {AbortSignal} signal - request cancellation.
- * @returns {Promise<Record<string, any>>} the row.
+ * @returns {Promise<Record<string, unknown>>} the row.
  */
-async function collectProvidedArtifact(ctx: any, attachments: any, artifact: any, signal: any) {
+async function collectProvidedArtifact(ctx: HostContext, attachments: AttachmentService, artifact: ArtifactRow, signal: AbortSignal) {
   const image = typeof artifact.mediaType === 'string' && artifact.mediaType.startsWith('image/')
   const kind = artifactKind(artifact.name)
   const row = {
@@ -206,12 +216,12 @@ async function collectProvidedArtifact(ctx: any, attachments: any, artifact: any
 
 /**
  * Fold one Session log into the artifact list this Host can currently serve.
- * @param {Record<string, any>} ctx - Host context carrying the filesystem.
- * @param {Record<string, any>} snapshot - the Session log snapshot to fold.
+ * @param {Record<string, unknown>} ctx - Host context carrying the filesystem.
+ * @param {Record<string, unknown>} snapshot - the Session log snapshot to fold.
  * @param {AbortSignal} signal - request cancellation.
- * @returns {Promise<Array<Record<string, any>>>} artifact rows with live file metadata.
+ * @returns {Promise<Array<Record<string, unknown>>>} artifact rows with live file metadata.
  */
-async function collectArtifacts(ctx: any, snapshot: any, signal: any) {
+async function collectArtifacts(ctx: HostContext, snapshot: SessionSnapshot, signal: AbortSignal) {
   const attachments = attachmentCapability(ctx)
   const artifacts = [
     ...foldArtifacts(snapshot.events, snapshot.session.cwd),
@@ -252,11 +262,11 @@ async function collectArtifacts(ctx: any, snapshot: any, signal: any) {
 
 /**
  * `GET /api/session-artifacts.list` — the current Session's artifact entries.
- * @param {Record<string, any>} ctx - Host context.
+ * @param {Record<string, unknown>} ctx - Host context.
  * @param {Request} request - authenticated request.
  * @returns {Promise<Response>} JSON list or a typed failure.
  */
-async function handleList(ctx: any, request: any) {
+async function handleList(ctx: HostContext, request: Request) {
   const url = new URL(request.url)
   const sessionId = url.searchParams.get('sessionId')
   if (sessionId === null || sessionId.trim().length === 0) {
@@ -274,15 +284,15 @@ async function handleList(ctx: any, request: any) {
     const snapshot = await ctx.sessionQuery.readSession(sessionId)
     workspaceRoot = snapshot.session.cwd ?? null
     artifacts = await collectArtifacts(ctx, snapshot, request.signal)
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (request.signal.aborted) return sendJson(499, { code: 'aborted', message: 'request aborted' })
-    const code = error !== null && typeof error === 'object' && 'code' in error ? error.code : undefined
+    const code = errorCode(error)
     if (code === 'SESSION_QUERY_SESSION_NOT_FOUND') {
       return sendJson(404, { code: 'session-not-found', message: 'Session not found' })
     }
     return sendJson(500, {
       code: 'list-failed',
-      message: typeof error?.message === 'string' ? error.message : 'Session artifacts unavailable'
+      message: errorMessage(error) ?? 'Session artifacts unavailable'
     })
   }
   return sendJson(200, { sessionId, origin, workspaceRoot, artifacts })
@@ -290,11 +300,11 @@ async function handleList(ctx: any, request: any) {
 
 /**
  * `GET|HEAD /api/session-artifacts.raw` — one artifact's bytes.
- * @param {Record<string, any>} ctx - Host context.
+ * @param {Record<string, unknown>} ctx - Host context.
  * @param {Request} request - authenticated request.
  * @returns {Promise<Response>} the file response or a typed failure.
  */
-async function handleRaw(ctx: any, request: any) {
+async function handleRaw(ctx: HostContext, request: Request) {
   const url = new URL(request.url)
   const rawPath = url.searchParams.get('path')
   if (rawPath === null || rawPath.trim().length === 0) {
@@ -341,9 +351,9 @@ async function handleRaw(ctx: any, request: any) {
   let bytes
   try {
     bytes = await ctx.fs.readBytes(target, request.signal, MAX_RAW_BYTES)
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (request.signal.aborted) return sendJson(499, { code: 'aborted', message: 'request aborted' })
-    const code = error !== null && typeof error === 'object' && 'code' in error ? error.code : undefined
+    const code = errorCode(error)
     if (code === 'FS_TOO_LARGE') {
       return sendJson(413, {
         code: 'too-large',
@@ -365,11 +375,11 @@ async function handleRaw(ctx: any, request: any) {
  * byte leaves the Host. Images go through the store's verified image read and
  * report the stored media type; generic files stream through the verified file
  * read, with their type sniffed from the bytes when the name does not say it.
- * @param {Record<string, any>} ctx - Host context.
+ * @param {Record<string, unknown>} ctx - Host context.
  * @param {Request} request - authenticated request.
  * @returns {Promise<Response>} the file response or a typed failure.
  */
-async function handleAttachment(ctx: any, request: any) {
+async function handleAttachment(ctx: HostContext, request: Request) {
   const url = new URL(request.url)
   const attachmentId = url.searchParams.get('attachmentId')
   if (attachmentId === null || attachmentId.trim().length === 0) {
@@ -405,7 +415,7 @@ async function handleAttachment(ctx: any, request: any) {
         height,
         ...(typeof recordedName === 'string' && recordedName.length > 0 ? { name: recordedName } : {})
       }, request.signal)
-    } catch (error: any) {
+    } catch (error: unknown) {
       return attachmentFailure(request, error)
     }
     bytes = stored.data
@@ -421,9 +431,9 @@ async function handleAttachment(ctx: any, request: any) {
         name: displayName,
         bytes: recordedBytes
       }, request.signal)
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (request.signal.aborted) return sendJson(499, { code: 'aborted', message: 'request aborted' })
-      const code = error !== null && typeof error === 'object' && 'code' in error ? error.code : undefined
+      const code = errorCode(error)
       if (code === 'FS_TOO_LARGE') {
         return sendJson(413, {
           code: 'too-large',
@@ -448,11 +458,11 @@ async function handleAttachment(ctx: any, request: any) {
 
 /**
  * `GET /api/session-artifacts.preview` — one bounded hover-preview descriptor.
- * @param {Record<string, any>} ctx - Host context.
+ * @param {Record<string, unknown>} ctx - Host context.
  * @param {Request} request - authenticated request.
  * @returns {Promise<Response>} JSON descriptor or a typed failure.
  */
-async function handlePreview(ctx: any, request: any) {
+async function handlePreview(ctx: HostContext, request: Request) {
   const url = new URL(request.url)
   const rawPath = url.searchParams.get('path')
   if (rawPath === null || rawPath.trim().length === 0) {
@@ -495,11 +505,11 @@ async function handlePreview(ctx: any, request: any) {
   let bytes
   try {
     bytes = await ctx.fs.readByteRange(target, { offset: 0, length: PREVIEW_TEXT_BYTES }, request.signal)
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (request.signal.aborted) return sendJson(499, { code: 'aborted', message: 'request aborted' })
     return sendJson(500, {
       code: 'preview-failed',
-      message: typeof error?.message === 'string' ? error.message : 'Preview unavailable'
+      message: errorMessage(error) ?? 'Preview unavailable'
     })
   }
   const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
@@ -513,32 +523,32 @@ async function handlePreview(ctx: any, request: any) {
 
 /**
  * Register the feature's routes inside Connection's authentication and trust fence.
- * @param {Record<string, any>} ctx - Host context.
+ * @param {Record<string, unknown>} ctx - Host context.
  * @returns {void}
  */
-export function installSessionArtifacts(ctx: any) {
+export function installSessionArtifacts(ctx: HostContext) {
   ctx.effect(() => ctx.connection.fetch.register({
     path: LIST_ROUTE,
     methods: ['GET'],
     requestBody: 'buffered',
-    fetch: (request: any) => handleList(ctx, request)
+    fetch: (request: Request) => handleList(ctx, request)
   }), `power-suite: session-artifacts GET ${LIST_ROUTE}`)
   ctx.effect(() => ctx.connection.fetch.register({
     path: RAW_ROUTE,
     methods: ['GET', 'HEAD'],
     requestBody: 'buffered',
-    fetch: (request: any) => handleRaw(ctx, request)
+    fetch: (request: Request) => handleRaw(ctx, request)
   }), `power-suite: session-artifacts GET ${RAW_ROUTE}`)
   ctx.effect(() => ctx.connection.fetch.register({
     path: ATTACHMENT_ROUTE,
     methods: ['GET', 'HEAD'],
     requestBody: 'buffered',
-    fetch: (request: any) => handleAttachment(ctx, request)
+    fetch: (request: Request) => handleAttachment(ctx, request)
   }), `power-suite: session-artifacts GET ${ATTACHMENT_ROUTE}`)
   ctx.effect(() => ctx.connection.fetch.register({
     path: PREVIEW_ROUTE,
     methods: ['GET'],
     requestBody: 'buffered',
-    fetch: (request: any) => handlePreview(ctx, request)
+    fetch: (request: Request) => handlePreview(ctx, request)
   }), `power-suite: session-artifacts GET ${PREVIEW_ROUTE}`)
 }

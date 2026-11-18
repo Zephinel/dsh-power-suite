@@ -18,6 +18,8 @@ import { randomBytes } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
+import { isNotFound } from '../../host/errors.ts'
+
 /** Ledger document schema version; bump when the shape changes. */
 export const ACTIVITY_LEDGER_VERSION = 1
 
@@ -40,20 +42,11 @@ export const MAX_ACTIVITY_SESSION_ID_LENGTH = 200
 export const ACTIVITY_READ_FAILED = 'ACTIVITY_READ_FAILED'
 
 /**
- * Whether one filesystem error means "document absent" (legitimately empty).
- * @param {unknown} error - thrown error.
- * @returns {boolean} whether it is ENOENT.
- */
-function isNotFound(error: any) {
-  return error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
-}
-
-/**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {value is Record<string, any>} whether it is a record.
+ * @returns {value is Record<string, unknown>} whether it is a record.
  */
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -165,9 +158,19 @@ export function activityLedgerPath(dshHome: string): string {
  * @param {string} dshHome - harness home directory.
  * @param {object} [options] - injection points for tests.
  * @param {number} [options.debounceMs] - durable write debounce window.
- * @returns {Record<string, any>} the ledger handle.
+ * @returns {Record<string, unknown>} the ledger handle.
  */
-export function createActivityLedger(dshHome: string, options: { debounceMs?: number } = {}) {
+/** The public handle returned by createActivityLedger. */
+export interface ActivityLedgerHandle {
+  load(): Promise<Record<string, number>>
+  record(entries: Record<string, unknown>): void
+  snapshot(): Record<string, number>
+  flush(): Promise<Record<string, number>>
+  dispose(): Promise<Record<string, number> | void>
+  file: string
+}
+
+export function createActivityLedger(dshHome: string, options: { debounceMs?: number } = {}): ActivityLedgerHandle {
   const file = activityLedgerPath(dshHome)
   const debounceMs = options.debounceMs !== undefined && Number.isFinite(options.debounceMs) && options.debounceMs >= 0
     ? options.debounceMs
@@ -198,7 +201,7 @@ export function createActivityLedger(dshHome: string, options: { debounceMs?: nu
    * cross-process lock. Corrupt or missing files merge as empty; the in-memory
    * map also absorbs external entries.
    */
-  const writeDocument = async (payload: any) => {
+  const writeDocument = async (payload: Record<string, number>) => {
     let external = {}
     try {
       external = parseActivityLedger(await readFile(file, 'utf8'))
@@ -313,7 +316,7 @@ export function createActivityLedger(dshHome: string, options: { debounceMs?: nu
     })()
     return loadPromise
   }
-  const record = (entries: any) => {
+  const record = (entries: Record<string, unknown>) => {
     if (entries === null || typeof entries !== 'object') return
     // Commit-path update is O(entries in this batch), not O(map size): mutate
     // the in-memory map, mark dirty, and defer sanitize/cap/copy to

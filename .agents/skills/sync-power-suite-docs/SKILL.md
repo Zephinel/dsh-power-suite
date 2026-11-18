@@ -8,7 +8,7 @@ whenToUse: "同步文档, 更新文档, 检查文档, 文档落后了, 文档和
 
 Scope: the `dsh-power-suite` repository — one installable DSH bundle. It ships a
 Node Host half (`src/index.ts`, `src/features/<name>/` and the shared
-`src/host/document-store.ts`), a Web browser half
+`src/host/document-store.ts`, `src/host/context.ts`, `src/host/errors.ts`), a Web browser half
 (one `//#region feature:` group per feature in `src/client.js`), plugin display
 metadata (`locale/*.json`), the bundle patch (`cordis.patch.yml`), the release
 notes and changelog, and a documentation set (`README.md`, `docs/`,

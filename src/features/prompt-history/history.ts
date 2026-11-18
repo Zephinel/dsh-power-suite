@@ -18,18 +18,18 @@ export const MAX_PROMPTS = 500
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {value is Record<string, any>} whether it is a record.
+ * @returns {value is Record<string, unknown>} whether it is a record.
  */
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /**
  * Read the human prompt text recorded by one session event.
- * @param {Record<string, any>} event - raw session event.
+ * @param {Record<string, unknown>} event - raw session event.
  * @returns {string | null} the prompt text, or null when this event is not one.
  */
-export function promptTextOfEvent(event: any) {
+export function promptTextOfEvent(event: unknown) {
   if (!isRecord(event) || event.type !== 'user/message') return null
   const data = event.data
   if (!isRecord(data)) return null
@@ -58,7 +58,7 @@ interface PromptRecord {
   at: number | null
 }
 
-export function collectPromptHistory(events: any, limit = MAX_PROMPTS): PromptRecord[] {
+export function collectPromptHistory(events: unknown, limit = MAX_PROMPTS): PromptRecord[] {
   const prompts: PromptRecord[] = []
   if (!Array.isArray(events)) return prompts
   for (const event of events) {

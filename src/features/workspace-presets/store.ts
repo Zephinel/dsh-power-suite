@@ -21,24 +21,25 @@ export const STORE_DIRECTORY = 'dsh-power-suite'
 /** File name inside {@link STORE_DIRECTORY}. */
 export const STORE_FILE = 'workspace-presets.json'
 
-/**
- * @typedef {{ version: number, workspaces: Record<string, string> }} PresetState
- */
+export interface PresetState {
+  version: number
+  workspaces: Record<string, string>
+}
 
 /**
  * An empty store state.
  * @returns {PresetState} versioned empty state.
  */
-export function emptyState() {
+export function emptyState(): PresetState {
   return { version: STORE_VERSION, workspaces: {} }
 }
 
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {value is Record<string, any>} whether it is a record.
+ * @returns {value is Record<string, unknown>} whether it is a record.
  */
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -50,7 +51,7 @@ function isRecord(value: unknown): value is Record<string, any> {
  * @param {unknown} text - file contents.
  * @returns {PresetState} parsed state.
  */
-export function parseState(text: any) {
+export function parseState(text: string): PresetState {
   if (typeof text !== 'string' || text.length === 0) return emptyState()
   let value
   try {
@@ -75,7 +76,7 @@ export function parseState(text: any) {
  * @param {PresetState} state - store state.
  * @returns {string} file contents ending in one newline.
  */
-export function serializeState(state: any) {
+export function serializeState(state: PresetState) {
   return `${JSON.stringify({ version: STORE_VERSION, workspaces: state.workspaces }, null, 2)}\n`
 }
 
@@ -85,7 +86,7 @@ export function serializeState(state: any) {
  * @param {string} workspaceId - Workspace identity.
  * @returns {string | null} the stored preset id, or null for no override.
  */
-export function presetOf(state: any, workspaceId: any) {
+export function presetOf(state: PresetState, workspaceId: string): string | null {
   return Object.hasOwn(state.workspaces, workspaceId) ? state.workspaces[workspaceId] : null
 }
 
@@ -98,7 +99,7 @@ export function presetOf(state: any, workspaceId: any) {
  * @param {string | null} preset - preset id, or null to clear the override.
  * @returns {PresetState} the next state.
  */
-export function withPreset(state: any, workspaceId: any, preset: any) {
+export function withPreset(state: PresetState, workspaceId: string, preset: string | null): PresetState {
   if (preset === null || preset === undefined) {
     if (!Object.hasOwn(state.workspaces, workspaceId)) return state
     const workspaces = { ...state.workspaces }
@@ -123,7 +124,7 @@ export function withPreset(state: any, workspaceId: any, preset: any) {
  * @param {{ current: string | null, globalDefault: string, target: string | null }} input - decision inputs.
  * @returns {boolean} whether to select the target preset.
  */
-export function shouldApplyPreset(input: any) {
+export function shouldApplyPreset(input: { current: string | null, globalDefault: string, target: string | null }): boolean {
   const { current, globalDefault, target } = input
   if (typeof target !== 'string' || target.length === 0) return false
   if (current === target) return false
@@ -136,7 +137,7 @@ export function shouldApplyPreset(input: any) {
  * @param {string} dshHome - the harness home directory.
  * @returns {string} absolute store path.
  */
-export function storePath(dshHome: any) {
+export function storePath(dshHome: string) {
   return path.join(dshHome, STORE_DIRECTORY, STORE_FILE)
 }
 
@@ -148,17 +149,17 @@ export function storePath(dshHome: any) {
  * @param {string} dshHome - the harness home directory.
  * @returns {{ get(workspaceId: string): Promise<string | null>, set(workspaceId: string, preset: string | null): Promise<string | null> }} the store.
  */
-export function createPresetStore(dshHome: any) {
+export function createPresetStore(dshHome: string) {
   const store = createDocumentStore({
     file: storePath(dshHome),
     decode: parseState,
     encode: serializeState
   })
   return {
-    async get(workspaceId: any) {
+    async get(workspaceId: string) {
       return presetOf(await store.get(), workspaceId)
     },
-    async set(workspaceId: any, preset: any) {
+    async set(workspaceId: string, preset: string | null) {
       const next = await store.update((current) => {
         const updated = withPreset(current, workspaceId, preset)
         return { next: updated, changed: updated !== current }

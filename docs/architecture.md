@@ -8,6 +8,8 @@ script), which are the entries the published package exports:
 ```
 src/index.ts            Host entry (Node)
 ├─ host/document-store.ts               shared durable-document module
+├─ host/context.ts                      minimal structural Host context
+├─ host/errors.ts                       unknown-thrown-value helpers
 ├─ features/session-artifacts/host.ts   GET  /api/session-artifacts.list
 │                                        GET|HEAD /api/session-artifacts.raw
 │                                        GET|HEAD /api/session-artifacts.attachment

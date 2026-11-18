@@ -8,7 +8,9 @@
  * idempotent operations, and merge the Host document back through this route.
  */
 
+import { type HostContext } from '../../host/context.ts'
 import { SESSION_PINS_READ_FAILED, createSessionPinStore, validatePinOps } from './store.ts'
+import { errorCode } from '../../host/errors.ts'
 import { harnessHome } from '../read-acks/host.ts'
 
 /** Route serving and applying the session-pins document. */
@@ -23,16 +25,16 @@ const MAX_BODY_BYTES = 64 * 1024
  * @param {unknown} payload - JSON body.
  * @returns {Response} the response.
  */
-function sendJson(status: any, payload: any) {
+function sendJson(status: number, payload: unknown) {
   return Response.json(payload, { status, headers: { 'cache-control': 'no-store' } })
 }
 
 /**
  * Narrow parsed JSON to a plain object.
  * @param {unknown} value - decoded value.
- * @returns {value is Record<string, any>} whether it is a record.
+ * @returns {value is Record<string, unknown>} whether it is a record.
  */
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -41,20 +43,20 @@ function isRecord(value: unknown): value is Record<string, any> {
  * @param {unknown} body - decoded request body.
  * @returns {{ ok: true, ops: Array<object> } | { ok: false, message: string }} accepted operations or a failure.
  */
-export function validatePinApplyBody(body: any) {
+export function validatePinApplyBody(body: unknown): ReturnType<typeof validatePinOps> {
   if (!isRecord(body)) return { ok: false, message: 'request body must be one JSON object' }
   return validatePinOps(body.ops)
 }
 
 /**
  * Register the session-pins route inside Connection's authentication fence.
- * @param {Record<string, any>} ctx - Host context carrying the connection service.
+ * @param {Record<string, unknown>} ctx - Host context carrying the connection service.
  * @param {object} [options] - injection points for tests.
- * @param {Record<string, any>} [options.store] - store override with `get`/`apply`.
+ * @param {Record<string, unknown>} [options.store] - store override with `get`/`apply`.
  * @returns {void}
  */
 export function installSessionPins(
-  ctx: any,
+  ctx: HostContext,
   options: { store?: ReturnType<typeof createSessionPinStore> } = {}
 ) {
   const store = options.store ?? createSessionPinStore(harnessHome())
@@ -62,12 +64,12 @@ export function installSessionPins(
     path: SESSION_PINS_ROUTE,
     methods: ['GET', 'POST'],
     requestBody: 'buffered',
-    fetch: async (request: any) => {
+    fetch: async (request: Request) => {
       if (request.method === 'GET') {
         try {
           return sendJson(200, await store.get())
-        } catch (error: any) {
-          if (error !== null && typeof error === 'object' && error.code === SESSION_PINS_READ_FAILED) {
+        } catch (error: unknown) {
+          if (errorCode(error) === SESSION_PINS_READ_FAILED) {
             return sendJson(500, { code: 'store-read-failed', message: 'pinned sessions could not be read' })
           }
           return sendJson(500, { code: 'store-failed', message: 'pinned sessions could not be served' })
@@ -98,8 +100,8 @@ export function installSessionPins(
       }
       try {
         return sendJson(200, await store.apply(verdict.ops))
-      } catch (error: any) {
-        if (error !== null && typeof error === 'object' && error.code === SESSION_PINS_READ_FAILED) {
+      } catch (error: unknown) {
+        if (errorCode(error) === SESSION_PINS_READ_FAILED) {
           return sendJson(500, { code: 'store-read-failed', message: 'pinned sessions could not be read' })
         }
         return sendJson(500, { code: 'store-failed', message: 'pinned sessions could not be stored' })

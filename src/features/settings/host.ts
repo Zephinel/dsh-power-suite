@@ -8,6 +8,7 @@
  * to the next keypress without a reload.
  */
 
+import { type HostContext } from '../../host/context.ts'
 import os from 'node:os'
 import path from 'node:path'
 import { createSettingsStore, validatePatch } from './store.ts'
@@ -34,22 +35,22 @@ function harnessHome() {
  * @param {unknown} payload - JSON body.
  * @returns {Response} the response.
  */
-function sendJson(status: any, payload: any) {
+function sendJson(status: number, payload: unknown) {
   return Response.json(payload, { status, headers: { 'cache-control': 'no-store' } })
 }
 
 /**
  * Register the settings route inside Connection's authentication fence.
- * @param {Record<string, any>} ctx - Host context carrying the connection service.
+ * @param {Record<string, unknown>} ctx - Host context carrying the connection service.
  * @returns {void}
  */
-export function installSettings(ctx: any) {
+export function installSettings(ctx: HostContext) {
   const store = createSettingsStore(harnessHome())
   ctx.effect(() => ctx.connection.fetch.register({
     path: SETTINGS_ROUTE,
     methods: ['GET', 'POST'],
     requestBody: 'buffered',
-    fetch: async (request: any) => {
+    fetch: async (request: Request) => {
       if (request.method === 'GET') {
         return sendJson(200, { settings: await store.get() })
       }

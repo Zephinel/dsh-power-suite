@@ -22,7 +22,7 @@ const HEADING = /^#{1,6}\s+/u
  * @param {string} line - one bullet's text after its marker.
  * @returns {string} the plain-text point, collapsed to single spaces.
  */
-function plainText(line: any) {
+function plainText(line: string) {
   return line
     .replace(/\[\s*([^\]]*)\s*\]\([^)]*\)/gu, '$1')
     .replace(/`([^`]+)`/gu, '$1')
@@ -61,7 +61,7 @@ export function parseHighlights(markdown: unknown): string[] {
  * @param {unknown} language - active DSH locale id, such as `en`, `en-US`, or `zh`.
  * @returns {'default' | 'en'} `en` for English locales, otherwise `default`.
  */
-export function releaseNotesVariant(language: any) {
+export function releaseNotesVariant(language: string | null) {
   return typeof language === 'string' && language.trim().toLowerCase().startsWith('en') ? 'en' : 'default'
 }
 
@@ -72,7 +72,7 @@ export function releaseNotesVariant(language: any) {
  * @param {'default' | 'en'} [variant] - notes variant to read.
  * @returns {string} the raw URL for that release's notes.
  */
-export function releaseNotesUrl(repository: any, version: any, variant = 'default') {
+export function releaseNotesUrl(repository: string, version: string, variant: 'default' | 'en' = 'default') {
   const suffix = variant === 'en' ? '.en' : ''
   return `https://raw.githubusercontent.com/${repository}/v${version}/release-notes/${version}${suffix}.md`
 }
@@ -83,7 +83,7 @@ export function releaseNotesUrl(repository: any, version: any, variant = 'defaul
  * @returns {string | undefined} `owner/repo`, or undefined for a non-GitHub or
  *   malformed repository.
  */
-export function repositorySlug(repository: any) {
+export function repositorySlug(repository: unknown): string | undefined {
   const url = typeof repository === 'string'
     ? repository
     : repository !== null && typeof repository === 'object' && 'url' in repository && typeof repository.url === 'string'
