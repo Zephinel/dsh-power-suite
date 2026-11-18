@@ -164,26 +164,9 @@ function isPresentedData(value: unknown): value is { turn: number, files: unknow
   )
 }
 
-/**
- * Create or update one artifact entry, keeping the strongest facts recorded
- * for its path.
- * @param {Map<string, Record<string, unknown>>} artifacts - path-keyed entries.
- * @param {string} artifactPath - normalized absolute path.
- * @param {Record<string, unknown>} fact - what this event proved.
- * @returns {void}
- */
-export interface ArtifactRow {
-  path: string
+/** Fields shared by generated artifacts and provided attachments. */
+export interface ArtifactBase {
   name: string
-  attachmentId?: string
-  mediaType?: string
-  bytes?: number
-  width?: number
-  height?: number
-  promptOrdinal?: number
-  mime?: string
-  previewable?: boolean
-  missing?: boolean
   description?: string
   presented?: boolean
   generated?: boolean
@@ -193,8 +176,33 @@ export interface ArtifactRow {
   seq: number
 }
 
+/** One produced file row (has a workspace path). */
+export interface ArtifactRow extends ArtifactBase {
+  path: string
+}
+
+/** One user-provided attachment row (no workspace path; served through the attachment store). */
+export interface AttachmentRow extends ArtifactBase {
+  provided: true
+  attachmentId: string
+  mediaType?: string
+  bytes?: number
+  width?: number
+  height?: number
+  promptOrdinal: number
+}
+
+/** Whether one row is a provided attachment rather than a produced artifact. */
+export function isAttachmentRow(row: ArtifactBase): row is AttachmentRow {
+  return row.provided === true
+}
+
 type ArtifactFact = Partial<Pick<ArtifactRow, 'description' | 'presented' | 'generated' | 'tool' | 'turn' | 'seq'>>
 
+/**
+ * Create or update one artifact entry, keeping the strongest facts recorded
+ * for its path.
+ */
 function upsertArtifact(artifacts: Map<string, ArtifactRow>, artifactPath: string, fact: ArtifactFact): void {
   const entry = artifacts.get(artifactPath)
   if (entry === undefined) {
@@ -227,8 +235,8 @@ function upsertArtifact(artifacts: Map<string, ArtifactRow>, artifactPath: strin
  * @param {Array<Record<string, unknown>>} artifacts - rows carrying numeric `seq` and a `name`.
  * @returns {Array<Record<string, unknown>>} the same array, sorted in place.
  */
-export function sortArtifactsNewestFirst(artifacts: ArtifactRow[]): ArtifactRow[] {
-  return artifacts.sort((left: ArtifactRow, right: ArtifactRow) => {
+export function sortArtifactsNewestFirst<T extends ArtifactBase>(artifacts: T[]): T[] {
+  return artifacts.sort((left: T, right: T) => {
     if (right.seq !== left.seq) return right.seq - left.seq
     return left.name.localeCompare(right.name)
   })
@@ -271,8 +279,8 @@ function attachmentName(name: unknown, mediaType: string | undefined) {
  * @param {readonly Record<string, unknown>[]} events - raw session events in ascending seq order.
  * @returns {Array<Record<string, unknown>>} provided rows, newest event first.
  */
-export function foldUserAttachments(events: readonly Record<string, unknown>[]): ArtifactRow[] {
-  const provided = new Map()
+export function foldUserAttachments(events: readonly Record<string, unknown>[]): AttachmentRow[] {
+  const provided = new Map<string, AttachmentRow>()
   let promptOrdinal = 0
   for (const event of events) {
     if (!isRecord(event) || event.type !== 'user/message') continue
@@ -320,8 +328,8 @@ export function foldUserAttachments(events: readonly Record<string, unknown>[]):
  * @returns {Array<Record<string, unknown>>} artifacts, newest turn first.
  */
 export function foldArtifacts(events: readonly Record<string, unknown>[], cwd: string | null | undefined): ArtifactRow[] {
-  const calls = new Map()
-  const artifacts = new Map()
+  const calls = new Map<string, { name: string, argumentPath: string, turn: number }>()
+  const artifacts = new Map<string, ArtifactRow>()
   for (const event of events) {
     if (!isRecord(event)) continue
     if (event.type === 'tool/call') {

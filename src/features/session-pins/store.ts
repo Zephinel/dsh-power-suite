@@ -86,19 +86,20 @@ export function sanitizePinned(value: unknown) {
   return pinned
 }
 
-/**
- * Normalize one document into its canonical shape.
- * @param {unknown} value - candidate document.
- * @returns {{ version: number, rev: number, pinned: string[] }} canonical document.
- */
+/** Canonical session-pins document. */
 export interface SessionPinsDocument {
   version: number
   rev: number
   pinned: string[]
 }
 
+/** One validated pin/unpin operation. */
 export type PinOp = { op: 'pin' | 'unpin', id: string }
 
+/**
+ * Normalize one document into its canonical shape.
+ * @param value - candidate document.
+ */
 export function normalizeSessionPins(value: unknown): SessionPinsDocument {
   const source = isRecord(value) ? value : {}
   const rev = typeof source.rev === 'number' && Number.isFinite(source.rev) && source.rev >= 0

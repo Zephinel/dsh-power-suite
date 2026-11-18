@@ -22,7 +22,8 @@
  */
 
 import { type HostContext, type SessionSnapshot } from '../../host/context.ts'
-import type { ArtifactRow } from './artifact-index.ts'
+import type { ArtifactRow, AttachmentRow } from './artifact-index.ts'
+import { isAttachmentRow } from './artifact-index.ts'
 import { Buffer } from 'node:buffer'
 import path from 'node:path'
 import { errorCode, errorMessage } from '../../host/errors.ts'
@@ -183,7 +184,7 @@ function sendJson(status: number, payload: unknown) {
  * @param {AbortSignal} signal - request cancellation.
  * @returns {Promise<Record<string, unknown>>} the row.
  */
-async function collectProvidedArtifact(ctx: HostContext, attachments: AttachmentService, artifact: ArtifactRow, signal: AbortSignal) {
+async function collectProvidedArtifact(ctx: HostContext, attachments: AttachmentService, artifact: AttachmentRow, signal: AbortSignal) {
   const image = typeof artifact.mediaType === 'string' && artifact.mediaType.startsWith('image/')
   const kind = artifactKind(artifact.name)
   const row = {
@@ -223,7 +224,7 @@ async function collectProvidedArtifact(ctx: HostContext, attachments: Attachment
  */
 async function collectArtifacts(ctx: HostContext, snapshot: SessionSnapshot, signal: AbortSignal) {
   const attachments = attachmentCapability(ctx)
-  const artifacts = [
+  const artifacts: Array<ArtifactRow | AttachmentRow> = [
     ...foldArtifacts(snapshot.events, snapshot.session.cwd),
     ...foldUserAttachments(snapshot.events)
   ]
@@ -231,7 +232,7 @@ async function collectArtifacts(ctx: HostContext, snapshot: SessionSnapshot, sig
   const rows = []
   for (const artifact of artifacts) {
     signal.throwIfAborted()
-    if (artifact.provided === true) {
+    if (isAttachmentRow(artifact)) {
       // A composition without a durable attachment store cannot serve these
       // bytes, so those rows are omitted rather than shown broken.
       if (attachments === null) continue

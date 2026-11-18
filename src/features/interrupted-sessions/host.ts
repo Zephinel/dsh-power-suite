@@ -73,7 +73,20 @@ function agentRunning(ctx: HostContext, sessionId: string) {
  * @param {Record<string, unknown>} value - internal value with timing fields.
  * @returns {Record<string, unknown>} the wire value.
  */
-function toWire(value: Record<string, unknown>) {
+interface InterruptionWire {
+  interrupted: boolean
+  running: boolean
+  turn: number | null
+  reason: string | null
+  open: boolean
+  lastStartTime: number | null
+  lastEndTime: number | null
+  lastEventTime: number | null
+  interruptedAt: number | null
+  subagent?: boolean
+}
+
+function toWire(value: InterruptionWire) {
   const { lastStartTime, lastEndTime, lastEventTime: eventTime, interruptedAt, ...wire } = value
   return wire
 }
@@ -104,7 +117,7 @@ function sendError(status: number, code: string, message: string) {
 async function handleContinue(
   ctx: HostContext,
   request: Request,
-  readEffective: (id: string) => Promise<Record<string, unknown>>,
+  readEffective: (id: string) => Promise<InterruptionWire>,
   inFlight: Set<string>
 ) {
   const contentType = (request.headers.get('content-type') ?? '').toLowerCase()
@@ -117,10 +130,11 @@ async function handleContinue(
   } catch {
     return sendError(400, 'bad-request', 'JSON body is required')
   }
-  if (!isRecord(body)) return sendError(400, 'bad-request', 'JSON object is required')
-  const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : ''
-  const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : ''
-  const summary = typeof body.summary === 'string' ? body.summary.trim() : ''
+  if (body === null || typeof body !== 'object') return sendError(400, 'bad-request', 'JSON object is required')
+  const bodyRecord = body as Record<string, unknown>
+  const sessionId = typeof bodyRecord.sessionId === 'string' ? bodyRecord.sessionId.trim() : ''
+  const prompt = typeof bodyRecord.prompt === 'string' ? bodyRecord.prompt.trim() : ''
+  const summary = typeof bodyRecord.summary === 'string' ? bodyRecord.summary.trim() : ''
   if (sessionId.length === 0 || sessionId.length > 200) return sendError(400, 'bad-request', 'sessionId is required')
   if (prompt.length === 0 || prompt.length > 1000) return sendError(400, 'bad-request', 'prompt must be 1..1000 characters')
   const controller = ctx.get('sessionController') as
@@ -172,9 +186,9 @@ async function handleContinue(
  * @returns {void}
  */
 export function installInterruptedSessions(ctx: HostContext) {
-  const cache = new Map()
-  const derived = new Map()
-  const epochs = new Map()
+  const cache = new Map<string, InterruptionWire>()
+  const derived = new Map<string, { at: number, value: InterruptionWire }>()
+  const epochs = new Map<string, number>()
   let derivedVersion = 0
   interface LineageState {
     at: number
@@ -191,7 +205,7 @@ export function installInterruptedSessions(ctx: HostContext) {
    * @param {Record<string, unknown>} value - wire value plus internal timing.
    * @returns {void}
    */
-  const remember = (sessionId: string, value: unknown) => {
+  const remember = (sessionId: string, value: InterruptionWire) => {
     if (cache.size >= MAX_CACHED && !cache.has(sessionId)) {
       const oldest = cache.keys().next().value
       if (oldest !== undefined) cache.delete(oldest)
@@ -204,7 +218,7 @@ export function installInterruptedSessions(ctx: HostContext) {
    * @param {string} sessionId - Session to inspect.
    * @returns {Promise<Record<string, unknown>>} public value plus internal timing fields.
    */
-  async function readBase(sessionId: string) {
+  async function readBase(sessionId: string): Promise<InterruptionWire> {
     const cached = cache.get(sessionId)
     if (cached !== undefined) return cached
     const startEpoch = epochs.get(sessionId) ?? 0
@@ -272,7 +286,7 @@ export function installInterruptedSessions(ctx: HostContext) {
    * @param {Set<string>} seen - recursion guard.
    * @returns {Promise<Record<string, unknown>>} public value plus internal timing fields.
    */
-  async function readEffective(sessionId: string, seen = new Set()) {
+  async function readEffective(sessionId: string, seen = new Set<string>()): Promise<InterruptionWire> {
     if (seen.has(sessionId)) return readBase(sessionId)
     seen.add(sessionId)
     const base = await readBase(sessionId)

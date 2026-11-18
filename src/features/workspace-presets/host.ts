@@ -51,16 +51,13 @@ function sendJson(status: number, payload: unknown) {
   })
 }
 
-/**
- * Read one small JSON object request body.
- * @param {Request} request - the buffered request.
- * @returns {Promise<{ ok: true, value: Record<string, unknown> } | { ok: false, status: number, code: string, message: string }>} the decoded object or a typed failure.
- */
+/** Successful JSON-body decode. */
 interface JsonBodySuccess {
   ok: true
   value: Record<string, unknown>
 }
 
+/** Typed JSON-body decode failure. */
 interface JsonBodyFailure {
   ok: false
   status: number
@@ -68,6 +65,11 @@ interface JsonBodyFailure {
   message: string
 }
 
+/**
+ * Read one small JSON object request body.
+ * @param request - the buffered request.
+ * @returns the decoded object or a typed failure.
+ */
 async function readJsonObject(request: Request): Promise<JsonBodySuccess | JsonBodyFailure> {
   const mediaType = String(request.headers.get('content-type') ?? '')
     .split(';', 1)[0]
@@ -178,6 +180,13 @@ interface AgentEvent {
   session?: { header?: Record<string, unknown> }
 }
 
+/** Whether one agent/created payload carries the session view used by this feature. */
+function isAgentEvent(value: unknown): value is AgentEvent {
+  if (!isRecord(value)) return false
+  const session = value.session
+  return session === undefined || session === null || isRecord(session)
+}
+
 async function applyWorkspaceDefault(ctx: HostContext, store: ReturnType<typeof createPresetStore>, agent: AgentEvent) {
   const session = agent?.session
   if (session === undefined || session === null) return
@@ -216,9 +225,9 @@ export function installWorkspacePresets(ctx: HostContext) {
     requestBody: 'buffered',
     fetch: (request: Request) => handleSet(ctx, store, request)
   }), `power-suite: workspace-presets POST ${SET_ROUTE}`)
-  ctx.on('agent/created', async ({ agent }: { agent: AgentEvent }) => {
+  ctx.on('agent/created', async ({ agent }) => {
     try {
-      await applyWorkspaceDefault(ctx, store, agent)
+      if (isAgentEvent(agent)) await applyWorkspaceDefault(ctx, store, agent)
     } catch {
       // A Workspace default is a convenience, never a precondition: a refused
       // selection leaves the new Session on the preset it already composed.

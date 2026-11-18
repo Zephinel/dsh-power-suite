@@ -3,7 +3,8 @@
  * Repository gate:
  *   1. syntax-check the remaining checked-in JavaScript entries (src/client.js);
  *      TypeScript sources are parsed by the typecheck instead;
- *   2. no-build typecheck (`tsc --noEmit`) over the Host TypeScript sources;
+ *   2. no-build typecheck (`tsc --noEmit --strict`) over the Host TypeScript
+ *      sources, and fail when an explicit `any` token re-enters them;
  *   3. validate the bundle manifest, exports, icon, locale, and cordis patch;
  *   4. built-entry smoke: the bundled Host sees its own package, and its update
  *      route reports the running version (not a bundle-relative 0.0.0);
@@ -37,11 +38,52 @@ function collectFiles(directory, extension) {
   return files
 }
 
-/** Count explicit `any` sites in the Host TypeScript sources (tracked, not gated). */
+/** Strip comments and string/template literals so the any budget counts code tokens only. */
+function stripCommentsAndStrings(source) {
+  let output = ''
+  let mode = 'code'
+  let index = 0
+  while (index < source.length) {
+    const char = source[index]
+    const next = source[index + 1]
+    if (mode === 'code') {
+      if (char === '/' && next === '/') { mode = 'line'; index += 2; continue }
+      if (char === '/' && next === '*') { mode = 'block'; index += 2; continue }
+      if (char === "'") { mode = 'single'; index += 1; continue }
+      if (char === '"') { mode = 'double'; index += 1; continue }
+      if (char === '`') { mode = 'template'; index += 1; continue }
+      output += char
+      index += 1
+      continue
+    }
+    if (mode === 'line') {
+      if (char === '\n') { mode = 'code'; output += '\n' }
+      index += 1
+      continue
+    }
+    if (mode === 'block') {
+      if (char === '*' && next === '/') { mode = 'code'; index += 2 } else index += 1
+      continue
+    }
+    if (mode === 'single' || mode === 'double') {
+      if (char === '\\') { index += 2; continue }
+      if ((mode === 'single' && char === "'") || (mode === 'double' && char === '"')) mode = 'code'
+      index += 1
+      continue
+    }
+    // Template body: this intentionally treats the whole literal as text.
+    if (char === '\\') { index += 2; continue }
+    if (char === '`') mode = 'code'
+    index += 1
+  }
+  return output
+}
+
+/** Count explicit `any` tokens in the Host TypeScript sources: a lexical tripwire, gated at 0. */
 function countAnySites(files) {
   let count = 0
   for (const file of files) {
-    const matches = readFileSync(file, 'utf8').match(/:\s*any\b|as\s+any\b|<\s*any\s*>|Record<string,\s*any>/g)
+    const matches = stripCommentsAndStrings(readFileSync(file, 'utf8')).match(/\bany\b/g)
     if (matches !== null) count += matches.length
   }
   return count

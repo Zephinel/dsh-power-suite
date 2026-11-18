@@ -217,7 +217,7 @@ export function readCachedDocumentActivity(text: string) {
  */
 export function createProjectionCacheReader(dshHome: string) {
   const directory = path.join(dshHome, ...PROJECTION_CACHE_PATH)
-  const known = new Map()
+  const known = new Map<string, { mtimeMs: number, value: number | null }>()
   return async function readCachedDocument(id: string) {
     if (typeof id !== 'string' || id.length === 0 || !SESSION_ID_PATTERN.test(id)) return null
     const file = path.join(directory, `${id}.json`)

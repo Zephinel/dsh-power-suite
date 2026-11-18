@@ -9,6 +9,12 @@
  * @module
  */
 
+/** Event payloads the suite subscribes to (only the members it uses). */
+export interface HostEventMap {
+  'session/event': [session: Record<string, unknown>, event: Record<string, unknown>]
+  'agent/created': [payload: { agent: unknown }]
+}
+
 /** One exact Fetch route registered on Connection's shared API channel. */
 export interface HostRoute {
   path: string
@@ -23,18 +29,28 @@ export interface SessionSnapshot {
   events: readonly Record<string, unknown>[]
 }
 
-/** One resolved filesystem target's facts. */
+/**
+ * The filesystem service resolves a path into an opaque {@link FsTarget}; only
+ * the backend interprets the key, and every later call passes the target back.
+ */
+export interface FsTarget {
+  targetKey: unknown
+  displayPath: string
+}
+
+/** One resolved target's metadata (a subset of DSH's `FsInfo`). */
 export interface FileInfo {
+  type?: 'file' | 'directory' | 'other'
   size?: number
-  type?: string
+  version?: unknown
 }
 
 /** The subset of the DSH filesystem service the suite uses. */
 export interface FileService {
-  resolve(path: string, options: { signal: AbortSignal }): Promise<string>
-  stat(target: string, signal?: AbortSignal): Promise<FileInfo>
-  readBytes(target: string, signal: AbortSignal, maxBytes: number): Promise<Uint8Array>
-  readByteRange(target: string, range: { offset: number, length: number }, signal: AbortSignal): Promise<Uint8Array>
+  resolve(path: string, options?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget>
+  stat(target: FsTarget, signal?: AbortSignal): Promise<FileInfo | undefined>
+  readBytes(target: FsTarget, signal: AbortSignal | undefined, maxBytes: number): Promise<Uint8Array>
+  readByteRange(target: FsTarget, range: { offset: number, length: number }, signal?: AbortSignal): Promise<Uint8Array>
 }
 
 /** The subset of the Agent-preset service the suite uses. */
@@ -42,7 +58,7 @@ export interface AgentPresetService {
   list(): Promise<Array<Record<string, unknown>>>
   presetForSession(session: unknown): string | null
   defaultId: string
-  select(agent: unknown, target: string): Promise<void>
+  select(agent: unknown, target: string): Promise<string>
 }
 
 /** The subset of the Agent service the suite uses. */
@@ -66,7 +82,11 @@ export interface WorkspaceRegistryService {
 /** One DSH Host context as seen by this suite. */
 export interface HostContext {
   effect(callback: () => unknown, label?: string): unknown
-  on(event: string, handler: (...args: never[]) => void, options?: { global?: boolean }): unknown
+  on<K extends keyof HostEventMap>(
+    event: K,
+    handler: (...args: HostEventMap[K]) => void,
+    options?: { global?: boolean }
+  ): unknown
   connection: { fetch: { register(route: HostRoute): unknown } }
   fs: FileService
   sessionQuery: SessionQueryService

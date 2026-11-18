@@ -200,8 +200,11 @@ Acceptance:
   workspace services), `src/host/errors.ts` (`errorCode`/`errorMessage`/
   `isNotFound` for unknown thrown values), real document/ops interfaces for every
   store, `ArtifactRow`/`SessionSnapshot` fold types, an `ActivityLedgerHandle`
-  and typed event callbacks. `npm run check` now fails when `: any`, `as any` or
-  `Record<string, any>` re-enters `src/**/*.ts` (ratchet at 0).
+  and typed event callbacks; the Host context mirrors DSH's real filesystem API
+  (opaque `FsTarget`, `stat` returning `FileInfo | undefined`) and provided
+  attachments are a distinct `AttachmentRow`. `npm run check` fails when an
+  `any` token re-enters the code (comments/strings stripped; aliases, unions and
+  generics count) — a lexical tripwire at 0, not a proof.
 
 Introduce the build (recommended: esbuild for the browser classic script and
 `tsc --noEmit` for types; alternative: `tsc` emit for both), switch `exports` and

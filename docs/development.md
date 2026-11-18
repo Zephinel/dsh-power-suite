@@ -47,9 +47,11 @@ the typecheck. The release-notes gate runs inside `npm run check` and again in
 the publish workflow.
 
 `npm run check` reports an explicit-`any` budget for `src/**/*.ts` (currently 0
-sites) and fails if a new `: any`, `as any` or `Record<string, any>` re-enters the
-Host TypeScript sources. DSH platform boundaries use `src/host/context.ts`
-(structural Host context) and `src/host/errors.ts` (unknown thrown values). `npm ci` installs esbuild, TypeScript and `@types/node` as dev dependencies;
+sites) and fails when an `any` token re-enters the code (comments and string
+literals are stripped first, so aliases, unions and generics count). It is a
+lexical tripwire, not a proof: implicit `any` is already covered by `strict`. DSH platform boundaries use `src/host/context.ts` (structural Host context,
+including the opaque `FsTarget`/`FileInfo` shapes) and `src/host/errors.ts`
+(unknown thrown values). `npm ci` installs esbuild, TypeScript and `@types/node` as dev dependencies;
 `npm run build` emits only the gitignored `lib/` entries, and the typecheck
 itself emits nothing. The classic browser entry stays out of the type gate until
 Phase 3 — see [the TypeScript migration plan](plans/typescript-migration.md).

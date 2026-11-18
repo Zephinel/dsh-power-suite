@@ -148,18 +148,6 @@ export function activityLedgerPath(dshHome: string): string {
   return path.join(dshHome, ACTIVITY_LEDGER_DIRECTORY, ACTIVITY_LEDGER_FILE)
 }
 
-/**
- * Open the durable activity ledger over one harness home.
- *
- * `record` is synchronous and immediately visible to `snapshot`; durability is
- * debounced and serialized. Reads load lazily and merge with any events already
- * recorded in this process, so a slow file read can never discard live data.
- * A missing or corrupt document schedules an empty rewrite.
- * @param {string} dshHome - harness home directory.
- * @param {object} [options] - injection points for tests.
- * @param {number} [options.debounceMs] - durable write debounce window.
- * @returns {Record<string, unknown>} the ledger handle.
- */
 /** The public handle returned by createActivityLedger. */
 export interface ActivityLedgerHandle {
   load(): Promise<Record<string, number>>
@@ -170,6 +158,16 @@ export interface ActivityLedgerHandle {
   file: string
 }
 
+/**
+ * Open the durable activity ledger over one harness home.
+ *
+ * `record` is synchronous and immediately visible to `snapshot`; durability is
+ * debounced and serialized. Reads load lazily and merge with any events already
+ * recorded in this process, so a slow file read can never discard live data.
+ * A missing or corrupt document schedules an empty rewrite.
+ * @param dshHome - harness home directory.
+ * @param options - injection points for tests.
+ */
 export function createActivityLedger(dshHome: string, options: { debounceMs?: number } = {}): ActivityLedgerHandle {
   const file = activityLedgerPath(dshHome)
   const debounceMs = options.debounceMs !== undefined && Number.isFinite(options.debounceMs) && options.debounceMs >= 0

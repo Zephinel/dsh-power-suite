@@ -55,11 +55,7 @@ export function isInterruptedEnd(reason: unknown): boolean {
   return interruptedEnd(reason.kind, cause)
 }
 
-/**
- * Fold one Session log into its last turn position.
- * @param {readonly object[]} events - raw events in ascending sequence order.
- * @returns {{ turn: number | null, open: boolean, endReason: string | null, endCause: string | null }} the last turn.
- */
+/** The last turn position folded from one Session log. */
 export interface LastTurnState {
   turn: number | null
   open: boolean
@@ -67,6 +63,11 @@ export interface LastTurnState {
   endCause: string | null
 }
 
+/**
+ * Fold one Session log into its last turn position.
+ * @param events - raw events in ascending sequence order.
+ * @returns the last turn position.
+ */
 export function lastTurnState(events: unknown): LastTurnState {
   let turn = null
   let endReason = null

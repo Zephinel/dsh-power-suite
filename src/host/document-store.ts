@@ -14,10 +14,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
-/** Whether a filesystem error means the document is absent (legitimately empty). */
-function isNotFound(error: unknown): boolean {
-  return error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
-}
+import { isNotFound } from './errors.ts'
 
 /** Document policy supplied by one store adapter. */
 export interface DocumentStoreOptions<T> {
