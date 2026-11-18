@@ -272,18 +272,18 @@ and artifacts tests moved off `loadClientModule` entirely. Record shapes and the
 remaining vm hooks (`uiAnnotation`, gallery, dynamic-Workspaces, updateCheck,
 sidebarWidth probe) are the remaining Phase 3 cleanup.
 
-**3f e2e evidence (2026-11-18).** Because the live `:3080` server predates the
-new client entry and still serves `src/client.js`, the three suites ran against
-an isolated throwaway DSH web instance (temp `$DSH_HOME`, current tarball
-installed): `sidebar.e2e.mjs --smoke` **4/4 PASS**, `update-prompt.e2e.mjs`
-**21/21 PASS**, `annotation.e2e.mjs --smoke` **5/6** with `smoke-6` timing out
-when the launcher click does not enter annotation mode. Re-running the same
-smoke with the pre-Phase-3 baseline client (`fa48b2a`) reproduces exactly the
-same 5/6, so that failure is pre-existing under this harness (root cause not
-established) rather than a Phase 3 regression. The live `:3080` server still resolves the old `src/client.js` entry path; it now
-also serves the new ES-module source, so the live plugin fails to boot until
-that service is restarted (the isolated instance and the npm artifact are
-unaffected).
+**3f e2e evidence (2026-11-18).** The isolated throwaway instance (temp
+`$DSH_HOME`, current tarball) produced `sidebar.e2e.mjs --smoke` **4/4**,
+`update-prompt.e2e.mjs` **21/21**, and `annotation.e2e.mjs --smoke` **5/6**
+(smoke-6 launcher-click timeout, exactly reproduced with the pre-Phase-3
+baseline client `fa48b2a`, so not a Phase 3 regression). The long-running live
+`:3080` service was then restarted: it now serves the installed
+`lib/client.js` classic IIFE (976,585 B + source-map trailer) and the live runs
+pass — `sidebar --smoke` **4/4**, `annotation --smoke` **6/6**,
+`update-prompt` **21/21**, 0 page errors. The Phase 3 e2e smoke acceptance is
+therefore satisfied on the live GUI; the full modes and negative-control
+scenarios are still to be run, and the core browser-region split/type conversion
+remains open.
 
 Decide between (a) splitting `src/client.js` by `//#region feature:` into modules
 and bundling one classic script, or (b) keeping one file and annotating it. Under

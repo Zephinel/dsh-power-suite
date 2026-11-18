@@ -61,18 +61,19 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   Node suite and the release-notes gate, then `pack:check`.
 - `npm run pack:check`: **75 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).
-- Browser e2e (isolated throwaway `$DSH_HOME`, current tarball): `sidebar.e2e.mjs
-  --smoke` **4/4 PASS**; `update-prompt.e2e.mjs` **21/21 PASS**;
-  `annotation.e2e.mjs --smoke` **5/6** (`smoke-6` launcher-click timeout, exactly
-  reproduced with the pre-Phase-3 baseline client `fa48b2a`, so not a Phase 3
-  regression; the root cause is pre-existing under this harness and not
-  established); served plugin entry comes from `lib/client.js` (958.5 kB) and the
-  annotation/sidebar harness injects the esbuild-bundled ESM worktree client.
-- Live `:3080` caveat: its long-running server still resolves the old
-  `src/client.js` entry path, which is now an ES module, so the live plugin
-  currently fails to boot (`Cannot use import statement outside a module`);
-  restart the service (or use an isolated instance) before testing the live GUI.
-  The npm artifact and the isolated-instance evidence above are unaffected.
+- Browser e2e (2026-11-18): the isolated throwaway instance first produced
+  `sidebar.e2e.mjs --smoke` **4/4**, `update-prompt.e2e.mjs` **21/21**, and
+  `annotation.e2e.mjs --smoke` **5/6** (smoke-6 exactly reproduced with the
+  pre-Phase-3 baseline client, so not a regression). After restarting the live
+  `:3080` service it serves the installed `lib/client.js` classic IIFE
+  (976,585 B + source-map trailer; served text starts with the installed file)
+  and the live runs pass: `sidebar.e2e.mjs --smoke` **4/4**, `annotation.e2e.mjs
+  --smoke` **6/6**, `update-prompt.e2e.mjs` **21/21**, 0 page errors. The
+  annotation/sidebar harnesses inject the esbuild-bundled ESM worktree client.
+- Client-entry caveat: a long-running GUI that resolved the old `src/client.js`
+  path must be restarted after a client-entry change (the 2026-11-18 restart
+  resolved the observed ES-module boot failure); use an isolated instance when a
+  restart is not possible. The npm artifact is unaffected.
 - `npm run check:release`: **PASS** — 75 packaged files installed into a throwaway
   `$DSH_HOME`; it deletes `lib/` first so `npm pack` must rebuild it through
   `prepare`, then the packed `lib/` matches the fresh build, every other packed

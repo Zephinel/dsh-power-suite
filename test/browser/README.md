@@ -17,7 +17,9 @@ node test/browser/annotation.e2e.mjs
 > `lib/`), it keeps resolving the old `src/client.js` path. After Phase 3 that
 > path is an ES module, so the live plugin fails to boot until the GUI is
 > restarted (or these suites run against an isolated throwaway DSH web
-> instance); do not mistake that boot failure for a harness regression.
+> instance); do not mistake that boot failure for a harness regression. The
+> 2026-11-18 restart confirmed the live GUI serves `lib/client.js` and the three
+> smoke/update suites pass; repeat the restart after future entry changes.
 
 ## How it works
 
