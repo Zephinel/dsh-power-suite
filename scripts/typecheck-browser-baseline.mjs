@@ -1,46 +1,35 @@
 #!/usr/bin/env node
 /**
- * Browser typecheck baseline for the browser entry and the modules it imports.
+ * Browser-profile typecheck and its zero-diagnostic ratchet.
  *
- * `src/client.js` starts with `// @ts-nocheck` (Phase 3 keeps the browser half
- * out of the root gate), so `npm run typecheck` never sees it. This harness
- * measures the separate browser profile in `tsconfig.browser.json` (DOM lib,
- * `types: []`, the minimal `src/browser/dom.d.ts` shim excluded because the DOM
- * lib supersedes it) without touching any production file:
- *
- *   1. copy `src/` and `package.json` to a throwaway OS temp directory;
- *   2. replace the first `@ts-nocheck` line of the copied `client.js` with a
- *      comment of the same byte length, so line numbers and byte offsets stay
- *      stable while the compiler finally checks the file;
- *   3. write a temp copy of `tsconfig.browser.json` (same compiler options and
- *      include/exclude patterns) and run a single `tsc -p ... --noEmit` pass;
- *   4. attribute every diagnostic to its innermost `//#region`, and report the
- *      total, per TS code, per top-level `feature:` region (including nested
- *      regions) and per nested model.
+ * `tsconfig.json` checks the Host half, and since M5c it also checks the
+ * browser entry and modules with the ES2023 lib plus the minimal
+ * `src/browser/dom.d.ts` shim. This script owns the *browser* profile
+ * (`tsconfig.browser.json`: DOM/DOM.Iterable, `types: []`, the shim excluded)
+ * and keeps the count at zero, attributed per `//#region` so a regression
+ * points at its feature.
  *
  * Modes:
  *   (default)  measure, report, and exit 0. Writes the baseline only when the
  *              baseline file is missing; an existing baseline is never
  *              overwritten, so an ordinary run cannot silently loosen it.
  *   --write    measure and overwrite scripts/browser-typecheck-baseline.json.
- *   --check    exit 1 only when the measured total or one TS-code count is
- *              greater than the stored baseline. HEAD, client.js size, region
- *              counts and per-file counts are reported but never gate.
+ *   --check    exit 1 when the measured total or one TS-code count is greater
+ *              than the stored baseline. HEAD and client.js size are reported
+ *              but never gate.
  *
  * Exit codes: 0 ok, 1 ratchet regression (--check only), 2 harness error.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, realpathSync } from 'node:fs'
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { existsSync } from 'node:fs'
+import { readFile, writeFile } from 'node:fs/promises'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const BASELINE_PATH = join(root, 'scripts', 'browser-typecheck-baseline.json')
 const BROWSER_TSCONFIG_PATH = join(root, 'tsconfig.browser.json')
 const CLIENT_PATH = join(root, 'src', 'client.js')
-const PACKAGE_PATH = join(root, 'package.json')
 const FEATURE_PREFIX = 'feature: '
 const DIAGNOSTIC_RE = /^(.*)\((\d+),(\d+)\): error (TS\d+): (.*)$/
 const GLOBAL_DIAGNOSTIC_RE = /^error (TS\d+): (.*)$/
@@ -74,58 +63,6 @@ async function typescriptVersion() {
   } catch {
     return 'unknown'
   }
-}
-
-/**
- * Replace the first `@ts-nocheck` line with a comment of the same UTF-8 byte
- * length. Line numbers and byte offsets stay stable, so the measured
- * diagnostics map one-to-one onto the real file.
- */
-function neutralizeNocheck(text) {
-  const newline = text.includes('\r\n') ? '\r\n' : '\n'
-  const lines = text.split(/\r?\n/)
-  const index = lines.findIndex((line) => /^\/\/\s*@ts-nocheck\b/.test(line))
-  if (index === -1) {
-    throw new Error('src/client.js no longer starts with a @ts-nocheck line; update the browser baseline harness')
-  }
-  const targetBytes = Buffer.byteLength(lines[index], 'utf8')
-  let replacement = '// baseline harness: nocheck directive neutralized in this temporary copy.'
-  if (Buffer.byteLength(replacement, 'utf8') > targetBytes) {
-    replacement = '// baseline harness: nocheck neutralized.'
-  }
-  while (Buffer.byteLength(replacement, 'utf8') < targetBytes) replacement += ' '
-  lines[index] = replacement
-  const patched = lines.join(newline)
-  if (Buffer.byteLength(patched, 'utf8') !== Buffer.byteLength(text, 'utf8')) {
-    throw new Error('could not neutralize @ts-nocheck without changing the file byte length')
-  }
-  if (patched.split('\n').length !== text.split('\n').length) {
-    throw new Error('could not neutralize @ts-nocheck without changing the line count')
-  }
-  return { text: patched, line: index + 1, bytes: targetBytes }
-}
-
-/**
- * Write the temp tsconfig: the repo `tsconfig.browser.json` with `extends`
- * rewritten to an absolute repo path, so the copy still inherits the root
- * compiler options from the real tree.
- */
-async function writeTempConfig(tempRoot) {
-  let config
-  try {
-    config = JSON.parse(await readFile(BROWSER_TSCONFIG_PATH, 'utf8'))
-  } catch (error) {
-    throw new Error(`cannot parse tsconfig.browser.json: ${error.message}`)
-  }
-  if (typeof config.extends === 'string' && !isAbsolute(config.extends)) {
-    config.extends = resolve(root, config.extends)
-  }
-  if (!Array.isArray(config.include) || !config.include.includes('src/client.js')) {
-    throw new Error('tsconfig.browser.json must include src/client.js')
-  }
-  const target = join(tempRoot, 'tsconfig.browser.json')
-  await writeFile(target, `${JSON.stringify(config, null, 2)}\n`)
-  return target
 }
 
 /** Parse `//#region` / `//#endregion` markers into a tree; spans are inclusive. */
@@ -191,14 +128,13 @@ function regionNode(region, byRegion) {
 }
 
 /**
- * Map a tsc diagnostic file name onto its path inside the temp copy.
+ * Map a tsc diagnostic file name onto its path inside the worktree.
  *
- * tsc may print absolute paths or paths relative to its own notion of the
- * current directory (macOS `/tmp` vs `/private/tmp` makes that ambiguous), so
- * the copy is identified by the trailing `src/...` segment instead of string
- * prefix matching.
+ * tsc prints absolute paths for the project files; macOS `/tmp` vs
+ * `/private/tmp` makes prefix matching ambiguous, so the trailing `src/...`
+ * segment is used instead.
  */
-function copyRelative(fileName) {
+function sourceRelative(fileName) {
   const normalized = fileName.replaceAll('\\', '/')
   const marker = '/src/'
   const index = normalized.lastIndexOf(marker)
@@ -206,125 +142,111 @@ function copyRelative(fileName) {
   return normalized.startsWith('src/') ? normalized : null
 }
 
-/** Run one tsc pass over the temp copy and return the measured counts plus metadata. */
+/** Run one tsc pass over the browser profile and return the measured counts plus metadata. */
 async function measure() {
-  // Canonicalize the temp root: macOS reports `/var` as `/private/var` through
-  // realpath, and tsc diagnostics would otherwise not match the copy paths.
-  const tempRoot = realpathSync(await mkdtemp(join(tmpdir(), 'dsh-browser-typecheck-')))
-  try {
-    const originalText = await readFile(CLIENT_PATH, 'utf8')
-    const patched = neutralizeNocheck(originalText)
-    await cp(join(root, 'src'), join(tempRoot, 'src'), { recursive: true })
-    // Module format detection: the repo package is `"type": "module"`; without
-    // this the copied sources would be checked as CommonJS.
-    await cp(PACKAGE_PATH, join(tempRoot, 'package.json'))
-    const tempClientPath = join(tempRoot, 'src', 'client.js')
-    await writeFile(tempClientPath, patched.text)
-    const tempConfigPath = await writeTempConfig(tempRoot)
+  if (!existsSync(BROWSER_TSCONFIG_PATH)) throw new Error('tsconfig.browser.json is missing')
+  const clientText = await readFile(CLIENT_PATH, 'utf8')
+  const tscBin = join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc')
+  if (!existsSync(tscBin)) throw new Error(`TypeScript binary not found: ${tscBin} (run npm install)`)
 
-    const tscBin = join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc')
-    if (!existsSync(tscBin)) throw new Error(`TypeScript binary not found: ${tscBin} (run npm install)`)
-    const startedAt = Date.now()
-    const result = spawnSync(
-      tscBin,
-      ['-p', tempConfigPath, '--noEmit', '--pretty', 'false', '--listFiles'],
-      {
-        cwd: root,
-        encoding: 'utf8',
-        maxBuffer: 64 * 1024 * 1024,
-        timeout: 120_000,
-        env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' }
-      }
-    )
-    const elapsedMs = Date.now() - startedAt
-    if (result.error !== undefined && result.error !== null) throw result.error
-    const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
-    if (result.status === null) {
-      throw new Error(`tsc was terminated before finishing (signal ${String(result.signal)})`)
+  const startedAt = Date.now()
+  const result = spawnSync(
+    tscBin,
+    ['-p', BROWSER_TSCONFIG_PATH, '--noEmit', '--pretty', 'false', '--listFiles'],
+    {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: 120_000,
+      env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' }
     }
+  )
+  const elapsedMs = Date.now() - startedAt
+  if (result.error !== undefined && result.error !== null) throw result.error
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
+  if (result.status === null) {
+    throw new Error(`tsc was terminated before finishing (signal ${String(result.signal)})`)
+  }
 
-    const diagnostics = []
-    let clientListed = false
-    for (const line of output.split(/\r?\n/)) {
-      const match = line.match(DIAGNOSTIC_RE)
-      if (match !== null) {
-        diagnostics.push({
-          file: match[1],
-          line: Number(match[2]),
-          column: Number(match[3]),
-          code: match[4],
-          message: match[5]
-        })
-        continue
-      }
-      const global = line.match(GLOBAL_DIAGNOSTIC_RE)
-      if (global !== null) {
-        diagnostics.push({ file: null, line: 0, column: 0, code: global[1], message: global[2] })
-        continue
-      }
-      // --listFiles prints absolute paths after the diagnostics; they double as
-      // proof that the copied client.js really entered the program.
-      if (copyRelative(line) === 'src/client.js') clientListed = true
+  const diagnostics = []
+  let clientListed = false
+  for (const line of output.split(/\r?\n/)) {
+    const match = line.match(DIAGNOSTIC_RE)
+    if (match !== null) {
+      diagnostics.push({
+        file: match[1],
+        line: Number(match[2]),
+        column: Number(match[3]),
+        code: match[4],
+        message: match[5]
+      })
+      continue
     }
+    const global = line.match(GLOBAL_DIAGNOSTIC_RE)
+    if (global !== null) {
+      diagnostics.push({ file: null, line: 0, column: 0, code: global[1], message: global[2] })
+      continue
+    }
+    // --listFiles prints the compiled program; it doubles as proof that the
+    // browser entry really entered this profile.
+    if (sourceRelative(line) === 'src/client.js') clientListed = true
+  }
 
-    if (!clientListed) {
-      throw new Error('tsc did not include the copied src/client.js in the program; refusing to record a baseline')
-    }
-    const globalDiagnostics = diagnostics.filter((diagnostic) => diagnostic.file === null)
-    if (globalDiagnostics.length > 0) {
-      throw new Error(`tsc reported a configuration-level diagnostic: ${globalDiagnostics[0].message}`)
-    }
-    if (result.status !== 0 && diagnostics.length === 0) {
-      throw new Error(`tsc failed without diagnostics (exit ${String(result.status)}): ${output.trim().split('\n')[0] ?? ''}`)
-    }
+  if (!clientListed) {
+    throw new Error('tsc did not include src/client.js in the browser program; refusing to record a baseline')
+  }
+  const globalDiagnostics = diagnostics.filter((diagnostic) => diagnostic.file === null)
+  if (globalDiagnostics.length > 0) {
+    throw new Error(`tsc reported a configuration-level diagnostic: ${globalDiagnostics[0].message}`)
+  }
+  if (result.status !== 0 && diagnostics.length === 0) {
+    throw new Error(`tsc failed without diagnostics (exit ${String(result.status)}): ${output.trim().split('\n')[0] ?? ''}`)
+  }
 
-    const regions = parseRegions(originalText)
-    const byCode = new Map()
-    const byFile = new Map()
-    const byRegion = new Map()
-    const byFeature = new Map()
-    let clientOutsideRegions = 0
-    let otherFiles = 0
-    for (const diagnostic of diagnostics) {
-      byCode.set(diagnostic.code, (byCode.get(diagnostic.code) ?? 0) + 1)
-      const file = diagnostic.file === null ? '(global)' : copyRelative(diagnostic.file) ?? diagnostic.file
-      byFile.set(file, (byFile.get(file) ?? 0) + 1)
-      if (file !== 'src/client.js') {
-        otherFiles += 1
-        continue
-      }
-      const region = innermostRegion(regions, diagnostic.line)
-      if (region === null) {
-        clientOutsideRegions += 1
-        continue
-      }
-      const key = regionPath(region)
-      byRegion.set(key, (byRegion.get(key) ?? 0) + 1)
-      let top = region
-      while (top.parent !== null) top = top.parent
-      if (top.name.startsWith(FEATURE_PREFIX)) {
-        const name = top.name.slice(FEATURE_PREFIX.length)
-        byFeature.set(name, (byFeature.get(name) ?? 0) + 1)
-      }
+  const regions = parseRegions(clientText)
+  const byCode = new Map()
+  const byFile = new Map()
+  const byRegion = new Map()
+  const byFeature = new Map()
+  let clientOutsideRegions = 0
+  let otherFiles = 0
+  for (const diagnostic of diagnostics) {
+    byCode.set(diagnostic.code, (byCode.get(diagnostic.code) ?? 0) + 1)
+    const file = diagnostic.file === null ? '(global)' : sourceRelative(diagnostic.file) ?? diagnostic.file
+    byFile.set(file, (byFile.get(file) ?? 0) + 1)
+    if (file !== 'src/client.js') {
+      otherFiles += 1
+      continue
     }
+    const region = innermostRegion(regions, diagnostic.line)
+    if (region === null) {
+      clientOutsideRegions += 1
+      continue
+    }
+    const key = regionPath(region)
+    byRegion.set(key, (byRegion.get(key) ?? 0) + 1)
+    let top = region
+    while (top.parent !== null) top = top.parent
+    if (top.name.startsWith(FEATURE_PREFIX)) {
+      const name = top.name.slice(FEATURE_PREFIX.length)
+      byFeature.set(name, (byFeature.get(name) ?? 0) + 1)
+    }
+  }
 
-    return {
-      total: diagnostics.length,
-      byCode: sortedCounts(byCode),
-      byFile: sortedCounts(byFile),
-      byFeature: sortedCounts(byFeature),
-      byRegion: sortedCounts(byRegion),
-      unattributed: { clientJs: clientOutsideRegions, otherFiles },
-      regionTree: regions
-        .filter((region) => region.parent === null)
-        .map((region) => regionNode(region, byRegion)),
-      clientJs: { lines: (originalText.match(/\n/g) ?? []).length, bytes: Buffer.byteLength(originalText, 'utf8') },
-      typescript: await typescriptVersion(),
-      gitHead: gitHead(),
-      elapsedMs
-    }
-  } finally {
-    await rm(tempRoot, { recursive: true, force: true })
+  return {
+    total: diagnostics.length,
+    byCode: sortedCounts(byCode),
+    byFile: sortedCounts(byFile),
+    byFeature: sortedCounts(byFeature),
+    byRegion: sortedCounts(byRegion),
+    unattributed: { clientJs: clientOutsideRegions, otherFiles },
+    regionTree: regions
+      .filter((region) => region.parent === null)
+      .map((region) => regionNode(region, byRegion)),
+    clientJs: { lines: (clientText.match(/\n/g) ?? []).length, bytes: Buffer.byteLength(clientText, 'utf8') },
+    typescript: await typescriptVersion(),
+    gitHead: gitHead(),
+    elapsedMs
   }
 }
 
@@ -380,7 +302,7 @@ function compare(measured, baseline) {
 /** Human report of one measurement (the stored baseline is reported by the caller). */
 function report(measured) {
   const lines = []
-  lines.push('browser typecheck baseline (tsconfig.browser.json: DOM lib, types: [], src/browser/dom.d.ts excluded)')
+  lines.push('browser typecheck (tsconfig.browser.json: DOM lib, types: [], src/browser/dom.d.ts excluded)')
   lines.push(`  typescript           ${measured.typescript}`)
   lines.push(`  src/client.js        ${measured.clientJs.lines} lines, ${measured.clientJs.bytes} bytes`)
   lines.push(`  git HEAD             ${measured.gitHead} (informational)`)
@@ -459,40 +381,27 @@ async function main() {
 
   const { changed, overruns, totalDelta } = compare(measured, stored)
   console.log('')
-  console.log(`baseline: ${relative(root, BASELINE_PATH)} (total ${stored.total}, ${stored.generatedAt}, HEAD ${stored.gitHead})`)
-
+  console.log(`baseline: ${relative(root, BASELINE_PATH)} (total ${stored.total})`)
+  for (const change of changed) {
+    console.log(`  ${change.code}: ${change.was} -> ${change.now} (${change.delta >= 0 ? '+' : ''}${change.delta})`)
+  }
   if (mode === 'check') {
-    console.log(`ratchet: total ${measured.total}, baseline ${stored.total} (${totalDelta > 0 ? '+' : ''}${totalDelta})`)
-    if (changed.length === 0) {
-      console.log('ratchet: per-code deltas: none')
-    } else {
-      for (const change of changed) {
-        console.log(`ratchet: ${change.code} ${change.was} -> ${change.now} (${change.delta > 0 ? '+' : ''}${change.delta})`)
-      }
-    }
     if (overruns.length > 0) {
+      console.error('')
       for (const overrun of overruns) console.error(`[ratchet] ${overrun}`)
-      console.error('[ratchet] FAIL: counters above baseline; fix the regressions or, for a deliberate increase, refresh with --write')
       return 1
     }
-    console.log('[ratchet] ok: no counter above baseline')
+    console.log(`ratchet: ok (${measured.total} diagnostics, baseline ${stored.total})`)
     return 0
   }
-
-  if (totalDelta === 0) {
-    console.log('delta: total 0 (matches baseline)')
-  } else {
-    console.log(`delta: total ${totalDelta > 0 ? '+' : ''}${totalDelta} vs baseline`)
-    if (overruns.length > 0) console.log('note: above baseline; --check would fail (default mode exits 0)')
-  }
+  console.log(`total: ${measured.total} (${totalDelta >= 0 ? '+' : ''}${totalDelta} vs baseline ${stored.total})`)
   return 0
 }
 
-main()
-  .then((code) => {
-    process.exitCode = code
-  })
-  .catch((error) => {
-    console.error(`[browser-baseline] ${error instanceof Error ? error.message : String(error)}`)
+main().then(
+  (code) => { process.exitCode = code },
+  (error) => {
+    console.error(`[typecheck-browser] ${error instanceof Error ? error.message : String(error)}`)
     process.exitCode = 2
-  })
+  }
+)

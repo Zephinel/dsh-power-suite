@@ -3,8 +3,8 @@
  * Repository gate:
  *   1. syntax-check the remaining checked-in JavaScript entries (src/client.js);
  *      TypeScript sources are parsed by the typecheck instead;
- *   2. no-build typecheck (`tsc --noEmit --strict`) over the TypeScript sources,
- *      and fail when an explicit `any` token re-enters them;
+ *   2. no-build typecheck (`tsc --noEmit --strict`) over the Host and browser
+ *      sources, and fail when an explicit `any` token re-enters them;
  *   3. validate the bundle manifest, exports, icon, locale, and cordis patch;
  *   4. built-entry smoke: the bundled Host sees its own package, and its update
  *      route reports the running version (not a bundle-relative 0.0.0);
@@ -79,7 +79,7 @@ function stripCommentsAndStrings(source) {
   return output
 }
 
-/** Count explicit `any` tokens in the Host TypeScript sources: a lexical tripwire, gated at 0. */
+/** Count explicit `any` tokens in the TypeScript sources: a lexical tripwire, gated at 0. */
 function countAnySites(files) {
   let count = 0
   for (const file of files) {
@@ -123,7 +123,7 @@ try {
   failures.push('typecheck failed: node node_modules/typescript/bin/tsc --noEmit')
 }
 if (typecheckPassed) {
-  console.log('typecheck: ok (tsc --noEmit --strict; browser entry opted out until the Phase 3 split completes)')
+  console.log('typecheck: ok (tsc --noEmit --strict over Host and browser sources; the browser profile gates next)')
   const anyBudget = 0
   const anySites = countAnySites(typeScriptSources)
   if (anySites > anyBudget) failures.push(`explicit-any budget exceeded: ${anySites} site(s) > ${anyBudget} allowed`)

@@ -55,7 +55,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "prepare": "npm run build",
-    "check": "npm run build && node scripts/check.mjs && npm run pack:check",
+    "check": "npm run build && node scripts/check.mjs && node scripts/typecheck-browser-baseline.mjs --check && npm run pack:check",
     "test": "node --test test/*.test.js",
     "typecheck": "tsc --noEmit",
     "typecheck:browser": "node scripts/typecheck-browser-baseline.mjs",
