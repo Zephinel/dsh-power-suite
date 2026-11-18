@@ -36,7 +36,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 ### Current gates (2026-11-18, Node 24.22.3)
 
 - `npm run build`: **`lib/index.js` 105.9 kB** (Host ESM bundle) and
-  **`lib/client.js` 937.0 kB** (ESM `src/client.js` + `src/browser/` bundled to a
+  **`lib/client.js` 938.5 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
 - `npm test`: **392 tests, 392 passed, 0 failed**, 28 test files — Host stores/routes
@@ -55,7 +55,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 - `rm -rf lib && node --test test/*.test.js`: **392/392** — the suite imports the
   `.ts` sources directly (Node >= 22.18 native type stripping), so the tests need
   no build.
-- `npm run check`: passed (`64 TypeScript modules, 1 JavaScript module(s), 28 test files`); it builds `lib/` first,
+- `npm run check`: passed (`68 TypeScript modules, 1 JavaScript module(s), 28 test files`); it builds `lib/` first,
   then runs the syntax checks, the typecheck, package-manifest validation, the
   built-entry smoke (update route reports `current=0.1.0`), local docs links, the
   Node suite and the release-notes gate, then `pack:check`.
@@ -116,7 +116,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   path must be restarted after a client-entry change (the 2026-11-18 restart
   resolved the observed ES-module boot failure); use an isolated instance when a
   restart is not possible. The npm artifact is unaffected.
-- `npm run typecheck:browser`: **1375** browser-profile diagnostics at this HEAD, matching
+- `npm run typecheck:browser`: **1211** browser-profile diagnostics at this HEAD, matching
   `scripts/browser-typecheck-baseline.json`; `--check` enforces the ratchet (no
   counter above baseline) without changing the main gate. The profile is
   `tsconfig.browser.json` (DOM lib, `types: []`, `dom.d.ts` excluded) and the

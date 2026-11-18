@@ -559,3 +559,20 @@ Lead's integration log. Remaining top regions: annotation controller 1,006,
 interrupted components 47, prompt-history preview 37, update check 37; the
 strict React inference's null-seed state errors remain for M5, and the browser
 profile is still report-only.
+
+
+**M5b progress (2026-11-18).** Four more regions moved out of `src/client.js`
+(now **12,019** lines): native session hover figures
+(`src/browser/native-session-hover-figures/install.ts`), the interrupted-session
+seats (`src/browser/interrupted-sessions/components.ts`), the prompt-history
+preview (`src/browser/prompt-history/preview.ts`) and the update-check UI
+(`src/browser/update-check/install.ts`, still driven by the existing pure
+`model.ts`). The browser baseline dropped **1,375 -> 1,211** (native figures 11->0,
+interrupted 59->0, prompt preview 57->0, update 37->0) and the TS module count is
+68; preview/update CSS, copy keys, slot ids and DOM markers are unchanged, and
+live smoke 4/4, interrupted 9/1/0, update-prompt 22/22 (injected harness) pass.
+Remaining top region: annotation controller 1,012, then composer gallery 24,
+presets menu 22, prompt history 20, draft attachment 17, interrupted copy/icons
+15, settings page 10, preset routing 10, artifacts 5; non-feature helpers 29 /
+panel 20 / plugin 15. The browser profile is still report-only and
+`@ts-nocheck` remains until M5a lands.
