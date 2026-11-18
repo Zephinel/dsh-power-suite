@@ -1192,6 +1192,40 @@ async function runSmoke({ page, results, state }) {
           ? style.textContent.includes('[data-psp-rail]') : false,
       }
     })()`)
+    // Click-select smoke: a green surface check can hide a broken pointer path (a
+    // regression where every click threw `Illegal invocation` still passed 6/6).
+    // Click one stable native element through the real CDP pointer and require a
+    // real selection popover, a still-active mode, and no new page error.
+    let clickSelect = 'click-select not run'
+    const clickErrorsBefore = page.pageErrors.length
+    const clickTarget = await page.eval(pageProbe.newSessionButton)
+    if (clickTarget === null) {
+      await results.skip('smoke-6-click-select', 'click-select smoke on a stable native element',
+        'no visible native New Session button (empty and full data both render it); the click path could not be exercised. Explicit SKIP, not a pass.')
+      clickSelect = 'click-select SKIPPED: no visible native New Session button'
+    } else {
+      await page.moveTo(clickTarget.x, clickTarget.y)
+      await sleep(150)
+      await page.clickAt(clickTarget.x, clickTarget.y)
+      await page.waitFor(`!!document.querySelector('[data-psa-popover]')`, { timeout: 8000, label: 'click-select popover' })
+      await sleep(300)
+      const activeAfterClick = await page.evaluate(`document.documentElement.getAttribute('data-psa-active')`)
+      assertEqual(activeAfterClick, 'true', 'click-select smoke: the mode must stay active after selecting an element')
+      assertEqual(page.pageErrors.length, clickErrorsBefore,
+        `click-select smoke raised page error(s): ${page.pageErrors.slice(clickErrorsBefore).join(' | ')}`)
+      const clickSelectFacts = await page.evaluate(`(() => {
+        const popover = document.querySelector('[data-psa-popover]')
+        return { present: popover !== null, hasTarget: popover !== null && (popover.innerText || '').trim().length > 0 }
+      })()`)
+      assert(clickSelectFacts.present, 'click-select smoke: the native click did not open [data-psa-popover]')
+      assert(clickSelectFacts.hasTarget, 'click-select smoke: the selection popover has no target text')
+      clickSelect = 'click-select opened [data-psa-popover], mode stayed active, page errors +0'
+      // Clear the selection without leaving the mode; the exit block below handles mode off.
+      await page.pressKey('escape')
+      await sleep(250)
+      const activeAfterEscape = await page.evaluate(`document.documentElement.getAttribute('data-psa-active')`)
+      assertEqual(activeAfterEscape, 'true', 'click-select smoke: Esc on the selection must not leave the annotation mode')
+    }
     const exit = await page.findRect('[data-psa-exit]')
     if (exit !== null) await page.clickAt(exit.x, exit.y)
     else await page.pressKey('escape')
@@ -1230,7 +1264,7 @@ async function runSmoke({ page, results, state }) {
     if (probe.pspRail) {
       assertEqual(probe.pspDisplay, 'none', 'the native prompt-history rail is visible while the mode is active')
     }
-    return `rail inside [data-shell-overlay], launcher ×${probe.launchers}, prompt rail ${probe.pspRail ? `display=${probe.pspDisplay}` : 'absent (hidden rule present)'}`
+    return `rail inside [data-shell-overlay], launcher ×${probe.launchers}, prompt rail ${probe.pspRail ? `display=${probe.pspDisplay}` : 'absent (hidden rule present)'}; ${clickSelect}`
   })
 }
 
