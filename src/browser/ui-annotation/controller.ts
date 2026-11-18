@@ -2184,7 +2184,7 @@ export function createAnnotationController(t: DshTranslate, ctx: AnnotationContr
     const resolvesSecond = statusResolveCount
     return {
       ok: true,
-      id: ref.id,
+      id: typeof ref.id === 'string' ? ref.id : undefined,
       before,
       firstDelta: afterFirst - before,
       secondDelta: afterSecond - afterFirst,

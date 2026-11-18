@@ -2095,13 +2095,14 @@ if (ui === undefined) {
   test('A2/F-2: the Session seat bridges cwd and record capture prefers it over the ctx fallback', () => {
     const source = client.source
     assert.equal(typeof source, 'string')
-    const seatStart = source.indexOf('function AnnotationSessionSeat')
+    const installSource = readFileSync(new URL('../src/browser/ui-annotation/install.ts', import.meta.url), 'utf8')
+    const seatStart = installSource.indexOf('function AnnotationSessionSeat')
     assert.ok(seatStart >= 0, 'the annotation Session seat exists')
-    const seatEnd = source.indexOf('\n    function ', seatStart + 'function AnnotationSessionSeat'.length)
-    const seat = source.slice(seatStart, seatEnd > 0 ? seatEnd : source.length)
+    const seatEnd = installSource.indexOf('\n/**', seatStart + 'function AnnotationSessionSeat'.length)
+    const seat = installSource.slice(seatStart, seatEnd > 0 ? seatEnd : installSource.length)
     assert.ok(seat.includes('props.useSessions'), 'the seat must read the slot contract useSessions hook')
     assert.ok(seat.includes('sessionCwd'), 'the seat must derive the Session cwd')
-    assert.ok(seat.includes('annotationBridge.sessionCwd'), 'the seat must mirror cwd into the bridge')
+    assert.ok(seat.includes('bridge.sessionCwd'), 'the seat must mirror cwd into the bridge')
     const controllerSource = readFileSync(new URL('../src/browser/ui-annotation/controller.ts', import.meta.url), 'utf8')
     const identityStart = controllerSource.indexOf('function sessionIdentity')
     const identityEnd = controllerSource.indexOf('\n  function ', identityStart + 'function sessionIdentity'.length)
@@ -2278,10 +2279,11 @@ if (ui === undefined) {
   test('T9: the chip source hides its group header and self-identifies candidates instead', () => {
     const source = client.source
     assert.equal(typeof source, 'string')
-    const start = source.indexOf('function createAnnotationChipSource')
+    const installSource = readFileSync(new URL('../src/browser/ui-annotation/install.ts', import.meta.url), 'utf8')
+    const start = installSource.indexOf('function createAnnotationChipSource')
     assert.ok(start >= 0, 'the chip source factory exists')
-    const nextFunction = source.indexOf('\n    function ', start + 'function createAnnotationChipSource'.length)
-    const factory = source.slice(start, nextFunction > 0 ? nextFunction : source.length)
+    const nextFunction = installSource.indexOf('\n/**', start + 'function createAnnotationChipSource'.length)
+    const factory = installSource.slice(start, nextFunction > 0 ? nextFunction : installSource.length)
     assert.ok(factory.includes('showGroupTitle: false'),
       'the source must not render a custom group header (the shell has no annotation menu title and the raw source name would leak)')
     assert.ok(factory.includes('current.chipCandidates(sessionId)'), 'candidates come from the controller helper')
@@ -2399,6 +2401,7 @@ if (ui === undefined) {
 
   test('A3/T21: chip hover preview is a pointer-transparent tooltip backed by the local record store', () => {
     const source = client.source
+    const installSource = readFileSync(new URL('../src/browser/ui-annotation/install.ts', import.meta.url), 'utf8')
     const componentsSource = readFileSync(new URL('../src/browser/ui-annotation/components.ts', import.meta.url), 'utf8')
     assert(componentsSource.includes('function AnnotationChipPreview'), 'the chip hover preview component exists')
     const componentStart = componentsSource.indexOf('function AnnotationChipPreview')
@@ -2418,11 +2421,11 @@ if (ui === undefined) {
     assert(controller.includes('chipPreviewModel'), 'the preview reads the local collection, not the network')
     assert(ANNOTATION_CSS.includes('.psa-chip-preview{') && /\.psa-chip-preview\{[^}]*pointer-events:none/.test(ANNOTATION_CSS),
       'the preview CSS must be pointer-transparent')
-    assert(source.includes("document.addEventListener('pointerout'"), 'leaving the chip hides the preview')
-    assert(source.includes("document.addEventListener('pointermove'"), 'a stationary re-show after Esc is supported')
+    assert(installSource.includes("document.addEventListener('pointerout'"), 'leaving the chip hides the preview')
+    assert(installSource.includes("document.addEventListener('pointermove'"), 'a stationary re-show after Esc is supported')
     assert(controllerSource.includes('function onChipScroll'), 'scrolling a chip ancestor hides the preview')
-    assert.ok(source.includes('const hadPreview = annotationController.hideChipPreview()')
-      && source.includes('if (hadPreview) {'),
+    assert.ok(installSource.includes('const hadPreview = controller.hideChipPreview()')
+      && installSource.includes('if (hadPreview) {'),
       'Esc closes the chip preview before the mode Esc ladder')
   })
 

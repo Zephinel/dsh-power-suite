@@ -1276,9 +1276,9 @@ function AnnotationModifierSettingsPopover(props: AnnotationSurfaceProps) {
     }
     const onPointerDown = (event: AnnotationUiEvent) => {
       const target = event.target
-      if (popoverRef.current !== null && popoverRef.current.contains(target)) return
+      if (popoverRef.current !== null && popoverRef.current.contains(target as never)) return
       const trigger = document.querySelector('[data-psa-open-modifier-settings]')
-      if (trigger !== null && trigger.contains(target)) return
+      if (trigger !== null && trigger.contains(target as never)) return
       controller.closeSettingsOpen()
     }
     // A3/T53/T55: document-level Escape closes the popover (no nested menu now).
@@ -1289,13 +1289,13 @@ function AnnotationModifierSettingsPopover(props: AnnotationSurfaceProps) {
       controller.closeSettingsOpen()
     }
     const close = () => controller.closeSettingsOpen()
-    document.addEventListener('keydown', onDocumentKeyDown, true)
-    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('keydown', onDocumentKeyDown as never, true)
+    document.addEventListener('pointerdown', onPointerDown as never, true)
     window.addEventListener('resize', close)
     window.addEventListener('scroll', close, true)
     return () => {
-      document.removeEventListener('keydown', onDocumentKeyDown, true)
-      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('keydown', onDocumentKeyDown as never, true)
+      document.removeEventListener('pointerdown', onPointerDown as never, true)
       window.removeEventListener('resize', close)
       window.removeEventListener('scroll', close, true)
     }
@@ -1945,3 +1945,6 @@ function AnnotationNoteEditor(props: AnnotationSurfaceProps) {
     AnnotationRail
   }
 }
+
+/** The built component set returned by the factory. */
+export type AnnotationComponentsApi = ReturnType<typeof createAnnotationComponents>

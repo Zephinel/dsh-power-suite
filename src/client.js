@@ -153,6 +153,7 @@ import {
 } from './browser/ui-annotation/surface.ts'
 import { ANNOTATION_CSS } from './browser/ui-annotation/styles.ts'
 import { createAnnotationComponents } from './browser/ui-annotation/components.ts'
+import { createUiAnnotationInstaller } from './browser/ui-annotation/install.ts'
 import { createAnnotationController } from './browser/ui-annotation/controller.ts'
 import {
   ANNOTATION_CHIP_ORDER,
@@ -3805,12 +3806,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     /** @type {import('./browser/ui-annotation/types.ts').AnnotationBridge} */
     const annotationBridge = { sessionId: null, inputActions: null, sessionCwd: null }
 
-    /** Install guard: a remount must never register the surface twice. */
-    let annotationInstalled = false
-
-    /** The controller singleton, or `null` while the feature is uninstalled. */
-    let annotationController = null
-
     // Remix Icon path data (Apache-2.0, https://remixicon.com), inlined so the
     // mode needs no icon package at runtime.
     const REMIX_FOCUS_3_LINE = 'M12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2ZM12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4ZM12 8C14.2091 8 16 9.79086 16 12C16 14.2091 14.2091 16 12 16C9.79086 16 8 14.2091 8 12C8 9.79086 9.79086 8 12 8Z'
@@ -3830,139 +3825,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
 
 
-    /**
-     * Invisible Composer seat that keeps the insertion bridge current and resets
-     * selection state when the viewed Session changes.
-     * @param {object} props - session slot props.
-     * @returns {object} a hidden anchor element.
-     */
-    function AnnotationSessionSeat(props) {
-      const { sessionId, inputActions } = props
-      // Session-scoped slots receive the global `useSessions` standard hook. The
-      // annotation overlay itself is not a slot, so this seat mirrors the Session's
-      // workspace identity (cwd) into the bridge for record capture (F-2). The hook
-      // presence is fixed by the slot contract for this seat's lifetime.
-      const useSessions = typeof props.useSessions === 'function' ? props.useSessions : null
-      const sessionsList = useSessions !== null ? useSessions((state) => state) : null
-      const sessionCwd = sessionId !== undefined && sessionsList !== null && typeof sessionsList === 'object'
-        && sessionsList.byId !== null && typeof sessionsList.byId === 'object'
-        && typeof sessionsList.byId[sessionId]?.cwd === 'string'
-        && sessionsList.byId[sessionId].cwd.length > 0
-        ? sessionsList.byId[sessionId].cwd
-        : null
-      React.useEffect(() => {
-        annotationBridge.sessionId = typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null
-        annotationBridge.inputActions = inputActions ?? null
-        annotationBridge.sessionCwd = sessionCwd
-        if (annotationController !== null) annotationController.sessionChanged(annotationBridge.sessionId)
-        return () => {
-          // The bridge is all-or-nothing: a session id without its Composer actions (or the
-          // reverse) would keep collection scope and insertion decisions stale after this
-          // seat unmounts (e.g. leaving the conversation for the Plugins view).
-          annotationBridge.sessionId = null
-          annotationBridge.inputActions = null
-          annotationBridge.sessionCwd = null
-          if (annotationController !== null) annotationController.sessionChanged(null)
-        }
-      }, [sessionId, inputActions, sessionCwd])
-      return React.createElement('span', {
-        style: { display: 'none' },
-        'aria-hidden': true
-      })
-    }
-
-    /**
-     * Build the `@` trigger source that owns annotation reference chips (A3/T9).
-     *
-     * The source receives the controller lazily so registration can happen before
-     * the controller effect settles; every callback resolves the current
-     * controller instance. `codec.serialize` throws for a deleted record so the
-     * shell blocks the send instead of silently downgrading (D9).
-     * @param {() => object | null} controllerAt - current annotation controller getter.
-     * @param {Function} t - namespace-bound translate.
-     * @returns {object} trigger source for `ctx.inputTriggers.registerSource`.
-     */
-    function createAnnotationChipSource(controllerAt, t) {
-      /** @returns {object | null} the current controller. */
-      const controller = () => {
-        try {
-          return controllerAt()
-        } catch {
-          return null
-        }
-      }
-      return {
-        trigger: ANNOTATION_CHIP_TRIGGER,
-        name: ANNOTATION_CHIP_SOURCE,
-        order: ANNOTATION_CHIP_ORDER,
-        // The shell's slash-menu dictionary has no annotation title, and locale
-        // registration cannot take over another owner's namespace, so a custom group
-        // header would render the raw source name. Native reference sources use the
-        // same no-title treatment; candidates self-identify via `chip.candidateLabel`.
-        showGroupTitle: false,
-        /**
-         * Current-Session candidates only; an empty array hides the group (D8).
-         * @param {object} session - composer Session projection.
-         * @returns {Promise<Array<object>>} candidates.
-         */
-        async candidates(session) {
-          const current = controller()
-          if (current === null || session === null || typeof session !== 'object') return []
-          const sessionId = typeof session.sessionId === 'string' ? session.sessionId : ''
-          if (sessionId.length === 0) return []
-          return current.chipCandidates(sessionId)
-        },
-        /**
-         * A menu pick inserts the record's chip through the scoped input pipeline.
-         * @param {object} pick - pipeline pick (`candidate`, `session`, `span`).
-         * @returns {object | undefined} insert outcome, or undefined for a stale candidate.
-         */
-        onPick(pick) {
-          const current = controller()
-          if (current === null || pick === null || typeof pick !== 'object') return undefined
-          const candidate = pick.candidate !== null && typeof pick.candidate === 'object' ? pick.candidate : null
-          const value = candidate === null ? null : candidate.value
-          if (typeof value !== 'string') return undefined
-          const record = current.chipRecord(value)
-          if (record === null) return undefined
-          return { insert: annotationChipRefOf(record) }
-        },
-        /**
-         * A chip click opens the record's detail card (single) or the rail
-         * collection view (batch group).
-         * @param {object} _session - composer Session projection.
-         * @param {{ ref: string }} reference - chip reference.
-         * @returns {boolean} whether the preview was accepted.
-         */
-        openReference(_session, reference) {
-          const current = controller()
-          if (current === null || reference === null || typeof reference !== 'object') return false
-          return current.openChipReference(reference.ref)
-        },
-        codec: {
-          /**
-           * Clipboard projection of one chip.
-           * @param {string} ref - chip ref.
-           * @returns {string} clipboard text.
-           */
-          clipboardText: (ref) => {
-            const current = controller()
-            return current === null ? '' : current.chipClipboardText(ref)
-          },
-          /**
-           * Model text for one chip; failure rejects the send (never downgraded).
-           * @param {string} ref - chip ref.
-           * @returns {Promise<string>} serialized model text.
-           */
-          serialize: async (ref) => {
-            const current = controller()
-            if (current === null) throw new Error(t('feedback.chipMissing'))
-            return current.serializeChip(ref)
-          }
-        }
-      }
-    }
-
     /** The annotation React surface, built once with the entry's glyph + icons. */
     const annotationComponents = createAnnotationComponents({
       React: /** @type {typeof import('react')} */ (React),
@@ -3981,127 +3843,14 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       }
     })
 
-    /**
-     * Install the browser-only UI element annotation mode.
-     * @param {object} ctx - client root context.
-     * @returns {void}
-     */
-    function installUiAnnotation(ctx) {
-      if (annotationInstalled) return
-      annotationInstalled = true
-      const t = ctx.locale.bind(ANNOTATION_NS)
-      ctx.effect(() => ctx.locale.register(ANNOTATION_NS, {
-        en: ANNOTATION_EN,
-        zh: ANNOTATION_ZH
-      }), 'power-suite: ui annotation dictionaries')
-      ctx.effect(() => {
-        const style = document.createElement('style')
-        style.setAttribute('data-power-suite-css', 'ui-annotation')
-        style.textContent = ANNOTATION_CSS
-        document.head.appendChild(style)
-        return () => style.remove()
-      }, 'power-suite: ui annotation stylesheet')
-      ctx.effect(() => {
-        try {
-          annotationController = createAnnotationController(
-            t,
-            /** @type {import('./browser/ui-annotation/types.ts').AnnotationControllerContext} */ (ctx),
-            { bridge: annotationBridge }
-          )
-        } catch (error) {
-          // The guard must not wedge this factory into a "installed" state with no controller.
-          annotationInstalled = false
-          throw error
-        }
-        return () => {
-          if (annotationController !== null) annotationController.dispose()
-          annotationController = null
-          annotationInstalled = false
-        }
-      }, 'power-suite: ui annotation controller')
-      ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-        name: 'shell.overlay',
-        id: ANNOTATION_OVERLAY_ID
-      }, (props) => React.createElement(annotationComponents.AnnotationOverlay, {
-        ...props,
-        t,
-        controller: annotationController
-      }))), 'power-suite: ui annotation overlay')
-      ctx.effect(() => ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({
-        name: 'conversation.input.overlay',
-        id: ANNOTATION_SEAT_ID,
-        order: 60
-      }, AnnotationSessionSeat)), 'power-suite: ui annotation composer seat')
-      // A3/T21: delegated composer-chip hover preview listeners (they only fire on
-      // chips the shell renders with `data-composer-chip="ui-annotation"`, so the
-      // shell itself is untouched and native chips are ignored).
-      ctx.effect(() => {
-        const onPointerOver = (event) => {
-          if (annotationController !== null) annotationController.onChipPointerOver(event)
-        }
-        const onPointerOut = (event) => {
-          if (annotationController !== null) annotationController.onChipPointerOut(event)
-        }
-        const onPointerMove = (event) => {
-          // Re-show the preview after it was dismissed (Esc) without requiring the
-          // pointer to leave and re-enter the chip: pointerover alone does not fire
-          // when the pointer is already inside the chip.
-          if (annotationController !== null) annotationController.onChipPointerOver(event)
-        }
-        const onKeyDown = (event) => {
-          if (event.key !== 'Escape' || annotationController === null) return
-          // Esc first closes the transient chip tooltip/× and must not also clear a
-          // selection or leave the mode in the same keypress.
-          const hadPreview = annotationController.hideChipPreview()
-          annotationController.hideChipAction()
-          if (hadPreview) {
-            event.preventDefault()
-            event.stopPropagation()
-            if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation()
-          }
-        }
-        const onScroll = (event) => {
-          if (annotationController !== null) annotationController.onChipScroll(event)
-        }
-        document.addEventListener('pointerover', onPointerOver, true)
-        document.addEventListener('pointerout', onPointerOut, true)
-        document.addEventListener('pointermove', onPointerMove, true)
-        document.addEventListener('keydown', onKeyDown, true)
-        window.addEventListener('scroll', onScroll, true)
-        return () => {
-          document.removeEventListener('pointerover', onPointerOver, true)
-          document.removeEventListener('pointerout', onPointerOut, true)
-          document.removeEventListener('pointermove', onPointerMove, true)
-          document.removeEventListener('keydown', onKeyDown, true)
-          window.removeEventListener('scroll', onScroll, true)
-        }
-      }, 'power-suite: ui annotation chip hover preview')
-      // A3/T9: the composer chip pipeline is injected dynamically so the plugin
-      // keeps working on embeds without the chat UI. `conversation`+`inputTriggers`
-      // arrive when the composer services are installed; the source registration
-      // dies with the dynamic inject's fiber.
-      try {
-        ctx.inject(['conversation', 'inputTriggers'], (scoped) => {
-          const scope = scoped !== undefined && scoped !== null && typeof scoped.get === 'function' ? scoped : ctx
-          let conversation = null
-          let inputTriggers = null
-          try {
-            conversation = scope.get('conversation')
-            inputTriggers = scope.get('inputTriggers')
-          } catch {
-            conversation = null
-            inputTriggers = null
-          }
-          if (conversation === undefined || conversation === null || inputTriggers === undefined || inputTriggers === null) return
-          if (annotationController !== null) annotationController.attachComposerServices({ conversation, inputTriggers })
-          const register = typeof scope.effect === 'function' ? scope.effect.bind(scope) : ctx.effect.bind(ctx)
-          register(() => inputTriggers.registerSource(createAnnotationChipSource(() => annotationController, t)),
-            'power-suite: ui annotation chip source')
-        })
-      } catch {
-        // A missing dynamic-inject API leaves the plain-text insertion path (D9).
-      }
-    }
+    /** The per-factory annotation installer (install guard + controller + seats). */
+    const uiAnnotationInstaller = createUiAnnotationInstaller({
+      React: /** @type {typeof import('react')} */ (React),
+      components: annotationComponents,
+      copy: { en: ANNOTATION_EN, zh: ANNOTATION_ZH },
+      bridge: annotationBridge
+    })
+
     //#endregion
 
     //#region feature: composer image gallery
@@ -4563,7 +4312,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       installSettingsPage(ctx)
       installComposerImageGallery(ctx)
       installUpdatePrompt(/** @type {import('./browser/update-check/install.ts').UpdateCheckContext} */ (ctx))
-      installUiAnnotation(ctx)
+      uiAnnotationInstaller.install(/** @type {import('./browser/ui-annotation/install.ts').UiAnnotationContext} */ (ctx))
       // The entry context is documented as a loose object; the sidebar module
       // declares the narrow slice it reads, so assert once at this boundary.
       sidebarWidthController.install(/** @type {import('./browser/sidebar-width/install.ts').SidebarWidthContext} */ (ctx))
@@ -4579,10 +4328,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
       && typeof testHookHost.__POWER_SUITE_TEST_HOOKS__ === 'object'
       && testHookHost.__POWER_SUITE_TEST_HOOKS__ !== null) {
       testHookHost.__POWER_SUITE_TEST_HOOKS__.uiAnnotation = {
-        debugFallbackScanProbe: () => (annotationController !== null && annotationController !== undefined
-          && typeof annotationController.debugFallbackScanProbe === 'function'
-          ? annotationController.debugFallbackScanProbe()
-          : { ok: false, reason: 'controller unavailable' })
+        debugFallbackScanProbe: () => uiAnnotationInstaller.debugFallbackScanProbe()
       }
 
       // Sidebar width: only the attach probe the browser E2E reads remains a
