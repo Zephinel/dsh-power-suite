@@ -318,6 +318,18 @@ with the hooks (no behavior assertions lost), so the suite is 385 tests. The
 planned order for the annotation rest: identity, records, reducer, serializers,
 anchors, surface/resolution, then the annotation seam retirement in its own commit.
 
+**3n progress (2026-11-18).** The annotation identity and record-store slices
+landed: `identity.ts` (selector candidates, element refs, locators, stable
+ancestors/unique selector, scoring; plus the pure anchor sanitizers and
+`annotationTagPath`/`annotationStableSelectorCandidate` used by the controller)
+and `records.ts` (v2/v3 document normalise/parse/serialize, collection CRUD,
+undo, groups, counts/filters and include/order helpers). 40 hook keys now come
+from modules while the 112-key hook block stays byte-identical as a pass-through;
+`src/client.js` is ~21.1k lines. Differential checks: 588 identity + 1,648
+record cases against the old seam. The planned order for the annotation rest:
+reducer, serializers, anchors, surface/resolution, then the annotation seam
+retirement in its own commit.
+
 **3m progress (2026-11-18).** Two follow-ups landed: `dwCacheHitPercent` is now a
 total function (inconsistent/negative/non-finite cache data returns `null`
 instead of looping forever; valid outputs unchanged, with a 7,389-case

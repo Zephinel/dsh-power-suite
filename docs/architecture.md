@@ -12,7 +12,7 @@ Browser-side pure models live under
 model and its stable-version math, the sidebar-width decisions and cache
 document, the composer-gallery index/wheel model, the Running & recent
 pending-interaction/activity, stats/pin/row-menu derivation, or the annotation
-settings/sanitizer/format/geometry helpers):
+settings/sanitizer/format/geometry/identity/record-store helpers):
 
 ```
 src/index.ts            Host entry (Node)

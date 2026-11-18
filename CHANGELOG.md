@@ -16,6 +16,8 @@ All notable changes to this repository are documented here. The format follows
 
 ### Changed
 
+- **Annotation identity and record-store models (Phase 3n).** The identity/selector/locator helpers (plus the pure anchor sanitizers) moved to `src/browser/ui-annotation/identity.ts`, and the record store (normalise/parse/serialize, CRUD, undo, groups, counts/filters) moved to `records.ts`. 40 hook keys now come from modules; the 112-key annotation hook stays byte-identical as a pass-through, with 588 identity + 1,648 record differential checks against the old seam. `src/client.js` is ~21.1k lines; no behavior or copy changes.
+
 - **Sidebar-width hook trimmed to the e2e probe (Phase 3m).** The `sidebarWidth` vm hook now exposes only the read-only attach `probe`; its constants and pure helpers are asserted directly from `src/browser/sidebar-width/model.ts`. Only the `uiAnnotation` hook and the sidebar probe remain.
 
 - **Dynamic-Workspaces stats/pin/row-menu models (Phase 3l).** The session-figure formatters and copy dictionaries, the card-owned pin cache/effective/panel-row logic (with shared row primitives in `rows.ts`) and the row-menu delegation/resolution moved to `src/browser/dynamic-workspaces/{stats,pin,rows,row-menu}.ts`; the three vm hooks were deleted and their tests import the modules directly. Only the `uiAnnotation` and `sidebarWidth` hooks remain; `src/client.js` is ~22.8k lines. Three seam-only tests were removed (no behavior assertions lost); no behavior, copy or storage-format changes.

@@ -1695,8 +1695,9 @@ route and no service, so a Host that predates this version still serves it.
 
 Implementation: browser region [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js) under its
 `feature: ui element annotation` region; the modifier-settings helpers live in
-`src/browser/ui-annotation/{settings,text,format,geometry}.ts`, the remaining pure
-model helpers stay in the same region with the shared test seam, tests
+`src/browser/ui-annotation/{settings,text,format,geometry,identity,records}.ts`,
+the remaining pure model helpers stay in the same region with the shared test
+seam, tests
 [`test/ui-annotation.test.js`](../test/ui-annotation.test.js), browser
 acceptance `test/browser/`.
 
