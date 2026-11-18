@@ -418,12 +418,13 @@ shell tokens, dark #2C2C2E) and S12 passes 7/0/0; the path also exposed a real
 
 **3y progress (2026-11-18).** Owner visual decisions landed: annotation
 surfaces follow the theme (light shell surface/label tokens, dark #2C2C2E,
-S12 7/0/0), and the dark atmosphere was softened toward the light-mode pastel
-reference (canvas `saturate(1.32) brightness(1.28)`, wrapper opacity 0.68 base /
-0.78 hover, white veil scrim 0.14/0.07); `b4-5` was updated to the softened
-contract (screen blend, light scrim, colorful pastel, opacity range) and passes
-in the live full run (card sat 0.466, Workspace/Session 0.479). Other live
-full-run failures (`b3-1/b3-2`, `b5-5`, `c2-1`, `c4-4`) are intermittent
+S12 7/0/0), and the dark atmosphere was iterated toward the light-mode pastel
+reference: final recipe is screen blend with `saturate(1.18) brightness(1.16)`,
+wrapper opacity 0.48 base / 0.56 hover, and a white veil scrim 0.30/0.18
+(earlier 0.68/0.78 + 0.14/0.07 was still too strong versus light mode; a
+0.42/1.12 variant dropped dark title contrast to 2.51, so the final keeps the
+3.0 readability floor). `b4-5` and `b4-9` pass in the live full run. Other live
+full-run failures (`b1-3`, `b3-1/b3-2`, `b5-5`, `c2-1`, `c4-4`) are intermittent
 GUI-data/state issues, not this change. The annotation click-selection
 regression from the identity extraction remains covered by the new
 click-select smoke.

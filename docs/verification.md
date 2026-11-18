@@ -70,13 +70,15 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   * sidebar full (live, after the harness fixes): `b2-3` and `f6-1` are fixed
     (the former passed a title object instead of `.title.text`; the latter read
     the DOM before React committed and now samples after commit with bounded
-    polling and only counts the shell spinner). `b4-5` also passes after the
-    owner-requested dark-atmosphere softening (pastel screen blend, white veil
-    scrim, opacity 0.68/0.78; the run measured card sat 0.466, Workspace/Session
-    0.479). The live full run still varies with GUI data/state (`b3-1/b3-2`,
-    `b5-5`, `c2-1`, `c4-4` were observed intermittently), so its pass count is
-    not a stable single number; isolated full is data-starved, isolated
-    `--layout` is **12/12**, live `--interrupted` is **9 PASS / 1 SKIP / 0 FAIL**.
+    polling and only counts the shell spinner). `b4-5` and `b4-9` pass after the
+    owner-requested very soft dark-atmosphere recipe (screen blend,
+    `saturate(1.18) brightness(1.16)`, wrapper opacity 0.48 base / 0.56 hover,
+    white veil scrim 0.30/0.18; dark title contrast stays at the harness's 3.0
+    floor). The live full run still varies with GUI data/state (`b1-3`,
+    `b3-1/b3-2`, `b5-5`, `c2-1`, `c4-4` were observed intermittently), so its
+    pass count is not a stable single number; isolated full is data-starved,
+    isolated `--layout` is **12/12**, live `--interrupted` is
+    **9 PASS / 1 SKIP / 0 FAIL**.
   * annotation: after the harness fixes `--scenario 4` is **7/0/0** (composer is
     intentionally not a selection target, so the three surfaces now exclude it),
     `--scenario 13` is **7 PASS / 1 SKIP**, `--scenario 10` is **8/0/0** with the

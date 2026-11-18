@@ -3068,10 +3068,10 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       for (const [label, row, atmos, content] of rows) {
         assert(row && atmos, `${label}: atmosphere missing in dark theme`)
         assertEqual(atmos.canvas.mixBlendMode, 'screen', `${label}: dark theme must keep the light-adding screen blend`)
-        assert(atmos.canvas.filter.includes('saturate(1.32)'), `${label}: dark theme must use the softened pastel saturation (${atmos.canvas.filter})`)
-        assert(atmos.canvas.filter.includes('brightness(1.28)'), `${label}: dark theme must stay luminous (${atmos.canvas.filter})`)
+        assert(atmos.canvas.filter.includes('saturate(1.18)'), `${label}: dark theme must use the soft pastel saturation (${atmos.canvas.filter})`)
+        assert(atmos.canvas.filter.includes('brightness(1.16)'), `${label}: dark theme must stay luminous (${atmos.canvas.filter})`)
         assert(atmos.canvas.avgSaturationStrong >= 0.28, `${label}: softened pastel atmosphere must stay colorful (blob-core saturation ${atmos.canvas.avgSaturationStrong})`)
-        assert(atmos.opacity >= 0.62 && atmos.opacity <= 0.82, `${label}: dark theme atmosphere opacity must be the softened range (${atmos.opacity})`)
+        assert(atmos.opacity >= 0.42 && atmos.opacity <= 0.60, `${label}: dark theme atmosphere opacity must be the soft range (${atmos.opacity})`)
         assert(atmos.scrim !== null && /rgba\(255, 255, 255/.test(atmos.scrim.backgroundImage), `${label}: dark theme scrim must be a light veil, not a dark one (${atmos.scrim?.backgroundImage})`)
         details.push(`${label} sat ${atmos.canvas.avgSaturation} opacity ${atmos.opacity} blend ${atmos.canvas.mixBlendMode}`)
       }
@@ -3126,7 +3126,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       assert(dark && dark.card, 'no current card row to measure in dark mode')
       assertEqual(dark.card.blend, 'screen', 'dark theme must keep the screen gas blend')
       assert(dark.card.scrim[0] >= 200 && dark.card.scrim[1] >= 200, `dark theme must use the softened light veil scrim (got rgb(${dark.card.scrim.slice(0, 3).join(',')}))`)
-      assert(dark.card.opacity >= 0.62 && dark.card.opacity <= 0.82, `dark theme atmosphere opacity must be in the softened range (got ${dark.card.opacity})`)
+      assert(dark.card.opacity >= 0.42 && dark.card.opacity <= 0.60, `dark theme atmosphere opacity must be in the soft range (got ${dark.card.opacity})`)
       assert(dark.card.title.contrast >= 3.0, `dark title contrast ${dark.card.title.contrast}:1 must stay readable on the softened pill`)
       return `${summaries.join('; ')}; dark softened: blend ${dark.card.blend}, scrim rgb(${dark.card.scrim.slice(0, 3).join(',')}), opacity ${dark.card.opacity}, title ${dark.card.title.contrast}:1`
     } finally {
