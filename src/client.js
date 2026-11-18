@@ -31,6 +31,7 @@ import {
 import { copyArtifactContent, copyText } from './browser/artifacts/clipboard.ts'
 import { ARTIFACTS_NS } from './browser/artifacts/copy.ts'
 import { createArtifactsComponents } from './browser/artifacts/panel.ts'
+import { createWorkspacePresets } from './browser/workspace-presets/install.ts'
 import { REMIX_BOOK_OPEN_LINE, REMIX_DOWNLOAD_LINE, REMIX_FILE_COPY_LINE, REMIX_FILE_LINE, REMIX_LINK } from './browser/remix-icons.ts'
 import { createInterruptedSessionComponents } from './browser/interrupted-sessions/components.ts'
 import { createPromptHistoryPreview } from './browser/prompt-history/preview.ts'
@@ -293,323 +294,13 @@ window.__ModuleLoader__.load({
     const testHookHost = globalThis
 
 
-    //#region feature: workspace default presets — copy and routes
-    /** Copy namespace for the Workspace default-preset menu. */
-    const PRESET_NS = 'workspacePresets'
-
-    /** Exact routes the Host half serves for the override map. */
-    const PRESET_GET_ROUTE = browserRoute(ROUTES.workspacePresetsGet)
-    const PRESET_SET_ROUTE = browserRoute(ROUTES.workspacePresetsSet)
-
-    const PRESET_EN = {
-      'menu.followGlobal': 'Follow the global default',
-      'menu.followGlobalCurrent': 'Follow the global default (currently {name})',
-      'menu.current': 'Default agent preset: {name}',
-      'preset.standard': 'Standard mode',
-      'preset.ptc': 'PTC mode',
-      'preset.minimal': 'Minimal mode',
-      'preset.cordis': 'Creator mode',
-      'menu.currentMark': '{name} (current)',
-      'menu.unavailableMark': '{name} (unavailable)',
-      'menu.globalDefault': 'Global default',
-      'menu.loadFailed': 'Could not read agent presets',
-      'menu.saveFailed': 'Could not save the default agent preset',
-      'menu.saved': 'Default agent preset saved'
-    }
-    const PRESET_ZH = {
-      'menu.followGlobal': '跟随全局默认',
-      'menu.followGlobalCurrent': '跟随全局默认（当前为 {name}）',
-      'menu.current': '默认 Agent 预设：{name}',
-      'preset.standard': '标准模式',
-      'preset.ptc': 'PTC 模式',
-      'preset.minimal': '极简模式',
-      'preset.cordis': '创造模式',
-      'menu.currentMark': '{name}（当前）',
-      'menu.unavailableMark': '{name}（不可用）',
-      'menu.globalDefault': '全局默认',
-      'menu.loadFailed': '无法读取 Agent 预设',
-      'menu.saveFailed': '无法保存默认 Agent 预设',
-      'menu.saved': '默认 Agent 预设已保存'
-    }
-    //#endregion
 
 
 
 
 
 
-    //#region feature: workspace default presets — menu
-    /** Built-in preset ids whose display names the host UI localizes itself. @type {Record<string, string>} */
-    const BUILT_IN_NAME_KEYS = {
-      standard: 'preset.standard',
-      ptc: 'preset.ptc',
-      minimal: 'preset.minimal',
-      cordis: 'preset.cordis'
-    }
 
-    /**
-     * Display one preset's name: the published custom name when it has one,
-     * the host's built-in label for a built-in id, else the raw id.
-     * @param {Function} t - namespace-bound translate.
-     * @param {{ id: string, name?: string }} preset - roster row or stored id.
-     * @returns {string} the display name.
-     */
-    function presetDisplayName(t, preset) {
-      if (typeof preset.name === 'string' && preset.name.length > 0) return preset.name
-      const key = BUILT_IN_NAME_KEYS[preset.id]
-      return key === undefined ? preset.id : t(key)
-    }
-
-    /**
-     * The menu row's glyph: a small preset badge.
-     * @returns {object} the SVG element.
-     */
-    function WorkspacePresetIcon() {
-      return React.createElement('svg', {
-        width: 16,
-        height: 16,
-        viewBox: '0 0 24 24',
-        fill: 'none',
-        stroke: 'currentColor',
-        strokeWidth: 1.7,
-        strokeLinecap: 'round',
-        strokeLinejoin: 'round',
-        'aria-hidden': true
-      },
-      React.createElement('rect', { x: 3.5, y: 5, width: 17, height: 14, rx: 4 }),
-      React.createElement('path', { d: 'M8 10h8' }),
-      React.createElement('path', { d: 'M8 14h5' }))
-    }
-
-    /**
-     * Read the Agent preset roster for the menu.
-     * @param {object} ctx - client root context.
-     * @returns {Promise<{ ok: true, presets: object[] } | { ok: false }>} the roster or a failure.
-     */
-    async function readPresetRoster(ctx) {
-      try {
-        const result = await ctx.remote.agentPresets.list()
-        if (result.ok === true) {
-          const presets = result.value !== null && typeof result.value === 'object' && Array.isArray(result.value.presets)
-            ? result.value.presets
-            : []
-          return { ok: true, presets }
-        }
-        if (result.error !== undefined && result.error !== null && result.error.code === 'gateway/invocation-unavailable') {
-          return { ok: true, presets: [] }
-        }
-        return { ok: false }
-      } catch {
-        return { ok: false }
-      }
-    }
-
-    /**
-     * Read one Workspace's stored default preset.
-     * @param {string} workspaceId - Workspace identity.
-     * @param {AbortSignal} [signal] - menu preparation cancellation.
-     * @returns {Promise<string | null>} the stored preset id, or null for none.
-     */
-    async function readWorkspacePreset(workspaceId, signal) {
-      const response = await fetch(`${appUrl(PRESET_GET_ROUTE)}?workspaceId=${encodeURIComponent(workspaceId)}`, {
-        signal,
-        credentials: 'same-origin',
-        headers: { accept: 'application/json' }
-      })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const value = await response.json()
-      return value !== null && typeof value === 'object' && typeof value.preset === 'string' ? value.preset : null
-    }
-
-    /**
-     * Store or clear one Workspace's default preset.
-     * @param {string} workspaceId - Workspace identity.
-     * @param {string | null} preset - preset id, or null for no override.
-     * @returns {Promise<void>} resolves after the Host persisted the value.
-     */
-    async function writeWorkspacePreset(workspaceId, preset) {
-      const response = await fetch(appUrl(PRESET_SET_ROUTE), {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ workspaceId, preset })
-      })
-      if (response.ok) return
-      let message = `HTTP ${response.status}`
-      try {
-        const body = await response.json()
-        if (body !== null && typeof body === 'object' && typeof body.message === 'string') message = body.message
-      } catch {
-        // Keep the status text.
-      }
-      throw new Error(message)
-    }
-
-    /**
-     * Save a Workspace default and acknowledge it on success; a rejection
-     * reaches the shared menu toast through the action's failureLabel.
-     * @param {object} ctx - client root context.
-     * @param {Function} t - namespace-bound translate.
-     * @param {string} workspaceId - Workspace identity.
-     * @param {string | null} preset - preset id, or null for no override.
-     * @param {string} name - display name for the success notice.
-     * @returns {Promise<void>} resolves after the write settles.
-     */
-    async function saveWorkspacePreset(ctx, t, workspaceId, preset, name) {
-      await writeWorkspacePreset(workspaceId, preset)
-      ctx.contextMenus.notify(t('menu.saved', { name }), true)
-    }
-
-    /**
-     * Contribute the Workspace context-menu submenu and its icon.
-     * @param {object} ctx - client root context.
-     * @returns {void}
-     */
-    function installWorkspacePresetMenu(ctx) {
-      const t = ctx.locale.bind(PRESET_NS)
-      ctx.effect(() => ctx.locale.register(PRESET_NS, { en: PRESET_EN, zh: PRESET_ZH }), 'power-suite: workspace-presets dictionaries')
-      ctx.effect(() => ctx.slots.inject('contextMenu.icon', () => ctx.slots.register({
-        name: 'contextMenu.icon',
-        key: 'power-suite.workspacePreset'
-      }, WorkspacePresetIcon)), 'power-suite: workspace-presets icon')
-      ctx.effect(() => ctx.contextMenus.register({
-        id: 'power-suite.workspace-default-preset',
-        target: 'workspace',
-        order: 150,
-        resolve: async (target, signal) => {
-          const workspaceId = target.workspaceId
-          let roster
-          let current
-          try {
-            [roster, current] = await Promise.all([
-              readPresetRoster(ctx),
-              readWorkspacePreset(workspaceId, signal)
-            ])
-          } catch {
-            signal.throwIfAborted()
-            return [{ id: 'unavailable', label: t('menu.loadFailed'), disabled: true }]
-          }
-          signal.throwIfAborted()
-          if (roster.ok !== true) {
-            return [{ id: 'unavailable', label: t('menu.loadFailed'), disabled: true }]
-          }
-          signal.throwIfAborted()
-          const currentRow = current === null ? undefined : roster.presets.find((preset) => preset.id === current)
-          const globalRow = roster.presets.find((preset) => preset.isDefault === true)
-          const currentName = current === null
-            ? t('menu.globalDefault')
-            : currentRow === undefined ? current : presetDisplayName(t, currentRow)
-          const globalName = globalRow === undefined ? t('menu.globalDefault') : presetDisplayName(t, globalRow)
-          const children = [{
-            id: 'global',
-            label: current === null ? t('menu.followGlobalCurrent', { name: globalName }) : t('menu.followGlobal'),
-            disabled: current === null,
-            failureLabel: t('menu.saveFailed'),
-            run: () => saveWorkspacePreset(ctx, t, workspaceId, null, t('menu.globalDefault'))
-          }]
-          for (const preset of roster.presets) {
-            const name = presetDisplayName(t, preset)
-            const label = preset.id === current
-              ? t('menu.currentMark', { name })
-              : preset.broken === undefined
-                ? name
-                : t('menu.unavailableMark', { name })
-            children.push({
-              id: `preset:${preset.id}`,
-              label,
-              disabled: preset.broken !== undefined,
-              failureLabel: t('menu.saveFailed'),
-              run: () => saveWorkspacePreset(ctx, t, workspaceId, preset.id, name)
-            })
-          }
-          return [{
-            id: 'workspaceDefaultPreset',
-            icon: { key: 'power-suite.workspacePreset' },
-            label: t('menu.current', { name: currentName }),
-            children
-          }]
-        }
-      }), 'power-suite: workspace default preset menu')
-    }
-    //#endregion
-
-    //#region feature: workspace default presets — creation routing
-    /**
-     * Read one workspace's default preset and check that it is still usable.
-     *
-     * A stale or broken preference must never break New Session, so an
-     * unresolvable store or a broken roster answer yields null and the caller
-     * falls back to the user's global default.
-     * @param {object} ctx - client root context.
-     * @param {string} workspaceId - Workspace identity.
-     * @returns {Promise<string | null>} a usable preset id, or null.
-     */
-    async function usableWorkspacePreset(ctx, workspaceId) {
-      let preset
-      try {
-        preset = await readWorkspacePreset(workspaceId)
-      } catch {
-        return null
-      }
-      if (preset === null) return null
-      const roster = await readPresetRoster(ctx)
-      if (roster.ok !== true) return null
-      const row = roster.presets.find((entry) => entry.id === preset)
-      if (row === undefined || row.broken !== undefined) return null
-      return preset
-    }
-
-    /**
-     * Return options that name the Workspace default preset.
-     * @param {object | undefined} options - caller-supplied options.
-     * @param {string | null} preset - the Workspace default.
-     * @returns {object | undefined} options carrying an explicit preset.
-     */
-    function withWorkspacePreset(options, preset) {
-      if (preset === null) return options
-      if (options !== null && typeof options === 'object' && options.agentPreset !== undefined) return options
-      return { ...(options ?? {}), agentPreset: preset }
-    }
-
-    /**
-     * Route new-Session flows through the Workspace default.
-     *
-     * The sidebar's New Session calls `ctx.uiWorkspace.openWorkspace` without
-     * naming a preset, and the Host's reuse path then resets an existing blank
-     * to the global default. Naming the preset on the request keeps that reuse
-     * under the Workspace choice and creates new Sessions composed under it.
-     * Explicit requests (Creator mode and other flows) already carry
-     * `agentPreset` and pass through untouched.
-     * @param {object} ctx - client root context.
-     * @returns {void}
-     */
-    function installWorkspacePresetRouting(ctx) {
-      const ui = ctx.uiWorkspace
-      if (ui === null || typeof ui !== 'object') return
-      if (typeof ui.openWorkspace !== 'function' || typeof ui.connectWorkspace !== 'function') return
-      const marker = { patched: true }
-      if (ui.__powerSuitePresetRouting !== undefined) return
-      const originalOpen = ui.openWorkspace
-      const originalConnect = ui.connectWorkspace
-      async function openWorkspaceWithPreset(workspaceId, beforeOpen, options) {
-        const preset = await usableWorkspacePreset(ctx, workspaceId)
-        return originalOpen.call(ui, workspaceId, beforeOpen, withWorkspacePreset(options, preset))
-      }
-      async function connectWorkspaceWithPreset(workspaceId, options) {
-        const preset = await usableWorkspacePreset(ctx, workspaceId)
-        return originalConnect.call(ui, workspaceId, withWorkspacePreset(options, preset))
-      }
-      ui.openWorkspace = openWorkspaceWithPreset
-      ui.connectWorkspace = connectWorkspaceWithPreset
-      ui.__powerSuitePresetRouting = marker
-      ctx.effect(() => () => {
-        if (ui.__powerSuitePresetRouting !== marker) return
-        delete ui.__powerSuitePresetRouting
-        if (ui.openWorkspace === openWorkspaceWithPreset) ui.openWorkspace = originalOpen
-        if (ui.connectWorkspace === connectWorkspaceWithPreset) ui.connectWorkspace = originalConnect
-      }, 'power-suite: workspace-presets routing cleanup')
-    }
-    //#endregion
 
     //#region feature: prompt history
     /** Seat identity of the composer overlay registration. */
@@ -3150,6 +2841,16 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     })
     //#endregion
 
+    //#region feature: workspace default presets
+    //
+    // The menu contribution and the new-Session routing patch live in
+    // `src/browser/workspace-presets/install.ts`: the entry only binds the
+    // React runtime for the menu icon and passes the app URL builder, then
+    // installs both in `apply`. Copy, menu ids and patch behavior are unchanged;
+    // this region is a wiring point.
+    const workspacePresets = createWorkspacePresets({ React })
+    //#endregion
+
     //#region plugin
     /**
      * Register dictionaries, the page type, and its Session-scoped body.
@@ -3178,8 +2879,8 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
         }
       }
       artifactsFeature.installArtifacts(/** @type {import('./browser/artifacts/panel.ts').ArtifactsContext} */ (ctx))
-      installWorkspacePresetMenu(ctx)
-      installWorkspacePresetRouting(ctx)
+      workspacePresets.installWorkspacePresetMenu(/** @type {import('./browser/workspace-presets/install.ts').WorkspacePresetsContext} */ (ctx), appUrl)
+      workspacePresets.installWorkspacePresetRouting(/** @type {import('./browser/workspace-presets/install.ts').WorkspacePresetsContext} */ (ctx), appUrl)
       installPromptHistory(ctx)
       installPromptHistoryPreview(/** @type {import('./browser/prompt-history/preview.ts').PromptHistoryPreviewContext} */ (ctx))
       installDraftAttachmentMemory(ctx)
