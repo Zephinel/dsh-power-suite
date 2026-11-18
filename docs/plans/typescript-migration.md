@@ -421,9 +421,10 @@ surfaces follow the theme (light shell surface/label tokens, dark #2C2C2E,
 S12 7/0/0), and the dark atmosphere was iterated toward the light-mode pastel
 reference. Final recipe: screen blend with `saturate(1.15) brightness(1.45)`, wrapper
 opacity 0.58 base / 0.64 hover, white veil scrim 0.08/0.04, and a **2D fBm flow
-field**: eight constant-HSL hues (S=0.90, L=0.62), two blobs per hue whose
-positions are advected by a 3-octave value-noise curl field (Book of Shaders
-fBm/flow-noise style). The field uses low frequencies and slow time drift, the
+field**: eight OKLCH hues (light L=0.78/C=0.18, dark L=0.70/C=0.14 at hues
+20/65/110/150/195/245/290/330, using the browser's `oklch()` gamut mapping),
+two blobs per hue whose positions are advected by a 3-octave value-noise curl
+field (Book of Shaders fBm/flow-noise style). The field uses low frequencies and slow time drift, the
 per-blob velocity is low-pass filtered, and edges clamp instead of wrapping, so
 the smoke meanders/diffuses in both axes without frame-to-frame flinging or
 wrap flashes; a stronger wash plus smaller/softer blobs prevent complementary

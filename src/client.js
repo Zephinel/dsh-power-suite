@@ -5327,23 +5327,25 @@ body:not([data-ds-dark-theme]) .psd-row-action:focus-visible{color:var(--dsw-ali
 
 `
 
-/** Prism palette of the atmosphere renderer (V3 shader rainbow stops). */
-// Eight hues at a constant HSL saturation/lightness (S=0.90, L=0.62), so the
-// rainbow lanes share the same color attributes instead of some hues reading
-// heavier than others. Keep the order red -> magenta for an even hue path.
+/**
+ * OKLCH hue path of the atmosphere: equal perceived lightness/chroma across the
+ * eight stops (unlike HSL, where yellow/green read much brighter at the same L).
+ * Each theme gets its own L/C so the composited pill lands at a similar pastel
+ * weight: light is higher-L/lower-C, dark is a little lower-L with more chroma.
+ * Chroma stays moderate to stay near sRGB and to keep dark mode from glowing.
+ */
+const DW_ATMOS_HUES = [20, 65, 110, 150, 195, 245, 290, 330]
+const DW_ATMOS_PALETTES = {
+  light: DW_ATMOS_HUES.map((hue) => ({ l: 0.78, c: 0.18, hue })),
+  dark: DW_ATMOS_HUES.map((hue) => ({ l: 0.70, c: 0.14, hue }))
+}
 /** Per-hue radiance trim: after the blobs mix, red/violet read hotter and cyan
- *  reads cooler in H/S/L, so scale each hue's blob alpha to even the lanes out. */
+ *  reads cooler, so scale each hue's blob alpha to even the lanes out. */
 const DW_ATMOS_HUE_ALPHA = [0.78, 1.02, 0.92, 1.16, 1.30, 1.04, 0.94, 0.94]
-const DW_ATMOS_PALETTE = [
-  [245, 71, 71],
-  [245, 202, 71],
-  [158, 245, 71],
-  [71, 245, 114],
-  [71, 245, 245],
-  [71, 114, 245],
-  [158, 71, 245],
-  [245, 71, 202]
-]
+/** CSS `oklch()` colour string with alpha (the browser gamut-maps it). */
+function dwAtmosPaint(color, alpha) {
+  return `oklch(${color.l} ${color.c} ${color.hue} / ${alpha.toFixed(3)})`
+}
 
 /** Baseline atmosphere config adapted from the V3 design doc (smoke mode). */
 const DW_ATMOS_CONFIG = { intensity: 0.64, spread: 1.18, drift: 1.2, stirring: 0.58, breathing: 0.22, blend: 1.0, vibrance: 1.72 }
@@ -5407,8 +5409,8 @@ function dwAtmosphereMount(host) {
     return total
   }
   // Two independent blobs per hue; even hue coverage at spawn, free 2D flow after.
-  const blobs = DW_ATMOS_PALETTE.flatMap((_, index) => {
-    const base = (index / DW_ATMOS_PALETTE.length) * Math.PI * 2
+  const blobs = DW_ATMOS_HUES.flatMap((_, index) => {
+    const base = (index / DW_ATMOS_HUES.length) * Math.PI * 2
     return [
       {
         phase: base,
@@ -5417,7 +5419,7 @@ function dwAtmosphereMount(host) {
         vy: 0,
         size: 0.50 + noise(index + 3) * 0.20,
         hue: index,
-        x: ((index + 0.5) / DW_ATMOS_PALETTE.length + (noise(index + 1) - 0.5) * 0.12 + 1) % 1,
+        x: ((index + 0.5) / DW_ATMOS_HUES.length + (noise(index + 1) - 0.5) * 0.12 + 1) % 1,
         y: 0.5 + (noise(index + 6) - 0.5) * 0.45,
         alpha: 0.24
       },
@@ -5428,7 +5430,7 @@ function dwAtmosphereMount(host) {
         vy: 0,
         size: 0.36 + noise(index + 10) * 0.16,
         hue: index,
-        x: ((index + 0.5) / DW_ATMOS_PALETTE.length + (noise(index + 7) - 0.5) * 0.18 + 1) % 1,
+        x: ((index + 0.5) / DW_ATMOS_HUES.length + (noise(index + 7) - 0.5) * 0.18 + 1) % 1,
         y: 0.5 + (noise(index + 8) - 0.5) * 0.55,
         alpha: 0.15
       }
@@ -5464,11 +5466,12 @@ function dwAtmosphereMount(host) {
     ctx.clearRect(0, 0, width, height)
     const span = Math.max(width, height)
     // A low broad wash keeps the whole pill tinted, not just the blob cores.
+    const palette = document.body.hasAttribute('data-ds-dark-theme') ? DW_ATMOS_PALETTES.dark : DW_ATMOS_PALETTES.light
     const wash = ctx.createLinearGradient(0, 0, width, 0)
     const washAlpha = Math.min(0.34, 0.40 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.spread * DW_ATMOS_CONFIG.blend)
-    for (let index = 0; index < DW_ATMOS_PALETTE.length; index += 1) {
-      const color = DW_ATMOS_PALETTE[index]
-      wash.addColorStop(index / (DW_ATMOS_PALETTE.length - 1), `rgba(${color[0]},${color[1]},${color[2]},${washAlpha.toFixed(3)})`)
+    for (let index = 0; index < palette.length; index += 1) {
+      const color = palette[index]
+      wash.addColorStop(index / (palette.length - 1), dwAtmosPaint(color, washAlpha))
     }
     ctx.globalCompositeOperation = 'source-over'
     ctx.fillStyle = wash
@@ -5479,7 +5482,7 @@ function dwAtmosphereMount(host) {
     ctx.globalCompositeOperation = 'source-over'
     const breath = 1 + 0.10 * Math.sin(time * 0.17) + 0.05 * Math.sin(time * 0.09 + 1.4)
     for (const blob of blobs) {
-      const color = DW_ATMOS_PALETTE[blob.hue]
+      const color = palette[blob.hue]
       const field = (fx, fy) => fbm2(
         fx * 1.1 + blob.phase + time * 0.018,
         fy * 1.1 + blob.phase * 0.7 - time * 0.012
@@ -5505,10 +5508,10 @@ function dwAtmosphereMount(host) {
           + 0.03 * Math.sin(time * 0.06 + blob.phase * 1.9)))
       const alpha = Math.min(0.48, blob.alpha * DW_ATMOS_HUE_ALPHA[blob.hue] * 0.68 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.vibrance * DW_ATMOS_CONFIG.blend * breath)
       const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius)
-      gradient.addColorStop(0, `rgba(${color[0]},${color[1]},${color[2]},${alpha.toFixed(3)})`)
-      gradient.addColorStop(0.30, `rgba(${color[0]},${color[1]},${color[2]},${(alpha * 0.84).toFixed(3)})`)
-      gradient.addColorStop(0.60, `rgba(${color[0]},${color[1]},${color[2]},${(alpha * 0.30).toFixed(3)})`)
-      gradient.addColorStop(1, `rgba(${color[0]},${color[1]},${color[2]},0)`)
+      gradient.addColorStop(0, dwAtmosPaint(color, alpha))
+      gradient.addColorStop(0.30, dwAtmosPaint(color, alpha * 0.84))
+      gradient.addColorStop(0.60, dwAtmosPaint(color, alpha * 0.30))
+      gradient.addColorStop(1, dwAtmosPaint(color, 0))
       ctx.fillStyle = gradient
       ctx.beginPath()
       ctx.arc(cx, cy, radius, 0, Math.PI * 2)
