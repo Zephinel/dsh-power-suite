@@ -35,6 +35,7 @@ import {
   resolveModifierChange as resolveAnnotationModifier,
   serializeSettings as serializeAnnotationSettings
 } from '../src/browser/ui-annotation/settings.ts'
+import { ANNOTATION_CSS } from '../src/browser/ui-annotation/styles.ts'
 import {
   annotationRoutePath,
   annotationWorkspaceLabel,
@@ -2071,9 +2072,8 @@ if (ui === undefined) {
   test('A3/T6: the mark overlay is pointer-transparent and the detail card keeps its markers', () => {
     const source = client.source
     assert.equal(typeof source, 'string')
-    const cssStart = source.indexOf('const ANNOTATION_CSS')
-    assert.ok(cssStart >= 0, 'the annotation stylesheet exists')
-    const css = source.slice(cssStart, source.indexOf('\n    `', cssStart))
+    assert.ok(source.includes("from './browser/ui-annotation/styles.ts'"), 'the annotation stylesheet is mounted from the module')
+    const css = ANNOTATION_CSS
     assert.ok(css.includes('.psa-mark{'), 'the page mark rule exists')
     const markRule = css.slice(css.indexOf('.psa-mark{'), css.indexOf('}', css.indexOf('.psa-mark{')))
     assert.ok(markRule.includes('pointer-events:none'), 'page marks must never intercept pointer events')
@@ -2311,14 +2311,14 @@ if (ui === undefined) {
     assert.equal(typeof source, 'string')
     assert.equal(source.includes('AnnotationDockedLauncher'), false, 'the docked launcher component/usage must be gone')
     assert.equal(source.includes('data-psa-launcher-docked'), false, 'the docked launcher marker must be gone')
-    assert.equal(source.includes('.psa-launcher-docked'), false, 'the docked launcher CSS must be gone')
+    assert.equal(ANNOTATION_CSS.includes('.psa-launcher-docked'), false, 'the docked launcher CSS must be gone')
     assert.equal(source.includes('AnnotationLauncherFlight'), false, 'the flight element component must be gone')
     assert.equal(source.includes('launcherFlight'), false, 'the flight state/helper must be gone')
     assert.ok(source.includes("'data-psa-launcher-hidden': active ? 'true' : 'false'"), 'the launcher exposes its hidden state')
     assert.ok(source.includes("'aria-hidden': active ? 'true' : undefined"), 'the hidden launcher is aria-hidden while active')
-    assert.ok(source.includes('.psa-launcher[data-psa-launcher-hidden=true]{'), 'the hidden launcher CSS exists')
-    assert.ok(source.includes('transition:opacity 180ms ease,transform 180ms ease'), 'the hide/show transition exists')
-    assert.ok(source.includes('.psa-launcher{transition:none}'), 'reduced motion disables the launcher hide/show transition')
+    assert.ok(ANNOTATION_CSS.includes('.psa-launcher[data-psa-launcher-hidden=true]{'), 'the hidden launcher CSS exists')
+    assert.ok(ANNOTATION_CSS.includes('transition:opacity 180ms ease,transform 180ms ease'), 'the hide/show transition exists')
+    assert.ok(ANNOTATION_CSS.includes('.psa-launcher{transition:none}'), 'reduced motion disables the launcher hide/show transition')
     assert.ok(source.includes('idleLauncherPosition = snapshot().launcherPosition'), 'activation remembers the idle floating position')
     assert.ok(source.includes('clampLauncherPosition(restoreLauncher, annotationViewport(), ANNOTATION_LAUNCHER_SIZE)'),
       'deactivation restores the remembered idle position')
@@ -2340,7 +2340,7 @@ if (ui === undefined) {
     assert.ok(source.includes("M12 22C6.47715 22 2 17.5228 2 12C2 6.47715"), 'information-line constant carries the Remix information-line path')
     assert.ok(source.includes('RemixGlyph(REMIX_INFORMATION_LINE'), 'rail header uses the information-line glyph')
     assert.ok(!source.includes("'data-psa-open-settings': ''"), 'legacy settings gear marker must be gone')
-    assert.ok(source.includes('pointer-events:none') && source.includes('.psa-layer{position:fixed'), 'marks layer remains pointer-transparent')
+    assert.ok(ANNOTATION_CSS.includes('pointer-events:none') && ANNOTATION_CSS.includes('.psa-layer{position:fixed'), 'marks layer remains pointer-transparent')
   })
 
   test('A3/T21: chat leaf locators anchor to stable message/turn wrappers instead of positional chat paths', () => {
@@ -2404,7 +2404,7 @@ if (ui === undefined) {
     assert(controller.includes("'[data-composer-chip=\"ui-annotation\"]'"),
       'only chips rendered with our source get the preview (shell data attribute, no shell modification)')
     assert(controller.includes('chipPreviewModel'), 'the preview reads the local collection, not the network')
-    assert(source.includes('.psa-chip-preview{') && /\.psa-chip-preview\{[^}]*pointer-events:none/.test(source),
+    assert(ANNOTATION_CSS.includes('.psa-chip-preview{') && /\.psa-chip-preview\{[^}]*pointer-events:none/.test(ANNOTATION_CSS),
       'the preview CSS must be pointer-transparent')
     assert(source.includes("document.addEventListener('pointerout'"), 'leaving the chip hides the preview')
     assert(source.includes("document.addEventListener('pointermove'"), 'a stationary re-show after Esc is supported')
@@ -2419,15 +2419,15 @@ if (ui === undefined) {
   test('A3/T21: the rainbow wrapper hugs the control border box (no bottom baseline gap)', () => {
     const source = client.source
     const rule = /\.psa-rainbow-field > textarea,[\s\S]{0,220}display:block;vertical-align:top/
-    assert(rule.test(source), 'wrapped textarea/input/select must render as blocks inside the ring wrapper')
-    const start = source.indexOf('.psa-rainbow-field{')
-    const end = source.indexOf('}', start)
-    const base = source.slice(start, end)
+    assert(rule.test(ANNOTATION_CSS), 'wrapped textarea/input/select must render as blocks inside the ring wrapper')
+    const start = ANNOTATION_CSS.indexOf('.psa-rainbow-field{')
+    const end = ANNOTATION_CSS.indexOf('}', start)
+    const base = ANNOTATION_CSS.slice(start, end)
     assert(base.includes('position:relative') && base.includes('display:block'),
       'the ring wrapper must be a relative block so its border box matches the control')
-    const after = source.indexOf('.psa-rainbow-field::after{')
-    const afterEnd = source.indexOf('}', after)
-    const ring = source.slice(after, afterEnd)
+    const after = ANNOTATION_CSS.indexOf('.psa-rainbow-field::after{')
+    const afterEnd = ANNOTATION_CSS.indexOf('}', after)
+    const ring = ANNOTATION_CSS.slice(after, afterEnd)
     assert(ring.includes('inset:-2px'), 'the ring stays a symmetric 2px band around the control border box')
   })
 
