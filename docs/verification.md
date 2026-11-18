@@ -72,12 +72,14 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
     the DOM before React committed and now samples after commit with bounded
     polling and only counts the shell spinner). `b4-5` and `b4-9` pass after the
     owner-requested lighter dark-atmosphere recipe: screen blend,
-    `saturate(1) brightness(1.66)`, wrapper opacity 0.58 base / 0.64 hover, white
-    veil scrim 0.14/0.08, and eight constant-HSL hues in evenly spaced lanes (2
-    drifting blobs per hue; sampled hue path ~9/40/86/136/180/217/260/293
-    degrees). The light theme uses the same renderer with its multiply/white-veil
-    recipe. Dark title contrast lands at 2.5:1 and the scenario records that as
-    the accepted trade-off for the lighter pill. The live full run still varies
+    `saturate(1.15) brightness(1.45)`, wrapper opacity 0.58 base / 0.64 hover,
+    white veil scrim 0.08/0.04, eight constant-HSL hues (S=0.90, L=0.62) and two
+    free-orbiting blobs per hue (speeds 0.55-1.1 / 0.78-1.43) so every position
+    changes hue over time instead of owning a fixed lane. A stronger wash plus
+    smaller/softer blobs keep the canvas saturation at ~0.385 (b4-1/b4-3 pass)
+    while the smoke still diffuses. The light theme uses the same renderer with
+    its multiply/white-veil recipe. Dark title contrast lands at 2.5:1 and the
+    scenario records that as the accepted trade-off for the lighter pill. The live full run still varies
     with GUI data/state (`b1-3`, `b3-1/b3-2`, `b5-5`, `c2-1`, `c4-4` were observed
     intermittently), so its pass count is not a stable single number; isolated
     full is data-starved, isolated `--layout` is **12/12**, live `--interrupted`

@@ -3068,8 +3068,8 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       for (const [label, row, atmos, content] of rows) {
         assert(row && atmos, `${label}: atmosphere missing in dark theme`)
         assertEqual(atmos.canvas.mixBlendMode, 'screen', `${label}: dark theme must keep the light-adding screen blend`)
-        assert(atmos.canvas.filter.includes('saturate(1)'), `${label}: dark theme must use the lighter pastel saturation (${atmos.canvas.filter})`)
-        assert(atmos.canvas.filter.includes('brightness(1.66)'), `${label}: dark theme must stay luminous (${atmos.canvas.filter})`)
+        assert(atmos.canvas.filter.includes('saturate(1.15)'), `${label}: dark theme must keep the rainbow chroma (${atmos.canvas.filter})`)
+        assert(atmos.canvas.filter.includes('brightness(1.45)'), `${label}: dark theme must stay luminous without graying out (${atmos.canvas.filter})`)
         assert(atmos.canvas.avgSaturationStrong >= 0.20, `${label}: lighter pastel atmosphere must stay colorful (blob-core saturation ${atmos.canvas.avgSaturationStrong})`)
         assert(atmos.opacity >= 0.54 && atmos.opacity <= 0.70, `${label}: dark theme atmosphere opacity must be the lighter range (${atmos.opacity})`)
         assert(atmos.scrim !== null && /rgba\(255, 255, 255/.test(atmos.scrim.backgroundImage), `${label}: dark theme scrim must be a light veil, not a dark one (${atmos.scrim?.backgroundImage})`)
