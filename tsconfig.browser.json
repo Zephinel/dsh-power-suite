@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": []
+  },
+  "include": [
+    "src/client.js",
+    "src/browser/**/*.ts",
+    "src/shared/**/*.ts"
+  ],
+  "exclude": [
+    "src/browser/dom.d.ts"
+  ]
+}
