@@ -328,9 +328,8 @@ through its background/padding and through the popover's Parent control.
   leaf → column → row → whole panel (3 steps) and Child walks back; card/panel
   padding keeps the whole-surface outline.
 - **Paint layer.** While the mode is active the shell overlay's inline
-  `z-index` is raised to **150** (above native hover cards at 100, below native
-  modals at 1000 and menus at 1100) and restored exactly on exit — value and
-  priority included. The rail stays inside `[data-shell-overlay]`; nothing is
+  `z-index` is raised to **2000** (intentionally above native hover cards; the
+  saved value and priority are restored exactly on exit). The rail stays inside `[data-shell-overlay]`; nothing is
   portalled. The raise is asserted live: the overlay's computed z-index must be
   greater than the hover card's.
 - **Our own hover card** — the Dynamic Workspaces feature's running/recent hover
@@ -1285,7 +1284,7 @@ package manifest.
   as a hex escape (`#123abc` → `#\31 23abc`) rather than producing an invalid
   selector.
 - **Paint layer (F1)** — activating the mode captures the shell overlay's own
-  inline `z-index` value and priority, sets `z-index: 150 !important` plus a
+  inline `z-index` value and priority, sets `z-index: 2000 !important` plus a
   `data-psa-raised` marker, and restores the captured pair exactly on exit,
   deactivation rollback, or disposal. The overlay element itself is unchanged, so
   the rail stays inside the shell's own seat; only its stacking layer moves. This
@@ -1867,9 +1866,8 @@ through its background/padding and through the popover's Parent control.
   leaf → column → row → whole panel (3 steps) and Child walks back; card/panel
   padding keeps the whole-surface outline.
 - **Paint layer.** While the mode is active the shell overlay's inline
-  `z-index` is raised to **150** (above native hover cards at 100, below native
-  modals at 1000 and menus at 1100) and restored exactly on exit — value and
-  priority included. The rail stays inside `[data-shell-overlay]`; nothing is
+  `z-index` is raised to **2000** (intentionally above native hover cards; the
+  saved value and priority are restored exactly on exit). The rail stays inside `[data-shell-overlay]`; nothing is
   portalled. The raise is asserted live: the overlay's computed z-index must be
   greater than the hover card's.
 - **Our own hover card** — the Dynamic Workspaces feature's running/recent hover
@@ -2582,7 +2580,7 @@ package manifest.
   as a hex escape (`#123abc` → `#\31 23abc`) rather than producing an invalid
   selector.
 - **Paint layer (F1)** — activating the mode captures the shell overlay's own
-  inline `z-index` value and priority, sets `z-index: 150 !important` plus a
+  inline `z-index` value and priority, sets `z-index: 2000 !important` plus a
   `data-psa-raised` marker, and restores the captured pair exactly on exit,
   deactivation rollback, or disposal. The overlay element itself is unchanged, so
   the rail stays inside the shell's own seat; only its stacking layer moves. This

@@ -670,7 +670,7 @@ live hit is inside a contiguous `position: fixed|absolute` region with computed
 `z-index >= 10` resolves to that surface's root by default (whole native hover
 preview card or the plugin's own pinned card), and the Parent/Child controls
 drill into the surface's inner text blocks and controls; while the mode is
-active the shell overlay's inline `z-index` is raised to 150 (saved value and
+active the shell overlay's inline `z-index` is raised to 2000 (saved value and
 priority restored on exit) so the outline paints above body-level hover cards,
 and a 60 ms mutation-triggered hover recompute keeps up with surfaces that
 appear while the pointer is stationary. A selected element becomes a **v2

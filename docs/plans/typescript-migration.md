@@ -367,8 +367,20 @@ modules directly. `src/client.js` is ~19.2k lines; the server bundle is 936.8 kB
 Live `annotation --smoke` passes 6/6 with the 1-key seam (smoke-3 now asserts
 that shape) and `--scenario 14` passes 7/7. The remaining gap to fully removing
 the hook is `debugFallbackScanProbe` reading controller counters, used by the
-fallback/diagnostic coverage. Next: browser typing milestones (M1 mechanical
-fixes) and the e2e harness corrections already identified.
+fallback/diagnostic coverage. **3t progress (2026-11-18).** The e2e harness defects found by the independent
+root-cause review were fixed: `b2-3` now passes the row title string
+(`.title.text`) instead of the probe object; `f6-1` samples the interrupted
+badge after React commits with bounded polling and counts only the shell spinner
+as a second indicator; the duplicate `b3-3` id is gone; annotation smoke gained a
+click-select check (which would have caught the unbound-`getAttribute`
+regression that old smoke missed); S4/S13 use a native header button instead of
+the intentionally unselectable composer; and S10 expects the product's
+intentional paint z-index 2000. Post-fix live evidence: sidebar full **70 PASS /
+1 SKIP / 1 FAIL** (`b4-5` dark atmosphere saturation is pre-existing/owner
+triage), annotation smoke **6/6**, S4 **7/0/0**, S13 **7 PASS / 1 SKIP**, S10
+**8/0/0**; S12 remains an owner theme-contract decision (native hover card now
+follows the theme while the annotation surface stays fixed dark). Next: browser
+typing milestones (M1 mechanical fixes) and the remaining owner decisions.
 
 **3m progress (2026-11-18).** Two follow-ups landed: `dwCacheHitPercent` is now a
 total function (inconsistent/negative/non-finite cache data returns `null`

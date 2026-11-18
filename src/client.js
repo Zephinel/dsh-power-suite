@@ -9442,7 +9442,7 @@ function dwClearNativeAtmospheres() {
     /** F2: a floating surface root needs at least this computed z-index. */
     const ANNOTATION_SURFACE_MIN_Z = 10
 
-    /** F1: annotation paint layer z-index: above native hover cards (100), below modals (1000)/menus (1100). */
+    /** F1: annotation paint layer z-index: intentionally above native hover cards and shell modals/menus. */
     const ANNOTATION_PAINT_Z = 2000
 
     /** Root marker for the raised paint layer, asserted by the live E2E. */
