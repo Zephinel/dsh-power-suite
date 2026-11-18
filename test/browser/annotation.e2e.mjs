@@ -1102,129 +1102,20 @@ async function runSmoke({ page, results, state }) {
     return 'wrapper ran with real ctx'
   })
 
-  await results.check('smoke-3', 'frozen test seam pinned key set (31 round-1 / 32 resolveNodeCandidate / 35 audit-fix / 48 Phase 1 / 57 Phase 2-A / 66 Phase 2-B / 67 inner-first / 68 leaf-first / 76 batch groups / 79 sidebar redesign / 80 shared group ordinals / 82 surface pinning / 90 multi-strategy anchors / 91 P0 / 97 anchor / 100 review / 106 descendant / 107 scan / 108 scope / 109 reference / 110 segmented / 111 symbols / 112 preview-dock)', async () => {
+  await results.check('smoke-3', 'minimal test seam: only debugFallbackScanProbe (112-key pass-through retired)', async () => {
     const probe = await page.evaluate(
-      `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [] } })()`
+      `(() => { const flag = window.__POWER_SUITE_TEST_HOOKS__; const hook = flag && flag.uiAnnotation; return { flagType: typeof flag, hookType: typeof hook, keys: hook && typeof hook === 'object' ? Object.keys(hook) : [], probeType: typeof (hook && hook.debugFallbackScanProbe) } })()`
     )
     assertEqual(probe.flagType, 'object', 'test hook flag type')
     assertEqual(probe.hookType, 'object', 'hooks.uiAnnotation is not an object')
-    // Documented frozen generations: round-1 (31), round-2 adds resolveNodeCandidate
-    // (32), audit-fix adds normalizeUserNote/cssIdentifier/clampPopoverPositionToViewport
-    // (35), Phase 1 adds the A1/A2/persistence helpers (48), Phase 2-A adds the record
-    // action/undo/mark/detail-card helpers (57), Phase 2-B adds the multi-delete undo,
-    // rail selection and chip-ref serialization helpers (66). Pin a documented count and
-    // require the keys that generation introduced.
-    const ACCEPTED_SEAM_GENERATIONS = [31, 32, 35, 48, 57, 66, 67, 68, 76, 79, 80, 82, 90, 91, 97, 100, 106, 107, 108, 109, 110, 111, 112]
-    const keyCount = probe.keys.length
-    assert(
-      ACCEPTED_SEAM_GENERATIONS.includes(keyCount),
-      `frozen seam must expose a documented generation (got ${keyCount} keys: ${probe.keys.join(', ') || 'none'})`
-    )
-    assert(probe.keys.includes('textDigest'), `textDigest is missing from the seam (keys: ${probe.keys.join(', ')})`)
-    if (keyCount >= 32) {
-      assert(probe.keys.includes('resolveNodeCandidate'), `round-2+ seam must expose resolveNodeCandidate (keys: ${probe.keys.join(', ')})`)
-    }
-    if (keyCount === 35) {
-      for (const key of ['normalizeUserNote', 'cssIdentifier', 'clampPopoverPositionToViewport']) {
-        assert(probe.keys.includes(key), `audit-fix seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
-      }
-    }
-    if (keyCount === 48) {
-      for (const key of ['RECORDS_STORAGE_KEY', 'RECORD_LIMIT', 'buildUniqueSelector', 'buildStableAncestors',
-        'parseAnnotationStore', 'serializeAnnotationStore', 'annotationSurfaceRoot', 'annotationSurfaceLevels',
-        'annotationLocatorText', 'normalizeAnnotationRecord']) {
-        assert(probe.keys.includes(key), `Phase 1 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
-      }
-    }
-    if (keyCount === 57) {
-      for (const key of ['upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
-        'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove', 'annotationUndoRestore',
-        'annotationMarkerBadgeText', 'clampDetailCardPosition']) {
-        assert(probe.keys.includes(key), `Phase 2-A seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
-      }
-    }
-    if (keyCount === 66) {
-      for (const key of ['annotationUndoRemoveMany', 'annotationScopeCounts', 'annotationSelectedEntries',
-        'annotationApplyIncludes', 'annotationChipRefOf', 'annotationChipRefBatch', 'parseAnnotationChipRef',
-        'annotationChipCandidates', 'serializeAnnotationChip']) {
-        assert(probe.keys.includes(key), `Phase 2-B seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
-      }
-    }
-    if (keyCount === 67) {
-      for (const key of ['annotationSurfacePickLevel', 'annotationSurfaceLevels', 'annotationSurfaceRoot']) {
-        assert(probe.keys.includes(key), `inner-first surface seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
-      }
-    }
-    if (keyCount === 68) {
-      for (const key of ['annotationLeafPickIndex', 'annotationSurfacePickLevel', 'annotationSurfaceLevels', 'annotationSurfaceRoot']) {
-        assert(probe.keys.includes(key), `leaf-first seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
-      }
-    }
-    if (keyCount === 76) {
-      for (const key of ['annotationLeafPickIndex', 'annotationGroupFromSelection', 'collectionAddGroup', 'serializeBatchEntries']) {
-        assert(probe.keys.includes(key), `batch-group seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
-      }
-    }
-    if (keyCount === 79) {
-      for (const key of ['annotationGroupFromSelection', 'annotationSidebarCounts', 'annotationFilterEntries', 'annotationGroupSummary']) {
-        assert(probe.keys.includes(key), `redesigned-sidebar seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
-      }
-    }
-    if (keyCount === 80) {
-      for (const key of ['annotationEntryOrdinals', 'annotationGroupSummary', 'annotationSidebarCounts']) {
-        assert(probe.keys.includes(key), `task-29 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
-      }
-    }
-    if (keyCount === 82) {
-      for (const key of ['annotationSurfacePinEligible', 'annotationSurfacePinEventMatches', 'annotationEntryOrdinals']) {
-        assert(probe.keys.includes(key), `task-30 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
-      }
-    }
-    if (keyCount === 90) {
-      for (const key of ['annotationResolveStatus', 'annotationXPathOf', 'annotationTextQuoteMatches', 'annotationSelectorScore']) {
-        assert(probe.keys.includes(key), `task-32 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
-      }
-    }
-    if (keyCount === 91) {
-      for (const key of ['annotationIsGeneratedClass', 'resolveRefStatus', 'annotationResolveStatus']) {
-        assert(probe.keys.includes(key), `task-33 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
-      }
-    }
-    if (keyCount === 97) {
-      for (const key of ['annotationDisambiguateQuote', 'annotationScoreQuoteMatches', 'annotationRenderTextChunks', 'annotationFullXPathOf', 'annotationFallbackCacheKey']) {
-        assert(probe.keys.includes(key), `task-34 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
-      }
-    }
-    if (keyCount === 100) {
-      for (const key of ['annotationHasStrongIdentity', 'annotationStructuralFallbackStatus', 'annotationCopyAnchorDecision']) {
-        assert(probe.keys.includes(key), `task-36 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
-      }
-    }
-    if (keyCount === 106) {
-      for (const key of ['annotationRenderedTextRepeatCount', 'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey']) {
-        assert(probe.keys.includes(key), `task-38 seam must expose ${key} (keys: ${probe.keys.join(', ')})`)
-      }
-    }
-    if (keyCount === 107) {
-      assert(probe.keys.includes('debugFallbackScanProbe'), 'task-38 seam must expose debugFallbackScanProbe')
-    }
-    if (keyCount === 108) {
-      assert(probe.keys.includes('annotationScopeAuthorityOutcome'), 'task-42 seam must expose annotationScopeAuthorityOutcome')
-    }
-    if (keyCount === 109) {
-      assert(probe.keys.includes('annotationEphemeralOutcome'), 'task-47 seam must expose annotationEphemeralOutcome')
-    }
-    if (keyCount === 110) {
-      assert(probe.keys.includes('annotationSegmentedIndex'), 'task-55 seam must expose annotationSegmentedIndex')
-    }
-    if (keyCount === 111) {
-      assert(probe.keys.includes('annotationSegmentDisplayLabel'), 'task-57 seam must expose annotationSegmentDisplayLabel')
-    }
-    if (keyCount === 112) {
-      assert(probe.keys.includes('annotationRailRightForPane'), 'task-68 seam must expose annotationRailRightForPane')
-    }
+    // Phase 3 moved every pure model into src/browser/ui-annotation/**; this
+    // harness no longer reads a pass-through seam. Only the controller's
+    // fallback-scan cache probe remains as a live diagnostic.
+    assertEqual(probe.keys.length, 1, `the retired pass-through seam must not be republished (keys: ${probe.keys.join(', ') || 'none'})`)
+    assertEqual(probe.keys[0], 'debugFallbackScanProbe', `unexpected annotation hook key (keys: ${probe.keys.join(', ')})`)
+    assertEqual(probe.probeType, 'function', 'debugFallbackScanProbe must stay callable')
     state.hooks = probe.keys
-    return `uiAnnotation seam: ${keyCount} keys`
+    return 'uiAnnotation seam: 1 diagnostic key (debugFallbackScanProbe)'
   })
 
   await results.check('smoke-4', 'blank session is opened/verified through the native flow', async () => {

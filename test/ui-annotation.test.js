@@ -5,12 +5,15 @@
  * `window.__ModuleLoader__` and the DSH shell calls `factory(require)`. There is
  * no import surface, so `test/helpers/client-module.mjs` evaluates the file in a
  * `node:vm` sandbox, sets the §3.7 test-hook flag before evaluation, and
- * materializes the factory. Everything asserted here is a pure function from
- * `hooks.uiAnnotation`: no React rendering, no DOM listeners, no timers — the
- * live-page behavior belongs to `test/browser/annotation.e2e.mjs`.
+ * materializes the factory. Phase 3 moved every pure annotation model into
+ * `src/browser/ui-annotation/**`, so this file imports and tests those modules
+ * directly; the only value still read from `hooks.uiAnnotation` is the
+ * controller's `debugFallbackScanProbe`, which has no direct-import equivalent.
+ * No React rendering, no DOM listeners, no timers — the live-page behavior
+ * belongs to `test/browser/annotation.e2e.mjs`.
  *
- * Contract: `/tmp/ps-annotation/CONTRACT.md` §3.7 (frozen seam signatures) and
- * §4.1 (unit-test scope), extended by `/tmp/ps-annotation/REVIEW-FINDINGS.md`.
+ * Contract: `/tmp/ps-annotation/CONTRACT.md` §4.1 (unit-test scope), extended
+ * by `/tmp/ps-annotation/REVIEW-FINDINGS.md`.
  * Every fix-round regression below (F1-F4, F6, F11, F16) is written to fail on
  * the reviewed build 5136d3c and pass on `fix/ui-annotation-review-fixes`; the
  * round-2 regressions (R1 resolver semantics, R2 real session-attribute shape,
@@ -153,10 +156,10 @@ import {
   annotationXPathOf
 } from '../src/browser/ui-annotation/anchors.ts'
 
-/** One materialization of the browser module; the seam is read from it. */
+/** One materialization of the browser module; the diagnostic hook is read from it. */
 const client = loadClientModule()
 
-/** The pure annotation helpers, or undefined until the feature region lands. */
+/** The minimal diagnostic seam object, or undefined before the feature region lands. */
 const ui = client.hooks?.uiAnnotation
 
 /**
@@ -168,201 +171,25 @@ const ui = client.hooks?.uiAnnotation
 const plain = (value) => structuredClone(value)
 
 if (ui === undefined) {
-  // Pre-seam state: keep `npm test` green for the other agents while the
-  // feature region is being written. This placeholder disappears from the
-  // suite (and the tests below take over) as soon as §3.7 is implemented.
-  test('ui annotation pure model (waiting for the src/client.js test seam)', { skip: 'CONTRACT.md §3.7 seam not implemented in src/client.js yet' }, () => {})
+  // The pure model no longer depends on the hook, but keep a pre-feature guard so
+  // a client without the diagnostic seam skips instead of crashing.
+  test('ui annotation pure model (missing the controller diagnostic seam)', { skip: 'src/client.js does not publish __POWER_SUITE_TEST_HOOKS__.uiAnnotation' }, () => {})
 } else {
-  //#region seam contract
+  //#region diagnostic seam contract
 
-  /** Every key CONTRACT.md §3.7 freezes on `hooks.uiAnnotation`, and nothing else. */
-  const SEAM_EXPORTS = [
-    'DEFAULT_SETTINGS', 'MODIFIER_CHOICES', 'SETTINGS_STORAGE_KEY',
-    'RECORDS_STORAGE_KEY', 'RECORD_LIMIT',
-    'normalizeSettings', 'resolveModifierChange', 'parseStoredSettings', 'serializeSettings',
-    'modifierMatches',
-    'textDigest',
-    'sanitizeText', 'normalizeUserNote', 'sanitizeAttributeName', 'sanitizeAttributeValue',
-    'buildElementRef', 'selectorCandidates', 'identityKeyOf', 'describeLocator', 'elementLabel',
-    'cssIdentifier', 'clampPopoverPositionToViewport',
-    'createAnnotationState', 'reduceAnnotationState',
-    'serializeQuickReference', 'serializeBatchRequest', 'batchScopeSplit',
-    'resolveRefStatus',
-    'resolveNodeCandidate',
-    'clampLauncherPosition', 'clampPopoverPosition', 'computeRailWidth', 'layoutModeFor',
-    'collectionAdd', 'collectionRemove', 'collectionClear', 'collectionSetNote',
-    'annotationWorkspaceLabel', 'annotationRoutePath', 'normalizeAnnotationViewport',
-    'buildStableAncestors', 'buildUniqueSelector', 'annotationLocatorText',
-    'normalizeAnnotationRecord', 'parseAnnotationStore', 'serializeAnnotationStore',
-    'annotationSurfaceRoot', 'annotationSurfaceLevels', 'annotationSurfacePickLevel',
-    'annotationLeafPickIndex',
-    'annotationIsGroup', 'annotationGroupItems', 'annotationFlattenRecords',
-    'annotationTotalItemCount', 'annotationFindRecord', 'annotationGroupFromSelection',
-    'collectionAddGroup', 'serializeBatchEntries',
-    'annotationSidebarCounts', 'annotationFilterEntries', 'annotationGroupSummary',
-    'annotationEntryOrdinals', 'annotationSurfacePinEligible', 'annotationSurfacePinEventMatches',
-    'annotationNormalizeQuoteText', 'annotationXPathOf', 'annotationJsPathFor', 'annotationTextQuoteOf',
-    'annotationTextPositionOf', 'annotationTextQuoteMatches', 'annotationSelectorScore', 'annotationResolveStatus',
-    'annotationIsGeneratedClass',
-    'annotationRenderTextChunks', 'annotationDisambiguateQuote', 'annotationScoreQuoteMatches',
-    'annotationFullXPathOf', 'annotationFallbackCacheKey', 'annotationLevenshteinWithin',
-    'annotationHasStrongIdentity', 'annotationStructuralFallbackStatus', 'annotationCopyAnchorDecision',
-    'annotationRenderedTextRepeatCount', 'annotationFirstTextLeafDescendant', 'annotationAncestorTagChain',
-    'annotationDescendantAncestorMatches', 'annotationStatusConfidence', 'annotationStatusLabelKey', 'annotationScopeAuthorityOutcome', 'annotationEphemeralOutcome', 'annotationSegmentedIndex', 'annotationSegmentDisplayLabel', 'annotationRailRightForPane', 'debugFallbackScanProbe',
-    'upsertAnnotationRecord', 'removeAnnotationRecord', 'restoreAnnotationRecord',
-    'moveAnnotationRecord', 'toggleAnnotationInclude', 'annotationUndoRemove',
-    'annotationUndoRestore', 'annotationMarkerBadgeText', 'clampDetailCardPosition',
-    'annotationUndoRemoveMany', 'annotationScopeCounts', 'annotationSelectedEntries',
-    'annotationApplyIncludes', 'annotationChipRefOf', 'annotationChipRefBatch',
-    'parseAnnotationChipRef', 'annotationChipCandidates', 'serializeAnnotationChip'
-  ]
-  /**
-   * Frozen seam generation. 31 = round-1 audit, 32 = round-2 resolver, 35 =
-   * audit-fix batch, 48 = A1/A2/persistence Phase 1 (surface picker, unique
-   * selector/ancestors, v2 record store), 57 = A3 Phase 2-A (record commit/undo/
-   * move/include helpers, mark badge excerpt, detail-card clamp), 66 = A3 Phase
-   * 2-B (multi-delete undo, rail scope/selection helpers, chip ref round-trip,
-   * candidates and model serialization), 67 = inner-first floating-surface pick
-   * level, 68 = leaf-first picking (deepest eligible element, full ancestor
-   * Parent/Child chain), 69 = batch groups (group model helpers, flatten/cap,
-   * group serializer), 79 = redesigned sidebar (derived counts, client-side
-   * filter, group auto-summary), 80 = shared group ordinals (A3/T29 numbering),
-   * 82 = transient-surface pinning (eligible selection + capture-phase match),
-   * 90 = multi-strategy anchors (quote/xpath/js path/scoring/resolution),
-   * 91 = P0 selector stability (generated-class filter),
-   * 97 = P1/P2 anchor hardening (rendered text/disambiguation/scoring/full xpath/cache),
-   * 100 = review fixes (strong identity gate / structural status / copy decision),
-   * 106 = descendant anchors / confidence / rendered climb (repeat count, leaf, chain, match, confidence, label).
-   * The E2E `ACCEPTED_SEAM_GENERATIONS` must accept exactly these counts.
-   */
-  const SEAM_GENERATION = SEAM_EXPORTS.length
-  /** Accepted `Function.length` ranges from the frozen signatures (defaults reduce length). */
-  const SEAM_ARITIES = {
-    normalizeSettings: [1, 1],
-    resolveModifierChange: [3, 3],
-    parseStoredSettings: [1, 1],
-    serializeSettings: [1, 1],
-    modifierMatches: [2, 2],
-    textDigest: [1, 1],
-    sanitizeText: [1, 2],
-    normalizeUserNote: [1, 1],
-    cssIdentifier: [1, 1],
-    clampPopoverPositionToViewport: [3, 5],
-    sanitizeAttributeName: [1, 1],
-    sanitizeAttributeValue: [2, 2],
-    buildElementRef: [2, 2],
-    selectorCandidates: [1, 1],
-    identityKeyOf: [1, 1],
-    describeLocator: [1, 1],
-    elementLabel: [1, 1],
-    createAnnotationState: [0, 0],
-    reduceAnnotationState: [2, 2],
-    serializeQuickReference: [3, 3],
-    serializeBatchRequest: [2, 2],
-    batchScopeSplit: [2, 2],
-    resolveRefStatus: [1, 1],
-    resolveNodeCandidate: [1, 1],
-    clampLauncherPosition: [2, 4],
-    clampPopoverPosition: [3, 5],
-    computeRailWidth: [1, 3],
-    layoutModeFor: [3, 3],
-    collectionAdd: [2, 3],
-    collectionRemove: [2, 2],
-    collectionClear: [0, 0],
-    collectionSetNote: [3, 3],
-    annotationWorkspaceLabel: [1, 1],
-    annotationRoutePath: [1, 1],
-    normalizeAnnotationViewport: [1, 1],
-    buildStableAncestors: [1, 1],
-    buildUniqueSelector: [2, 2],
-    annotationLocatorText: [1, 1],
-    normalizeAnnotationRecord: [1, 2],
-    parseAnnotationStore: [1, 1],
-    serializeAnnotationStore: [1, 2],
-    annotationSurfaceRoot: [1, 2],
-    annotationSurfaceLevels: [1, 2],
-    annotationSurfacePickLevel: [2, 4],
-    annotationLeafPickIndex: [1, 3],
-    annotationIsGroup: [1, 1],
-    annotationGroupItems: [1, 1],
-    annotationFlattenRecords: [1, 1],
-    annotationTotalItemCount: [1, 1],
-    annotationFindRecord: [2, 2],
-    annotationGroupFromSelection: [5, 5],
-    collectionAddGroup: [3, 3],
-    serializeBatchEntries: [3, 3],
-    annotationSidebarCounts: [2, 2],
-    annotationFilterEntries: [2, 2],
-    annotationGroupSummary: [1, 1],
-    annotationEntryOrdinals: [1, 1],
-    annotationSurfacePinEligible: [2, 2],
-    annotationSurfacePinEventMatches: [3, 3],
-    annotationNormalizeQuoteText: [1, 2],
-    annotationXPathOf: [1, 1],
-    annotationJsPathFor: [1, 1],
-    annotationTextQuoteOf: [1, 1],
-    annotationTextPositionOf: [1, 1],
-    annotationTextQuoteMatches: [2, 2],
-    annotationSelectorScore: [1, 1],
-    annotationResolveStatus: [1, 1],
-    annotationIsGeneratedClass: [1, 1],
-    annotationRenderTextChunks: [1, 1],
-    annotationDisambiguateQuote: [3, 4],
-    annotationScoreQuoteMatches: [2, 4],
-    annotationFullXPathOf: [1, 1],
-    annotationFallbackCacheKey: [2, 2],
-    annotationLevenshteinWithin: [3, 3],
-    annotationHasStrongIdentity: [1, 1],
-    annotationStructuralFallbackStatus: [2, 2],
-    annotationCopyAnchorDecision: [1, 1],
-    annotationRenderedTextRepeatCount: [2, 2],
-    annotationFirstTextLeafDescendant: [1, 1],
-    annotationAncestorTagChain: [2, 2],
-    annotationDescendantAncestorMatches: [2, 2],
-    annotationStatusConfidence: [2, 2],
-    annotationStatusLabelKey: [2, 2],
-    annotationScopeAuthorityOutcome: [1, 1],
-    annotationEphemeralOutcome: [2, 3],
-    annotationSegmentedIndex: [3, 3],
-    annotationSegmentDisplayLabel: [1, 1],
-    annotationRailRightForPane: [2, 2],
-    debugFallbackScanProbe: [0, 0],
-    annotationUndoRemoveMany: [2, 3],
-    annotationScopeCounts: [2, 2],
-    annotationSelectedEntries: [2, 2],
-    annotationApplyIncludes: [2, 2],
-    annotationChipRefOf: [1, 1],
-    annotationChipRefBatch: [1, 2],
-    parseAnnotationChipRef: [1, 1],
-    annotationChipCandidates: [2, 4],
-    serializeAnnotationChip: [3, 4],
-    upsertAnnotationRecord: [2, 4],
-    removeAnnotationRecord: [2, 2],
-    restoreAnnotationRecord: [2, 3],
-    moveAnnotationRecord: [3, 3],
-    toggleAnnotationInclude: [3, 3],
-    annotationUndoRemove: [2, 4],
-    annotationUndoRestore: [2, 2],
-    annotationMarkerBadgeText: [1, 2],
-    clampDetailCardPosition: [3, 5]
-  }
-
-  test('the seam publishes exactly the frozen §3.7 surface', () => {
-    assert.deepEqual(Object.keys(ui).sort(), [...SEAM_EXPORTS].sort())
-    assert.equal(SEAM_GENERATION, 112, 'the frozen task-68 generation is pinned')
-    assert.equal(typeof ui.DEFAULT_SETTINGS, 'object')
-    assert.equal(Array.isArray(ui.MODIFIER_CHOICES), true)
-    assert.equal(typeof ui.SETTINGS_STORAGE_KEY, 'string')
-    for (const [name, [minimum, maximum]] of Object.entries(SEAM_ARITIES)) {
-      assert.equal(typeof ui[name], 'function', `${name} is a function`)
-      assert.ok(ui[name].length >= minimum && ui[name].length <= maximum, `${name} arity ${ui[name].length} within [${minimum}, ${maximum}]`)
-    }
+  test('the test seam publishes only the controller fallback-scan probe', () => {
+    // Phase 3 moved every pure model into src/browser/ui-annotation/**; this file
+    // imports those functions directly. The only controller-dependent diagnostic
+    // left is the fallback-scan cache probe the browser E2E reads.
+    assert.deepEqual(Object.keys(ui), ['debugFallbackScanProbe'])
+    assert.equal(typeof ui.debugFallbackScanProbe, 'function')
+    assert.equal(ui.debugFallbackScanProbe.length, 0)
   })
 
   test('the seam stays inert without the test-hooks flag (production path)', () => {
     const withoutFlag = loadClientModule({ hooksFlag: false })
     assert.equal(withoutFlag.hooks, undefined, 'the seam never creates the global the browser does not define')
-    assert.equal(withoutFlag.hooks?.uiAnnotation?.resolveNodeCandidate, undefined, 'the resolver is not leaked on the production path')
+    assert.equal(withoutFlag.hooks?.uiAnnotation, undefined, 'no annotation diagnostic is exposed on the production path')
     assert.equal(withoutFlag.registration?.id, '@zephinel/dsh-power-suite')
     assert.equal(typeof withoutFlag.registration.factory, 'function')
     assert.equal(typeof withoutFlag.factory.apply, 'function')
@@ -883,11 +710,11 @@ if (ui === undefined) {
 
   test('F11: ElementRef carries a top-level textDigest for the full sanitized text', () => {
     const fullText = 'word '.repeat(40).trim() // 199 chars, longer than the 80-char display summary
-    const descriptorDigest = ui.textDigest(fullText)
+    const descriptorDigest = annotationTextDigest(fullText)
     const ref = refOf({ name: 'Long target', text: fullText, textDigest: descriptorDigest })
     assert.equal(ref.textDigest, descriptorDigest, 'buildElementRef copies the descriptor digest through')
     assert.ok(ref.text.length <= 81, 'the display summary stays bounded')
-    assert.notEqual(ref.textDigest, ui.textDigest(ref.text), 'the digest covers the full text, not the truncated summary')
+    assert.notEqual(ref.textDigest, annotationTextDigest(ref.text), 'the digest covers the full text, not the truncated summary')
     const plain = refOf({ name: 'Plain target', text: 'plain' })
     assert.equal(plain.textDigest, '', 'the descriptor owns digest computation; an absent digest stays empty')
     assert.deepEqual(Object.keys(plain).sort(), ['at', 'bounds', 'component', 'context', 'id', 'included', 'lastStatus', 'locator', 'note', 'order', 'route', 'session', 'text', 'textDigest', 'updatedAt', 'version', 'viewport'])
@@ -1718,20 +1545,19 @@ if (ui === undefined) {
   })
 
   test('cssIdentifier/escapeSelectorValue use the platform CSS.escape when present', () => {
-    // The vm sandbox has no platform CSS by default; inject a sentinel before
-    // evaluation. A regression to the factory's local `const CSS` string would
-    // skip this path and fail these assertions.
-    const platform = loadClientModule({
-      globals: {
-        CSS: { escape: (value) => `sentinel:${value}` }
-      }
-    })
-    const platformUi = platform.hooks?.uiAnnotation
-    assert.equal(platformUi.cssIdentifier('123abc'), 'sentinel:123abc')
-    assert.equal(platformUi.cssIdentifier('#123abc'), 'sentinel:#123abc')
-    // escapeSelectorValue is not part of the frozen 35-key seam; assert at the
-    // source level that it uses the same platform path (the seam count is an
-    // E2E smoke gate, so adding a key would break that generation).
+    // cssIdentifier lives in text.ts and reads globalThis.CSS at call time, so
+    // install the sentinel on this realm for the duration of the assertions.
+    const previousCss = globalThis.CSS
+    try {
+      globalThis.CSS = { escape: (value) => `sentinel:${value}` }
+      assert.equal(escapeAnnotationIdentifier('123abc'), 'sentinel:123abc')
+      assert.equal(escapeAnnotationIdentifier('#123abc'), 'sentinel:#123abc')
+    } finally {
+      if (previousCss === undefined) delete globalThis.CSS
+      else globalThis.CSS = previousCss
+    }
+    // escapeSelectorValue is a controller-local helper; assert at the source
+    // level that it uses the same platform path.
     const source = client.source
     const start = source.indexOf('function escapeSelectorValue')
     const end = source.indexOf('function ', start + 10)
@@ -1875,7 +1701,7 @@ if (ui === undefined) {
       name: 'Long target',
       attrs: [{ name: 'id', value: 'long-button' }],
       text: longText,
-      textDigest: ui.textDigest(longText)
+      textDigest: annotationTextDigest(longText)
     })
     const longElement = liveElement('BUTTON', longText)
     const base = { candidates: longRef.locator.candidates, expectedTag: 'button', queryAll: () => [longElement] }
@@ -1883,13 +1709,13 @@ if (ui === undefined) {
     // Unchanged digest and accessible name keep the target resolved.
     assert.equal(resolveRefStatus({
       ...base,
-      liveInfo: () => ({ expectedDigest: longRef.textDigest, actualDigest: ui.textDigest(longText), expectedName: 'Long target', actualName: 'Long target' })
+      liveInfo: () => ({ expectedDigest: longRef.textDigest, actualDigest: annotationTextDigest(longText), expectedName: 'Long target', actualName: 'Long target' })
     }), 'resolved')
 
     // A tail change beyond the 80-char display summary changes the digest.
     assert.equal(resolveRefStatus({
       ...base,
-      liveInfo: () => ({ expectedDigest: longRef.textDigest, actualDigest: ui.textDigest(`${longText} tail`) })
+      liveInfo: () => ({ expectedDigest: longRef.textDigest, actualDigest: annotationTextDigest(`${longText} tail`) })
     }), 'changed', 'a change outside the truncated summary still reads as changed')
 
     // The accessible name can change while the visible text stays the same.
@@ -1904,22 +1730,22 @@ if (ui === undefined) {
       name: 'Icon',
       attrs: [{ name: 'id', value: 'icon-button' }],
       text: '',
-      textDigest: ui.textDigest('')
+      textDigest: annotationTextDigest('')
     })
     assert.equal(resolveRefStatus({
       candidates: emptyRef.locator.candidates,
       expectedTag: 'button',
       queryAll: () => [liveElement('BUTTON', 'now has text')],
-      liveInfo: () => ({ expectedDigest: emptyRef.textDigest, actualDigest: ui.textDigest('now has text') })
+      liveInfo: () => ({ expectedDigest: emptyRef.textDigest, actualDigest: annotationTextDigest('now has text') })
     }), 'changed', 'empty captured text with live text reads as changed')
 
     // The digest must not rescue the generic-only branch (no stable candidate).
-    const genericRef = refOf({ tag: 'div', role: '', name: '', component: 'container', text: '', textDigest: ui.textDigest('') })
+    const genericRef = refOf({ tag: 'div', role: '', name: '', component: 'container', text: '', textDigest: annotationTextDigest('') })
     assert.equal(resolveRefStatus({
       candidates: genericRef.locator.candidates,
       expectedTag: 'div',
       queryAll: () => [liveElement('DIV', 'now has text')],
-      liveInfo: () => ({ expectedDigest: ui.textDigest(''), actualDigest: ui.textDigest('now has text') })
+      liveInfo: () => ({ expectedDigest: annotationTextDigest(''), actualDigest: annotationTextDigest('now has text') })
     }), 'resolved', 'a unique anonymous generic match stays resolved; digest does not corroborate')
   })
 

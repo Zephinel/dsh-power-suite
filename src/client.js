@@ -50,21 +50,15 @@ import {
   psgWheelDecision
 } from './browser/composer-gallery/model.ts'
 import {
-  ANNOTATION_DEFAULT_SETTINGS,
   MODIFIER_CHOICES,
   SETTINGS_STORAGE_KEY,
   modifierMatches,
-  normalizeSettings,
   parseStoredSettings,
   resolveModifierChange,
   serializeSettings
 } from './browser/ui-annotation/settings.ts'
 import {
-  ANNOTATION_CONTROL_CHARS,
-  STABLE_KEY_ATTRIBUTES,
   annotationNormalizeQuoteText,
-  cssIdentifier,
-  cssString,
   normalizeUserNote,
   sanitizeAttributeName,
   sanitizeAttributeValue,
@@ -76,34 +70,26 @@ import {
   annotationAncestorTagChain,
   annotationCopyAnchorDecision,
   annotationDescendantAncestorMatches,
-  annotationDisambiguateQuote,
   annotationEphemeralOutcome,
   annotationFallbackCacheKey,
   annotationFirstTextLeafDescendant,
   annotationFullXPathOf,
   annotationHasStrongIdentity,
   annotationJsPathFor,
-  annotationLevenshteinWithin,
-  annotationRenderTextChunks,
   annotationRenderedTextOf,
-  annotationRenderedTextRepeatCount,
   annotationScopeAuthorityOutcome,
   annotationScoreQuoteMatches,
   annotationStatusConfidence,
   annotationStatusLabelKey,
-  annotationStructuralFallbackStatus,
   annotationTextPositionOf,
-  annotationTextQuoteMatches,
   annotationTextQuoteOf,
   annotationXPathOf
 } from './browser/ui-annotation/anchors.ts'
 import {
-  annotationJoinLabel,
   annotationRoutePath,
   annotationWorkspaceLabel,
   formatAnnotationTime,
   normalizeAnnotationBounds,
-  normalizeAnnotationViewport,
   sessionShortLabel
 } from './browser/ui-annotation/format.ts'
 import {
@@ -118,36 +104,22 @@ import {
   layoutModeFor
 } from './browser/ui-annotation/geometry.ts'
 import {
-  ANNOTATION_JS_PATH_MAX,
   ANNOTATION_MAX_ANCESTORS,
-  ANNOTATION_QUOTE_CONTEXT_MAX,
-  ANNOTATION_QUOTE_TOTAL_MAX,
-  ANNOTATION_TEXT_QUOTE_MAX,
-  ANNOTATION_XPATH_MAX,
   annotationIsGeneratedClass,
   annotationLocatorText,
-  annotationSelectorScore,
   annotationStableSelectorCandidate,
   annotationTagPath,
   buildElementRef,
-  buildStableAncestors,
   buildUniqueSelector,
   describeLocator,
   elementLabel,
   identityKeyOf,
   isDynamicValue,
-  isFormTag,
-  sanitizeAnchorString,
-  sanitizeDescendantAnchor,
-  sanitizeTextPosition,
-  sanitizeTextQuote,
-  selectorCandidates
+  isFormTag
 } from './browser/ui-annotation/identity.ts'
 import {
-  ANNOTATION_CHIP_REF_PATTERN,
   ANNOTATION_RECORD_LIMIT,
   ANNOTATION_RECORDS_STORAGE_KEY,
-  annotationApplyIncludes,
   annotationEntryOrdinals,
   annotationFilterEntries,
   annotationFindGroup,
@@ -155,7 +127,6 @@ import {
   annotationFlattenRecords,
   annotationGroupFromSelection,
   annotationGroupItems,
-  annotationGroupSummary,
   annotationIsGroup,
   annotationMarkerBadgeText,
   annotationScopeCounts,
@@ -164,20 +135,10 @@ import {
   annotationTotalItemCount,
   annotationUndoRemove,
   annotationUndoRemoveMany,
-  annotationUndoRestore,
-  collectionAdd,
   collectionAddGroup,
   collectionClear,
-  collectionRemove,
-  collectionSetNote,
-  moveAnnotationRecord,
-  normalizeAnnotationRecord,
   parseAnnotationStore,
-  removeAnnotationRecord,
-  restoreAnnotationRecord,
-  serializeAnnotationStore,
-  toggleAnnotationInclude,
-  upsertAnnotationRecord
+  serializeAnnotationStore
 } from './browser/ui-annotation/records.ts'
 import {
   createAnnotationState,
@@ -185,8 +146,7 @@ import {
 } from './browser/ui-annotation/reducer.ts'
 import {
   annotationResolveStatus,
-  resolveNodeCandidate,
-  resolveRefStatus
+  resolveNodeCandidate
 } from './browser/ui-annotation/resolution.ts'
 import {
   ANNOTATION_CHIP_CANDIDATE_LIMIT,
@@ -198,14 +158,12 @@ import {
   parseAnnotationChipRef,
   serializeAnnotationChip,
   serializeBatchEntries,
-  serializeBatchRequest,
   serializeQuickReference
 } from './browser/ui-annotation/serializers.ts'
 import {
   annotationLeafPickIndex,
   annotationRailRightForPane,
   annotationSurfaceLevels,
-  annotationSurfacePickLevel,
   annotationSurfacePinEligible,
   annotationSurfacePinEventMatches,
   annotationSurfaceRoot,
@@ -19168,127 +19126,20 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
       installSidebarWidth(ctx)
     }
 
-    // Test seam: `test/helpers/client-module.mjs` materializes this factory under a
-    // DOM stub and reads these pure helpers. Production never defines the flag.
+    // Test seam: the controller's deterministic fallback-scan probe is the only
+    // diagnostic the browser E2E still needs (it proves the status cache does not
+    // rescan the DOM). Every pure annotation model is imported from
+    // `src/browser/ui-annotation/**` and unit-tested directly, so the retired
+    // 112-key pass-through is not republished here. Production never defines the
+    // flag, so this block is inert.
     if (typeof globalThis !== 'undefined'
       && typeof globalThis.__POWER_SUITE_TEST_HOOKS__ === 'object'
       && globalThis.__POWER_SUITE_TEST_HOOKS__ !== null) {
       globalThis.__POWER_SUITE_TEST_HOOKS__.uiAnnotation = {
-        DEFAULT_SETTINGS: ANNOTATION_DEFAULT_SETTINGS,
-        MODIFIER_CHOICES,
-        SETTINGS_STORAGE_KEY,
-        RECORDS_STORAGE_KEY: ANNOTATION_RECORDS_STORAGE_KEY,
-        RECORD_LIMIT: ANNOTATION_RECORD_LIMIT,
-        normalizeSettings,
-        resolveModifierChange,
-        parseStoredSettings,
-        serializeSettings,
-        modifierMatches,
-        sanitizeText,
-        normalizeUserNote,
-        textDigest,
-        sanitizeAttributeName,
-        sanitizeAttributeValue,
-        buildElementRef,
-        selectorCandidates,
-        identityKeyOf,
-        describeLocator,
-        elementLabel,
-        cssIdentifier,
-        clampPopoverPositionToViewport,
-        createAnnotationState,
-        reduceAnnotationState,
-        serializeQuickReference,
-        serializeBatchRequest,
-        batchScopeSplit,
-        resolveRefStatus,
-        resolveNodeCandidate,
-        clampLauncherPosition,
-        clampPopoverPosition,
-        computeRailWidth,
-        layoutModeFor,
-        collectionAdd,
-        collectionRemove,
-        collectionClear,
-        collectionSetNote,
-        annotationWorkspaceLabel,
-        annotationRoutePath,
-        normalizeAnnotationViewport,
-        buildStableAncestors,
-        buildUniqueSelector,
-        annotationLocatorText,
-        normalizeAnnotationRecord,
-        parseAnnotationStore,
-        serializeAnnotationStore,
-        annotationSurfaceRoot,
-        annotationSurfaceLevels,
-        annotationSurfacePickLevel,
-        annotationLeafPickIndex,
-        annotationIsGroup,
-        annotationGroupItems,
-        annotationFlattenRecords,
-        annotationTotalItemCount,
-        annotationFindRecord,
-        annotationGroupFromSelection,
-        collectionAddGroup,
-        serializeBatchEntries,
-        annotationSidebarCounts,
-        annotationFilterEntries,
-        annotationGroupSummary,
-        annotationEntryOrdinals,
-        annotationSurfacePinEligible,
-        annotationSurfacePinEventMatches,
-        annotationNormalizeQuoteText,
-        annotationXPathOf,
-        annotationJsPathFor,
-        annotationTextQuoteOf,
-        annotationTextPositionOf,
-        annotationTextQuoteMatches,
-        annotationSelectorScore,
-        annotationResolveStatus,
-        annotationIsGeneratedClass,
-        annotationRenderTextChunks,
-        annotationDisambiguateQuote,
-        annotationScoreQuoteMatches,
-        annotationFullXPathOf,
-        annotationFallbackCacheKey,
-        annotationLevenshteinWithin,
-        annotationHasStrongIdentity,
-        annotationStructuralFallbackStatus,
-        annotationCopyAnchorDecision,
-        annotationRenderedTextRepeatCount,
-        annotationFirstTextLeafDescendant,
-        annotationAncestorTagChain,
-        annotationDescendantAncestorMatches,
-        annotationStatusConfidence,
-        annotationStatusLabelKey,
-        annotationScopeAuthorityOutcome,
-        annotationEphemeralOutcome,
-        annotationSegmentedIndex,
-        annotationSegmentDisplayLabel,
-        annotationRailRightForPane,
         debugFallbackScanProbe: () => (annotationController !== null && annotationController !== undefined
           && typeof annotationController.debugFallbackScanProbe === 'function'
           ? annotationController.debugFallbackScanProbe()
-          : { ok: false, reason: 'controller unavailable' }),
-        upsertAnnotationRecord,
-        removeAnnotationRecord,
-        restoreAnnotationRecord,
-        moveAnnotationRecord,
-        toggleAnnotationInclude,
-        annotationUndoRemove,
-        annotationUndoRestore,
-        annotationMarkerBadgeText,
-        clampDetailCardPosition,
-        annotationUndoRemoveMany,
-        annotationScopeCounts,
-        annotationSelectedEntries,
-        annotationApplyIncludes,
-        annotationChipRefOf,
-        annotationChipRefBatch,
-        parseAnnotationChipRef,
-        annotationChipCandidates,
-        serializeAnnotationChip
+          : { ok: false, reason: 'controller unavailable' })
       }
 
       // Sidebar width: only the attach probe the browser E2E reads remains a
