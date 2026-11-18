@@ -2073,6 +2073,7 @@ if (ui === undefined) {
 
   test('A3/T6: the mark overlay is pointer-transparent and the detail card keeps its markers', () => {
     const source = client.source
+    const componentsSource = readFileSync(new URL('../src/browser/ui-annotation/components.ts', import.meta.url), 'utf8')
     assert.equal(typeof source, 'string')
     assert.ok(source.includes("from './browser/ui-annotation/styles.ts'"), 'the annotation stylesheet is mounted from the module')
     const css = ANNOTATION_CSS
@@ -2082,13 +2083,13 @@ if (ui === undefined) {
     assert.ok(css.includes('.psa-mark-badge{'), 'the mark badge rule exists')
     assert.ok(css.includes('.psa-detail-card{'), 'the detail card rule exists')
     assert.ok(css.includes('prefers-reduced-motion'), 'reduced-motion handling is present')
-    assert.ok(source.includes("'data-psa-mark': ''"), 'marks are rendered with the data-psa-mark marker')
-    assert.ok(source.includes("'data-psa-mark-id': mark.id"), 'marks expose their record id')
-    assert.ok(source.includes("'data-psa-detail': ''"), 'the detail card is rendered with data-psa-detail')
-    assert.ok(source.includes("'data-psa-undo-toast': ''"), 'the delete undo toast is rendered')
-    assert.ok(source.includes('role: \'status\''), 'the undo toast is a polite status region')
-    assert.ok(source.includes('function AnnotationDetailCard'), 'the detail card component exists')
-    assert.ok(source.includes('function annotationMarkElements'), 'the mark element builder exists')
+    assert.ok(componentsSource.includes("'data-psa-mark': ''"), 'marks are rendered with the data-psa-mark marker')
+    assert.ok(componentsSource.includes("'data-psa-mark-id': mark.id"), 'marks expose their record id')
+    assert.ok(componentsSource.includes("'data-psa-detail': ''"), 'the detail card is rendered with data-psa-detail')
+    assert.ok(componentsSource.includes("'data-psa-undo-toast': ''"), 'the delete undo toast is rendered')
+    assert.ok(componentsSource.includes('role: \'status\''), 'the undo toast is a polite status region')
+    assert.ok(componentsSource.includes('function AnnotationDetailCard'), 'the detail card component exists')
+    assert.ok(componentsSource.includes('function annotationMarkElements'), 'the mark element builder exists')
   })
 
   test('A2/F-2: the Session seat bridges cwd and record capture prefers it over the ctx fallback', () => {
@@ -2312,14 +2313,15 @@ if (ui === undefined) {
 
   test('A3/T29: the launcher hides while active (no dock/flight) and exits are confirmed', () => {
     const source = client.source
+    const componentsSource = readFileSync(new URL('../src/browser/ui-annotation/components.ts', import.meta.url), 'utf8')
     assert.equal(typeof source, 'string')
-    assert.equal(source.includes('AnnotationDockedLauncher'), false, 'the docked launcher component/usage must be gone')
-    assert.equal(source.includes('data-psa-launcher-docked'), false, 'the docked launcher marker must be gone')
+    assert.equal(componentsSource.includes('AnnotationDockedLauncher'), false, 'the docked launcher component/usage must be gone')
+    assert.equal(componentsSource.includes('data-psa-launcher-docked'), false, 'the docked launcher marker must be gone')
     assert.equal(ANNOTATION_CSS.includes('.psa-launcher-docked'), false, 'the docked launcher CSS must be gone')
-    assert.equal(source.includes('AnnotationLauncherFlight'), false, 'the flight element component must be gone')
-    assert.equal(source.includes('launcherFlight'), false, 'the flight state/helper must be gone')
-    assert.ok(source.includes("'data-psa-launcher-hidden': active ? 'true' : 'false'"), 'the launcher exposes its hidden state')
-    assert.ok(source.includes("'aria-hidden': active ? 'true' : undefined"), 'the hidden launcher is aria-hidden while active')
+    assert.equal(componentsSource.includes('AnnotationLauncherFlight'), false, 'the flight element component must be gone')
+    assert.equal(componentsSource.includes('launcherFlight'), false, 'the flight state/helper must be gone')
+    assert.ok(componentsSource.includes("'data-psa-launcher-hidden': active ? 'true' : 'false'"), 'the launcher exposes its hidden state')
+    assert.ok(componentsSource.includes("'aria-hidden': active ? 'true' : undefined"), 'the hidden launcher is aria-hidden while active')
     assert.ok(ANNOTATION_CSS.includes('.psa-launcher[data-psa-launcher-hidden=true]{'), 'the hidden launcher CSS exists')
     assert.ok(ANNOTATION_CSS.includes('transition:opacity 180ms ease,transform 180ms ease'), 'the hide/show transition exists')
     assert.ok(ANNOTATION_CSS.includes('.psa-launcher{transition:none}'), 'reduced motion disables the launcher hide/show transition')
@@ -2331,7 +2333,7 @@ if (ui === undefined) {
       assert.ok(controllerSource.includes(marker), `exit confirmation must include ${marker}`)
     }
     for (const marker of ['function AnnotationExitConfirm', "'data-psa-exit-clear': '',", "'data-psa-exit-cancel': '',", 'data-psa-exit-confirm']) {
-      assert.ok(source.includes(marker), `exit confirmation must include ${marker}`)
+      assert.ok(componentsSource.includes(marker), `exit confirmation must include ${marker}`)
     }
     const confirmStart = controllerSource.indexOf('function confirmExitClear()')
     const confirmEnd = controllerSource.indexOf('\n  /**', confirmStart)
@@ -2339,15 +2341,15 @@ if (ui === undefined) {
     assert.ok(confirm.includes("dispatch({ type: 'collectionClear' })"), 'confirming must clear all records')
     assert.ok(confirm.includes('flushAnnotationRecords()'), 'confirming must flush the empty persisted document')
     assert.ok(confirm.includes('deactivate()'), 'confirming must exit the mode')
-    const footerStart = source.indexOf('function annotationCollectionFooter')
-    const footerEnd = source.indexOf('\n    /**', footerStart)
-    const footer = source.slice(footerStart, footerEnd > 0 ? footerEnd : source.length)
+    const footerStart = componentsSource.indexOf('function annotationCollectionFooter')
+    const footerEnd = componentsSource.indexOf('\n/**', footerStart)
+    const footer = componentsSource.slice(footerStart, footerEnd > 0 ? footerEnd : componentsSource.length)
     assert.ok(footer.includes("t('sidebar.cancelAnnotation')"), 'footer danger label is Cancel Annotation')
     assert.ok(footer.includes('controller.requestExit()'), 'footer danger uses the confirmed exit path')
     assert.ok(source.includes('REMIX_INFORMATION_LINE'), 'information-line glyph constant exists')
     assert.ok(source.includes("M12 22C6.47715 22 2 17.5228 2 12C2 6.47715"), 'information-line constant carries the Remix information-line path')
-    assert.ok(source.includes('RemixGlyph(REMIX_INFORMATION_LINE'), 'rail header uses the information-line glyph')
-    assert.ok(!source.includes("'data-psa-open-settings': ''"), 'legacy settings gear marker must be gone')
+    assert.ok(componentsSource.includes('glyph(icons.information, 13)'), 'rail header uses the information-line glyph')
+    assert.ok(!componentsSource.includes("'data-psa-open-settings': ''"), 'legacy settings gear marker must be gone')
     assert.ok(ANNOTATION_CSS.includes('pointer-events:none') && ANNOTATION_CSS.includes('.psa-layer{position:fixed'), 'marks layer remains pointer-transparent')
   })
 
@@ -2397,10 +2399,11 @@ if (ui === undefined) {
 
   test('A3/T21: chip hover preview is a pointer-transparent tooltip backed by the local record store', () => {
     const source = client.source
-    assert(source.includes('function AnnotationChipPreview'), 'the chip hover preview component exists')
-    const componentStart = source.indexOf('function AnnotationChipPreview')
-    const componentEnd = source.indexOf('\n    /**', componentStart)
-    const component = source.slice(componentStart, componentEnd > 0 ? componentEnd : source.length)
+    const componentsSource = readFileSync(new URL('../src/browser/ui-annotation/components.ts', import.meta.url), 'utf8')
+    assert(componentsSource.includes('function AnnotationChipPreview'), 'the chip hover preview component exists')
+    const componentStart = componentsSource.indexOf('function AnnotationChipPreview')
+    const componentEnd = componentsSource.indexOf('\n/**', componentStart)
+    const component = componentsSource.slice(componentStart, componentEnd > 0 ? componentEnd : componentsSource.length)
     assert(component.includes("role: 'tooltip'"), 'the preview must be a tooltip')
     assert(component.includes("'data-psa-chip-preview': ''"), 'the preview must be queryable for E2E')
     assert(component.includes("annotationLocatorText(record)"), 'the preview shows the recorded locator')
@@ -3103,11 +3106,12 @@ if (ui === undefined) {
 
   test('F6: the popover note textarea is wired to beginEdit/endEdit in production code', () => {
     const source = client.source
+    const componentsSource = readFileSync(new URL('../src/browser/ui-annotation/components.ts', import.meta.url), 'utf8')
     assert.equal(typeof source, 'string')
-    const start = source.indexOf('function AnnotationPopover')
+    const start = componentsSource.indexOf('function AnnotationPopover')
     assert.ok(start >= 0, 'the AnnotationPopover component exists')
-    const nextFunction = source.indexOf('\n    function ', start + 'function AnnotationPopover'.length)
-    const popover = source.slice(start, nextFunction > 0 ? nextFunction : source.length)
+    const nextFunction = componentsSource.indexOf('\n/**', start + 'function AnnotationPopover'.length)
+    const popover = componentsSource.slice(start, nextFunction > 0 ? nextFunction : componentsSource.length)
     assert.ok(popover.includes("'data-psa-note'"), 'the popover still renders the note textarea')
     assert.ok(popover.includes('onFocus'), 'the note textarea enters edit mode on focus')
     assert.ok(popover.includes('onBlur'), 'the note textarea leaves edit mode on blur')
