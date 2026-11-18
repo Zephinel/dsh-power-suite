@@ -838,8 +838,8 @@ function AnnotationGroupRow(props: AnnotationEntryRowProps) {
       className: 'psa-icon-btn',
       'data-psa-group-edit': '',
       'data-psa-own': '',
-      'aria-label': t('collection.expand'),
-      title: t('collection.expand'),
+      'aria-label': t('collection.expandNote'),
+      title: t('collection.expandNote'),
       onClick: () => controller.openNoteEditor(entry.id)
     }, glyph(icons.annotationCopy, 13)),
     React.createElement('button', {
@@ -1102,8 +1102,8 @@ function AnnotationEntryRow(props: AnnotationEntryRowProps) {
       className: 'psa-icon-btn',
       'data-psa-entry-expand': '',
       'data-psa-own': '',
-      'aria-label': t('collection.expand'),
-      title: t('collection.expand'),
+      'aria-label': t('collection.expandNote'),
+      title: t('collection.expandNote'),
       onClick: () => controller.openNoteEditor(entry.id)
     }, glyph(icons.listCheck, 13)),
     React.createElement('button', {
