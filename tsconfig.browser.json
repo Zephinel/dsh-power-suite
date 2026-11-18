@@ -11,7 +11,8 @@
   "include": [
     "src/client.js",
     "src/browser/**/*.ts",
-    "src/shared/**/*.ts"
+    "src/shared/**/*.ts",
+    "src/browser/ambient/**/*.d.ts"
   ],
   "exclude": [
     "src/browser/dom.d.ts"

@@ -2488,7 +2488,9 @@ window.__ModuleLoader__.load({
       const [copiedContentKey, setCopiedContentKey] = React.useState(null)
       const [filter, setFilter] = React.useState('all')
       const [filterOpen, setFilterOpen] = React.useState(false)
+      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
       const filterWrapRef = React.useRef(null)
+      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
       const filterMenuRef = React.useRef(null)
 
       React.useEffect(() => {
@@ -2833,8 +2835,11 @@ window.__ModuleLoader__.load({
       const phase = state.phase
       const open = phase === 'opening' || phase === 'open'
       const showing = phase !== 'files'
+      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
       const buttonRef = React.useRef(null)
+      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
       const viewRef = React.useRef(null)
+      /** @type {import('react').MutableRefObject<{ page: HTMLElement | null, content: HTMLElement | null }>} */
       const stageRef = React.useRef({ page: null, content: null })
       const previousPhaseRef = React.useRef(phase)
       const [sessionId, setSessionId] = React.useState(slotSessionId)
@@ -3334,6 +3339,7 @@ window.__ModuleLoader__.load({
       const phase = useInput((state) => state.phase)
       const browsing = React.useRef({ index: null, saved: '', recalled: null })
       const history = React.useRef({ prompts: [], ready: false, loading: null, sessionId: null, generation: 0 })
+      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
       const anchor = React.useRef(null)
       const latest = React.useRef({ draft, phase, sessionId })
       latest.current.draft = draft
@@ -3803,6 +3809,7 @@ window.__ModuleLoader__.load({
       const currentText = shortcutText(t, current)
       const currentRecent = snapshot.value.recentSessionMinutes
       const currentActive = snapshot.value.activeProjectDays
+      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
       const pageRef = React.useRef(null)
 
       // The bundle page draws the package README above this configuration
@@ -5587,6 +5594,7 @@ function dwAtmosphereMount(host) {
  * @returns {object} the wrapper element.
  */
 function DwAtmosphere() {
+  /** @type {import('react').MutableRefObject<HTMLElement | null>} */
   const hostRef = React.useRef(null)
   React.useEffect(() => {
     const host = hostRef.current
@@ -6829,8 +6837,11 @@ function dwClearNativeAtmospheres() {
       const [annotationActive, setAnnotationActive] = React.useState(
         () => document.documentElement.getAttribute('data-psa-active') === 'true'
       )
+      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
       const hoverCardRef = React.useRef(null)
+      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
       const panelRootRef = React.useRef(null)
+      /** @type {import('react').MutableRefObject<number | null>} */
       const hoverTimer = React.useRef(null)
       const clearHoverTimer = () => {
         if (hoverTimer.current !== null) {
@@ -8797,10 +8808,15 @@ function dwClearNativeAtmospheres() {
       const [layout, setLayout] = React.useState(null)
       const [fades, setFades] = React.useState({ top: false, bottom: false })
       const [searchAnchor, setSearchAnchor] = React.useState(null)
+      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
       const searchRef = React.useRef(null)
+      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
       const searchCardRef = React.useRef(null)
+      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
       const toggleRef = React.useRef(null)
+      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
       const marksRef = React.useRef(null)
+      /** @type {import('react').MutableRefObject<number | null>} */
       const previewTimer = React.useRef(null)
 
       const prompts = snapshot.sessionId === sessionId && snapshot.status === 'ready' ? snapshot.prompts : []
@@ -16760,6 +16776,7 @@ body:not([data-ds-dark-theme]) .psa-settings-popover{
      */
     function AnnotationModifierSettingsPopover(props) {
       const { t, controller, snapshot } = props
+      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
       const popoverRef = React.useRef(null)
       const [position, setPosition] = React.useState(null)
       React.useEffect(() => {
@@ -16853,6 +16870,7 @@ body:not([data-ds-dark-theme]) .psa-settings-popover{
       const { t, controller, snapshot } = props
       const card = snapshot.detailCard
       /** Requirement draft; uncontrolled so hover reopen never fights the record value. */
+      /** @type {import('react').MutableRefObject<HTMLTextAreaElement | null>} */
       const noteRef = React.useRef(null)
       const setDetailNode = React.useCallback((node) => {
         if (node === null) controller.detachDetailNode()
@@ -17894,6 +17912,7 @@ body:not([data-ds-dark-theme]) .psa-settings-popover{
     function ComposerImageGallery(props) {
       const { t } = props
       const state = React.useSyncExternalStore(psgSubscribe, psgSnapshot, psgSnapshot)
+      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
       const rootRef = React.useRef(null)
       const open = state.open
 
@@ -18397,6 +18416,7 @@ body:not([data-ds-dark-theme]) .psa-settings-popover{
         controller.store.getSnapshot
       )
       const actions = controller.actions
+      /** @type {import('react').MutableRefObject<HTMLElement | null>} */
       const cardRef = React.useRef(null)
       const shown = snapshot.kind === 'shown'
 
