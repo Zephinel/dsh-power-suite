@@ -108,6 +108,8 @@ export interface PromptHistorySeatDeps {
 export interface PromptHistorySeatModule {
   PromptHistorySeat: (props: PromptHistorySeatProps) => ReactElement | null
   installPromptHistory(ctx: PromptHistorySeatContext): void
+  /** Host reader reused by the composer-docked preview. */
+  readPromptHistoryEntries(sessionId: string): Promise<PromptHistoryEntry[]>
 }
 
 /** A loose JSON object. */
@@ -375,5 +377,5 @@ export function createPromptHistorySeat(deps: PromptHistorySeatDeps): PromptHist
     }, PromptHistorySeat)), 'power-suite: prompt history seat')
   }
 
-  return { PromptHistorySeat, installPromptHistory }
+  return { PromptHistorySeat, installPromptHistory, readPromptHistoryEntries }
 }
