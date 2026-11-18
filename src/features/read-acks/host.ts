@@ -15,9 +15,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { READ_ACKS_READ_FAILED, createReadAckStore, isAckBaseline, isSessionId } from './store.ts'
 import { errorCode } from '../../host/errors.ts'
+import { ROUTES } from '../../shared/routes.ts'
 
 /** Route serving and merging the read-acks document. */
-export const READ_ACKS_ROUTE = '/api/power-suite.read-acks'
+export const READ_ACKS_ROUTE = ROUTES.readAcks
 
 /** Request bodies here are one small JSON object; anything larger is hostile. */
 const MAX_BODY_BYTES = 64 * 1024

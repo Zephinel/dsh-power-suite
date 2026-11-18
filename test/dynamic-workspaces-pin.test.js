@@ -41,6 +41,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { loadClientModule } from './helpers/client-module.mjs'
+import { ROUTES, browserRoute } from '../src/shared/routes.ts'
 
 const client = loadClientModule()
 const production = loadClientModule({ hooksFlag: false })
@@ -222,7 +223,8 @@ test('the card-owned pin syncs through the panel route, never through the native
   const source = client.source
   // Panel-owned Host-shared state: the suite's own route, request helpers, local
   // cache, and the first-contact migration flag that merges pre-restart pins.
-  assert.match(source, /power-suite\.session-pins/, 'the client talks to /api/power-suite.session-pins')
+  assert.equal(browserRoute(ROUTES.sessionPins), 'api/power-suite.session-pins', 'the shared contract owns the panel route')
+  assert.match(source, /ROUTES\.sessionPins/, 'the client talks to the panel route through the shared contract')
   assert.match(source, /dwFetchPinnedSessions/, 'the client has the Host GET helper')
   assert.match(source, /dwPostPinOps/, 'the client has the Host POST helper')
   assert.match(source, /power-suite\.dynamic-workspaces\.pinned/, 'the local cache document key exists')

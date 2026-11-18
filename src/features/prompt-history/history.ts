@@ -9,8 +9,11 @@
  * files) contribute nothing; a prompt with no words has no history entry.
  */
 
+import { ROUTES } from '../../shared/routes.ts'
+
+
 /** Authenticated exact route serving one Session's sent-prompt history. */
-export const PROMPT_HISTORY_ROUTE = '/api/prompt-history.list'
+export const PROMPT_HISTORY_ROUTE = ROUTES.promptHistoryList
 
 /** Most recent prompts one response carries. */
 export const MAX_PROMPTS = 500

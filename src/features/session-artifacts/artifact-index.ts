@@ -12,18 +12,19 @@
  */
 
 import path from 'node:path'
+import { ROUTES } from '../../shared/routes.ts'
 
 /** Authenticated exact route serving the artifact list for one Session. */
-export const LIST_ROUTE = '/api/session-artifacts.list'
+export const LIST_ROUTE = ROUTES.sessionArtifactsList
 
 /** Authenticated exact route serving one artifact's bytes. */
-export const RAW_ROUTE = '/api/session-artifacts.raw'
+export const RAW_ROUTE = ROUTES.sessionArtifactsRaw
 
 /** Authenticated exact route serving one user-provided attachment's bytes. */
-export const ATTACHMENT_ROUTE = '/api/session-artifacts.attachment'
+export const ATTACHMENT_ROUTE = ROUTES.sessionArtifactsAttachment
 
 /** Authenticated exact route serving one artifact's hover-preview descriptor. */
-export const PREVIEW_ROUTE = '/api/session-artifacts.preview'
+export const PREVIEW_ROUTE = ROUTES.sessionArtifactsPreview
 
 /** Tool names whose successful calls produce a file. */
 const MUTATING_TOOLS = new Set(['write', 'edit', 'str_replace_editor'])

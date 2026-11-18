@@ -35,15 +35,16 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 
 ### Current gates (2026-11-18, Node 24.22.3)
 
-- `npm run build`: **`lib/index.js` 105.0 kB** (Host ESM bundle) and
-  **`lib/client.js` 957.5 kB** (ESM `src/client.js` + `src/browser/` bundled to a
+- `npm run build`: **`lib/index.js` 105.7 kB** (Host ESM bundle) and
+  **`lib/client.js` 958.6 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **387 tests, 387 passed, 0 failed**, 26 test files — Host stores/routes
+- `npm test`: **388 tests, 388 passed, 0 failed**, 26 test files — Host stores/routes
   plus the browser-side derivations (the vm harness bundles the ESM client), the
   release-notes approval round-trip, the protocol contract guard for duplicated
-  route/enum literals, the durable document-store interface, and direct Node tests
-  for the extracted browser update-prompt and sidebar-width models.
+  route/enum literals, the shared route contract, the durable document-store
+  interface, and direct Node tests for the extracted browser update-prompt and
+  sidebar-width models.
 - `npm run typecheck`: `tsc --noEmit --strict` clean over the Host TypeScript
   sources (`src/**/*.ts`; the ESM browser entry `src/client.js` + `src/browser/`
   still carries `// @ts-nocheck` until the Phase 3 split completes).
@@ -53,7 +54,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 - `rm -rf lib && node --test test/*.test.js`: **377/377** — the suite imports the
   `.ts` sources directly (Node >= 22.18 native type stripping), so the tests need
   no build.
-- `npm run check`: passed (`30 TypeScript modules, 1 JavaScript module(s), 26 test files`); it builds `lib/` first,
+- `npm run check`: passed (`31 TypeScript modules, 1 JavaScript module(s), 26 test files`); it builds `lib/` first,
   then runs the syntax checks, the typecheck, package-manifest validation, the
   built-entry smoke (update route reports `current=0.1.0`), local docs links, the
   Node suite and the release-notes gate, then `pack:check`.

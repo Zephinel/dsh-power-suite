@@ -18,9 +18,10 @@ import {
 } from './store.ts'
 import { harnessHome } from '../read-acks/host.ts'
 import { errorCode } from '../../host/errors.ts'
+import { ROUTES } from '../../shared/routes.ts'
 
 /** Route serving and storing the sidebar-width document. */
-export const SIDEBAR_WIDTH_ROUTE = '/api/power-suite.sidebar-width'
+export const SIDEBAR_WIDTH_ROUTE = ROUTES.sidebarWidth
 
 /** Request bodies here are one tiny JSON object; anything larger is hostile. */
 const MAX_BODY_BYTES = 1024

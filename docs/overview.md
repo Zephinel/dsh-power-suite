@@ -40,6 +40,7 @@ the code the Host runs after `npm run build` and a restart (the Host loads
   src/features/<name>/      # Host-side feature modules
   src/client.js             # browser entry (ESM): one `#region feature: <name>` per feature
   src/browser/              # browser-side modules imported by the entry (update-check, sidebar-width)
+  src/shared/routes.ts      # cross-half route contract (16 API paths)
   src/host/document-store.ts # shared durable-document module for the JSON stores
   src/host/context.ts        # minimal structural Host context
   src/host/errors.ts         # unknown-thrown-value helpers
@@ -63,7 +64,8 @@ the code the Host runs after `npm run build` and a restart (the Host loads
    registers each feature's contributions.
 3. Feature routes live under `/api/<feature>.*` and use
    `ctx.connection.fetch.register`, so they sit behind the same browser
-   authentication and Host/Origin fence as the rest of the GUI.
+   authentication and Host/Origin fence as the rest of the GUI; the path is
+   declared once in `src/shared/routes.ts` for both halves.
 4. Put user-facing reference in `docs/<name>.md` and, when the display text is
    user-visible, add the copy to the locale dictionaries.
 5. Add a pure-logic test under `test/` when a feature derives state from the

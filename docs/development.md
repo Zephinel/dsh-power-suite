@@ -231,7 +231,9 @@ releases are stable semver with an annotated `v<version>` tag.
    `src/client.js` with its slot components, guide card, and copy; register it
    from `apply`.
 3. **Routes** — keep them under `/api/<feature>.*` and behind
-   `ctx.connection.fetch.register`.
+   `ctx.connection.fetch.register`; declare the path once in
+   `src/shared/routes.ts` and re-export it from the Host module (the browser half
+   imports it through `browserRoute`).
 4. **Copy** — register the feature's dictionary inline in its client region with
    `ctx.locale.register(NS, { en, zh })` and bind it with `ctx.locale.bind(NS)`;
    `locale/*.json` holds only the plugin's display metadata (title/description).

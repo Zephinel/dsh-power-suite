@@ -51,9 +51,10 @@ import {
   isActivitySessionId,
   isActivityTime
 } from './store.ts'
+import { ROUTES } from '../../shared/routes.ts'
 
 /** Route serving the live activity ledger snapshot. */
-export const SESSION_ACTIVITY_ROUTE = '/api/power-suite.session-activity'
+export const SESSION_ACTIVITY_ROUTE = ROUTES.sessionActivity
 
 /** Longest a cold route request waits for the one-time baseline before serving. */
 export const SEED_BASELINE_WAIT_MS = 5000

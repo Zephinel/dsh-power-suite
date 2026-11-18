@@ -12,9 +12,10 @@ import { type HostContext } from '../../host/context.ts'
 import { SESSION_PINS_READ_FAILED, createSessionPinStore, validatePinOps } from './store.ts'
 import { errorCode } from '../../host/errors.ts'
 import { harnessHome } from '../read-acks/host.ts'
+import { ROUTES } from '../../shared/routes.ts'
 
 /** Route serving and applying the session-pins document. */
-export const SESSION_PINS_ROUTE = '/api/power-suite.session-pins'
+export const SESSION_PINS_ROUTE = ROUTES.sessionPins
 
 /** Request bodies here are one small JSON object; anything larger is hostile. */
 const MAX_BODY_BYTES = 64 * 1024

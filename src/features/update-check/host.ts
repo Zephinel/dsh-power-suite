@@ -8,9 +8,10 @@
 
 import { type HostContext } from '../../host/context.ts'
 import { createUpdateChecker } from './checker.ts'
+import { ROUTES } from '../../shared/routes.ts'
 
 /** Same-origin exact route serving the cached update check. */
-export const UPDATE_ROUTE = '/api/power-suite.update'
+export const UPDATE_ROUTE = ROUTES.update
 
 /**
  * Register the update-check route inside Connection's authentication fence.

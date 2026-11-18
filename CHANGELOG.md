@@ -12,6 +12,8 @@ All notable changes to this repository are documented here. The format follows
 
 ### Changed
 
+- **Shared route contract (Phase 3d).** All 16 API paths now live in `src/shared/routes.ts`: Host modules re-export those constants and the browser entry/models import the same values through `browserRoute`, so no `/api/...` route literal remains in `src/client.js`. The protocol contract test asserts the Host set equals the shared contract and that the browser half contains no route literals. Paths and behavior are unchanged.
+
 - **Browser sidebar-width model (Phase 3c).** The pure sidebar-width decisions (clamp/validity, browser-cache document, Host-payload normalizer and the boot/adopt/reopen decision rules) moved from `src/client.js` to `src/browser/sidebar-width/model.ts`, with `test/sidebar-width-model.test.js` importing them directly in Node; the protocol contract test now imports the extracted browser route alongside the remaining inline literals. Attach, drag capture, persistence and the Host route are unchanged.
 
 - **Browser update-prompt model (Phase 3b).** The pure update-prompt state machine moved from `src/client.js` to `src/browser/update-check/model.ts` and is now covered by `test/update-check-model.test.js` importing it directly in Node (the vm seam only covers the browser controller). No prompt behavior, copy or storage format changes.

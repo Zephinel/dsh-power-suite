@@ -28,6 +28,7 @@ import {
   serializeSidebarWidthCache,
   shouldAdoptSidebarWidth
 } from './browser/sidebar-width/model.ts'
+import { ROUTES, browserRoute } from './shared/routes.ts'
 /**
  * Browser half of DSH Power Suite.
  *
@@ -98,10 +99,10 @@ window.__ModuleLoader__.load({
     const FILES_ARTIFACTS_EXIT_MS = 160
 
     /** Authenticated exact routes registered by the Host half. */
-    const LIST_ROUTE = 'api/session-artifacts.list'
-    const RAW_ROUTE = 'api/session-artifacts.raw'
-    const ATTACHMENT_ROUTE = 'api/session-artifacts.attachment'
-    const PREVIEW_ROUTE = 'api/session-artifacts.preview'
+    const LIST_ROUTE = browserRoute(ROUTES.sessionArtifactsList)
+    const RAW_ROUTE = browserRoute(ROUTES.sessionArtifactsRaw)
+    const ATTACHMENT_ROUTE = browserRoute(ROUTES.sessionArtifactsAttachment)
+    const PREVIEW_ROUTE = browserRoute(ROUTES.sessionArtifactsPreview)
 
     /** The bundle's npm package name: configuration slot key and settings identity. */
     const PACKAGE_NAME = '@zephinel/dsh-power-suite'
@@ -182,8 +183,8 @@ window.__ModuleLoader__.load({
     const PRESET_NS = 'workspacePresets'
 
     /** Exact routes the Host half serves for the override map. */
-    const PRESET_GET_ROUTE = 'api/workspace-presets.get'
-    const PRESET_SET_ROUTE = 'api/workspace-presets.set'
+    const PRESET_GET_ROUTE = browserRoute(ROUTES.workspacePresetsGet)
+    const PRESET_SET_ROUTE = browserRoute(ROUTES.workspacePresetsSet)
 
     const PRESET_EN = {
       'menu.followGlobal': 'Follow the global default',
@@ -457,7 +458,7 @@ window.__ModuleLoader__.load({
       let base = appUrl(RAW_ROUTE)
       if (typeof origin === 'string' && origin.length > 0) {
         try {
-          const lanBase = new URL('api/session-artifacts.raw', origin.endsWith('/') ? origin : `${origin}/`)
+          const lanBase = new URL(browserRoute(ROUTES.sessionArtifactsRaw), origin.endsWith('/') ? origin : `${origin}/`)
           base = lanBase.href
         } catch {
           base = appUrl(RAW_ROUTE)
@@ -501,7 +502,7 @@ window.__ModuleLoader__.load({
       let base = appUrl(ATTACHMENT_ROUTE)
       if (typeof origin === 'string' && origin.length > 0) {
         try {
-          const lanBase = new URL('api/session-artifacts.attachment', origin.endsWith('/') ? origin : `${origin}/`)
+          const lanBase = new URL(browserRoute(ROUTES.sessionArtifactsAttachment), origin.endsWith('/') ? origin : `${origin}/`)
           base = lanBase.href
         } catch {
           base = appUrl(ATTACHMENT_ROUTE)
@@ -3156,7 +3157,7 @@ window.__ModuleLoader__.load({
     const PROMPT_HISTORY_SEAT = 'power-suite.prompt-history'
 
     /** Host route returning one Session's complete sent-prompt history. */
-    const PROMPT_HISTORY_ROUTE = 'api/prompt-history.list'
+    const PROMPT_HISTORY_ROUTE = browserRoute(ROUTES.promptHistoryList)
 
     /**
      * Whether a composer menu or listbox owns arrow keys right now.
@@ -3403,7 +3404,7 @@ window.__ModuleLoader__.load({
     const SETTINGS_NS = 'powerSuiteSettings'
 
     /** Host route serving and storing the suite's preference document. */
-    const SETTINGS_ROUTE = 'api/power-suite.settings'
+    const SETTINGS_ROUTE = browserRoute(ROUTES.settings)
 
     /** Modifier choices accepted by the Host and shown on the page. */
     const PROMPT_HISTORY_MODIFIERS = ['primary', 'alt', 'ctrl', 'shift', 'off']
@@ -3878,11 +3879,11 @@ window.__ModuleLoader__.load({
     const INTERRUPTED_NS = 'powerSuiteInterrupted'
 
     /** Host route reporting one Session's last-turn state. */
-    const INTERRUPTED_ROUTE = 'api/power-suite.interrupted'
+    const INTERRUPTED_ROUTE = browserRoute(ROUTES.interrupted)
     /** Host SSE route broadcasting turn-boundary interruptions. */
-    const INTERRUPTED_EVENTS_ROUTE = 'api/power-suite.interrupted-events'
+    const INTERRUPTED_EVENTS_ROUTE = browserRoute(ROUTES.interruptedEvents)
     /** Host route resuming one Session through a non-human context message. */
-    const CONTINUE_ROUTE = 'api/power-suite.continue'
+    const CONTINUE_ROUTE = browserRoute(ROUTES.continue)
 
     const INTERRUPTED_EN = {
       'badge.aria': 'Task did not finish',
@@ -4996,7 +4997,7 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     const DW_PIN_VERSION = 1
 
     /** Authenticated Host route sharing the card's pinned ids across devices. */
-    const DW_PIN_ROUTE = 'api/power-suite.session-pins'
+    const DW_PIN_ROUTE = browserRoute(ROUTES.sessionPins)
 
     /** How often the client re-reads the Host-shared pin document. */
     const DW_PIN_SYNC_POLL_MS = 30000
@@ -6727,7 +6728,7 @@ function dwClearNativeAtmospheres() {
     const DW_ACK_TOLERANCE_MS = 1000
 
     /** Authenticated Host route that shares read baselines across browsers. */
-    const DW_ACK_ROUTE = 'api/power-suite.read-acks'
+    const DW_ACK_ROUTE = browserRoute(ROUTES.readAcks)
 
     /** How often the client re-reads the Host-shared document. */
     const DW_ACK_SYNC_POLL_MS = 30000
@@ -6752,7 +6753,7 @@ function dwClearNativeAtmospheres() {
     const DW_ACK_MAX_ID_LENGTH = 200
 
     /** Authenticated Host route exposing true last-activity timestamps. */
-    const DW_ACTIVITY_ROUTE = 'api/power-suite.session-activity'
+    const DW_ACTIVITY_ROUTE = browserRoute(ROUTES.sessionActivity)
 
     /**
      * Read the persisted acknowledgement baselines: Session id → the effective
@@ -23028,7 +23029,7 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
     const UPDATE_NS = 'powerSuiteUpdate'
 
     /** Host route answering one cached registry check. */
-    const UPDATE_ROUTE = '/api/power-suite.update'
+    const UPDATE_ROUTE = ROUTES.update
 
     /** Slot cell identity of the prompt overlay. */
     const UPDATE_SLOT_ID = 'power-suite.update-prompt'

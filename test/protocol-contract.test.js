@@ -13,6 +13,7 @@ import { SESSION_PINS_ROUTE } from '../src/features/session-pins/host.ts'
 import { SIDEBAR_WIDTH_ROUTE } from '../src/features/sidebar-width/host.ts'
 import { SESSION_ACTIVITY_ROUTE } from '../src/features/session-activity/host.ts'
 import { UPDATE_ROUTE } from '../src/features/update-check/host.ts'
+import { ROUTES, browserRoute } from '../src/shared/routes.ts'
 import { SIDEBAR_WIDTH_ROUTE as CLIENT_SIDEBAR_WIDTH_ROUTE } from '../src/browser/sidebar-width/model.ts'
 import {
   ACTIVE_PROJECT_DAYS,
@@ -21,10 +22,10 @@ import {
   RECENT_SESSION_MINUTES
 } from '../src/features/settings/store.ts'
 
-// Phase 3 splits the browser half into modules: route literals still inline in
-// src/client.js are read from source, and routes that already moved into
-// src/browser/**/*.ts are imported here until the shared contract module owns
-// them. Either way the browser copy must stay exactly equal to the Host sets.
+// The cross-half route vocabulary now has one owner: src/shared/routes.ts.
+// Host modules re-export its paths and the browser entry/models import the same
+// constants (relative, via browserRoute). No route literal may reappear on
+// either side.
 
 const clientSource = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8')
 
@@ -47,14 +48,19 @@ const hostRoutes = new Set([
   UPDATE_ROUTE
 ].map((route) => route.replace(/^\//u, '')))
 
-const clientRoutes = new Set(
-  [...clientSource.matchAll(/['"`](\/?api\/[A-Za-z0-9.-]+)['"`]/gu)]
-    .map((match) => match[1].replace(/^\//u, ''))
-)
-clientRoutes.add(CLIENT_SIDEBAR_WIDTH_ROUTE.replace(/^\//u, ''))
+const sharedRoutes = new Set(Object.values(ROUTES).map((route) => route.replace(/^\//u, '')))
 
-test('the client route literals match the Host route constants', () => {
-  assert.deepEqual([...clientRoutes].sort(), [...hostRoutes].sort())
+test('the Host route constants re-export the shared contract', () => {
+  assert.deepEqual([...hostRoutes].sort(), [...sharedRoutes].sort())
+})
+
+test('the browser half uses the shared contract and no route literals', () => {
+  const literals = [...clientSource.matchAll(/['"`]\/?api\/[A-Za-z0-9.-]+['"`]/gu)]
+  assert.deepEqual(literals.map((match) => match[0]), [])
+  assert.equal(CLIENT_SIDEBAR_WIDTH_ROUTE, browserRoute(ROUTES.sidebarWidth))
+  for (const route of Object.values(ROUTES)) {
+    assert.match(route, /^\/api\/[A-Za-z0-9.-]+$/u)
+  }
 })
 
 test('the client settings enums match the Host settings store', () => {

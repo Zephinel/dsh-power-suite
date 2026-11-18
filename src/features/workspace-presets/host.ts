@@ -18,12 +18,13 @@ import { type HostContext } from '../../host/context.ts'
 import os from 'node:os'
 import path from 'node:path'
 import { createPresetStore, shouldApplyPreset } from './store.ts'
+import { ROUTES } from '../../shared/routes.ts'
 
 /** Route serving one Workspace's stored default preset. */
-export const GET_ROUTE = '/api/workspace-presets.get'
+export const GET_ROUTE = ROUTES.workspacePresetsGet
 
 /** Route storing or clearing one Workspace's default preset. */
-export const SET_ROUTE = '/api/workspace-presets.set'
+export const SET_ROUTE = ROUTES.workspacePresetsSet
 
 /** Request bodies here are one small JSON object; anything larger is hostile. */
 const MAX_BODY_BYTES = 64 * 1024

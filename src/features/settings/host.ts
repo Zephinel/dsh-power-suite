@@ -12,9 +12,10 @@ import { type HostContext } from '../../host/context.ts'
 import os from 'node:os'
 import path from 'node:path'
 import { createSettingsStore, validatePatch } from './store.ts'
+import { ROUTES } from '../../shared/routes.ts'
 
 /** Route serving and storing the settings document. */
-export const SETTINGS_ROUTE = '/api/power-suite.settings'
+export const SETTINGS_ROUTE = ROUTES.settings
 
 /** Request bodies here are one small JSON object; anything larger is hostile. */
 const MAX_BODY_BYTES = 64 * 1024

@@ -8,8 +8,10 @@
  * @module
  */
 
+import { ROUTES, browserRoute } from '../../shared/routes.ts'
+
 /** Host route serving and storing the durable sidebar-width document. */
-export const SIDEBAR_WIDTH_ROUTE = 'api/power-suite.sidebar-width'
+export const SIDEBAR_WIDTH_ROUTE = browserRoute(ROUTES.sidebarWidth)
 
 /** Per-origin browser cache of the last known width and sync state. */
 export const SIDEBAR_WIDTH_STORAGE_KEY = 'power-suite.sidebar-width'

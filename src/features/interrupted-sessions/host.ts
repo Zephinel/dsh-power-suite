@@ -30,12 +30,13 @@ import {
   lastTurnState,
   subagentInterruptionAfter
 } from './turns.ts'
+import { ROUTES } from '../../shared/routes.ts'
 
 /** Authenticated route that resumes an interrupted Session implicitly. */
-export const CONTINUE_ROUTE = '/api/power-suite.continue'
+export const CONTINUE_ROUTE = ROUTES.continue
 
 /** Authenticated SSE route broadcasting interrupted-state invalidations. */
-export const INTERRUPTED_EVENTS_ROUTE = '/api/power-suite.interrupted-events'
+export const INTERRUPTED_EVENTS_ROUTE = ROUTES.interruptedEvents
 
 /** SSE heartbeat interval; comments keep proxies from idling the stream out. */
 const EVENT_HEARTBEAT_MS = 25000

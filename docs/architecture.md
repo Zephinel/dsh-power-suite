@@ -4,7 +4,9 @@ The suite is one DSH bundle with two halves that share no runtime code. The
 checkout keeps both halves in `src/`; `npm run build` bundles them into the
 gitignored `lib/index.js` (Host ESM) and `lib/client.js` (browser entry: ESM
 source plus `src/browser/` modules, bundled to a classic script), which are the
-entries the published package exports. Browser-side pure models live under
+entries the published package exports. `src/shared/routes.ts` owns the 16 API
+paths, re-exported by the Host modules and imported by the browser half.
+Browser-side pure models live under
 `src/browser/` and are imported by the entry (for example the update-prompt
 model and its stable-version math, or the sidebar-width decisions and cache
 document):

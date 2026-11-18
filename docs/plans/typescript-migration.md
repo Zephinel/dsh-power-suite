@@ -253,6 +253,14 @@ contract guard now imports the extracted browser route constant alongside the
 remaining inline client literals, so the contract seam keeps covering both
 locations while the split continues.
 
+**3d progress (2026-11-18).** The route vocabulary moved into
+`src/shared/routes.ts` (all 16 paths): Host modules re-export the shared
+constants and the browser entry/models import them through `browserRoute`, so no
+`/api/...` literal remains in `src/client.js`. `test/protocol-contract.test.js`
+now asserts that the Host set equals the shared contract and that the browser
+half contains no route literals. The settings enums/defaults and the record
+shapes remain the next contract-ownership step.
+
 Decide between (a) splitting `src/client.js` by `//#region feature:` into modules
 and bundling one classic script, or (b) keeping one file and annotating it. Under
 (a), give each feature an `install(ctx, deps)` plus pure model functions, import

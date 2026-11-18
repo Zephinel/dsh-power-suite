@@ -99,6 +99,11 @@ the client source matches them exactly — Phase 1 landed that guard in
 `test/protocol-contract.test.js`; it is shallow on purpose and documents the
 seam to deepen later.
 
+**Phase 3d status.** The route half of this target landed: `src/shared/routes.ts`
+owns all 16 paths, both halves import it, and the contract test rejects route
+literals on either side. The settings enums/defaults and the record shapes are
+still duplicated and remain the next deepening step.
+
 ### F4. The browser half exposes a test seam instead of an interface
 
 Ten test files load `src/client.js` through a `node:vm` sandbox, and the script

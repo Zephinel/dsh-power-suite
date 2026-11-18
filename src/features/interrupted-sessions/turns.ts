@@ -15,8 +15,11 @@
  * user/parent/hook cancellation) are not resumable.
  */
 
+import { ROUTES } from '../../shared/routes.ts'
+
+
 /** Authenticated exact route reporting one Session's interruption state. */
-export const INTERRUPTED_ROUTE = '/api/power-suite.interrupted'
+export const INTERRUPTED_ROUTE = ROUTES.interrupted
 
 /**
  * Narrow parsed JSON to a plain object.
