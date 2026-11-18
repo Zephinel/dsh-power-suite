@@ -389,9 +389,19 @@ no new suppressions. Remaining diagnostics are concentrated in
 `require('react')`/`window.__ModuleLoader__` untyped boundaries and unannotated
 record/closure state (TS2339 1,058, TS7005 264, TS7006 248, TS7034 69,
 TS2322 48); further reduction needs React/DSH ambient types (owner supply-chain
-decision) or the M2/M3 module splits. Next: M2 sidebar controller extraction and
-the remaining owner decisions (S12 theme contract, b4-5 atmosphere threshold,
-full-e2e data fixtures).
+decision) or the M2/M3 module splits. **3v progress (2026-11-18, browser-typing M2).** The sidebar-width browser
+controller/state moved to a fully typed `src/browser/sidebar-width/install.ts`
+(776 lines) behind `createSidebarWidthController(deps) -> { install(ctx),
+probe() }`; `src/client.js` keeps only the factory binding and the e2e probe
+hook. Behavior/storage/markers/probe shape are unchanged, with four new fake
+ctx/store/DOM unit tests; `npm test` is 392. The browser baseline dropped from
+1,773 to **1,720** (sidebar-width region 53 → 0) and the shipped client bundle is
+937.3 kB. Live `sidebar --smoke` is 4/4 and `--layout` is 12/12; `--pin` has the
+same seven environment/data failures on the base commit, not a regression.
+Remaining diagnostics are the annotation controller (owner needs a React/DSH
+ambient-type decision), dynamic workspaces 244, hover 147, interrupted 47,
+prompt-history preview 37 and update check 37. Next: owner decisions (S12 theme,
+b4-5 atmosphere, ambient types) and the e2e fixture work.
 
 **3m progress (2026-11-18).** Two follow-ups landed: `dwCacheHitPercent` is now a
 total function (inconsistent/negative/non-finite cache data returns `null`
