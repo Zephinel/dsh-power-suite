@@ -339,8 +339,19 @@ copy, reports total/per-code/per-region, `--write` refreshes, `--check` ratchets
 and `scripts/browser-typecheck-baseline.json` (1,976 diagnostics at this HEAD;
 2,484 at the pre-slice commit). The diagnostic baseline dropped by 508 with the
 identity/records/reducer/serializer extractions. It is report-only, not wired
-into `npm run check`. The planned order for the annotation rest: anchors,
-surface/resolution, then the annotation seam retirement in its own commit.
+into `npm run check`. **3q progress (2026-11-18).** The anchors slice landed: `anchors.ts` (XPath/full
+XPath/JS path, rendered-text chunks, quote/position extraction, disambiguation and
+scoring, Levenshtein/cache keys, identity-strength and scope authority helpers).
+22 hook keys now come from the module while both copies of the hook text stay
+byte-identical; `src/client.js` is ~19.8k lines. A 15,261-case differential
+against the old seam found 0 mismatches. Remaining inline keys: the 11-key
+surface/resolution slice (`resolveRefStatus`, `resolveNodeCandidate`, surface
+root/levels/pick/leaf/pin helpers, `annotationResolveStatus`,
+`annotationRailRightForPane`) and the controller-only `debugFallbackScanProbe`;
+then the annotation seam retirement. Also fixed a real regression introduced by
+the identity extraction: the extracted DOM `getAttribute` was called unbound and
+broke every click selection (`Illegal invocation`), now bound with a regression
+test (live S4 back to baseline 2/3, smoke 6/6, 0 page errors).
 
 **3m progress (2026-11-18).** Two follow-ups landed: `dwCacheHitPercent` is now a
 total function (inconsistent/negative/non-finite cache data returns `null`
