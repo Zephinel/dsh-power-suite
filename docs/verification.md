@@ -73,8 +73,8 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
     polling and only counts the shell spinner). `b4-5` and `b4-9` pass after the
     owner-requested lighter dark-atmosphere recipe: screen blend,
     `saturate(1.15) brightness(1.45)`, wrapper opacity 0.58 base / 0.64 hover,
-    white veil scrim 0.08/0.04, eight OKLCH hues (light L=0.78/C=0.18, dark
-    L=0.70/C=0.14 at hues 20/65/110/150/195/245/290/330) painted through the
+    white veil scrim 0.08/0.04, eight OKLCH hues (light L=0.76/C=0.26, dark
+    L=0.76/C=0.16 at hues 20/65/110/150/195/245/290/330) painted through the
     browser's `oklch()`/gamut mapping, and two blobs per hue advected by a
     low-frequency 3-octave fBm curl field. A stronger wash plus smaller/softer
     blobs keep the canvas saturation at ~0.5-0.66 (b4-1/b4-3 pass) while the

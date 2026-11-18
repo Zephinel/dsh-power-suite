@@ -5289,8 +5289,8 @@ html[data-input-modality='keyboard'] .psd-child-current:focus-within > *:not(.ps
    the wrapper is slightly less opaque, and the scrim is a soft white veil
    instead of a dark one (user request: lighten it, reference the light mode). */
 body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.15) brightness(1.45)}
-body[data-ds-dark-theme] .psd-atmos{opacity:.58}
-body[data-ds-dark-theme] .psd-run-current:hover .psd-atmos,body[data-ds-dark-theme] .psd-child-current:hover .psd-atmos,body[data-ds-dark-theme] [data-psd-current-workspace='true']:hover .psd-atmos,body[data-ds-dark-theme] [data-psd-current-session='true']:hover .psd-atmos{opacity:.64}
+body[data-ds-dark-theme] .psd-atmos{opacity:.62}
+body[data-ds-dark-theme] .psd-run-current:hover .psd-atmos,body[data-ds-dark-theme] .psd-child-current:hover .psd-atmos,body[data-ds-dark-theme] [data-psd-current-workspace='true']:hover .psd-atmos,body[data-ds-dark-theme] [data-psd-current-session='true']:hover .psd-atmos{opacity:.68}
 body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(255,255,255,.08),rgba(255,255,255,.04))}
 /* Light-mode readability (user fix). The multiply canvas over the light surface
    turned the pill into a medium saturated tone; the shell's tertiary time/icons
@@ -5300,9 +5300,9 @@ body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(
    light veil (not a dark one). The plugin's own secondary text/icons inside the
    highlighted rows are lifted from label-tertiary to label-secondary so they
    clear WCAG AA on the remaining pastel. Dark mode is untouched. */
-body:not([data-ds-dark-theme]) .psd-atmos-canvas{filter:blur(3px) saturate(1.22) brightness(1.22)}
-body:not([data-ds-dark-theme]) .psd-atmos{opacity:.56}
-body:not([data-ds-dark-theme]) .psd-atmos-scrim{background:linear-gradient(90deg,rgba(255,255,255,.68),rgba(255,255,255,.55))}
+body:not([data-ds-dark-theme]) .psd-atmos-canvas{filter:blur(3px) saturate(1.35) brightness(1.22)}
+body:not([data-ds-dark-theme]) .psd-atmos{opacity:.60}
+body:not([data-ds-dark-theme]) .psd-atmos-scrim{background:linear-gradient(90deg,rgba(255,255,255,.48),rgba(255,255,255,.36))}
 body:not([data-ds-dark-theme]) .psd-run-current:hover .psd-atmos,body:not([data-ds-dark-theme]) .psd-child-current:hover .psd-atmos,body:not([data-ds-dark-theme]) [data-psd-current-workspace='true']:hover .psd-atmos,body:not([data-ds-dark-theme]) [data-psd-current-session='true']:hover .psd-atmos{opacity:.68}
 body:not([data-ds-dark-theme]) .psd-run-current :is(.psd-run-time,.psd-run-brand,.psd-row-action,.psd-run-toggle),body:not([data-ds-dark-theme]) .psd-child-current :is(.psd-child-time,.psd-child-brand,.psd-row-action){color:var(--dsw-alias-label-secondary)}
 /* Status dots keep their semantic shell colours (user fix): the light-mode icon
@@ -5336,8 +5336,8 @@ body:not([data-ds-dark-theme]) .psd-row-action:focus-visible{color:var(--dsw-ali
  */
 const DW_ATMOS_HUES = [20, 65, 110, 150, 195, 245, 290, 330]
 const DW_ATMOS_PALETTES = {
-  light: DW_ATMOS_HUES.map((hue) => ({ l: 0.78, c: 0.18, hue })),
-  dark: DW_ATMOS_HUES.map((hue) => ({ l: 0.70, c: 0.14, hue }))
+  light: DW_ATMOS_HUES.map((hue) => ({ l: 0.76, c: 0.26, hue })),
+  dark: DW_ATMOS_HUES.map((hue) => ({ l: 0.76, c: 0.16, hue }))
 }
 /** Per-hue radiance trim: after the blobs mix, red/violet read hotter and cyan
  *  reads cooler, so scale each hue's blob alpha to even the lanes out. */
