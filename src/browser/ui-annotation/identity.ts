@@ -725,7 +725,7 @@ export function annotationLocatorText(ref: unknown): string {
  * @param candidates - ordered candidates.
  * @returns identity key.
  */
-function identityKeyForCandidates(tag: string, source: Record<string, unknown>, candidates: readonly AnnotationSelectorCandidate[]): string {
+export function identityKeyForCandidates(tag: string, source: Record<string, unknown>, candidates: readonly AnnotationSelectorCandidate[]): string {
   // A3/T33: a verified unique selector is the strongest identity signal; it
   // includes its stable ancestor anchors, so two same-label controls do not
   // collapse into one record. Fall back to the legacy candidate hierarchy.

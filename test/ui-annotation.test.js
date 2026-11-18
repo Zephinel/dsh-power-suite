@@ -60,6 +60,39 @@ import {
   selectorCandidates
 } from '../src/browser/ui-annotation/identity.ts'
 import {
+  ANNOTATION_RECORDS_STORAGE_KEY as RECORDS_STORAGE_KEY,
+  ANNOTATION_RECORD_LIMIT as RECORD_LIMIT,
+  annotationApplyIncludes,
+  annotationFilterEntries,
+  annotationFindRecord,
+  annotationFlattenRecords,
+  annotationGroupFromSelection,
+  annotationGroupItems,
+  annotationGroupSummary,
+  annotationIsGroup,
+  annotationMarkerBadgeText,
+  annotationScopeCounts,
+  annotationSelectedEntries,
+  annotationSidebarCounts,
+  annotationTotalItemCount,
+  annotationUndoRemove,
+  annotationUndoRemoveMany,
+  annotationUndoRestore,
+  collectionAdd,
+  collectionAddGroup,
+  collectionClear,
+  collectionRemove,
+  collectionSetNote,
+  moveAnnotationRecord,
+  normalizeAnnotationRecord,
+  parseAnnotationStore,
+  removeAnnotationRecord,
+  restoreAnnotationRecord,
+  serializeAnnotationStore,
+  toggleAnnotationInclude,
+  upsertAnnotationRecord
+} from '../src/browser/ui-annotation/records.ts'
+import {
   annotationNormalizeQuoteText as normalizeAnnotationQuote,
   cssIdentifier as escapeAnnotationIdentifier,
   normalizeUserNote as normalizeAnnotationNote,
@@ -1021,7 +1054,7 @@ if (ui === undefined) {
     const ref = refOf({ name: 'Target' }, { sessionId: SESSION_A })
     const otherSessionRef = refOf({ name: 'Target' }, { sessionId: SESSION_B })
     const empty = []
-    const first = ui.collectionAdd(empty, entryOf(ref, 'first'))
+    const first = collectionAdd(empty, entryOf(ref, 'first'))
     assert.equal(first.added, true)
     assert.equal(first.updated, false)
     assert.equal(first.list.length, 1)
@@ -1031,7 +1064,7 @@ if (ui === undefined) {
 
     const input = first.list
     const duplicateRef = refOf({ name: 'Target' }, { at: 1_800_000_000_000, order: 9, sessionId: SESSION_A })
-    const duplicate = ui.collectionAdd(input, entryOf(duplicateRef, 'changed'))
+    const duplicate = collectionAdd(input, entryOf(duplicateRef, 'changed'))
     assert.equal(duplicate.added, false)
     assert.equal(duplicate.updated, true)
     assert.equal(duplicate.list.length, 1)
@@ -1042,7 +1075,7 @@ if (ui === undefined) {
     assert.notEqual(duplicate.list, input, 'returns a new array')
     assert.equal(input[0].note, 'first', 'input array is not mutated')
 
-    const scoped = ui.collectionAdd(duplicate.list, entryOf(otherSessionRef, 'other session'))
+    const scoped = collectionAdd(duplicate.list, entryOf(otherSessionRef, 'other session'))
     assert.equal(scoped.added, true)
     assert.equal(scoped.list.length, 2, 'the same element in another session is a separate entry')
   })
@@ -1050,39 +1083,39 @@ if (ui === undefined) {
   test('collectionRemove, collectionClear, and collectionSetNote are immutable', () => {
     const one = refOf({ name: 'One', text: 'One' }, { order: 1 })
     const two = refOf({ name: 'Two', text: 'Two' }, { order: 2 })
-    const built = ui.collectionAdd(ui.collectionAdd([], entryOf(one, 'one')).list, entryOf(two, 'two')).list
+    const built = collectionAdd(collectionAdd([], entryOf(one, 'one')).list, entryOf(two, 'two')).list
     const frozen = plain(built)
 
-    const removed = ui.collectionRemove(built, one.id)
+    const removed = collectionRemove(built, one.id)
     assert.equal(removed.length, 1)
     assert.equal(removed[0].id, two.id)
     assert.deepEqual(plain(built), frozen, 'remove does not mutate the input')
-    assert.equal(ui.collectionRemove(built, 'no-such-ref').length, 2)
+    assert.equal(collectionRemove(built, 'no-such-ref').length, 2)
 
-    const noted = ui.collectionSetNote(built, two.id, 'two updated')
+    const noted = collectionSetNote(built, two.id, 'two updated')
     assert.equal(noted[1].note, 'two updated')
     assert.notEqual(noted, built)
     assert.deepEqual(plain(built), frozen, 'setNote does not mutate the input')
 
-    assert.deepEqual(plain(ui.collectionClear()), [])
+    assert.deepEqual(plain(collectionClear()), [])
   })
 
   test('F4: an empty re-add preserves an existing note and only an explicit setNote clears it', () => {
     const ref = refOf({ name: 'Target', text: 'Target' })
     const sameElement = refOf({ name: 'Target', text: 'Target' }, { order: 4, at: 1_800_000_000_000 })
-    const seeded = ui.collectionAdd([], entryOf(ref, 'keep me'))
+    const seeded = collectionAdd([], entryOf(ref, 'keep me'))
 
-    const emptyReadd = ui.collectionAdd(seeded.list, entryOf(sameElement, ''))
+    const emptyReadd = collectionAdd(seeded.list, entryOf(sameElement, ''))
     assert.equal(emptyReadd.updated, true)
     assert.equal(emptyReadd.list[0].note, 'keep me', 'an empty note must not overwrite the saved note')
 
-    const whitespaceReadd = ui.collectionAdd(seeded.list, entryOf(sameElement, '   '))
+    const whitespaceReadd = collectionAdd(seeded.list, entryOf(sameElement, '   '))
     assert.equal(whitespaceReadd.list[0].note, 'keep me', 'a whitespace-only note is empty')
 
-    const noted = ui.collectionAdd(seeded.list, entryOf(sameElement, 'new note'))
+    const noted = collectionAdd(seeded.list, entryOf(sameElement, 'new note'))
     assert.equal(noted.list[0].note, 'new note', 'a non-empty note still updates the entry')
 
-    const cleared = ui.collectionSetNote(seeded.list, ref.id, '')
+    const cleared = collectionSetNote(seeded.list, ref.id, '')
     assert.equal(cleared[0].note, '', 'the explicit editor path clears the note')
     assert.equal(seeded.list[0].note, 'keep me', 'setNote stays immutable')
 
@@ -1497,7 +1530,7 @@ if (ui === undefined) {
       extra: 'not persisted',
       outerHTML: '<button>no</button>'
     }
-    const normalized = ui.normalizeAnnotationRecord(record, 3)
+    const normalized = normalizeAnnotationRecord(record, 3)
     assert.equal(normalized.version, 2)
     assert.equal(normalized.note, '  keep\nthis  ', 'the user note survives verbatim')
     assert.equal(normalized.included, false)
@@ -1530,7 +1563,7 @@ if (ui === undefined) {
       bounds: { x: 1, y: 2, width: 3, height: 4 },
       note: ''
     }
-    const upgraded = ui.normalizeAnnotationRecord(v1, 0)
+    const upgraded = normalizeAnnotationRecord(v1, 0)
     assert.equal(upgraded.version, 2)
     assert.equal(upgraded.locator.uniqueSelector, null)
     assert.equal(upgraded.locator.uniqueVerified, false)
@@ -1538,30 +1571,30 @@ if (ui === undefined) {
     assert.equal(upgraded.locator.surface, 'page')
     assert.equal(upgraded.id, 'psa-old-1', 'v1 identity is preserved')
     for (const bad of [null, undefined, 'x', [], { id: 'x' }, { version: 9, id: 'x', locator: { tag: 'div', candidates: [{ kind: 'tag', value: 'div', reliability: 0.2 }] } }, { id: 'x', locator: { tag: 'div', candidates: [] } }, { locator: { tag: 'div', candidates: [{ kind: 'tag', value: 'div', reliability: 0.2 }] } }]) {
-      assert.equal(ui.normalizeAnnotationRecord(bad), null, `dropped: ${JSON.stringify(bad)}`)
+      assert.equal(normalizeAnnotationRecord(bad), null, `dropped: ${JSON.stringify(bad)}`)
     }
   })
 
   test('D1: parseAnnotationStore tolerates bad documents and serializeAnnotationStore round-trips', () => {
     const empty = { version: 3, updatedAt: 0, records: [], groups: [], entries: [] }
     for (const bad of [null, undefined, '', 'not json', 'null', '42', '"text"', JSON.stringify({ version: 9, records: [recordAt(1)] })]) {
-      assert.deepEqual(plain(ui.parseAnnotationStore(bad)), empty, `empty store for ${String(bad).slice(0, 24)}`)
+      assert.deepEqual(plain(parseAnnotationStore(bad)), empty, `empty store for ${String(bad).slice(0, 24)}`)
     }
     const second = recordAt(2)
     const first = recordAt(1)
-    const serialized = ui.serializeAnnotationStore([second, first, second], 1_800_000_000_000)
-    const parsed = ui.parseAnnotationStore(serialized)
+    const serialized = serializeAnnotationStore([second, first, second], 1_800_000_000_000)
+    const parsed = parseAnnotationStore(serialized)
     assert.equal(parsed.version, 3)
     assert.equal(parsed.updatedAt, 1_800_000_000_000)
     assert.deepEqual(plain(parsed.records).map((record) => record.order), [1, 2], 'ordered by order, duplicate ids removed')
-    assert.equal(ui.serializeAnnotationStore(parsed.entries, 1_800_000_000_000), serialized, 'serialization is deterministic')
+    assert.equal(serializeAnnotationStore(parsed.entries, 1_800_000_000_000), serialized, 'serialization is deterministic')
     const many = Array.from({ length: 130 }, (_, index) => recordAt(index))
-    const capped = ui.parseAnnotationStore(ui.serializeAnnotationStore(many, 1))
+    const capped = parseAnnotationStore(serializeAnnotationStore(many, 1))
     assert.equal(capped.records.length, 100, 'the store is capped at the total item limit')
-    assert.equal(ui.RECORD_LIMIT, 100)
-    assert.equal(ui.RECORDS_STORAGE_KEY, 'power-suite.ui-annotation.annotations')
+    assert.equal(RECORD_LIMIT, 100)
+    assert.equal(RECORDS_STORAGE_KEY, 'power-suite.ui-annotation.annotations')
     // A bare legacy array is tolerated but every record is still validated.
-    const arrayDoc = ui.parseAnnotationStore(JSON.stringify([recordAt(3), { bogus: true }]))
+    const arrayDoc = parseAnnotationStore(JSON.stringify([recordAt(3), { bogus: true }]))
     assert.equal(arrayDoc.records.length, 1)
     assert.equal(arrayDoc.records[0].order, 3)
   })
@@ -1569,16 +1602,16 @@ if (ui === undefined) {
   test('D15: collectionAdd refuses the 101st record explicitly and reducer state stays unchanged', () => {
     let list = []
     for (let index = 0; index < 100; index += 1) {
-      list = ui.collectionAdd(list, entryOf(recordAt(index), `note ${index}`), 100).list
+      list = collectionAdd(list, entryOf(recordAt(index), `note ${index}`), 100).list
     }
     assert.equal(list.length, 100)
-    const overflow = ui.collectionAdd(list, entryOf(recordAt(999), 'overflow'), 100)
+    const overflow = collectionAdd(list, entryOf(recordAt(999), 'overflow'), 100)
     assert.equal(overflow.rejected, true)
     assert.equal(overflow.added, false)
     assert.equal(overflow.list.length, 100)
     assert.equal(list.length, 100, 'the input list is not mutated')
     // Updating an existing record at the cap is still allowed.
-    const updated = ui.collectionAdd(list, entryOf(recordAt(5), 'updated note'), 100)
+    const updated = collectionAdd(list, entryOf(recordAt(5), 'updated note'), 100)
     assert.equal(updated.rejected, false)
     assert.equal(updated.updated, true)
     let state = ui.reduceAnnotationState(ui.createAnnotationState(), { type: 'activate' })
@@ -1969,7 +2002,7 @@ if (ui === undefined) {
 
   test('A3/T5: upsertAnnotationRecord inserts and updates by identity+session while keeping id/at/order', () => {
     const first = recordOf('Alpha')
-    const inserted = ui.upsertAnnotationRecord([], first, 100, 1_000)
+    const inserted = upsertAnnotationRecord([], first, 100, 1_000)
     assert.equal(inserted.added, true)
     assert.equal(inserted.updated, false)
     assert.equal(inserted.rejected, false)
@@ -1981,7 +2014,7 @@ if (ui === undefined) {
 
     const changed = recordOf('Alpha', SESSION_A, { at: 5, order: 99, note: 'new requirement' })
     changed.locator = { ...changed.locator, uniqueSelector: '[data-slot="alpha"]', uniqueVerified: true }
-    const updated = ui.upsertAnnotationRecord(inserted.list, changed, 100, 2_000)
+    const updated = upsertAnnotationRecord(inserted.list, changed, 100, 2_000)
     assert.equal(updated.updated, true)
     assert.equal(updated.added, false)
     assert.equal(updated.list.length, 1, 'same identity+session never duplicates')
@@ -1997,18 +2030,18 @@ if (ui === undefined) {
 
   test('A3/T5: an empty incoming note preserves the existing requirement and the cap refuses explicitly', () => {
     const alpha = recordOf('Alpha', SESSION_A, { note: 'keep me' })
-    const committed = ui.upsertAnnotationRecord([], alpha, 100, 1_000).list
+    const committed = upsertAnnotationRecord([], alpha, 100, 1_000).list
     const blankNote = recordOf('Alpha', SESSION_A, { note: '   ' })
-    const updated = ui.upsertAnnotationRecord(committed, blankNote, 100, 2_000).list
+    const updated = upsertAnnotationRecord(committed, blankNote, 100, 2_000).list
     assert.equal(updated[0].note, 'keep me', 'a blank re-save must not wipe the requirement')
 
-    const beta = ui.upsertAnnotationRecord(updated, recordOf('Beta'), 2, 3_000)
+    const beta = upsertAnnotationRecord(updated, recordOf('Beta'), 2, 3_000)
     assert.equal(beta.list.length, 2)
-    const refused = ui.upsertAnnotationRecord(beta.list, recordOf('Gamma'), 2, 4_000)
+    const refused = upsertAnnotationRecord(beta.list, recordOf('Gamma'), 2, 4_000)
     assert.equal(refused.rejected, true, 'D15: the 101st/over-cap record is refused')
     assert.equal(refused.added, false)
     assert.equal(refused.list.length, 2, 'a refused commit never changes the list')
-    assert.equal(ui.upsertAnnotationRecord([], null, 100, 1).rejected, false, 'invalid input is ignored, not refused')
+    assert.equal(upsertAnnotationRecord([], null, 100, 1).rejected, false, 'invalid input is ignored, not refused')
   })
 
   test('A3/T5: removeAnnotationRecord and restoreAnnotationRecord round-trip at the original position', () => {
@@ -2016,12 +2049,12 @@ if (ui === undefined) {
     const beta = recordOf('Beta')
     const gamma = recordOf('Gamma')
     const list = [alpha, beta, gamma]
-    const removed = ui.removeAnnotationRecord(list, beta.id)
+    const removed = removeAnnotationRecord(list, beta.id)
     assert.deepEqual(plain(removed.map((entry) => entry.id)), [alpha.id, gamma.id])
-    assert.deepEqual(plain(ui.removeAnnotationRecord(removed, 'psa-missing')), plain(removed), 'a missing id is a no-op')
-    const restored = ui.restoreAnnotationRecord(removed, beta, 1)
+    assert.deepEqual(plain(removeAnnotationRecord(removed, 'psa-missing')), plain(removed), 'a missing id is a no-op')
+    const restored = restoreAnnotationRecord(removed, beta, 1)
     assert.deepEqual(plain(restored.map((entry) => entry.id)), [alpha.id, beta.id, gamma.id])
-    const appended = ui.restoreAnnotationRecord(removed, beta, 99)
+    const appended = restoreAnnotationRecord(removed, beta, 99)
     assert.deepEqual(plain(appended.map((entry) => entry.id)), [alpha.id, gamma.id, beta.id], 'an out-of-range index appends')
   })
 
@@ -2029,21 +2062,21 @@ if (ui === undefined) {
     const alpha = recordOf('Alpha')
     const beta = recordOf('Beta')
     const gamma = recordOf('Gamma')
-    const first = ui.annotationUndoRemove([alpha, beta, gamma], beta.id, 'single', 5_000)
+    const first = annotationUndoRemove([alpha, beta, gamma], beta.id, 'single', 5_000)
     assert.deepEqual(plain(first.list.map((entry) => entry.id)), [alpha.id, gamma.id])
     assert.equal(first.undo.kind, 'single')
     assert.equal(first.undo.index, 1)
     assert.equal(first.undo.at, 5_000)
     assert.equal(first.undo.record.id, beta.id)
-    assert.deepEqual(plain(ui.annotationUndoRestore(first.list, first.undo).map((entry) => entry.id)), [alpha.id, beta.id, gamma.id])
-    assert.equal(ui.annotationUndoRemove([], 'psa-missing', 'single', 1).undo, null, 'a missing removal yields no undo slot')
+    assert.deepEqual(plain(annotationUndoRestore(first.list, first.undo).map((entry) => entry.id)), [alpha.id, beta.id, gamma.id])
+    assert.equal(annotationUndoRemove([], 'psa-missing', 'single', 1).undo, null, 'a missing removal yields no undo slot')
 
-    const cleared = ui.annotationUndoRemove([alpha, beta], null, 'clear', 6_000)
+    const cleared = annotationUndoRemove([alpha, beta], null, 'clear', 6_000)
     assert.deepEqual(plain(cleared.list), [])
     assert.equal(cleared.undo.kind, 'clear')
     assert.equal(cleared.undo.records.length, 2)
-    assert.deepEqual(plain(ui.annotationUndoRestore([], cleared.undo).map((entry) => entry.id)), [alpha.id, beta.id])
-    assert.deepEqual(plain(ui.annotationUndoRestore([alpha], cleared.undo).map((entry) => entry.id)), [alpha.id, beta.id], 'restore never duplicates an existing id')
+    assert.deepEqual(plain(annotationUndoRestore([], cleared.undo).map((entry) => entry.id)), [alpha.id, beta.id])
+    assert.deepEqual(plain(annotationUndoRestore([alpha], cleared.undo).map((entry) => entry.id)), [alpha.id, beta.id], 'restore never duplicates an existing id')
   })
 
   test('A3/T5: moveAnnotationRecord swaps neighbours, keeps order contiguous, and clamps at the edges', () => {
@@ -2051,14 +2084,14 @@ if (ui === undefined) {
     const beta = recordOf('Beta')
     const gamma = recordOf('Gamma')
     const start = [alpha, beta, gamma]
-    const up = ui.moveAnnotationRecord(start, beta.id, -1)
+    const up = moveAnnotationRecord(start, beta.id, -1)
     assert.deepEqual(plain(up.map((entry) => entry.id)), [beta.id, alpha.id, gamma.id])
     assert.deepEqual(plain(up.map((entry) => entry.order)), [0, 1, 2], 'order stays contiguous after a move')
-    const down = ui.moveAnnotationRecord(start, beta.id, 1)
+    const down = moveAnnotationRecord(start, beta.id, 1)
     assert.deepEqual(plain(down.map((entry) => entry.id)), [alpha.id, gamma.id, beta.id])
-    assert.deepEqual(plain(ui.moveAnnotationRecord(start, alpha.id, -1)), plain(start), 'moving the first record up is a no-op')
-    assert.deepEqual(plain(ui.moveAnnotationRecord(start, gamma.id, 1)), plain(start), 'moving the last record down is a no-op')
-    assert.deepEqual(plain(ui.moveAnnotationRecord(start, 'psa-missing', 1)), plain(start))
+    assert.deepEqual(plain(moveAnnotationRecord(start, alpha.id, -1)), plain(start), 'moving the first record up is a no-op')
+    assert.deepEqual(plain(moveAnnotationRecord(start, gamma.id, 1)), plain(start), 'moving the last record down is a no-op')
+    assert.deepEqual(plain(moveAnnotationRecord(start, 'psa-missing', 1)), plain(start))
     assert.deepEqual(plain(start.map((entry) => entry.id)), [alpha.id, beta.id, gamma.id], 'the input list is never mutated')
   })
 
@@ -2066,12 +2099,12 @@ if (ui === undefined) {
     const alpha = recordOf('Alpha')
     const beta = recordOf('Beta')
     const list = [alpha, beta]
-    const off = ui.toggleAnnotationInclude(list, beta.id, false)
+    const off = toggleAnnotationInclude(list, beta.id, false)
     assert.equal(off[0].included, true)
     assert.equal(off[1].included, false)
-    const same = ui.toggleAnnotationInclude(off, beta.id, false)
+    const same = toggleAnnotationInclude(off, beta.id, false)
     assert.equal(same[1], off[1], 'an unchanged flag keeps the same record reference')
-    assert.equal(ui.toggleAnnotationInclude(list, 'psa-missing', false)[0], alpha)
+    assert.equal(toggleAnnotationInclude(list, 'psa-missing', false)[0], alpha)
     assert.equal(list[1].included, true, 'the input is never mutated')
   })
 
@@ -2101,7 +2134,7 @@ if (ui === undefined) {
     assert.equal(state.collection.length, 1)
     state = ui.reduceAnnotationState(state, { type: 'annotationRestore', record: alpha, index: 1 })
     assert.deepEqual(plain(state.collection.map((entry) => entry.id)), [beta.id, alpha.id])
-    const cleared = ui.annotationUndoRemove(state.collection, null, 'clear', 4_000)
+    const cleared = annotationUndoRemove(state.collection, null, 'clear', 4_000)
     const emptied = ui.reduceAnnotationState(state, { type: 'collectionClear' })
     assert.equal(emptied.collection.length, 0)
     state = ui.reduceAnnotationState(emptied, { type: 'annotationUndo', undo: cleared.undo })
@@ -2113,16 +2146,16 @@ if (ui === undefined) {
   })
 
   test('A3/T6: annotationMarkerBadgeText keeps one excerpt line and truncates to the cap', () => {
-    const empty = ui.annotationMarkerBadgeText('   \n  ')
+    const empty = annotationMarkerBadgeText('   \n  ')
     assert.deepEqual(plain(empty), { text: '', empty: true, truncated: false })
-    assert.deepEqual(plain(ui.annotationMarkerBadgeText('Fix   the   toolbar')), { text: 'Fix the toolbar', empty: false, truncated: false })
-    assert.deepEqual(plain(ui.annotationMarkerBadgeText('first line\nsecond line')).text, 'first line')
-    const long = ui.annotationMarkerBadgeText('0123456789abcdefghijKLMNOP')
+    assert.deepEqual(plain(annotationMarkerBadgeText('Fix   the   toolbar')), { text: 'Fix the toolbar', empty: false, truncated: false })
+    assert.deepEqual(plain(annotationMarkerBadgeText('first line\nsecond line')).text, 'first line')
+    const long = annotationMarkerBadgeText('0123456789abcdefghijKLMNOP')
     assert.equal(plain(long).truncated, true)
     assert.equal(plain(long).text.length, 18)
     assert.equal(plain(long).text.endsWith('…'), true)
-    assert.equal(plain(ui.annotationMarkerBadgeText('0123456789abcdefghijKLMNOP', 10)).text.length, 10)
-    assert.equal(plain(ui.annotationMarkerBadgeText('tab\tand  spaces')).text, 'tab and spaces')
+    assert.equal(plain(annotationMarkerBadgeText('0123456789abcdefghijKLMNOP', 10)).text.length, 10)
+    assert.equal(plain(annotationMarkerBadgeText('tab\tand  spaces')).text, 'tab and spaces')
   })
 
   test('A3/T6: clampDetailCardPosition flips sides/verticals, reserves the rail and clamps margins', () => {
@@ -2205,21 +2238,21 @@ if (ui === undefined) {
     const beta = recordOf('Beta', SESSION_A, { included: false })
     const other = recordOf('Gamma', SESSION_B)
     const list = [alpha, beta, other]
-    assert.deepEqual(plain(ui.annotationScopeCounts(list, SESSION_A)), {
+    assert.deepEqual(plain(annotationScopeCounts(list, SESSION_A)), {
       current: 2, other: 1, included: 1, otherIncluded: 1, total: 3
     })
-    assert.deepEqual(plain(ui.annotationSelectedEntries(list, SESSION_A).map((entry) => entry.id)), [alpha.id])
-    assert.deepEqual(plain(ui.annotationSelectedEntries(list, null)), [], 'no current Session means no batch selection')
+    assert.deepEqual(plain(annotationSelectedEntries(list, SESSION_A).map((entry) => entry.id)), [alpha.id])
+    assert.deepEqual(plain(annotationSelectedEntries(list, null)), [], 'no current Session means no batch selection')
     beta.included = true
-    assert.deepEqual(plain(ui.annotationSelectedEntries(list, SESSION_A).map((entry) => entry.id)), [alpha.id, beta.id], 'insertion order is preserved')
-    assert.equal(plain(ui.annotationScopeCounts([], SESSION_A)).total, 0)
+    assert.deepEqual(plain(annotationSelectedEntries(list, SESSION_A).map((entry) => entry.id)), [alpha.id, beta.id], 'insertion order is preserved')
+    assert.equal(plain(annotationScopeCounts([], SESSION_A)).total, 0)
   })
 
   test('T8: annotationApplyIncludes applies many flags in one immutable pass', () => {
     const alpha = recordOf('Alpha')
     const beta = recordOf('Beta')
     const list = [alpha, beta]
-    const changed = ui.annotationApplyIncludes(list, [
+    const changed = annotationApplyIncludes(list, [
       { refId: alpha.id, included: false },
       { refId: 'psa-missing', included: true },
       { refId: beta.id, included: false }
@@ -2227,9 +2260,9 @@ if (ui === undefined) {
     assert.equal(changed[0].included, false)
     assert.equal(changed[1].included, false)
     assert.equal(list[0].included, true, 'the input list is never mutated')
-    const same = ui.annotationApplyIncludes(changed, [{ refId: alpha.id, included: false }])
+    const same = annotationApplyIncludes(changed, [{ refId: alpha.id, included: false }])
     assert.equal(same[0], changed[0], 'an unchanged flag keeps the record reference')
-    assert.equal(ui.annotationApplyIncludes([], [{ refId: alpha.id, included: false }]).length, 0)
+    assert.equal(annotationApplyIncludes([], [{ refId: alpha.id, included: false }]).length, 0)
   })
 
   test('T8/D5: annotationUndoRemoveMany captures original positions and restores all of them', () => {
@@ -2238,15 +2271,15 @@ if (ui === undefined) {
     const gamma = recordOf('Gamma')
     const delta = recordOf('Delta')
     const list = [alpha, beta, gamma, delta]
-    const removal = ui.annotationUndoRemoveMany(list, [beta.id, delta.id], 9_000)
+    const removal = annotationUndoRemoveMany(list, [beta.id, delta.id], 9_000)
     assert.deepEqual(plain(removal.list.map((entry) => entry.id)), [alpha.id, gamma.id])
     assert.equal(removal.undo.kind, 'multi')
     assert.equal(removal.undo.at, 9_000)
     assert.deepEqual(plain(removal.undo.entries.map((item) => item.index)), [1, 3])
-    const restored = ui.annotationUndoRestore(removal.list, removal.undo)
+    const restored = annotationUndoRestore(removal.list, removal.undo)
     assert.deepEqual(plain(restored.map((entry) => entry.id)), [alpha.id, beta.id, gamma.id, delta.id])
-    assert.deepEqual(plain(ui.annotationUndoRemoveMany(list, [], 1)), { list: plain(list), undo: null })
-    assert.equal(ui.annotationUndoRemoveMany(list, ['psa-missing'], 1).undo, null)
+    assert.deepEqual(plain(annotationUndoRemoveMany(list, [], 1)), { list: plain(list), undo: null })
+    assert.equal(annotationUndoRemoveMany(list, ['psa-missing'], 1).undo, null)
   })
 
   test('T8: the rail reducer actions include, move and multi-remove records', () => {
@@ -2555,7 +2588,7 @@ if (ui === undefined) {
   test('A3/T24: a multi-selection becomes ONE group with a shared requirement and full item identity', () => {
     const first = recordAt(1)
     const second = recordAt(2)
-    const group = ui.annotationGroupFromSelection(
+    const group = annotationGroupFromSelection(
       [{ ...first, session: { sessionId: SESSION_A, cwd: '/repo', workspaceLabel: 'repo' } },
         { ...second, session: { sessionId: SESSION_A, cwd: '/repo', workspaceLabel: 'repo' } }],
       '  Batch requirement  ',
@@ -2570,37 +2603,37 @@ if (ui === undefined) {
     assert.deepEqual(group.items.map((item) => item.id), [first.id, second.id], 'each selected element keeps its identity')
     assert.equal(group.items[0].session.sessionId, SESSION_A, 'items keep their session metadata')
     assert(group.items.every((item) => (item.note ?? '') === ''), 'group items have no per-item requirement')
-    const collection = ui.collectionAddGroup([], group, 100).list
+    const collection = collectionAddGroup([], group, 100).list
     assert.equal(collection.length, 1)
-    assert.equal(ui.annotationTotalItemCount(collection), 2, 'the cap counts group items, not just entries')
-    const flat = ui.annotationFlattenRecords(collection)
+    assert.equal(annotationTotalItemCount(collection), 2, 'the cap counts group items, not just entries')
+    const flat = annotationFlattenRecords(collection)
     assert.equal(flat.length, 2)
     assert(flat.every((record) => record.note === '  Batch requirement  '), 'marks/chips read the group requirement')
-    const found = ui.annotationFindRecord(collection, second.id)
+    const found = annotationFindRecord(collection, second.id)
     assert.equal(found.id, second.id, 'group items are resolvable by their record id')
     assert.equal(found.note, '  Batch requirement  ')
-    assert.equal(ui.annotationIsGroup(collection[0]), true)
-    assert.equal(ui.annotationGroupItems(collection[0]).length, 2)
+    assert.equal(annotationIsGroup(collection[0]), true)
+    assert.equal(annotationGroupItems(collection[0]).length, 2)
     // The total cap rejects a group that would exceed 100 elements.
     let full = []
-    for (let index = 0; index < 99; index += 1) full = ui.collectionAdd(full, entryOf(recordAt(index), `note ${index}`), 100).list
-    const overflowGroup = ui.annotationGroupFromSelection([recordAt(500), recordAt(501)], 'too much', SESSION_A, 1, 'psa-group-overflow')
-    const rejected = ui.collectionAddGroup(full, overflowGroup, 100)
+    for (let index = 0; index < 99; index += 1) full = collectionAdd(full, entryOf(recordAt(index), `note ${index}`), 100).list
+    const overflowGroup = annotationGroupFromSelection([recordAt(500), recordAt(501)], 'too much', SESSION_A, 1, 'psa-group-overflow')
+    const rejected = collectionAddGroup(full, overflowGroup, 100)
     assert.equal(rejected.rejected, true, 'a group over the total item cap is refused')
     assert.equal(rejected.added, false)
   })
 
   test('A3/T24: the v3 document persists singles+groups and migrates v2 records to singles', () => {
     const single = { ...recordAt(1), note: 'single note' }
-    const group = ui.annotationGroupFromSelection([recordAt(2), recordAt(3)], 'group note', SESSION_A, 1_800_000_000_000, 'psa-group-persist')
-    const serialized = ui.serializeAnnotationStore([single, group], 1_800_000_000_000)
+    const group = annotationGroupFromSelection([recordAt(2), recordAt(3)], 'group note', SESSION_A, 1_800_000_000_000, 'psa-group-persist')
+    const serialized = serializeAnnotationStore([single, group], 1_800_000_000_000)
     const doc = JSON.parse(serialized)
     assert.equal(doc.version, 3, 'the document schema is v3')
     assert.equal(doc.records.length, 1)
     assert.equal(doc.groups.length, 1)
     assert.equal(doc.groups[0].requirement, 'group note')
     assert.equal(doc.groups[0].items.length, 2)
-    const parsed = ui.parseAnnotationStore(serialized)
+    const parsed = parseAnnotationStore(serialized)
     assert.equal(parsed.version, 3)
     assert.equal(parsed.records.length, 1)
     assert.equal(parsed.groups.length, 1)
@@ -2609,16 +2642,16 @@ if (ui === undefined) {
     // v2 documents (and bare arrays) migrate to singles without loss.
     const legacyA = recordAt(7)
     const legacyB = recordAt(8)
-    const legacy = ui.parseAnnotationStore(JSON.stringify({ version: 2, records: [legacyA, legacyB] }))
+    const legacy = parseAnnotationStore(JSON.stringify({ version: 2, records: [legacyA, legacyB] }))
     assert.equal(legacy.version, 3)
     assert.equal(legacy.groups.length, 0)
     assert.deepEqual(plain(legacy.entries.map((entry) => entry.id)), [legacyA.id, legacyB.id])
     // Unknown versions remain tolerated (empty, never throwing).
-    assert.deepEqual(plain(ui.parseAnnotationStore(JSON.stringify({ version: 99, records: [recordAt(9)] }))), plain({ version: 3, updatedAt: 0, records: [], groups: [], entries: [] }))
+    assert.deepEqual(plain(parseAnnotationStore(JSON.stringify({ version: 99, records: [recordAt(9)] }))), plain({ version: 3, updatedAt: 0, records: [], groups: [], entries: [] }))
   })
 
   test('A3/T24: a group batch serializes the shared requirement + numbered element references', () => {
-    const group = ui.annotationGroupFromSelection([recordAt(2), recordAt(3)], 'Shared batch requirement', SESSION_A, 1, 'psa-group-serialize')
+    const group = annotationGroupFromSelection([recordAt(2), recordAt(3)], 'Shared batch requirement', SESSION_A, 1, 'psa-group-serialize')
     const text = ui.serializeBatchEntries([group], {
       groupHeader: 'Group',
       groupRequirement: 'Requirement:',
@@ -2641,22 +2674,22 @@ if (ui === undefined) {
   test('A3/T25: sidebar counts/filter/group auto-summary are derived from singles + groups', () => {
     const singleA = { ...recordAt(1), note: 'Single A' }
     const singleB = { ...recordAt(2), note: 'Single B' }
-    const group = ui.annotationGroupFromSelection([recordAt(3), recordAt(4)], 'Group title line\nGroup description line', SESSION_A, 1, 'psa-group-sidebar')
+    const group = annotationGroupFromSelection([recordAt(3), recordAt(4)], 'Group title line\nGroup description line', SESSION_A, 1, 'psa-group-sidebar')
     const other = { ...recordAt(5), note: 'Other session', session: { sessionId: 'session-other', cwd: '/x', workspaceLabel: 'x' } }
     const collection = [singleA, group, singleB, other]
-    const counts = ui.annotationSidebarCounts(collection, SESSION_A)
+    const counts = annotationSidebarCounts(collection, SESSION_A)
     assert.equal(counts.all, 3)
     assert.equal(counts.single, 2)
     assert.equal(counts.group, 1)
     assert.equal(counts.items, 4)
     assert.equal(counts.other, 1)
-    assert.equal(ui.annotationFilterEntries(collection, 'single').length, 3, 'single filter returns singles from every scope')
-    assert.equal(ui.annotationFilterEntries(collection, 'group').length, 1)
-    assert.equal(ui.annotationFilterEntries(collection, 'all').length, 4)
-    const summary = ui.annotationGroupSummary(group)
+    assert.equal(annotationFilterEntries(collection, 'single').length, 3, 'single filter returns singles from every scope')
+    assert.equal(annotationFilterEntries(collection, 'group').length, 1)
+    assert.equal(annotationFilterEntries(collection, 'all').length, 4)
+    const summary = annotationGroupSummary(group)
     assert.equal(summary.title, 'Group title line')
     assert.equal(summary.description, 'Group description line')
-    const longSummary = ui.annotationGroupSummary({ ...group, requirement: 'x'.repeat(60) })
+    const longSummary = annotationGroupSummary({ ...group, requirement: 'x'.repeat(60) })
     assert(longSummary.title.endsWith('…') && longSummary.title.length <= 42, 'long group titles are bounded')
   })
 
