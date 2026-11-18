@@ -107,6 +107,20 @@ import {
   dwNeedsProjectionRead,
   dwProjectionSections
 } from './browser/dynamic-workspaces/stats.ts'
+import {
+  DW_PIN_MAX_PENDING,
+  DW_PIN_VERSION,
+  dwPinEffectiveIds,
+  dwPinPanelRows,
+  dwReadPinCache,
+  dwSanitizePinnedIds,
+  dwWritePinCache
+} from './browser/dynamic-workspaces/pin.ts'
+import {
+  dwOwningWorkspace,
+  dwSessionRunning,
+  dwWorkspaceLabel
+} from './browser/dynamic-workspaces/rows.ts'
 /**
  * Browser half of DSH Power Suite.
  *
@@ -4929,23 +4943,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
      *  waiting Session's title in amber, the native question-prompt colour. */
     const DW_FLAG_FILL_PATH = 'M3 3H12.382C12.7607 3 13.107 3.214 13.2764 3.55279L14 5H20C20.5523 5 21 5.44772 21 6V17C21 17.5523 20.5523 18 20 18H13.618C13.2393 18 12.893 17.786 12.7236 17.4472L12 16H5V22H3V3Z'
 
-
-
-    /**
-     * localStorage key caching the card's pinned main-Session ids.
-     *
-     * The card pin belongs to this panel: it keeps a main Session on top of
-     * Running & recent instead of letting the retention window retire it, and it
-     * deliberately does not read or write the native sidebar pin (an old
-     * project-organisation pin must never surface here). The Host owns the shared
-     * document (see {@link DW_PIN_ROUTE}); this local copy gives the first paint,
-     * offline use, and a queue for operations not published yet.
-     */
-    const DW_PIN_KEY = 'power-suite.dynamic-workspaces.pinned'
-
-    /** Schema version of the cached pin document. */
-    const DW_PIN_VERSION = 1
-
     /** Authenticated Host route sharing the card's pinned ids across devices. */
     const DW_PIN_ROUTE = browserRoute(ROUTES.sessionPins)
 
@@ -4957,15 +4954,6 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
 
     /** Debounce before queued pin operations are published to the Host. */
     const DW_PIN_PUSH_DEBOUNCE_MS = 150
-
-    /** Most pinned ids one document keeps; the Host drops the oldest pin first. */
-    const DW_PIN_LIMIT = 500
-
-    /** Most queued operations the local cache keeps for a retry. */
-    const DW_PIN_MAX_PENDING = 200
-
-    /** Longest accepted Session id; the Host validator uses the same bound. */
-    const DW_PIN_MAX_ID_LENGTH = 200
 
     /** Highest number of rows the summary card lists before "view all". */
     const DW_PANEL_LIMIT = 5
@@ -5691,41 +5679,6 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
-     * Display label of one Workspace: durable title, then directory basename.
-     * @param {object} workspace - WorkspaceView row.
-     * @param {Function} t - namespace-bound translate.
-     * @returns {string} label.
-     */
-    function dwWorkspaceLabel(workspace, t) {
-      if (workspace === null || typeof workspace !== 'object') return t('group.untitled')
-      const title = typeof workspace.title === 'string' ? workspace.title.trim() : ''
-      if (title.length > 0) return title
-      const path = typeof workspace.path === 'string' ? workspace.path.replace(/[\\/]+$/, '') : ''
-      const parts = path.split(/[\\/]/)
-      const base = parts.length > 0 ? parts[parts.length - 1] : ''
-      return base.length > 0 ? base : t('group.untitled')
-    }
-
-    /**
-     * Whether one Session currently counts as running.
-     *
-     * The live Session-status snapshot is authoritative once it knows the row;
-     * the list summary's running bit is the fallback while the status baseline
-     * is still in flight.
-     * @param {string} sessionId - Session identity.
-     * @param {object} summary - Session list summary, if any.
-     * @param {Map | undefined} statuses - live status snapshot.
-     * @returns {boolean} whether the Session is running.
-     */
-    function dwSessionRunning(sessionId, summary, statuses) {
-      if (statuses !== undefined && statuses !== null && typeof statuses.get === 'function') {
-        const status = statuses.get(sessionId)
-        if (status !== undefined && status !== null && typeof status.running === 'boolean') return status.running
-      }
-      return summary !== undefined && summary !== null && summary.running === true
-    }
-
-    /**
      * Count the running direct subagent children of each Session.
      *
      * A parent whose own turn has closed is still working while a delegated
@@ -5747,21 +5700,6 @@ function dwClearNativeAtmospheres() {
         parents.set(parentId, (parents.get(parentId) ?? 0) + 1)
       }
       return parents
-    }
-
-    /**
-     * Workspace display label for one Session: its owning Workspace's label,
-     * or the ungrouped fallback when no Workspace accounts for it.
-     * @param {string} sessionId - Session identity.
-     * @param {readonly object[]} workspaces - Workspace rows.
-     * @param {Function} t - namespace-bound translate.
-     * @returns {string} workspace label.
-     */
-    function dwOwningWorkspace(sessionId, workspaces) {
-      for (const candidate of workspaces) {
-        if (Array.isArray(candidate.sessionIds) && candidate.sessionIds.includes(sessionId)) return candidate
-      }
-      return null
     }
 
     /**
@@ -5856,111 +5794,6 @@ function dwClearNativeAtmospheres() {
       rows.sort((left, right) => right.updatedAt - left.updatedAt)
       return rows
     }
-
-    /**
-     * Sanitize one pinned-id source into a Set.
-     *
-     * Accepts a bare id array (the cache/Host document shape) or an object with
-     * `pinned` / `pinnedSessionIds` arrays (older cached documents and test
-     * fixtures). Only non-empty string ids are kept, each id appears once, and the
-     * list is bounded to the Host document limit.
-     * @param {unknown} value - id array or an object carrying one.
-     * @returns {Set<string>} valid pinned Session ids.
-     */
-    function dwSanitizePinnedIds(value) {
-      const pinned = new Set()
-      let source = []
-      if (Array.isArray(value)) source = value
-      else if (value !== null && typeof value === 'object') {
-        if (Array.isArray(value.pinned)) source = value.pinned
-        else if (Array.isArray(value.pinnedSessionIds)) source = value.pinnedSessionIds
-      }
-      for (const id of source) {
-        if (typeof id !== 'string' || id.length === 0 || id.length > DW_PIN_MAX_ID_LENGTH) continue
-        pinned.add(id)
-        if (pinned.size >= DW_PIN_LIMIT) break
-      }
-      return pinned
-    }
-
-    /**
-     * Effective pinned ids for painting: the confirmed set with the queued
-     * operations replayed on top, so a toggle shows immediately while its Host
-     * write is still in flight/failed.
-     * @param {readonly string[]} pinned - confirmed pinned ids.
-     * @param {readonly Array<{ op: 'pin' | 'unpin', id: string }>} pending - queued operations.
-     * @returns {Set<string>} effective pinned ids.
-     */
-    function dwPinEffectiveIds(pinned, pending) {
-      const ids = dwSanitizePinnedIds(pinned)
-      if (Array.isArray(pending)) {
-        for (const entry of pending) {
-          if (entry === null || typeof entry !== 'object') continue
-          if (typeof entry.id !== 'string' || entry.id.length === 0) continue
-          if (entry.op === 'pin') ids.add(entry.id)
-          else if (entry.op === 'unpin') ids.delete(entry.id)
-        }
-      }
-      return ids
-    }
-
-    /**
-     * Read the cached pin state: last Host document seen, queued operations, and
-     * whether this browser has reconciled with the Host at least once. Corrupt,
-     * missing, or storage-denied documents read as an empty local state.
-     * @returns {{ version: number, rev: number, pinned: string[], pending: Array<object>, migrated: boolean }} cached state.
-     */
-    function dwReadPinCache() {
-      const fallback = { version: DW_PIN_VERSION, rev: 0, pinned: [], pending: [], migrated: false }
-      try {
-        const raw = window.localStorage.getItem(DW_PIN_KEY)
-        if (raw === null) return fallback
-        const value = JSON.parse(raw)
-        if (value === null || typeof value !== 'object' || Array.isArray(value)) return fallback
-        const pending = []
-        if (Array.isArray(value.pending)) {
-          for (const entry of value.pending) {
-            if (entry === null || typeof entry !== 'object') continue
-            if (entry.op !== 'pin' && entry.op !== 'unpin') continue
-            if (typeof entry.id !== 'string' || entry.id.length === 0 || entry.id.length > DW_PIN_MAX_ID_LENGTH) continue
-            pending.push({ op: entry.op, id: entry.id })
-            if (pending.length >= DW_PIN_MAX_PENDING) break
-          }
-        }
-        const rev = typeof value.rev === 'number' && Number.isFinite(value.rev) && value.rev >= 0
-          ? Math.floor(value.rev)
-          : 0
-        return {
-          version: DW_PIN_VERSION,
-          rev,
-          pinned: [...dwSanitizePinnedIds(value.pinned)],
-          pending,
-          migrated: value.migrated === true
-        }
-      } catch {
-        return fallback
-      }
-    }
-
-    /**
-     * Persist the cached pin state.
-     * @param {object} state - cached state.
-     * @returns {void}
-     */
-    function dwWritePinCache(state) {
-      try {
-        window.localStorage.setItem(DW_PIN_KEY, JSON.stringify({
-          version: DW_PIN_VERSION,
-          rev: state.rev,
-          pinned: state.pinned,
-          pending: state.pending,
-          migrated: state.migrated
-        }))
-      } catch {
-        // A storage-denied browser keeps the in-memory state only.
-      }
-    }
-
     /**
      * Read the Host-shared pin document. A missing route (older Host, service not
      * restarted yet) or a transport failure reads as null and leaves the local
@@ -6020,104 +5853,6 @@ function dwClearNativeAtmospheres() {
         window.clearTimeout(timer)
       }
     }
-
-    /**
-     * One card row for a pinned main Session that is not running and outside the
-     * finished-retention window: the pinned "never retires" case. The row keeps
-     * the Session's own effective end time, so unpinning re-derives it with the
-     * current rules instead of restarting a timer or resetting the end time.
-     * @param {object} summary - Session summary.
-     * @param {object | null} owner - owning Workspace row.
-     * @param {string} id - Session id.
-     * @param {Function} t - dynamic-Workspaces translate.
-     * @param {number} updatedAt - effective last-activity time.
-     * @returns {object} row.
-     */
-    function dwPinnedRow(summary, owner, id, t, updatedAt) {
-      return {
-        id,
-        title: typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0 ? summary.displayTitle : id,
-        workspace: owner === null ? t('group.ungrouped') : dwWorkspaceLabel(owner, t),
-        workspacePath: owner !== null && typeof owner.path === 'string' ? owner.path : '',
-        workspaceId: owner !== null ? owner.workspaceId : null,
-        cwd: typeof summary.cwd === 'string' && summary.cwd.length > 0 ? summary.cwd : null,
-        updatedAt,
-        subagents: 0,
-        state: 'done',
-        pinned: true
-      }
-    }
-
-    /**
-     * Combine the card's derived rows with the pinned main Sessions.
-     *
-     * Pinned rows always lead the card, newest activity first, and are listed
-     * regardless of the running / finished-retention window: the card's pin is a
-     * "keep this here" state, so time never retires it. The remaining rows
-     * keep exactly the existing running-then-recent order. Pinned running rows
-     * keep their running state and subagent count; a pinned finished Session
-     * outside the retention window is listed with `state:'done'` and its own
-     * original end time (unpin uses the same facts to re-derive the row by the
-     * ordinary rules). Blank, archived, subagent, and unknown Sessions are never
-     * listed, exactly like the ordinary card rows.
-     * @param {object} input - derivation input.
-     * @param {object} input.list - Session list state (`ids`, `byId`).
-     * @param {Map | undefined} input.statuses - live Session status snapshot.
-     * @param {readonly object[]} input.workspaces - Workspace rows.
-     * @param {Function} input.t - dynamic-Workspaces translate.
-     * @param {Map<string, number> | undefined} input.runningParents - parent id → running child count.
-     * @param {Set<string>} input.archived - archived Session ids.
-     * @param {Record<string, number>} input.activity - true last-activity map.
-     * @param {Set<string>} input.pinnedIds - pinned main Session ids.
-     * @param {Array<object>} input.runningRows - rows from {@link dwRunningRows}.
-     * @param {Array<object>} input.recentRows - rows from {@link dwRecentRows}.
-     * @returns {Array<object>} card rows, pinned first.
-     */
-    function dwPinPanelRows(input) {
-      const {
-        list, statuses, workspaces, t, runningParents, archived, activity, pinnedIds, runningRows, recentRows
-      } = input
-      const runningById = new Map(runningRows.map((row) => [row.id, row]))
-      const recentById = new Map(recentRows.map((row) => [row.id, row]))
-      const pinnedRows = []
-      if (list !== null && typeof list === 'object' && list.byId !== undefined && Array.isArray(list.ids)) {
-        for (const id of list.ids) {
-          if (!pinnedIds.has(id)) continue
-          const running = runningById.get(id)
-          if (running !== undefined) {
-            pinnedRows.push({ ...running, pinned: true })
-            continue
-          }
-          const recent = recentById.get(id)
-          if (recent !== undefined) {
-            pinnedRows.push({ ...recent, pinned: true })
-            continue
-          }
-          const summary = list.byId[id]
-          if (summary === undefined || summary.blank === true || summary.origin === 'subagent') continue
-          if (archived.has(id)) continue
-          const owner = dwOwningWorkspace(id, workspaces)
-          const row = dwPinnedRow(
-            summary,
-            owner,
-            id,
-            t,
-            dwEffectiveUpdatedAt(activity, id, summary)
-          )
-          const runningNow = dwSessionRunning(id, summary, statuses) || runningParents.has(id)
-          row.state = runningNow ? 'running' : 'done'
-          row.subagents = runningNow ? (runningParents.get(id) ?? 0) : 0
-          pinnedRows.push(row)
-        }
-      }
-      pinnedRows.sort((left, right) => right.updatedAt - left.updatedAt)
-      const ordinary = runningRows
-        .filter((row) => !pinnedIds.has(row.id))
-        .concat(recentRows.filter((row) => !pinnedIds.has(row.id)))
-        .map((row) => ({ ...row, pinned: false }))
-      return pinnedRows.concat(ordinary)
-    }
-
     /**
      * Sessions that keep a Workspace Active: running now, or last active
      * inside the retention window.
@@ -23145,15 +22880,7 @@ html[data-psa-active="true"] .psa-layer{z-index:110}
         annotationChipCandidates,
         serializeAnnotationChip
       }
-      // Pin seam: the card's own id sanitizer/optimistic replay helpers plus the
-      // pinned-first "never retires" row derivation.
-      globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesPin = {
-        dwSanitizePinnedIds,
-        dwPinEffectiveIds,
-        dwReadPinCache,
-        dwWritePinCache,
-        dwPinPanelRows
-      }
+
       // The card row "..." menu: the plugin-owned captured-target kind the shared
       // popup opens against plus the pure delegation helpers (Pin/Unpin filtering
       // and native MenuActionView -> delegating MenuAction mapping).
