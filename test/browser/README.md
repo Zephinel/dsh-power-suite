@@ -13,6 +13,11 @@ passed with `--client` still inject unchanged.
 node test/browser/annotation.e2e.mjs
 ```
 
+> If the running GUI predates a change to the plugin client entry (`exports`/
+> `lib/`), it can keep serving the old `src/client.js`. Restart the GUI (or run
+> these suites against an isolated throwaway DSH web instance) before trusting a
+> boot/injection failure.
+
 ## How it works
 
 1. Resolves a token URL for the GUI (`~/.local/bin/dsh-web url --ip`, or `DSH_WEB_URL`).

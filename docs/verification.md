@@ -61,6 +61,12 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   Node suite and the release-notes gate, then `pack:check`.
 - `npm run pack:check`: **75 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).
+- Browser e2e (isolated throwaway `$DSH_HOME`, current tarball): `sidebar.e2e.mjs
+  --smoke` **4/4 PASS**; `update-prompt.e2e.mjs` **21/21 PASS**;
+  `annotation.e2e.mjs --smoke` **5/6** (`smoke-6` launcher-click timeout, exactly
+  reproduced with the pre-Phase-3 baseline client `fa48b2a`, so not a
+  regression); served plugin entry comes from `lib/client.js` (958.3 kB) and the
+  annotation/sidebar harness injects the esbuild-bundled ESM worktree client.
 - `npm run check:release`: **PASS** — 75 packaged files installed into a throwaway
   `$DSH_HOME`; it deletes `lib/` first so `npm pack` must rebuild it through
   `prepare`, then the packed `lib/` matches the fresh build, every other packed

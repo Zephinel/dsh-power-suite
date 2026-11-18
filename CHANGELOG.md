@@ -12,6 +12,8 @@ All notable changes to this repository are documented here. The format follows
 
 ### Changed
 
+- **Browser e2e evidence (Phase 3f).** The three browser suites ran against an isolated throwaway DSH web instance with the current tarball installed: `sidebar.e2e.mjs --smoke` 4/4, `update-prompt.e2e.mjs` 21/21, and `annotation.e2e.mjs --smoke` 5/6; the remaining launcher-click timeout reproduces identically with the pre-Phase-3 baseline client, so it is a headless/harness limitation rather than a regression. The long-running `:3080` server still serves the old `src/client.js` entry until it is restarted.
+
 - **Shared settings contract and three more browser models (Phase 3e).** The settings enums/defaults now live in `src/shared/protocol.ts` and are imported by both the Host store (re-exported) and the browser entry. The Files ↔ Artifacts phase model, the interrupted-state decision and the settings payload filter/merge moved to `src/browser/artifacts/model.ts`, `src/browser/interrupted-sessions/model.ts` and `src/browser/settings/model.ts`; their tests import the models directly and the `filesArtifacts` and `interruptedState` vm hooks are gone. Behavior and copy are unchanged.
 
 - **Shared route contract (Phase 3d).** All 16 API paths now live in `src/shared/routes.ts`: Host modules re-export those constants and the browser entry/models import the same values through `browserRoute`, so no `/api/...` route literal remains in `src/client.js`. The protocol contract test asserts the Host set equals the shared contract and that the browser half contains no route literals. Paths and behavior are unchanged.

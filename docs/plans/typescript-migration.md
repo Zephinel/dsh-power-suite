@@ -272,6 +272,17 @@ and artifacts tests moved off `loadClientModule` entirely. Record shapes and the
 remaining vm hooks (`uiAnnotation`, gallery, dynamic-Workspaces, updateCheck,
 sidebarWidth probe) are the remaining Phase 3 cleanup.
 
+**3f e2e evidence (2026-11-18).** Because the live `:3080` server predates the
+new client entry and still serves `src/client.js`, the three suites ran against
+an isolated throwaway DSH web instance (temp `$DSH_HOME`, current tarball
+installed): `sidebar.e2e.mjs --smoke` **4/4 PASS**, `update-prompt.e2e.mjs`
+**21/21 PASS**, `annotation.e2e.mjs --smoke` **5/6** with `smoke-6` timing out
+when the launcher click does not enter annotation mode. Re-running the same
+smoke with the pre-Phase-3 baseline client (`fa48b2a`) reproduces exactly the
+same 5/6, so that failure is a headless/harness limitation rather than a Phase 3
+regression. The live server needs a restart (or a fresh instance) before its
+served entry becomes `lib/client.js`.
+
 Decide between (a) splitting `src/client.js` by `//#region feature:` into modules
 and bundling one classic script, or (b) keeping one file and annotating it. Under
 (a), give each feature an `install(ctx, deps)` plus pure model functions, import
