@@ -164,6 +164,7 @@ import {
   dwProjectionSections
 } from './browser/dynamic-workspaces/stats.ts'
 import { DW_NS, createDynamicWorkspacesInstaller } from './browser/dynamic-workspaces/install.ts'
+import { createNativeSessionHoverFigures } from './browser/native-session-hover-figures/install.ts'
 /**
  * Browser half of DSH Power Suite.
  *
@@ -3346,84 +3347,19 @@ html[data-power-suite-interrupted="true"] [data-conversation-region="composer"] 
     //#endregion
 
     //#region feature: native session hover figures
-    /**
-     * Occupant of the shell's `sidebar.session.row.hover` seat: the three native
-     * figures the running-panel hover card shows, rendered inside the default
-     * sidebar Session hover card between its relative-time line and its trailing
-     * status lines. The seat is mounted only while that card is open; a Session
-     * whose projections carry no figures renders nothing, so the shipped card
-     * keeps its exact shape for a blank or stat-less Session.
-     * @param {object} props - slot props: the owner's `sessionId`, this feature's
-     *   `t` and `ensureProjections`, and the shell's standard hooks.
-     * @returns {object | null} the figure sections, or null when none has data.
-     */
-    function SessionHoverFigures(props) {
-      const { sessionId, t, ensureProjections } = props
-      // Root-scope slot entries receive the shell's `useSessions` standard hook;
-      // subscribing to the list state re-renders the open card when the Host
-      // pushes new projection values for this Session.
-      const sessions = props.useSessions((state) => state)
-      const projections = sessions !== null && typeof sessions === 'object'
-        ? sessions.projectionsBySession
-        : undefined
-      const record = typeof sessionId === 'string' && sessionId.length > 0
-        && projections !== null && typeof projections === 'object'
-        ? projections[sessionId]
-        : undefined
-      // Cold (persisted) Sessions carry only summary projections: the first mount
-      // of their hover card starts the one one-shot read the running panel's card
-      // also performs. The ref Set keeps it to one request per Session id for the
-      // mounted card, and error / migration records are never retried.
-      const requested = React.useRef(new Set())
-      React.useEffect(() => {
-        if (typeof sessionId !== 'string' || sessionId.length === 0) return
-        if (requested.current.has(sessionId)) return
-        if (!dwNeedsProjectionRead(record)) return
-        requested.current.add(sessionId)
-        if (typeof ensureProjections === 'function') ensureProjections(sessionId)
-      }, [sessionId, record, ensureProjections])
-      const values = record !== null && typeof record === 'object' ? record.values : undefined
-      // A single wrapper is the test/DOM anchor for "native sidebar hover card
-      // figures"; `:empty` hides it when the Session has no figures, so a blank
-      // card keeps the shipped spacing exactly.
-      return React.createElement('div', {
-        className: 'psd-native-hover-figures',
-        'data-psd-native-figures': ''
-      }, React.createElement(dynamicWorkspacesInstaller.hovercardSections, {
-        sections: dwProjectionSections(values),
-        t
-      }))
-    }
-
-    /**
-     * Register the native Session hover-card occupant.
-     * @param {object} ctx - client root context.
-     * @returns {void}
-     */
-    function installSessionHoverFigures(ctx) {
-      // `dynamicWorkspacesInstaller.install` runs first in `apply`, so the
-      // `DW_NS` dictionaries and the shared `.psd-hovercard-section*` styles the
-      // installer registers are already installed when this seat renders.
-      const t = ctx.locale.bind(DW_NS)
-      const ensureProjections = (sessionId) => {
-        const sessions = ctx.sessions
-        if (sessions === null || sessions === undefined) return
-        if (typeof sessions.refreshProjections !== 'function') return
-        try {
-          const pending = sessions.refreshProjections(sessionId)
-          if (pending !== null && pending !== undefined && typeof pending.catch === 'function') pending.catch(() => {})
-        } catch {
-          // A Host without the projection units leaves the figures out; the
-          // native card keeps every one of its own lines.
-        }
-      }
-      ctx.effect(() => ctx.slots.inject('sidebar.session.row.hover', () => ctx.slots.register({
-        name: 'sidebar.session.row.hover',
-        id: 'power-suite.session-hover-figures',
-        order: 100,
-        inject: () => ({ t, ensureProjections })
-      }, SessionHoverFigures)), 'power-suite: native session hover figures')
-    }
+    //
+    // The seat and its registration live in
+    // `src/browser/native-session-hover-figures/install.ts`: the entry only binds
+    // the React runtime and the section/projection helpers the dynamic-Workspaces
+    // installer already owns, then installs it in `apply`. DOM markers, slot id,
+    // copy and ordering stay unchanged; this region is a wiring point.
+    const { installSessionHoverFigures } = createNativeSessionHoverFigures({
+      React,
+      hovercardSections: dynamicWorkspacesInstaller.hovercardSections,
+      projectionSections: dwProjectionSections,
+      needsProjectionRead: dwNeedsProjectionRead,
+      namespace: DW_NS
+    })
     //#endregion
 
     //#region feature: prompt history — preview

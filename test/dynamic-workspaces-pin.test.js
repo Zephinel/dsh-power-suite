@@ -55,6 +55,9 @@ const client = loadClientModule()
 /** The extracted dynamic-Workspaces controller, read for its own wiring assertions. */
 const dynamicSource = readFileSync(new URL('../src/browser/dynamic-workspaces/install.ts', import.meta.url), 'utf8')
 
+/** The extracted native Session hover-figure seat, read for its own marker assertions. */
+const hoverFiguresSource = readFileSync(new URL('../src/browser/native-session-hover-figures/install.ts', import.meta.url), 'utf8')
+
 /** Fixed clock used by every row fixture (2025-10-09T08:53:20Z). */
 const NOW = 1_760_000_000_000
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -215,9 +218,10 @@ test('the card-owned pin syncs through the panel route, never through the native
   )
   // The pre-final round's helpers are gone.
   assert.doesNotMatch(dynamicSource, /dwReadPinnedIds|dwWritePinnedIds/, 'the removed host-pin helpers must not reappear')
-  // Requirement 2's native hover-figure wiring is untouched in the entry.
-  assert.match(client.source, /sidebar\.session\.row\.hover/, 'the native hover-figure slot registration stays')
-  assert.match(client.source, /psd-native-hover-figures/, 'the native hover-figure DOM anchor stays')
+  // Requirement 2's native hover-figure wiring moved intact into its typed seat.
+  assert.match(client.source, /createNativeSessionHoverFigures/, 'the entry still binds the native hover-figure seat')
+  assert.match(hoverFiguresSource, /sidebar\.session\.row\.hover/, 'the native hover-figure slot registration stays')
+  assert.match(hoverFiguresSource, /psd-native-hover-figures/, 'the native hover-figure DOM anchor stays')
 })
 
 test('pinned ids sanitize from arrays and legacy objects, drop junk, dedupe, and bound', () => {
