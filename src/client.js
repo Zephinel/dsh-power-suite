@@ -5374,30 +5374,63 @@ function dwAtmosphereMount(host) {
     const value = Math.sin(seed * 127.1 + 311.7) * 43758.5453
     return value - Math.floor(value)
   }
-  // Two free-orbiting blobs per palette hue. Their phases are evenly spread so
-  // every hue is present, but each blob wanders across the whole row (different
-  // speeds and vertical orbits) instead of staying in a fixed lane: a given spot
-  // changes hue over time, and no hue permanently owns the left/right edge.
+  // Value-noise fBm: the smoke moves through a 2D flow field rather than on
+  // fixed sinusoidal orbits, so it meanders, curls and diffuses in both axes.
+  // Reference: Book of Shaders fBm / flow-noise; a light 3-octave value noise is
+  // enough for a small pill and costs little per frame.
+  const hash2 = (x, y) => {
+    const h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453
+    return h - Math.floor(h)
+  }
+  const noise2 = (x, y) => {
+    const xi = Math.floor(x)
+    const yi = Math.floor(y)
+    const xf = x - xi
+    const yf = y - yi
+    const u = xf * xf * (3 - 2 * xf)
+    const v = yf * yf * (3 - 2 * yf)
+    const a = hash2(xi, yi)
+    const b = hash2(xi + 1, yi)
+    const c = hash2(xi, yi + 1)
+    const d = hash2(xi + 1, yi + 1)
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v
+  }
+  const fbm2 = (x, y) => {
+    let total = 0
+    let amplitude = 0.5
+    let frequency = 1
+    for (let octave = 0; octave < 3; octave += 1) {
+      total += amplitude * noise2(x * frequency, y * frequency)
+      frequency *= 2
+      amplitude *= 0.5
+    }
+    return total
+  }
+  // Two independent blobs per hue; even hue coverage at spawn, free 2D flow after.
   const blobs = DW_ATMOS_PALETTE.flatMap((_, index) => {
     const base = (index / DW_ATMOS_PALETTE.length) * Math.PI * 2
     return [
       {
         phase: base,
-        speed: 0.55 + noise(index + 2) * 0.55,
-        size: 0.55 + noise(index + 3) * 0.20,
+        speed: 0.004 + noise(index + 2) * 0.005,
+        vx: 0,
+        vy: 0,
+        size: 0.50 + noise(index + 3) * 0.20,
         hue: index,
-        orbitX: 0.40 + noise(index + 4) * 0.05,
-        orbitY: 0.30 + noise(index + 5) * 0.12,
-        alpha: 0.22
+        x: ((index + 0.5) / DW_ATMOS_PALETTE.length + (noise(index + 1) - 0.5) * 0.12 + 1) % 1,
+        y: 0.5 + (noise(index + 6) - 0.5) * 0.45,
+        alpha: 0.24
       },
       {
         phase: base + Math.PI * 0.62,
-        speed: 0.78 + noise(index + 9) * 0.65,
-        size: 0.38 + noise(index + 10) * 0.16,
+        speed: 0.005 + noise(index + 9) * 0.006,
+        vx: 0,
+        vy: 0,
+        size: 0.36 + noise(index + 10) * 0.16,
         hue: index,
-        orbitX: 0.44 + noise(index + 11) * 0.05,
-        orbitY: 0.34 + noise(index + 12) * 0.14,
-        alpha: 0.13
+        x: ((index + 0.5) / DW_ATMOS_PALETTE.length + (noise(index + 7) - 0.5) * 0.18 + 1) % 1,
+        y: 0.5 + (noise(index + 8) - 0.5) * 0.55,
+        alpha: 0.15
       }
     ]
   })
@@ -5423,7 +5456,7 @@ function dwAtmosphereMount(host) {
     canvas.height = height
     return true
   }
-  const draw = () => {
+  const draw = (advance = false) => {
     if (disposed) return
     const width = canvas.width
     const height = canvas.height
@@ -5444,17 +5477,32 @@ function dwAtmosphereMount(host) {
     // blobs paint over each other (not additive) so their hues stay saturated
     // instead of summing to white; the CSS blend then applies the theme recipe.
     ctx.globalCompositeOperation = 'source-over'
-    const breath = 1 + 0.30 * Math.sin(time * 0.43) + 0.12 * Math.sin(time * 0.19 + 1.4)
+    const breath = 1 + 0.10 * Math.sin(time * 0.17) + 0.05 * Math.sin(time * 0.09 + 1.4)
     for (const blob of blobs) {
       const color = DW_ATMOS_PALETTE[blob.hue]
-      const cx = width * (0.5 + blob.orbitX * Math.sin(time * blob.speed * DW_ATMOS_CONFIG.drift + blob.phase)
-        + 0.06 * Math.sin(time * 0.17 + blob.phase * 1.7))
-      const cy = height * (0.5
-        + blob.orbitY * Math.cos(time * blob.speed * 0.75 * DW_ATMOS_CONFIG.drift + blob.phase * 1.3)
-        + 0.12 * Math.sin(time * 0.17 + blob.phase * 0.7))
+      const field = (fx, fy) => fbm2(
+        fx * 1.1 + blob.phase + time * 0.018,
+        fy * 1.1 + blob.phase * 0.7 - time * 0.012
+      )
+      const eps = 0.055
+      const curlX = field(blob.x, blob.y + eps) - field(blob.x, blob.y - eps)
+      const curlY = -(field(blob.x + eps, blob.y) - field(blob.x - eps, blob.y))
+      const magnitude = Math.hypot(curlX, curlY) || 1
+      if (advance) {
+        // Smooth the field direction instead of jumping every frame, and never
+        // wrap across the row (a wrap teleports a hue and reads as a flash).
+        const targetX = (curlX / magnitude) * blob.speed
+        const targetY = (curlY / magnitude) * blob.speed
+        blob.vx = blob.vx * 0.95 + targetX * 0.05
+        blob.vy = blob.vy * 0.95 + targetY * 0.05
+        blob.x = Math.min(0.96, Math.max(0.04, blob.x + blob.vx))
+        blob.y = Math.min(0.92, Math.max(0.08, blob.y + blob.vy))
+      }
+      const cx = width * blob.x
+      const cy = height * blob.y
       const radius = Math.max(2, span * blob.size
-        * (0.42 + 0.14 * Math.sin(time * 0.37 + blob.phase)
-          + 0.04 * Math.sin(time * 0.12 + blob.phase * 1.9)))
+        * (0.42 + 0.08 * Math.sin(time * 0.12 + blob.phase)
+          + 0.03 * Math.sin(time * 0.06 + blob.phase * 1.9)))
       const alpha = Math.min(0.48, blob.alpha * DW_ATMOS_HUE_ALPHA[blob.hue] * 0.68 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.vibrance * DW_ATMOS_CONFIG.blend * breath)
       const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius)
       gradient.addColorStop(0, `rgba(${color[0]},${color[1]},${color[2]},${alpha.toFixed(3)})`)
@@ -5474,7 +5522,7 @@ function dwAtmosphereMount(host) {
     lastFrame = now
     if (now - lastDraw >= 33) {
       lastDraw = now
-      draw()
+      draw(true)
     }
     raf = window.requestAnimationFrame(frame)
   }
@@ -5492,7 +5540,7 @@ function dwAtmosphereMount(host) {
     if (motionQuery.matches) {
       state(false, 'static')
       resize()
-      draw()
+      draw(false)
       return
     }
     state(true, 'animated')
@@ -5510,13 +5558,13 @@ function dwAtmosphereMount(host) {
   // A real size change clears the backing store; repaint synchronously in the
   // same task (before the browser paints), regardless of reduced motion. The
   // 33 ms animation throttle above only governs steady-state frames.
-  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (resize()) draw() }) : null
+  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (resize()) draw(false) }) : null
   if (observer !== null) observer.observe(canvas)
   document.addEventListener('visibilitychange', onVisibility)
   motionQuery.addEventListener('change', onMotion)
   resize()
   // Paint once synchronously at mount so the first frame is never blank.
-  draw()
+  draw(false)
   start()
   return {
     destroy: () => {

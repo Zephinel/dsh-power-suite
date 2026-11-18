@@ -420,16 +420,18 @@ shell tokens, dark #2C2C2E) and S12 passes 7/0/0; the path also exposed a real
 surfaces follow the theme (light shell surface/label tokens, dark #2C2C2E,
 S12 7/0/0), and the dark atmosphere was iterated toward the light-mode pastel
 reference. Final recipe: screen blend with `saturate(1.15) brightness(1.45)`, wrapper
-opacity 0.58 base / 0.64 hover, white veil scrim 0.08/0.04, and a free-orbiting
-even-rainbow renderer: eight constant-HSL hues (S=0.90, L=0.62), two blobs per
-hue with independent speeds (main 0.55-1.1, satellite 0.78-1.43) and wider
-orbits, so a fixed position changes hue over time instead of permanently owning
-the left/right edge; a stronger wash plus smaller/softer blobs prevent the
-complementary overlaps from averaging the canvas to grey (measured saturation
-~0.385). The light theme shares the renderer with its multiply/white-veil
-recipe. The live full sidebar run is green (71 PASS / 1 SKIP / 0 FAIL at the
-last data-complete run), including b4-1/b4-3/b4-5/b4-9; dark title contrast is
-2.5:1, the accepted trade-off for the lighter pill. Other live full-run failures (`b1-3`, `b3-1/b3-2`, `b5-5`,
+opacity 0.58 base / 0.64 hover, white veil scrim 0.08/0.04, and a **2D fBm flow
+field**: eight constant-HSL hues (S=0.90, L=0.62), two blobs per hue whose
+positions are advected by a 3-octave value-noise curl field (Book of Shaders
+fBm/flow-noise style). The field uses low frequencies and slow time drift, the
+per-blob velocity is low-pass filtered, and edges clamp instead of wrapping, so
+the smoke meanders/diffuses in both axes without frame-to-frame flinging or
+wrap flashes; a stronger wash plus smaller/softer blobs prevent complementary
+overlaps from averaging the canvas to grey (measured saturation ~0.50). The
+light theme shares the renderer with its multiply/white-veil recipe. The live
+full sidebar run is green apart from an intermittent f4-1 pin-state flake
+(70/1/1); b4-1/b4-3/b4-5/b4-9 pass. Dark title contrast is 2.5:1, the accepted
+trade-off for the lighter pill. Other live full-run failures (`b1-3`, `b3-1/b3-2`, `b5-5`,
 `c2-1`, `c4-4`) are intermittent GUI-data/state issues, not this change. The
 annotation click-selection regression from the identity extraction remains
 covered by the new click-select smoke.
