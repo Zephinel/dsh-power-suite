@@ -3054,7 +3054,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     return `${summary}; child row radius ${highlight.row.radius}`
   })
 
-  await results.check('b4-5', 'dark theme keeps the atmosphere vivid (screen blend, high saturation, light scrim)', async () => {
+  await results.check('b4-5', 'dark theme keeps a soft luminous atmosphere (screen blend, pastel veil)', async () => {
     await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
     try {
       await sleep(900)
@@ -3067,11 +3067,13 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       const details = []
       for (const [label, row, atmos, content] of rows) {
         assert(row && atmos, `${label}: atmosphere missing in dark theme`)
-        assertEqual(atmos.canvas.mixBlendMode, 'screen', `${label}: dark theme must use the light-adding screen blend`)
-        assert(atmos.canvas.filter.includes('saturate(1.5)'), `${label}: dark theme must keep the vivid saturate baseline (${atmos.canvas.filter})`)
-        assert(atmos.canvas.avgSaturationStrong >= 0.38, `${label}: dark theme atmosphere must stay vivid (blob-core saturation ${atmos.canvas.avgSaturationStrong})`)
-        assert(atmos.opacity >= 0.7, `${label}: dark theme atmosphere opacity must stay vivid (${atmos.opacity})`)
-        details.push(`${label} sat ${atmos.canvas.avgSaturation} blend ${atmos.canvas.mixBlendMode}`)
+        assertEqual(atmos.canvas.mixBlendMode, 'screen', `${label}: dark theme must keep the light-adding screen blend`)
+        assert(atmos.canvas.filter.includes('saturate(1.32)'), `${label}: dark theme must use the softened pastel saturation (${atmos.canvas.filter})`)
+        assert(atmos.canvas.filter.includes('brightness(1.28)'), `${label}: dark theme must stay luminous (${atmos.canvas.filter})`)
+        assert(atmos.canvas.avgSaturationStrong >= 0.28, `${label}: softened pastel atmosphere must stay colorful (blob-core saturation ${atmos.canvas.avgSaturationStrong})`)
+        assert(atmos.opacity >= 0.62 && atmos.opacity <= 0.82, `${label}: dark theme atmosphere opacity must be the softened range (${atmos.opacity})`)
+        assert(atmos.scrim !== null && /rgba\(255, 255, 255/.test(atmos.scrim.backgroundImage), `${label}: dark theme scrim must be a light veil, not a dark one (${atmos.scrim?.backgroundImage})`)
+        details.push(`${label} sat ${atmos.canvas.avgSaturation} opacity ${atmos.opacity} blend ${atmos.canvas.mixBlendMode}`)
       }
       return details.join('; ')
     } finally {
@@ -3080,7 +3082,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     }
   })
 
-  await results.check('b4-9', 'light-mode atmosphere rows keep readable text/icons (dark mode unchanged)', async () => {
+  await results.check('b4-9', 'light-mode atmosphere rows keep readable text/icons (dark softened)', async () => {
     await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
     try {
       await sleep(900)
@@ -3122,11 +3124,11 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       await sleep(900)
       const dark = await page.eval(probe.atmosContrast)
       assert(dark && dark.card, 'no current card row to measure in dark mode')
-      assertEqual(dark.card.blend, 'screen', 'dark theme must keep the screen gas blend (unchanged)')
-      assert(dark.card.scrim[0] < 60 && dark.card.scrim[1] < 60, `dark theme must keep its dark scrim (got rgb(${dark.card.scrim.slice(0, 3).join(',')}))`)
-      assert(dark.card.opacity >= 0.7, `dark theme atmosphere opacity must stay at its previous level (got ${dark.card.opacity})`)
-      assert(dark.card.title.contrast >= 3.5, `dark title contrast ${dark.card.title.contrast}:1 must keep its pre-fix baseline (measured 3.8:1 before the light-mode fix)`)
-      return `${summaries.join('; ')}; dark unchanged: blend ${dark.card.blend}, scrim rgb(${dark.card.scrim.slice(0, 3).join(',')}), opacity ${dark.card.opacity}, title ${dark.card.title.contrast}:1`
+      assertEqual(dark.card.blend, 'screen', 'dark theme must keep the screen gas blend')
+      assert(dark.card.scrim[0] >= 200 && dark.card.scrim[1] >= 200, `dark theme must use the softened light veil scrim (got rgb(${dark.card.scrim.slice(0, 3).join(',')}))`)
+      assert(dark.card.opacity >= 0.62 && dark.card.opacity <= 0.82, `dark theme atmosphere opacity must be in the softened range (got ${dark.card.opacity})`)
+      assert(dark.card.title.contrast >= 3.0, `dark title contrast ${dark.card.title.contrast}:1 must stay readable on the softened pill`)
+      return `${summaries.join('; ')}; dark softened: blend ${dark.card.blend}, scrim rgb(${dark.card.scrim.slice(0, 3).join(',')}), opacity ${dark.card.opacity}, title ${dark.card.title.contrast}:1`
     } finally {
       await page.emulateMedia([])
       await sleep(500)

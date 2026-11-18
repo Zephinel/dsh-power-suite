@@ -416,6 +416,18 @@ S12's owner decision landed: annotation surfaces now follow the theme (light
 shell tokens, dark #2C2C2E) and S12 passes 7/0/0; the path also exposed a real
 `copyAnchorText` strict-mode bug (undeclared `text`/`source`), now fixed.
 
+**3y progress (2026-11-18).** Owner visual decisions landed: annotation
+surfaces follow the theme (light shell surface/label tokens, dark #2C2C2E,
+S12 7/0/0), and the dark atmosphere was softened toward the light-mode pastel
+reference (canvas `saturate(1.32) brightness(1.28)`, wrapper opacity 0.68 base /
+0.78 hover, white veil scrim 0.14/0.07); `b4-5` was updated to the softened
+contract (screen blend, light scrim, colorful pastel, opacity range) and passes
+in the live full run (card sat 0.466, Workspace/Session 0.479). Other live
+full-run failures (`b3-1/b3-2`, `b5-5`, `c2-1`, `c4-4`) are intermittent
+GUI-data/state issues, not this change. The annotation click-selection
+regression from the identity extraction remains covered by the new
+click-select smoke.
+
 **3m progress (2026-11-18).** Two follow-ups landed: `dwCacheHitPercent` is now a
 total function (inconsistent/negative/non-finite cache data returns `null`
 instead of looping forever; valid outputs unchanged, with a 7,389-case

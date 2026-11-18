@@ -67,16 +67,16 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   the mode active), and `update-prompt.e2e.mjs` **21/21**, 0 page errors. Full
   suite evidence:
   * update-prompt full: **21/21 PASS** isolated and live.
-  * sidebar full (live, after the harness fixes): **70 PASS / 1 SKIP / 1 FAIL**.
-    `b2-3` and `f6-1` were harness defects, not product bugs: `b2-3` passed the
-    `title` object where a string is required (the check requested
-    `.title.text`), and `f6-1` read the DOM in the same task as the Continue
-    hook, before React committed; it now samples after commit with bounded
-    polling and only counts the shell spinner as a second indicator. The one
-    remaining failure is `b4-5` (dark Workspace row atmosphere saturation 0.346
-    < 0.38), a pre-existing atmosphere threshold outside Phase 3 (baseline
-    reproduces it); isolated full is data-starved, isolated `--layout` is
-    **12/12**, live `--interrupted` is **9 PASS / 1 SKIP / 0 FAIL**.
+  * sidebar full (live, after the harness fixes): `b2-3` and `f6-1` are fixed
+    (the former passed a title object instead of `.title.text`; the latter read
+    the DOM before React committed and now samples after commit with bounded
+    polling and only counts the shell spinner). `b4-5` also passes after the
+    owner-requested dark-atmosphere softening (pastel screen blend, white veil
+    scrim, opacity 0.68/0.78; the run measured card sat 0.466, Workspace/Session
+    0.479). The live full run still varies with GUI data/state (`b3-1/b3-2`,
+    `b5-5`, `c2-1`, `c4-4` were observed intermittently), so its pass count is
+    not a stable single number; isolated full is data-starved, isolated
+    `--layout` is **12/12**, live `--interrupted` is **9 PASS / 1 SKIP / 0 FAIL**.
   * annotation: after the harness fixes `--scenario 4` is **7/0/0** (composer is
     intentionally not a selection target, so the three surfaces now exclude it),
     `--scenario 13` is **7 PASS / 1 SKIP**, `--scenario 10` is **8/0/0** with the

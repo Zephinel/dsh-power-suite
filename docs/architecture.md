@@ -455,8 +455,10 @@ row carries `data-psd-current-workspace`, and the native sidebar Session row of
 that Session carries `data-psd-current-session`; all of them get an internal
 **rainbow atmosphere**: a clipped absolutely-positioned wrapper inside the row's
 own rounded rectangle containing a small Canvas-2D gas renderer (broad prism
-wash + drifting radial blobs, screen blend, low base opacity), then a faint dark
-contrast scrim, then the untouched real content raised above both layers. The
+wash + drifting radial blobs; dark theme uses a screen blend with the softened
+pastel recipe, light theme a multiply blend), then a faint contrast scrim (white
+veil in both themes after the dark-mode softening), then the untouched real
+content raised above both layers. The
 effect is `pointer-events: none`, changes no geometry, runs only for highlighted
 rows (and pauses in hidden tabs), draws a single static frame under reduced
 motion, and is removed with the marker on session switch/unload. The leading glyph has three states: the shell loading indicator while

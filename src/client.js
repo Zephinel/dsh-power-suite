@@ -5284,8 +5284,14 @@ html[data-input-modality='keyboard'] .psd-child-current:focus-within > *:not(.ps
 .psd-run-current > .psd-run-toggle:hover,
 .psd-child-current > .psd-child-main .psd-continue-inline:hover,
 .psd-child-current > .psd-run-actions .psd-row-action:hover{background-color:transparent;filter:brightness(1.2)}
-body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.5) brightness(1.14)}
-body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(16,18,22,.12),rgba(16,18,22,.22))}
+/* Dark-mode atmosphere is intentionally lighter/pastel than the first vivid
+   recipe: the canvas keeps the screen blend but is less saturated and brighter,
+   the wrapper is slightly less opaque, and the scrim is a soft white veil
+   instead of a dark one (user request: lighten it, reference the light mode). */
+body[data-ds-dark-theme] .psd-atmos-canvas{mix-blend-mode:screen;filter:blur(3px) saturate(1.32) brightness(1.28)}
+body[data-ds-dark-theme] .psd-atmos{opacity:.68}
+body[data-ds-dark-theme] .psd-run-current:hover .psd-atmos,body[data-ds-dark-theme] .psd-child-current:hover .psd-atmos,body[data-ds-dark-theme] [data-psd-current-workspace='true']:hover .psd-atmos,body[data-ds-dark-theme] [data-psd-current-session='true']:hover .psd-atmos{opacity:.78}
+body[data-ds-dark-theme] .psd-atmos-scrim{background:linear-gradient(90deg,rgba(255,255,255,.14),rgba(255,255,255,.07))}
 /* Light-mode readability (user fix). The multiply canvas over the light surface
    turned the pill into a medium saturated tone; the shell's tertiary time/icons
    and the hover-revealed row actions then nearly vanished. In light mode the
