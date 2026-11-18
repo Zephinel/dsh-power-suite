@@ -42,11 +42,11 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { loadClientModule } from './helpers/client-module.mjs'
 import { ROUTES, browserRoute } from '../src/shared/routes.ts'
+import { DW_EN, DW_ZH } from '../src/browser/dynamic-workspaces/stats.ts'
 
 const client = loadClientModule()
 const production = loadClientModule({ hooksFlag: false })
 const pin = client.hooks?.dynamicWorkspacesPin
-const stats = client.hooks?.dynamicWorkspacesStats
 
 /** Fixed clock used by every row fixture (2025-10-09T08:53:20Z). */
 const NOW = 1_760_000_000_000
@@ -150,7 +150,7 @@ function pinInput(overrides = {}) {
     list: { ids: [], byId: {} },
     statuses: new Map(),
     workspaces: [],
-    t: translate(stats.DW_EN),
+    t: translate(DW_EN),
     now: NOW,
     runningParents: new Map(),
     archived: new Set(),
@@ -478,18 +478,17 @@ test('blank, archived, subagent, and unknown pinned ids are skipped; child rows 
 })
 
 test('EN and ZH dictionaries define the same pin keys', () => {
-  assert.notEqual(stats, undefined, 'dynamicWorkspacesStats test seam is missing from src/client.js')
-  const enKeys = Object.keys(stats.DW_EN).sort()
-  const zhKeys = Object.keys(stats.DW_ZH).sort()
+  const enKeys = Object.keys(DW_EN).sort()
+  const zhKeys = Object.keys(DW_ZH).sort()
   assert.deepEqual(zhKeys, enKeys, 'both dictionaries must define the same key set')
   const enPinKeys = enKeys.filter((key) => key.startsWith('pin.'))
   const zhPinKeys = zhKeys.filter((key) => key.startsWith('pin.'))
   assert.deepEqual(zhPinKeys, enPinKeys, 'both dictionaries must define the same pin keys')
   for (const key of ['pin.pin', 'pin.unpin']) {
-    assert.equal(typeof stats.DW_EN[key], 'string', `EN copy for ${key}`)
-    assert.equal(typeof stats.DW_ZH[key], 'string', `ZH copy for ${key}`)
-    assert.ok(stats.DW_EN[key].trim().length > 0, `EN copy for ${key} must not be blank`)
-    assert.ok(stats.DW_ZH[key].trim().length > 0, `ZH copy for ${key} must not be blank`)
+    assert.equal(typeof DW_EN[key], 'string', `EN copy for ${key}`)
+    assert.equal(typeof DW_ZH[key], 'string', `ZH copy for ${key}`)
+    assert.ok(DW_EN[key].trim().length > 0, `EN copy for ${key} must not be blank`)
+    assert.ok(DW_ZH[key].trim().length > 0, `ZH copy for ${key} must not be blank`)
   }
 })
 

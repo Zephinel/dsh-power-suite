@@ -2,11 +2,9 @@
  * Unit tests for the native session figures in the dynamic-Workspaces row
  * hover card (Session statistics, token usage, context occupancy).
  *
- * `src/client.js` is a browser classic script materialized in a `node:vm`
- * sandbox by `test/helpers/client-module.mjs`; the helpers are read from the
- * `dynamicWorkspacesStats` test-hook namespace, which is separate from the
- * annotation seam so that seam's keys stay frozen. Every expected string below
- * is the native shell's own recipe, copied from the installed
+ * The pure model lives in `src/browser/dynamic-workspaces/stats.ts`; this file
+ * imports it directly (no vm seam). Every expected string below is the native
+ * shell's own recipe, copied from the installed
  * `dsh-client-ui-chat` / `dsh-client-ui-conversation` clients:
  *
  * - `formatTokens` (compact `517 / 12.2K / 517K / 1.2M`),
@@ -23,10 +21,22 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { loadClientModule } from './helpers/client-module.mjs'
+import {
+  DW_EN,
+  DW_ZH,
+  dwBilledInputTokens,
+  dwCacheHitPercent,
+  dwContextOccupancy,
+  dwFormatCompactTokens,
+  dwFormatExactTokens,
+  dwFormatStatsDuration,
+  dwFormatTps,
+  dwNeedsProjectionRead,
+  dwProjectionSections
+} from '../src/browser/dynamic-workspaces/stats.ts'
 
+/** The browser entry, read for source-level identity-glyph regressions. */
 const client = loadClientModule()
-const stats = client.hooks?.dynamicWorkspacesStats
-const production = loadClientModule({ hooksFlag: false })
 
 /**
  * Build a translate seat from one dictionary map exactly like the locale
@@ -46,19 +56,12 @@ function translate(templates) {
   }
 }
 
-const en = statistics => translate(statistics.DW_EN)
-const zh = statistics => translate(statistics.DW_ZH)
-
-test('dynamic-Workspaces statistics seam is present and production stays inert', () => {
-  assert.notEqual(stats, undefined, 'dynamicWorkspacesStats test seam is missing from src/client.js')
-  assert.equal(production.hooks, undefined, 'the test-hook seam must stay inert when the flag is not set')
-  assert.equal(typeof stats.dwProjectionSections, 'function')
-  assert.equal(typeof stats.dwNeedsProjectionRead, 'function')
-})
+const en = translate(DW_EN)
+const zh = translate(DW_ZH)
 
 test('EN and ZH dictionaries define the same session-figure keys', () => {
-  const enKeys = Object.keys(stats.DW_EN).sort()
-  const zhKeys = Object.keys(stats.DW_ZH).sort()
+  const enKeys = Object.keys(DW_EN).sort()
+  const zhKeys = Object.keys(DW_ZH).sort()
   assert.deepEqual(zhKeys, enKeys)
   for (const key of [
     'stats.title', 'stats.counts', 'stats.llmTime', 'stats.toolTime', 'stats.ttft', 'stats.speed',
@@ -67,122 +70,117 @@ test('EN and ZH dictionaries define the same session-figure keys', () => {
     'tokensPerSecond', 'number.thousand', 'number.million', 'number.groupSeparator',
     'duration.compactSeconds', 'duration.compactMinutes'
   ]) {
-    assert.equal(typeof stats.DW_EN[key], 'string', `EN copy for ${key}`)
-    assert.equal(typeof stats.DW_ZH[key], 'string', `ZH copy for ${key}`)
+    assert.equal(typeof DW_EN[key], 'string', `EN copy for ${key}`)
+    assert.equal(typeof DW_ZH[key], 'string', `ZH copy for ${key}`)
   }
   // Native strings, not paraphrases.
-  assert.equal(stats.DW_EN['stats.counts'], '{turns} turns {steps} steps')
-  assert.equal(stats.DW_ZH['stats.counts'], '{turns} 轮 {steps} 步')
-  assert.equal(stats.DW_EN['context.aria'], '{percent} of context used')
-  assert.equal(stats.DW_ZH['context.aria'], '上下文已用 {percent}')
-  assert.equal(stats.DW_EN['usage.count'], '{count} tok')
+  assert.equal(DW_EN['stats.counts'], '{turns} turns {steps} steps')
+  assert.equal(DW_ZH['stats.counts'], '{turns} 轮 {steps} 步')
+  assert.equal(DW_EN['context.aria'], '{percent} of context used')
+  assert.equal(DW_ZH['context.aria'], '上下文已用 {percent}')
+  assert.equal(DW_EN['usage.count'], '{count} tok')
 })
 
 test('compact token counts match the native boundaries', () => {
-  const t = en(stats)
-  assert.equal(stats.dwFormatCompactTokens(0, t), '0')
-  assert.equal(stats.dwFormatCompactTokens(999, t), '999')
-  assert.equal(stats.dwFormatCompactTokens(1000, t), '1K')
-  assert.equal(stats.dwFormatCompactTokens(1200, t), '1.2K')
-  assert.equal(stats.dwFormatCompactTokens(12200, t), '12.2K')
-  assert.equal(stats.dwFormatCompactTokens(517000, t), '517K')
-  assert.equal(stats.dwFormatCompactTokens(1200000, t), '1.2M')
-  assert.equal(stats.dwFormatCompactTokens(12345678, t), '12.3M')
+  assert.equal(dwFormatCompactTokens(0, en), '0')
+  assert.equal(dwFormatCompactTokens(999, en), '999')
+  assert.equal(dwFormatCompactTokens(1000, en), '1K')
+  assert.equal(dwFormatCompactTokens(1200, en), '1.2K')
+  assert.equal(dwFormatCompactTokens(12200, en), '12.2K')
+  assert.equal(dwFormatCompactTokens(517000, en), '517K')
+  assert.equal(dwFormatCompactTokens(1200000, en), '1.2M')
+  assert.equal(dwFormatCompactTokens(12345678, en), '12.3M')
   // zh keeps the shared native K/M templates.
-  assert.equal(stats.dwFormatCompactTokens(240500, zh(stats)), '241K')
+  assert.equal(dwFormatCompactTokens(240500, zh), '241K')
 })
 
 test('exact token counts use the native grouped digits', () => {
-  const t = en(stats)
-  assert.equal(stats.dwFormatExactTokens(0, t), '0')
-  assert.equal(stats.dwFormatExactTokens(999, t), '999')
-  assert.equal(stats.dwFormatExactTokens(1000, t), '1,000')
-  assert.equal(stats.dwFormatExactTokens(5203456, t), '5,203,456')
-  assert.equal(stats.dwFormatExactTokens(1234567890, t), '1,234,567,890')
+  assert.equal(dwFormatExactTokens(0, en), '0')
+  assert.equal(dwFormatExactTokens(999, en), '999')
+  assert.equal(dwFormatExactTokens(1000, en), '1,000')
+  assert.equal(dwFormatExactTokens(5203456, en), '5,203,456')
+  assert.equal(dwFormatExactTokens(1234567890, en), '1,234,567,890')
 })
 
 test('durations follow the native compact recipe', () => {
-  const t = en(stats)
-  assert.equal(stats.dwFormatStatsDuration(0, t), '0s')
-  assert.equal(stats.dwFormatStatsDuration(59940, t), '59.9s')
-  assert.equal(stats.dwFormatStatsDuration(59960, t), '60s')
-  assert.equal(stats.dwFormatStatsDuration(60000, t), '1m0s')
-  assert.equal(stats.dwFormatStatsDuration(162400, t), '2m42s')
-  assert.equal(stats.dwFormatStatsDuration(3600000, t), '60m0s')
-  const zhT = zh(stats)
-  assert.equal(stats.dwFormatStatsDuration(59940, zhT), '59.9秒')
-  assert.equal(stats.dwFormatStatsDuration(162400, zhT), '2分42秒')
+  assert.equal(dwFormatStatsDuration(0, en), '0s')
+  assert.equal(dwFormatStatsDuration(59940, en), '59.9s')
+  assert.equal(dwFormatStatsDuration(59960, en), '60s')
+  assert.equal(dwFormatStatsDuration(60000, en), '1m0s')
+  assert.equal(dwFormatStatsDuration(162400, en), '2m42s')
+  assert.equal(dwFormatStatsDuration(3600000, en), '60m0s')
+  assert.equal(dwFormatStatsDuration(59940, zh), '59.9秒')
+  assert.equal(dwFormatStatsDuration(162400, zh), '2分42秒')
 })
 
 test('TPS follows the native whole-from-ten rule', () => {
-  const t = en(stats)
-  assert.equal(stats.dwFormatTps(100, 0, t), null, 'no decode time means no speed row')
-  assert.equal(stats.dwFormatTps(0, 1000, t), '0 tok/s')
-  assert.equal(stats.dwFormatTps(99, 10000, t), '9.9 tok/s')
-  assert.equal(stats.dwFormatTps(177698, 1746432, t), '102 tok/s')
-  assert.equal(stats.dwFormatTps(1200, 1000, t), '1200 tok/s')
+  assert.equal(dwFormatTps(100, 0, en), null, 'no decode time means no speed row')
+  assert.equal(dwFormatTps(0, 1000, en), '0 tok/s')
+  assert.equal(dwFormatTps(99, 10000, en), '9.9 tok/s')
+  assert.equal(dwFormatTps(177698, 1746432, en), '102 tok/s')
+  assert.equal(dwFormatTps(1200, 1000, en), '1200 tok/s')
 })
 
 test('cache-hit percentage is honest about partial hits', () => {
   // No billed prompt input: no cache-hit row.
-  assert.equal(stats.dwCacheHitPercent(0, 0), null)
-  assert.equal(stats.dwCacheHitPercent(0, 1000), '0')
+  assert.equal(dwCacheHitPercent(0, 0), null)
+  assert.equal(dwCacheHitPercent(0, 1000), '0')
   // Full hit.
-  assert.equal(stats.dwCacheHitPercent(1000, 1000), '100')
+  assert.equal(dwCacheHitPercent(1000, 1000), '100')
   // Ordinary partial hits keep integer rounding.
-  assert.equal(stats.dwCacheHitPercent(960, 1000), '96')
-  assert.equal(stats.dwCacheHitPercent(995, 1000), '99.5')
-  assert.equal(stats.dwCacheHitPercent(9999, 10000), '99.99')
+  assert.equal(dwCacheHitPercent(960, 1000), '96')
+  assert.equal(dwCacheHitPercent(995, 1000), '99.5')
+  assert.equal(dwCacheHitPercent(9999, 10000), '99.99')
   // The native 99.9… case must not round up to 100.
-  assert.equal(stats.dwCacheHitPercent(999999, 1000000), '99.9999')
+  assert.equal(dwCacheHitPercent(999999, 1000000), '99.9999')
   const ratio = 39590528 / (426524 + 39590528 + 0)
-  assert.equal(stats.dwCacheHitPercent(39590528, 426524 + 39590528 + 0), String(Math.round(ratio * 100)))
+  assert.equal(dwCacheHitPercent(39590528, 426524 + 39590528 + 0), String(Math.round(ratio * 100)))
 })
 
 test('billed input and context occupancy follow the native seams', () => {
-  assert.equal(stats.dwBilledInputTokens({ uncachedInputTokens: 1, cacheReadTokens: 2, cacheWriteTokens: 3 }), 6)
-  assert.equal(stats.dwContextOccupancy(null), null)
-  assert.equal(stats.dwContextOccupancy({}), null, 'needs both used tokens and a window')
-  assert.equal(stats.dwContextOccupancy({ pressureTokens: 100 }), null, 'missing window hides the section')
-  assert.equal(stats.dwContextOccupancy({ contextWindow: 1000 }), null, 'missing used tokens hides the section')
+  assert.equal(dwBilledInputTokens({ uncachedInputTokens: 1, cacheReadTokens: 2, cacheWriteTokens: 3 }), 6)
+  assert.equal(dwContextOccupancy(null), null)
+  assert.equal(dwContextOccupancy({}), null, 'needs both used tokens and a window')
+  assert.equal(dwContextOccupancy({ pressureTokens: 100 }), null, 'missing window hides the section')
+  assert.equal(dwContextOccupancy({ contextWindow: 1000 }), null, 'missing used tokens hides the section')
   // `projectedTokens` wins over the older pressure estimate.
   assert.deepEqual(
-    { ...stats.dwContextOccupancy({ pressureTokens: 100, projectedTokens: 250, contextWindow: 1000 }) },
+    dwContextOccupancy({ pressureTokens: 100, projectedTokens: 250, contextWindow: 1000 }),
     { percent: 25, usedTokens: 250, contextWindow: 1000 }
   )
   assert.deepEqual(
-    { ...stats.dwContextOccupancy({ pressureTokens: 240000, contextWindow: 1000000 }) },
+    dwContextOccupancy({ pressureTokens: 240000, contextWindow: 1000000 }),
     { percent: 24, usedTokens: 240000, contextWindow: 1000000 }
   )
   // Percent is clamped and rounded like the native meter.
-  assert.equal(stats.dwContextOccupancy({ pressureTokens: 2000, contextWindow: 1000 }).percent, 100)
-  assert.equal(stats.dwContextOccupancy({ pressureTokens: 1, contextWindow: 3 }).percent, 33)
-  assert.equal(stats.dwContextOccupancy({ pressureTokens: 2, contextWindow: 3 }).percent, 67)
+  assert.equal(dwContextOccupancy({ pressureTokens: 2000, contextWindow: 1000 }).percent, 100)
+  assert.equal(dwContextOccupancy({ pressureTokens: 1, contextWindow: 3 }).percent, 33)
+  assert.equal(dwContextOccupancy({ pressureTokens: 2, contextWindow: 3 }).percent, 67)
 })
 
 test('section normalization hides empty Sessions and keeps zero rows out', () => {
-  const empty = stats.dwProjectionSections({})
+  const empty = dwProjectionSections({})
   assert.equal(empty.stats, null)
   assert.equal(empty.usage, null)
   assert.equal(empty.context, null)
-  assert.equal(stats.dwProjectionSections(undefined).stats, null)
-  assert.equal(stats.dwProjectionSections(null).usage, null)
+  assert.equal(dwProjectionSections(undefined).stats, null)
+  assert.equal(dwProjectionSections(null).usage, null)
 
   // No steps means no statistics section, exactly like the native pill.
-  const noSteps = stats.dwProjectionSections({ sessionStats: { turns: 2, steps: 0, llmMs: 4000 } })
+  const noSteps = dwProjectionSections({ sessionStats: { turns: 2, steps: 0, llmMs: 4000 } })
   assert.equal(noSteps.stats, null)
   // Steps present but no timing rows yet: the section stays (counts line only).
-  const countsOnly = stats.dwProjectionSections({ sessionStats: { turns: 1, steps: 3 } })
+  const countsOnly = dwProjectionSections({ sessionStats: { turns: 1, steps: 3 } })
   assert.deepEqual(
-    { ...countsOnly.stats },
+    countsOnly.stats,
     { turns: 1, steps: 3, llmMs: 0, toolMs: 0, ttftMs: 0, ttftSteps: 0, decodeMs: 0, decodeTokens: 0 }
   )
   // Malformed/missing numbers degrade to 0 rather than NaN.
-  assert.equal(stats.dwProjectionSections({ sessionStats: { turns: '2', steps: 5, llmMs: null } }).stats.turns, 0)
+  assert.equal(dwProjectionSections({ sessionStats: { turns: '2', steps: 5, llmMs: null } }).stats.turns, 0)
 
   // Nothing billed and no output means no token section.
-  assert.equal(stats.dwProjectionSections({ tokenUsage: { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 } }).usage, null)
-  const usage = stats.dwProjectionSections({
+  assert.equal(dwProjectionSections({ tokenUsage: { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 } }).usage, null)
+  const usage = dwProjectionSections({
     tokenUsage: { uncachedInputTokens: 426524, cacheReadTokens: 39590528, cacheWriteTokens: 0, outputTokens: 177698 }
   }).usage
   assert.equal(usage.billedInputTokens, 40017052)
@@ -191,34 +189,34 @@ test('section normalization hides empty Sessions and keeps zero rows out', () =>
   assert.equal(usage.cacheWriteTokens, 0)
 
   // Context needs the provider pressure; the heuristic breakdown may be absent.
-  const pressureOnly = stats.dwProjectionSections({ contextPressure: { pressureTokens: 450947, contextWindow: 1000000 } }).context
+  const pressureOnly = dwProjectionSections({ contextPressure: { pressureTokens: 450947, contextWindow: 1000000 } }).context
   assert.equal(pressureOnly.percent, 45)
   assert.equal(pressureOnly.breakdown, null)
-  const withBreakdown = stats.dwProjectionSections({
+  const withBreakdown = dwProjectionSections({
     contextPressure: { pressureTokens: 450947, projectedTokens: 452000, contextWindow: 1000000 },
     contextBreakdown: { systemTokens: 2074, toolsTokens: 13536, messageTokens: 355890 }
   }).context
   assert.equal(withBreakdown.usedTokens, 452000, 'projected estimate wins')
-  assert.deepEqual({ ...withBreakdown.breakdown }, { systemTokens: 2074, toolsTokens: 13536, messageTokens: 355890 })
+  assert.deepEqual(withBreakdown.breakdown, { systemTokens: 2074, toolsTokens: 13536, messageTokens: 355890 })
   // An empty pressure value ({}) hides the section.
-  assert.equal(stats.dwProjectionSections({ contextPressure: {} }).context, null)
+  assert.equal(dwProjectionSections({ contextPressure: {} }).context, null)
 })
 
 test('one-shot projection read is only requested for unseeded idle records', () => {
   const full = { sessionStats: {}, tokenUsage: {}, contextPressure: {}, contextBreakdown: {} }
-  assert.equal(stats.dwNeedsProjectionRead(undefined), true, 'missing record')
-  assert.equal(stats.dwNeedsProjectionRead(null), true)
-  assert.equal(stats.dwNeedsProjectionRead({}), true, 'no values yet')
-  assert.equal(stats.dwNeedsProjectionRead({ values: {} }), true, 'empty values')
-  assert.equal(stats.dwNeedsProjectionRead({ values: { sessionStats: {} } }), true, 'context values still missing')
-  assert.equal(stats.dwNeedsProjectionRead({ values: { sessionStats: {}, contextBreakdown: {} } }), false, 'fully seeded')
-  assert.equal(stats.dwNeedsProjectionRead({ values: full, state: 'idle' }), false, 'live Sessions are push-seeded')
+  assert.equal(dwNeedsProjectionRead(undefined), true, 'missing record')
+  assert.equal(dwNeedsProjectionRead(null), true)
+  assert.equal(dwNeedsProjectionRead({}), true, 'no values yet')
+  assert.equal(dwNeedsProjectionRead({ values: {} }), true, 'empty values')
+  assert.equal(dwNeedsProjectionRead({ values: { sessionStats: {} } }), true, 'context values still missing')
+  assert.equal(dwNeedsProjectionRead({ values: { sessionStats: {}, contextBreakdown: {} } }), false, 'fully seeded')
+  assert.equal(dwNeedsProjectionRead({ values: full, state: 'idle' }), false, 'live Sessions are push-seeded')
   // Never retry a request already attempted, even when the values stayed absent.
   for (const state of ['loading', 'ready', 'error', 'migration-required']) {
-    assert.equal(stats.dwNeedsProjectionRead({ values: {}, state }), false, `state ${state} must not be re-read`)
+    assert.equal(dwNeedsProjectionRead({ values: {}, state }), false, `state ${state} must not be re-read`)
   }
   // Once both figure values are present, an error/ready marker is irrelevant.
-  assert.equal(stats.dwNeedsProjectionRead({ values: { sessionStats: {}, contextBreakdown: {} }, state: 'error' }), false)
+  assert.equal(dwNeedsProjectionRead({ values: { sessionStats: {}, contextBreakdown: {} }, state: 'error' }), false)
 })
 
 test('identity glyphs are swapped without touching the rest of the marker recipe', () => {
