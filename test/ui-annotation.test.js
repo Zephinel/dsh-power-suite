@@ -57,7 +57,8 @@ import {
   describeLocator,
   elementLabel,
   identityKeyOf,
-  selectorCandidates
+  selectorCandidates,
+  annotationStableSelectorCandidate
 } from '../src/browser/ui-annotation/identity.ts'
 import {
   ANNOTATION_RECORDS_STORAGE_KEY as RECORDS_STORAGE_KEY,
@@ -2879,6 +2880,20 @@ if (ui === undefined) {
     // P1.5 cache key: same record + same revision shares, revision change invalidates.
     assert.equal(ui.annotationFallbackCacheKey('psa-1', 7), 'psa-1:7')
     assert.equal(ui.annotationFallbackCacheKey('psa-1', 8), 'psa-1:8')
+  })
+
+  test('annotationStableSelectorCandidate keeps DOM getAttribute bound to its element', () => {
+    const element = {
+      tagName: 'BUTTON',
+      getAttribute(name) {
+        return this === element && name === 'id' ? 'stable-id' : null
+      }
+    }
+    assert.deepEqual(plain(annotationStableSelectorCandidate(element)), {
+      name: 'id',
+      value: 'stable-id',
+      selector: '#stable-id'
+    })
   })
 
   test('A3/T36: weak-identity structural fallbacks fail closed; strong identity still resolves', () => {

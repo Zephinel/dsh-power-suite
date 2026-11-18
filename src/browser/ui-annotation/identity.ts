@@ -908,7 +908,8 @@ export function annotationStableSelectorCandidate(element: unknown): AnnotationS
   if (element === null || typeof element !== 'object') return null
   const node = element as { tagName?: unknown; getAttribute?: unknown }
   if (typeof node.getAttribute !== 'function') return null
-  const getAttribute = node.getAttribute as (name: string) => string | null
+  // Bind: a bare extracted DOM method throws `Illegal invocation` when called.
+  const getAttribute = (node.getAttribute as (name: string) => string | null).bind(node)
   const tag = typeof node.tagName === 'string' ? node.tagName.toLowerCase() : ''
   if (tag.length === 0) return null
   const names = [...UNIQUE_SELECTOR_ATTRIBUTES, 'id', 'aria-label']

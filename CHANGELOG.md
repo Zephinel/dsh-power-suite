@@ -12,6 +12,8 @@ All notable changes to this repository are documented here. The format follows
 
 ### Fixed
 
+- **Annotation clicks no longer throw after the identity extraction (Phase 3q).** `annotationStableSelectorCandidate` had extracted the DOM `getAttribute` method and called it unbound, so every click-based selection threw `TypeError: Illegal invocation`; it now binds the method to its element, with a regression test. The live S4 scenario returns to its baseline 2/3 (the remaining outline miss reproduces on the pre-Phase-3 client) and smoke is 6/6 with 0 page errors.
+
 - **Cache-hit percentage no longer hangs on inconsistent data (Phase 3m).** `dwCacheHitPercent` treated `cacheRead > billedInput` as a negative loop increment and never terminated; it now returns `null` for impossible/negative/non-finite inputs while all valid outputs stay byte-identical (7,389-case differential oracle). The one production call site already hides a `null` cache-hit line.
 
 ### Changed
