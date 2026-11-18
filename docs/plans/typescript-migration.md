@@ -306,9 +306,17 @@ labels, time/join, bounds/viewport normalization) and `geometry.ts` (clamps,
 rail width, layout mode, segmented index/label). Tests import them directly; the
 112-key annotation hook remains a pass-through shim and `annotationRailRightForPane`
 stays in the controller section for a later small slice. `src/client.js` is now
-~23,580 lines. The planned order for the rest: identity, records, reducer,
-serializers, anchors, surface/resolution, then the annotation seam retirement in
-its own commit.
+~23,580 lines. **3l progress (2026-11-18).** The remaining dynamic-Workspaces models landed:
+`stats.ts` (session figures/formatting and the DW copy dictionaries),
+`pin.ts` + `rows.ts` (sanitize/effective/cache/panel rows plus the shared row
+primitives) and `row-menu.ts` (target kind, Pin/Unpin filter, delegating actions
+and the bounded nested resolution). The `dynamicWorkspacesStats/Pin/RowMenu` hooks
+were deleted after their tests switched to direct imports; `dynamicWorkspacesPanel`
+was already gone. `src/client.js` is now ~22.8k lines and only the `uiAnnotation`
+and `sidebarWidth` hooks remain. Three seam/materialization tests were removed
+with the hooks (no behavior assertions lost), so the suite is 385 tests. The
+planned order for the annotation rest: identity, records, reducer, serializers,
+anchors, surface/resolution, then the annotation seam retirement in its own commit.
 
 **3j full-suite e2e evidence (2026-11-18, commit 5128669).** Independent runs
 started from clean copies (temp `$DSH_HOME`, installed tarball; current HEAD
