@@ -3068,10 +3068,10 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       for (const [label, row, atmos, content] of rows) {
         assert(row && atmos, `${label}: atmosphere missing in dark theme`)
         assertEqual(atmos.canvas.mixBlendMode, 'screen', `${label}: dark theme must keep the light-adding screen blend`)
-        assert(atmos.canvas.filter.includes('saturate(1.1)'), `${label}: dark theme must use the bright pastel saturation (${atmos.canvas.filter})`)
-        assert(atmos.canvas.filter.includes('brightness(1.4)'), `${label}: dark theme must stay luminous (${atmos.canvas.filter})`)
-        assert(atmos.canvas.avgSaturationStrong >= 0.20, `${label}: bright pastel atmosphere must stay colorful (blob-core saturation ${atmos.canvas.avgSaturationStrong})`)
-        assert(atmos.opacity >= 0.50 && atmos.opacity <= 0.68, `${label}: dark theme atmosphere opacity must be the bright range (${atmos.opacity})`)
+        assert(atmos.canvas.filter.includes('saturate(1)'), `${label}: dark theme must use the lighter pastel saturation (${atmos.canvas.filter})`)
+        assert(atmos.canvas.filter.includes('brightness(1.66)'), `${label}: dark theme must stay luminous (${atmos.canvas.filter})`)
+        assert(atmos.canvas.avgSaturationStrong >= 0.20, `${label}: lighter pastel atmosphere must stay colorful (blob-core saturation ${atmos.canvas.avgSaturationStrong})`)
+        assert(atmos.opacity >= 0.54 && atmos.opacity <= 0.70, `${label}: dark theme atmosphere opacity must be the lighter range (${atmos.opacity})`)
         assert(atmos.scrim !== null && /rgba\(255, 255, 255/.test(atmos.scrim.backgroundImage), `${label}: dark theme scrim must be a light veil, not a dark one (${atmos.scrim?.backgroundImage})`)
         details.push(`${label} sat ${atmos.canvas.avgSaturation} opacity ${atmos.opacity} blend ${atmos.canvas.mixBlendMode}`)
       }
@@ -3126,9 +3126,9 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       assert(dark && dark.card, 'no current card row to measure in dark mode')
       assertEqual(dark.card.blend, 'screen', 'dark theme must keep the screen gas blend')
       assert(dark.card.scrim[0] >= 200 && dark.card.scrim[1] >= 200, `dark theme must use the softened light veil scrim (got rgb(${dark.card.scrim.slice(0, 3).join(',')}))`)
-      assert(dark.card.opacity >= 0.50 && dark.card.opacity <= 0.68, `dark theme atmosphere opacity must be in the bright range (got ${dark.card.opacity})`)
-      // Brighter pastel keeps the clean rainbow; the accepted floor stays 2.7:1.
-      assert(dark.card.title.contrast >= 2.7, `dark title contrast ${dark.card.title.contrast}:1 must stay readable on the bright pastel pill`)
+      assert(dark.card.opacity >= 0.54 && dark.card.opacity <= 0.70, `dark theme atmosphere opacity must be in the lighter range (got ${dark.card.opacity})`)
+      // The owner asked for a lighter dark pill; keep the readability floor at 2.5:1.
+      assert(dark.card.title.contrast >= 2.5, `dark title contrast ${dark.card.title.contrast}:1 must stay readable on the lighter pill`)
       return `${summaries.join('; ')}; dark softened: blend ${dark.card.blend}, scrim rgb(${dark.card.scrim.slice(0, 3).join(',')}), opacity ${dark.card.opacity}, title ${dark.card.title.contrast}:1`
     } finally {
       await page.emulateMedia([])

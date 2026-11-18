@@ -71,13 +71,13 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
     (the former passed a title object instead of `.title.text`; the latter read
     the DOM before React committed and now samples after commit with bounded
     polling and only counts the shell spinner). `b4-5` and `b4-9` pass after the
-    owner-requested bright-pastel dark-atmosphere recipe: screen blend,
-    `saturate(1.1) brightness(1.4)`, wrapper opacity 0.55 base / 0.62 hover,
-    white veil scrim 0.12/0.06, and one hue per evenly spaced lane (the sampled
-    hue path is ~9/40/86/136/180/217/260/293 degrees, i.e. an even rainbow). The
-    light theme uses the same 8-lane renderer with its multiply/white-veil recipe.
-    Dark title contrast lands at 2.7:1 and the scenario records that as the
-    accepted trade-off for the bright pastel pill. The live full run still varies
+    owner-requested lighter dark-atmosphere recipe: screen blend,
+    `saturate(1) brightness(1.66)`, wrapper opacity 0.58 base / 0.64 hover, white
+    veil scrim 0.14/0.08, and eight constant-HSL hues in evenly spaced lanes (2
+    drifting blobs per hue; sampled hue path ~9/40/86/136/180/217/260/293
+    degrees). The light theme uses the same renderer with its multiply/white-veil
+    recipe. Dark title contrast lands at 2.5:1 and the scenario records that as
+    the accepted trade-off for the lighter pill. The live full run still varies
     with GUI data/state (`b1-3`, `b3-1/b3-2`, `b5-5`, `c2-1`, `c4-4` were observed
     intermittently), so its pass count is not a stable single number; isolated
     full is data-starved, isolated `--layout` is **12/12**, live `--interrupted`
