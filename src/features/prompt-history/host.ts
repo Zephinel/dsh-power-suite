@@ -1,0 +1,63 @@
+/**
+ * Host half of the suite's `prompt-history` feature.
+ *
+ * One authenticated route serves the complete prompt history of one Session,
+ * read from the Session log rather than from the loaded chat window. That is
+ * what makes Up recall prompts from turns the browser has not paged in.
+ */
+
+import { type HostContext } from '../../host/context.ts'
+import { PROMPT_HISTORY_ROUTE, collectPromptHistory } from './history.ts'
+import { errorCode, errorMessage } from '../../host/errors.ts'
+
+/**
+ * Answer with JSON and a no-store policy: the history grows with the log.
+ * @param {number} status - HTTP status.
+ * @param {unknown} payload - JSON body.
+ * @returns {Response} the response.
+ */
+function sendJson(status: number, payload: unknown) {
+  return Response.json(payload, { status, headers: { 'cache-control': 'no-store' } })
+}
+
+/**
+ * `GET /api/prompt-history.list?sessionId=<id>` — one Session's sent prompts.
+ * @param {Record<string, unknown>} ctx - Host context carrying Session query.
+ * @param {Request} request - authenticated request.
+ * @returns {Promise<Response>} the prompt list or a typed failure.
+ */
+async function handleList(ctx: HostContext, request: Request) {
+  const url = new URL(request.url)
+  const sessionId = url.searchParams.get('sessionId')
+  if (sessionId === null || sessionId.trim().length === 0) {
+    return sendJson(400, { code: 'bad-request', message: 'sessionId is required' })
+  }
+  let snapshot
+  try {
+    snapshot = await ctx.sessionQuery.readSession(sessionId)
+  } catch (error: unknown) {
+    const code = errorCode(error)
+    if (code === 'SESSION_QUERY_SESSION_NOT_FOUND') {
+      return sendJson(404, { code: 'session-not-found', message: 'Session not found' })
+    }
+    return sendJson(500, {
+      code: 'history-failed',
+      message: errorMessage(error) ?? 'Prompt history unavailable'
+    })
+  }
+  return sendJson(200, { sessionId, prompts: collectPromptHistory(snapshot.events) })
+}
+
+/**
+ * Register the history route inside Connection's authentication fence.
+ * @param {Record<string, unknown>} ctx - Host context.
+ * @returns {void}
+ */
+export function installPromptHistory(ctx: HostContext) {
+  ctx.effect(() => ctx.connection.fetch.register({
+    path: PROMPT_HISTORY_ROUTE,
+    methods: ['GET'],
+    requestBody: 'buffered',
+    fetch: (request: Request) => handleList(ctx, request)
+  }), `power-suite: prompt-history GET ${PROMPT_HISTORY_ROUTE}`)
+}

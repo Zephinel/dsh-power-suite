@@ -7,13 +7,11 @@
  *
  * Why this exists: `npm run check` never leaves the source tree, so it cannot
  * catch a package that ships a stale or missing file — for example a packing
- * change that silently drops `docs/`, a locale entry or the release notes. The
- * guarantees here are artifact-level, not sample-level: the tarball's full
- * manifest is extracted and compared against both the checkout and the
- * installed package.
- *
- * This repository has no build step: every packed file is the checked-in file,
- * so all packed paths can be hash-compared with the checkout.
+ * change that silently drops `docs/`, a locale entry or the release notes, or a
+ * build that does not match the source. The guarantees here are artifact-level:
+ * the build runs first, the tarball's full manifest is extracted, `lib/` is
+ * compared with the fresh build output, every other packed path is compared with
+ * the checkout, and the installed copy is compared with the tarball.
  *
  * Requirements: `dsh` and `pnpm` on PATH (override dsh with DSH_BIN). The script
  * never reads or writes the user's DSH profiles: it uses a throwaway `$DSH_HOME`
@@ -29,13 +27,14 @@ import { createHash } from 'node:crypto'
 import { access, mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const dshBin = process.env.DSH_BIN ?? 'dsh'
 const keepArtifacts = process.argv.includes('--keep')
+const allowDirty = process.argv.includes('--allow-dirty')
 const PACKAGE_NAME = '@zephinel/dsh-power-suite'
 const PROFILE = 'web'
 
@@ -45,8 +44,8 @@ const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 const REQUIRED_PACK_FILES = [
   'package.json',
   'cordis.patch.yml',
-  'src/index.js',
-  'src/client.js',
+  'lib/index.js',
+  'lib/client.js',
   'locale/en.json',
   'locale/zh.json',
   'README.md',
@@ -54,10 +53,16 @@ const REQUIRED_PACK_FILES = [
   'PRODUCT.md',
   'docs/README.md',
   'icon.png',
-  `release-notes/${pkg.version}.md`
+  `release-notes/${pkg.version}.md`,
+  'LICENSE',
+  'NOTICE',
+  'docs/architecture.md',
+  'docs/development.md',
+  'docs/overview.md',
+  'docs/verification.md'
 ]
 /** Repo-only directories that must never reach the tarball. */
-const FORBIDDEN_PACK_PREFIXES = ['test/', 'skills/', '.agents/', '.github/', '.git/', 'node_modules/', 'lib/', '.tmp-']
+const FORBIDDEN_PACK_PREFIXES = ['src/', 'test/', 'skills/', '.agents/', '.github/', '.git/', 'node_modules/', 'scripts/', '.tmp-']
 
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms))
 
@@ -200,6 +205,27 @@ async function main() {
   try {
     console.log(`release-check: ${PACKAGE_NAME}@${pkg.version}`)
 
+    console.log('- the tracked worktree is clean')
+    if (allowDirty) {
+      pass('--allow-dirty: skipped the clean-worktree check')
+    } else {
+      const status = await run('git', ['status', '--porcelain', '--untracked-files=no'])
+      ensure(status.stdout.trim() === '', 'release-check needs a clean tracked worktree (commit or stash, or pass --allow-dirty)')
+      pass('tracked worktree is clean')
+    }
+
+    console.log('- build the package entries')
+    await run(process.execPath, [join(root, 'scripts/build.mjs')], { timeout: 120_000 })
+    const builtLib = new Map(
+      [...(await hashTree(join(root, 'lib')))].map(([path, hash]) => [`lib/${path}`, hash])
+    )
+    pass(`${builtLib.size} built entries`)
+
+    // Remove the build output so npm pack must recreate it through `prepare`;
+    // the packed lib is then compared with the hashes above.
+    await rm(join(root, 'lib'), { recursive: true, force: true })
+    pass('removed lib/ so npm pack must rebuild it through prepare')
+
     console.log('- pack')
     await mkdir(packDir, { recursive: true })
     const entry = await pack(packDir)
@@ -229,6 +255,14 @@ async function main() {
     }
     pass(`${packedFiles.size} files extracted`)
 
+    console.log('- packed docs do not link to repo-only src/')
+    for (const [path] of packedFiles) {
+      if (!path.endsWith('.md')) continue
+      const text = await readFile(join(packedRoot, path), 'utf8')
+      ensure(!/\]\((?:\.\.\/)+src\//.test(text), `${path} links to repo-only src/`)
+    }
+    pass('no packed Markdown links to src/')
+
     console.log('- the packed manifest and bundle row are internally consistent')
     const packedPkg = JSON.parse(await readFile(join(packedRoot, 'package.json'), 'utf8'))
     ensure(packedPkg.name === PACKAGE_NAME, `packed package name is ${String(packedPkg.name)}`)
@@ -236,17 +270,24 @@ async function main() {
     const packedPatch = await readFile(join(packedRoot, 'cordis.patch.yml'), 'utf8')
     ensure(/^\s+- id: power-suite\s*$/m.test(packedPatch), 'packed cordis.patch.yml has no "id: power-suite" row')
     ensure(packedPatch.includes(`name: '${PACKAGE_NAME}'`), 'packed cordis.patch.yml names another package')
-    const packedEntry = await readFile(join(packedRoot, 'src/index.js'), 'utf8')
-    ensure(/export const name = 'power-suite'/.test(packedEntry), 'packed Host entry does not export the power-suite name')
+    const packedHost = await import(`${pathToFileURL(join(packedRoot, 'lib/index.js')).href}?packed=${Date.now()}`)
+    ensure(packedHost.name === 'power-suite', 'packed Host entry does not export the power-suite name')
+    ensure(Array.isArray(packedHost.inject) && packedHost.inject.length > 0, 'packed Host entry has no inject list')
+    ensure(typeof packedHost.apply === 'function', 'packed Host entry has no apply function')
     pass(`one power-suite loader row for ${PACKAGE_NAME}`)
 
-    console.log('- every packed file matches the checkout')
+    console.log('- packed lib matches the build; every other packed file matches the checkout')
     for (const [path, hash] of packedFiles) {
+      if (path.startsWith('lib/')) {
+        ensure(builtLib.has(path), `packed ${path} is not produced by the build`)
+        ensure(builtLib.get(path) === hash, `packed ${path} differs from the build output`)
+        continue
+      }
       const source = join(root, path)
       ensure(await exists(source), `packed ${path} does not exist in the checkout`)
       ensure(sha256(await readFile(source)) === hash, `packed ${path} differs from the checkout`)
     }
-    pass(`${packedFiles.size} packed paths exist in the checkout and hash-match it`)
+    pass(`${packedFiles.size} packed paths: lib matches the build, the rest match the checkout`)
 
     console.log('- initialize a throwaway DSH profile')
     await run(dshBin, ['--profile', PROFILE, '--dump-config'], { env, timeout: 120_000 })
@@ -322,8 +363,8 @@ async function main() {
     const bundleResponse = await fetch(new URL(moduleMatch[1], tokenUrl), { headers: { cookie } })
     ensure(bundleResponse.status === 200, `client bundle returned ${bundleResponse.status}`)
     const servedBundle = await bundleResponse.text()
-    const installedClient = await readFile(join(installedDir, 'src/client.js'), 'utf8')
-    ensure(servedBundle.startsWith(installedClient), 'served client bundle does not start with the installed src/client.js')
+    const installedClient = await readFile(join(installedDir, 'lib/client.js'), 'utf8')
+    ensure(servedBundle.startsWith(installedClient), 'served client bundle does not start with the installed lib/client.js')
     const trailer = servedBundle.slice(installedClient.length)
     ensure(trailer.length < 2048 && trailer.includes('sourceMappingURL'), 'served client bundle has an unexpected trailer')
     pass(`${installedClient.length} B, only the source-map trailer differs`)

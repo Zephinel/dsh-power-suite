@@ -15,7 +15,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseHighlights } from '../src/features/update-check/release-notes.js'
+import { parseHighlights } from '../src/features/update-check/release-notes.ts'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const version = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version

@@ -16,27 +16,195 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 
 `npm run check` performs:
 
-- `node --check` on both package entries and every Host feature entry;
+- `npm run build` (esbuild) bundles `src/` into the gitignored `lib/index.js`
+  and `lib/client.js`;
+- `node --check` on the remaining JavaScript entry (`src/client.js`);
+- `tsc --noEmit` in **strict** mode over **all** Host and browser sources
+  (`src/**/*.ts` plus the `allowJs`/`checkJs` entry `src/client.js` and
+  `src/browser/` modules) — no `@ts-nocheck`; the separate DOM-lib profile
+  (`npm run typecheck:browser`) is also gated at 0 by `npm run check`;
 - package-manifest validation: exports/files/icon/cordis patch are present and
   the DSH bundle patch points at a real file;
-- the pure-logic test suite (`node --test test/*.test.js`).
+- local Markdown links and images (`scripts/check-docs-links.mjs`);
+- the pure-logic test suite (`node --test test/*.test.js`, importing the Host
+  `.ts` sources through Node's native type stripping);
+- a built-entry smoke: imports the bundled `lib/index.js`, applies it to a stub
+  context and drives the update route with a stubbed registry fetch, asserting
+  the reported `current` is the package version (catches bundle-only root bugs);
+- the release-notes gate (`scripts/check-release-notes.mjs`).
 
-### Current gates (2026-11-17, Node 24.22.3)
+### Current gates (2026-11-18, Node 24.22.3)
 
-- `npm test`: **364 tests, 364 passed, 0 failed**, 22 test files — Host stores/routes
-  plus the browser-side derivations and the new release-notes approval round-trip.
-- `npm run check`: passed (`24 modules, 22 test files`); it runs the syntax checks,
-  package-manifest validation, local docs links, the Node suite and the
-  release-notes gate, then `pack:check`.
-- `npm run pack:check`: **95 files**; inspect the file list rather than the byte totals
+- `npm run build`: **`lib/index.js` 105.9 kB** (Host ESM bundle) and
+  **`lib/client.js` 934.1 kB** (ESM `src/client.js` + `src/browser/` bundled to a
+  classic-script IIFE); `lib/` is gitignored and
+  rebuilt by `npm run check` and by `npm pack`'s `prepare`.
+- `npm test`: **394 tests, 394 passed, 0 failed**, 28 test files — Host stores/routes
+  plus the browser-side derivations (the vm harness bundles the ESM client), the
+  release-notes approval round-trip, the protocol contract guard for duplicated
+  route/enum literals, the shared route and settings contracts, the durable
+  document-store interface, and direct Node tests for the extracted browser
+  update-prompt, sidebar-width, artifacts-toggle, interrupted-state and settings
+  models.
+- `npm run typecheck`: `tsc --noEmit --strict` clean over **all** Host and browser
+  TypeScript sources, including the ESM entry `src/client.js` (the Phase 3 split
+  removed the transitional `// @ts-nocheck`). `npm run typecheck:browser` is a
+  second, DOM-lib profile with **0 diagnostics**.
+- `npm run check` reports an explicit-`any` budget: **0 sites** in `src/**/*.ts`;
+  the gate strips comments/strings and fails on any `any` code token (aliases,
+  unions and generics included) — a lexical tripwire at 0, not a proof.
+- `rm -rf lib && node --test test/*.test.js`: **394/394** — the suite imports the
+  `.ts` sources directly (Node >= 22.18 native type stripping), so the tests need
+  no build.
+- `npm run check`: passed (`99 TypeScript modules, 1 JavaScript module(s), 28 test files`); it builds `lib/` first,
+  then runs the syntax checks, the typecheck, package-manifest validation, the
+  built-entry smoke (update route reports `current=0.1.0`), local docs links, the
+  Node suite and the release-notes gate, then `pack:check`.
+- `npm run pack:check`: **75 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).
-- `npm run check:release`: **PASS** — 95 packaged files installed into a throwaway
-  `$DSH_HOME`, byte-identical to the tarball and the checkout, the mounted
-  `power-suite` Loader row, the boot graph and served client bundle, then clean
-  uninstall (requires `dsh` + `pnpm`; intentionally not in CI).
+- Browser e2e (2026-11-18; current HEAD): live smoke is `sidebar.e2e.mjs
+  --smoke` **4/4**, `annotation.e2e.mjs --smoke` **6/6** (now including a
+  click-select check: a real pointer click opens `[data-psa-popover]` and keeps
+  the mode active), and `update-prompt.e2e.mjs` **21/21**, 0 page errors. Full
+  suite evidence:
+  * update-prompt full: **21/21 PASS** isolated and live.
+  * sidebar full (live, after the harness fixes): `b2-3` and `f6-1` are fixed
+    (the former passed a title object instead of `.title.text`; the latter read
+    the DOM before React committed and now samples after commit with bounded
+    polling and only counts the shell spinner). `b4-5` and `b4-9` pass after the
+    owner-requested lighter dark-atmosphere recipe: screen blend,
+    `saturate(1.3) brightness(1.35)`, wrapper opacity 0.62 base / 0.68 hover,
+    white veil scrim 0.04/0.02, eight OKLCH hues (light L=0.76/C=0.26, dark
+    L=0.76/C=0.24 at hues 20/65/110/150/195/245/290/330) painted through the
+    browser's `oklch()`/gamut mapping, and two blobs per hue advected by a
+    low-frequency 3-octave fBm curl field. A stronger wash plus smaller/softer
+    blobs keep the canvas saturation at ~0.5-0.66 (b4-1/b4-3 pass) while the
+    smoke still diffuses. The light theme uses the same renderer with
+    its multiply/white-veil recipe. Dark title contrast lands at 2.5:1 and the
+    scenario records that as the accepted trade-off for the lighter pill (light
+    compositing: saturate 1.35, opacity 0.60, veil 0.48/0.36). The live full run still varies
+    with GUI data/state (`b1-3`, `b3-1/b3-2`, `b5-5`, `c2-1`, `c4-4` were observed
+    intermittently), so its pass count is not a stable single number; isolated
+    full is data-starved, isolated `--layout` is **12/12**, live `--interrupted`
+    is **9 PASS / 1 SKIP / 0 FAIL**.
+  * annotation: after the harness fixes `--scenario 4` is **7/0/0** (composer is
+    intentionally not a selection target, so the three surfaces now exclude it),
+    `--scenario 13` is **7 PASS / 1 SKIP**, `--scenario 10` is **8/0/0** with the
+    product's intentional paint z-index **2000**, and smoke is **6/6**. S12
+    (**7/0/0**) now passes: the owner chose theme-following annotation surfaces,
+    so `.psa-popover`/`.psa-detail-card`/`.psa-note-editor` use the shell
+    light tokens in light mode and keep the #2C2C2E recipe in dark; the scenario
+    compares each theme's surfaces with that theme's native hover card. Fixing
+    that path also exposed and fixed a real `copyAnchorText` bug (undeclared
+    `text`/`source` under strict mode made the XPath copy toast throw
+    `ReferenceError`). Isolated full was data-starved; live full is not a
+    reliable verdict.
+  * `annotation.e2e.mjs --bootstrap` is an opt-in isolated-profile preparation:
+    it dismisses the localized first-run dialogs and best-effort seeds blank
+    Sessions until the existing scroll probe succeeds (default runs unchanged).
+    Live `--bootstrap --smoke` passes 6/6; on a fresh isolated profile it
+    dismisses Preview Notice but cannot create a second blank Session (one blank
+    draft per workspace), so S3/S8 still fail at the scroll-region assertion and
+    S16/S11 remain data-limited.
+  * Regression guard: the identity extraction briefly broke all click selection
+    (unbound DOM `getAttribute`); the new click-select smoke would have caught it
+    while the old smoke passed 6/6. Fixed in `bfaf0d4` with a unit regression.
+- Isolated served bundle (5128669): boot graph lists
+  `plugins/??@zephinel/dsh-power-suite/client.js&rev=29bc3dccf100`; installed
+  `lib/client.js` is 980,746 B (sha256 dffe95…), served 980,828 B = installed +
+  82 B source-map trailer; the served text starts with `"use strict";` and has
+  no top-level import/export (classic IIFE); the source map is 1,109,650 B.
+- Client-entry caveat: a long-running GUI that resolved the old `src/client.js`
+  path must be restarted after a client-entry change (the 2026-11-18 restart
+  resolved the observed ES-module boot failure); use an isolated instance when a
+  restart is not possible. The npm artifact is unaffected.
+- `npm run typecheck:browser`: **0** diagnostics — `tsconfig.browser.json` (DOM
+  lib, `types: []`, `dom.d.ts` excluded) now typechecks the real entry, and
+  `--check` is wired into `npm run check`, so the browser profile is a hard gate
+  rather than the earlier report-only ratchet.
+
+- `npm run check` also enforces: **0** `@ts-nocheck`/`@ts-ignore` comments in
+  `src/**`; a **DOM-free Host-only profile** (`tsconfig.host.json`) so the browser
+  shim cannot leak into Host code; and a **built-browser smoke** that executes the
+  shipped `lib/client.js` in a vm, asserts the DSH module id and calls the factory
+  (`inject`/`apply`) — the source e2e bundle alone no longer stands in for the
+  artifact.
+- `npm run check:release`: **PASS** — 75 packaged files installed into a throwaway
+  `$DSH_HOME`; it deletes `lib/` first so `npm pack` must rebuild it through
+  `prepare`, then the packed `lib/` matches the fresh build, every other packed
+  file is byte-identical to the tarball and the checkout, and the mounted `power-suite`
+  Loader row, the boot graph, the served client bundle and clean uninstall pass
+  (requires `dsh` + `pnpm`; intentionally not in CI).
 - `node scripts/release-notes-approval.mjs --verify`: the tagged commit's
   `Release-Notes-Review: sha256=<hash>` line is required before publishing
   (covered by `test/release-notes-approval.test.js`).
+
+## Full e2e evidence (2026-11-18, Phase 3 tip)
+
+Branch `feat/typescript-phase3` at `5527db7` (harness fixes later committed as
+`afa000c`), Node 24.22.3, launchd GUI on port 3080. The live GUI still installs
+the published **0.1.0**; annotation/sidebar harnesses inject this worktree's
+`src/client.js` bundle, so those suites exercise the tip source. The isolated
+run installed the tip tarball in a throwaway DSH_HOME.
+
+### Live GUI full suites
+
+- `sidebar.e2e.mjs --no-shots`: **70 PASS / 2 SKIP / 0 FAIL**, exit 0, 0 page
+  errors; the two SKIPs are the explicit data-dependent rows (cold subagent,
+  `--no-shots` gallery). After the harness corrections below (dark atmosphere
+  contract, b4-4 `finally` cleanup, prompt-rail explicit skips) this is stable;
+  the two full runs before the fixes were 61 PASS / 3 SKIP / 8 FAIL with the same
+  failures caused by OS-dark theme state and a missing prompt rail.
+- `annotation.e2e.mjs --no-shots`: **23 PASS / 1 SKIP / 0 FAIL**, exit 0,
+  0 page errors, 0 real network failures. The one SKIP is the documented S13f
+  chip-fallback case (the live composer services cannot be forced absent). This
+  is the final green run after fixing the three live-state fixtures:
+  - S10's native hover probe now prefers a session row (a workspace row could be
+    a non-hoverable leaf in some live layouts);
+  - S6 uses a deterministic synthetic target that is selected, committed to the
+    collection and then removed from the DOM, with a filter toggle forcing a
+    fresh status render (the native sidebar-collapse fixture was live-layout
+    dependent and could select the Account-menu SVG);
+  - S12/S14 reload checks restore the record-owning session through the native
+    sidebar row with expanded workspace groups, scrolling in both directions,
+    and explicit SKIPs when the prompt rail has no mounted data.
+  Earlier iterations were 9/1/13 and 19/1/3 before these fixes; the remaining
+  red rows then were all live-state fixtures, not product assertions, and the
+  final run proves the same scenarios in sequence.
+- Chrome flags `--disable-background-timer-throttling`,
+  `--disable-renderer-backgrounding`, `--disable-backgrounding-occluded-windows`
+  and per-scenario `Page.bringToFront` / focus emulation / active lifecycle fixed
+  the S3 hidden-page transition freeze.
+
+### Isolated tip artifact and suites
+
+- Clean `git archive 5527db7` build: `lib/index.js` 105.9 kB, `lib/client.js`
+  934.1 kB; `npm pack` produced a **75-file, 4,601,858 B** tarball, sha256
+  `2997d77f330bb0f6f1c25b98d7b53e26757e21a2b03983ae3060c9ee626a177d`.
+- Throwing away the tarball-installed client: served bytes 956,644 B; the
+  installed `lib/client.js` (956,562 B) is an exact byte prefix, the remaining
+  82 B are the combo separator + source-map trailer; classic `"use strict"`,
+  no top-level imports, DSH module id present; source map 1,091,536 B; page boot
+  mounts the launcher and the five plugin styles with 0 page exceptions.
+- `update-prompt.e2e.mjs` against the installed tip: **21/21**, 0 page errors.
+- `sidebar --smoke`: **4/4**; `sidebar --layout` on a fresh profile initially
+  **8/4** because the first-run Get started modal mask intercepts the drag; the
+  same harness with the throwaway bootstrap modal dismissal reaches **12/12**.
+  The repo harness does not yet have `sidebar --bootstrap`; this is a documented
+  fresh-profile limitation, not a product failure.
+- `annotation --smoke`: **6/6** with `--bootstrap` (5/6 without it on a fresh
+  profile, blocked by the same modal); S4 7/7; S10 7 PASS / 1 SKIP; S12 6/7
+  (fresh-profile text-quote ambiguity), all with 0 page errors.
+
+### Reproduction notes
+
+- Live full runs are not deterministic while the GUI is in active human use; the
+  deterministic artifact/update evidence above is the release-critical proof.
+  For a fully green live full annotation run, either run against an isolated
+  cloned profile or re-run when the GUI is idle and treat the reload scenarios
+  as the residual risk.
+- Non-gating noise: DSH telemetry `ws://127.0.0.1:9230/ingest` 403 responses
+  (WebSocket, not plugin JavaScript).
 
 ### Historical baseline evidence (2026-11-13, Node 24.22.2; merged 0.3.0 polish round — the
 counts below were current when that round closed and are kept as history, not as

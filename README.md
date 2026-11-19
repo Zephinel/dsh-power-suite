@@ -7,7 +7,7 @@
 [![DSH](https://img.shields.io/badge/DSH-0.2.2-4f46e5)](https://www.npmjs.com/package/@deepseek-ai/dsh)
 [![ci](https://github.com/Zephinel/dsh-power-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/Zephinel/dsh-power-suite/actions/workflows/ci.yml)
 
-**One plugin that makes DSH show the working session, not only the answer.** It adds a Running & recent panel and activity buckets to the sidebar, a Session artifacts browser, prompt recall, draft memory and a multi-image composer gallery, interrupted-session recovery, and point-and-click UI annotation — all as one `power-suite` plugin row, with no build step.
+**One plugin that makes DSH show the working session, not only the answer.** It adds a Running & recent panel and activity buckets to the sidebar, a Session artifacts browser, prompt recall, draft memory and a multi-image composer gallery, interrupted-session recovery, and point-and-click UI annotation — all as one `power-suite` plugin row.
 
 Install it from npm and start DSH:
 
@@ -116,7 +116,7 @@ Or use the in-app route: **Plugins** in the Web sidebar → **Add plugin** → e
 plugin_manager action=install_bundle target=/absolute/path/to/dsh-power-suite
 ```
 
-The profile keeps a local checkout as a `link:` dependency, so an edited checkout is the code the Host runs after a reload. There is no build step; removing the bundle removes the plugin.
+The profile keeps a local checkout as a `link:` dependency, so the checkout is the code the Host runs after `npm run build` and a reload; removing the bundle removes the plugin.
 
 Installation needs `pnpm` on `PATH`: `dsh plugin add` forwards to pnpm in the profile, and the Plugins page runs pnpm behind its install dialog.
 
@@ -145,12 +145,12 @@ git clone https://github.com/Zephinel/dsh-power-suite.git
 cd dsh-power-suite
 ```
 
-The checkout needs no `npm install` to run the checks: the package has no runtime dependencies and no build step.
+There is no runtime dependency. Run `npm ci` once to install the esbuild/TypeScript dev dependencies, then `npm run build` to produce the gitignored `lib/` entries (`npm run check` builds for you); `npm test` runs without the build.
 
 ## Prerequisites
 
 - **DSH 0.2.2 plugin interface** — the Host and browser halves target DSH 0.2.2. The Web Host used for this repository's browser checks runs **0.2.2-rc.1**; later DSH versions are unverified. Install the CLI with `npm install -g @deepseek-ai/dsh`.
-- **Node.js 22 or newer** — `package.json` declares `engines.node >= 22`; the CI gate runs on Node 22 and 24.
+- **Node.js 22.18 or newer** — `package.json` declares `engines.node >= 22.18` (the test suite imports the TypeScript sources through Node's native type stripping); the CI gate runs on Node 22 and 24. Run `npm ci` once for esbuild and the typecheck tooling.
 - **pnpm** — needed to install profile bundles: `dsh plugin add` forwards to it, and the in-app Plugins page runs it behind its dialog.
 - **Git** — needed only to get the code; the repository sets no minimum version.
 - **Google Chrome** (optional) — only for the local browser suites; they use the standard macOS Chrome path and accept `CHROME_BIN` elsewhere.
@@ -168,12 +168,14 @@ Verified platform: macOS with DSH Web 0.2.2-rc.1. The plugin itself is a Web-pla
 
 ## Build, test and deploy
 
-There is no build step: the Host and browser entries are the checked-in ES modules under `src/`, with no runtime dependencies. Run the commands below from the checkout root.
+The build bundles `src/index.ts` and `src/client.js` into the gitignored `lib/` entries with esbuild; there are no runtime dependencies. Run the commands below from the checkout root.
 
 | Command | Purpose |
 |---|---|
-| `npm test` | `node --test test/*.test.js` — pure-logic tests for the Host stores/routes and the browser-side derivations. |
-| `npm run check` | The full gate: syntax, package manifest, docs links, Node tests and the release-notes check, then `pack:check`. |
+| `npm run build` | `node scripts/build.mjs` — esbuild bundles `src/` into the gitignored `lib/index.js` (Host ESM) and `lib/client.js` (browser entry: ESM source plus `src/browser/` modules, bundled to a classic script); `prepare` runs it before `npm pack`/`npm publish`. |
+| `npm test` | `node --test test/*.test.js` — pure-logic tests importing the TypeScript Host sources through Node's native type stripping (Node 22.18+; no build needed). |
+| `npm run typecheck` | `tsc --noEmit` — no-emit **strict** TypeScript check over the Host and browser sources; a DOM-free Host profile, the browser DOM profile, a suppression-comment scan and a built `lib/client.js` execution smoke are also gated. |
+| `npm run check` | The full gate: builds the entries, then runs syntax, typecheck, package manifest, docs links, Node tests and the release-notes check, then `pack:check`. |
 | `npm run pack:check` | `npm pack --dry-run --json` — inspect the published file list. |
 | `npm run check:release-notes` | Validate the tag-pinned release highlights for the package version. |
 | `npm run check:docs-links` | Verify that local Markdown links and images resolve. |
@@ -213,7 +215,7 @@ with the [full documentation index](https://github.com/Zephinel/dsh-power-suite/
 - [Verification](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/verification.md) — the checks and evidence for this checkout.
 - [Limitations](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/limitations.md) — known bounds and unverified areas.
 - [Browser harness](https://github.com/Zephinel/dsh-power-suite/blob/main/test/browser/README.md) — the live-GUI acceptance suites, their modes and evidence.
-- [Changelog](https://github.com/Zephinel/dsh-power-suite/blob/main/CHANGELOG.md) — release entries; the first release is 0.1.0, not yet cut.
+- [Changelog](https://github.com/Zephinel/dsh-power-suite/blob/main/CHANGELOG.md) — release entries; the current published release is 0.1.0.
 - [Release notes](https://github.com/Zephinel/dsh-power-suite/blob/main/release-notes/README.md) — the tag-pinned Highlights format read by the update notice.
 
 ## Contributing

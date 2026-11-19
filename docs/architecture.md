@@ -1,24 +1,40 @@
 # Architecture
 
-The suite is one DSH bundle with two halves that share no runtime code:
+The suite is one DSH bundle with two halves that share no runtime code. The
+checkout keeps both halves in `src/`; `npm run build` bundles them into the
+gitignored `lib/index.js` (Host ESM) and `lib/client.js` (browser entry: ESM
+source plus `src/browser/` modules, bundled to a classic script), which are the
+entries the published package exports. `src/shared/routes.ts` owns the 16 API paths and `src/shared/protocol.ts` owns the
+settings enums/defaults, re-exported by the Host modules and imported by the
+browser half.
+Browser-side pure models live under
+`src/browser/` and are imported by the entry (for example the update-prompt
+model and its stable-version math, the sidebar-width decisions and cache
+document, the composer-gallery index/wheel model, the Running & recent
+pending-interaction/activity, stats/pin/row-menu derivation, or the annotation
+settings/sanitizer/format/geometry/identity/record-store/reducer/serializer/anchor/
+resolution/surface helpers):
 
 ```
-src/index.js            Host entry (Node)
-├─ features/session-artifacts/host.js    GET  /api/session-artifacts.list
+src/index.ts            Host entry (Node)
+├─ host/document-store.ts               shared durable-document module
+├─ host/context.ts                      minimal structural Host context
+├─ host/errors.ts                       unknown-thrown-value helpers
+├─ features/session-artifacts/host.ts   GET  /api/session-artifacts.list
 │                                        GET|HEAD /api/session-artifacts.raw
 │                                        GET|HEAD /api/session-artifacts.attachment
 │                                        GET  /api/session-artifacts.preview
-├─ features/workspace-presets/host.js    GET  /api/workspace-presets.get
+├─ features/workspace-presets/host.ts   GET  /api/workspace-presets.get
 │                                        POST /api/workspace-presets.set
-├─ features/prompt-history/host.js       GET  /api/prompt-history.list
-├─ features/interrupted-sessions/host.js GET  /api/power-suite.interrupted
+├─ features/prompt-history/host.ts      GET  /api/prompt-history.list
+├─ features/interrupted-sessions/host.ts GET  /api/power-suite.interrupted
 │                                        POST /api/power-suite.continue
-├─ features/settings/host.js             GET/POST /api/power-suite.settings
-├─ features/read-acks/host.js            GET/POST /api/power-suite.read-acks
-├─ features/session-pins/host.js         GET/POST /api/power-suite.session-pins
-├─ features/sidebar-width/host.js        GET/POST /api/power-suite.sidebar-width
-├─ features/session-activity/host.js     GET  /api/power-suite.session-activity
-├─ features/update-check/host.js         GET  /api/power-suite.update
+├─ features/settings/host.ts            GET/POST /api/power-suite.settings
+├─ features/read-acks/host.ts           GET/POST /api/power-suite.read-acks
+├─ features/session-pins/host.ts        GET/POST /api/power-suite.session-pins
+├─ features/sidebar-width/host.ts       GET/POST /api/power-suite.sidebar-width
+├─ features/session-activity/host.ts    GET  /api/power-suite.session-activity
+├─ features/update-check/host.ts        GET  /api/power-suite.update
 └─ ctx.effect(...)                       every registration lives with the plugin
 
 src/client.js           Browser entry (DSH module loader)
@@ -38,7 +54,7 @@ src/client.js           Browser entry (DSH module loader)
 
 ## Host half
 
-`src/index.js` exports the stable Loader name (`power-suite`) and the union of
+`src/index.ts` exports the stable Loader name (`power-suite`) and the union of
 Host services the features may use. Each feature exports an `install<Feature>`
 function; the entry calls them inside `apply`. All routes, events, and caches
 are registered through `ctx.effect`, so unloading the plugin removes them.
@@ -46,6 +62,14 @@ are registered through `ctx.effect`, so unloading the plugin removes them.
 Routes are registered with `ctx.connection.fetch.register`, which puts them
 behind the same browser authentication and Host/Origin fence as the rest of the
 GUI. JSON responses are `no-store`.
+
+The five simple durable stores (settings, read acknowledgements, session pins,
+sidebar width, workspace presets) share `src/host/document-store.ts`. That module
+owns the mechanism — lazy single-flight read, coded read-error policy, serialized
+read-modify-write, an atomic 0600 temporary-sibling rename, and in-memory
+publication only after the rename — while each store supplies only its document
+policy (decode/encode/clone/change rule). The session-activity ledger keeps its
+own debounced, event-merging write path.
 
 ### Session artifacts
 
@@ -407,7 +431,7 @@ white surface with the light label tokens (title `#0f1115`, secondary
 `--dsw-hovercard-bg` recipe; a minimal scoped light-mode override themes the
 native shell session-info card as well. The same theme-following recipe is used
 by the other plugin tooltip-like surfaces (Artifact Quick Look, prompt-history
-cards), while annotation popover/detail cards keep their separate fixed recipe.
+cards, and the annotation popover/detail/note surfaces).
 Running & recent row titles and minor icons use the native Workspace
 title/icon tokens in light mode (brand glyph stays primary; dark unchanged), and
 both the plugin and native session-info cards share the 320 px width. The figures come from the injected `sessions` service's
@@ -431,8 +455,10 @@ row carries `data-psd-current-workspace`, and the native sidebar Session row of
 that Session carries `data-psd-current-session`; all of them get an internal
 **rainbow atmosphere**: a clipped absolutely-positioned wrapper inside the row's
 own rounded rectangle containing a small Canvas-2D gas renderer (broad prism
-wash + drifting radial blobs, screen blend, low base opacity), then a faint dark
-contrast scrim, then the untouched real content raised above both layers. The
+wash + drifting radial blobs; dark theme uses a screen blend with the softened
+pastel recipe, light theme a multiply blend), then a faint contrast scrim (white
+veil in both themes after the dark-mode softening), then the untouched real
+content raised above both layers. The
 effect is `pointer-events: none`, changes no geometry, runs only for highlighted
 rows (and pauses in hidden tabs), draws a single static frame under reduced
 motion, and is removed with the marker on session switch/unload. The leading glyph has three states: the shell loading indicator while
@@ -570,7 +596,7 @@ leave the content invisible.
 
 A **browser-only** feature: it has no Host route, service, Session-log write, or
 profile change. One `//#region feature: ui element annotation` in
-[`src/client.js`](../src/client.js) is installed through `ctx.effect` by
+[`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js) is installed through `ctx.effect` by
 `installUiAnnotation(ctx)`, which registers a `shell.overlay` seat and a
 renderless `conversation.input.overlay` seat, injects one
 `<style data-power-suite-css="ui-annotation">`, creates the controller singleton,
@@ -638,14 +664,15 @@ resolver re-finds the live node from the ordered candidates so scroll-frame
 lookups stay bounded without trusting a stale first hit. The reducer (`off | idle |
 inspect | selected | multi | collection`, a settings view flag, and transient
 pass-through/boxing/drag states) is a pure function covered by the Node suite
-through the factory's test seam.
+through direct module imports; the factory test seam is retired except for the
+`debugFallbackScanProbe` controller diagnostic.
 
 Candidate picking treats **floating surfaces** as first-class: a chain whose
 live hit is inside a contiguous `position: fixed|absolute` region with computed
 `z-index >= 10` resolves to that surface's root by default (whole native hover
 preview card or the plugin's own pinned card), and the Parent/Child controls
 drill into the surface's inner text blocks and controls; while the mode is
-active the shell overlay's inline `z-index` is raised to 150 (saved value and
+active the shell overlay's inline `z-index` is raised to 2000 (saved value and
 priority restored on exit) so the outline paints above body-level hover cards,
 and a 60 ms mutation-triggered hover recompute keeps up with surfaces that
 appear while the pointer is stationary. A selected element becomes a **v2

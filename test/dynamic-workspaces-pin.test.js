@@ -2,10 +2,8 @@
  * Unit tests for pinned Sessions in the Running & recent card of the
  * dynamic-Workspaces feature (final panel-owned Host-shared design).
  *
- * `src/client.js` is a browser classic script materialized in a `node:vm`
- * sandbox by `test/helpers/client-module.mjs`; the helpers are read from the
- * `dynamicWorkspacesPin` test-hook namespace (kept separate from the annotation
- * seam so that seam's keys stay frozen). The authoritative spec is
+ * The pure model lives in `src/browser/dynamic-workspaces/pin.ts`; this file
+ * imports it directly (no vm seam). The authoritative spec is
  * `.tmp-work/pin-stats-contract.md` ("FOLLOW-UP 2"). These tests cover:
  *
  * 1. `dwSanitizePinnedIds` — id-array / legacy-object sources, junk filtering,
@@ -32,27 +30,40 @@
  * Scope: this file unit-tests the pure helpers and the client source wiring.
  * The Host route/storage is covered by `test/session-pins.test.js`; the live
  * UI, reload/cross-device proof and the local-only fallback belong to the
- * `--pin` E2E harness (`test/browser/sidebar.e2e.mjs`). One reachability
- * limitation: the sandbox's `localStorage` object is not exposed, so a corrupt
- * raw cache document cannot be seeded here — the read fallback is exercised by
- * writing a malformed cache *state* through the seam (the writer persists
- * fields verbatim, the reader sanitizes them).
+ * `--pin` E2E harness (`test/browser/sidebar.e2e.mjs`). The cache helpers read
+ * `globalThis.localStorage` at call time, so each cache test installs its own
+ * deterministic stand-in and restores the previous value afterwards (including
+ * seeding a corrupt raw document, which the old vm seam could not do).
  */
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { loadClientModule } from './helpers/client-module.mjs'
+import { ROUTES, browserRoute } from '../src/shared/routes.ts'
+import { DW_EN, DW_ZH } from '../src/browser/dynamic-workspaces/stats.ts'
+import {
+  dwPinEffectiveIds,
+  dwPinPanelRows,
+  dwReadPinCache,
+  dwSanitizePinnedIds,
+  dwWritePinCache
+} from '../src/browser/dynamic-workspaces/pin.ts'
 
+/** The browser entry, read for source-level wiring/regression assertions. */
 const client = loadClientModule()
-const production = loadClientModule({ hooksFlag: false })
-const pin = client.hooks?.dynamicWorkspacesPin
-const stats = client.hooks?.dynamicWorkspacesStats
+
+/** The extracted dynamic-Workspaces controller, read for its own wiring assertions. */
+const dynamicSource = readFileSync(new URL('../src/browser/dynamic-workspaces/install.ts', import.meta.url), 'utf8')
+
+/** The extracted native Session hover-figure seat, read for its own marker assertions. */
+const hoverFiguresSource = readFileSync(new URL('../src/browser/native-session-hover-figures/install.ts', import.meta.url), 'utf8')
 
 /** Fixed clock used by every row fixture (2025-10-09T08:53:20Z). */
 const NOW = 1_760_000_000_000
 const DAY_MS = 24 * 60 * 60 * 1000
 
-/** Pin helpers exposed by the seam, in sorted order. */
-const PIN_SEAM_KEYS = ['dwPinEffectiveIds', 'dwPinPanelRows', 'dwReadPinCache', 'dwSanitizePinnedIds', 'dwWritePinCache']
+/** The stable localStorage document key the cache owns. */
+const PIN_CACHE_KEY = 'power-suite.dynamic-workspaces.pinned'
 
 /**
  * Build a translate seat from one dictionary map exactly like the locale
@@ -73,35 +84,27 @@ function translate(templates) {
 }
 
 /**
- * Read one helper off the pin seam with a clear failure while the Lead's
- * implementation is still landing.
- * @param {string} name - seam key.
- * @returns {Function} the helper.
+ * Install a deterministic `globalThis.localStorage` stand-in for one test and
+ * restore the previous value afterwards.
+ * @param {import('node:test').TestContext} t - test context.
+ * @returns {Map<string, string>} the backing store.
  */
-function requirePin(name) {
-  assert.notEqual(
-    pin,
-    undefined,
-    'src/client.js does not expose hooks.dynamicWorkspacesPin yet: '
-    + `expected globalThis.__POWER_SUITE_TEST_HOOKS__.dynamicWorkspacesPin = { ${PIN_SEAM_KEYS.join(', ')} } `
-    + `(hooks found: ${client.hooks ? Object.keys(client.hooks).join(', ') : '(none)'}).`
-  )
-  const helper = pin[name]
-  assert.equal(typeof helper, 'function', `hooks.dynamicWorkspacesPin.${name} is not a function`)
-  return helper
-}
-
-/**
- * Materialize an isolated browser module for a cache test. Every
- * `loadClientModule()` call builds its own vm sandbox with a fresh `localStorage`
- * stand-in, so cache writes in one test never leak into another.
- * @returns {object} that instance's `dynamicWorkspacesPin` seam.
- */
-function freshPinSeam() {
-  const instance = loadClientModule()
-  const seam = instance.hooks?.dynamicWorkspacesPin
-  assert.notEqual(seam, undefined, 'dynamicWorkspacesPin test seam is missing from src/client.js')
-  return seam
+function installPinStorage(t) {
+  const previous = globalThis.localStorage
+  const store = new Map()
+  globalThis.localStorage = {
+    getItem(key) { return store.has(key) ? store.get(key) : null },
+    setItem(key, value) { store.set(key, String(value)) },
+    removeItem(key) { store.delete(key) },
+    clear() { store.clear() },
+    key(index) { return [...store.keys()][index] ?? null },
+    get length() { return store.size }
+  }
+  t.after(() => {
+    if (previous === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = previous
+  })
+  return store
 }
 
 /**
@@ -149,7 +152,7 @@ function pinInput(overrides = {}) {
     list: { ids: [], byId: {} },
     statuses: new Map(),
     workspaces: [],
-    t: translate(stats.DW_EN),
+    t: translate(DW_EN),
     now: NOW,
     runningParents: new Map(),
     archived: new Set(),
@@ -163,11 +166,6 @@ function pinInput(overrides = {}) {
 
 /**
  * Row ids in output order.
- *
- * The helpers run inside the vm sandbox, so their arrays are vm-realm arrays;
- * `assert.deepEqual` (strict) rejects those against host-realm literals because
- * the prototypes differ. `Array.from` on the host side copies the values into a
- * host-realm array.
  * @param {Array<object>} rows - helper output.
  * @returns {string[]} ids.
  */
@@ -176,7 +174,7 @@ function ids(rows) {
 }
 
 /**
- * One field from every row, as a host-realm array (same cross-realm reason).
+ * One field from every row.
  * @param {Array<object>} rows - helper output.
  * @param {string} fieldName - row field name.
  * @returns {Array<unknown>} field values.
@@ -186,10 +184,9 @@ function field(rows, fieldName) {
 }
 
 /**
- * Normalize a cache record read from the vm sandbox into a comparable host
- * object (same cross-realm reason; also flattens pending ops for readable diffs).
+ * Normalize a cache record for readable diffs (also flattens pending ops).
  * @param {object} cache - cache state from `dwReadPinCache`.
- * @returns {object} host-realm view of the cache.
+ * @returns {object} comparable view of the cache.
  */
 function cacheView(cache) {
   return {
@@ -201,68 +198,52 @@ function cacheView(cache) {
   }
 }
 
-test('dynamic-Workspaces pin seam has the final panel-owned shape and production stays inert', () => {
-  assert.notEqual(
-    pin,
-    undefined,
-    'hooks.dynamicWorkspacesPin is missing from src/client.js (test seam not wired yet)'
-  )
-  assert.deepEqual(
-    [...Object.keys(pin)].sort(),
-    PIN_SEAM_KEYS,
-    'the seam exposes the sanitizer, effective-id replay, cache read/write, and row derivation'
-  )
-  for (const name of PIN_SEAM_KEYS) {
-    assert.equal(typeof pin[name], 'function', `${name} is exported through the seam`)
-  }
-  assert.equal(production.hooks, undefined, 'the test-hook seam must stay inert when the flag is not set')
-})
-
 test('the card-owned pin syncs through the panel route, never through the native sidebar pin', () => {
-  const source = client.source
   // Panel-owned Host-shared state: the suite's own route, request helpers, local
   // cache, and the first-contact migration flag that merges pre-restart pins.
-  assert.match(source, /power-suite\.session-pins/, 'the client talks to /api/power-suite.session-pins')
-  assert.match(source, /dwFetchPinnedSessions/, 'the client has the Host GET helper')
-  assert.match(source, /dwPostPinOps/, 'the client has the Host POST helper')
-  assert.match(source, /power-suite\.dynamic-workspaces\.pinned/, 'the local cache document key exists')
-  assert.match(source, /migrated/, 'the first-contact migration state exists')
+  assert.equal(browserRoute(ROUTES.sessionPins), 'api/power-suite.session-pins', 'the shared contract owns the panel route')
+  assert.match(dynamicSource, /ROUTES\.sessionPins/, 'the controller talks to the panel route through the shared contract')
+  assert.match(dynamicSource, /dwFetchPinnedSessions/, 'the controller has the Host GET helper')
+  assert.match(dynamicSource, /dwPostPinOps/, 'the controller has the Host POST helper')
+  assert.match(dynamicSource, /dwReadPinCache/, 'the controller paints from the local cache')
+  assert.match(dynamicSource, /dwWritePinCache/, 'the controller persists the local cache')
+  assert.match(dynamicSource, /migrated/, 'the first-contact migration state exists')
   // The native sidebar pin (and its Workspaces snapshot field) must never drive
   // the card: those are project-organisation pins, not card pins.
-  assert.doesNotMatch(source, /uiWorkspace\.(?:pinSession|unpinSession)/, 'the card must not toggle the native sidebar pin')
+  assert.doesNotMatch(dynamicSource, /uiWorkspace\.(?:pinSession|unpinSession)/, 'the card must not toggle the native sidebar pin')
   assert.doesNotMatch(
-    source,
+    dynamicSource,
     /(?:workspaceSnapshot|WorkspaceSnapshot)[^\n]{0,40}\.pinnedSessionIds/,
     'the card must not read the native pinnedSessionIds snapshot'
   )
   // The pre-final round's helpers are gone.
-  assert.doesNotMatch(source, /dwReadPinnedIds|dwWritePinnedIds/, 'the removed host-pin helpers must not reappear')
-  // Requirement 2's native hover-figure wiring is untouched.
-  assert.match(source, /sidebar\.session\.row\.hover/, 'the native hover-figure slot registration stays')
-  assert.match(source, /psd-native-hover-figures/, 'the native hover-figure DOM anchor stays')
+  assert.doesNotMatch(dynamicSource, /dwReadPinnedIds|dwWritePinnedIds/, 'the removed host-pin helpers must not reappear')
+  // Requirement 2's native hover-figure wiring moved intact into its typed seat.
+  assert.match(client.source, /createNativeSessionHoverFigures/, 'the entry still binds the native hover-figure seat')
+  assert.match(hoverFiguresSource, /sidebar\.session\.row\.hover/, 'the native hover-figure slot registration stays')
+  assert.match(hoverFiguresSource, /psd-native-hover-figures/, 'the native hover-figure DOM anchor stays')
 })
 
 test('pinned ids sanitize from arrays and legacy objects, drop junk, dedupe, and bound', () => {
-  const sanitize = requirePin('dwSanitizePinnedIds')
   for (const malformed of [undefined, null, {}, { pinned: null }, { pinnedSessionIds: 'session-a' }, 'session-a']) {
-    const result = sanitize(malformed)
+    const result = dwSanitizePinnedIds(malformed)
     assert.equal(typeof result?.has, 'function', `expected a Set for ${JSON.stringify(malformed)}`)
     assert.equal(result.size, 0, `expected no pinned ids for ${JSON.stringify(malformed)}`)
   }
   // Bare array (the cache/Host document shape).
   assert.deepEqual(
-    [...sanitize(['session-a', '', null, 42, {}, ['session-b'], 'session-b', 'session-c'])].sort(),
+    [...dwSanitizePinnedIds(['session-a', '', null, 42, {}, ['session-b'], 'session-b', 'session-c'])].sort(),
     ['session-a', 'session-b', 'session-c']
   )
   // Object with `pinned` (canonical document shape).
-  assert.deepEqual([...sanitize({ pinned: ['session-a', 'session-a', 'session-b'] })], ['session-a', 'session-b'])
+  assert.deepEqual([...dwSanitizePinnedIds({ pinned: ['session-a', 'session-a', 'session-b'] })], ['session-a', 'session-b'])
   // Object with `pinnedSessionIds` (older cached documents/test fixtures).
-  assert.deepEqual([...sanitize({ pinnedSessionIds: ['legacy-a', 'legacy-b'] })], ['legacy-a', 'legacy-b'])
+  assert.deepEqual([...dwSanitizePinnedIds({ pinnedSessionIds: ['legacy-a', 'legacy-b'] })], ['legacy-a', 'legacy-b'])
   // Id length bound (the Host validator uses the same 200-character limit).
-  assert.deepEqual([...sanitize(['x'.repeat(200), 'y'.repeat(201)])], ['x'.repeat(200)])
+  assert.deepEqual([...dwSanitizePinnedIds(['x'.repeat(200), 'y'.repeat(201)])], ['x'.repeat(200)])
   // Document bound: 500 ids, insertion order kept (the Host drops the oldest).
   const many = Array.from({ length: 505 }, (_, index) => `session-${index}`)
-  const bounded = [...sanitize(many)]
+  const bounded = [...dwSanitizePinnedIds(many)]
   assert.equal(bounded.length, 500)
   assert.equal(bounded[0], 'session-0')
   assert.equal(bounded[499], 'session-499')
@@ -270,8 +251,7 @@ test('pinned ids sanitize from arrays and legacy objects, drop junk, dedupe, and
 })
 
 test('effective pinned ids replay queued operations over the confirmed set', () => {
-  const effective = requirePin('dwPinEffectiveIds')
-  const view = (pinned, pending) => [...effective(pinned, pending)]
+  const view = (pinned, pending) => [...dwPinEffectiveIds(pinned, pending)]
   assert.deepEqual(view(undefined, undefined), [])
   assert.deepEqual(view(['session-a', 'session-b'], []).sort(), ['session-a', 'session-b'])
   // Optimistic pin / unpin.
@@ -284,10 +264,10 @@ test('effective pinned ids replay queued operations over the confirmed set', () 
   assert.deepEqual(view(['session-a'], [null, 42, { op: 'pin' }, { op: 'pin', id: '' }, { op: 'toggle', id: 'session-b' }]), ['session-a'])
 })
 
-test('the pin cache round-trips and a malformed cached state degrades to defaults', () => {
-  const seam = freshPinSeam()
+test('the pin cache round-trips and a malformed cached state degrades to defaults', (t) => {
+  const store = installPinStorage(t)
   // A fresh browser profile has no cached pin state.
-  assert.deepEqual(cacheView(seam.dwReadPinCache()), {
+  assert.deepEqual(cacheView(dwReadPinCache()), {
     version: 1,
     rev: 0,
     pinned: [],
@@ -295,14 +275,15 @@ test('the pin cache round-trips and a malformed cached state degrades to default
     migrated: false
   })
   // Round-trip one Host-confirmed document plus a queued operation.
-  seam.dwWritePinCache({
+  dwWritePinCache({
     version: 1,
     rev: 7,
     pinned: ['session-a', 'session-b'],
     pending: [{ op: 'pin', id: 'session-c' }],
     migrated: true
   })
-  assert.deepEqual(cacheView(seam.dwReadPinCache()), {
+  assert.equal(store.has(PIN_CACHE_KEY), true, 'the cache writes the stable panel-owned document key')
+  assert.deepEqual(cacheView(dwReadPinCache()), {
     version: 1,
     rev: 7,
     pinned: ['session-a', 'session-b'],
@@ -310,24 +291,32 @@ test('the pin cache round-trips and a malformed cached state degrades to default
     migrated: true
   })
   // The writer persists fields verbatim; the reader is the sanitizing boundary.
-  seam.dwWritePinCache({
+  dwWritePinCache({
     version: 1,
     rev: -3,
     pinned: ['session-a', '', null, 42, 'session-a'],
     pending: [{ op: 'bogus', id: 'session-x' }, null, { op: 'pin', id: 42 }, { op: 'pin', id: 'session-b' }],
     migrated: 'yes'
   })
-  assert.deepEqual(cacheView(seam.dwReadPinCache()), {
+  assert.deepEqual(cacheView(dwReadPinCache()), {
     version: 1,
     rev: 0,
     pinned: ['session-a'],
     pending: ['pin:session-b'],
     migrated: false
   })
+  // A corrupt raw document also reads as the empty defaults.
+  store.set(PIN_CACHE_KEY, '{not json')
+  assert.deepEqual(cacheView(dwReadPinCache()), {
+    version: 1,
+    rev: 0,
+    pinned: [],
+    pending: [],
+    migrated: false
+  })
 })
 
 test('a pinned finished row outside the retention window stays listed with its original end time', () => {
-  const dwPinPanelRows = requirePin('dwPinPanelRows')
   const updatedAt = NOW - 30 * DAY_MS
   const rows = dwPinPanelRows(pinInput({
     list: {
@@ -362,7 +351,6 @@ test('a pinned finished row outside the retention window stays listed with its o
 })
 
 test('pinned rows already present in the running or recent rows are never duplicated', () => {
-  const dwPinPanelRows = requirePin('dwPinPanelRows')
   const rows = dwPinPanelRows(pinInput({
     list: {
       ids: ['pinRun', 'pinDone'],
@@ -391,7 +379,6 @@ test('pinned rows already present in the running or recent rows are never duplic
 })
 
 test('pinned rows sort first by newest activity, then the existing running and recent order', () => {
-  const dwPinPanelRows = requirePin('dwPinPanelRows')
   const rows = dwPinPanelRows(pinInput({
     list: {
       ids: ['pinRunning', 'pinDoneNew', 'pinDoneOld', 'runX', 'runY', 'recZ'],
@@ -428,7 +415,6 @@ test('pinned rows sort first by newest activity, then the existing running and r
 })
 
 test('unpinned rows keep the exact order they were handed in and are never re-timed', () => {
-  const dwPinPanelRows = requirePin('dwPinPanelRows')
   const runningRows = [
     row({ id: 'runB', updatedAt: NOW - 3_000 }),
     row({ id: 'runA', updatedAt: NOW - 2_000 })
@@ -445,7 +431,6 @@ test('unpinned rows keep the exact order they were handed in and are never re-ti
 })
 
 test('blank, archived, subagent, and unknown pinned ids are skipped; child rows never surface', () => {
-  const dwPinPanelRows = requirePin('dwPinPanelRows')
   const rows = dwPinPanelRows(pinInput({
     list: {
       ids: ['blankId', 'archivedId', 'childId', 'mainOk'],
@@ -476,23 +461,22 @@ test('blank, archived, subagent, and unknown pinned ids are skipped; child rows 
 })
 
 test('EN and ZH dictionaries define the same pin keys', () => {
-  assert.notEqual(stats, undefined, 'dynamicWorkspacesStats test seam is missing from src/client.js')
-  const enKeys = Object.keys(stats.DW_EN).sort()
-  const zhKeys = Object.keys(stats.DW_ZH).sort()
+  const enKeys = Object.keys(DW_EN).sort()
+  const zhKeys = Object.keys(DW_ZH).sort()
   assert.deepEqual(zhKeys, enKeys, 'both dictionaries must define the same key set')
   const enPinKeys = enKeys.filter((key) => key.startsWith('pin.'))
   const zhPinKeys = zhKeys.filter((key) => key.startsWith('pin.'))
   assert.deepEqual(zhPinKeys, enPinKeys, 'both dictionaries must define the same pin keys')
   for (const key of ['pin.pin', 'pin.unpin']) {
-    assert.equal(typeof stats.DW_EN[key], 'string', `EN copy for ${key}`)
-    assert.equal(typeof stats.DW_ZH[key], 'string', `ZH copy for ${key}`)
-    assert.ok(stats.DW_EN[key].trim().length > 0, `EN copy for ${key} must not be blank`)
-    assert.ok(stats.DW_ZH[key].trim().length > 0, `ZH copy for ${key} must not be blank`)
+    assert.equal(typeof DW_EN[key], 'string', `EN copy for ${key}`)
+    assert.equal(typeof DW_ZH[key], 'string', `ZH copy for ${key}`)
+    assert.ok(DW_EN[key].trim().length > 0, `EN copy for ${key} must not be blank`)
+    assert.ok(DW_ZH[key].trim().length > 0, `ZH copy for ${key} must not be blank`)
   }
 })
 
 test('requirement 1: the running-card status dot opts out of the shell superellipse', () => {
-  const source = client.source
+  const source = dynamicSource
   // The shell theme applies `corner-shape: superellipse(1.5)` to every element,
   // which renders a plain `border-radius: 50%` dot as a squircle; the plugin dot
   // must explicitly ask for a round corner shape.

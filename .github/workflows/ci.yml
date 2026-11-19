@@ -13,8 +13,9 @@
 #   with a real Chrome and a real profile, so it stays a local pre-release check
 #   instead of a GitHub runner gate (see docs/development.md and the release
 #   skill).
-# - Caches: only actions/setup-node's npm cache (lockfile keyed). The package
-#   has no build step and no generated artifacts to cache.
+# - Caches: only actions/setup-node's npm cache (lockfile keyed). esbuild is a
+#   dev dependency and `lib/` is a gitignored build output rebuilt by
+#   `npm run check`; there is no build artifact to cache between jobs.
 #
 # Owner setup (GitHub settings, not code): require the `verify` status check on
 # main/branches and restrict `v*` tag creation to maintainers.

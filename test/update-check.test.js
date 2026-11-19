@@ -8,19 +8,19 @@ import {
   compareStableVersions,
   isNewerStableVersion,
   parseStableVersion
-} from '../src/features/update-check/version.js'
+} from '../src/features/update-check/version.ts'
 import {
   parseHighlights,
   releaseNotesUrl,
   releaseNotesVariant,
   repositorySlug
-} from '../src/features/update-check/release-notes.js'
+} from '../src/features/update-check/release-notes.ts'
 import {
   createUpdateChecker,
   installedVersion,
   releaseNotesRepository
-} from '../src/features/update-check/checker.js'
-import { UPDATE_ROUTE, installUpdateCheck } from '../src/features/update-check/host.js'
+} from '../src/features/update-check/checker.ts'
+import { UPDATE_ROUTE, installUpdateCheck } from '../src/features/update-check/host.ts'
 
 const repoManifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 

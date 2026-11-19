@@ -72,8 +72,8 @@ Host:
 - `POST /api/power-suite.continue` — admits one implicit continuation after
   checking JSON content type, the Session's current interruption state, and a
   per-Session in-flight lock; duplicate requests get `409`.
-- Registered in [`src/features/interrupted-sessions/host.js`](../src/features/interrupted-sessions/host.js);
-  the pure fold lives in [`turns.js`](../src/features/interrupted-sessions/turns.js).
+- Registered in [`src/features/interrupted-sessions/host.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/features/interrupted-sessions/host.ts);
+  the pure fold lives in [`turns.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/features/interrupted-sessions/turns.ts).
 
 Browser:
 

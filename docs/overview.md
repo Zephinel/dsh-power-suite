@@ -27,7 +27,8 @@ plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-
 ```
 
 The profile keeps this package as a `link:` dependency, so an edited checkout is
-the code the Host runs after a restart. Removing the bundle removes the plugin.
+the code the Host runs after `npm run build` and a restart (the Host loads
+`lib/index.js`, not `src/`). Removing the bundle removes the plugin.
 
 ## Layout
 
@@ -35,9 +36,19 @@ the code the Host runs after a restart. Removing the bundle removes the plugin.
 .
   package.json              # bundle patch + exports + checks
   cordis.patch.yml          # inserts the single `power-suite` row
-  src/index.js              # Host entry: calls each feature's installer
+  src/index.ts              # Host entry: calls each feature's installer
   src/features/<name>/      # Host-side feature modules
-  src/client.js             # browser entry: one `#region feature: <name>` per feature
+  src/client.js             # browser entry (ESM): one `#region feature: <name>` per feature
+  src/browser/              # browser-side modules imported by the entry (update-check, sidebar-width,
+                            #   artifacts, interrupted-sessions, settings, composer-gallery,
+                            #   dynamic-workspaces (activity, stats, pin, rows, row-menu, install),
+                            #   hover-quick-look, native-session-hover-figures, prompt-history, update-check,
+                            #   ui-annotation settings/text/format/geometry/identity/records/reducer/serializers/anchors/resolution/surface)
+  src/shared/routes.ts      # cross-half route contract (16 API paths)
+  src/host/document-store.ts # shared durable-document module for the JSON stores
+  src/host/context.ts        # minimal structural Host context
+  src/host/errors.ts         # unknown-thrown-value helpers
+  lib/                      # gitignored build output (lib/index.js + lib/client.js)
   locale/                   # plugin display metadata (en, zh)
   docs/                     # architecture, guides, per-feature reference
   test/                     # pure-logic tests (node --test)
@@ -45,16 +56,20 @@ the code the Host runs after a restart. Removing the bundle removes the plugin.
 
 ## Add a feature
 
-1. Host side: create `src/features/<name>/host.js` exporting
+1. Host side: create `src/features/<name>/host.ts` exporting
    `install<Name>(ctx)`; register routes, services, and events inside
-   `ctx.effect`. Call the installer from [`src/index.js`](../src/index.js) and add any new
-   service names to its `inject` union.
-2. Browser side: add a `//#region feature: <name>` section to [`src/client.js`](../src/client.js)
+   `ctx.effect`. Call the installer from [`src/index.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/index.ts) and add any new
+   service names to its `inject` union. A durable Host document goes through
+   [`src/host/document-store.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/host/document-store.ts) (atomic queued
+   writes, coded read errors) — supply decode/encode/clone/change policy instead
+   of hand-rolling filesystem code.
+2. Browser side: add a `//#region feature: <name>` section to [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js)
    with its tab type, guide card, slot component, and copy. The entry's `apply`
    registers each feature's contributions.
 3. Feature routes live under `/api/<feature>.*` and use
    `ctx.connection.fetch.register`, so they sit behind the same browser
-   authentication and Host/Origin fence as the rest of the GUI.
+   authentication and Host/Origin fence as the rest of the GUI; the path is
+   declared once in `src/shared/routes.ts` for both halves.
 4. Put user-facing reference in `docs/<name>.md` and, when the display text is
    user-visible, add the copy to the locale dictionaries.
 5. Add a pure-logic test under `test/` when a feature derives state from the

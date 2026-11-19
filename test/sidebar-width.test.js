@@ -32,8 +32,8 @@ import {
   parseSidebarWidthDocument,
   serializeSidebarWidthDocument,
   sidebarWidthPath
-} from '../src/features/sidebar-width/store.js'
-import { SIDEBAR_WIDTH_ROUTE, installSidebarWidth } from '../src/features/sidebar-width/host.js'
+} from '../src/features/sidebar-width/store.ts'
+import { SIDEBAR_WIDTH_ROUTE, installSidebarWidth } from '../src/features/sidebar-width/host.ts'
 
 /** The canonical unset document every parse failure degrades to. */
 const DEFAULT_DOCUMENT = { version: SIDEBAR_WIDTH_VERSION, sidebarWidth: null }

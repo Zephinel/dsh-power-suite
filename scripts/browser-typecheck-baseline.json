@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "scripts/typecheck-browser-baseline.mjs",
+  "profile": "tsconfig.browser.json",
+  "typescript": "7.0.2",
+  "generatedAt": "2026-11-18T19:27:20.039Z",
+  "gitHead": "596dc0c",
+  "clientJs": {
+    "lines": 1092,
+    "bytes": 52836
+  },
+  "total": 0,
+  "byCode": {},
+  "byFile": {},
+  "byFeature": {},
+  "byRegion": {},
+  "unattributed": {
+    "clientJs": 0,
+    "otherFiles": 0
+  }
+}

@@ -181,7 +181,7 @@ converge when one of them is refocused or reloaded.
 ## The flicker fix
 
 The rainbow atmosphere is a Canvas 2D renderer (`dwAtmosphereMount()` in
-[`src/client.js`](../src/client.js)) whose backing store is resized from a
+[`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js)) whose backing store is resized from a
 `ResizeObserver`. Assigning `canvas.width`/`canvas.height` clears the bitmap, and
 during a sidebar drag the row's box changes size on every frame, so the observer
 cleared the canvas every frame while the animation loop repainted only on its

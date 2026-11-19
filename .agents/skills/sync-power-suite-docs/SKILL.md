@@ -7,13 +7,17 @@ whenToUse: "同步文档, 更新文档, 检查文档, 文档落后了, 文档和
 # Sync Power Suite Docs
 
 Scope: the `dsh-power-suite` repository — one installable DSH bundle. It ships a
-Node Host half (`src/index.js` plus `src/features/<name>/`), a Web browser half
-(one `//#region feature:` group per feature in `src/client.js`), plugin display
+Node Host half (`src/index.ts`, `src/features/<name>/` and the shared
+`src/host/document-store.ts`, `src/host/context.ts`, `src/host/errors.ts`), a Web browser half
+(one `//#region feature:` group per feature in the ESM `src/client.js`, with browser modules under `src/browser/`; esbuild bundles it to the classic script), plugin display
 metadata (`locale/*.json`), the bundle patch (`cordis.patch.yml`), the release
 notes and changelog, and a documentation set (`README.md`, `docs/`,
 `PRODUCT.md`) that **ships in the npm package**, plus a repo-only
-`test/browser/README.md`. There is no build step, no generated code, no vendored
-tree, and no bilingual doc pair. DSH shell docs are out of scope.
+`test/browser/README.md`. A small esbuild build (`npm run build`) produces the
+gitignored `lib/index.js` and `lib/client.js` that the npm package ships; the
+Host sources are TypeScript (Phase 2c); the browser entry is an ES module tree
+bundled to a classic script (Phase 3a), and there is no vendored tree or binary
+asset pipeline; there is no bilingual doc pair. DSH shell docs are out of scope.
 
 Docs split into two contracts. **As-built** docs describe what the bundle does
 now and must match the code. **As-planned** docs (proposals, roadmaps, future
@@ -90,8 +94,8 @@ An ambiguous doc class is left alone and flagged.
 ### 1. Set the frame and run the guards
 
 Load [`references/verification.md`](references/verification.md). Run
-`npm run check` when feasible (it runs `scripts/check.mjs` and then
-`npm run pack:check`; there is no build step to run first), or at least
+`npm run check` when feasible (it builds `lib/` first, then runs
+`scripts/check.mjs` and `npm run pack:check`), or at least
 `npm run check:docs-links`, `npm test` and `npm run check:release-notes`; record
 the outputs — module/test-file/test counts, docs-link file count, release-notes
 result and pack entry count become evidence. Read
@@ -128,13 +132,14 @@ coverage per doc.
 Claim groups for this bundle:
 
 - **Product state and packaging**: one bundle `@zephinel/dsh-power-suite`, one
-  Loader row `power-suite`, features as modules inside the package, no build
-  step, no runtime dependencies, Node.js 22+, DSH 0.2.2 plugin interface (the
+  Loader row `power-suite`, features as modules inside the package, an esbuild
+  build to the gitignored `lib/` entries, no runtime dependencies, Node.js 22.18+,
+  DSH 0.2.2 plugin interface (the
   Web Host used for the browser checks runs 0.2.2-rc.1), Web platform only,
   pnpm for bundle installs, Chrome optional for the browser suites, `docs/`,
   `assets/`, `locale/` and `release-notes/` ship in the package while
   `.agents/**` does not. Sources: `package.json`, `cordis.patch.yml`,
-  `src/index.js` (`name`, `inject`), `scripts/check.mjs`.
+  `src/index.ts` (`name`, `inject`), `scripts/check.mjs`.
 - **Manifest and shipped set**: name, version, description, `exports`, `files`,
   `main`, `icon`, `engines`, `dsh.client.inject`, `publishConfig`, `repository`;
   the packed file list and entry count. Sources: `package.json`,
@@ -142,10 +147,10 @@ Claim groups for this bundle:
 - **Feature inventory and navigation**: README's *Features at a glance* table,
   `docs/overview.md`'s *Features* table, `docs/README.md`'s reference list and
   `docs/usage.md`'s sections agree with each other and with the installed
-  features (`src/index.js` installers plus `//#region feature:` marks in
+  features (`src/index.ts` installers plus `//#region feature:` marks in
   `src/client.js`). The composer image gallery is a browser-only capability
   documented inside `usage.md`, not a Host feature module — count modules, not
-  table rows. Sources: `src/index.js`, `src/client.js` region marks, those docs.
+  table rows. Sources: `src/index.ts`, `src/client.js` region marks, those docs.
 - **UI copy and settings**: every quoted label comes from the inline `en`/`zh`
   dictionaries in the feature's `src/client.js` region; the settings contract
   comes from `src/features/settings/` — prompt-history modifier modes
@@ -157,8 +162,8 @@ Claim groups for this bundle:
   storage keys and caps.
 - **Routes, slots, services, storage**: `docs/architecture.md`'s Host route map,
   browser-half tree and *Slots used* table match the route strings in
-  `src/features/**/host.js`, the `ctx.slot` registrations in `src/client.js`,
-  the `inject` union in `src/index.js`, and the profile storage documents.
+  `src/features/**/host.ts`, the `ctx.slot` registrations in `src/client.js`,
+  the `inject` union in `src/index.ts`, and the profile storage documents.
   Quoted caps and limits (annotation record cap 100, read-ack entries 1000,
   prompt cap 500, sidebar-width range 264–420 px, 5 s undo, 24-candidate
   marquee, three "later" clicks, six highlights, activity-ledger caps) come from
@@ -251,9 +256,12 @@ lets the owner see which decisions were theirs.
 
 ## Doc-Specific Gotchas
 
-- **No doc pairs and no build.** The docs are a single English set; do not create
-  `README.en.md`, `docs/*.en.md`, `lib/`, `vendor/` or a `docs/current-facts.json`
-  to "match" the intelligent-ui repository. Counts come from command output.
+- **No doc pairs; a small build exists.** The docs are a single English set; do
+  not create `README.en.md`, `docs/*.en.md`, `vendor/` or a
+  `docs/current-facts.json` to "match" the intelligent-ui repository. `npm run
+  build` emits only the gitignored `lib/` entries (Phase 2), and `npm run
+  typecheck` (`tsc --noEmit`, part of `npm run check`) emits nothing; `src/
+  client.js` is opted out until Phase 3.
 - **`docs/verification.md` is a historical evidence ledger with one live part.**
   The `## Automated` section describes the current gates and is refreshed from
   command output; everything from the first dated round down is history — append

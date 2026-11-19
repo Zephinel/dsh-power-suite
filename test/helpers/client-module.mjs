@@ -5,20 +5,20 @@
  *
  * ## Why vm
  *
- * `src/client.js` is a classic browser script, not a module: it immediately
- * calls `window.__ModuleLoader__.load({ id, factory })` and the DSH shell later
- * invokes `factory(require)`. There is no build step and no `export` to import,
- * so the only portable way to reach the feature code from `node:test` is to
- * evaluate the file against browser stubs and grab the registration object.
+ * `src/client.js` is an ES module that calls `window.__ModuleLoader__.load({
+ * id, factory })`; the DSH shell later invokes `factory(require)`. The entry and
+ * its `src/browser/` imports are bundled with esbuild for the vm, so the
+ * feature code can be evaluated against browser stubs and its registration
+ * captured.
  *
- * ## The test seam (CONTRACT.md §3.7)
+ * ## The test seam
  *
- * The factory ends with a guarded block: when `globalThis.__POWER_SUITE_TEST_
- * HOOKS__` is an object it sets `__POWER_SUITE_TEST_HOOKS__.uiAnnotation` to an
- * object of side-effect-free helpers (`normalizeSettings`, `sanitizeText`,
- * `buildElementRef`, `reduceAnnotationState`, the serializers, the collection
- * functions, the clamp/layout math, …). Production never defines the flag, so
- * the block is inert in the browser.
+ * The 112-key annotation pass-through seam is retired; pure annotation models
+ * are imported directly by their tests. The factory still publishes the
+ * narrow, read-only diagnostics needed by the live e2e: the annotation
+ * controller's `debugFallbackScanProbe` and the sidebar-width attach `probe`.
+ * Production never defines `globalThis.__POWER_SUITE_TEST_HOOKS__`, so the block
+ * is inert in the browser.
  *
  * This helper therefore:
  *
@@ -41,12 +41,22 @@
  * browser. If the factory top-level starts touching a new browser global, add
  * the smallest stub below instead of weakening the harness.
  *
- * Keep this file dependency-free and side-effect-free: it is loaded by the
- * unit-test file only, never by `src/**`, and never by the browser bundle.
+ * ## ESM source
+ *
+ * Phase 3 turns the browser entry into an ES module that imports browser-side
+ * models. A classic-script vm cannot execute bare `import` statements, so when
+ * the entry contains one the harness bundles it with esbuild (already a dev
+ * dependency) before evaluation. The returned `source` stays the raw file text
+ * for source-level regression assertions.
+ *
+ * Keep this file side-effect-free: it is loaded by the unit-test file only,
+ * never by `src/**`, and never by the browser bundle.
  */
 import { readFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
+import { buildSync } from 'esbuild'
 
 /**
  * Absolute path of the worktree's browser entry: the normal unit-test subject,
@@ -154,10 +164,50 @@ function createBrowserStubs(registrationBox, shared) {
  *   (null when `options.source` was injected) for source-level regression
  *   assertions such as the popover edit wiring or region-marker balance.
  */
+/**
+ * Bundle the ESM entry with esbuild so a classic-script vm can evaluate it.
+ * Classic sources (baseline copies, injected text) are returned unchanged.
+ * @param {string | null} sourcePath - file the source came from, or null.
+ * @param {string} source - raw source text.
+ * @returns {string} source text suitable for vm evaluation.
+ */
+function evaluableSource(sourcePath, source) {
+  if (!/(^|\n)\s*import\s/u.test(source)) return source
+  if (sourcePath !== null) {
+    // No cache: a long-lived test process must see edits to model modules.
+    const result = buildSync({
+      entryPoints: [sourcePath],
+      bundle: true,
+      write: false,
+      format: 'iife',
+      platform: 'browser',
+      target: 'es2022',
+      logLevel: 'silent'
+    })
+    return result.outputFiles[0].text
+  }
+  const result = buildSync({
+    stdin: {
+      contents: source,
+      loader: 'js',
+      resolveDir: dirname(CLIENT_SOURCE_PATH),
+      sourcefile: 'client.js'
+    },
+    bundle: true,
+    write: false,
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2022',
+    logLevel: 'silent'
+  })
+  return result.outputFiles[0].text
+}
+
 export function loadClientModule(options = {}) {
   const injectedSource = typeof options.source === 'string'
   const sourcePath = injectedSource ? null : resolveSourcePath(options)
   const source = injectedSource ? options.source : readFileSync(sourcePath, 'utf8')
+  const evaluated = evaluableSource(sourcePath, source)
 
   const registrationBox = { current: null }
   const document = {
@@ -229,7 +279,7 @@ export function loadClientModule(options = {}) {
   sandbox.globalThis = sandbox
 
   vm.createContext(sandbox)
-  vm.runInContext(source, sandbox, { filename: 'src/client.js' })
+  vm.runInContext(evaluated, sandbox, { filename: 'src/client.js' })
 
   const registration = registrationBox.current
   const hooks = sandbox.__POWER_SUITE_TEST_HOOKS__
@@ -316,23 +366,4 @@ export function createStubRequire() {
   return function stubRequire(specifier) {
     return known[specifier] ?? {}
   }
-}
-
-/**
- * Read the UI-annotation seam with a clear failure when it is missing.
- * @param {object} [hooks] - hook bag from {@link loadClientModule}.
- * @returns {object} the `uiAnnotation` seam object.
- * @throws {Error} when `src/client.js` has no seam (pre-feature state).
- */
-export function requireUiAnnotation(hooks) {
-  const bag = hooks ?? loadClientModule().hooks
-  if (!bag || typeof bag !== 'object' || bag.uiAnnotation === undefined || bag.uiAnnotation === null) {
-    const found = bag && typeof bag === 'object' ? Object.keys(bag) : []
-    throw new Error(
-      'src/client.js does not expose the UI-annotation test seam yet: '
-      + 'expected the factory to set globalThis.__POWER_SUITE_TEST_HOOKS__.uiAnnotation '
-      + `(CONTRACT.md §3.7). Hook keys found: ${found.length > 0 ? found.join(', ') : '(none)'}.`
-    )
-  }
-  return bag.uiAnnotation
 }

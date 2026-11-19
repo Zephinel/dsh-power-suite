@@ -1,19 +1,23 @@
 # Verification — dsh-power-suite docs
 
-Run from the repo root. Expected values are dated 2026-11-17 (Node v24.22.3);
-derive them from the commands, never copy them forward blindly. There is no build
-step, so no rebuild precedes the gate.
+Run from the repo root. Expected values are dated 2026-11-18 (Node v24.22.3);
+derive them from the commands, never copy them forward blindly. `npm run check`
+builds `lib/` first, and `npm run check:release` compares the packed `lib/`
+against a fresh build before installing.
 
 ## Guards
 
-| Command | Expected (2026-11-17) | What it proves |
+| Command | Expected (2026-11-18) | What it proves |
 | --- | --- | --- |
-| `npm run check` | `check passed: 24 modules, 22 test files.`; inside it `node --test` reports **364 tests / 364 pass / 0 fail**; `docs links ok: 26 Markdown files`; `release-notes: ok (0.1.0; 6 highlight(s), 6 English)`; then `pack:check` reports `"entryCount": 95`. Fails on any syntax error, missing manifest target, broken local docs link/image, failing Node test, missing release-notes Highlights, or a pack failure | Syntax of the 24 checked-in modules, package manifest/export/file presence, local docs links and images, the pure-logic suite, the release-notes gate and the packed file set |
-| `npm test` | `node --test test/*.test.js`: 364 pass, 0 fail, 22 files (including the release-notes approval round-trip) | Host stores/routes plus browser-side derivations through `test/helpers/client-module.mjs`; it never reads `docs/`, `README.md`, `CHANGELOG.md` or `locale/*.json`, so a green suite does not prove docs are current |
-| `npm run check:docs-links` (`node scripts/check-docs-links.mjs`) | `docs links ok: 26 Markdown files` | Every local link and image in `docs/**/*.md`, `.agents/skills/**/*.md`, `README.md`, `CHANGELOG.md` and `PRODUCT.md` resolves on disk. Skipped: `http(s):`, `mailto:`, `data:`; `#fragment` is stripped. Not checked: heading anchors, absolute GitHub URLs, `test/browser/README.md`, `release-notes/*.md`, non-`.md` targets. Adding or removing a skill file changes the file count — keep the skill's own links resolving |
+| `npm run check` | Builds first (`build: index.js 105.9 kB, client.js 934.1 kB`), then `typecheck: ok (tsc --noEmit --strict over Host and browser sources; the browser profile gates next)` with `any budget: 0 explicit any sites in src/**/*.ts (limit 0)`, a `built-entry smoke: update route reports current=0.1.0`, and `check passed: 99 TypeScript modules, 1 JavaScript module(s), 28 test files (plus 0 suppression comments, a clean DOM-free Host profile and a passing built lib/client.js vm smoke).`; `node --test` reports **394 tests / 394 pass / 0 fail**; `docs links ok: 28 Markdown files`; `release-notes: ok (0.1.0; 6 highlight(s), 6 English)`; then `pack:check` reports `"entryCount": 75`. Fails on any build error, syntax error, missing manifest target, broken local docs link/image, failing Node test, missing release-notes Highlights, or a pack failure | The built `lib/` entries, syntax of the checked-in modules, package manifest/export/file presence, local docs links and images, the pure-logic suite, the release-notes gate and the packed file set |
+| `npm run typecheck:browser` | Browser-profile diagnostics for the real `src/client.js`: runs `tsc -p tsconfig.browser.json` (DOM lib, `types: []`, `dom.d.ts` excluded), prints total/per-code/per-feature counts, and is gated at 0 through `npm run check`; `--write` refreshes the baseline. Current baseline is 0 diagnostics; `--check` is part of `npm run check` | The browser-typing ratchet and per-region progress; it does not gate `npm run check` yet |
+| `npm run build` (`node scripts/build.mjs`) | `build: index.js 105.9 kB, client.js 934.1 kB`; writes the gitignored `lib/index.js` (Host ESM) and `lib/client.js` (ESM browser entry + `src/browser/` modules bundled to a classic script) | esbuild bundles the two entries and asserts the Host Loader contract (name `power-suite`, non-empty `inject`, `apply`), the browser entry's DSH module-loader call and package id, and (from inside `lib/`) that the package self-reference resolves the manifest. Same script runs from `prepare` and `npm run check` |
+| `npm test` | `node --test test/*.test.js`: 392 pass, 0 fail, 28 files (including the release-notes approval round-trip, the protocol contract guard and the document-store interface). Needs Node >= 22.18: the tests import the Host `.ts` sources through native type stripping, with no build | Host stores/routes plus browser-side derivations through `test/helpers/client-module.mjs`; it never reads `docs/`, `README.md`, `CHANGELOG.md` or `locale/*.json`, so a green suite does not prove docs are current |
+| `npm run typecheck` (`tsc --noEmit --strict`) | clean; `strict: true` over **all** Host and browser TypeScript sources, including the ESM browser entry `src/client.js` (no `@ts-nocheck`); the separate DOM profile is also 0 | Type-only gate: real annotations on the Host modules, shared protocol types, and the `test/protocol-contract.test.js` guard for duplicated route/enum literals. Explicit `any` is gated at 0: `npm run check` strips comments/strings and fails on any `any` code token (aliases, unions and generics included) — a lexical tripwire, not a proof. The Host context is modeled structurally in `src/host/context.ts` (including the opaque DSH `FsTarget`/`FileInfo` shapes) and unknown thrown values are read through `src/host/errors.ts`. The typecheck emits nothing; the Phase 2 build separately produces `lib/` |
+| `npm run check:docs-links` (`node scripts/check-docs-links.mjs`) | `docs links ok: 28 Markdown files` | Every local link and image in `docs/**/*.md`, `.agents/skills/**/*.md`, `README.md`, `CHANGELOG.md` and `PRODUCT.md` resolves on disk. Skipped: `http(s):`, `mailto:`, `data:`; `#fragment` is stripped. Not checked: heading anchors, absolute GitHub URLs, `test/browser/README.md`, `release-notes/*.md`, non-`.md` targets. Adding or removing a skill file changes the file count — keep the skill's own links resolving |
 | `npm run check:release-notes` (`node scripts/check-release-notes.mjs`) | `release-notes: ok (0.1.0; 6 highlight(s), 6 English)` | `release-notes/<package version>.md` exists and its `## Highlights` has at least one bullet; `<version>.en.md` is optional but validated when present. It does not enforce the 2–6 bullet convention |
-| `npm run pack:check` | 95 files; `size` 4,672,536 B; `unpackedSize` 6,541,378 B; contains `src/`, `docs/` (incl. `docs/assets/`), `assets/`, `locale/`, `release-notes/`, `README.md`, `CHANGELOG.md`, `PRODUCT.md`, `LICENSE`, `NOTICE`, `icon.png`, `cordis.patch.yml`; excludes `.agents/`, `test/`, `.github/` | Shipped-file claims and package size. Byte counts vary with the npm/platform versions and with any packed doc edit — quote the file list as the fact and the sizes as a dated local record |
-| `npm run check:release` (`node scripts/release-check.mjs`) | `release-check: PASS (95 packaged files verified)` in about 7 s; needs `dsh` and `pnpm` on PATH; uses a throwaway `$DSH_HOME` and an isolated 127.0.0.1 Web instance | Packs the tarball, installs it into a fresh profile, and proves every packed file is byte-identical to the checkout and to the installed copy, the packed patch/Host entry name the `power-suite` row, the composed tree mounts the Loader row, the boot graph serves the installed client bundle, and uninstall removes the dependency, row and directory. Deliberately not in CI (Linux runner behaviour unverified) |
+| `npm run pack:check` | 75 files; `size` 4,593,645 B; `unpackedSize` 6,280,490 B; contains `lib/` (the two built entries), `docs/` (incl. `docs/assets/`), `assets/`, `locale/`, `release-notes/`, `README.md`, `CHANGELOG.md`, `PRODUCT.md`, `LICENSE`, `NOTICE`, `icon.png`, `cordis.patch.yml`; excludes `src/`, `.agents/`, `test/`, `.github/` | Shipped-file claims and package size. Byte counts vary with the npm/platform versions and with any packed doc edit — quote the file list as the fact and the sizes as a dated local record |
+| `npm run check:release` (`node scripts/release-check.mjs`) | `release-check: PASS (75 packaged files verified)` in about 9 s; deletes `lib/` before `npm pack` so `prepare` must rebuild it; needs `dsh` and `pnpm` on PATH; uses a throwaway `$DSH_HOME` and an isolated 127.0.0.1 Web instance | Builds `lib/`, packs the tarball, installs it into a fresh profile, and proves the packed `lib/` matches the fresh build, every other packed file is byte-identical to the checkout and the installed copy, the packed patch/Host entry name the `power-suite` row, the composed tree mounts the Loader row, the boot graph serves the installed client bundle, and uninstall removes the dependency, row and directory. Deliberately not in CI (Linux runner behaviour unverified) |
 | `node scripts/check-publish-manifest.mjs` | `publish manifest ok: @zephinel/dsh-power-suite@0.1.0` | Release readiness only (run after `"private": true` is removed): name, repository URL, `publishConfig.access`, `files` containing `release-notes`, the `check:release-notes` script. Deliberately **not** part of `npm run check` |
 | CI `.github/workflows/ci.yml` | `verify` on Node 22 and 24; `changes` classifies docs-only as `CHANGELOG.md`, `PRODUCT.md`, `docs/**`, `.agents/**`; docs-only runs only `npm run check:docs-links`; anything else runs `npm run check` plus `git diff --exit-code`; no browser job | The CI claims in README/`docs/development.md`; also why a docs-only change still fails on a broken skill link |
 | `.github/workflows/publish.yml` | Ordered gates: tag == `package.json` version → publish manifest → `npm run check` → `npm run pack:check` → CHANGELOG dated `## [<version>]` heading → `check:release-notes` → `release-notes-approval.mjs --verify` against the tagged commit body → `npm publish --provenance` → registry poll bounded to 10 minutes | The release-flow claims in `docs/development.md` and the release skill |
@@ -81,14 +85,14 @@ grep -nE '^## (Settings|Routes|Limits|Troubleshooting|Verification|Release notes
 Also verify by hand:
 
 - **Settings quotes** — `docs/settings.md` values against
-  `src/features/settings/store.js`: modes `primary|alt|ctrl|shift|off`, windows
+  `src/features/settings/store.ts`: modes `primary|alt|ctrl|shift|off`, windows
   `60/120/360/720/1440` minutes and `1/3/7/14/30` days, defaults `primary`/`120`/`7`,
   document version 2, field names.
 - **Slots and routes** — `docs/architecture.md` *Slots used* table and route tree
   against `ctx.slots.register(...)` in `src/client.js` and the route constants in
-  `src/features/**/host.js`.
+  `src/features/**/host.ts`.
 - **Release notes source** — `docs/update-check.md` URLs and TTLs against
-  `src/features/update-check/{checker,release-notes}.js` (6 h success cache, 5 min
+  `src/features/update-check/{checker,release-notes}.ts` (6 h success cache, 5 min
   failure cache, 5 s timeout, six highlights, tag-pinned raw URL).
 - **DSH version claims** — no dependency in `package.json` pins DSH, so the
   DSH 0.2.2 interface target and the 0.2.2-rc.1 browser-check host are
@@ -141,9 +145,10 @@ Also verify by hand:
   tag's raw URL).
 - `.tmp-work/**` captures, logs and `.tgz` files are gitignored; recorded runs are
   cited from the verification/harness docs, never from raw local files.
-- This repository has no `lib/`, `vendor/`, `docs/current-facts.json` or shipped
-  Agent Skill; do not import the intelligent-ui build, pack-facts or Agent-Skill
-  steps into a sync here.
+- `lib/` is a gitignored build output, not a checked-in file; never edit or
+  commit it — rebuild with `npm run build`. This repository has no `vendor/`,
+  `docs/current-facts.json` or shipped Agent Skill; do not import the
+  intelligent-ui pack-facts or Agent-Skill steps into a sync here.
 - `npm run check:release` is intentionally not in CI; it is a local pre-release
   gate that needs `dsh` and `pnpm` and boots a throwaway `$DSH_HOME`.
 - The `v0.1.0` publish workflow run is red only because the final registry-poll

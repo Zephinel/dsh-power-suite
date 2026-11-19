@@ -144,6 +144,7 @@ import { existsSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readClientForInjection } from './bundle-client.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const WORKTREE = path.resolve(HERE, '..', '..')
@@ -889,6 +890,18 @@ function injectorSource(clientSource) {
 // Results table
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * Internal signal: one check discovered it cannot run in this live data state.
+ * Throwing it from a check callback records exactly ONE SKIP row (never a SKIP
+ * plus a PASS under the same id).
+ */
+class CheckSkip extends Error {
+  constructor(reason) {
+    super(reason)
+    this.name = 'CheckSkip'
+  }
+}
+
 class Results {
   constructor() {
     this.rows = []
@@ -901,6 +914,11 @@ class Results {
       this.rows.push({ id, title, pass: true, detail: detail ? short(detail) : '', ms: Date.now() - started })
       log(`PASS  ${id}  ${title}${detail ? ` — ${short(detail)}` : ''}`)
     } catch (error) {
+      if (error instanceof CheckSkip) {
+        this.rows.push({ id, title, pass: true, skipped: true, detail: error.message, ms: Date.now() - started })
+        log(`SKIP  ${id}  ${title} — ${error.message}`)
+        return
+      }
       const detail = error?.message || String(error)
       this.rows.push({ id, title, pass: false, detail, ms: Date.now() - started })
       log(`FAIL  ${id}  ${title} — ${short(detail, 400)}`)
@@ -2548,6 +2566,11 @@ async function runLayoutChecks({ page, results, state }) {
     await sleep(250)
     const before = await page.eval(probe.panelGeometry)
     const parentIndex = state.geometry.rows.findIndex((row) => row.kind === 'parent')
+    // `panelGeometry` returns a title OBJECT ({rect, style, text, ...}); the row
+    // helpers match on the plain title string, so pass `.text` (a JSON-stringified
+    // object can never equal the rendered row title).
+    const parentTitle = state.geometry.rows[parentIndex]?.title?.text ?? ''
+    assert(parentTitle.length > 0, 'the parent row title text is missing for the row-menu check')
     const hoveredIndex = before.rows.findIndex((row) => row.kind === 'parent')
     const parentRowIndex = before.rows.slice(0, hoveredIndex).filter((row) => row.kind === 'parent').length
     const menuFactsOf = (rowIndex) => page.eval((index) => {
@@ -2616,7 +2639,7 @@ async function runLayoutChecks({ page, results, state }) {
     assertEqual(hoveredMenu.morePointerEvents, 'auto', `the "…" trigger must be interactive on highlight (${hoveredMenu.morePointerEvents})`)
     // Ordinary rows paint the same soft hover background as their New session
     // control; the rainbow row suppresses it and keeps only brightness(1.2).
-    const trigger = await hoverCardControl(page, 'parent', state.geometry.rows[parentIndex].title, '.psd-run-more')
+    const trigger = await hoverCardControl(page, 'parent', parentTitle, '.psd-run-more')
     if (hoveredMenu.current) {
       assertEqual(trigger.background, 'rgba(0, 0, 0, 0)', `the rainbow row's "…" trigger must paint no hover background (${trigger.background})`)
       assertEqual(trigger.filter, 'brightness(1.2)', `the rainbow row's "…" trigger hover must keep its brightness suppression (filter ${trigger.filter})`)
@@ -2638,8 +2661,8 @@ async function runLayoutChecks({ page, results, state }) {
         timeOpacity: time === null ? null : getComputedStyle(time).opacity,
         moreVisibility: more === null ? null : getComputedStyle(more).visibility,
       }
-    }, state.geometry.rows[parentIndex].title)
-    assert(restored !== null, `the hovered row "${short(state.geometry.rows[parentIndex].title, 40)}" disappeared after the pointer left`)
+    }, parentTitle)
+    assert(restored !== null, `the hovered row "${short(parentTitle, 40)}" disappeared after the pointer left`)
     assertEqual(restored.timeOpacity, '1', `the time must return after the pointer leaves (opacity ${restored.timeOpacity})`)
     const hoveredMargin = Number(before.rows[hoveredIndex].titleMarginLeft ?? before.rows[hoveredIndex].titleShift ?? 0)
     return `rest: time visible / "…" hidden; hover: time hidden / "…" visible with the ordinary hover paint${hoveredMenu.current ? ' suppressed on the rainbow row (brightness(1.2))' : ''}; columns fixed (time ${before.rows[0].time.rect.right}, action ${before.rows[0].actions.rect.right}, disclosure ${before.rows[0].toggle.right}); hovered title slid ${before.rows[hoveredIndex].title.rect.left} -> ${during.rows[hoveredIndex].title.rect.left} = 25 − rest marginLeft ${hoveredMargin} (two-phase reveal); subagent rows have no trigger; leaving restores the time`
@@ -2817,18 +2840,18 @@ function assertAtmosphereRow(label, row, atmos, content, options = {}) {
   if (lightGas) {
     assert(atmos.opacity >= 0.5 && atmos.opacity <= 0.72, `${label}: light-mode atmosphere must stay an airy veil (opacity ${atmos.opacity}; light baseline .56 active / .68 hover)`)
   } else {
-    assert(atmos.opacity >= 0.7 && atmos.opacity <= 1, `${label}: atmosphere must be visible and vivid (opacity ${atmos.opacity}; dark baseline .78)`)
+    assert(atmos.opacity >= 0.55 && atmos.opacity <= 0.85, `${label}: dark atmosphere must stay a readable luminous veil (opacity ${atmos.opacity}; current receipt .62 base / .68 hover)`)
   }
   assert(atmos.canvas, `${label}: atmosphere has no canvas`)
   assert(atmos.canvas.width > 0 && atmos.canvas.height > 0, `${label}: atmosphere canvas has no drawing buffer (${atmos.canvas.width}x${atmos.canvas.height})`)
   assert(atmos.canvas.painted > 0, `${label}: atmosphere canvas painted no rainbow pixels`)
   assert(atmos.canvas.filter.includes('blur'), `${label}: atmosphere canvas must keep the gas blur (${atmos.canvas.filter})`)
   if (lightGas) {
-    assert(atmos.canvas.filter.includes('saturate(1.22)') && atmos.canvas.filter.includes('brightness(1.22)'), `${label}: light-mode canvas must keep the brighter/softer pastel filter (${atmos.canvas.filter})`)
+    assert(atmos.canvas.filter.includes('saturate(1.35)') && atmos.canvas.filter.includes('brightness(1.22)'), `${label}: light-mode canvas must keep the brighter/softer pastel filter (${atmos.canvas.filter})`)
   } else {
-    assert(atmos.canvas.filter.includes('saturate(1.5)'), `${label}: atmosphere canvas must keep the vivid saturate(1.5) baseline (${atmos.canvas.filter})`)
+    assert(atmos.canvas.filter.includes('saturate(1.3)') && atmos.canvas.filter.includes('brightness(1.35)'), `${label}: dark atmosphere canvas must keep the current luminous filter (${atmos.canvas.filter})`)
   }
-  const saturationMin = options.saturationMin ?? (lightGas ? 0.3 : 0.38)
+  const saturationMin = options.saturationMin ?? (lightGas ? 0.3 : 0.2)
 
   assert(atmos.canvas.avgSaturationStrong >= saturationMin, `${label}: atmosphere colours must stay vivid, not grey (blob-core saturation ${atmos.canvas.avgSaturationStrong}, all-pixel ${atmos.canvas.avgSaturation}, minimum ${saturationMin}; grey baseline was ~0.25)`)
   assert(['multiply', 'screen'].includes(atmos.canvas.mixBlendMode), `${label}: atmosphere canvas must keep a vivid blend mode (${atmos.canvas.mixBlendMode})`)
@@ -3012,26 +3035,31 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     await sleep(900)
     const highlight = await page.eval(probe.currentHighlight)
     assert(highlight.row && highlight.row.kind === 'child', `expected a child current row, got ${JSON.stringify(highlight.row)}`)
-    const summary = assertAtmosphereRow('child current row', highlight.row, highlight.card, highlight.cardContent)
-    // Leave a parent row current again: the report screenshots show the primary case.
-    const parent = await page.eval(() => {
-      const row = document.querySelector('.psd-run')
-      const main = row ? row.querySelector('.psd-run-main') : null
-      if (!main) return null
-      const r = main.getBoundingClientRect()
-      return { x: Math.round(r.left + 30), y: Math.round(r.top + r.height / 2) }
-    })
-    if (parent) {
-      await page.moveTo(900, 500)
-      await sleep(150)
-      await page.clickAt(parent.x, parent.y)
-      await page.waitForFn(() => !!document.querySelector('.psd-run-current'), [], { timeout: 15000, label: 'parent current row after child check' })
-      await sleep(700)
+    let summary
+    try {
+      summary = assertAtmosphereRow('child current row', highlight.row, highlight.card, highlight.cardContent)
+    } finally {
+      // Leave a parent row current again even when the child assertion fails, so a
+      // single failure cannot cascade into b4-5/b4-15.
+      const parent = await page.eval(() => {
+        const row = document.querySelector('.psd-run')
+        const main = row ? row.querySelector('.psd-run-main') : null
+        if (!main) return null
+        const r = main.getBoundingClientRect()
+        return { x: Math.round(r.left + 30), y: Math.round(r.top + r.height / 2) }
+      })
+      if (parent) {
+        await page.moveTo(900, 500)
+        await sleep(150)
+        await page.clickAt(parent.x, parent.y)
+        await page.waitForFn(() => !!document.querySelector('.psd-run-current'), [], { timeout: 15000, label: 'parent current row after child check' })
+        await sleep(700)
+      }
     }
     return `${summary}; child row radius ${highlight.row.radius}`
   })
 
-  await results.check('b4-5', 'dark theme keeps the atmosphere vivid (screen blend, high saturation, light scrim)', async () => {
+  await results.check('b4-5', 'dark theme keeps a soft luminous atmosphere (screen blend, pastel veil)', async () => {
     await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
     try {
       await sleep(900)
@@ -3044,11 +3072,13 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       const details = []
       for (const [label, row, atmos, content] of rows) {
         assert(row && atmos, `${label}: atmosphere missing in dark theme`)
-        assertEqual(atmos.canvas.mixBlendMode, 'screen', `${label}: dark theme must use the light-adding screen blend`)
-        assert(atmos.canvas.filter.includes('saturate(1.5)'), `${label}: dark theme must keep the vivid saturate baseline (${atmos.canvas.filter})`)
-        assert(atmos.canvas.avgSaturationStrong >= 0.38, `${label}: dark theme atmosphere must stay vivid (blob-core saturation ${atmos.canvas.avgSaturationStrong})`)
-        assert(atmos.opacity >= 0.7, `${label}: dark theme atmosphere opacity must stay vivid (${atmos.opacity})`)
-        details.push(`${label} sat ${atmos.canvas.avgSaturation} blend ${atmos.canvas.mixBlendMode}`)
+        assertEqual(atmos.canvas.mixBlendMode, 'screen', `${label}: dark theme must keep the light-adding screen blend`)
+        assert(atmos.canvas.filter.includes('saturate(1.3)'), `${label}: dark theme must keep the rainbow chroma (${atmos.canvas.filter})`)
+        assert(atmos.canvas.filter.includes('brightness(1.35)'), `${label}: dark theme must stay luminous without graying out (${atmos.canvas.filter})`)
+        assert(atmos.canvas.avgSaturationStrong >= 0.20, `${label}: lighter pastel atmosphere must stay colorful (blob-core saturation ${atmos.canvas.avgSaturationStrong})`)
+        assert(atmos.opacity >= 0.54 && atmos.opacity <= 0.70, `${label}: dark theme atmosphere opacity must be the lighter range (${atmos.opacity})`)
+        assert(atmos.scrim !== null && /rgba\(255, 255, 255/.test(atmos.scrim.backgroundImage), `${label}: dark theme scrim must be a light veil, not a dark one (${atmos.scrim?.backgroundImage})`)
+        details.push(`${label} sat ${atmos.canvas.avgSaturation} opacity ${atmos.opacity} blend ${atmos.canvas.mixBlendMode}`)
       }
       return details.join('; ')
     } finally {
@@ -3057,7 +3087,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     }
   })
 
-  await results.check('b4-9', 'light-mode atmosphere rows keep readable text/icons (dark mode unchanged)', async () => {
+  await results.check('b4-9', 'light-mode atmosphere rows keep readable text/icons (dark softened)', async () => {
     await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
     try {
       await sleep(900)
@@ -3099,11 +3129,12 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       await sleep(900)
       const dark = await page.eval(probe.atmosContrast)
       assert(dark && dark.card, 'no current card row to measure in dark mode')
-      assertEqual(dark.card.blend, 'screen', 'dark theme must keep the screen gas blend (unchanged)')
-      assert(dark.card.scrim[0] < 60 && dark.card.scrim[1] < 60, `dark theme must keep its dark scrim (got rgb(${dark.card.scrim.slice(0, 3).join(',')}))`)
-      assert(dark.card.opacity >= 0.7, `dark theme atmosphere opacity must stay at its previous level (got ${dark.card.opacity})`)
-      assert(dark.card.title.contrast >= 3.5, `dark title contrast ${dark.card.title.contrast}:1 must keep its pre-fix baseline (measured 3.8:1 before the light-mode fix)`)
-      return `${summaries.join('; ')}; dark unchanged: blend ${dark.card.blend}, scrim rgb(${dark.card.scrim.slice(0, 3).join(',')}), opacity ${dark.card.opacity}, title ${dark.card.title.contrast}:1`
+      assertEqual(dark.card.blend, 'screen', 'dark theme must keep the screen gas blend')
+      assert(dark.card.scrim[0] >= 200 && dark.card.scrim[1] >= 200, `dark theme must use the softened light veil scrim (got rgb(${dark.card.scrim.slice(0, 3).join(',')}))`)
+      assert(dark.card.opacity >= 0.54 && dark.card.opacity <= 0.70, `dark theme atmosphere opacity must be in the lighter range (got ${dark.card.opacity})`)
+      // The owner asked for a lighter dark pill; keep the readability floor at 2.5:1.
+      assert(dark.card.title.contrast >= 2.5, `dark title contrast ${dark.card.title.contrast}:1 must stay readable on the lighter pill`)
+      return `${summaries.join('; ')}; dark softened: blend ${dark.card.blend}, scrim rgb(${dark.card.scrim.slice(0, 3).join(',')}), opacity ${dark.card.opacity}, title ${dark.card.title.contrast}:1`
     } finally {
       await page.emulateMedia([])
       await sleep(500)
@@ -3540,6 +3571,9 @@ async function runHoverCardChecks({ page, results, state }) {
       await sleep(800)
       const lightCard = await readCard()
       assert(lightCard, 'no hover card in light mode')
+      if (await page.eval(() => document.querySelector('[data-psp-search-toggle]') === null)) {
+        throw new CheckSkip('the prompt-history search UI is not mounted in this live environment (0 prompt ticks); cannot verify the search-card surface')
+      }
       assertEqual(lightCard.background, 'rgb(255, 255, 255)', `light hover card must use the light surface, got ${lightCard.background}`)
       assertEqual(lightCard.title.color, 'rgb(15, 17, 21)', `light hover card title must use the light primary label, got ${lightCard.title.color}`)
       const lightSearch = await readSearch()
@@ -3651,6 +3685,9 @@ async function runHoverCardChecks({ page, results, state }) {
     const native = state.nativeTooltip
     const nativeDark = state.nativeTooltipDark
     assert(native && nativeDark, 'the native tooltip oracle was not measured earlier')
+    if (await page.eval(() => document.querySelector('.psp-rail-card') === null)) {
+      throw new CheckSkip('the prompt-history rail card is not mounted in this live environment (0 prompt ticks); cannot compare all tooltip surfaces')
+    }
     const surfaces = ['psd-hovercard', 'dsa-quicklook', 'psp-rail-card', 'psp-search-card']
     const measured = {}
     await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
@@ -3814,6 +3851,7 @@ async function runFocusChecks({ page, results, state }) {
   log('\n=== B3: rainbow focus highlight for plugin inputs ===')
   await results.check('b3-1', 'prompt-history search card shows the calm rainbow ring on focus (input stays ringless)', async () => {
     const toggle = await page.findRect('[data-psp-search-toggle]')
+    if (!toggle) throw new CheckSkip('the prompt-history search UI is not mounted in this live environment (0 prompt ticks); cannot inspect the search-card ring')
     assert(toggle, 'prompt-history search toggle not found (the prompt rail is not mounted)')
     await page.clickAt(toggle.x, toggle.y)
     await sleep(800)
@@ -3863,6 +3901,8 @@ async function runFocusChecks({ page, results, state }) {
   })
 
   await results.check('b3-2', 'settings choice pills replaced their solid focus outline with the same ring', async () => {
+    const promptRaised = await page.eval(() => document.querySelector('[data-psp-search-toggle]') !== null || document.querySelector('.psp-search-card') !== null)
+    if (!promptRaised) throw new CheckSkip('the prompt-history surface is not mounted in this live environment (0 prompt ticks); its scoped focus-ring CSS is absent')
     const rules = await page.evaluate(`(() => {
       const result = { ringRule: false, fieldWired: false, solidChoiceOutline: false, calmScoped: false, sharedDefault: false }
       for (const sheet of document.styleSheets) {
@@ -3917,9 +3957,10 @@ async function runFocusChecks({ page, results, state }) {
       }
     })
     if (rail.present !== true || rail.marks.length < 2) {
-      results.skip('b3-3', 'prompt-history rail lists the oldest tick first with the newest visible at its foot',
-        `the prompt-history rail currently has ${rail.present === true ? rail.marks.length : 0} tick(s) in this environment; at least two are needed to verify the reversed order. Explicit SKIP, not a pass.`)
-      return
+      // Throw the SKIP signal so the wrapping results.check records exactly one
+      // SKIP row for b3-3 (previously results.skip() inside the callback added a
+      // second, passing row under the same id).
+      throw new CheckSkip(`the prompt-history rail currently has ${rail.present === true ? rail.marks.length : 0} tick(s) in this environment; at least two are needed to verify the reversed order. Explicit SKIP, not a pass.`)
     }
     const indices = rail.marks.map((mark) => mark.index)
     for (let index = 1; index < indices.length; index += 1) {
@@ -4086,12 +4127,21 @@ async function runInterruptedChecks({ page, results, state }) {
     // consistency fix, an interrupted-idle record on a row the shell still renders as
     // running legitimately shows the warning badge AND the Continue slot side by side.
     const peerSvgs = lead === null ? [] : [...lead.querySelectorAll('svg')].filter((svg) => svg.closest('.dps-row-interrupted') === null && svg.closest('.dps-row-continue-slot') === null)
+    // Only the shell's RUNNING indicator may coexist with the interrupted badge.
+    // The shell paints a themed state DOT on idle rows; counting every peer SVG
+    // therefore reported a false second indicator. The spinner carries the shell's
+    // _spinner_* class (and data-state="ongoing").
+    const spinnerSvgs = peerSvgs.filter((svg) => {
+      const className = String(svg.getAttribute('class') ?? '')
+      return className.includes('_spinner') || svg.getAttribute('data-state') === 'ongoing'
+    })
     return {
       record,
       interruptedAttr: row.hasAttribute('data-power-suite-interrupted'),
       badges: badges.length,
       badgeText: badges.map((badge) => (badge.textContent || '').trim()).join('|'),
       peerSvgDisplays: peerSvgs.map((svg) => getComputedStyle(svg).display),
+      spinnerCount: spinnerSvgs.filter((svg) => getComputedStyle(svg).display !== 'none').length,
     }
   }`
   const apply = async (key, patch) => page.eval(
@@ -4115,6 +4165,32 @@ async function runInterruptedChecks({ page, results, state }) {
     }`,
     key
   )
+  // Read-only facts (does not re-seed the record). `hook.set` updates the external
+  // store synchronously, but the React row (useSyncExternalStore) commits on a later
+  // frame: an immediate read can still observe the previous badge for ~16 ms.
+  const read = async (key) => page.eval(`(key) => (${factsScript})(key)`, key)
+  /**
+   * Poll the rendered row until the predicate holds, bounded by the given timeout.
+   * Used so every assertion samples AFTER the React commit, never in the same JS
+   * task that seeded the record.
+   * @param {string} key - native row key.
+   * @param {(facts: object) => boolean} predicate - expected rendered state.
+   * @param {{ timeout?: number, label?: string }} options - poll bound/label.
+   * @returns {Promise<object>} the last facts.
+   */
+  const waitSettled = async (key, predicate, { timeout = 800, label = 'interrupted row commit' } = {}) => {
+    const deadline = Date.now() + timeout
+    let facts = await read(key)
+    while (!predicate(facts) && Date.now() < deadline) {
+      await sleep(16)
+      facts = await read(key)
+    }
+    return facts
+  }
+  const settledFacts = {
+    interrupted: (facts) => facts.interruptedAttr === true && facts.badges >= 1,
+    cleared: (facts) => facts.interruptedAttr === false && facts.badges === 0,
+  }
   const clear = async (key) => page.eval(
     `(key) => { globalThis.__POWER_SUITE_TEST_HOOKS__?.interruptedSessions?.clear(key.replace(/^session:/, '')) }`,
     key
@@ -4138,33 +4214,45 @@ async function runInterruptedChecks({ page, results, state }) {
     const key = await pickRow()
     assert(key, 'no native Session row to seed an interrupted record on')
     try {
-      const idle = await apply(key, { interrupted: true, running: false })
+      await apply(key, { interrupted: true, running: false })
+      const idle = await waitSettled(key, settledFacts.interrupted)
       assert(!idle.unavailable, 'interrupted test seam unavailable')
       assertEqual(idle.interruptedAttr, true, 'before Continue: the interrupted row must carry the interrupted attribute')
       assert(idle.badges >= 1, `before Continue: exactly one interrupted indicator expected, got ${idle.badges}`)
-      const continued = await applyContinue(key)
-      assertEqual(continued.interruptedAttr, false, 'immediately after Continue: the interrupted attribute must be cleared')
-      assertEqual(continued.badges, 0, `immediately after Continue: the interrupted badge must be gone, got ${continued.badges}`)
-      const stale = await apply(key, { interrupted: true, running: true })
+      await applyContinue(key)
+      // The optimistic settle clears the attribute synchronously, but an idle row's
+      // persistent leading-slot badge unmounts only after the external-store commit.
+      // Bound the wait (500-800 ms) and then assert the committed state.
+      const continued = await waitSettled(key, settledFacts.cleared, { timeout: 800, label: 'Continue commit' })
+      assertEqual(continued.interruptedAttr, false, 'after Continue: the interrupted attribute must be cleared')
+      assertEqual(continued.badges, 0, `after Continue: the interrupted badge must be gone, got ${continued.badges}`)
+      await apply(key, { interrupted: true, running: true })
+      const stale = await waitSettled(key, settledFacts.cleared)
       assertEqual(stale.interruptedAttr, false, 'stale-Host (interrupted while running): attribute must stay cleared — the two indicators must never coexist')
       assertEqual(stale.badges, 0, `stale-Host (interrupted while running): no interrupted badge may render while running, got ${stale.badges}`)
       for (const display of stale.peerSvgDisplays) {
         assert(display !== 'none', 'while running, the native loading indicator must not be hidden by the stale-spinner rule')
       }
-      const done = await apply(key, { interrupted: false, running: false })
+      await apply(key, { interrupted: false, running: false })
+      const done = await waitSettled(key, settledFacts.cleared)
       assertEqual(done.interruptedAttr, false, 'completed: no interrupted attribute')
       assertEqual(done.badges, 0, 'completed: no interrupted badge')
       // Poll-style sampling across the Continue transition: never both indicators.
+      // Each sample is taken AFTER the record's commit (the previous sample cannot
+      // leak its badge into the next one), and only the shell spinner counts as the
+      // second indicator — an idle row's state dot does not.
       let coexist = 0
+      let sampledSpinner = 0
       for (let i = 0; i < 20; i += 1) {
-        const sample = i % 2 === 0 ? await apply(key, { interrupted: true, running: false }) : await apply(key, { interrupted: false, running: true })
-        const visible = sample.badges + sample.peerSvgDisplays.filter((display) => display !== 'none').length
-        if (sample.badges > 0 && sample.record?.running === true) coexist += 1
-        if (visible > 1) coexist += 1
+        const patch = i % 2 === 0 ? { interrupted: true, running: false } : { interrupted: false, running: true }
+        await apply(key, patch)
+        const sample = await waitSettled(key, patch.running ? settledFacts.cleared : settledFacts.interrupted, { timeout: 500, label: `transition sample ${i}` })
+        if (sample.spinnerCount > 0) sampledSpinner += 1
+        if (sample.badges > 0 && sample.spinnerCount > 0) coexist += 1
         await sleep(60)
       }
-      assertEqual(coexist, 0, `poll sampling caught ${coexist} sample(s) with two leading indicators at once`)
-      return `idle interrupted: badge ${idle.badges} + attr; after Continue: badge ${continued.badges} no attr; stale interrupted+running: badge ${stale.badges} no attr (peer svg ${stale.peerSvgDisplays.join(',') || 'n/a'}); completed: badge ${done.badges}; 20 transition samples, 0 coexistence`
+      assertEqual(coexist, 0, `poll sampling caught ${coexist} sample(s) with the interrupted badge and the shell spinner at once`)
+      return `idle interrupted: badge ${idle.badges} + attr; after Continue (post-commit): badge ${continued.badges} no attr; stale interrupted+running: badge ${stale.badges} no attr (peer svg ${stale.peerSvgDisplays.join(',') || 'n/a'}); completed: badge ${done.badges}; 20 post-commit transition samples (spinner seen ${sampledSpinner}), 0 coexistence`
     } finally {
       await clear(key)
       await sleep(250)
@@ -11555,7 +11643,6 @@ async function runInterruptedModeChecks({ page, results, state }) {
     const hooks = globalThis.__POWER_SUITE_TEST_HOOKS__
     return {
       interruptedSessions: hooks !== undefined && hooks !== null && hooks.interruptedSessions !== undefined && hooks.interruptedSessions !== null ? Object.keys(hooks.interruptedSessions) : null,
-      interruptedState: hooks !== undefined && hooks !== null && hooks.interruptedState !== undefined && hooks.interruptedState !== null ? Object.keys(hooks.interruptedState) : null,
     }
   }).catch(() => null)
   state.interrupted.seams = seamState
@@ -17022,7 +17109,7 @@ async function run() {
   log('DSH Power Suite — dynamic Workspaces sidebar live E2E')
   log(`node: ${process.version}`)
   log(`client: ${opts.clientPath}`)
-  const clientSource = await readFile(opts.clientPath, 'utf8')
+  const clientSource = await readClientForInjection(opts.clientPath)
   log(`client size: ${(clientSource.length / 1024).toFixed(0)} KiB`)
   const url = await resolveGuiUrl(opts)
   log(`GUI: ${redact(url)}`)

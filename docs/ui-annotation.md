@@ -328,9 +328,8 @@ through its background/padding and through the popover's Parent control.
   leaf → column → row → whole panel (3 steps) and Child walks back; card/panel
   padding keeps the whole-surface outline.
 - **Paint layer.** While the mode is active the shell overlay's inline
-  `z-index` is raised to **150** (above native hover cards at 100, below native
-  modals at 1000 and menus at 1100) and restored exactly on exit — value and
-  priority included. The rail stays inside `[data-shell-overlay]`; nothing is
+  `z-index` is raised to **2000** (intentionally above native hover cards; the
+  saved value and priority are restored exactly on exit). The rail stays inside `[data-shell-overlay]`; nothing is
   portalled. The raise is asserted live: the overlay's computed z-index must be
   greater than the hover card's.
 - **Our own hover card** — the Dynamic Workspaces feature's running/recent hover
@@ -1120,8 +1119,9 @@ insertion, and the composer keeps focus so the human can edit before sending.
 The rail header has a small **info (i) icon** (Remix information-line) that opens
 a transient, **borderless** modifier-settings popover anchored to it (no settings
 view, gear page, or rail navigation step). The popover uses the plugin hovercard
-style — background `var(--dsw-hovercard-bg,#2C2C2E)`, no border, 14px radius,
-`--dsw-shadow-lv3`, white 12px text — and holds the two interaction modifier rows.
+style — theme-following surface (light: shell layer-1/label tokens; dark: the
+`#2C2C2E` hover-card recipe), no border, 14px radius, `--dsw-shadow-lv3`, 12px
+text — and holds the two interaction modifier rows.
 Each row is a **custom segmented control** (radiogroup with four always-visible
 segments): there is no dropdown, listbox, native `<select>` or OS menu anywhere.
 
@@ -1135,8 +1135,8 @@ tabbable (the checked one). The track has a subtle `rgba(255,255,255,.06)`
 background with a 1px alpha border and 9px radius; the checked segment uses a
 subtle primary accent tint (`color-mix(..., var(--dsw-alias-state-business-primary), 30%)
 with white text), hover uses `rgba(255,255,255,.08)`, and focus uses the rainbow
-ring instead of a solid outline; dark and light themes keep the hovercard popover
-tokens. Keyboard: ArrowLeft/Right and ArrowUp/Down move the selection with
+ring instead of a solid outline; the popover follows the active theme tokens
+(light shell surface/label, dark #2C2C2E/white). Keyboard: ArrowLeft/Right and ArrowUp/Down move the selection with
 wrap-around, Home/End jump to the first/last segment, Enter/Space selects;
 selection is persisted immediately (`power-suite.ui-annotation.settings`) and
 conflicts move the other modifier with inline feedback. Esc closes the popover
@@ -1237,11 +1237,11 @@ and inserts text through the composer that is already mounted.
 ## Architecture
 
 The feature is one region inside the plugin's single browser entry. It has no
-Host counterpart: nothing is added to `src/index.js`, `src/features/`, or the
+Host counterpart: nothing is added to `src/index.ts`, `src/features/`, or the
 package manifest.
 
 - **One region, one installer** — `//#region feature: ui element annotation` in
-  [`src/client.js`](../src/client.js), installed by `installUiAnnotation(ctx)`
+  [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js), installed by `installUiAnnotation(ctx)`
   from the entry's `apply()` inside `ctx.effect`. An install guard makes a
   reconnect/HMR install idempotent: one launcher, one set of listeners.
 - **Two seats** — a `shell.overlay` seat (`AnnotationOverlay`) renders the
@@ -1268,24 +1268,21 @@ package manifest.
   the requirement popover (`.psa-popover`), the hover detail card
   (`.psa-detail-card`), and the expanded note editor (`.psa-note-editor`) are
   deliberately **not** panel cards. They copy the shell's own session-row hover
-  preview card exactly: `background: var(--dsw-hovercard-bg, #2C2C2E)`,
-  `box-shadow: var(--dsw-shadow-lv3)`, no border, no `backdrop-filter`, and a
-  near-white content color. That hover-card background is a **fixed `#2C2C2E` in
-  both themes** (the native card defines the custom property on itself and does
-  not flip it for dark mode), so the annotation cards stay `#2C2C2E` in light and
-  dark instead of following `--dsw-alias-tooltip-bg` (whose dark value is
-  `#43454a`). Their inputs/buttons are tinted from the same near-white label color
-  so they stay readable on that background. The rail, launcher, marks, and the
-  undo toast keep the panel recipe. E2E scenario 12 discovers the real native
-  hover-card stylesheet rule, measures its computed background/shadow, and asserts
-  the computed background/shadow/border/backdrop of all three surfaces match it in
-  both emulated themes (expected background `rgb(44, 44, 46)` in both).
+  preview card per theme: light mode uses the shell surface/label tokens
+  (`--dsw-alias-bg-layer-1`, label primary/secondary/tertiary), dark mode keeps
+  the `#2C2C2E` recipe; both use `box-shadow: var(--dsw-shadow-lv3)`, no border,
+  no `backdrop-filter`, and `--dsw-alias-label-primary` content color. The rail,
+  launcher, marks, and undo toast keep the panel recipe. E2E scenario 12 discovers
+  the real native hover-card stylesheet rule, measures its computed
+  background/shadow, and asserts the computed background/color/shadow/border/
+  backdrop of all three surfaces match that theme's native card (light
+  `rgb(255,255,255)`, dark `rgb(44,44,46)`).
 - **Selector escaping** — candidate selectors use `globalThis.CSS` when
   available and a small fallback otherwise; the fallback escapes a leading digit
   as a hex escape (`#123abc` → `#\31 23abc`) rather than producing an invalid
   selector.
 - **Paint layer (F1)** — activating the mode captures the shell overlay's own
-  inline `z-index` value and priority, sets `z-index: 150 !important` plus a
+  inline `z-index` value and priority, sets `z-index: 2000 !important` plus a
   `data-psa-raised` marker, and restores the captured pair exactly on exit,
   deactivation rollback, or disposal. The overlay element itself is unchanged, so
   the rail stays inside the shell's own seat; only its stacking layer moves. This
@@ -1363,8 +1360,10 @@ package manifest.
 - **Test seam** — at the end of the factory, when
   `globalThis.__POWER_SUITE_TEST_HOOKS__` exists (set only by the test harness
   and the E2E injector), the factory publishes its pure helpers under
-  `__POWER_SUITE_TEST_HOOKS__.uiAnnotation` (**48 keys**, the Phase 1 generation;
-  previous generations were 31/32/35): settings normalization and modifier
+  `__POWER_SUITE_TEST_HOOKS__.uiAnnotation` (**1 diagnostic key**,
+  `debugFallbackScanProbe`; the former 112-key pass-through, itself grown from
+  the Phase 1 48-key generation, was retired in Phase 3 and the helpers below are
+  covered by direct module imports): settings normalization and modifier
   conflict resolution, text/attribute sanitizers, selector candidates,
   `buildElementRef`, a deterministic text digest, a DOM node resolver, locator
   descriptions, the reducer, quick-reference and batch serializers,
@@ -1693,9 +1692,11 @@ Because the feature is browser-only, no Host reload is required for it: reload
 the Web page after upgrading the package's browser code. The feature adds no
 route and no service, so a Host that predates this version still serves it.
 
-Implementation: browser region [`src/client.js`](../src/client.js) under its
-`feature: ui element annotation` region, pure model helpers in the same region
-and the shared test seam, tests
+Implementation: browser region [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js) under its
+`feature: ui element annotation` region; the modifier-settings helpers live in
+`src/browser/ui-annotation/{settings,text,format,geometry,identity,records,reducer,serializers,anchors,resolution,surface}.ts`,
+the remaining pure model helpers stay in the same region with the shared test
+seam, tests
 [`test/ui-annotation.test.js`](../test/ui-annotation.test.js), browser
 acceptance `test/browser/`.
 
@@ -1863,9 +1864,8 @@ through its background/padding and through the popover's Parent control.
   leaf → column → row → whole panel (3 steps) and Child walks back; card/panel
   padding keeps the whole-surface outline.
 - **Paint layer.** While the mode is active the shell overlay's inline
-  `z-index` is raised to **150** (above native hover cards at 100, below native
-  modals at 1000 and menus at 1100) and restored exactly on exit — value and
-  priority included. The rail stays inside `[data-shell-overlay]`; nothing is
+  `z-index` is raised to **2000** (intentionally above native hover cards; the
+  saved value and priority are restored exactly on exit). The rail stays inside `[data-shell-overlay]`; nothing is
   portalled. The raise is asserted live: the overlay's computed z-index must be
   greater than the hover card's.
 - **Our own hover card** — the Dynamic Workspaces feature's running/recent hover
@@ -2530,11 +2530,11 @@ and inserts text through the composer that is already mounted.
 ## Architecture
 
 The feature is one region inside the plugin's single browser entry. It has no
-Host counterpart: nothing is added to `src/index.js`, `src/features/`, or the
+Host counterpart: nothing is added to `src/index.ts`, `src/features/`, or the
 package manifest.
 
 - **One region, one installer** — `//#region feature: ui element annotation` in
-  [`src/client.js`](../src/client.js), installed by `installUiAnnotation(ctx)`
+  [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js), installed by `installUiAnnotation(ctx)`
   from the entry's `apply()` inside `ctx.effect`. An install guard makes a
   reconnect/HMR install idempotent: one launcher, one set of listeners.
 - **Two seats** — a `shell.overlay` seat (`AnnotationOverlay`) renders the
@@ -2561,24 +2561,21 @@ package manifest.
   the requirement popover (`.psa-popover`), the hover detail card
   (`.psa-detail-card`), and the expanded note editor (`.psa-note-editor`) are
   deliberately **not** panel cards. They copy the shell's own session-row hover
-  preview card exactly: `background: var(--dsw-hovercard-bg, #2C2C2E)`,
-  `box-shadow: var(--dsw-shadow-lv3)`, no border, no `backdrop-filter`, and a
-  near-white content color. That hover-card background is a **fixed `#2C2C2E` in
-  both themes** (the native card defines the custom property on itself and does
-  not flip it for dark mode), so the annotation cards stay `#2C2C2E` in light and
-  dark instead of following `--dsw-alias-tooltip-bg` (whose dark value is
-  `#43454a`). Their inputs/buttons are tinted from the same near-white label color
-  so they stay readable on that background. The rail, launcher, marks, and the
-  undo toast keep the panel recipe. E2E scenario 12 discovers the real native
-  hover-card stylesheet rule, measures its computed background/shadow, and asserts
-  the computed background/shadow/border/backdrop of all three surfaces match it in
-  both emulated themes (expected background `rgb(44, 44, 46)` in both).
+  preview card per theme: light mode uses the shell surface/label tokens
+  (`--dsw-alias-bg-layer-1`, label primary/secondary/tertiary), dark mode keeps
+  the `#2C2C2E` recipe; both use `box-shadow: var(--dsw-shadow-lv3)`, no border,
+  no `backdrop-filter`, and `--dsw-alias-label-primary` content color. The rail,
+  launcher, marks, and undo toast keep the panel recipe. E2E scenario 12 discovers
+  the real native hover-card stylesheet rule, measures its computed
+  background/shadow, and asserts the computed background/color/shadow/border/
+  backdrop of all three surfaces match that theme's native card (light
+  `rgb(255,255,255)`, dark `rgb(44,44,46)`).
 - **Selector escaping** — candidate selectors use `globalThis.CSS` when
   available and a small fallback otherwise; the fallback escapes a leading digit
   as a hex escape (`#123abc` → `#\31 23abc`) rather than producing an invalid
   selector.
 - **Paint layer (F1)** — activating the mode captures the shell overlay's own
-  inline `z-index` value and priority, sets `z-index: 150 !important` plus a
+  inline `z-index` value and priority, sets `z-index: 2000 !important` plus a
   `data-psa-raised` marker, and restores the captured pair exactly on exit,
   deactivation rollback, or disposal. The overlay element itself is unchanged, so
   the rail stays inside the shell's own seat; only its stacking layer moves. This
@@ -2656,8 +2653,10 @@ package manifest.
 - **Test seam** — at the end of the factory, when
   `globalThis.__POWER_SUITE_TEST_HOOKS__` exists (set only by the test harness
   and the E2E injector), the factory publishes its pure helpers under
-  `__POWER_SUITE_TEST_HOOKS__.uiAnnotation` (**48 keys**, the Phase 1 generation;
-  previous generations were 31/32/35): settings normalization and modifier
+  `__POWER_SUITE_TEST_HOOKS__.uiAnnotation` (**1 diagnostic key**,
+  `debugFallbackScanProbe`; the former 112-key pass-through, itself grown from
+  the Phase 1 48-key generation, was retired in Phase 3 and the helpers below are
+  covered by direct module imports): settings normalization and modifier
   conflict resolution, text/attribute sanitizers, selector candidates,
   `buildElementRef`, a deterministic text digest, a DOM node resolver, locator
   descriptions, the reducer, quick-reference and batch serializers,
@@ -2986,9 +2985,10 @@ Because the feature is browser-only, no Host reload is required for it: reload
 the Web page after upgrading the package's browser code. The feature adds no
 route and no service, so a Host that predates this version still serves it.
 
-Implementation: browser region [`src/client.js`](../src/client.js) under its
-`feature: ui element annotation` region, pure model helpers in the same region
-and the shared test seam, tests
+Implementation: browser region [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js) under its
+`feature: ui element annotation` region; the modifier-settings helpers live in
+`src/browser/ui-annotation/settings.ts`, the remaining pure model helpers stay in
+the same region with the shared test seam, tests
 [`test/ui-annotation.test.js`](../test/ui-annotation.test.js), browser
 acceptance `test/browser/`.
 

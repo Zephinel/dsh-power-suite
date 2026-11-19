@@ -2,11 +2,17 @@
 
 ## Prerequisites
 
-- Node.js 22 or newer (CI runs the gate on Node 22 and 24).
+- Node.js 22.18 or newer (the tests import the TypeScript Host sources through Node's native type stripping; CI runs on Node 22 and 24).
+- npm — run `npm ci` once; it installs esbuild and TypeScript as dev dependencies.
 - A DeepSeek Harness profile that can install local bundles (`web` by default).
 
-There is **no build step**: `package.json` exports `src/index.js` and
-`src/client.js` directly, and the package has no runtime dependencies.
+`npm run typecheck:browser` typechecks the browser entry against a DOM-lib
+profile and is gated at 0 by `npm run check` (together with the root strict
+typecheck, the DOM-free `tsconfig.host.json` profile, the suppression-comment
+scan and the built `lib/client.js` execution smoke). `npm run build` bundles `src/index.ts` (Host ESM) and the ES-module browser
+entry `src/client.js` (plus `src/browser/`) into the gitignored `lib/` entries
+with esbuild; the served client is a classic-script IIFE. The package has
+no runtime dependencies; `npm pack` builds through `prepare`.
 
 ## Local install loop
 
@@ -16,27 +22,47 @@ plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-
 
 The installed bundle is `@zephinel/dsh-power-suite` (Loader row `power-suite`).
 The profile keeps the package as a `link:` dependency, so the checkout itself is
-the code the Host runs. After changing Host code:
+the code the Host runs. After changing Host or browser code:
 
-1. Reload the plugin (toggle it disabled/enabled in the Plugin list, or restart
+1. `npm run build`.
+2. Reload the plugin (toggle it disabled/enabled in the Plugin list, or restart
    the Host process).
-2. Reload the Web page for browser-code changes.
+3. Reload the Web page for browser-code changes.
 
-The plugin manages no build artifacts; nothing under `src/` is generated.
+`lib/` is generated and gitignored; never commit it. `src/` is the source of
+truth and stays repo-only.
 
 ## Checks
 
 ```bash
-npm test                    # node --test test/*.test.js
-npm run check               # syntax + manifest + tests + release-notes gate, then pack:check
-npm run pack:check          # npm pack --dry-run --json; inspect the published file list
+npm run build               # esbuild: src/ → gitignored lib/index.js + lib/client.js
+npm test                    # node --test test/*.test.js: imports the .ts sources via Node >= 22.18 type stripping; no build
+npm run typecheck           # tsc --noEmit: strict check over Host + browser TypeScript sources
+npm run check               # build + syntax + typecheck + manifest + built-entry smoke + docs links + tests + release-notes gate, then pack:check
+npm run pack:check          # npm pack --dry-run --json (prepare builds); inspect the published file list
 npm run check:release-notes # release-notes Highlights for the current package version
-npm run check:release       # pack → throwaway DSH_HOME install → isolated boot → byte identity → uninstall (needs dsh + pnpm; not in CI)
+npm run check:release       # build → pack → compare lib with the build, other files with the checkout → throwaway DSH_HOME install/boot/uninstall (needs dsh + pnpm; not in CI)
 ```
 
 `npm run check` is the required gate before committing a functional change. CI
-runs it on push and pull request. The release-notes gate runs inside
-`npm run check` and again in the publish workflow.
+runs it on push and pull request. A docs-only change (CHANGELOG/PRODUCT/docs/`
+`.agents`) skips the full gate and runs only `check:docs-links`, so it also skips
+the typecheck. The release-notes gate runs inside `npm run check` and again in
+the publish workflow.
+
+`npm run check` reports an explicit-`any` budget for `src/**/*.ts` (currently 0
+sites) and fails when an `any` token re-enters the code (comments and string
+literals are stripped first, so aliases, unions and generics count). It is a
+lexical tripwire, not a proof: implicit `any` is already covered by `strict`. DSH platform boundaries use `src/host/context.ts` (structural Host context,
+including the opaque `FsTarget`/`FileInfo` shapes) and `src/host/errors.ts`
+(unknown thrown values). `npm ci` installs esbuild, TypeScript and `@types/node` as dev dependencies;
+`npm run build` emits only the gitignored `lib/` entries, and the typecheck
+itself emits nothing. The browser entry is an ES module (`src/client.js` plus
+`src/browser/`) that the build bundles into the classic script the shell loads;
+it is now part of both typecheck gates — see
+[the TypeScript migration plan](plans/typescript-migration.md). The unit-test
+harness and the browser e2e harness bundle that ESM source with esbuild before
+evaluating/injecting it.
 
 ## README screenshots and the Bento pipeline
 
@@ -198,16 +224,20 @@ releases are stable semver with an annotated `v<version>` tag.
 
 ## Adding a feature
 
-1. **Host side** — add `src/features/<name>/host.js` exporting an
+1. **Host side** — add `src/features/<name>/host.ts` exporting an
    `install<Name>(ctx)` function; create pure derivation helpers in sibling
    modules. Register routes, services, and events inside `ctx.effect`. Call the
-   installer from `src/index.js` and add any new service name to its `inject`
-   union.
+   installer from `src/index.ts` and add any new service name to its `inject`
+   union. Durable JSON documents go through `src/host/document-store.ts`; pass the
+   document policy (decode/encode/clone/change rule) instead of writing files
+   directly.
 2. **Browser side** — add a `//#region feature: <name>` section to
    `src/client.js` with its slot components, guide card, and copy; register it
    from `apply`.
 3. **Routes** — keep them under `/api/<feature>.*` and behind
-   `ctx.connection.fetch.register`.
+   `ctx.connection.fetch.register`; declare the path once in
+   `src/shared/routes.ts` and re-export it from the Host module (the browser half
+   imports it through `browserRoute`).
 4. **Copy** — register the feature's dictionary inline in its client region with
    `ctx.locale.register(NS, { en, zh })` and bind it with `ctx.locale.bind(NS)`;
    `locale/*.json` holds only the plugin's display metadata (title/description).

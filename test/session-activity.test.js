@@ -14,7 +14,7 @@ import {
   parseActivityLedger,
   sanitizeActivitySessions,
   serializeActivityLedger
-} from '../src/features/session-activity/store.js'
+} from '../src/features/session-activity/store.ts'
 import {
   ACTIVITY_EVENT_TYPES,
   MAX_ACTIVITY_FUTURE_SKEW_MS,
@@ -29,7 +29,7 @@ import {
   isSyntheticSeedEvent,
   readCachedDocumentActivity,
   seedActivityBaseline
-} from '../src/features/session-activity/host.js'
+} from '../src/features/session-activity/host.ts'
 
 /**
  * One listed Session record.
