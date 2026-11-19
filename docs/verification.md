@@ -164,6 +164,26 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   docs-only follow-up after the tag. npm 0.1.0 installs will see the 0.2.0
   update notice once the new `latest` propagates.
 
+## 0.2.1 screenshot fix and marketplace submissions (2026-11-19)
+
+- Screenshot refresh commit `da5e700`: new current-theme
+  `assets/readme-overview.webp`, `readme-artifacts.webp` and
+  `readme-composer.webp`; the annotation example keeps the panel-target
+  composition (annotating our Running & recent UI rather than generated answer
+  content); added `screenshots.json`.
+- Release commit `cbf46f9` (`release: v0.2.1`), annotated tag **`v0.2.1`**;
+  publish run **44467237488** passed with provenance. npm `latest` is
+  **0.2.1** (`sha512-XvU+TFIIQl+i3cIArMR7qzTZ4Vy8ZRmsl800Z3pNbSURHb76aNceUBAdbKRqYHuy+39xOawWLKi+UOSpFoMPIw==`).
+- GitHub Release: <https://github.com/Zephinel/dsh-power-suite/releases/tag/v0.2.1>;
+  both tag-pinned raw notes returned HTTP 200.
+- Marketplace submissions (pending upstream review, not yet listed):
+  awesome-dsh-plugin / dsh-market PR
+  <https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/16847>;
+  Open Plugin Market listing issue
+  <https://github.com/polang233/dsh-plugin-index/issues/568>.
+  bradeGithub/DSH-Plugins-Marketplace is topic-driven and the repository now
+  carries `dsh-plugin`, `dsh-bundle` and `deepseek-harness`.
+
 ## Full e2e evidence (2026-11-18, Phase 3 tip)
 
 Branch `feat/typescript-phase3` at `5527db7` (harness fixes later committed as
