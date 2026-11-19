@@ -139,6 +139,31 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   `Release-Notes-Review: sha256=<hash>` line is required before publishing
   (covered by `test/release-notes-approval.test.js`).
 
+## 0.2.0 release (2026-11-19)
+
+- Release commit `2a4de8f` (`release: v0.2.0`), annotated tag **`v0.2.0`**
+  ("0.2.0 — 2026-11-19"). The tag carries
+  `Release-Notes-Review: sha256=b041dd92cb2fb1f0f9508412d5e5e052950c4e7002bea5271532b0fdf7f93d9a`
+  and `node scripts/release-notes-approval.mjs --verify` passed.
+- `main` CI `verify` run **44463248671** passed after the release commit was pushed.
+- Publish workflow run **44463339814** passed every step: publish manifest gate,
+  local gate, packaged manifest, CHANGELOG `[0.2.0]` section, reviewed release
+  notes, owner approval, `Publish with provenance`, and `Verify the published
+  version and dist-tag`.
+- npm `latest` is **0.2.0**; the registry tarball is
+  `https://registry.npmjs.org/@zephinel/dsh-power-suite/-/dsh-power-suite-0.2.0.tgz`
+  with integrity
+  `sha512-4AN7xo+FDqqZVPVTcb809qvlgIZhoykFqimKPXAP1vIQ/2TQboC5hL2xAOnurcPbxFvobg3uqpMewnPYo/X7uw==`
+  and SLSA provenance
+  (`https://registry.npmjs.org/-/npm/v1/attestations/@zephinel%2fdsh-power-suite@0.2.0`).
+- Packed package: **77 files**, 4,604,746 B tarball / 6,290,121 B unpacked.
+- GitHub Release: <https://github.com/Zephinel/dsh-power-suite/releases/tag/v0.2.0>
+  (published 2026-11-19T05:13:37Z). The tag-pinned raw notes
+  `release-notes/0.2.0.md` and `.en.md` both returned HTTP 200.
+- The release commit is the tagged tree; this documentation record is a
+  docs-only follow-up after the tag. npm 0.1.0 installs will see the 0.2.0
+  update notice once the new `latest` propagates.
+
 ## Full e2e evidence (2026-11-18, Phase 3 tip)
 
 Branch `feat/typescript-phase3` at `5527db7` (harness fixes later committed as
