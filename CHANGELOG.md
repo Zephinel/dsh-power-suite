@@ -1,7 +1,3 @@
-### Changed
-
-- **Review hardening of the migration gates.** Added a Host-only DOM-free typecheck (`tsconfig.host.json`), a zero-tolerance `@ts-nocheck`/`@ts-ignore` scan, a vm execution smoke for the shipped `lib/client.js` (module id + factory inject/apply), full `src/browser/**` coverage for the settings-constant contract scan, a Host→browser import-boundary test, removed the entry's unused imports, restored the Quick Look `.tok-punct` rule, and cleaned the retired annotation-seam helper. Tests are now 394/394; the gate fails on injected `@ts-nocheck` and on a broken built browser bundle (verified with negative probes).
-
 # Changelog
 
 All notable changes to this repository are documented here. The format follows
@@ -9,6 +5,8 @@ All notable changes to this repository are documented here. The format follows
 [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [0.2.0] - 2026-11-19
 
 ### Fixed
 
@@ -484,6 +482,8 @@ consolidated into this first release together with the current work.
   current-Session highlight. See [docs/sidebar-width.md](docs/sidebar-width.md).
 
 ### Changed
+
+- **Review hardening of the migration gates.** Added a Host-only DOM-free typecheck (`tsconfig.host.json`), a zero-tolerance `@ts-nocheck`/`@ts-ignore` scan, a vm execution smoke for the shipped `lib/client.js` (module id + factory inject/apply), full `src/browser/**` coverage for the settings-constant contract scan, a Host→browser import-boundary test, removed the entry's unused imports, restored the Quick Look `.tok-punct` rule, and cleaned the retired annotation-seam helper. Tests are now 394/394; the gate fails on injected `@ts-nocheck` and on a broken built browser bundle (verified with negative probes).
 
 - **Release gates now match the intelligent-ui repository: owner-approved notes and a package-level release check.** `node scripts/release-notes-approval.mjs` hashes the version plus `release-notes/<version>{,.en}.md` and verifies a `Release-Notes-Review: sha256=<hash>` line in the release commit body; `publish.yml` recomputes the hash from the tagged commit and refuses a missing, duplicated or mismatched approval, so an unapproved notes edit can no longer publish. `npm run check:release` (`scripts/release-check.mjs`) packs the artifact, installs it into a throwaway `$DSH_HOME`, and verifies every packed file's byte identity against the checkout and the installed copy, the mounted `power-suite` Loader row, the boot graph and served client bundle, then clean uninstall (requires `dsh` + `pnpm`; intentionally not in CI). Final gate: `npm run check` passed (24 modules, 22 test files, **364/364** tests, docs links 26 files, release-notes 0.1.0 6+6), pack **95 files**, `npm run check:release` **PASS** (95 files), and the approval round-trip is covered by `test/release-notes-approval.test.js`.
 

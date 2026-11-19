@@ -12,12 +12,12 @@
 Install it from npm and start DSH:
 
 ```bash
-dsh plugin --profile web add @zephinel/dsh-power-suite@0.1.0
+dsh plugin --profile web add @zephinel/dsh-power-suite@0.2.0
 dsh web
 ```
 
-> **Status: `0.1.0` is published on npm.** Install the released bundle with
-> `dsh plugin --profile web add @zephinel/dsh-power-suite@0.1.0` (see
+> **Status: `0.2.0` is published on npm.** Install the released bundle with
+> `dsh plugin --profile web add @zephinel/dsh-power-suite@0.2.0` (see
 > [Install](#install)); the in-app update notice stays silent until a newer
 > stable version is published.
 
@@ -105,10 +105,10 @@ The bundle is `@zephinel/dsh-power-suite` (Loader row `power-suite`). Install it
 **From npm:**
 
 ```bash
-dsh plugin --profile web add @zephinel/dsh-power-suite@0.1.0
+dsh plugin --profile web add @zephinel/dsh-power-suite@0.2.0
 ```
 
-Or use the in-app route: **Plugins** in the Web sidebar → **Add plugin** → enter `@zephinel/dsh-power-suite@0.1.0` → **Install** → **Enable now**.
+Or use the in-app route: **Plugins** in the Web sidebar → **Add plugin** → enter `@zephinel/dsh-power-suite@0.2.0` → **Install** → **Enable now**.
 
 **From this checkout (development):** in the **Plugins** page choose **Add plugin** → **Install a third-party plugin** and enter the checkout's absolute path. From an agent session the same install is:
 
@@ -215,7 +215,7 @@ with the [full documentation index](https://github.com/Zephinel/dsh-power-suite/
 - [Verification](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/verification.md) — the checks and evidence for this checkout.
 - [Limitations](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/limitations.md) — known bounds and unverified areas.
 - [Browser harness](https://github.com/Zephinel/dsh-power-suite/blob/main/test/browser/README.md) — the live-GUI acceptance suites, their modes and evidence.
-- [Changelog](https://github.com/Zephinel/dsh-power-suite/blob/main/CHANGELOG.md) — release entries; the current published release is 0.1.0.
+- [Changelog](https://github.com/Zephinel/dsh-power-suite/blob/main/CHANGELOG.md) — release entries; the current published release is 0.2.0.
 - [Release notes](https://github.com/Zephinel/dsh-power-suite/blob/main/release-notes/README.md) — the tag-pinned Highlights format read by the update notice.
 
 ## Contributing
