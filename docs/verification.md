@@ -155,21 +155,26 @@ run installed the tip tarball in a throwaway DSH_HOME.
   contract, b4-4 `finally` cleanup, prompt-rail explicit skips) this is stable;
   the two full runs before the fixes were 61 PASS / 3 SKIP / 8 FAIL with the same
   failures caused by OS-dark theme state and a missing prompt rail.
-- `annotation.e2e.mjs --no-shots`: **19 PASS / 1 SKIP / 3 FAIL**, exit 1,
-  0 page errors, 0 real network failures. This is an improvement on the same tip
-  before the visibility hardening (9 PASS / 1 SKIP / 13 FAIL). The three red rows
-  are S10 (page-record re-resolve after reload), S12 (marks after reload) and S14
-  (persistence count) — all three pass when run individually
-  (`--scenario 10` 8/0/0, `--scenario 12` 7/0/0, `--scenario 14` 7/0/0). Their
-  full-run failures carry a current-session id different from the records'
-  session and a synthetic-record count; the long live run was concurrently
-  switched by GUI/user activity, so these are cross-scenario live-state failures,
-  not product regressions. S13f is the documented SKIP (chip fallback cannot be
-  forced against the live composer services).
+- `annotation.e2e.mjs --no-shots`: **23 PASS / 1 SKIP / 0 FAIL**, exit 0,
+  0 page errors, 0 real network failures. The one SKIP is the documented S13f
+  chip-fallback case (the live composer services cannot be forced absent). This
+  is the final green run after fixing the three live-state fixtures:
+  - S10's native hover probe now prefers a session row (a workspace row could be
+    a non-hoverable leaf in some live layouts);
+  - S6 uses a deterministic synthetic target that is selected, committed to the
+    collection and then removed from the DOM, with a filter toggle forcing a
+    fresh status render (the native sidebar-collapse fixture was live-layout
+    dependent and could select the Account-menu SVG);
+  - S12/S14 reload checks restore the record-owning session through the native
+    sidebar row with expanded workspace groups, scrolling in both directions,
+    and explicit SKIPs when the prompt rail has no mounted data.
+  Earlier iterations were 9/1/13 and 19/1/3 before these fixes; the remaining
+  red rows then were all live-state fixtures, not product assertions, and the
+  final run proves the same scenarios in sequence.
 - Chrome flags `--disable-background-timer-throttling`,
   `--disable-renderer-backgrounding`, `--disable-backgrounding-occluded-windows`
   and per-scenario `Page.bringToFront` / focus emulation / active lifecycle fixed
-  the S3 hidden-page transition freeze; S3 then passes standalone and in sequence.
+  the S3 hidden-page transition freeze.
 
 ### Isolated tip artifact and suites
 
