@@ -58,7 +58,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   no build.
 - `npm run check`: passed (`99 TypeScript modules, 1 JavaScript module(s), 28 test files`); it builds `lib/` first,
   then runs the syntax checks, the typecheck, package-manifest validation, the
-  built-entry smoke (update route reports `current=0.2.0`), local docs links, the
+  built-entry smoke (update route reports `current=0.2.1`), local docs links, the
   Node suite and the release-notes gate, then `pack:check`.
 - `npm run pack:check`: **75 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).

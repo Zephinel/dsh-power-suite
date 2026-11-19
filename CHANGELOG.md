@@ -6,6 +6,12 @@ All notable changes to this repository are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-19
+
+### Fixed
+
+- **README and marketplace screenshots now match the current release.** Re-captured the README raws against an isolated clone of the current data with the injected 0.2.0 client, recomposed the four Bento grids (`assets/readme-*.webp`), and added `screenshots.json` with the five storefront images. The capture pass now masks Workspace/Session titles even for live/cloned data and degrades cleanly when the prompt-history rail is absent. No plugin behavior, packaged code or settings changed.
+
 ## [0.2.0] - 2026-11-19
 
 ### Fixed
