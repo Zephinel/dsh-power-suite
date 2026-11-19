@@ -14557,12 +14557,24 @@ async function readmeWaitChatAnswer(page, { timeout = 180000 } = {}) {
   )
 }
 
-/** Open the prompt-history search card and optionally filter it, returning the toggle point. */
-async function readmeOpenPromptRail(page, queryText) {
-  await page.waitForFn(() => document.querySelector('[data-psp-search-toggle]') !== null, [], {
-    timeout: 15000,
-    label: 'prompt-history rail for the real chat Session',
-  })
+/**
+ * Open the prompt-history search card and optionally filter it, returning the toggle
+ * point. With `{ optional: true }`, a missing rail is a logged deviation (the live data
+ * can have no prompt ticks) instead of a hard failure.
+ */
+async function readmeOpenPromptRail(page, queryText, options = {}) {
+  try {
+    await page.waitForFn(() => document.querySelector('[data-psp-search-toggle]') !== null, [], {
+      timeout: 15000,
+      label: 'prompt-history rail for the real chat Session',
+    })
+  } catch (error) {
+    if (options?.optional === true) {
+      log('warning: prompt-history rail is not mounted for this Session; capturing the chat without it')
+      return null
+    }
+    throw error
+  }
   const toggle = await page.findRect('[data-psp-search-toggle]')
   assert(toggle, 'the prompt-history search toggle is not visible')
   await page.clickAt(toggle.x, toggle.y)
@@ -15001,7 +15013,10 @@ async function runReadmeShotsMode({ page, results, state, cdp, opts }) {
   log('\n=== --readme-shots: README Bento raw captures (privacy-masked, demo stubs) ===')
   state.mode = 'readme-shots'
   const dashboardOnly = opts?.dashboardOnly === true
-  README_ACTIVE_MASK_COPY = dashboardOnly === true ? README_MASK_COPY_DEMO : null
+  // Always mask real Workspace/Session titles for the README raws. The old
+  // demo-only copy trusted seeded demo names; live/cloned data can carry the
+  // owner's real Workspace names, so strict masking is the safe default.
+  README_ACTIVE_MASK_COPY = README_MASK_COPY
   state.readme = { captures: [], deviations: [], file: path.join(README_RAW_DIR, 'captures.json') }
   if (dashboardOnly !== true) {
     await rm(README_RAW_DIR, { recursive: true, force: true }).catch(() => {})
@@ -15628,10 +15643,14 @@ async function runReadmeShotsMode({ page, results, state, cdp, opts }) {
         let chatClip = null
         let chatParts = null
         if (modelOk) {
-          await readmeOpenPromptRail(page, 'weekend')
-          const hover = await readmeHoverRailPreview(page)
-          chatParts = hover.parts
-          chatClip = readmeChatClip(hover.parts)
+          const promptRail = await readmeOpenPromptRail(page, 'weekend', { optional: true })
+          if (promptRail !== null) {
+            const hover = await readmeHoverRailPreview(page)
+            chatParts = hover.parts
+          } else {
+            chatParts = await page.eval(probeReadme.composerChatParts)
+          }
+          chatClip = readmeChatClip(chatParts)
         } else {
           chatParts = await page.eval(probeReadme.composerChatParts)
           chatClip = readmeChatClip(chatParts)
@@ -16489,8 +16508,8 @@ async function runReadmeChatShotsMode({ page, results, state, opts }) {
       return true
     })()`)
     await sleep(500)
-    await readmeOpenPromptRail(page, 'release')
-    await readmeHoverRailPreview(page)
+    const promptRail = await readmeOpenPromptRail(page, 'release', { optional: true })
+    if (promptRail !== null) await readmeHoverRailPreview(page)
     const parts = await page.eval(probeReadme.chatWindowParts)
     const clip = readmeChatClip(parts)
     const chatShot = await readmeCapture(page, {

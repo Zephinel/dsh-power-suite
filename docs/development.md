@@ -264,3 +264,26 @@ releases are stable semver with an annotated `v<version>` tag.
 - [Reference implementations for UI annotation](reference-libraries.md) —
   local XERJ corpus (`ui-annotation-refs`) + filtered source tree + full
   checkouts of DevTools/Playwright/Annotator for annotation work
+
+## Community marketplace maintenance
+
+- **Listing locations**: the bundle is published to npm and GitHub (DSH has no
+  built-in official plugin marketplace; Discover only reads user-added index
+  sources), and every market entry follows npm `latest`:
+  - **awesome-dsh-plugin / dsh-market**: [awesome entry](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/data/plugins/Zephinel__dsh-power-suite.yml) · [listing page](https://awesome-dsh-plugin.com/p/Zephinel/dsh-power-suite/); dsh-market's catalog comes from awesome and syncs with it.
+  - **Open Plugin Market**: [index entry](https://dshopen.org/plugins/@zephinel/dsh-power-suite/) ([dshopen.org](https://dshopen.org/)); the listing request is tracked in [dsh-plugin-index](https://github.com/polang233/dsh-plugin-index).
+  - **bradeGithub/DSH-Plugins-Marketplace**: [repository](https://github.com/bradeGithub/DSH-Plugins-Marketplace), auto-indexed from the GitHub `dsh-plugin` topic.
+- **Version updates**: publish production releases to npm's `latest` tag and
+  confirm with `npm view @zephinel/dsh-power-suite dist-tags`. awesome /
+  dsh-market associates the npm package whose `repository` points at this repo;
+  Open Plugin Market follows `latest`. Each market refreshes on its own build
+  schedule. Keep the npm package's `repository` pointing here and retain the
+  GitHub `dsh-plugin` topic for automatic discovery.
+- **Screenshots**: update `screenshots.json` and the corresponding images, then
+  push to the default branch. Keep 1-8 screenshots with valid repository-relative
+  paths; markets collect them on a later build, so no market PR or npm release is
+  needed just for screenshots.
+- **Listing corrections**: update the relevant market entry when the package
+  name, repository URL or category changes, or the description becomes outdated.
+  For awesome, edit only `data/plugins/Zephinel__dsh-power-suite.yml`; for Open
+  Plugin Market, reply to the original listing request with the correction.
