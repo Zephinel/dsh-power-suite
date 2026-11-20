@@ -48,7 +48,7 @@ sits above the native header and the Workspace list is split into **Active
 Projects** and **Inactive Projects**. A Workspace is Active while one of its
 Sessions is running or was active inside the Active-project retention window
 (default 7 days). The card's header shows a blue pulsing dot while a listed
-Session is running and the white sparkle icon when nothing runs.
+Session is running and the DeepSeek icon (`deepseek-fill`) when nothing runs.
 
 - Fold a bucket with its right-edge header chevron; the state is remembered in
   this browser.
@@ -65,11 +65,11 @@ Session is running and the white sparkle icon when nothing runs.
   short-lived activity-floor iteration some baselines were inflated; those marks
   cannot be lowered automatically, but the affected rows have since left the
   card, so no visible action is needed.
-- The row of the Session the main conversation currently shows gets a faint
-  **rainbow ring** plus glow; it follows whichever Session you open (from the
-  card, the sidebar, or anywhere else) and disappears when that row leaves the
-  card. Merely-running or unopened rows are not ringed. Reduced-motion users see
-  a static ring.
+- The row of the Session the main conversation currently shows (and its owning
+  Workspace row) gets a subtle **colored smoke atmosphere** along the bottom
+  edge; it follows whichever Session you open (from the card, the sidebar, or
+  anywhere else) and disappears when that row leaves the card. Merely-running or
+  unopened rows stay plain. Reduced-motion users see a static soft glow.
 - Card times come from the Host's **event-sourced activity ledger**, not the
   catalog's last-prompt time, so a turn that ran for hours keeps its real
   completion time and stays in the recent window instead of vanishing on stop.
@@ -93,9 +93,9 @@ Session is running and the white sparkle icon when nothing runs.
   row's buttons.
 - Hover or keyboard-focus a row to reveal its trailing actions: **New session**
   creates a blank Session in that row's own directory and opens it, and
-  **Continue** (interrupted rows only) resumes the interrupted task without
-  opening the row first. Interrupted rows also show an amber warning badge before
-  the title.
+  **Continue** (interrupted rows only) opens the interrupted Session and starts
+  an implicit continuation. Interrupted rows also show an amber warning badge
+  before the title.
 - A parent Session with delegated subagent Sessions shows a chevron at its far
   right: expanding it lists the children indented under the parent, and clicking
   one opens that child Session.
@@ -112,8 +112,9 @@ prompts. Plain ↑/↓ keep their original behavior. Change the modifier in the
 plugin settings (⌘/Ctrl, ⌥/Alt, Ctrl, Shift, or Off).
 
 Below the native turn rail at the conversation's right edge, a vertical rail
-lists the current Session's prompts as small native-style ticks, newest at the
-top, with a short horizontal divider separating the two groups. Hover or
+lists the current Session's prompts as small native-style ticks, oldest at the
+top (newest at the bottom), with a short horizontal divider separating the two
+groups. Hover or
 keyboard-focus a tick to read the full prompt and its time in a card to the
 left; click it (or press Enter) to copy the text into the composer draft — the
 copy is silent, with no confirmation chip or animation. The **Search** button
@@ -183,18 +184,15 @@ reduces it to a strip. Exit with the rail's exit control, the launcher, or Esc.
   this browser. They must differ; a conflicting choice moves the other modifier
   to a different key and the view explains what changed.
 
-Annotation records survive a page reload (browser `localStorage`, at most 100,
-with a visible refusal past the cap) and re-resolve their live status; the two
-modifiers, launcher position, and rail-collapsed flag persist separately.
-
 Clicking while annotating does not trigger the page: native controls such as
 **New session** are selected, not activated. The feature never edits the page's
 content elements, never reads typed values, and never sends the message; its page
 marks are a separate pointer-events-free overlay. With no Session open, insert
 actions are unavailable and the collection says **Open a session before
 inserting a reference**. Annotation records survive a page reload (browser
-`localStorage`, cap 100) and re-resolve their statuses; the two modifiers, the
-launcher position, and the rail's collapsed state also persist in this browser.
+`localStorage`, at most 100, with a visible refusal past the cap) and re-resolve
+their live status; the two modifiers, the launcher position, and the rail's
+collapsed state also persist separately in this browser.
 
 ## Draft attachments
 
@@ -242,6 +240,25 @@ implicit — it does not appear as a user message in the transcript, while the
 composer submit control uses a play icon until the new turn starts. Deliberate
 user/hook/parent cancellations and completed turns stay unmarked.
 
+## Sidebar width
+
+Drag the native left sidebar's right edge to any width DSH allows. The width is
+stored on the Host, so reloads, new tabs, and other browsers paired with the
+same `$DSH_HOME` share one value (last write wins). Collapsing the sidebar to
+the rail and expanding it again restores your stored width instead of resetting
+to 280 px, and the rainbow current-row atmosphere repaints synchronously during
+a resize so it does not blink.
+
+## Update notice
+
+Once per page load the Host checks the npm `latest` dist-tag for
+`@zephinel/dsh-power-suite`. While you are on the latest stable version the
+notice stays silent. When a newer stable release exists, a compact bottom-right
+card shows the version change and up to six highlights: **Update** opens the
+bundle's Plugins page (DSH handles the install), **Later** dismisses it for this
+load (after three dismissals for the same version, **Don't remind me** silences
+only that version), and Esc or an outside click acts like **Later**.
+
 ## Settings
 
 The Plugins detail page for the bundle carries the suite's settings in two
@@ -261,8 +278,10 @@ page.
 - [Session artifacts](session-artifacts.md)
 - [Workspace presets](workspace-default-presets.md)
 - [Dynamic workspaces](dynamic-workspaces.md)
+- [Sidebar width](sidebar-width.md)
 - [Prompt history](prompt-history.md)
 - [UI element annotation](ui-annotation.md)
 - [Draft attachments](draft-attachments.md)
 - [Interrupted sessions](interrupted-sessions.md)
+- [Update notice](update-check.md)
 - [Settings](settings.md)

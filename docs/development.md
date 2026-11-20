@@ -17,7 +17,7 @@ no runtime dependencies; `npm pack` builds through `prepare`.
 ## Local install loop
 
 ```text
-plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-suite
+plugin_manager action=install_bundle target=/absolute/path/to/dsh-power-suite
 ```
 
 The installed bundle is `@zephinel/dsh-power-suite` (Loader row `power-suite`).
@@ -115,6 +115,7 @@ load them.
    | `assets/readme-overview.webp` | 2×2 grid: Workspaces browser, the Running & recent panel, the native row menu and a row hover card |
    | `assets/readme-artifacts.webp` | Artifacts list (ten rows), Quick Look, source filter |
    | `assets/readme-composer.webp` | Main chat window (answer + composer + prompt rail) and the settings section |
+   | `assets/readme-composer-gallery.webp` | Composer image gallery (`N / M` viewer over two pasted composer screenshots) |
    | `assets/readme-annotation.webp` | The Running & recent panel annotated in a demo session (compact marks + rail requirements; captured at 1728×1200 so the whole rail fits) |
 
    The annotation raws are captured at a taller 1728×1200 viewport so the
@@ -124,7 +125,7 @@ load them.
    (`pkill -f "dsh web --port 3199"`; remove `/tmp/ps-readme-home`,
    `/tmp/ps-readme-home-url.txt`) — nothing from the production GUI is touched.
 
-3. **Run the gates.** `README.md` links the four outputs by relative path, so
+3. **Run the gates.** `README.md` links the five outputs by relative path, so
    `node scripts/check-docs-links.mjs` (also part of `npm run check`) fails until
    every composed file exists; re-run it after composing.
 
@@ -142,45 +143,17 @@ or Session id.
 
 ## Release flow
 
-The first public release was **0.1.0** (2026-11-17); `package.json` stays at
-that version until the next release preparation.
+The current published release on npm is **0.2.1** (first public release: 0.1.0
+on 2026-11-17); `package.json` stays at `0.2.1` until the next release
+preparation.
 Tagging and publishing are separate, explicit approvals, and the full procedure
 lives in the release skill
-([`.agents/skills/release-power-suite/SKILL.md`](../.agents/skills/release-power-suite/SKILL.md)).
+([`.agents/skills/release-power-suite/SKILL.md`](https://github.com/Zephinel/dsh-power-suite/blob/main/.agents/skills/release-power-suite/SKILL.md)).
 The parts that touch this document:
 
-**One-time npm setup.** Publishing uses Trusted Publishing (OIDC + provenance),
-so no npm token is stored in the repository or CI. npm can trust a package only
-once it exists on the registry, so the first release bootstrapped it (done for 0.1.0):
-
-1. Push `main` to the GitHub repository named in `package.json`
-   (`origin`) — the publish workflow only runs there; create the repository
-   first if it does not exist.
-2. Publish one prerelease by hand to create the package without claiming
-   `latest`:
-
-   ```bash
-   npm login                              # owner account, 2FA enabled
-   npm version 0.1.0-rc.0 --no-git-tag-version
-   npm publish --access public --tag next
-   git checkout -- package.json package-lock.json
-   ```
-
-   Publishing `0.1.0` by hand also creates the package, but then the first tag
-   cannot be the first publish; the tagged flow takes over from the next version.
-3. Configure the trusted publisher — `npm trust` needs npm >= 11.15.0, write
-   access to the package, and account-level 2FA, and refuses until the package
-   exists:
-
-   ```bash
-   npm trust github @zephinel/dsh-power-suite --file publish.yml \
-     --repo Zephinel/dsh-power-suite --allow-publish --yes
-   ```
-
-   or npmjs.com → the package → Settings → Trusted Publishing → GitHub Actions
-   (repository `Zephinel/dsh-power-suite`, workflow `publish.yml`).
-4. Optionally remove the bootstrap prerelease's dist-tag:
-   `npm dist-tag rm @zephinel/dsh-power-suite next`.
+**Trusted Publishing.** Publishing uses npm Trusted Publishing (OIDC +
+provenance, configured for `Zephinel/dsh-power-suite` / `publish.yml` during the
+0.1.0 bootstrap), so no npm token is stored in the repository or CI.
 
 **A release:**
 
@@ -192,8 +165,7 @@ once it exists on the registry, so the first release bootstrapped it (done for 0
    publish workflow recomputes the hash from the tagged tree and refuses a
    missing, duplicated or mismatched approval. Move the current `## [Unreleased]` entries under
    `## [<version>] - <UTC date>` and leave an empty `## [Unreleased]`; the
-   publish gate requires the dated heading. Remove `"private": true` during
-   preparation and run
+   publish gate requires the dated heading. Run
    `node scripts/check-publish-manifest.mjs`. The in-app update notice reads the
    notes from the **tag-pinned** raw URL, so they must be committed before the
    tag.
@@ -231,9 +203,9 @@ releases are stable semver with an annotated `v<version>` tag.
    union. Durable JSON documents go through `src/host/document-store.ts`; pass the
    document policy (decode/encode/clone/change rule) instead of writing files
    directly.
-2. **Browser side** — add a `//#region feature: <name>` section to
-   `src/client.js` with its slot components, guide card, and copy; register it
-   from `apply`.
+2. **Browser side** — put browser modules under `src/browser/<name>/` and wire
+   a `//#region feature: <name>` section in `src/client.js` with its slot
+   components and copy; register it from `apply`.
 3. **Routes** — keep them under `/api/<feature>.*` and behind
    `ctx.connection.fetch.register`; declare the path once in
    `src/shared/routes.ts` and re-export it from the Host module (the browser half
@@ -247,7 +219,7 @@ releases are stable semver with an annotated `v<version>` tag.
    [verification.md](verification.md) when behavior changes. User-visible copy,
    settings or route changes also need the README and the feature page synced
    following
-   [.agents/skills/sync-power-suite-docs/SKILL.md](../.agents/skills/sync-power-suite-docs/SKILL.md).
+   [.agents/skills/sync-power-suite-docs/SKILL.md](https://github.com/Zephinel/dsh-power-suite/blob/main/.agents/skills/sync-power-suite-docs/SKILL.md).
 
 ## Git workflow
 

@@ -204,4 +204,4 @@ this ordering; the design changes it in three places:
   [`sidebar-width/store.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/features/sidebar-width/store.ts),
   [`workspace-presets/store.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/features/workspace-presets/store.ts).
 - Browser half and its test seam: [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js),
-  [`test/helpers/client-module.mjs`](../../test/helpers/client-module.mjs).
+  [`test/helpers/client-module.mjs`](https://github.com/Zephinel/dsh-power-suite/blob/main/test/helpers/client-module.mjs).

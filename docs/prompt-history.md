@@ -9,7 +9,7 @@ prompts from earlier pages of a long Session are included.
 
 The keyboard shortcut defaults to ⌘ on macOS and Ctrl on Windows and Linux; the
 [Settings](settings.md) section on the bundle's Plugins page changes it to
-Option/Alt, Ctrl, or turns the shortcut off. A recalled or copied prompt is
+Option/Alt, Ctrl, Shift, or turns the shortcut off. A recalled or copied prompt is
 ordinary draft text — edit it and send it again. Plain arrow keys keep their
 original caret behavior.
 

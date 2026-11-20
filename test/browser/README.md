@@ -1,9 +1,8 @@
 # Browser end-to-end acceptance harness (UI element annotation)
 
 `annotation.e2e.mjs` drives the **real running DSH UI** with a throwaway headless Chrome
-and asserts the eleven acceptance scenarios of the UI element annotation mode
-(`/tmp/ps-annotation/CONTRACT.md` §4.2, the review-round hardening spec H1–H13, and the
-Phase 1 floating-surface / v2-record / rainbow-focus checks). It injects
+and asserts the 16 acceptance scenarios (`SCENARIO_ORDER` 1..16) of the UI element annotation mode
+(review-round hardening H1–H13, floating surfaces, v2/v3 persistence, composer chips, multi-strategy anchors, and rainbow-focus checks). It injects
 this worktree's `src/client.js` into the live page without touching the installed checkout, the
 profile or the launchd service. Since Phase 3 the entry is an ES module, so the harness first
 bundles it (and `src/browser/`) into a classic script with esbuild; classic baseline copies
@@ -52,7 +51,7 @@ node test/browser/annotation.e2e.mjs
    inserts into a non-blank session. The **non-blank auto-restore → create-fresh** branch is
    implemented but was **not exercised in this environment** (the restored draft was always
    blank); that path has no live-run evidence.
-6. Runs the eleven scenarios with **real CDP input** (`Input.dispatchMouseEvent`,
+6. Runs the 16 scenarios (`SCENARIO_ORDER`) with **real CDP input** (`Input.dispatchMouseEvent`,
    `Input.dispatchKeyEvent`, modifier bitmask Alt=1 Ctrl=2 Meta=4 Shift=8; real wheel and
    `Input.insertText`). Nothing is synthesized for blocking / pass-through / drag assertions.
 7. Collects page errors (`Runtime.exceptionThrown` + error-level `Runtime.consoleAPICalled`),
@@ -77,19 +76,16 @@ node test/browser/annotation.e2e.mjs
 
 - Node.js **22 or newer** (uses the global `fetch`/`WebSocket`; verified on Node 24.22.2).
 - Google Chrome at the standard macOS path, or `CHROME_BIN` pointing at the binary.
-- The DSH UI served by the existing launchd service
-  (`com.rexxin.dsh-web`, https://192.168.5.210:3080). Do **not** restart or install anything
+- A running DSH Web UI (for example via `dsh web`). Do **not** restart or install anything
   for the harness.
-- A token URL: leave `DSH_WEB_URL` unset and the harness asks `~/.local/bin/dsh-web url --ip`;
-  a `DSH_WEB_URL` without `token=` is treated as unauthenticated and the harness falls back to
-  the CLI. The token is always redacted from output.
+- A token URL passed in `DSH_WEB_URL`. The token is always redacted from output.
 - The worktree client (`src/client.js` plus `src/browser/`) must contain the feature; the harness bundles and injects it
   read-only and never edits `src/**`.
 
 ## Options
 
 ```text
-node test/browser/annotation.e2e.mjs                 full run: smoke + 11 scenarios + screenshots
+node test/browser/annotation.e2e.mjs                 full run: smoke + 16 scenarios + screenshots
 node test/browser/annotation.e2e.mjs --smoke         pipeline + feature-surface smoke only
 node test/browser/annotation.e2e.mjs --shots-only    five screenshots only (no scenario assertions)
 node test/browser/annotation.e2e.mjs --assets        write screenshots to docs/assets instead of /tmp
@@ -130,7 +126,7 @@ reviewed files) to publish `docs/assets/annotation-idle.png`, `annotation-mode.p
   recorded and the process exits non-zero. A feature-absent client can never produce a green
   run. Example proof: `node test/browser/annotation.e2e.mjs --client /tmp/ps-annotation/baseline-client.js`
   → `FAIL gate-feature`, exit 1.
-- Invalid selections are argument errors: `--scenario 16`, `--from 16` and a missing value exit
+- Invalid selections are argument errors: `--scenario 17`, `--from 17` and a missing value exit
   **2** with a message; they never run silently with zero scenarios.
 - Every requested scenario must produce a result row; a missing row is recorded as FAIL.
 - Exit code contract (N6): `0` only when every check passes; `1` for any scenario failure,
@@ -571,10 +567,9 @@ HTTP failure predicate) and adds:
 | `r3-14b` | The read-row sparkle is 16×16 and centred | explicit read-row confirmation when an acknowledged/finished row is present; if a long verification session has warmed every card row (all visible mains running) the check is an explicit SKIP, never a fake pass |
 | `r3-15` | A pinned row paints exactly one highlight layer | pin an ordinary card row and park the pointer: the row carries the row-level violet tint (`color(srgb … / 0.07)`), `.psd-run-main` stays `rgba(0, 0, 0, 0)` and neither element paints a background-image; hovering the pinned row still shows the ordinary body hover (`rgba(38, 49, 72, 0.06)`) and not a second tint layer; unpin restores the row background and collapses the slot back to 0/46 |
 
-R1/R2 checks are unchanged from the original delivery (`r1-1`/`r1-2` perfect-circle dot;
-`r2-1`..`r2-4` native hover figures, same-Session label alignment, 244 px native frame,
-blank Session none). `r2-2` accepts a running Session's real projection drift between the
-two hover reads when the label structure stays identical, and logs the drift.
+R1 checks stay (`r1-1`/`r1-2` perfect-circle dot); the former native-session
+hover-card figure extension (`r2-1`..`r2-4`) was retired on DSH 0.2.2 in favor
+of leaving the shell's native hover card untouched (`b5-1` contract check).
 
 ### New Running & recent surfaces (row menu + pending notices)
 
@@ -1430,7 +1425,6 @@ node test/browser/sidebar.e2e.mjs --readme-dashboard --url "$URL"
   `pkill -f "dsh web --port 3199"`, then remove `/tmp/ps-readme-home` and
   `/tmp/ps-readme-home-url.txt`.
 
-## Update prompt harness
 ## Update prompt harness
 
 `update-prompt.e2e.mjs` is the local-only acceptance harness for the in-app

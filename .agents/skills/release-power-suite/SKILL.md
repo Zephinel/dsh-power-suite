@@ -1,7 +1,7 @@
 ---
 name: release-power-suite
 description: "Release and publish the dsh-power-suite bundle: prepare the version, CHANGELOG, bilingual release notes, README/docs/verification pins, run the local gates, tag, watch Trusted Publishing, verify the registry and create the GitHub Release. Use only when the user explicitly asks to release/publish this repository, or asks to prepare a release that will be tagged later. Never create a tag or publish from a request that only changes code, docs, or a plugin page."
-whenToUse: "发布插件, 发版, 出个版本, 发布 0.1.x, release, publish, cut a release, prepare a release, tag v0.1.x, npm publish, GitHub Release, 发布流程"
+whenToUse: "发布插件, 发版, 出个版本, 发布新版本, release, publish, cut a release, prepare a release, tag v0.x, npm publish, GitHub Release, 发布流程"
 ---
 
 # Release Power Suite
@@ -69,36 +69,22 @@ Facts that shape the procedure:
    npm view @zephinel/dsh-power-suite version dist-tags --json --prefer-online
    git tag --sort=-v:refname | head -3
    ```
-   A registry 404 is expected before the first publish; `latest` must otherwise
-   point at a stable version.
+   `latest` must point at a stable version.
 6. `dsh` and `pnpm` are on PATH for the local package-level gate
    (`npm run check:release`); it packs, installs into a throwaway `$DSH_HOME`,
    boots an isolated Web instance and uninstalls without touching this profile.
-7. **First publish only (done for 0.1.0) — bootstrap the npm package.** Trusted
-   Publishing cannot be configured until the package exists on npm, so before the
-   first tag:
-   create the GitHub remote and push `main` (the workflow needs it), publish one
-   prerelease by hand without claiming `latest`
-   (`npm version <version>-rc.0 --no-git-tag-version && npm publish --access
-   public --tag next && git checkout -- package.json package-lock.json`), then
-   run the one-time `npm trust github …` setup below. `npm trust` needs npm
-   >= 11.15.0, write access to the package and account-level 2FA, and refuses
-   until the package exists. The tagged flow publishes the real version.
+   *(Note: npm Trusted Publishing for `Zephinel/dsh-power-suite` / `publish.yml`
+   was bootstrapped during `0.1.0`; no manual prerelease or `npm trust` setup is
+   needed for routine releases.)*
 
 ## 1. Prepare the release commit (no tag yet)
 
 1. Decide the UTC release date. CHANGELOG section dates and the GitHub Release
    title use the **UTC** date; the local timezone may be a day ahead.
 2. `package.json` / `package-lock.json`: set `version` (both the root field and
-   `packages[""].version` in the lockfile). Before the first publish also
-   confirm the publish metadata is in place: name `@zephinel/dsh-power-suite`,
-   `repository` pointing at `https://github.com/Zephinel/dsh-power-suite`,
-   `publishConfig.access: "public"`, `files` containing `release-notes`, and the
-   `check:release-notes` script. **Remove `"private": true`** during release
-   preparation (never in a feature commit) and run
-   `node scripts/check-publish-manifest.mjs`; `publish.yml` runs the same gate
-   right after the tag check and refuses a private or incomplete package before
-   `npm publish`.
+   `packages[""].version` in the lockfile), and run
+   `node scripts/check-publish-manifest.mjs` (`publish.yml` runs the same gate
+   right after the tag check).
 3. **CHANGELOG (dsh-intelligent-ui convention):** move the current
    `## [Unreleased]` entries into `## [<version>] - <UTC date>` (the release
    date) and leave an empty `## [Unreleased]` heading in place. `publish.yml`
@@ -200,16 +186,6 @@ Rules:
   check, `check:release-notes` and the notes-approval verification, then
   publishes with OIDC + provenance. There is **no `NODE_AUTH_TOKEN`**; never add
   or print one.
-- One-time npm setup (package owner, needs npm >= 11.15.0 and account 2FA;
-  first publish: run the bootstrap in Preconditions first, because `npm trust`
-  refuses until the package exists) — either the CLI:
-  ```bash
-  npm login
-  npm trust github @zephinel/dsh-power-suite --file publish.yml \
-    --repo Zephinel/dsh-power-suite --allow-publish --yes
-  ```
-  or npmjs.com → the package → Settings → Trusted Publishing → GitHub Actions
-  (repository `Zephinel/dsh-power-suite`, workflow `publish.yml`).
 
 ## 4. Watch the publish workflow
 

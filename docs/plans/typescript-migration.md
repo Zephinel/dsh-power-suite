@@ -7,7 +7,7 @@ as-built state is described by the dated progress sections and
 
 Related: [Codebase design review](codebase-design-review.md) ·
 [Development](../development.md) · [Architecture](../architecture.md) ·
-[Verification](../verification.md) · [Release skill](../../.agents/skills/release-power-suite/SKILL.md)
+[Verification](../verification.md) · [Release skill](https://github.com/Zephinel/dsh-power-suite/blob/main/.agents/skills/release-power-suite/SKILL.md)
 
 ## 1. Summary
 

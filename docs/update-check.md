@@ -55,11 +55,12 @@ route missing (older Host, not yet reloaded), offline, timeout, `latest: null`
 most checks an in-memory hit. Switching the page language does not re-check;
 the next page load asks for highlights in the then-active language.
 
-Because the version comparison is strict, the **first public release (0.1.0) is
-its own latest version**: installing 0.1.0 from npm never shows a prompt until
-**0.2.0 is published**, at which point 0.1.0 installs see `0.1.0 → 0.2.0`
-(exactly the example above). A `link:` install runs the local checkout, which
-usually *is* the newest code — it normally gets no prompt, by design.
+Because the version comparison is strict, the **current published release
+(`0.2.1`) is its own latest version**: installs already on `latest` never show a
+prompt until a newer stable version is published (at which point older installs
+see `<installed> → <latest>`, as in the example above). A `link:` install runs
+the local checkout, which usually *is* the newest code — it normally gets no
+prompt, by design.
 
 ## Card actions
 
@@ -201,9 +202,9 @@ https://raw.githubusercontent.com/Zephinel/dsh-power-suite/v<latest>/release-not
 
 ## Limitations
 
-- **The first release is silent.** `0.1.0` is its own `latest`, so the prompt
-  only starts reaching 0.1.0 installs after 0.2.0 ships; a registry read failure
-  is silent too.
+- **The latest release is silent.** Installs already on the current `latest`
+  (`0.2.1`) see no prompt until a newer stable version ships; a registry read
+  failure is silent too.
 - **No self-update.** The plugin never installs anything: **更新** only opens the
   Plugin detail page and DSH's plugin manager performs the update.
 - **`link:` installs cannot update themselves.** A local checkout install has no

@@ -33,34 +33,36 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   the reported `current` is the package version (catches bundle-only root bugs);
 - the release-notes gate (`scripts/check-release-notes.mjs`).
 
-### Current gates (2026-11-18, Node 24.22.3)
+### Current gates (2026-11-20, Node 24.22.3)
 
 - `npm run build`: **`lib/index.js` 105.9 kB** (Host ESM bundle) and
-  **`lib/client.js` 934.1 kB** (ESM `src/client.js` + `src/browser/` bundled to a
+  **`lib/client.js` 935.7 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **394 tests, 394 passed, 0 failed**, 28 test files — Host stores/routes
-  plus the browser-side derivations (the vm harness bundles the ESM client), the
+- `npm test`: **403 tests, 403 passed, 0 failed**, **29 test files** — Host
+  stores/routes plus browser-side derivations, the atmosphere motion model, the
   release-notes approval round-trip, the protocol contract guard for duplicated
   route/enum literals, the shared route and settings contracts, the durable
   document-store interface, and direct Node tests for the extracted browser
-  update-prompt, sidebar-width, artifacts-toggle, interrupted-state and settings
   models.
 - `npm run typecheck`: `tsc --noEmit --strict` clean over **all** Host and browser
-  TypeScript sources, including the ESM entry `src/client.js` (the Phase 3 split
-  removed the transitional `// @ts-nocheck`). `npm run typecheck:browser` is a
-  second, DOM-lib profile with **0 diagnostics**.
+  TypeScript sources, including the ESM entry `src/client.js` (zero `@ts-nocheck`
+  / `@ts-ignore` suppressions). `npm run typecheck:browser` is a second, DOM-lib
+  profile gated at **0 diagnostics** (`baseline 0`).
 - `npm run check` reports an explicit-`any` budget: **0 sites** in `src/**/*.ts`;
   the gate strips comments/strings and fails on any `any` code token (aliases,
   unions and generics included) — a lexical tripwire at 0, not a proof.
-- `rm -rf lib && node --test test/*.test.js`: **394/394** — the suite imports the
-  `.ts` sources directly (Node >= 22.18 native type stripping), so the tests need
-  no build.
-- `npm run check`: passed (`99 TypeScript modules, 1 JavaScript module(s), 28 test files`); it builds `lib/` first,
-  then runs the syntax checks, the typecheck, package-manifest validation, the
-  built-entry smoke (update route reports `current=0.2.1`), local docs links, the
-  Node suite and the release-notes gate, then `pack:check`.
-- `npm run pack:check`: **75 files**; inspect the file list rather than the byte totals
+- `npm run check:docs-links`: **28 Markdown files** ok (local links/images
+  resolve, shipped relative links stay inside `package.json` `files`, zero
+  personal `/Users/<name>/` paths in shipped docs, and no non-portable `> [!`
+  alerts in `README.md`).
+- `npm run check`: passed (`99 TypeScript modules, 1 JavaScript module(s), 29 test files`);
+  it builds `lib/` first, then runs syntax checks, strict/Host/browser typechecks,
+  package-manifest validation, the built-entry smoke (update route reports
+  `current=0.2.1`) and built-browser smoke (8 injects), local docs/hygiene checks,
+  the 403-test Node suite, and the release-notes gate (`0.2.1; 2 highlights, 2 English`),
+  then `pack:check`.
+- `npm run pack:check`: **79 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).
 - Browser e2e (2026-11-18; current HEAD): live smoke is `sidebar.e2e.mjs
   --smoke` **4/4**, `annotation.e2e.mjs --smoke` **6/6** (now including a
@@ -1094,8 +1096,8 @@ These were exercised in the DSH UI during development:
   Esc/scroll/resize dismissal). The session itself stayed untouched when the
   actions were used. **New session** created blank Sessions in the row's own cwd
   as proven from persisted Host logs: the main row's cwd
-  `/Users/rexxin/Development/DSH` → a blank Session with the same cwd, and a
-  child row's `/Users/rexxin/Development/dsh-power-suite` → a blank Session with
+  `/path/to/DSH` → a blank Session with the same cwd, and a
+  child row's `/path/to/dsh-power-suite` → a blank Session with
   that cwd; the source Sessions were never opened. No genuinely interrupted
   Session existed in the live GUI, so the amber badge (`14 × 14` before the title
   at `58–72`) and the **Continue** CTA (`188–210`, visible and enabled) were
@@ -1314,7 +1316,7 @@ watches for that squeeze.
 Independent live verification of the follow-up on the merged/served build. Worktree
 `session-pin-stats` at `2a1bb5d`; injected/loaded `src/client.js` md5
 `0e7e12c93555c2d8ffabf0795cb06303` (19440 lines). The linked checkout
-`/Users/rexxin/Development/dsh-power-suite` is at the same commit/md5 and the running
+`/path/to/dsh-power-suite` is at the same commit/md5 and the running
 launchd service serves it without a restart (proved by a non-injected page). Node
 v24.22.2, Chrome 157.0.8103.78, 1728x900. Logs under `/tmp`; screenshots under
 `.tmp-work/sidebar-e2e/` (gitignored). Tokens are redacted; every Chrome profile is
@@ -2185,7 +2187,7 @@ npm run check
   `README.md`, and `CHANGELOG.md` link resolves, including the new
   [update-check.md](update-check.md),
   [release-notes/README.md](../release-notes/README.md), and
-  [.agents/skills/release-power-suite/SKILL.md](../.agents/skills/release-power-suite/SKILL.md).
+  [.agents/skills/release-power-suite/SKILL.md](https://github.com/Zephinel/dsh-power-suite/blob/main/.agents/skills/release-power-suite/SKILL.md).
 - Publish workflow CHANGELOG gate: simulated locally with the same `awk`
   predicate — the `[Unreleased]` section names `0.1.0`, so a `v0.1.0` tag
   passes while the section is still under Unreleased (no dated heading exists
@@ -3328,3 +3330,91 @@ unchanged (the main tree hash `e8e71365` and the release-commit tree hash
   metadata is immutable). Future releases use the Zephinel identity.
 - Local-only, never-pushed branches and the local git-notes ref still carry the
   old identities until they are rebased or deleted.
+
+## Atmosphere motion model: bounded hue slots (no more decay to grey)
+
+The reported symptom was "the rainbow flashes when I open a Session and turns
+grey seconds later". It was not the click: the renderer advanced every blob by a
+per-frame constant (`blob.x += vx`, `speed` 0.004–0.011 per frame ≈ 0.12–0.33
+pill widths per second at 30 fps), clamped at 0.04/0.96, and painted sixteen
+translucent hues over each other — so within a few seconds every hue sat in two
+clumps at the ends and the overlapping wash averaged to a neutral slab.
+
+Measured before (headless Chrome on the served GUI, `getImageData` grid over the
+live canvas, dark theme):
+
+| mount + | blob-core saturation | pixels with sat ≥ 0.45 | left 20% |
+|---|---|---|---|
+| 0 s | 0.79 | 98% | 0.83 |
+| 2.5 s | 0.45 | 53% | 0.64 |
+| 4 s | 0.39 | 42% | 0.18 |
+| 9 s | 0.32 | 23% | 0.25 |
+
+Rendered chroma of the two atmosphere rows dropped from 0.226 to 0.142 (−37%)
+between 1.5 s and 4 s; the same in light mode from 0.055 to 0.023 (−57%). The
+blob simulation (same seeds, same flow field) put 5 of 16 blobs on a clamp at
+3 s and 8 of 16 at 8 s.
+
+After the fix (`atmosphere.ts`: hue slots + spring 1.6 / damping 1.0 / wind
+0.052, real delta time):
+
+| mount + | blob-core saturation | pixels with sat ≥ 0.45 | left 20% |
+|---|---|---|---|
+| 0.4 s | 0.767 | 97% | 0.835 |
+| 2.5 s | 0.761 | 97% | 0.822 |
+| 4 s | 0.754 | 97% | 0.833 |
+| 9 s | 0.753 | 96% | 0.851 |
+
+Ten simulated minutes at 30/60/120 fps keep every blob inside `home ± 0.06`
+(max deviation 0.038, zero safety-clamp hits), so the hue order across the pill
+cannot invert; `node --test test/dynamic-workspaces-atmosphere.test.js` is 7/7.
+The sidebar suite's new `b4-6` samples the same canvases seven seconds apart in
+the live page and requires ≥ 85% of the first read plus blob-core saturation
+≥ 0.6 on every canvas.
+
+This also explains the long-standing `b4-1` "live-canvas saturation flake"
+recorded earlier in this file (0.373 / 0.377 vs the 0.38 threshold): the old
+renderer was still decaying while the check read the canvas, so the measured
+value depended on how long after mount the read happened. With a constant
+vividness the read no longer races the decay.
+
+## Running & recent card: wheel gestures belong to the card's own scroller
+
+DSH 0.2.2's sidebar viewport splits wheel gestures in JavaScript
+(`@deepseek-ai/dsh-client-ui-sidebar` `scroll-handoff.ts`: a non-passive `wheel`
+listener that calls `preventDefault` and writes the viewport's `scrollTop`), so a
+wheel over anything inside the navigation - including the plugin's card - never
+reached the nested `.psd-panel-body` scroller. Live probe on the served GUI with
+the body forced to overflow (`clientHeight 327`, `scrollHeight 620`):
+
+- before: 3 wheel steps over the body -> `scrollTop` stayed **0**, no `scroll`
+  event fired, and the sidebar viewport took the gesture;
+- the `preventDefault` stack pointed at the plugin bundle's
+  `HTMLDivElement.onWheel` -> `handle`, which is the sidebar's hand-off, not a
+  plugin handler;
+- `DOMDebugger.getEventListeners` on the ancestor chain showed exactly one
+  non-passive `wheel` listener above the card: `.hHd-Xa_scrollArea`.
+
+The card now claims the gesture itself (passive listener, `stopPropagation`
+while the body can still move, no `preventDefault`). Measured after the fix,
+same probe: 3 x 120 px -> `scrollTop` **293** (the full remaining range) with the
+sidebar at 0, and 3 x -120 px -> back to **0**. `b4-7` performs the same gesture
+through CDP in the suite.
+
+## 2026-11-20 — README Bento 原始截图重采（真实隔离 DSH 会话）
+
+- **背景**：上一版 README Bento 的原始截图来自 stub 路由的合成会话（`captures.json` 记录的 `dashboardOnly` 运行），没有真实模型轮次。本轮在**临时隔离的 DSH Web 实例**中重采全部九张原料，日常 profile、launchd 服务与真实项目目录均未被写入。
+- **环境**：DSH `0.2.2-rc.5`，两个一次性 `DSH_HOME`（`/private/tmp/dsh-shots/ps-a`、`ps-b`）+ 演示工作区 `demo-app` / `archive-notes`，profile 仅安装 `@zephinel/dsh-power-suite`（`link:` 当前工作树），模型 DeepSeek V4.1 Flash（effort High）；浅色外观、100% 缩放、2× DPR，全部由 CDP 精确裁切，无人工截图、无像素修补。
+- **原料**：`composer-chat`（3 轮真实提示 + Prompt history 轨道第 2 刻度预览 + 草稿）、`settings`（插件设置区）、`artifacts`（Generated 2 + Provided 1，SVG 缩略图为白底图表）、`artifacts-quicklook`（Quick Look 卡片）、`artifacts-filter`（展开 All 3 / Generated 2 / Provided 1）、`workspaces`（Active/Inactive 分组 + 琥珀 `flag-fill` 行 + 彩虹当前行）、`card`（Running & recent 特写）、`row-menu`（原生 `…` 菜单，快捷键完整）、`card-hover`（原生统计浮卡）。
+- **合成**：`scripts/build-readme-bento.mjs` 的 crop 按新原料尺寸重算（总览改为两列瀑布流并保持各源宽高比：`workspaces` 763×432 取 `0,796,840,476`，`row-menu` 763×432 取 `0,161,1066,603`，`card` 763×316，`card-hover` 763×569）；`readme-overview.webp` 1600×959、`readme-artifacts.webp` 1600×1051、`readme-composer.webp` 1600×797。`readme-annotation.webp` 未改动（其原料不是本轮重采对象）。
+- **门禁**：`npm run check` PASS（build、`scripts/check.mjs` 的 typecheck/预算/文档链接/单测、browser typecheck baseline、`npm pack --dry-run` 79 条目）；文档链接 28 个 Markdown 文件通过。
+- **证据边界**：真实模型轮次不可复现，九张原料为一次性实采；`artifacts-filter` 与 `artifacts-quicklook` 仅在截图时将行操作图标列/消息滚动区临时 `visibility: hidden`（chrome 姿态，非改图）；`card-hover` 的路径文本以 DOM 文本替换为 `~/Projects/demo-app`（沿用 `captures.json` 既有脱敏策略）。隔离实例与临时 `DSH_HOME` 在收尾时删除，未改版本号、未打 tag、未发布 npm。
+
+### 2026-11-20 追加：Overview Bento 倍率统一与真实标题
+
+- **问题**：上一版 `readme-overview.webp` 四格源图宽度分别为 840 / 840 / 1066 / 1528，右下统计浮卡在 763 槽位里被压到约一半字号；侧栏标题还是 `Noted reply only` 之类的测试占位名。
+- **演示数据**：隔离实例内重建 5 条真实会话——`Choose staging or production rollout`（真实 `ask_user_question` 等待态，琥珀 `flag-fill`）、`Release checklist review`（含嵌套只读 subagent 子行）、`Release checklist & smoke tests`（彩虹当前行）、`Q3 release notes draft`、`Migrate config schema`；侧栏同时显示 Active / Inactive 两组。
+- **原料**：`workspaces.png` 840×900、`card.png` 840×442、`row-menu.png` 840×872、`card-hover.png` 688×914（只含 Running & recent 卡与统计浮卡，起始于面板边缘，路径脱敏为 `~/Projects/demo-app`）。
+- **拼图**：`readme-overview.webp` 改为两列布局，各格 `源图宽 ÷ 槽宽 ≈ 1.20`（840/700、840/700、840/700、688/573），四格字号一致；输出 **1600×1264**。`row-menu` 裁切取文本空白带 `y=280..872` 以免切字；`workspaces` 裁到 `y=0..836` 保留两组标题与全部会话。其余三组配置未改动，`readme-annotation.webp` 保持提交版本。
+- **文案**：README 第 58 行 `readme-composer.webp` 的 alt 补上 `prompt history rail with its hover preview`。
+- **门禁**：`npm run check` PASS（typecheck、预算、文档链接 28 篇、release-notes、ratchet、`npm pack` 79 entries、403 条单测）。

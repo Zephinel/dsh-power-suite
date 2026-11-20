@@ -65,31 +65,36 @@ const FRAME = { width: 1600, padding: 28, gap: 18, ...FRAMES[process.env.README_
 const groups = [
   {
     out: 'readme-overview.webp',
-    height: 938,
+    height: 1264,
     cells: [
-      // 2x2 grid: the Running & recent panel must be visible next to the tree.
-      { file: 'workspaces.png', x: 28, y: 28, w: 763, h: 432, crop: { x: 0, y: 0, w: 752, h: 426 } },
-      { file: 'card.png', x: 809, y: 28, w: 763, h: 432, crop: { x: 0, y: 0, w: 736, h: 417 } },
-      { file: 'row-menu.png', x: 28, y: 478, w: 763, h: 432, crop: { x: 0, y: 0, w: 954, h: 540 } },
-      { file: 'card-hover.png', x: 809, y: 478, w: 763, h: 432 }
+      // Left column: the Workspaces panel (Active + Inactive, amber flag, rainbow current)
+      // above the native row menu. Right column: the Running & recent card (with its nested
+      // sub-agent row) above the native statistics hover card. Every cell is cropped at its
+      // native aspect and scaled by the same ratio (source width / slot width ≈ 1.20), so all
+      // four tiles render text at one apparent size.
+      { file: 'workspaces.png', x: 91, y: 28, w: 700, h: 697, crop: { x: 0, y: 0, w: 840, h: 836 } },
+      { file: 'row-menu.png', x: 91, y: 743, w: 700, h: 493, crop: { x: 0, y: 280, w: 840, h: 592 } },
+      { file: 'card.png', x: 809, y: 28, w: 700, h: 368, crop: { x: 0, y: 0, w: 840, h: 442 } },
+      { file: 'card-hover.png', x: 936, y: 414, w: 573, h: 762, crop: { x: 0, y: 0, w: 688, h: 914 } }
     ]
   },
   {
     out: 'readme-artifacts.webp',
-    height: 880,
+    height: 1051,
     cells: [
-      { file: 'artifacts.png', x: 28, y: 28, w: 920, h: 824 },
-      { file: 'artifacts-quicklook.png', x: 966, y: 28, w: 606, h: 392 },
-      { file: 'artifacts-filter.png', x: 966, y: 438, w: 606, h: 414 }
+      // The wide artifact list spans the top; Quick Look and the open filter sit below it.
+      { file: 'artifacts.png', x: 28, y: 28, w: 1544, h: 481, crop: { x: 0, y: 0, w: 1438, h: 448 } },
+      { file: 'artifacts-quicklook.png', x: 28, y: 527, w: 760, h: 496, crop: { x: 0, y: 0, w: 1176, h: 768 } },
+      { file: 'artifacts-filter.png', x: 806, y: 527, w: 766, h: 470, crop: { x: 0, y: 0, w: 508, h: 312 } }
     ]
   },
   {
     out: 'readme-composer.webp',
-    height: 611,
+    height: 797,
     cells: [
       // The main chat window (answer + composer + prompt rail) and the settings view.
-      { file: 'composer-chat.png', x: 61, y: 28, w: 900, h: 555 },
-      { file: 'settings.png', x: 979, y: 89, w: 560, h: 432 }
+      { file: 'composer-chat.png', x: 28, y: 28, w: 1000, h: 741, crop: { x: 0, y: 0, w: 3240, h: 2400 } },
+      { file: 'settings.png', x: 1046, y: 200, w: 526, h: 396, crop: { x: 0, y: 0, w: 1336, h: 1006 } }
     ]
   },
   {

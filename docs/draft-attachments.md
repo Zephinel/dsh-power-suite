@@ -90,13 +90,13 @@ persists attachments itself is not double-fed.
 This feature ships inside [DSH Power Suite](overview.md); install the suite:
 
 ```text
-plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-suite
+plugin_manager action=install_bundle target=/absolute/path/to/dsh-power-suite
 ```
 
 No Host restart is needed for this feature: it is browser-only and reloads with
 the client entry.
 
-Implementation: [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js) under its
+Implementation: [`src/browser/draft-attachments/`](https://github.com/Zephinel/dsh-power-suite/tree/main/src/browser/draft-attachments) wired from [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js) under its
 `feature: draft attachment memory` region.
 
 ## Verification

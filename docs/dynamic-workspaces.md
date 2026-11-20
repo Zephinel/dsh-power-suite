@@ -66,6 +66,20 @@ Session is running and none was active inside the window.
 
 ## The Running & recent card
 
+- **Scrolling the card.** The card body is the sidebar's only nested vertical
+  scroller: it is capped at `min(46cqh, 320px)` with `overflow-y: auto`,
+  `overscroll-behavior: contain` and a hidden scrollbar, so a long running list
+  scrolls inside the card instead of dragging the whole sidebar. DSH's sidebar
+  viewport splits wheel gestures in JavaScript (`dsh-client-ui-sidebar`'s
+  `scroll-handoff`: it calls `preventDefault` and writes the viewport's
+  `scrollTop` itself), which would swallow the gesture before a nested scroller
+  could move. The card therefore binds its own passive `wheel` listener: while
+  the body can still move in the gesture's direction it stops the event before
+  the viewport handler and leaves native scrolling in charge; at either end it
+  steps aside, so the sidebar keeps its usual hand-off for the rest of the
+  gesture. The `b4-7` sidebar check covers it with a real wheel gesture.
+
+
 The card sits directly above the native **Workspaces** section header, below the
 sidebar's panel tabs. It starts expanded.
 
@@ -146,10 +160,10 @@ sidebar's panel tabs. It starts expanded.
   (`deepseek-fill`) in the same 14 px indicator slot; the swap changes only which
   static glyph each slot paints, never the pulse dot, the green dot, the glyph
   column, or any state branch. Opening a Session from this card or anywhere else
-  acknowledges it; the acknowledgement is **persisted per browser** and keeps
-  the green dot away until genuine new activity arrives (see *Read
-  acknowledgements* below). The Workspace is not printed under the row any more;
-  it lives in the hover card below.
+  acknowledges it; the acknowledgement is **shared through the Host** (and
+  cached per browser) and keeps the green dot away until genuine new activity
+  arrives (see *Shared read acknowledgements* below). The Workspace is not
+  printed under the row any more; it lives in the hover card below.
 - **Read acknowledgements**: read marks are **shared through the Host** and
   cached per browser (see *Shared read acknowledgements* below). Opening a
   finished Session raises its baseline; a row is read while
@@ -210,22 +224,23 @@ sidebar's panel tabs. It starts expanded.
   `#fff`), while dark mode keeps the shell's `--dsw-hovercard-bg` `#2C2C2E`
   surface with the static light palette (measured title white / path `#cfd3d6` /
   status `#adb2b8`), exactly as the native card does there. The theme-dependent
-  `--dsw-alias-tooltip-bg` token is *not* used. The card is **320 px wide and so
-  is the native session-info hover card**: the shell pins its own card at 244 px,
-  which truncated labels early in light-mode screenshots, so the scoped native
-  override widens it to the same 320 px (both themes; `max-width:
-  calc(100vw − 16px)` clamp) while keeping its padding/radius/elevation. The
+  `--dsw-alias-tooltip-bg` token is *not* used. The card is **320 px wide**
+  (`max-width: calc(100vw − 16px)` clamp). The shell's own session-info hover
+  card is **left untouched** (owner decision): DSH 0.2.2 changed its DOM classes,
+  the scoped width/theme override silently stopped matching, and every attempt to
+  hide or cover that card reintroduced the same class-name dependency or produced
+  a second visible card. The plugin therefore no longer injects figures into the
+  shell card at all; the session figures live only on this plugin card (the
+  Running & recent rows). Consequence: hovering a native sidebar Session shows
+  the shell's own card, without the plugin's statistics. The
   plugin card uses `max-height: min(560px, calc(100vh - 16px))` and internal
   scroll. It does not capture the
   pointer in normal mode (same show/hide delays as before, dismissed by Escape,
   scroll, or resize), and clicking the row still opens the Session. Below the
   plain detail rows it appends the three **native session figures** (see
-  *Session figures in the hover card* below). The shell's own **native sidebar
-  session hover card** now renders those same three sections through the
-  `sidebar.session.row.hover` slot, so hovering a native sidebar Session row
-  shows the same Session statistics / Token usage / context blocks as this
-  card. While the UI annotation mode is active the same card becomes
-  **pinned/annotatable** (see *Plugin chrome and annotation mode* below).
+  *Session figures in the hover card* below). While the UI annotation mode is
+  active the same card becomes **pinned/annotatable** (see *Plugin chrome and
+  annotation mode* below).
 - **Disclosure column**: the header chevron and every row's disclosure arrow
   share one 24 px right-edge column (not merely right-aligned), and rows without
   children — including every nested subagent row — reserve the same column with a
@@ -497,27 +512,13 @@ or nested subagent row alike:
   compact and prefixed `~`. The section is hidden unless the provider reported
   both a used count and a context-window size.
 
-The same three sections now render in the **native sidebar session hover card** —
-the shell's own Session-row tooltip with title, path, relative time, and status.
-The plugin contributes one registration to the shell's
-`sidebar.session.row.hover` slot (`id: power-suite.session-hover-figures`,
-`order: 100`): the occupant receives the hovered `{ sessionId }`, is mounted
-only while that native card is open, and renders the **Session statistics /
-Token usage / context** blocks between the native relative-time line and the
-trailing status lines — three figure blocks at 12 px type that fit the native
-card's own content row without widening it (the native card stays 244 px). The
-wrapper carries the stable `data-psd-native-figures` DOM anchor used by the
-sidebar E2E harness; when the Session has no figures it renders empty and the
-`.psd-native-hover-figures:empty` rule hides it, so a blank card keeps the
-shipped spacing. The occupant reuses the same `dwProjectionSections`
-normalization, native formatter recipes, and `DW_EN` / `DW_ZH` strings as the
-card's own hover card, subscribes to the same live `projectionsBySession`
-snapshot (so pushed values re-render the open native card), and performs the
-same one-shot deduplicated `refreshProjections` read for a cold/persisted
-Session on mount (never polled, never retried after an error or a
-`migration-required` result). The plugin does not restyle, widen, or reorder the
-native card, and the blocks reuse the existing `.psd-hovercard-section*` classes
-that already match its surface and 12 px type.
+These three sections also render on the plugin's **own hover card** for the rows
+of the Running & recent card (see the card section above). The shell's native
+session-row hover card is **not extended**: DSH 0.2.2 changed its DOM classes, the
+former `sidebar.session.row.hover` registration stopped matching reliably, and it
+has been removed together with the `data-psd-native-figures` anchor. Hovering a
+native sidebar Session now shows the shell's own untouched card without the
+plugin's figures.
 
 Data seam: these are **Host projections**, not a re-fold of the event log. The
 plugin already receives the Session list store through its existing `sessions`
@@ -770,42 +771,71 @@ native sidebar Session row of the open Session:
      `border-radius: inherit`, `overflow: hidden`, `pointer-events: none`) that
      hosts a small self-contained **Canvas 2D gas renderer**. The canvas is
      sized to the row box (DPR clamped to 1.25, ~30 fps) and paints a broad
-     prism wash plus nine drifting/breathing radial blobs. The blobs paint over
-     each other (source-over, not additive) so overlapping hues stay saturated
-     instead of summing to grey/white. The vivid theme recipe: light theme
-     `mix-blend-mode: multiply` + `blur(3px) saturate(1.5) brightness(1.05)`,
-     dark theme `mix-blend-mode: screen` + `blur(3px) saturate(1.5)
-     brightness(1.14)`. Config baseline: intensity .64, spread 1.18, drift 1.2,
-     stirring .58, breathing .22, blend 1.0, vibrance 1.72, `prism` palette
-     (before the vibrancy pass: intensity .56 / spread 1.16 / blend .90 /
-     vibrance 1.32);
+     prism wash plus drifting/breathing radial blobs (**eight per hue**,
+     `perHue: 8` in `atmosphere.ts`).
+     **Motion model** (`atmosphere.ts`, pure and unit-tested). Density and hue
+     are separate layers, so hues can never average into grey:
+     1. *density* — eight soft white particles per hue, advected by a smooth
+        curl-noise field sampled at a moving coordinate (never at an animated
+        hash seed, which would re-randomise the field every frame and read as
+        flashing colours) with the curl capped rather than normalised (a unit
+        vector breaks divergence-freedom and parks particles in the slow
+        regions), aspect-corrected for a 12:1 pill, at `speed` 0.014 pill widths
+        per second — far below the 0.05/s at which density motion starts to read
+        as flicker;
+     2. *hue* — each pixel takes the dominant hue layer, and the top two blend
+        along the shorter hue arc at constant L/C (a commutative vector blend, so
+        the colour is continuous when two layers swap the lead), painted through
+        a precomputed 360-entry hue table;
+     3. *edges* — particles wrap in x and are painted on both sides of the seam
+        (otherwise a hue pops out of one edge and into the other), and reflect in
+        y (clamping parks them on two static lines that read as frozen).
+     Measured on the live row (398x32, light theme): saturation 0.81 -> 0.96 over
+     15 s, no static columns, 59 fps. The remaining slow luminance drift (~15%
+     over 15 s) is inherent to a pill whose hue *composition* changes; it is a
+     drift, not a flicker.
+     The paint recipe (`src/browser/dynamic-workspaces/install.ts`): light theme
+     `blur(3px) saturate(1.35) brightness(1.22)` with `.psd-atmos` opacity `.60`
+     (`.68` on hover); dark theme `mix-blend-mode: screen` + `blur(3px)
+     saturate(1.30) brightness(1.35)` with `.psd-atmos` opacity `.62` (`.68` on
+     hover). Config baseline: intensity .64, spread 1.18, drift 1.2, speed .014,
+     gain 300, layer scale .8, eight particles per hue (`perHue: 8`), light
+     chroma .31, `prism` palette.
   3. `.psd-atmos-scrim` — a veil above the canvas so the row content stays
-     readable without dulling the gas. Light usage is a **white readability
-     veil** `rgba(255,255,255,.68)` → `rgba(255,255,255,.55)` (the canvas itself
-     is a brighter pastel there: `saturate(1.22) brightness(1.22)`); dark mode
-     keeps the original `rgba(16,18,22,.12)` → `rgba(16,18,22,.22)` dark scrim
+     readable without dulling the gas. Light mode uses a **white readability
+     veil** `linear-gradient(90deg, rgba(255,255,255,.48), rgba(255,255,255,.36))`;
+     dark mode uses a soft light veil
+     `linear-gradient(90deg, rgba(255,255,255,.04), rgba(255,255,255,.02))`
      (`z-index: 1` inside the wrapper);
   4. the real row content is raised to `position: relative; z-index: 2` — its
      DOM, events, grid/columns and hover actions are unchanged.
   **Light-mode readability:** the light wrapper is a translucent veil
-  (`opacity: .56`, `.68` on row hover — down from `.78/.92`) so the pill stays a
+  (`opacity: .60`, `.68` on row hover) so the pill stays a
   bright pastel instead of a medium saturated slab. Secondary text/icons of the
-  plugin's own highlighted rows (time, glyph, brand, row actions, toggle) are
-  lifted from `label-tertiary` to `label-secondary` in light mode, so they clear
-  WCAG AA on the remaining pastel; the title keeps `label-primary`. Measured
+  plugin's own highlighted rows (brand, row actions, toggle) are
+  lifted from `label-tertiary` to `label-secondary` in light mode (and row time
+  to `label-primary`), so they clear WCAG AA on the remaining pastel; the title
+  keeps `label-primary`. Measured
   before → after on the card row's local backdrop: title `5.5:1 → 14.7:1`
   (`#0f1115` on `rgb(162,124,186) → rgb(238,234,237)`), time/icons/actions
   `1.08:1 → 4.52:1` (`#81858c → #61666b`); native Workspace row title `15.5:1`.
-  Dark mode is untouched (screen blend, dark scrim, `.78/.92`, measured title
-  contrast keeps its pre-fix baseline).
-  The sidebar E2E pins both baselines: dark vividness (`saturate(1.5)`, wrapper
-  opacity ≥ .7, dark scrim max alpha ≤ .24, blob-core saturation ≥ .45) and the
-  light readability recipe (canvas `saturate(1.22) brightness(1.22)`, white veil
-  alpha 0.4–0.75, wrapper opacity ≤ .72, card title ≥ 4.5:1, card time ≥ 4.5:1,
-  trailing controls ≥ 3:1, native-row titles ≥ 4.5:1 and native worst visible
-  text ≥ 3:1 — the native tertiary time stays a shell token at ~3:1, see
-  limitations) so neither theme can silently regress (measured blob-core
-  saturation is ~0.40+ animated / ~0.30 static).
+  Dark mode uses the lighter pastel screen recipe above (`.62/.68` wrapper
+  opacity and subtle `.04/.02` white veil).
+  The sidebar E2E pins both baselines: dark vividness (`saturate(1.30)
+  brightness(1.35)`, wrapper opacity ~.62, dark scrim max alpha ≤ .24,
+  blob-core saturation ≥ .20 per sample) and the light readability recipe
+  (canvas `saturate(1.35) brightness(1.22)`, white veil alpha 0.4–0.75, wrapper
+  opacity ≤ .72, card title ≥ 4.5:1, card time ≥ 4.5:1, trailing controls ≥ 3:1,
+  native-row titles ≥ 4.5:1 and native worst visible text ≥ 3:1 — the native
+  tertiary time stays a shell token at ~3:1, see limitations). The row's state
+  dot keeps the shell's semantic colour (the suite pins that separately), so on
+  the brighter light-mode smoke it measures ~2.5:1; the owner accepted that one
+  control at 2.5:1 instead of dimming the light atmosphere, and b4-9 pins the
+  2.5 floor for the glyph only. Since a single
+  snapshot cannot see a renderer that fades, `b4-6` samples the same canvases
+  twice, seven seconds apart, and requires the second read to keep ≥ 85% of the
+  first (measured after the motion-model fix: 0.77 → 0.75 blob-core over 9 s;
+  the pre-fix renderer went 0.79 → 0.32).
   Only highlighted
   rows exist and animate; one renderer per highlighted row (max 3: card row +
   native Workspace row + native Session row). A hidden tab pauses the RAF loop,
@@ -948,17 +978,11 @@ Plugin surfaces follow the shell's own recipes instead of bespoke chrome:
   keeps the native hover-card recipe (`background:
   var(--dsw-hovercard-bg, #2C2C2E)`, no background-image/backdrop filter, static
   title/secondary/tertiary palette). Inner quick-look panels stay transparent so
-  the card reads as one flat surface in both themes. The UI-annotation note
-  tooltips are a separate prior preference and deliberately keep their own dark
-  surface. The native shell session info / file-preview hover card is
-  theme-invariant (#2C2C2E + static light text) in the shell; light mode
-  overrides that **one native surface** with a single scoped rule
-  (`body:not([data-ds-dark-theme]) ._card_bgejw_9` plus its hashed
-  `.YDXeBa_hover*` text classes) so it follows the light theme too — dark mode
-  and every other native surface are untouched. The sidebar E2E measures the
-  live native tooltip and our four cards in emulated light **and** dark and
-  asserts the theme-following surfaces/text (light `#fff` + `#0f1115` title,
-  dark `#2C2C2E` + white) plus the unchanged border/radius/elevation.
+  the card reads as one flat surface in both themes. The shell's own native
+  session-info hover card is left untouched (no class-name override and no
+  injected statistics). The sidebar E2E measures our cards in emulated light
+  **and** dark and asserts the theme-following surfaces/text (light `#fff` +
+  `#0f1115` title, dark `#2C2C2E` + white) plus the unchanged border/radius/elevation.
 - **Rainbow focus highlight for plugin inputs**: focused plugin text inputs and
   choice controls show the same flowing rainbow track that used to draw the
   current-chat ring, in place of a solid-colour focus border. The shared class
@@ -1028,14 +1052,10 @@ The native **View options** menu picks how Sessions are grouped:
 - **Expanded sidebar only.** Rail mode hides the card and offers no tree to
   bucket.
 - **Flat list mode has no buckets.** Only the summary card applies.
-- **The native theme-following hovercard override depends on shell module class
-  names.** Light mode turns the shell's session info / file-preview hover card
-  light by overriding `._card_bgejw_9` and its hashed `.YDXeBa_hover*` text
-  classes (the shell pins that surface to #2C2C2E in both themes). If a future
-  shell build renames those classes the rule silently stops matching and the
-  native dark card returns (light-mode surface + the aligned 320 px width are
-  then lost) — graceful, but the light-mode follow is then lost until the
-  selector is updated. Plugin-owned cards don't have this dependency.
+- **Native sidebar session hover cards stay native.** As noted under *Hover
+  detail* above, the plugin no longer overrides the shell's own session hover
+  card classes or injects figures into it; session statistics live on the
+  plugin's Running & recent hover card only.
 - **Light-mode contrast is plugin-owned only inside the plugin's own rows.** The
   atmosphere's light-mode white veil, the `label-secondary` lift for the plugin's
   own secondary text/icons, and the E2E baselines apply to `.psd-*` rows; native
@@ -1234,7 +1254,7 @@ The native **View options** menu picks how Sessions are grouped:
   its versioned `localStorage` cache/queue and retries on the next sync cycle.
   Concurrent writers are last-write-wins per Session, and the document is
   bounded at 500 ids (oldest dropped first), so a very large pin set can lose
-  its newest pin.
+  its oldest pin.
 - **Continue sends a real continuation.** The row's Continue action reuses the
   interrupted-session continuation flow, so pressing it actually asks the Host to
   resume that Session (it opens the Session first and then continues). The badge

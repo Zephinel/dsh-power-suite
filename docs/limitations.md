@@ -3,7 +3,7 @@
 ## Packaging
 
 - This checkout is installed as a local `link:` bundle in a DSH profile, and
-  the package is published on npm as `0.1.0` (see
+  the package is published on npm as `0.2.1` (see
   [CHANGELOG.md](../CHANGELOG.md)). `npm run build` bundles `src/` into the
   gitignored `lib/` entries (Host ESM plus the browser entry bundled to a classic
   script); the npm
@@ -101,10 +101,10 @@
 
 ## Update notice
 
-- **Silent until a newer version is published.** `0.1.0` is its own `latest`,
-  so installs of 0.1.0 see no prompt until a newer stable version (0.2.0) is
-  published. A blocked `registry.npmjs.org` or `raw.githubusercontent.com` also
-  means silence, not an error.
+- **Silent until a newer version is published.** The currently published release
+  (`0.2.1`) is its own `latest`, so installs on the latest stable release see no
+  prompt until a newer stable version is published. A blocked `registry.npmjs.org`
+  or `raw.githubusercontent.com` also means silence, not an error.
 - **It never updates anything.** **更新** only opens the bundle's Plugin detail
   page through `pluginNavigation.openBundle`; DSH's plugin manager performs the
   install. A `link:` install runs the local checkout and normally already has
@@ -506,8 +506,9 @@
   as missing/ambiguous rather than guessed.
 - **Pointer-events-free tooltips cannot be annotated.** Native tooltips that set
   `pointer-events: none` cannot be hit-tested; annotate their anchor control.
-  Native modals/menus stack above the annotation paint layer, so they must be
-  closed before annotating the page behind them.
+  The annotation paint layer raises the overlay to `z-index: 2000` so open
+  native modals (`1000`) and menus (`1100`) stay inspectable while annotation
+  mode is active; close them to annotate the page behind them.
 - **A uniquely verified selector can still go stale.** The selector is verified
   at capture time; after a re-render or data change the four live statuses report
   it honestly (Resolved / Matches several / No longer resolves / Content
@@ -574,8 +575,7 @@
   landed (matchQuote recall bounds/hint fading, role+name composite candidate,
   selector length penalty, ephemeral surface-gone ⇒ Missing for all outcomes,
   weak-label E2E restored, role+name own tier, alignment unit tests). Deferred
-  items remain documented in `.tmp-design/reference-conformance-root-cause.md`
-  and the user docs: Apache-style word-boundary quote expansion, code-point
+  items remain documented in [ui-annotation.md](ui-annotation.md): Apache-style word-boundary quote expansion, code-point
   TextPosition semantics (ours uses rendered UTF-16 offsets), a capture-shaped
   scope E2E, and identity-key verified-only fallback. Remaining NITs: the
   conservative controller policy reports a still-present transient Changed as
@@ -705,14 +705,10 @@
   10px type; the b4-9 native-row title/time slots use plugin-only selectors so
   the "native title ≥4.5" wording is covered only by the generic worst-native
   text ≥3 assertion.
-- **Theme-following hovercards and shell class hashes.** The native session-info
-  hover card is themed and widened to the plugin card's 320 px through a scoped
-  light-mode/width override that depends on shell module class hashes
-  (`_card_bgejw_9` and hashed text classes); a shell rename degrades gracefully
-  to the native dark 244 px card. The shell copy-feedback style
-  (`_copied_bgejw_36{color:#fff}`) is not remapped and may be white-on-white if
-  reachable in light mode. The exact markdown preview modal was not
-  deterministically reproducible in the harness; the native document-preview
-  pane itself measured light/readable. The narrow-viewport `max-width` clamp and
-  genuine long-value ellipsis for the shared card width are CSS-preserved but
-  not separately asserted.
+- **Native session-info hover cards stay native.** The plugin no longer
+  overrides the shell's session-info hover card classes or injects statistics
+  into it (DSH 0.2.2 changed those hashed classes); session statistics live on
+  the plugin's Running & recent hover card only, which follows light and dark
+  themes at 320 px without depending on shell class hashes. The narrow-viewport
+  `max-width` clamp and genuine long-value ellipsis for the plugin card width
+  are CSS-preserved but not separately asserted.

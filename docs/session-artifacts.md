@@ -127,8 +127,7 @@ writes** are what need a secure context; that is why Copy image has the HTML
 fallback for insecure origins described above.
 Copy content sits between Download and Copy link and is absent for binaries with
 no meaningful text/picture clipboard representation. The icons are
-inlined [Remix Icon](https://remixicon.com) paths (Apache-2.0); the Artifacts
-guide card uses `ai-generate-3d-line` for the feature itself. The panel header's
+inlined [Remix Icon](https://remixicon.com) paths (Apache-2.0). The panel header's
 Refresh control is likewise an icon button (rotating while a reload is in
 flight). The panel footer's "Open previews the file in the right Sidebar"
 sentence describes generated/workspace rows; provided attachments open a tab
@@ -299,7 +298,7 @@ same-origin APIs.
 This feature ships inside [DSH Power Suite](overview.md); install the suite:
 
 ```text
-plugin_manager action=install_bundle target=/Users/rexxin/Development/dsh-power-suite
+plugin_manager action=install_bundle target=/absolute/path/to/dsh-power-suite
 ```
 
 The Host half serves the list, raw, preview, and attachment routes; the browser
@@ -309,10 +308,10 @@ upgrading the package's JavaScript.
 
 Implementation: Host entry [`src/features/session-artifacts/host.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/features/session-artifacts/host.ts),
 pure fold [`artifact-index.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/features/session-artifacts/artifact-index.ts),
-browser surface [`client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js) under its `feature: session artifacts`
-region, unit tests [`test/session-artifacts.test.js`](../test/session-artifacts.test.js)
-and [`test/files-artifacts.test.js`](../test/files-artifacts.test.js), live checks in
-[`test/browser/sidebar.e2e.mjs`](../test/browser/sidebar.e2e.mjs) (`files-*`).
+browser surface [`src/browser/artifacts/`](https://github.com/Zephinel/dsh-power-suite/tree/main/src/browser/artifacts) wired from [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js),
+unit tests [`test/session-artifacts.test.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/test/session-artifacts.test.js)
+and [`test/files-artifacts.test.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/test/files-artifacts.test.js), live checks in
+[`test/browser/sidebar.e2e.mjs`](https://github.com/Zephinel/dsh-power-suite/blob/main/test/browser/sidebar.e2e.mjs) (`files-*`).
 
 ## Limits
 

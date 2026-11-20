@@ -28,6 +28,7 @@ src/index.ts            Host entry (Node)
 │                                        POST /api/workspace-presets.set
 ├─ features/prompt-history/host.ts      GET  /api/prompt-history.list
 ├─ features/interrupted-sessions/host.ts GET  /api/power-suite.interrupted
+│                                        GET  /api/power-suite.interrupted-events (SSE)
 │                                        POST /api/power-suite.continue
 ├─ features/settings/host.ts            GET/POST /api/power-suite.settings
 ├─ features/read-acks/host.ts           GET/POST /api/power-suite.read-acks
@@ -38,11 +39,11 @@ src/index.ts            Host entry (Node)
 └─ ctx.effect(...)                       every registration lives with the plugin
 
 src/client.js           Browser entry (DSH module loader)
-├─ Artifacts panel (generated + provided rows, thumbnails, source filter)
-│  + right-Sidebar guide card
+├─ Artifacts panel (Files-pane in-place overlay: generated + provided rows, thumbnails, source filter)
 ├─ Workspace preset context-menu submenu
 ├─ Composer prompt-history keys + right-edge history rail
 ├─ Draft attachment memory seat (invisible)
+├─ Composer image gallery (continuous N/M viewer for ≥2 pasted composer screenshots)
 ├─ Dynamic Workspaces buckets + running & recent card (pin, row menu via the native shared popup, pending-interaction flags)
 ├─ Sidebar width persistence (Host-synced width; synchronous atmosphere repaint on resize)
 ├─ Interrupted-session rail badge + Continue seat + composer play icon
@@ -394,18 +395,18 @@ for notes to resolve; version prompts still work without them.
 ## Browser half
 
 `src/client.js` is loaded by `window.__ModuleLoader__.load`. Its `apply`
-registers slots, tab types, context menus, and the plugin settings surface
+registers slots, context menus, and the plugin settings surface
 through the injected client services (`slots`, `locale`,
-`sidebarRight`, `sidebarRightTabs`, `contextMenus`, `remote`, `uiWorkspace`,
+`sidebarRight`, `contextMenus`, `remote`, `remote.agentPresets`, `uiWorkspace`,
 `sessions`).
 
 The client talks to the Host only over the authenticated routes above; it never
 imports Host code. Feature copy is registered through per-feature locale
 namespaces (`sessionArtifacts`, `workspacePresets`, `dynamicWorkspaces`,
-`powerSuitePromptHistoryPreview`, `powerSuiteInterrupted`, `powerSuiteSettings`,
-`powerSuiteAnnotation`, `powerSuiteUpdate`) so the en/zh dictionaries stay
-aligned. The client entry also injects the shell's `sessions` listing service for
-the prompt-history preview's parent-Session rows.
+`composerImageGallery`, `powerSuitePromptHistoryPreview`, `powerSuiteInterrupted`,
+`powerSuiteSettings`, `powerSuiteAnnotation`, `powerSuiteUpdate`) so the en/zh
+dictionaries stay aligned. The client entry also injects the shell's `sessions`
+listing service for the prompt-history preview's parent-Session rows.
 
 ### Dynamic Workspaces
 
@@ -428,13 +429,14 @@ hover card that does not capture the pointer and follows the active theme
 (flush left edge, borderless, shell elevation/typography): light mode paints a
 white surface with the light label tokens (title `#0f1115`, secondary
 `#61666b`, tertiary `#81858c`), dark mode keeps the `#2C2C2E`
-`--dsw-hovercard-bg` recipe; a minimal scoped light-mode override themes the
-native shell session-info card as well. The same theme-following recipe is used
-by the other plugin tooltip-like surfaces (Artifact Quick Look, prompt-history
-cards, and the annotation popover/detail/note surfaces).
+`--dsw-hovercard-bg` recipe. The shell's own native session-info hover card is
+left untouched (no class-name override and no injected statistics). The same
+theme-following recipe is used by the other plugin tooltip-like surfaces
+(Artifact Quick Look, prompt-history cards, and the annotation
+popover/detail/note surfaces).
 Running & recent row titles and minor icons use the native Workspace
 title/icon tokens in light mode (brand glyph stays primary; dark unchanged), and
-both the plugin and native session-info cards share the 320 px width. The figures come from the injected `sessions` service's
+the plugin hover card uses a 320 px width. The figures come from the injected `sessions` service's
 `projectionsBySession` map — live Sessions are push-seeded, a cold persisted
 Session gets exactly one deduplicated `refreshProjections` read on first hover,
 and each section is omitted when its projection data is absent (no loading
@@ -727,9 +729,8 @@ reload, re-resolving their four live statuses. Multi-selections settle into one
 **batch group** (single shared requirement, N element items) after a short
 settle delay; the group inserts as one `UI annotations × N` chip serialized as a
 single request (shared requirement header + numbered references with honest
-status lines). Annotated elements of
-the current Session keep a page mark with a numbered requirement badge; a
-While a floating-surface selection's popover is active the controller pins that
+status lines). Annotated elements of the current Session keep a page mark with a
+numbered requirement badge. While a floating-surface selection's popover is active the controller pins that
 surface open (capture-phase suppression of `mouseout`/`mouseleave`/`pointerout`/
 `pointerleave` scoped to the surface root and its ancestors) so editing the
 requirement cannot unmount the target; the pin is released on popover close,
@@ -789,12 +790,15 @@ collection keep working.
 
 Two lifecycle boundaries are deliberate: exiting the mode removes the
 mode-scoped capture listeners, layout, rail DOM, popover/detail/mark DOM,
-hover/selection/box state, and pending rAF work while keeping the persisted
-records; the plugin disposer additionally removes the always-on launcher resize
-handler, the style tag, React roots, the input-trigger source, and the rest.
-Four browser-local keys persist: `power-suite.ui-annotation.settings` (the two
-modifiers), `power-suite.ui-annotation.launcher` (position),
-`power-suite.ui-annotation.rail-collapsed`, and the v2 records document. See
+hover/selection/box state, and pending rAF work (an exit confirmed through the
+cancel/exit dialog clears the persisted records before leaving, whereas a page
+reload or plugin dispose keeps them); the plugin disposer additionally removes
+the always-on launcher resize handler, the style tag, React roots, the
+input-trigger source, and the rest. Four browser-local keys persist:
+`power-suite.ui-annotation.settings` (the two modifiers),
+`power-suite.ui-annotation.launcher` (position),
+`power-suite.ui-annotation.rail-collapsed`, and the **v3** document carrying v2
+records (`power-suite.ui-annotation.annotations`). See
 [ui-annotation.md](ui-annotation.md).
 
 ### Update notice
@@ -845,7 +849,7 @@ re-open a card the user just dismissed.
 | `contextMenus.register` (`workspace`) | Default agent preset submenu |
 | `conversation.input.overlay` | Renderless prompt-history keyboard seat, draft-attachment memory seat, and the annotation mode's Session bridge seat (Session id, input actions, and the Session's cwd/workspace label mirrored from the slot's `useSessions` hook) |
 | `conversation.input.dock` | Session hooks for the prompt-history rail hosted in the native turn-rail frame |
-| `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation (card, buckets, pin button, row "…" menu, pending-interaction flags), the UI element annotation launcher/rail/popover, and the update notice card (`power-suite.update-prompt`) |
+| `shell.overlay` | Frame-wide seats: Dynamic Workspaces sidebar augmentation (card, buckets, pin button, row "…" menu, pending-interaction flags), the composer image gallery (`composer-gallery` overlay for ≥2 pasted screenshots), the UI element annotation launcher/rail/popover, and the update notice card (`power-suite.update-prompt`) |
 | `plugins.bundle.config` | Plugin settings page |
 | `sidebar.session.row.leading` | Interrupted-session badge plus the hover/focus inline Continue triangle |
 

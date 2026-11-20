@@ -15,7 +15,7 @@ pages go deeper. They ship with the npm package.
 ## Feature reference
 
 - [Dynamic Workspaces](dynamic-workspaces.md) — activity buckets, the Running &
-  recent panel, row menus, hover figures and read/pin state.
+  recent panel, row menus, its own hover card figures and read/pin state.
 - [Sidebar width](sidebar-width.md) — Host-owned width, cross-browser sync and
   the flicker-free rainbow repaint.
 - [Session artifacts](session-artifacts.md) — the Files-pane Artifacts list,
@@ -42,5 +42,5 @@ pages go deeper. They ship with the npm package.
 - [Limitations](limitations.md) — known bounds and unverified areas.
 - [Reference implementations for UI annotation](reference-libraries.md) — the
   local reference corpus behind the annotation work.
-- [Browser harness](../test/browser/README.md) — the live-DSH UI acceptance suites,
+- [Browser harness](https://github.com/Zephinel/dsh-power-suite/blob/main/test/browser/README.md) — the live-DSH UI acceptance suites,
   their modes and their evidence.

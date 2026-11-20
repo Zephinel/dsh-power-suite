@@ -180,8 +180,8 @@ converge when one of them is refocused or reloaded.
 
 ## The flicker fix
 
-The rainbow atmosphere is a Canvas 2D renderer (`dwAtmosphereMount()` in
-[`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js)) whose backing store is resized from a
+The rainbow atmosphere is a Canvas 2D renderer (`src/browser/ambient/atmosphere.ts`
+mounted by `src/browser/dynamic-workspaces/install.ts`) whose backing store is resized from a
 `ResizeObserver`. Assigning `canvas.width`/`canvas.height` clears the bitmap, and
 during a sidebar drag the row's box changes size on every frame, so the observer
 cleared the canvas every frame while the animation loop repainted only on its
@@ -207,7 +207,7 @@ node test/browser/sidebar.e2e.mjs --layout
   and reload, concurrent writes, the typed read failure with retry, and the route
   contract (methods, GET/POST bodies, and the `415`/`413`/`400`/`500` paths).
 - `test/sidebar-width-client.test.js` covers the browser half's pure helpers
-  through the client-module test seam — range/validity boundaries, cache
+  in `src/browser/sidebar-width/model.ts` — range/validity boundaries, cache
   parse/serialize, payload normalization, and the bootstrap/adopt decisions — with
   no DOM required.
 - `node test/browser/sidebar.e2e.mjs --layout` is the live harness for the

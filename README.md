@@ -21,7 +21,7 @@ dsh web
 > [Install](#install)); the in-app update notice stays silent until a newer
 > stable version is published.
 
-[Overview](#overview) · [Session artifacts](#session-artifacts) · [Composer](#composer-prompt-recall-drafts-recovery) · [UI annotation](#ui-element-annotation) · [Features](#features-at-a-glance) · [Install](#install) · [Quick start](#quick-start) · [Get the code](#get-the-code) · [Prerequisites](#prerequisites) · [Build, test and deploy](#build-test-and-deploy) · [Documentation](#documentation) · [Contributing](#contributing)
+[Overview](#overview) · [Features](#features-at-a-glance) · [Install](#install) · [Quick start](#quick-start) · [Build & test](#build-test-and-deploy) · [Documentation](#documentation)
 
 ## Overview
 
@@ -55,7 +55,7 @@ Read more: [Session artifacts](https://github.com/Zephinel/dsh-power-suite/blob/
 
 The composer keeps the work around the prompt: what you asked before, what you attached, and what happened when a turn did not finish.
 
-![A demo DSH chat window with the release-checklist answer and composer beside the suite settings section](assets/readme-composer.webp)
+![A demo DSH chat window with the release-checklist answer and composer, the prompt history rail with its hover preview, and the suite settings section beside it](assets/readme-composer.webp)
 
 - **Prompt history.** The configured modifier + ↑/↓ recalls prompts already sent in this Session; plain arrows keep their native behavior. A rail at the conversation's right edge lists the same prompts as ticks, oldest first, with timestamps, a full-text hover preview, an inline search and click-to-copy.
 - **Draft attachments survive Session switches.** Pasted, dropped or picked files stay with the draft when you open another Session and come back, for the page lifetime — the shell itself persists only the draft text.
@@ -149,7 +149,7 @@ There is no runtime dependency. Run `npm ci` once to install the esbuild/TypeScr
 
 ## Prerequisites
 
-- **DSH 0.2.2 plugin interface** — the Host and browser halves target DSH 0.2.2. The Web Host used for this repository's browser checks runs **0.2.2-rc.1**; later DSH versions are unverified. Install the CLI with `npm install -g @deepseek-ai/dsh`.
+- **DSH 0.2.2 plugin interface** — the Host and browser halves target DSH 0.2.2. Full browser suites were verified on **0.2.2-rc.1** and the 0.2.2 scroll-area / native hover-card changes were verified on **DSH 0.2.2**; later DSH versions are unverified. Install the CLI with `npm install -g @deepseek-ai/dsh`.
 - **Node.js 22.18 or newer** — `package.json` declares `engines.node >= 22.18` (the test suite imports the TypeScript sources through Node's native type stripping); the CI gate runs on Node 22 and 24. Run `npm ci` once for esbuild and the typecheck tooling.
 - **pnpm** — needed to install profile bundles: `dsh plugin add` forwards to it, and the in-app Plugins page runs it behind its dialog.
 - **Git** — needed only to get the code; the repository sets no minimum version.
@@ -159,12 +159,12 @@ Confirm the tools are present:
 
 ```bash
 node --version   # v22 or newer
-dsh --version    # verified: 0.2.2-rc.1
+dsh --version    # verified: 0.2.2 (full browser suite on 0.2.2-rc.1)
 pnpm --version
 git --version
 ```
 
-Verified platform: macOS with DSH Web 0.2.2-rc.1. The plugin itself is a Web-platform bundle; other platforms are unverified.
+Verified platform: macOS with DSH Web 0.2.2 (full browser suite on 0.2.2-rc.1). The plugin itself is a Web-platform bundle; other platforms are unverified.
 
 ## Build, test and deploy
 
