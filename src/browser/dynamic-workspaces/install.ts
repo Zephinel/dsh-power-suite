@@ -769,6 +769,65 @@ body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-
 
 body:not([data-ds-dark-theme]) .psd-row-action:hover,
 body:not([data-ds-dark-theme]) .psd-row-action:focus-visible{color:var(--dsw-alias-label-primary)}
+/* Owner request: while the row is highlighted — pointer on it, keyboard focus
+   inside it, or an open row menu (the card's strip is invisible at rest, so
+   those three cover every visible state, rainbow row included) — the row menu
+   (⋯) and New session (⊕) read at the title colour (label-primary) instead of
+   their resting row-icon weight (both secondary #61666b in light; in dark ⋯ is
+   the secondary #cfd3d6 and ⊕ the tertiary #adb2b8), which washed out against
+   the hover fill and the pastel atmosphere. Each control keeps its own hover/
+   focus feedback, and the rules above still lift it to the same token. Focus is
+   gated to keyboard modality like the shell's own strip. Child combinators keep
+   a nested subagent row's own controls out. In dark mode a finished row's title
+   stays secondary, so its strip reads one step brighter than that title. */
+.psd-run:hover > .psd-run-timeslot .psd-run-more,
+.psd-run:hover > .psd-run-actions .psd-row-action,
+.psd-run[data-menu-open='true'] > .psd-run-timeslot .psd-run-more,
+.psd-run[data-menu-open='true'] > .psd-run-actions .psd-row-action,
+html[data-input-modality='keyboard'] .psd-run:focus-within > .psd-run-timeslot .psd-run-more,
+html[data-input-modality='keyboard'] .psd-run:focus-within > .psd-run-actions .psd-row-action{color:var(--dsw-alias-label-primary)}
+/* Same rule for the shell's own sidebar rows — Session rows and the Workspace
+   (project) row above them: their strips pin the row-menu trigger and New
+   session to label-tertiary and only darken while that single button is hovered,
+   so on a highlighted row they read washed out next to the label-primary title.
+   Rows are anchored by their stable data-row-key attribute (no hashed module
+   class), the strip by the module class suffix, and the menu-open state by the
+   same suffix on the row. Archived Session rows are excluded: the shell dims
+   their title to label-caption on purpose, so the strip must stay dim too. */
+:is([data-row-key^='session:'],[data-row-key^='workspace:']):not([class*='archived']):hover [class*='rowActions'] :is(button,[role='button']),
+:is([data-row-key^='session:'],[data-row-key^='workspace:'])[class*='menuOpen'] [class*='rowActions'] :is(button,[role='button']),
+html[data-input-modality='keyboard'] :is([data-row-key^='session:'],[data-row-key^='workspace:']):focus-within [class*='rowActions'] :is(button,[role='button']),
+[data-psd-current-session='true'] [class*='rowActions'] :is(button,[role='button']),
+[data-psd-current-workspace='true'] [class*='rowActions'] :is(button,[role='button']){color:var(--dsw-alias-label-primary)}
+/* Owner request: on the native Workspace row the folder glyph and the
+   disclosure chevron/arrow sit on the shell's tertiary slot / caption weights,
+   so under the rainbow bar (and on hover) they read washed out next to the
+   label-primary title. Highlighted Workspace rows — hover, keyboard focus, or
+   the rainbow marker the plugin itself sets — carry the title colour on those
+   glyphs instead. The shell puts slot + folder (or slot + chevron) on the same
+   span, so the match is on the glyph class. The folder of the Workspace that
+   holds the current Session (folderActive, business blue) is included on
+   purpose: the business blue does not read on the rainbow, so on a highlighted
+   row the title colour wins there too (owner decision). */
+[data-row-key^='workspace:']:hover :is([class*='folder'],[class*='chevron']),
+[data-psd-current-workspace='true'] :is([class*='folder'],[class*='chevron']),
+html[data-input-modality='keyboard'] [data-row-key^='workspace:']:focus-within :is([class*='folder'],[class*='chevron']){color:var(--dsw-alias-label-primary)}
+/* Owner follow-up: the row's own glyphs join the same rule. The brand sparkle is
+   label-primary already and is demoted only by the light-mode current-row lift,
+   so only that arm is needed; the pin is tertiary until it is shown (hover or a
+   pinned row), and a pinned pin keeps the business colour. A status dot keeps
+   its shell state colour because that colour is the running/finished/idle data,
+   not a text weight. */
+.psd-run.psd-run-current > .psd-run-main .psd-run-brand,
+.psd-run:not([data-pinned='true']):hover > .psd-run-main .psd-run-pin,
+html[data-input-modality='keyboard'] .psd-run:not([data-pinned='true']):focus-within > .psd-run-main .psd-run-pin{color:var(--dsw-alias-label-primary)}
+/* Owner report: under the rainbow bar only, and in light mode only, the
+   light-mode lift demotes the subagent row's brand span to label-secondary while
+   the child title stays label-primary, so the robot glyph reads one step paler
+   than its own title on the very row the atmosphere highlights. Restore the
+   title colour there. Dark mode is left alone: there the child title is the
+   dimmed secondary label while that glyph is primary, i.e. one step brighter. */
+body:not([data-ds-dark-theme]) .psd-child.psd-child-current > .psd-child-main .psd-child-brand{color:var(--dsw-alias-label-primary)}
 /* Owner request: on the highlighted row the time reads like the title, and the
    title/time carry the selection in bold (the gas behind them is not uniform). */
 [data-psd-current-session='true'] [class*='timestamp'],

@@ -3326,6 +3326,10 @@ async function runCurrentHighlightChecks({ page, results, state }) {
   })
 
   await results.check('b4-14', 'running-panel icon colours match or beat the native Workspace icon weight in light mode', async () => {
+    // A parked pointer over a card row now lifts that row's strip to the title
+    // colour (highlighted-row rule), so the resting-state readings below need a
+    // neutral pointer rather than whatever the previous check left behind.
+    await resetPointer(page)
     const read = () => page.eval(() => {
       const colors = (selector) => [...document.querySelectorAll(selector)].map((node) => getComputedStyle(node).color)
       return {
@@ -3393,6 +3397,9 @@ async function runCurrentHighlightChecks({ page, results, state }) {
   })
 
   await results.check('b4-15', 'highlighted-row New-session action darkens on hover/focus like the pin control (light + dark)', async () => {
+    // Same reason as b4-14: the rest readings must not inherit a hovered row
+    // left parked by an earlier check.
+    await resetPointer(page)
     const measure = () => page.eval(() => {
       const colorOf = (node) => node === null ? null : getComputedStyle(node).color
       const rectOf = (node) => {

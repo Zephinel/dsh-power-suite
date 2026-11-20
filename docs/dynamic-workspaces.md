@@ -133,7 +133,13 @@ sidebar's panel tabs. It starts expanded.
   glyphs use the business colour `#4176e6`, the native
   disclosure/pin caption `#adb2b8`), while the brand / sparkle / header
   indicator glyphs stay `label-primary` `#0f1115`. Icon geometry, sizes and
-  layout are unchanged; dark mode keeps its original tertiary icons. Running Sessions are always listed,
+  layout are unchanged; dark mode keeps its original tertiary icons. While a row
+  is highlighted (pointer on it, keyboard focus inside it, or its row menu
+  open) its two trailing controls — the row menu `⋯` and New session `⊕` — read
+  at the title's own `label-primary` (`#0f1115` light, `#f9fafb` dark) instead of
+  the resting icon weight, so they are legible against the hover fill and the
+  pastel atmosphere; each control keeps its own hover/focus feedback, and the
+  resting weight returns when the row stops being highlighted. Running Sessions are always listed,
   then recently finished Sessions inside
   the finished-Session **retention window** (default 2 hours, configurable in
   [Settings](settings.md)), each group newest activity first. A running row uses the
@@ -815,7 +821,23 @@ native sidebar Session row of the open Session:
   plugin's own highlighted rows (brand, row actions, toggle) are
   lifted from `label-tertiary` to `label-secondary` in light mode (and row time
   to `label-primary`), so they clear WCAG AA on the remaining pastel; the title
-  keeps `label-primary`. Measured
+  keeps `label-primary`. On a highlighted row the row menu `⋯` and New session
+  `⊕` go one step further and take that same `label-primary` while the row is
+  highlighted (measured `#61666b → #0f1115` on hover), since the resting
+  secondary weight read as washed out against the gas; they return to the
+  resting weight when the row stops being highlighted. The row's own glyphs
+  follow the same rule: the brand sparkle (which the light-mode lift otherwise
+  demotes to `label-secondary` on the current row) and the unpinned pin control
+  (measured light `#81858c → #0f1115`, dark `#adb2b8 → #f9fafb`) read at the
+  title colour while the row is highlighted. Two semantic colours stay put: a
+  pinned pin keeps the business colour, and the status dot keeps its shell state
+  colour, because there the colour is the running/finished/idle data rather than
+  a text weight. A child row's glyph follows its own title with one exception:
+  light mode's lift demoted the subagent row's robot glyph to `label-secondary`
+  on the rainbow row only, so it read one step paler than its own title there;
+  it now keeps the title colour on that row (measured `#61666b → #0f1115`). In
+  dark mode the robot glyph stays `label-primary` while the child title keeps the
+  dimmed child label, i.e. one step brighter than the title, unchanged. Measured
   before → after on the card row's local backdrop: title `5.5:1 → 14.7:1`
   (`#0f1115` on `rgb(162,124,186) → rgb(238,234,237)`), time/icons/actions
   `1.08:1 → 4.52:1` (`#81858c → #61666b`); native Workspace row title `15.5:1`.
@@ -884,7 +906,28 @@ native sidebar Session row of the open Session:
   so a native re-render cannot drop them; the marker attributes, wrapper,
   renderer and canvas are removed when another Session is opened, when the row
   stops owning the current Session, and on plugin unload. Native rows are never
-  otherwise modified.
+  otherwise modified. Two deliberate exceptions follow. (1) While a native
+  Session row or the Workspace row above it is highlighted (pointer on it,
+  keyboard focus inside it, its row menu open, or the plugin's own rainbow
+  marker on the current Session/Workspace) its action strip — the shell's own
+  row-menu trigger, New session, and any quick action contributed to the row —
+  takes the title's `label-primary` instead of the shell's resting
+  `label-tertiary`, so it stays legible next to the title and on the pastel
+  atmosphere (measured: Session row light `#81858c → #0f1115`, dark
+  `#adb2b8 → #f9fafb`; Workspace row light `#81858c → #0f1115`, dark
+  `#adb2b8 → #f9fafb` for both `⋯` and `⊕`; the resting weight returns when the
+  row stops being highlighted). Archived Session rows keep the dim weight,
+  because the shell dims their titles to `label-caption` on purpose. (2) The
+  Workspace row's folder glyph and disclosure chevron/arrow take that same
+  `label-primary` on a highlighted row, since the shell paints them
+  `label-tertiary` / `label-caption` (measured light `#81858c`/`#adb2b8 →
+  #0f1115`, dark `#adb2b8`/`#81858c → #f9fafb`). The folder of the Workspace
+  that owns the current Session is included on purpose: its `folderActive`
+  business blue `#4176e6` does not read on the rainbow, so on a highlighted row
+  the title colour wins there too (owner decision); the plugin's own rainbow
+  marker still carries "this is the current Workspace". Rows are anchored by their
+  `data-row-key="session:…"` / `data-row-key="workspace:…"` attribute and the
+  strip by the shell's module class suffix.
 - **Feature-set alignment**: the atmosphere replaces both the previous
   "current-chat ring" and the B4 bottom-face smoke-glow layers entirely; no
   `.psd-child-ring`, no `.psd-child-wave`, no conic gradient and no

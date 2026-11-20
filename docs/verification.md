@@ -36,7 +36,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 ### Current gates (2026-11-20, Node 24.22.3)
 
 - `npm run build`: **`lib/index.js` 105.9 kB** (Host ESM bundle) and
-  **`lib/client.js` 935.7 kB** (ESM `src/client.js` + `src/browser/` bundled to a
+  **`lib/client.js` 940.6 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
 - `npm test`: **403 tests, 403 passed, 0 failed**, **29 test files** — Host
