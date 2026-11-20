@@ -29,7 +29,6 @@ import {
   dwProjectionSections
 } from './browser/dynamic-workspaces/stats.ts'
 import { DW_NS, createDynamicWorkspacesInstaller } from './browser/dynamic-workspaces/install.ts'
-import { createNativeSessionHoverFigures } from './browser/native-session-hover-figures/install.ts'
 /**
  * Browser half of DSH Power Suite.
  *
@@ -260,20 +259,14 @@ window.__ModuleLoader__.load({
     })
     //#endregion
 
-    //#region feature: native session hover figures
+    //#region feature: native session hover figures — retired
     //
-    // The seat and its registration live in
-    // `src/browser/native-session-hover-figures/install.ts`: the entry only binds
-    // the React runtime and the section/projection helpers the dynamic-Workspaces
-    // installer already owns, then installs it in `apply`. DOM markers, slot id,
-    // copy and ordering stay unchanged; this region is a wiring point.
-    const { installSessionHoverFigures } = createNativeSessionHoverFigures({
-      React,
-      hovercardSections: dynamicWorkspacesInstaller.hovercardSections,
-      projectionSections: dwProjectionSections,
-      needsProjectionRead: dwNeedsProjectionRead,
-      namespace: DW_NS
-    })
+    // The shell's session-info hover card used to be extended through a
+    // `sidebar.session.row.hover` registration in
+    // `src/browser/native-session-hover-figures/`. DSH 0.2.2 changed that card's
+    // DOM and the seat stopped mounting, so the registration, its module and its
+    // DOM anchor were removed: the plugin shows the figures on its own hover card
+    // (the Running & recent rows) and leaves the shell's card untouched.
     //#endregion
 
     //#region feature: prompt history — preview
@@ -883,7 +876,6 @@ window.__ModuleLoader__.load({
       installPromptHistoryPreview(/** @type {DshModuleContext<import('./browser/prompt-history/preview.ts').PromptHistoryPreviewContext>} */ (ctx))
       draftAttachments.installDraftAttachmentMemory(/** @type {DshModuleContext<import('./browser/draft-attachments/install.ts').DraftAttachmentContext>} */ (ctx))
       dynamicWorkspacesInstaller.install(/** @type {DshModuleContext<import('./browser/dynamic-workspaces/install.ts').DynamicWorkspacesContext>} */ (ctx))
-      installSessionHoverFigures(/** @type {DshModuleContext<import('./browser/native-session-hover-figures/install.ts').NativeSessionHoverFiguresContext>} */ (ctx))
       interruptedSessions.installInterruptedSessions(/** @type {DshModuleContext<import('./browser/interrupted-sessions/components.ts').InterruptedSessionComponentsContext>} */ (ctx))
       installQuickLook(/** @type {import('./browser/hover-quick-look/install.ts').HoverQuickLookContext} */ (ctx), {
         t,

@@ -36,7 +36,7 @@
  * seeding a corrupt raw document, which the old vm seam could not do).
  */
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { loadClientModule } from './helpers/client-module.mjs'
 import { ROUTES, browserRoute } from '../src/shared/routes.ts'
@@ -56,7 +56,6 @@ const client = loadClientModule()
 const dynamicSource = readFileSync(new URL('../src/browser/dynamic-workspaces/install.ts', import.meta.url), 'utf8')
 
 /** The extracted native Session hover-figure seat, read for its own marker assertions. */
-const hoverFiguresSource = readFileSync(new URL('../src/browser/native-session-hover-figures/install.ts', import.meta.url), 'utf8')
 
 /** Fixed clock used by every row fixture (2025-10-09T08:53:20Z). */
 const NOW = 1_760_000_000_000
@@ -218,10 +217,11 @@ test('the card-owned pin syncs through the panel route, never through the native
   )
   // The pre-final round's helpers are gone.
   assert.doesNotMatch(dynamicSource, /dwReadPinnedIds|dwWritePinnedIds/, 'the removed host-pin helpers must not reappear')
-  // Requirement 2's native hover-figure wiring moved intact into its typed seat.
-  assert.match(client.source, /createNativeSessionHoverFigures/, 'the entry still binds the native hover-figure seat')
-  assert.match(hoverFiguresSource, /sidebar\.session\.row\.hover/, 'the native hover-figure slot registration stays')
-  assert.match(hoverFiguresSource, /psd-native-hover-figures/, 'the native hover-figure DOM anchor stays')
+  // The shell's session-info hover card is left untouched (owner decision A): the
+  // entry must not bind the retired native hover-figure seat any more, because its
+  // DOM classes change on every shell upgrade.
+  assert.doesNotMatch(client.source, /createNativeSessionHoverFigures|installSessionHoverFigures/, 'the entry must not bind the retired native hover-figure seat')
+  assert(!existsSync(new URL('../src/browser/native-session-hover-figures/install.ts', import.meta.url)), 'the retired native hover-figure module is deleted')
 })
 
 test('pinned ids sanitize from arrays and legacy objects, drop junk, dedupe, and bound', () => {

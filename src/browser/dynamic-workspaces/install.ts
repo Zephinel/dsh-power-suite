@@ -21,6 +21,16 @@ import { ACTIVE_PROJECT_DAYS, RECENT_SESSION_MINUTES } from '../../shared/protoc
 import type { Settings } from '../../shared/protocol.ts'
 import { ROUTES, browserRoute } from '../../shared/routes.ts'
 import { dwEffectiveUpdatedAt, dwPendingSessionIds } from './activity.ts'
+import {
+  DW_ATMOS_HUES,
+  DW_ATMOS_PALETTES,
+  DW_SMOKE,
+  advanceAtmosphere,
+  atmosphereArcHue,
+  atmosphereMixWeight,
+  atmospherePaint,
+  createAtmosphereModel
+} from './atmosphere.ts'
 import { interruptedCardMark, interruptedIndicatorActive } from '../interrupted-sessions/model.ts'
 import type { InterruptedRecord } from '../interrupted-sessions/model.ts'
 import {
@@ -126,13 +136,6 @@ interface DynamicWorkspacePortalMounts {
 interface RunningDuration {
   at: number
   observed: boolean
-}
-
-/** One OKLCH atmosphere stop. */
-interface OklchColor {
-  l: number
-  c: number
-  hue: number
 }
 
 /** One injected native-row atmosphere instance. */
@@ -301,8 +304,6 @@ export interface DynamicWorkspacesDeps {
 /** The installer the browser entry keeps for its `apply` pass. */
 export interface DynamicWorkspacesInstaller {
   install(ctx: DynamicWorkspacesContext): void
-  /** Native-figure sections shared with the shell's Session hover-card seat. */
-  hovercardSections: (props: { sections: ProjectionSections, t: Translate }) => ReactElement | null
 }
 
 /**
@@ -468,7 +469,7 @@ html[data-input-modality='keyboard'] .psd-run:focus-within:not(:has(.psd-run-tog
 .psd-run-open:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px;border-radius:var(--dsw-radius-sm,6px)}
 .psd-run-spacer,.psd-child-spacer{flex:1 1 auto;min-width:0}
 .psd-run-timeslot{position:relative;flex:none;width:var(--psd-time-col,48px);height:20px}
-.psd-run-time{position:absolute;top:0;right:0;left:0;text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:20px;font-variant-numeric:tabular-nums;transition:opacity 120ms var(--ds-ease-in-out,ease)}
+.psd-run-time{position:absolute;top:0;right:0;left:0;text-align:right;color:var(--dsw-alias-label-primary);font-size:11px;line-height:20px;font-variant-numeric:tabular-nums;transition:opacity 120ms var(--ds-ease-in-out,ease)}
 .psd-run-more{appearance:none;position:absolute;top:50%;right:0;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease),background-color 120ms var(--ds-ease-in-out,ease)}
 .psd-run[data-menuable='true']:hover .psd-run-time,.psd-run[data-menuable='true']:focus-within .psd-run-time,.psd-run[data-menu-open='true'] .psd-run-time{opacity:0}
 .psd-run[data-menuable='true']:hover .psd-run-more,.psd-run[data-menuable='true']:focus-within .psd-run-more,.psd-run[data-menu-open='true'] .psd-run-more{opacity:1;pointer-events:auto;transition:opacity 120ms var(--ds-ease-in-out,ease),background-color 120ms var(--ds-ease-in-out,ease)}
@@ -544,7 +545,7 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-child-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-child-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
 .psd-child-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap}
-.psd-child-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
+.psd-child-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-primary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
 .psd-pending-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary);pointer-events:none}
 .dps-row-pending-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary);pointer-events:none}
@@ -583,32 +584,7 @@ body:not([data-ds-dark-theme]) .dsa-quicklook{
   --dsw-static-neutral-bluish-300:var(--dsw-alias-label-secondary,#61666b);
   --dsw-static-neutral-bluish-400:var(--dsw-alias-label-tertiary,#81858c);
 }
-/* The native (shell) session info hovercard is theme-invariant dark by design
-   (--dsw-hovercard-bg pinned to #2C2C2E on its module class). The user asked
-   the hovercards to follow the system theme, so light mode overrides that one
-   native surface and its static text palette here. This targets the shell's
-   hashed hovercard class: if a future shell build renames it, the rule silently
-   stops matching and the native dark card returns (graceful degradation). Dark
-   mode and all other native surfaces are untouched. */
-body:not([data-ds-dark-theme]) ._card_bgejw_9{
-  --dsw-hovercard-bg:var(--dsw-alias-bg-layer-1,#fff);
-  --dsw-static-neutral-bluish-00:var(--dsw-alias-label-primary,#0f1115);
-  --dsw-static-neutral-bluish-300:var(--dsw-alias-label-secondary,#61666b);
-  --dsw-static-neutral-bluish-400:var(--dsw-alias-label-tertiary,#81858c);
-}
-/* The shell's session-info hover card is fixed at 244 px, narrower than the
-   plugin session-info card (DW_HOVERCARD_WIDTH = 320 px), so its labels/values
-   truncated early in the user's screenshot. Match the width in both themes,
-   keeping the padding/radius/elevation and a viewport clamp; hash-dependency
-   caveat is the same as the colour override above. */
-._card_bgejw_9{width:320px;max-width:calc(100vw - 16px)}
-/* The shell's workspace hover-preview text classes are hardcoded light-palette
-   hex values (not tokens), so the surface override above needs matching text
-   rules. Same fragility note as the surface rule. */
-body:not([data-ds-dark-theme]) ._card_bgejw_9 .YDXeBa_hoverTitle{color:var(--dsw-alias-label-primary,#0f1115)}
-body:not([data-ds-dark-theme]) ._card_bgejw_9 .YDXeBa_hoverPath,
-body:not([data-ds-dark-theme]) ._card_bgejw_9 .YDXeBa_hoverTime{color:var(--dsw-alias-label-secondary,#61666b)}
-body:not([data-ds-dark-theme]) ._card_bgejw_9 .YDXeBa_hoverStatus{color:var(--dsw-alias-label-tertiary,#81858c)}
+
 /* Running & recent row text vs native Workspace rows (user fix). In light mode
    finished rows and child rows used the secondary label token (#61666b) titles while
    native Workspace session titles are the primary label token (#0f1115), so the panel
@@ -771,51 +747,52 @@ body:not([data-ds-dark-theme]) .psd-atmos-canvas{filter:blur(3px) saturate(1.35)
 body:not([data-ds-dark-theme]) .psd-atmos{opacity:.60}
 body:not([data-ds-dark-theme]) .psd-atmos-scrim{background:linear-gradient(90deg,rgba(255,255,255,.48),rgba(255,255,255,.36))}
 body:not([data-ds-dark-theme]) .psd-run-current:hover .psd-atmos,body:not([data-ds-dark-theme]) .psd-child-current:hover .psd-atmos,body:not([data-ds-dark-theme]) [data-psd-current-workspace='true']:hover .psd-atmos,body:not([data-ds-dark-theme]) [data-psd-current-session='true']:hover .psd-atmos{opacity:.68}
-body:not([data-ds-dark-theme]) .psd-run-current :is(.psd-run-time,.psd-run-brand,.psd-row-action,.psd-run-toggle),body:not([data-ds-dark-theme]) .psd-child-current :is(.psd-child-time,.psd-child-brand,.psd-row-action){color:var(--dsw-alias-label-secondary)}
+body:not([data-ds-dark-theme]) .psd-run-current :is(.psd-run-brand,.psd-row-action,.psd-run-toggle),body:not([data-ds-dark-theme]) .psd-child-current :is(.psd-child-brand,.psd-row-action){color:var(--dsw-alias-label-secondary)}
+body:not([data-ds-dark-theme]) .psd-run-current .psd-run-time,body:not([data-ds-dark-theme]) .psd-child-current .psd-child-time{color:var(--dsw-alias-label-primary)}
 /* Status dots keep their semantic shell colours (user fix): the light-mode icon
    lift above must not repaint the shell StateDot currentColor. The wrapper keeps
    the task-62 secondary weight for non-dot child glyphs; the semantic state
    colours win for the dot itself: ongoing business, completed success green,
    idle idle colour. Dark mode keeps its shell tokens. */
-body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-child-glyph){color:var(--dsw-alias-label-secondary,#61666b)}
+body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-child-glyph){color:var(--dsw-alias-label-primary,#0f1115)}
 body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-child-glyph)[data-state='ongoing'],
 body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-child-glyph) [data-state='ongoing']{color:var(--dsw-alias-state-business-primary)}
 body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-child-glyph)[data-state='done'],
 body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-child-glyph) [data-state='done']{color:var(--dsw-alias-state-success-primary)}
 body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-child-glyph)[data-state='idle'],
 body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-child-glyph) [data-state='idle']{color:var(--dsw-alias-state-idle-primary)}
+
 /* Row action hover + keyboard focus (user fix): the light-mode icon-lift rule
    above (0,2,1) outranks the base .psd-row-action:hover (0,2,0), so re-assert the
    primary label for hover and focus-visible in light mode; dark mode already
    darkens through the base hover rule, which no colour override outranks. */
+
 body:not([data-ds-dark-theme]) .psd-row-action:hover,
 body:not([data-ds-dark-theme]) .psd-row-action:focus-visible{color:var(--dsw-alias-label-primary)}
+/* Owner request: on the highlighted row the time reads like the title, and the
+   title/time carry the selection in bold (the gas behind them is not uniform). */
+[data-psd-current-session='true'] [class*='timestamp'],
+[data-psd-current-workspace='true'] [class*='timestamp']{color:var(--dsw-alias-label-primary)}
+/* The gas is not uniformly dark, so text needs its own contrast guarantee: a
+   soft halo behind the row content keeps the title/time readable on the bright
+   hue patches without dimming the smoke itself. */
+.psd-run-current > *:not(.psd-atmos),
+.psd-child-current > *:not(.psd-atmos),
+[data-psd-current-session='true'] > *:not([data-psd-atmos]),
+[data-psd-current-workspace='true'] > *:not([data-psd-atmos]){text-shadow:0 1px 2px rgba(0,0,0,.55),0 0 1px rgba(0,0,0,.35)}
+body:not([data-ds-dark-theme]) .psd-run-current > *:not(.psd-atmos),
+body:not([data-ds-dark-theme]) .psd-child-current > *:not(.psd-atmos),
+body:not([data-ds-dark-theme]) [data-psd-current-session='true'] > *:not([data-psd-atmos]),
+body:not([data-ds-dark-theme]) [data-psd-current-workspace='true'] > *:not([data-psd-atmos]){text-shadow:0 1px 2px rgba(255,255,255,.85),0 0 1px rgba(255,255,255,.6)}
+.psd-run-current :is(.psd-run-title,.psd-run-time),
+.psd-child-current :is(.psd-child-title,.psd-child-time),
+[data-psd-current-session='true'] [class*='_title'],
+[data-psd-current-session='true'] [class*='timestamp'],
+[data-psd-current-workspace='true'] [class*='_title'],
+[data-psd-current-workspace='true'] [class*='timestamp']{font-weight:600}
 @media (prefers-reduced-motion: reduce){.psd-atmos{transition:none}}
 
 `
-
-/**
- * OKLCH hue path of the atmosphere: equal perceived lightness/chroma across the
- * eight stops (unlike HSL, where yellow/green read much brighter at the same L).
- * Each theme gets its own L/C so the composited pill lands at a similar pastel
- * weight: light is higher-L/lower-C, dark is a little lower-L with more chroma.
- * Chroma stays moderate to stay near sRGB and to keep dark mode from glowing.
- */
-const DW_ATMOS_HUES = [20, 65, 110, 150, 195, 245, 290, 330]
-const DW_ATMOS_PALETTES = {
-  light: DW_ATMOS_HUES.map((hue) => ({ l: 0.76, c: 0.26, hue })),
-  dark: DW_ATMOS_HUES.map((hue) => ({ l: 0.76, c: 0.24, hue }))
-}
-/** Per-hue radiance trim: after the blobs mix, red/violet read hotter and cyan
- *  reads cooler, so scale each hue's blob alpha to even the lanes out. */
-const DW_ATMOS_HUE_ALPHA = [0.78, 1.02, 0.92, 1.16, 1.30, 1.04, 0.94, 0.94]
-/** CSS `oklch()` colour string with alpha (the browser gamut-maps it). */
-function dwAtmosPaint(color: OklchColor, alpha: number): string {
-  return `oklch(${color.l} ${color.c} ${color.hue} / ${alpha.toFixed(3)})`
-}
-
-/** Baseline atmosphere config adapted from the V3 design doc (smoke mode). */
-const DW_ATMOS_CONFIG = { intensity: 0.64, spread: 1.18, drift: 1.2, stirring: 0.58, breathing: 0.22, blend: 1.0, vibrance: 1.72 }
 
 /**
  * Mount the Canvas 2D rainbow-gas renderer into one atmosphere wrapper.
@@ -825,6 +802,9 @@ const DW_ATMOS_CONFIG = { intensity: 0.64, spread: 1.18, drift: 1.2, stirring: 0
  * additive blend, and is disposed when the row stops being highlighted. One
  * renderer per highlighted row; no RAFs for non-highlighted rows. A hidden tab
  * pauses the loop, reduced motion draws a single static frame.
+ *
+ * The motion itself lives in `atmosphere.ts` (hue slots + bounded spring); this
+ * function only owns the canvas, the palette paint and the frame loop.
  * @param {HTMLElement} host - the .psd-atmos wrapper.
  * @returns {{ destroy: () => void }} disposer.
  */
@@ -839,160 +819,208 @@ function dwAtmosphereMount(host: HTMLElement): { destroy(): void } {
     return { destroy: () => {} }
   }
   const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-  const noise = (seed: number): number => {
-    const value = Math.sin(seed * 127.1 + 311.7) * 43758.5453
-    return value - Math.floor(value)
+  // The gas itself (particles, flow field, hue-arc blending) is a pure model so
+  // its invariants are unit-testable; this closure only paints it. Density and
+  // hue are separate layers: the mask blobs are white, and the colour is chosen
+  // per pixel from the dominant hue layer, so hues can never average to grey.
+  const model = createAtmosphereModel()
+  const layerCanvases: HTMLCanvasElement[] = []
+  for (let index = 0; index < DW_ATMOS_HUES.length; index += 1) {
+    const layer = document.createElement('canvas')
+    layerCanvases.push(layer)
   }
-  // Value-noise fBm: the smoke moves through a 2D flow field rather than on
-  // fixed sinusoidal orbits, so it meanders, curls and diffuses in both axes.
-  // Reference: Book of Shaders fBm / flow-noise; a light 3-octave value noise is
-  // enough for a small pill and costs little per frame.
-  const hash2 = (x: number, y: number): number => {
-    const h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453
-    return h - Math.floor(h)
-  }
-  const noise2 = (x: number, y: number): number => {
-    const xi = Math.floor(x)
-    const yi = Math.floor(y)
-    const xf = x - xi
-    const yf = y - yi
-    const u = xf * xf * (3 - 2 * xf)
-    const v = yf * yf * (3 - 2 * yf)
-    const a = hash2(xi, yi)
-    const b = hash2(xi + 1, yi)
-    const c = hash2(xi, yi + 1)
-    const d = hash2(xi + 1, yi + 1)
-    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v
-  }
-  const fbm2 = (x: number, y: number): number => {
-    let total = 0
-    let amplitude = 0.5
-    let frequency = 1
-    for (let octave = 0; octave < 3; octave += 1) {
-      total += amplitude * noise2(x * frequency, y * frequency)
-      frequency *= 2
-      amplitude *= 0.5
-    }
-    return total
-  }
-  // Two independent blobs per hue; even hue coverage at spawn, free 2D flow after.
-  const blobs = DW_ATMOS_HUES.flatMap((_, index) => {
-    const base = (index / DW_ATMOS_HUES.length) * Math.PI * 2
-    return [
-      {
-        phase: base,
-        speed: 0.004 + noise(index + 2) * 0.005,
-        vx: 0,
-        vy: 0,
-        size: 0.50 + noise(index + 3) * 0.20,
-        hue: index,
-        x: ((index + 0.5) / DW_ATMOS_HUES.length + (noise(index + 1) - 0.5) * 0.12 + 1) % 1,
-        y: 0.5 + (noise(index + 6) - 0.5) * 0.45,
-        alpha: 0.24
-      },
-      {
-        phase: base + Math.PI * 0.62,
-        speed: 0.005 + noise(index + 9) * 0.006,
-        vx: 0,
-        vy: 0,
-        size: 0.36 + noise(index + 10) * 0.16,
-        hue: index,
-        x: ((index + 0.5) / DW_ATMOS_HUES.length + (noise(index + 7) - 0.5) * 0.18 + 1) % 1,
-        y: 0.5 + (noise(index + 8) - 0.5) * 0.55,
-        alpha: 0.15
-      }
-    ]
-  })
+  const layerContexts = layerCanvases.map((layer) => layer.getContext('2d', { alpha: true }))
+  let composite: ImageData | null = null
+  let hueTable: Uint8ClampedArray | null = null
+  let hueTableKey = ''
   let raf = 0
   let lastFrame = 0
   let lastDraw = 0
-  let time = 0
   let disposed = false
   const state = (running: boolean, motion: string): void => {
     host.setAttribute('data-psd-atmos-running', running ? 'true' : 'false')
     host.setAttribute('data-psd-atmos-motion', motion)
   }
+  /** 360-entry hue -> RGB table for one theme (built once per palette). */
+  const tableFor = (): Uint8ClampedArray => {
+    const palette = document.body.hasAttribute('data-ds-dark-theme') ? DW_ATMOS_PALETTES.dark : DW_ATMOS_PALETTES.light
+    const key = `${palette[0].l}:${palette[0].c}`
+    if (hueTable !== null && hueTableKey === key) return hueTable
+    const probe = document.createElement('canvas')
+    probe.width = 1
+    probe.height = 1
+    const px = probe.getContext('2d', { willReadFrequently: true })
+    const table = new Uint8ClampedArray(360 * 3)
+    if (px !== null) {
+      for (let deg = 0; deg < 360; deg += 1) {
+        px.fillStyle = atmospherePaint({ l: palette[0].l, c: palette[0].c, hue: deg }, 1)
+        px.fillRect(0, 0, 1, 1)
+        const data = px.getImageData(0, 0, 1, 1).data
+        table[deg * 3] = data[0]
+        table[deg * 3 + 1] = data[1]
+        table[deg * 3 + 2] = data[2]
+      }
+    }
+    hueTable = table
+    hueTableKey = key
+    return table
+  }
   const resize = () => {
     const rect = canvas.getBoundingClientRect()
     if (rect.width <= 0 || rect.height <= 0) return false
     const dpr = Math.min(window.devicePixelRatio || 1, 1.25)
-    const width = Math.max(2, Math.round(rect.width * dpr))
-    const height = Math.max(2, Math.round(rect.height * dpr))
+    // Composite slightly below the backing store: the CSS blur hides the
+    // upscale, and eight layer buffers per renderer stay cheap.
+    const width = Math.max(2, Math.round(rect.width * dpr * DW_SMOKE.layerScale))
+    const height = Math.max(2, Math.round(rect.height * dpr * DW_SMOKE.layerScale))
     if (canvas.width === width && canvas.height === height) return false
     // Assigning width/height resets the bitmap: the caller must repaint in the
     // same task, before the browser paints the blank backing store.
     canvas.width = width
     canvas.height = height
+    for (const layer of layerCanvases) {
+      layer.width = width
+      layer.height = height
+    }
+    composite = null
     return true
   }
-  const draw = (advance = false): void => {
+  const drawBlob = (context: CanvasRenderingContext2D, cx: number, cy: number, radius: number, alpha: number): void => {
+    const gradient = context.createRadialGradient(cx, cy, 0, cx, cy, radius)
+    gradient.addColorStop(0, `rgba(255,255,255,${alpha.toFixed(3)})`)
+    gradient.addColorStop(0.55, `rgba(255,255,255,${(alpha * 0.5).toFixed(3)})`)
+    gradient.addColorStop(1, 'rgba(255,255,255,0)')
+    context.fillStyle = gradient
+    context.beginPath()
+    context.arc(cx, cy, radius, 0, Math.PI * 2)
+    context.fill()
+  }
+  const draw = (): void => {
     if (disposed) return
     const width = canvas.width
     const height = canvas.height
     if (width === 0 || height === 0) return
-    ctx.clearRect(0, 0, width, height)
     const span = Math.max(width, height)
-    // A low broad wash keeps the whole pill tinted, not just the blob cores.
-    const palette = document.body.hasAttribute('data-ds-dark-theme') ? DW_ATMOS_PALETTES.dark : DW_ATMOS_PALETTES.light
-    const wash = ctx.createLinearGradient(0, 0, width, 0)
-    const washAlpha = Math.min(0.34, 0.40 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.spread * DW_ATMOS_CONFIG.blend)
-    for (let index = 0; index < palette.length; index += 1) {
-      const color = palette[index]
-      wash.addColorStop(index / (palette.length - 1), dwAtmosPaint(color, washAlpha))
+    for (const context of layerContexts) context?.clearRect(0, 0, width, height)
+    for (const particle of model.particles) {
+      const context = layerContexts[particle.hue]
+      const layer = layerCanvases[particle.hue]
+      if (context === null || context === undefined || layer === undefined) continue
+      const cx = particle.x * width
+      const cy = particle.y * height
+      const radius = Math.max(2, span * particle.size)
+      drawBlob(context, cx, cy, radius, particle.alpha)
+      // A wrapped particle has to be painted on both sides of the seam, or its
+      // hue pops out of one edge and into the other.
+      if (cx - radius < 0) drawBlob(context, cx + width, cy, radius, particle.alpha)
+      if (cx + radius > width) drawBlob(context, cx - width, cy, radius, particle.alpha)
     }
-    ctx.globalCompositeOperation = 'source-over'
-    ctx.fillStyle = wash
-    ctx.fillRect(0, 0, width, height)
-    // Drifting prism blobs: two coupled orbits + breathing alpha ≈ gas flow. The
-    // blobs paint over each other (not additive) so their hues stay saturated
-    // instead of summing to white; the CSS blend then applies the theme recipe.
-    ctx.globalCompositeOperation = 'source-over'
-    const breath = 1 + 0.10 * Math.sin(time * 0.17) + 0.05 * Math.sin(time * 0.09 + 1.4)
-    for (const blob of blobs) {
-      const color = palette[blob.hue]
-      const field = (fx: number, fy: number): number => fbm2(
-        fx * 1.1 + blob.phase + time * 0.018,
-        fy * 1.1 + blob.phase * 0.7 - time * 0.012
-      )
-      const eps = 0.055
-      const curlX = field(blob.x, blob.y + eps) - field(blob.x, blob.y - eps)
-      const curlY = -(field(blob.x + eps, blob.y) - field(blob.x - eps, blob.y))
-      const magnitude = Math.hypot(curlX, curlY) || 1
-      if (advance) {
-        // Smooth the field direction instead of jumping every frame, and never
-        // wrap across the row (a wrap teleports a hue and reads as a flash).
-        const targetX = (curlX / magnitude) * blob.speed
-        const targetY = (curlY / magnitude) * blob.speed
-        blob.vx = blob.vx * 0.95 + targetX * 0.05
-        blob.vy = blob.vy * 0.95 + targetY * 0.05
-        blob.x = Math.min(0.96, Math.max(0.04, blob.x + blob.vx))
-        blob.y = Math.min(0.92, Math.max(0.08, blob.y + blob.vy))
+    const layerData = layerCanvases.map((layer) => {
+      const context = layer.getContext('2d', { willReadFrequently: true })
+      return context === null ? null : context.getImageData(0, 0, width, height).data
+    })
+    if (composite === null) composite = ctx.createImageData(width, height)
+    const data = composite.data
+    // The buffer is reused, so leftover pixels from the previous frame would
+    // survive as smears; clear it before compositing.
+    data.fill(0)
+    const table = tableFor()
+    const total = width * height
+    // Blend the hues that are close to the leader, weighted by how far above the
+    // band threshold they are. A pure argmax produced flat slabs meeting at a
+    // hard line (owner: "looks like a bucket of ink"), and a capped top-2 blend
+    // only softened that line. The vector sum below is commutative, so the
+    // colour is continuous when two layers swap the lead, and because every
+    // layer keeps L/C fixed the blend never passes through grey.
+    const band = 0.55
+    const cos = DW_ATMOS_HUES.map((hue) => Math.cos(hue * Math.PI / 180))
+    const sin = DW_ATMOS_HUES.map((hue) => Math.sin(hue * Math.PI / 180))
+    const gain = DW_SMOKE.gain / 100
+    for (let pixel = 0; pixel < total; pixel += 1) {
+      let bestAlpha = 0
+      for (let hue = 0; hue < layerData.length; hue += 1) {
+        const layer = layerData[hue]
+        if (layer === null) continue
+        const alpha = layer[pixel * 4 + 3]
+        if (alpha > bestAlpha) bestAlpha = alpha
       }
-      const cx = width * blob.x
-      const cy = height * blob.y
-      const radius = Math.max(2, span * blob.size
-        * (0.42 + 0.08 * Math.sin(time * 0.12 + blob.phase)
-          + 0.03 * Math.sin(time * 0.06 + blob.phase * 1.9)))
-      const alpha = Math.min(0.48, blob.alpha * DW_ATMOS_HUE_ALPHA[blob.hue] * 0.68 * DW_ATMOS_CONFIG.intensity * DW_ATMOS_CONFIG.vibrance * DW_ATMOS_CONFIG.blend * breath)
-      const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius)
-      gradient.addColorStop(0, dwAtmosPaint(color, alpha))
-      gradient.addColorStop(0.30, dwAtmosPaint(color, alpha * 0.84))
-      gradient.addColorStop(0.60, dwAtmosPaint(color, alpha * 0.30))
-      gradient.addColorStop(1, dwAtmosPaint(color, 0))
-      ctx.fillStyle = gradient
-      ctx.beginPath()
-      ctx.arc(cx, cy, radius, 0, Math.PI * 2)
-      ctx.fill()
+      // Very thin gas is left to the coverage pass below: its colour would be a
+      // near-neutral blend and its alpha too low, which reads as a dark patch.
+      if (bestAlpha < 40) continue
+      const threshold = bestAlpha * band
+      let sumX = 0
+      let sumY = 0
+      for (let hue = 0; hue < layerData.length; hue += 1) {
+        const layer = layerData[hue]
+        if (layer === null) continue
+        const alpha = layer[pixel * 4 + 3]
+        if (alpha <= threshold) continue
+        const weight = (alpha - threshold) * (alpha - threshold)
+        sumX += weight * cos[hue]
+        sumY += weight * sin[hue]
+      }
+      const magnitude = Math.hypot(sumX, sumY)
+      const deg = magnitude < 1e-6
+        ? 0
+        : Math.round(((Math.atan2(sumY, sumX) * 180 / Math.PI) % 360 + 360) % 360) % 360
+      data[pixel * 4] = table[deg * 3]
+      data[pixel * 4 + 1] = table[deg * 3 + 1]
+      data[pixel * 4 + 2] = table[deg * 3 + 2]
+      data[pixel * 4 + 3] = Math.min(255, bestAlpha * gain)
     }
+    // Close the gaps between particles with the nearest solid colour instead of
+    // leaving them transparent or very thin: both show the row's dark surface
+    // and read as a black block in the gas (owner report, twice).
+    const solid = 150
+    for (let y = 0; y < height; y += 1) {
+      const row = y * width
+      let red = -1
+      let green = 0
+      let blue = 0
+      for (let x = 0; x < width; x += 1) {
+        const index = (row + x) * 4
+        if (data[index + 3] >= solid) {
+          red = data[index]
+          green = data[index + 1]
+          blue = data[index + 2]
+        } else if (red >= 0) {
+          data[index] = red
+          data[index + 1] = green
+          data[index + 2] = blue
+          data[index + 3] = 205
+        }
+      }
+      red = -1
+      for (let x = width - 1; x >= 0; x -= 1) {
+        const index = (row + x) * 4
+        if (data[index + 3] >= solid) {
+          if (red < 0) {
+            red = data[index]
+            green = data[index + 1]
+            blue = data[index + 2]
+          }
+        } else if (red >= 0) {
+          data[index] = red
+          data[index + 1] = green
+          data[index + 2] = blue
+          data[index + 3] = 205
+        }
+      }
+    }
+    ctx.putImageData(composite, 0, 0)
   }
   const frame = (now: number): void => {
     raf = 0
     if (disposed || document.hidden) return
-    if (lastFrame > 0) time += Math.min(0.08, (now - lastFrame) / 1000) * DW_ATMOS_CONFIG.drift
+    // Real delta time: the model integrates seconds, so a dropped frame or a
+    // 120 Hz display follows the same path (the 33 ms throttle below only
+    // limits repaints, never the simulation).
+    const dt = lastFrame > 0 ? (now - lastFrame) / 1000 : 0
     lastFrame = now
+    advanceAtmosphere(model, dt)
     if (now - lastDraw >= 33) {
       lastDraw = now
-      draw(true)
+      draw()
     }
     raf = window.requestAnimationFrame(frame)
   }
@@ -1010,7 +1038,7 @@ function dwAtmosphereMount(host: HTMLElement): { destroy(): void } {
     if (motionQuery.matches) {
       state(false, 'static')
       resize()
-      draw(false)
+      draw()
       return
     }
     state(true, 'animated')
@@ -1028,13 +1056,13 @@ function dwAtmosphereMount(host: HTMLElement): { destroy(): void } {
   // A real size change clears the backing store; repaint synchronously in the
   // same task (before the browser paints), regardless of reduced motion. The
   // 33 ms animation throttle above only governs steady-state frames.
-  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (resize()) draw(false) }) : null
+  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (resize()) draw() }) : null
   if (observer !== null) observer.observe(canvas)
   document.addEventListener('visibilitychange', onVisibility)
   motionQuery.addEventListener('change', onMotion)
   resize()
   // Paint once synchronously at mount so the first frame is never blank.
-  draw(false)
+  draw()
   start()
   return {
     destroy: () => {
@@ -2243,6 +2271,13 @@ function dwClearNativeAtmospheres() {
       return React.createElement(React.Fragment, null, blocks)
     }
 
+/** One vertical wheel step over the card's own scroller. */
+interface PanelWheelEvent {
+  readonly deltaY: number
+  readonly ctrlKey: boolean
+  stopPropagation(): void
+}
+
     /**
      * Render the running-Sessions summary card.
      * @param {object} props - component props.
@@ -2255,6 +2290,27 @@ function dwClearNativeAtmospheres() {
         projections, onEnsureProjections, pinnedIds, menuSessionId, menuEnabled, onOpenSessionMenu, onTogglePin,
         pendingIds
       } = props
+      // The sidebar viewport (DSH's `scroll-handoff`) splits wheel gestures in
+      // JavaScript: over anything inside the navigation it calls
+      // preventDefault and scrolls the viewport itself, which stops a nested
+      // scroller from ever moving. The card therefore claims the gesture while
+      // its own body can still scroll in that direction — native scrolling
+      // stays in charge (`overscroll-behavior: contain` keeps it here) — and
+      // steps aside at either end so the sidebar keeps its usual hand-off.
+      const bodyRef = React.useRef<HTMLElement | null>(null)
+      React.useEffect(() => {
+        const body = bodyRef.current
+        if (!(body instanceof HTMLElement)) return undefined
+        const onWheel = (event: PanelWheelEvent): void => {
+          if (event.ctrlKey || event.deltaY === 0) return
+          const max = body.scrollHeight - body.clientHeight
+          if (max <= 1) return
+          if (event.deltaY > 0 ? body.scrollTop >= max - 1 : body.scrollTop <= 1) return
+          event.stopPropagation()
+        }
+        body.addEventListener('wheel', onWheel, { passive: true })
+        return () => body.removeEventListener('wheel', onWheel)
+      }, [expanded])
       const visible = expanded && !showAll ? rows.slice(0, DW_PANEL_LIMIT) : rows
       // Waiting Sessions get an inline flag in front of their row title; no
       // floating popup is rendered at all (the row itself is the actionable
@@ -2470,6 +2526,7 @@ function dwClearNativeAtmospheres() {
         if (document.documentElement.getAttribute('data-psa-active') === 'true') return
         hoverTimer.current = window.setTimeout(() => setHover(null), 140)
       }
+
       // The annotation mode broadcasts its state; leaving the mode must never
       // leave a pinned hovercard behind, entering it must cancel a pending hide.
       React.useEffect(() => {
@@ -2745,7 +2802,7 @@ function dwClearNativeAtmospheres() {
               : null))
           }
         }
-        children.push(React.createElement('div', { key: 'body', className: 'psd-panel-body' }, body))
+        children.push(React.createElement('div', { key: 'body', className: 'psd-panel-body', ref: bodyRef }, body))
       }
       if (hover !== null) {
         const row = hover.row
@@ -3959,5 +4016,5 @@ function dwClearNativeAtmospheres() {
         })
       }, 'power-suite: session row menu')
     }
-  return { install: installDynamicWorkspaces, hovercardSections: DwHovercardProjectionSections }
+  return { install: installDynamicWorkspaces }
 }

@@ -121,11 +121,16 @@ interface HTMLElement {
 declare class HTMLCanvasElement extends HTMLElement {
   width: number
   height: number
-  getContext(contextId: '2d', options?: { alpha?: boolean }): CanvasRenderingContext2D | null
+  getContext(contextId: '2d', options?: { alpha?: boolean, willReadFrequently?: boolean }): CanvasRenderingContext2D | null
 }
 
 interface CanvasGradient {
   addColorStop(offset: number, color: string): void
+}
+
+/** One RGBA pixel buffer of a canvas (the renderer composites into this). */
+interface ImageData {
+  readonly data: Uint8ClampedArray
 }
 
 interface CanvasRenderingContext2D {
@@ -140,6 +145,9 @@ interface CanvasRenderingContext2D {
   arc(x: number, y: number, radius: number, startAngle: number, endAngle: number): void
   fill(): void
   measureText(text: string): { readonly width: number }
+  createImageData(width: number, height: number): ImageData
+  getImageData(x: number, y: number, width: number, height: number): ImageData
+  putImageData(data: ImageData, x: number, y: number): void
 }
 
 interface ResizeObserver {

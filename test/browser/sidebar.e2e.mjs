@@ -1740,6 +1740,56 @@ const probe = {
     }
   },
 
+  /**
+   * Vividness of every live atmosphere canvas right now. The renderer used to
+   * decay to grey within seconds (sat 0.79 -> 0.32); the check below samples
+   * this twice, seconds apart, and requires the second read to keep the first.
+   */
+  atmosSaturation: () => {
+    const canvasFacts = (canvas) => {
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })
+      const width = canvas.width
+      const height = canvas.height
+      if (!ctx || width === 0 || height === 0) return null
+      let total = 0
+      let sum = 0
+      let strongTotal = 0
+      let strongSum = 0
+      for (let y = 0; y < height; y += 4) {
+        for (let x = 0; x < width; x += 4) {
+          const data = ctx.getImageData(x, y, 1, 1).data
+          const max = Math.max(data[0], data[1], data[2]) / 255
+          const min = Math.min(data[0], data[1], data[2]) / 255
+          const saturation = max === 0 ? 0 : (max - min) / max
+          total += 1
+          sum += saturation
+          if (max >= 0.25) {
+            strongTotal += 1
+            strongSum += saturation
+          }
+        }
+      }
+      return {
+        avgSaturation: total === 0 ? 0 : Number((sum / total).toFixed(3)),
+        avgSaturationStrong: strongTotal === 0 ? 0 : Number((strongSum / strongTotal).toFixed(3)),
+      }
+    }
+    return [...document.querySelectorAll('.psd-atmos-canvas')].map((canvas) => {
+      const wrapper = canvas.parentElement
+      const row = wrapper === null ? null : wrapper.parentElement
+      const facts = canvasFacts(canvas)
+      return {
+        rowKey: row === null ? null : row.getAttribute('data-row-key'),
+        kind: wrapper === null ? null : wrapper.getAttribute('data-psd-atmos'),
+        running: wrapper === null ? null : wrapper.getAttribute('data-psd-atmos-running'),
+        motion: wrapper === null ? null : wrapper.getAttribute('data-psd-atmos-motion'),
+        width: canvas.width,
+        height: canvas.height,
+        ...facts,
+      }
+    })
+  },
+
   /** Theme + resolved tooltip tokens, for both-theme alignment assertions. */
   themeSnapshot: () => {
     const root = document.documentElement
@@ -2894,6 +2944,8 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       ['b4-3', 'reduced motion keeps the static internal rainbow fill and stops the renderer'],
       ['b4-4', 'a nested child current row paints the same atmosphere inside its own rounded rect'],
       ['b4-5', 'dark theme keeps the atmosphere vivid (screen blend, high saturation, light scrim)'],
+      ['b4-6', 'the atmosphere keeps its colour: vividness does not decay over seconds'],
+      ['b4-7', 'the running card scrolls its own wheel gesture instead of handing it to the sidebar'],
       ['b4-9', 'light-mode atmosphere rows keep readable text/icons (dark mode unchanged)'],
       ['b4-13', 'running-panel row text uses the native Workspace tokens in light mode (dark unchanged)'],
       ['b4-14', 'running-panel icon colours match or beat the native Workspace icon weight in light mode'],
@@ -3087,6 +3139,86 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     }
   })
 
+  await results.check('b4-6', 'the atmosphere keeps its colour: vividness does not decay over seconds', async () => {
+    // Regression: the old per-frame drift pushed every hue into the two edge
+    // clamps and the wash averaged to grey (blob-core saturation 0.79 -> 0.23
+    // within nine seconds). Sample the live canvases now and again after the
+    // window in which the old renderer decayed, and require the same vividness.
+    const before = await page.eval(probe.atmosSaturation)
+    assert(before.length > 0, 'no live atmosphere canvas to sample')
+    assert(before.every((canvas) => canvas.running === 'true' && canvas.motion === 'animated'), `the atmosphere is not animating: ${JSON.stringify(before)}`)
+    await page.moveTo(900, 500)
+    await sleep(7000)
+    const after = await page.eval(probe.atmosSaturation)
+    // Match the two samples by row: live data may open, finish or re-render a row
+    // during the window, and the decay oracle only speaks about the rows that
+    // stayed highlighted the whole time.
+    const keyOf = (canvas) => `${canvas.kind}:${canvas.rowKey}`
+    const byKey = new Map(after.map((canvas) => [keyOf(canvas), canvas]))
+    const details = []
+    for (const was of before) {
+      const now = byKey.get(keyOf(was))
+      if (!now) continue
+      assert(now.width === was.width && now.height === was.height, `${keyOf(was)} was rebuilt during the window`)
+      assert(now.avgSaturationStrong >= 0.6, `${keyOf(was)} lost its colour: blob-core saturation ${now.avgSaturationStrong}`)
+      const retained = was.avgSaturationStrong === 0 ? 1 : now.avgSaturationStrong / was.avgSaturationStrong
+      assert(retained >= 0.85, `${keyOf(was)} decayed from ${was.avgSaturationStrong} to ${now.avgSaturationStrong} (${Math.round(retained * 100)}% retained)`)
+      details.push(`${keyOf(was)} ${was.avgSaturationStrong} -> ${now.avgSaturationStrong}`)
+    }
+    assert(details.length > 0, `no atmosphere canvas survived the decay window (${JSON.stringify(before.map(keyOf))} -> ${JSON.stringify(after.map(keyOf))})`)
+    return details.join('; ')
+  })
+
+  await results.check('b4-7', 'the running card scrolls its own wheel gesture instead of handing it to the sidebar', async () => {
+    // DSH's sidebar viewport splits wheel gestures in JS (preventDefault + its own
+    // scrollTop writes), which used to swallow the gesture before the card body
+    // could scroll. The card now claims the gesture while it can still move.
+    const filler = 'data-psd-e2e-filler'
+    const setup = await page.eval((attribute) => {
+      const body = document.querySelector('.psd-panel-body')
+      if (!(body instanceof HTMLElement)) return null
+      const wrapper = document.createElement('div')
+      wrapper.setAttribute(attribute, '')
+      for (let index = 0; index < 12; index += 1) {
+        const row = document.createElement('div')
+        row.textContent = `e2e filler ${index}`
+        row.style.cssText = 'min-height:34px;display:flex;align-items:center;padding:0 10px'
+        wrapper.appendChild(row)
+      }
+      body.appendChild(wrapper)
+      const rect = body.getBoundingClientRect()
+      return {
+        clientH: body.clientHeight,
+        scrollH: body.scrollHeight,
+        x: Math.round(rect.x + rect.width / 2),
+        y: Math.round(rect.y + rect.height / 2),
+      }
+    }, filler)
+    assert(setup, 'no .psd-panel-body to scroll')
+    assert(setup.scrollH > setup.clientH + 20, `the card body could not be made to overflow (${setup.scrollH}/${setup.clientH})`)
+    try {
+      await page.moveTo(setup.x, setup.y)
+      await sleep(80)
+      for (let step = 0; step < 3; step += 1) {
+        await page.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: setup.x, y: setup.y, deltaX: 0, deltaY: 120 })
+      }
+      await sleep(250)
+      const after = await page.eval(() => {
+        const body = document.querySelector('.psd-panel-body')
+        return body instanceof HTMLElement ? { top: body.scrollTop, max: body.scrollHeight - body.clientHeight } : null
+      })
+      assert(after, 'the card body disappeared while scrolling')
+      assert(after.top > 0, `the card body did not scroll its own wheel gesture (scrollTop ${after.top}/${after.max})`)
+      return `card body scrolled ${after.top}px of ${after.max}px; the sidebar viewport did not take the gesture`
+    } finally {
+      await page.eval((attribute) => {
+        for (const node of document.querySelectorAll(`[${attribute}]`)) node.remove()
+        const body = document.querySelector('.psd-panel-body')
+        if (body instanceof HTMLElement) body.scrollTop = 0
+      }, filler)
+    }
+  })
+
   await results.check('b4-9', 'light-mode atmosphere rows keep readable text/icons (dark softened)', async () => {
     await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
     try {
@@ -3117,12 +3249,17 @@ async function runCurrentHighlightChecks({ page, results, state }) {
         }
         for (const key of ['toggle', 'action', 'glyph']) {
           if (host[key] !== null) {
-            assert(host[key].contrast >= thresholds.control, `${label}: ${key} contrast ${host[key].contrast}:1 must be >= ${thresholds.control}:1`)
+            // The state dot must keep the shell's semantic colour (f6-3), so on the
+            // brighter smoke pill it lands at ~2.5:1 in light mode. The owner
+            // accepted that trade-off rather than dimming the light atmosphere
+            // (2.5 is the floor for that one control; everything else stays at 3).
+            const minimum = key === 'glyph' && thresholds.glyph !== undefined ? thresholds.glyph : thresholds.control
+            assert(host[key].contrast >= minimum, `${label}: ${key} contrast ${host[key].contrast}:1 must be >= ${minimum}:1`)
           }
         }
         return `${label} title ${host.title?.contrast ?? 'n/a'}:1, time ${host.time?.contrast ?? 'n/a'}:1, worst text ${host.minText?.contrast ?? 'n/a'}:1 (backdrop rgb(${host.backdrop.r},${host.backdrop.g},${host.backdrop.b}))`
       }
-      const summaries = [assertHost('card row', light.card, { title: 4.5, time: 4.5, minText: 4.5, control: 3 })]
+      const summaries = [assertHost('card row', light.card, { title: 4.5, time: 4.5, minText: 4.5, control: 3, glyph: 2.5 })]
       if (light.workspace !== null) summaries.push(assertHost('native Workspace row', light.workspace, { title: 4.5, time: 3, minText: 3, control: 3 }))
       if (light.session !== null) summaries.push(assertHost('native Session row', light.session, { title: 4.5, time: 3, minText: 3, control: 3 }))
       await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
@@ -3425,103 +3562,6 @@ async function measureNativeTooltip(page, evidenceName = null) {
 
 async function runHoverCardChecks({ page, results, state }) {
   log('\n=== B5/C2/C3: row hover card vs the native tooltip oracle ===')
-  await results.check('b5-1', 'native sidebar tooltip measured live as the alignment oracle (light + dark)', async () => {
-    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
-    await sleep(800)
-    const light = await measureNativeTooltip(page, state.shotsEnabled ? '09-native-tooltip-light' : null)
-    assert(light.tooltip, 'native hover tooltip did not appear over a native session row (light theme)')
-    state.nativeTooltip = light.tooltip
-    state.nativeRow = light.row
-    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
-    await sleep(800)
-    const dark = await measureNativeTooltip(page, state.shotsEnabled ? '09-native-tooltip-dark' : null)
-    await page.emulateMedia([])
-    await sleep(500)
-    assert(dark.tooltip, 'native hover tooltip did not appear over a native session row (dark theme)')
-    state.nativeTooltipDark = dark.tooltip
-    assertEqual(light.tooltip.offsetFromSidebarRight, 0, 'native tooltip must sit flush on the sidebar right edge')
-    assertEqual(light.tooltip.borderWidth, '0px', 'native tooltip must be borderless')
-    // The theme-following light-mode override makes the native session info card a
-    // light surface with dark theme-text; dark mode keeps the shell's own
-    // #2C2C2E + static light palette recipe byte-identical.
-    assertEqual(light.tooltip.background, 'rgb(255, 255, 255)', `native light tooltip surface must follow the light theme, got ${light.tooltip.background}`)
-    assertEqual(light.tooltip.title.color, 'rgb(15, 17, 21)', `native light tooltip title must use the light primary label, got ${light.tooltip.title.color}`)
-    assertEqual(light.tooltip.path.color, 'rgb(97, 102, 107)', `native light tooltip path must use the light secondary label, got ${light.tooltip.path.color}`)
-    assertEqual(light.tooltip.status.color, 'rgb(129, 133, 140)', `native light tooltip status must use the light tertiary label, got ${light.tooltip.status.color}`)
-    assertEqual(dark.tooltip.background, 'rgb(44, 44, 46)', `native dark tooltip surface must stay the shell hover-card colour, got ${dark.tooltip.background}`)
-    assertEqual(dark.tooltip.title.color, 'rgb(255, 255, 255)', `native dark tooltip title must stay white, got ${dark.tooltip.title.color}`)
-    assertEqual(dark.tooltip.path.color, 'rgb(207, 211, 214)', `native dark tooltip path must stay #cfd3d6, got ${dark.tooltip.path.color}`)
-    assertEqual(dark.tooltip.status.color, 'rgb(173, 178, 184)', `native dark tooltip status must stay #adb2b8, got ${dark.tooltip.status.color}`)
-    assertEqual(dark.tooltip.boxShadow, light.tooltip.boxShadow, 'native tooltip elevation must be the same in light and dark')
-    assertEqual(light.tooltip.backgroundImage, 'none', 'native tooltip surface is a flat colour, no gradient layer')
-    assertEqual(light.tooltip.backdropFilter, 'none', 'native tooltip has no backdrop filter')
-    for (const [label, tooltip] of [['light', light.tooltip], ['dark', dark.tooltip]]) {
-      assertEqual(tooltip.radius, '16px', `native ${label} tooltip radius`)
-    }
-    return `oracle light ${light.tooltip.background}/${light.tooltip.title.color}, dark ${dark.tooltip.background}/#fff, radius ${light.tooltip.radius}, padding ${light.tooltip.padding}`
-  })
-
-  await results.check('b5-2', 'our hover card follows the theme like the native tooltip, with the same chrome', async () => {
-    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
-    await sleep(700)
-    const native = state.nativeTooltip
-    const nativeDark = state.nativeTooltipDark
-    // The live card re-sorts under a stationary pointer; retry until the card is
-    // actually showing instead of a single timed hover.
-    const target = await hoverRowStable(page, 0)
-    let card = await page.eval(probe.hoverCard)
-    assert(card, 'our hover card did not appear after the hover delay (light theme)')
-    state.hoverCard = card
-    const compare = (actual, expected, label) => {
-      assertEqual(actual.offsetFromSidebarRight, expected.offsetFromSidebarRight, `${label}: hover card left edge must be flush on the sidebar edge like the native tooltip`)
-      assertNear(actual.rect.top, target.rowTop, 1, `${label}: hover card top must align to the hovered row top`)
-      assertEqual(actual.rect.width, 320, `${label}: hover card keeps the native chrome and grows to its documented 320 px so the B6 figure sections fit on one line each`)
-      assertEqual(actual.radius, expected.radius, `${label}: hover card radius must match the native tooltip`)
-      assertEqual(actual.borderWidth, expected.borderWidth, `${label}: hover card must be borderless like the native tooltip`)
-      assertEqual(actual.padding, expected.padding, `${label}: hover card padding must match the native tooltip`)
-      assertEqual(actual.background, expected.background, `${label}: hover card background must match the native tooltip surface`)
-      assertEqual(actual.backgroundImage, expected.backgroundImage, `${label}: hover card background image layer must match the native tooltip`)
-      assertEqual(actual.backdropFilter, expected.backdropFilter, `${label}: hover card backdrop filter must match the native tooltip`)
-      assertEqual(actual.boxShadow, expected.boxShadow, `${label}: hover card elevation must match the native tooltip exactly`)
-      assertEqual(actual.pointerEvents, 'none', `${label}: hover card must not capture the pointer in normal mode`)
-      assertEqual(actual.pinned, null, `${label}: normal mode must not pin (data-psd-pinned) the hover card`)
-      assertEqual(actual.title.fontSize, expected.title.fontSize, `${label}: hover card title font-size vs native`)
-      assertEqual(actual.title.lineHeight, expected.title.lineHeight, `${label}: hover card title line-height vs native`)
-      assertEqual(actual.title.fontWeight, expected.title.fontWeight, `${label}: hover card title font-weight vs native`)
-      assertEqual(actual.title.color, expected.title.color, `${label}: hover card title colour vs native title`)
-      assertEqual(actual.path.color, expected.path.color, `${label}: hover card path colour vs native path`)
-      assertEqual(actual.status.color, expected.status.color, `${label}: hover card status colour vs native status`)
-      assertEqual(actual.status.fontSize, expected.status.fontSize, `${label}: hover card status font-size vs native`)
-      assertEqual(actual.status.lineHeight, expected.status.lineHeight, `${label}: hover card status line-height vs native`)
-    }
-    if (state.shotsEnabled) await writeEvidenceShot(page, '10-our-hovercard-light', card.rect)
-    compare(card, native, 'light')
-    assertEqual(card.background, native.background, 'light: our hover card background must match the live light native hover card surface')
-    assertEqual(card.background, 'rgb(255, 255, 255)', `our light hover card must follow the light theme, got ${card.background}`)
-    assertEqual(card.title.color, 'rgb(15, 17, 21)', `our light hover card title must use the light primary label, got ${card.title.color}`)
-    assertEqual(card.path.color, 'rgb(97, 102, 107)', `our light hover card path must use the light secondary label, got ${card.path.color}`)
-    assertEqual(card.status.color, 'rgb(129, 133, 140)', `our light hover card status must use the light tertiary label, got ${card.status.color}`)
-    const lastLight = card
-    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
-    await sleep(800)
-    try {
-      await page.moveTo(900, 500)
-      await sleep(300)
-      await hoverRowStable(page, 0)
-      card = await page.eval(probe.hoverCard)
-      assert(card, 'our hover card did not appear after the hover delay (dark theme)')
-      if (state.shotsEnabled) await writeEvidenceShot(page, '10-our-hovercard-dark', card.rect)
-      compare(card, nativeDark, 'dark')
-      assertEqual(card.background, 'rgb(44, 44, 46)', `our dark hover card must keep the native hover-card surface #2C2C2E, got ${card.background}`)
-      assert(card.background !== lastLight.background, 'our hover card must follow the active theme (light surface in light, #2C2C2E in dark)')
-    } finally {
-      await page.emulateMedia([])
-      await sleep(400)
-    }
-    await page.moveTo(900, 500)
-    return `light ${lastLight.background} / dark ${card.background}; radius ${card.radius}, border ${card.borderWidth}, elevation matched`
-  })
-
   await results.check('b5-5', 'plugin popover surfaces follow the light theme and keep the dark recipe unchanged', async () => {
     const readSearch = async () => {
       const toggle = await page.findRect('[data-psp-search-toggle]')
@@ -3596,81 +3636,48 @@ async function runHoverCardChecks({ page, results, state }) {
     }
   })
 
-  await results.check('b5-7', 'plugin and native session-info hover cards share the same width (no early truncation)', async () => {
-    const ourCard = () => page.eval(() => {
-      const card = document.querySelector('.psd-hovercard')
-      if (card === null) return null
-      const sections = [...card.querySelectorAll('.psd-hovercard-section-head')].map((head) => {
-        const title = head.querySelector('.psd-hovercard-section-title')
-        const value = head.querySelector('.psd-hovercard-section-value')
-        return {
-          title: title?.textContent ?? null,
-          titleFits: title ? title.scrollWidth <= title.clientWidth + 1 : null,
-          value: value?.textContent ?? null,
-          valueFits: value ? value.scrollWidth <= value.clientWidth + 1 : null,
-        }
-      })
-      return { width: Math.round(card.getBoundingClientRect().width), sections }
-    })
-    const nativeCard = () => page.eval(() => {
-      const card = document.querySelector('._card_bgejw_9')
-      if (card === null) return null
-      const title = card.querySelector('[class*="hoverTitle"]')
-      const path = card.querySelector('[class*="hoverPath"]')
-      return {
-        width: Math.round(card.getBoundingClientRect().width),
-        title: title?.textContent ?? null,
-        titleFits: title ? title.scrollWidth <= title.clientWidth + 1 : null,
-        path: path?.textContent ?? null,
-        pathFits: path ? path.scrollWidth <= path.clientWidth + 1 : null,
-      }
-    })
-    const hoverOurs = async () => {
-      await page.moveTo(900, 500)
-      await sleep(250)
-      await hoverRow(page, 0)
-      await sleep(1200)
-      return ourCard()
-    }
-    const hoverNative = async () => {
-      await page.moveTo(900, 500)
-      await sleep(300)
-      const row = await ensureNativeSessionRow(page)
-      await page.moveTo(row.rect.left + 40, row.rect.top + Math.round(row.rect.height / 2))
-      await sleep(1600)
-      return nativeCard()
-    }
+  await results.check('b5-1', 'native session tooltip is left untouched (alignment oracle, light + dark)', async () => {
     await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
-    try {
-      await sleep(800)
-      const oursLight = await hoverOurs()
-      assert(oursLight, 'our hover card did not appear (light)')
-      assertEqual(oursLight.width, 320, `our session-info card must be the documented 320 px wide, got ${oursLight.width}`)
-      assert(oursLight.sections.length > 0, 'our hover card has no figure sections to check for truncation')
-      for (const section of oursLight.sections) {
-        assert(section.titleFits !== false, `light: section label "${section.title}" is truncated`)
-        assert(section.valueFits !== false, `light: section value "${section.value}" is truncated`)
-      }
-      const stats = oursLight.sections.find((section) => /Session statistics|会话统计/.test(section.title ?? ''))
-      assert(stats, `the Session statistics section is missing (${oursLight.sections.map((section) => section.title).join(' / ')})`)
-      assert(/turns|轮/.test(stats.value ?? ''), `Session statistics value looks truncated: "${stats.value}"`)
-      const nativeLight = await hoverNative()
-      assert(nativeLight, 'native session-info hover card did not appear (light)')
-      assertEqual(nativeLight.width, oursLight.width, `native Workspace card width (${nativeLight.width}) must equal our session-info card width (${oursLight.width})`)
-      assert(nativeLight.titleFits !== false, `light: native card title truncated ("${nativeLight.title}")`)
-      assert(nativeLight.pathFits !== false, `light: native card path truncated ("${nativeLight.path}")`)
-      await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
-      await sleep(800)
-      const oursDark = await hoverOurs()
-      assert(oursDark, 'our hover card did not appear (dark)')
-      const nativeDark = await hoverNative()
-      assert(nativeDark, 'native session-info hover card did not appear (dark)')
-      assertEqual(nativeDark.width, oursDark.width, `dark: native Workspace card width (${nativeDark.width}) must equal our card width (${oursDark.width})`)
-      return `ours light/dark ${oursLight.width}/${oursDark.width}px, native light/dark ${nativeLight.width}/${nativeDark.width}px; stats value "${stats.value}" fits; native title/path fit`
-    } finally {
-      await page.emulateMedia([])
-      await sleep(400)
+    await sleep(800)
+    const light = await measureNativeTooltip(page, state.shotsEnabled ? '09-native-tooltip-light' : null)
+    assert(light.tooltip, 'native hover tooltip did not appear over a native session row (light theme)')
+    state.nativeTooltip = light.tooltip
+    state.nativeRow = light.row
+    await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
+    await sleep(800)
+    const dark = await measureNativeTooltip(page, state.shotsEnabled ? '09-native-tooltip-dark' : null)
+    await page.emulateMedia([])
+    await sleep(500)
+    assert(dark.tooltip, 'native hover tooltip did not appear over a native session row (dark theme)')
+    state.nativeTooltipDark = dark.tooltip
+    assertEqual(light.tooltip.offsetFromSidebarRight, 0, 'native tooltip must sit flush on the sidebar right edge')
+    assertEqual(light.tooltip.borderWidth, '0px', 'native tooltip must be borderless')
+    // The plugin no longer styles the shell's session-info card (its DOM classes
+    // changed in DSH 0.2.2), so the card must keep the shell's own theme-invariant
+    // recipe in both themes and must not carry our injected figures.
+    assertEqual(light.tooltip.background, 'rgb(44, 44, 46)', `native light tooltip must keep the shell surface untouched, got ${light.tooltip.background}`)
+    assertEqual(light.tooltip.title.color, 'rgb(255, 255, 255)', `native light tooltip title must stay white, got ${light.tooltip.title.color}`)
+    assertEqual(light.tooltip.path.color, 'rgb(207, 211, 214)', `native light tooltip path must stay #cfd3d6, got ${light.tooltip.path.color}`)
+    assertEqual(light.tooltip.status.color, 'rgb(173, 178, 184)', `native light tooltip status must stay #adb2b8, got ${light.tooltip.status.color}`)
+    const injected = await page.eval(() => {
+      const text = [...document.querySelectorAll('div')]
+        .filter((el) => getComputedStyle(el).position === 'fixed' && el.getBoundingClientRect().width > 150)
+        .map((el) => el.textContent || '')
+        .join(' ')
+      return text.includes('Session statistics')
+    })
+    assert(!injected, 'the plugin must not inject figures into the shell session card any more (A)')
+    assertEqual(dark.tooltip.background, 'rgb(44, 44, 46)', `native dark tooltip surface must stay the shell hover-card colour, got ${dark.tooltip.background}`)
+    assertEqual(dark.tooltip.title.color, 'rgb(255, 255, 255)', `native dark tooltip title must stay white, got ${dark.tooltip.title.color}`)
+    assertEqual(dark.tooltip.path.color, 'rgb(207, 211, 214)', `native dark tooltip path must stay #cfd3d6, got ${dark.tooltip.path.color}`)
+    assertEqual(dark.tooltip.status.color, 'rgb(173, 178, 184)', `native dark tooltip status must stay #adb2b8, got ${dark.tooltip.status.color}`)
+    assertEqual(dark.tooltip.boxShadow, light.tooltip.boxShadow, 'native tooltip elevation must be the same in light and dark')
+    assertEqual(light.tooltip.backgroundImage, 'none', 'native tooltip surface is a flat colour, no gradient layer')
+    assertEqual(light.tooltip.backdropFilter, 'none', 'native tooltip has no backdrop filter')
+    for (const [label, tooltip] of [['light', light.tooltip], ['dark', dark.tooltip]]) {
+      assertEqual(tooltip.radius, '16px', `native ${label} tooltip radius`)
     }
+    return `oracle light ${light.tooltip.background}/${light.tooltip.title.color}, dark ${dark.tooltip.background}/#fff, radius ${light.tooltip.radius}, padding ${light.tooltip.padding}`
   })
 
   await results.check('b5-3', 'hover card dismisses on pointer leave (normal mode unchanged)', async () => {
@@ -3753,14 +3760,27 @@ async function runHoverCardChecks({ page, results, state }) {
   })
 
   await results.check('c3-3', 'hover card inherits the shell font family', async () => {
-    const card = state.hoverCard
+    // Self-contained: the retired b5-2 row used to stash the card measurement, so
+    // this check opens the card itself by hovering a running-card row.
+    const target = await page.eval(() => {
+      const row = document.querySelector('.psd-run, .psd-child')
+      if (row === null) return null
+      const rect = row.getBoundingClientRect()
+      return { x: Math.round(rect.x + 60), y: Math.round(rect.y + rect.height / 2) }
+    })
+    if (target !== null) {
+      await page.moveTo(900, 420)
+      await sleep(150)
+      await page.moveTo(target.x, target.y)
+      await sleep(500)
+    }
     const family = await page.eval(() => getComputedStyle(document.body).fontFamily)
     const cardFamily = await page.eval(() => {
       const el = document.querySelector('[data-psd-hovercard]')
-      return el ? getComputedStyle(el).fontFamily : null
+      return el === null ? null : getComputedStyle(el).fontFamily
     })
-    if (cardFamily !== null) assertEqual(cardFamily, family, 'hover card font family')
-    assert(card, 'hover card was not measured earlier')
+    assert(cardFamily !== null, 'the plugin hover card is not in the DOM')
+    assertEqual(cardFamily, family, 'hover card font family')
     return 'hover card uses the inherited shell family'
   })
   await results.check('b6-7', 'a live Session hover card refreshes its figures in place while open', async () => {
