@@ -16,20 +16,20 @@ xerj code ui-annotation-refs "highlight node content padding border margin" -k 5
 xerj corpus list            # ui-annotation-refs (loaded)
 ```
 
-- The indexed corpus is built from a **filtered source tree**:
-  `.tmp-refs/ui-annotation-refs-src/` (gitignored, ~770 files/15 MB) — only the
-  directories worth searching (DevTools elements/sdk/overlay, Chromium overlay
-  backend, browser-use DOM serializer, Playwright injected selectors, finder,
-  css-selector-generator, Apache Annotator, Hypothesis anchoring, driver.js
-  overlay, Floating UI positioning, html2canvas renderer). It is registered as
-  `ui-annotation-refs` (manifest at
-  `~/.xerj-code/corpora/ui-annotation-refs/corpus.json`).
-- **Full checkouts for direct reading** (not indexed) live in
-  `.tmp-refs/full-clones-ui-annotation-refs/` plus the sparse DevTools tree
-  `.tmp-refs/devtools-frontend/`.
-- Rebuild: `xerj corpus index ui-annotation-refs` (the corpus source is the
-  filtered tree; re-run `xerj corpus add ui-annotation-refs
-  file://$PWD/.tmp-refs/ui-annotation-refs-src` after changing the tree).
+- The indexed corpus is served by XERJ from **its own store**, not from this
+  repository: `~/.xerj-code/corpora/ui-annotation-refs/` (manifest
+  `corpus.json` plus a copy of the filtered source tree, 771 files / ~9 MB).
+  The tree was filtered from the upstream checkouts (DevTools
+  elements/sdk/overlay, Chromium overlay backend, browser-use DOM serializer,
+  Playwright injected selectors, finder, css-selector-generator, Apache
+  Annotator, Hypothesis anchoring, driver.js overlay, Floating UI positioning,
+  html2canvas renderer) and registered as `ui-annotation-refs`; `corpus.json`
+  keeps the original staging path only as provenance, so queries never read it.
+- The staging checkouts (`.tmp-refs/…`, ~800 MB of full clones and a sparse
+  DevTools tree) are a **build-time scratch tree and are not kept**. To rebuild
+  the corpus, clone what the table below needs into any scratch path, filter it
+  into a source tree, then `xerj corpus add ui-annotation-refs
+  file://<that-tree>` followed by `xerj corpus index ui-annotation-refs`.
 - Keep data/assets out of the indexed tree: a JSON file such as `corpus.json`
   creates a numeric `files` field, and a numeric field in a wildcard
   `multi_match` makes BM25 fail with `For input string` (the old full-clone
