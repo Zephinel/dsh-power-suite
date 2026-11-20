@@ -43,6 +43,7 @@ const markdownFiles = [
   ...collectMarkdown(resolve(root, 'docs')),
   ...collectMarkdown(resolve(root, '.agents/skills')),
   resolve(root, 'README.md'),
+  resolve(root, 'README.zh.md'),
   resolve(root, 'CHANGELOG.md'),
   resolve(root, 'PRODUCT.md')
 ].filter((file) => existsSync(file))
@@ -52,8 +53,8 @@ for (const file of markdownFiles) {
   const relFile = relative(root, file).replace(/\\/gu, '/')
   const shipped = isShippedPath(relFile)
   const text = readFileSync(file, 'utf8')
-  if (relFile === 'README.md' && /^>\s*\[!/mu.test(text)) {
-    failures.push('README.md contains non-portable GitHub alert syntax (> [!...)')
+  if ((relFile === 'README.md' || relFile === 'README.zh.md') && /^>\s*\[!/mu.test(text)) {
+    failures.push(`${relFile} contains non-portable GitHub alert syntax (> [!...)`)
   }
   if (shipped && /\/Users\/[A-Za-z0-9._-]+\//u.test(text)) {
     failures.push(`${relFile} contains a personal /Users/<name>/ path`)

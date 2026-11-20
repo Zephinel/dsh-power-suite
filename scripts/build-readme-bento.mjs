@@ -65,17 +65,15 @@ const FRAME = { width: 1600, padding: 28, gap: 18, ...FRAMES[process.env.README_
 const groups = [
   {
     out: 'readme-overview.webp',
-    height: 1264,
+    height: 1197,
     cells: [
-      // Left column: the Workspaces panel (Active + Inactive, amber flag, rainbow current)
-      // above the native row menu. Right column: the Running & recent card (with its nested
-      // sub-agent row) above the native statistics hover card. Every cell is cropped at its
-      // native aspect and scaled by the same ratio (source width / slot width ≈ 1.20), so all
-      // four tiles render text at one apparent size.
-      { file: 'workspaces.png', x: 91, y: 28, w: 700, h: 697, crop: { x: 0, y: 0, w: 840, h: 836 } },
-      { file: 'row-menu.png', x: 91, y: 743, w: 700, h: 493, crop: { x: 0, y: 280, w: 840, h: 592 } },
-      { file: 'card.png', x: 809, y: 28, w: 700, h: 368, crop: { x: 0, y: 0, w: 840, h: 442 } },
-      { file: 'card-hover.png', x: 936, y: 414, w: 573, h: 762, crop: { x: 0, y: 0, w: 688, h: 914 } }
+      // Two columns with one straight 18 px gutter (left tiles end at x=890, right tiles
+      // start at x=908). Every cell keeps its native aspect and the same source-width /
+      // slot-width ratio (~1.21–1.25), so all four tiles share one text size.
+      { file: 'workspaces.png', x: 28, y: 28, w: 862, h: 594, crop: { x: 0, y: 0, w: 1040, h: 716 } },
+      { file: 'row-menu.png', x: 28, y: 640, w: 862, h: 529, crop: { x: 0, y: 0, w: 1040, h: 638 } },
+      { file: 'card.png', x: 908, y: 28, w: 664, h: 342, crop: { x: 0, y: 0, w: 828, h: 426 } },
+      { file: 'card-hover.png', x: 908, y: 388, w: 552, h: 734, crop: { x: 0, y: 0, w: 688, h: 914 } }
     ]
   },
   {

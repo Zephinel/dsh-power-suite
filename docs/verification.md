@@ -3410,11 +3410,13 @@ through CDP in the suite.
 - **门禁**：`npm run check` PASS（build、`scripts/check.mjs` 的 typecheck/预算/文档链接/单测、browser typecheck baseline、`npm pack --dry-run` 79 条目）；文档链接 28 个 Markdown 文件通过。
 - **证据边界**：真实模型轮次不可复现，九张原料为一次性实采；`artifacts-filter` 与 `artifacts-quicklook` 仅在截图时将行操作图标列/消息滚动区临时 `visibility: hidden`（chrome 姿态，非改图）；`card-hover` 的路径文本以 DOM 文本替换为 `~/Projects/demo-app`（沿用 `captures.json` 既有脱敏策略）。隔离实例与临时 `DSH_HOME` 在收尾时删除，未改版本号、未打 tag、未发布 npm。
 
-### 2026-11-20 追加：Overview Bento 倍率统一与真实标题
+### 2026-11-20 追加：Overview Bento 四格对齐与等待态修复
 
-- **问题**：上一版 `readme-overview.webp` 四格源图宽度分别为 840 / 840 / 1066 / 1528，右下统计浮卡在 763 槽位里被压到约一半字号；侧栏标题还是 `Noted reply only` 之类的测试占位名。
-- **演示数据**：隔离实例内重建 5 条真实会话——`Choose staging or production rollout`（真实 `ask_user_question` 等待态，琥珀 `flag-fill`）、`Release checklist review`（含嵌套只读 subagent 子行）、`Release checklist & smoke tests`（彩虹当前行）、`Q3 release notes draft`、`Migrate config schema`；侧栏同时显示 Active / Inactive 两组。
-- **原料**：`workspaces.png` 840×900、`card.png` 840×442、`row-menu.png` 840×872、`card-hover.png` 688×914（只含 Running & recent 卡与统计浮卡，起始于面板边缘，路径脱敏为 `~/Projects/demo-app`）。
-- **拼图**：`readme-overview.webp` 改为两列布局，各格 `源图宽 ÷ 槽宽 ≈ 1.20`（840/700、840/700、840/700、688/573），四格字号一致；输出 **1600×1264**。`row-menu` 裁切取文本空白带 `y=280..872` 以免切字；`workspaces` 裁到 `y=0..836` 保留两组标题与全部会话。其余三组配置未改动，`readme-annotation.webp` 保持提交版本。
-- **文案**：README 第 58 行 `readme-composer.webp` 的 alt 补上 `prompt history rail with its hover preview`。
-- **门禁**：`npm run check` PASS（typecheck、预算、文档链接 28 篇、release-notes、ratchet、`npm pack` 79 entries、403 条单测）。
+- **背景**：上一版 `readme-overview.webp` 有三个缺陷——待交互会话掉了真实等待态（显示感叹号圆圈而不是琥珀小旗）、嵌套子 Agent 行标题是提示词碎片（`Do not read any files,`）、左右两列出现 91px 与 18px 的阶梯留白。
+- **等待态**：`demo-app` 下的 `Staging vs production rollout` 在截图时处于真实的 `ask_user_question` 等待回答态（问题卡仍开着，未作答），且主视图停在另一个会话上，因此插件把待答标记渲染成琥珀 `flag-fill` + 右列 `Answer`；DOM 实测 `dps-row-pending-flag` 存在（`aria-label="Waiting for your answer"`），卡片行同样显示小旗。
+- **子 Agent 标题**：`Release checklist review` 派发子 Agent 时，提示词首句写成 `Audit release checklist items and return a one-sentence summary (no file reads needed).`，嵌套子行因此显示干净任务名 `Audit release checklist items and`（行宽裁切），不再是逗号残句。
+- **四格对齐**：`readme-overview.webp` 改为两列固定栅格——左列 862 宽（`workspaces` 与 `row-menu` 同宽同边，x=28..890），右列从 x=908 起（`card` 664 宽、`card-hover` 552 宽，统一左对齐中缝），两列之间只有一条笔直的 18px 缝。四格 `源图宽 ÷ 槽宽` 分别为 1.206 / 1.206 / 1.247 / 1.246（均落在 1.15–1.25），字号一致。输出 **1600×1197**。
+- **row-menu**：改为在 `Running & recent` 卡片的顶层行（高亮态，深墨色 `⋯`/`⊕`）展开原生菜单，菜单项为 `Rename ⌥⌘G`、`Fork session ⇧⌘F`、`Copy Session ID`、`Open in`、`Archive session ⌥⌘A`——不含 `Pin session`，与 README 描述一致；截图前隐藏下方 Workspaces 行与分组标题，避免菜单下缘切到半行。
+- **原料**：`workspaces.png` 1040×716、`row-menu.png` 1040×638、`card.png` 828×426、`card-hover.png` 688×914（沿用已验收版本）。
+- **门禁**：`npm run check` PASS（typecheck、预算、文档链接 28 篇、release-notes、ratchet、`npm pack` 79 entries、403 条单测）；`readme-annotation.webp` 保持提交版本。
+- **证据边界**：真实模型轮次不可复现；等待态为实拍；临时隔离实例与 `DSH_HOME` 在收尾时删除，未改版本号、未打 tag、未发布。
