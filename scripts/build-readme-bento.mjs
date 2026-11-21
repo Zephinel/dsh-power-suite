@@ -56,51 +56,39 @@ const FRAMES = {
 const FRAME = { width: 1600, padding: 28, gap: 18, ...FRAMES[process.env.README_BENTO_FRAME === 'dark' ? 'dark' : 'light'] }
 
 /**
- * Bento groups: explicit positions with a uniform 18 px gutter on the pale
- * beige canvas; every tile is sized to its source aspect, so screenshots fill
- * the card with no letterboxing. All sources are light-theme captures from the
- * isolated demo DSH instance.
- * @type {Array<{out: string, height: number, cells: Array<{file: string, x: number, y: number, w: number, h: number, fit?: string, position?: string, source?: 'docs', crop?: {x: number, y: number, w: number, h: number}}>}>}
+ * Bento layouts: one entry per output. Cells are laid out by `columns` or `rows`,
+ * every cell takes a fixed pixel width and derives its height from the source
+ * capture's aspect, and the canvas height follows the content. A capture whose
+ * size changes therefore re-flows instead of being cut by a stale crop.
+ *
+ * Widths are CSS px inside the 1600 px frame (28 px padding, 18 px gutter).
+ * @type {Array<{out: string, columns?: Array<{width: number, files: string[]}>, rows?: Array<Array<{file: string, width: number}>>}>}
  */
-const groups = [
+const layouts = [
   {
     out: 'readme-overview.webp',
-    height: 1197,
-    cells: [
-      // Two columns with one straight 18 px gutter (left tiles end at x=890, right tiles
-      // start at x=908). Every cell keeps its native aspect and the same source-width /
-      // slot-width ratio (~1.21–1.25), so all four tiles share one text size.
-      { file: 'workspaces.png', x: 28, y: 28, w: 862, h: 594, crop: { x: 0, y: 0, w: 1040, h: 716 } },
-      { file: 'row-menu.png', x: 28, y: 640, w: 862, h: 529, crop: { x: 0, y: 0, w: 1040, h: 638 } },
-      { file: 'card.png', x: 908, y: 28, w: 664, h: 342, crop: { x: 0, y: 0, w: 828, h: 426 } },
-      { file: 'card-hover.png', x: 908, y: 388, w: 552, h: 734, crop: { x: 0, y: 0, w: 688, h: 914 } }
+    columns: [
+      { width: 862, files: ['workspaces.png', 'row-menu.png'] },
+      { width: 664, files: ['card.png', 'card-hover.png'] }
     ]
   },
   {
     out: 'readme-artifacts.webp',
-    height: 1051,
-    cells: [
-      // The wide artifact list spans the top; Quick Look and the open filter sit below it.
-      { file: 'artifacts.png', x: 28, y: 28, w: 1544, h: 481, crop: { x: 0, y: 0, w: 1438, h: 448 } },
-      { file: 'artifacts-quicklook.png', x: 28, y: 527, w: 760, h: 496, crop: { x: 0, y: 0, w: 1176, h: 768 } },
-      { file: 'artifacts-filter.png', x: 806, y: 527, w: 766, h: 470, crop: { x: 0, y: 0, w: 508, h: 312 } }
+    rows: [
+      [{ file: 'artifacts.png', width: 1544 }],
+      [{ file: 'artifacts-quicklook.png', width: 760 }, { file: 'artifacts-filter.png', width: 766 }]
     ]
   },
   {
     out: 'readme-composer.webp',
-    height: 797,
-    cells: [
-      // The main chat window (answer + composer + prompt rail) and the settings view.
-      { file: 'composer-chat.png', x: 28, y: 28, w: 1000, h: 741, crop: { x: 0, y: 0, w: 3240, h: 2400 } },
-      { file: 'settings.png', x: 1046, y: 200, w: 526, h: 396, crop: { x: 0, y: 0, w: 1336, h: 1006 } }
+    rows: [
+      [{ file: 'composer-chat.png', width: 1000 }, { file: 'settings.png', width: 526 }]
     ]
   },
   {
     out: 'readme-annotation.webp',
-    height: 1128,
-    cells: [
-      // Real answer from the demo Session with three annotations and the rail requirements.
-      { file: 'annotation-annotated.png', x: 28, y: 28, w: 1544, h: 1072 }
+    rows: [
+      [{ file: 'annotation-annotated.png', width: 1544 }]
     ]
   }
 ]
@@ -138,96 +126,84 @@ function pngSize(bytes) {
 }
 
 /**
- * Refuse a group whose cell crop no longer matches its tile.
+ * Position every cell of one layout and derive the canvas height.
  *
- * The Bento cells are hand-tuned against one capture geometry. When the demo
- * instance's sidebar width or row count changes, the raw captures change shape
- * and a stale crop silently composes a cut-off image (the card loses its time
- * column, a menu gets clipped). Failing here is the honest alternative: it names
- * the cell and the two aspects so the layout can be re-tuned deliberately.
- * @param {object} group - one Bento group.
- * @returns {Promise<void>}
+ * `columns` stack their files vertically in one column; `rows` lay their files
+ * out left to right at a shared top edge. Both derive each cell's height from
+ * the capture's own aspect, so a differently sized raw can never be cropped by
+ * a stale constant.
+ * @param {object} layout - one entry of {@link layouts}.
+ * @returns {Promise<{out: string, height: number, cells: Array<{file: string, x: number, y: number, w: number, h: number}>}>} the positioned layout.
  */
-async function preflightGroup(group) {
-  for (const cell of group.cells) {
-    const file = sourcePath(cell)
-    if (!existsSync(file)) throw new Error(`bento: ${group.out}: missing capture ${file}`)
-    if (cell.crop === undefined) continue
-    const size = pngSize(await readFile(file))
-    if (cell.crop.x + cell.crop.w > size.width || cell.crop.y + cell.crop.h > size.height) {
-      throw new Error(
-        `bento: ${group.out}: crop ${cell.crop.w}x${cell.crop.h} + offset (${cell.crop.x},${cell.crop.y}) ` +
-        `exceeds ${cell.file} (${size.width}x${size.height}); the capture geometry changed — re-tune this cell`
-      )
+async function computeLayout(layout) {
+  const cells = []
+  let height = FRAME.padding
+  if (Array.isArray(layout.columns)) {
+    let x = FRAME.padding
+    let tallest = 0
+    for (const column of layout.columns) {
+      let y = FRAME.padding
+      for (const file of column.files) {
+        const size = pngSize(await readFile(sourcePath({ file })))
+        const h = Math.round((column.width / size.width) * size.height)
+        cells.push({ file, x, y, w: column.width, h })
+        y += h + FRAME.gap
+      }
+      tallest = Math.max(tallest, y - FRAME.gap)
+      x += column.width + FRAME.gap
     }
-    const cropAspect = cell.crop.w / cell.crop.h
-    const tileAspect = cell.w / cell.h
-    const drift = Math.abs(cropAspect - tileAspect) / Math.max(cropAspect, tileAspect)
-    if (drift > 0.015) {
-      throw new Error(
-        `bento: ${group.out}: ${cell.file} crop ${cell.crop.w}x${cell.crop.h} (aspect ${cropAspect.toFixed(3)}) ` +
-        `does not match its tile ${cell.w}x${cell.h} (aspect ${tileAspect.toFixed(3)}, drift ${(drift * 100).toFixed(1)}%); ` +
-        're-tune the Bento cells after a capture-geometry change'
-      )
+    height = tallest + FRAME.padding
+  } else {
+    let y = FRAME.padding
+    for (const row of layout.rows ?? []) {
+      let x = FRAME.padding
+      let rowHeight = 0
+      for (const cell of row) {
+        const size = pngSize(await readFile(sourcePath(cell)))
+        const h = Math.round((cell.width / size.width) * size.height)
+        cells.push({ file: cell.file, x, y, w: cell.width, h })
+        rowHeight = Math.max(rowHeight, h)
+        x += cell.width + FRAME.gap
+      }
+      y += rowHeight + FRAME.gap
     }
+    height = y - FRAME.gap + FRAME.padding
   }
+  const widest = Math.max(...cells.map((cell) => cell.x + cell.w))
+  if (widest > FRAME.width - FRAME.padding) {
+    throw new Error(`bento: ${layout.out}: cells reach ${widest}px, beyond the ${FRAME.width}px frame`)
+  }
+  return { out: layout.out, height: Math.round(height), cells }
 }
 
-/** Build the composed HTML page for one group. */
-async function buildHtml(group) {
+/** Build the composed HTML page for one positioned layout. */
+async function buildHtml(layout) {
   const figures = []
-  const crops = []
-  for (const cell of group.cells) {
-    const src = await dataUri(cell)
-    if (cell.crop === undefined) {
-      figures.push(
-        `<figure style="left:${cell.x}px;top:${cell.y}px;width:${cell.w}px;height:${cell.h}px">` +
-          `<img src="${src}" alt="" style="object-fit:${cell.fit ?? 'contain'}">` +
-        '</figure>'
-      )
-      continue
-    }
-    const index = crops.length
-    crops.push({ src, crop: cell.crop, width: cell.w, height: cell.h })
+  for (const cell of layout.cells) {
+    const src = await dataUri({ file: cell.file })
     figures.push(
       `<figure style="left:${cell.x}px;top:${cell.y}px;width:${cell.w}px;height:${cell.h}px">` +
-        `<canvas id="crop-${index}"></canvas>` +
+        `<img src="${src}" alt="">` +
       '</figure>'
     )
   }
-  const cropScript = crops.length === 0 ? '' : `
-const crops = ${JSON.stringify(crops)};
-const jobs = crops.map((crop, index) => new Promise((done) => {
-  const canvas = document.getElementById('crop-' + index);
-  const image = new Image();
-  image.addEventListener('load', () => {
-    canvas.width = crop.width * 2;
-    canvas.height = crop.height * 2;
-    canvas.style.width = crop.width + 'px';
-    canvas.style.height = crop.height + 'px';
-    canvas.getContext('2d').drawImage(
-      image,
-      crop.crop.x, crop.crop.y, crop.crop.w, crop.crop.h,
-      0, 0, canvas.width, canvas.height
-    );
-    done()
-  }, { once: true })
-  image.src = crop.src
-}));
-Promise.all(jobs).then(() => { document.documentElement.dataset.bentoReady = '1' });
+  const readyScript = `
+Promise.all([...document.images].map((image) => image.decode().catch(() => {}))).then(() => {
+  document.documentElement.dataset.bentoReady = '1'
+});
 `
   return '<!doctype html><html><head><meta charset="utf-8"><style>' +
     'html,body{margin:0;padding:0;background:' + FRAME.background + ';}' +
-    '#frame{position:relative;width:' + FRAME.width + 'px;height:' + group.height + 'px;box-sizing:border-box;overflow:hidden;}' +
+    '#frame{position:relative;width:' + FRAME.width + 'px;height:' + layout.height + 'px;box-sizing:border-box;overflow:hidden;}' +
     'figure{margin:0;position:absolute;overflow:hidden;border-radius:' + FRAME.radius + 'px;' +
     'background:' + FRAME.tile + ';border:1px solid ' + FRAME.tileBorder + ';box-shadow:' + FRAME.shadow + ';' +
     'display:flex;align-items:center;justify-content:center;}' +
-    'img,canvas{display:block;width:100%;height:100%;object-fit:contain;}' +
+    'img{display:block;width:100%;height:100%;object-fit:cover;}' +
     '</style></head><body><div id="frame">' + figures.join('') + '</div>' +
-    '<script>' + cropScript + '</script></body></html>'
+    '<script>' + readyScript + '</script></body></html>'
 }
 
-/** Find the configured Chrome binary. */
+/** Find the configured Chrome binary. *//** Find the configured Chrome binary. */
 function findChrome() {
   const found = CHROME_CANDIDATES.find((candidate) => existsSync(candidate))
   if (found === undefined) throw new Error(`Chrome not found (set CHROME_BIN); tried: ${CHROME_CANDIDATES.join(', ')}`)
@@ -336,7 +312,7 @@ function waitForReady(cdp, sessionId, timeoutMs = 15000) {
   return (async () => {
     while (Date.now() < deadline) {
       const result = await cdp.send('Runtime.evaluate', {
-        expression: 'document.readyState === "complete" && !!document.getElementById("frame") && (document.documentElement.dataset.bentoReady === "1" || !document.querySelector("canvas"))',
+        expression: 'document.readyState === "complete" && !!document.getElementById("frame") && document.documentElement.dataset.bentoReady === "1"',
         returnByValue: true
       }, sessionId).catch(() => null)
       if (result?.result?.value === true) return
@@ -363,8 +339,8 @@ async function main() {
   let launched = null
   try {
     const rows = []
-    for (const group of groups) {
-      await preflightGroup(group)
+    for (const spec of layouts) {
+      const group = await computeLayout(spec)
       const html = await buildHtml(group)
       const pageFile = join(temp, `${group.out}.html`)
       await writeFile(pageFile, html, 'utf8')

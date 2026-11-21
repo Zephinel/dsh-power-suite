@@ -15078,7 +15078,17 @@ async function readmeOpenCardHover(page, row) {
       const hovered = await page.eval(probeReadme.hoveredCardRows)
       if (hover !== null && hover.textLength > 30 && hovered > 0) return hover
       if (process.env.PSD_SHOT_DEBUG === '1') {
-        log(`readme hover attempt ${attempt}: mainPoint ${JSON.stringify(row.mainPoint)} hover ${hover === null ? 'null' : hover.textLength} hovered ${hovered}`)
+        const probeHit = await page.eval((point) => {
+          const element = document.elementFromPoint(point.x, point.y)
+          return {
+            tag: element === null ? null : element.tagName.toLowerCase(),
+            cls: element === null ? null : String(element.className).slice(0, 50),
+            modal: document.querySelectorAll('[role="dialog"][aria-modal="true"]').length,
+            rows: document.querySelectorAll('.psd-run').length,
+            insideRow: element === null ? false : element.closest('.psd-run') !== null,
+          }
+        }, row.mainPoint).catch(() => null)
+        log(`readme hover attempt ${attempt}: mainPoint ${JSON.stringify(row.mainPoint)} hit ${JSON.stringify(probeHit)} hover ${hover === null ? 'null' : hover.textLength} hovered ${hovered}`)
       }
     }
   }
