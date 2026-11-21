@@ -3,15 +3,17 @@
  * Documentation-audit gate for the release commit.
  *
  * `release-power-suite` step 6 requires a pre-tag audit of the as-built docs
- * (release state, counts, environment versions, prose, screenshots). A prose
- * requirement is easy to skip silently, so the commit that gets tagged must
- * carry one trailer naming what was checked:
+ * (release state, counts, environment versions, prose, screenshots, changelog
+ * completeness). A prose requirement is easy to skip silently, so the commit
+ * that gets tagged must carry one trailer naming what was checked:
  *
- *   Docs-Audit: checked=release-state,counts,environment,prose,screenshots fixed=<what changed> waived=<none|owner:"...">
+ *   Docs-Audit: checked=release-state,counts,environment,prose,screenshots,changelog fixed=<what changed> waived=<none|owner:"...">
  *
  * `publish.yml` recomputes this from the tagged commit and refuses a missing,
- * duplicated or malformed trailer. `waived=none` is the normal case; a waiver
- * must quote the owner's approval, so an agent cannot waive on its own.
+ * duplicated or malformed trailer. The trailer is an attestation: it proves the
+ * audit was recorded, not that every image was compared. The owner reviews the
+ * audit result in the release commit; a waiver must quote the owner so it is
+ * never anonymous.
  *
  * Usage:
  *   node scripts/check-docs-audit.mjs --verify            # check HEAD's commit body
@@ -27,7 +29,14 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 /** Claim classes the release audit must have covered. */
-export const AUDIT_CLASSES = Object.freeze(['release-state', 'counts', 'environment', 'prose', 'screenshots'])
+export const AUDIT_CLASSES = Object.freeze([
+  'release-state',
+  'counts',
+  'environment',
+  'prose',
+  'screenshots',
+  'changelog',
+])
 
 const TRAILER = /^Docs-Audit:\s*(.+)$/gmu
 
@@ -65,19 +74,31 @@ export function parseDocsAudit(message) {
   if (waived === null || waived.length === 0) {
     problems.push('waived= must be "none" or quote the owner\'s approval')
   } else if (waived !== 'none') {
-    const owner = waived.match(/^owner:"(.+)"$/u)
+    const owner = waived.match(/^owner:"([^"]*)"$/u)
     if (owner === null || owner[1].trim().length === 0) {
-      problems.push('a waiver must be waived=none or waived=owner:"<the owner\'s words>"')
+      problems.push('a waiver must be waived=none or waived=owner:"<the owner\'s words>" with no trailing text')
     }
   }
 
   return { ok: problems.length === 0, problems, checked, fixed, waived }
 }
 
-/** Read the commit message to verify. */
-function commitMessage(path) {
-  if (path !== null) return readFileSync(path, 'utf8')
-  return execFileSync('git', ['log', '-1', '--format=%B'], { cwd: root, encoding: 'utf8' })
+/**
+ * Keep only the sections a claim belongs to.
+ * @param {string} text - Markdown source.
+ * @param {{include?: RegExp, exclude?: RegExp}} [filter] - heading filters.
+ * @returns {string} the concatenated matching sections (the preamble is dropped when `include` is set).
+ */
+export function sliceSections(text, filter = {}) {
+  return text
+    .split(/^(?=## )/mu)
+    .filter((block) => {
+      const heading = block.match(/^## (.+)$/mu)?.[1]?.trim() ?? ''
+      if (filter.include !== undefined && !filter.include.test(heading)) return false
+      if (filter.exclude !== undefined && filter.exclude.test(heading)) return false
+      return true
+    })
+    .join('\n')
 }
 
 /** Read a repo-relative file, or null when it does not exist. */
@@ -98,46 +119,66 @@ function hostVersion() {
   }
 }
 
+const DSH_HOST = /\*\*DSH ([0-9][0-9A-Za-z.-]*)\*\*/gu
+const DSH_LIVE = /\bDSH ([0-9][0-9A-Za-z.-]*)/gu
+const LAYOUT_CLAIM = /dsh-client-ui-layout@([0-9][0-9A-Za-z.-]*)/gu
+
+/** Files, patterns and section scope the environment scan reads. */
+export const HOST_FILES = Object.freeze([
+  { file: 'README.md', pattern: DSH_HOST },
+  { file: 'README.zh.md', pattern: DSH_HOST },
+  { file: 'docs/architecture.md', pattern: LAYOUT_CLAIM, exclude: /evidence|verification|history/iu },
+  { file: 'docs/sidebar-width.md', pattern: LAYOUT_CLAIM, exclude: /verification|measured acceptance/iu },
+  { file: 'docs/limitations.md', pattern: LAYOUT_CLAIM, include: /^Sidebar width$/iu },
+  { file: 'docs/verification.md', pattern: DSH_LIVE, include: /^Automated$/iu },
+])
+
 /**
  * Compare the version claims that must track the running host.
- * @returns {{ok: boolean, problems: string[], notes: string[]}} result.
+ * @param {string|null} dshVersion - `dsh --version` output, or null when absent.
+ * @param {ReadonlyArray<{file: string, pattern: RegExp, include?: RegExp, exclude?: RegExp}>} files - scan targets.
+ * @param {(file: string) => string|null} [read] - file reader (tests inject one).
+ * @returns {{ok: boolean, problems: string[], claims: number}} result.
  */
-export function scanHostClaims(dshVersion, files) {
-  const problems = []
-  const notes = []
+export function scanHostClaims(dshVersion, files, read = readOrNull) {
   if (typeof dshVersion !== 'string' || dshVersion.length === 0) {
-    return { ok: true, problems, notes: ['skipped the environment scan: `dsh` is not on PATH'] }
+    return { ok: false, problems: ['`dsh` is not on PATH; the environment class cannot be checked'], claims: 0 }
   }
+  const problems = []
   let claims = 0
-  for (const [file, pattern] of files) {
-    const text = readOrNull(file)
+  for (const target of files) {
+    const text = read(target.file)
     if (text === null) {
-      problems.push(`${file}: promised by the audit but missing`)
+      problems.push(`${target.file}: promised by the audit but missing`)
       continue
     }
-    for (const match of text.matchAll(pattern)) {
+    const scoped = sliceSections(text, { include: target.include, exclude: target.exclude })
+    for (const match of scoped.matchAll(target.pattern)) {
       claims += 1
       if (match[1] !== dshVersion) {
-        problems.push(`${file}:${text.slice(0, match.index).split('\n').length}: claims ${match[0]} but the running host is ${dshVersion}`)
+        problems.push(`${target.file}: claims ${match[0]} but the running host is ${dshVersion}`)
       }
     }
   }
-  if (claims === 0) problems.push('no host-version claim was found in the audited files')
-  else notes.push(`${claims} host-version claim(s) match dsh ${dshVersion}`)
-  return { ok: problems.length === 0, problems, notes }
+  if (claims === 0 && problems.length === 0) problems.push('no host-version claim was found in the audited sections')
+  return { ok: problems.length === 0, problems, claims }
 }
 
-const HOST_CLAIM = /\*\*DSH ([0-9][0-9A-Za-z.-]*)\*\*/gu
-const LAYOUT_CLAIM = /dsh-client-ui-layout@([0-9][0-9A-Za-z.-]*)/gu
-
-/** Files and patterns the environment scan reads. */
-const HOST_FILES = [
-  ['README.md', HOST_CLAIM],
-  ['README.zh.md', HOST_CLAIM],
-  ['docs/architecture.md', LAYOUT_CLAIM],
-  ['docs/sidebar-width.md', LAYOUT_CLAIM],
-  ['docs/limitations.md', LAYOUT_CLAIM],
-]
+/** Read the commit message to verify. */
+function commitMessage(path) {
+  if (path !== null) {
+    try {
+      return readFileSync(path, 'utf8')
+    } catch {
+      throw new Error(`cannot read --message-file ${path}`)
+    }
+  }
+  try {
+    return execFileSync('git', ['log', '-1', '--format=%B'], { cwd: root, encoding: 'utf8' })
+  } catch {
+    throw new Error('not inside a Git checkout; pass --message or --message-file')
+  }
+}
 
 /** CLI entry; only runs when this file is executed, not when a test imports it. */
 function main() {
@@ -149,11 +190,11 @@ function main() {
 
   if (args.includes('--scan')) {
     const result = scanHostClaims(hostVersion(), HOST_FILES)
-    for (const note of result.notes) console.log(note)
     if (!result.ok) {
       for (const problem of result.problems) console.error(`docs audit: ${problem}`)
       process.exit(1)
     }
+    console.log(`${result.claims} host-version claim(s) match dsh ${hostVersion()}`)
     console.log('docs audit: host claims ok')
     process.exit(0)
   }
@@ -171,7 +212,13 @@ function main() {
     process.exit(2)
   }
 
-  const message = inlineMessage ?? commitMessage(messageFile)
+  let message
+  try {
+    message = inlineMessage ?? commitMessage(messageFile)
+  } catch (error) {
+    console.error(`docs audit: ${error.message}`)
+    process.exit(2)
+  }
   const result = parseDocsAudit(message)
   if (!result.ok) {
     for (const problem of result.problems) console.error(`docs audit: ${problem}`)
