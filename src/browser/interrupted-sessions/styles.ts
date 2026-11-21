@@ -40,8 +40,12 @@ html[data-input-modality='keyboard'] [data-row-key^="session:"][data-power-suite
   [data-row-key^="session:"][data-power-suite-interrupted]:focus-within .dps-row-continue-slot{transition:none}
 }
 .dps-row-continue{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;flex:none;opacity:1;pointer-events:auto}
-.dps-row-continue svg{display:block;flex:none}
-.dps-row-continue:hover{background:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);color:var(--dsw-alias-label-primary)}
+.dps-row-continue svg{display:block;flex:none;pointer-events:none}
+/* The native Session row is the hover surface (same one-surface rule as the
+   card): Continue only lifts its glyph colour, so no second block is stacked
+   inside a highlighted row. Its inner svg is pointer-transparent so an
+   annotation pick lands on the labelled button, not on the anonymous icon. */
+.dps-row-continue:hover{background:transparent;color:var(--dsw-alias-label-primary)}
 .dps-row-continue:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 /* Hide only the native status dots that render directly under this cell while
    the native row still believes it is running (the decorator inserts the warning

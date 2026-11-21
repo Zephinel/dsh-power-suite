@@ -414,6 +414,10 @@ export function createDynamicWorkspacesInstaller(deps: DynamicWorkspacesDeps): D
     /** Inline fallback path for the ellipsis (three filled dots, 24 viewBox). */
     const DW_MORE_PATH = 'M5 10.5C4.17157 10.5 3.5 11.1716 3.5 12C3.5 12.8284 4.17157 13.5 5 13.5C5.82843 13.5 6.5 12.8284 6.5 12C6.5 11.1716 5.82843 10.5 5 10.5ZM12 10.5C11.1716 10.5 10.5 11.1716 10.5 12C10.5 12.8284 11.1716 13.5 12 13.5C12.8284 13.5 13.5 12.8284 13.5 12C13.5 11.1716 12.8284 10.5 12 10.5ZM19 10.5C18.1716 10.5 17.5 11.1716 17.5 12C17.5 12.8284 18.1716 13.5 19 13.5C19.8284 13.5 20.5 12.8284 20.5 12C20.5 11.1716 19.8284 10.5 19 10.5Z'
     const DW_SPARKLING_LINE = 'M14 4.4375C15.3462 4.4375 16.4375 3.34619 16.4375 2H17.5625C17.5625 3.34619 18.6538 4.4375 20 4.4375V5.5625C18.6538 5.5625 17.5625 6.65381 17.5625 8H16.4375C16.4375 6.65381 15.3462 5.5625 14 5.5625V4.4375ZM1 11C4.31371 11 7 8.31371 7 5H9C9 8.31371 11.6863 11 15 11V13C11.6863 13 9 15.6863 9 19H7C7 15.6863 4.31371 13 1 13V11ZM4.87601 12C6.18717 12.7276 7.27243 13.8128 8 15.124 8.72757 13.8128 9.81283 12.7276 11.124 12 9.81283 11.2724 8.72757 10.1872 8 8.87601 7.27243 10.1872 6.18717 11.2724 4.87601 12ZM17.25 14C17.25 15.7949 15.7949 17.25 14 17.25V18.75C15.7949 18.75 17.25 20.2051 17.25 22H18.75C18.75 20.2051 20.2051 18.75 22 18.75V17.25C20.2051 17.25 18.75 15.7949 18.75 14H17.25Z'
+    /* The shell's own disclosure glyph (primitives `triangle-right-fill`,
+       16 viewBox): a filled triangle that points right when closed and rotates
+       to point down when open — the native sidebar project-row arrow. */
+    const DW_TRIANGLE_RIGHT_FILL_PATH = 'M5.5 4.5C5.5 4.40714 5.52586 4.31612 5.57467 4.23713C5.62349 4.15815 5.69334 4.09431 5.77639 4.05279C5.85945 4.01126 5.95242 3.99368 6.0449 4.00202C6.13738 4.01036 6.22572 4.04429 6.3 4.1L10.967 7.6C11.0291 7.64657 11.0795 7.70697 11.1142 7.77639C11.1489 7.84582 11.167 7.92238 11.167 8C11.167 8.07762 11.1489 8.15418 11.1142 8.22361C11.0795 8.29303 11.0291 8.35343 10.967 8.4L6.3 11.9C6.22572 11.9557 6.13738 11.9896 6.0449 11.998C5.95242 12.0063 5.85945 11.9887 5.77639 11.9472C5.69334 11.9057 5.62349 11.8419 5.57467 11.7629C5.52586 11.6839 5.5 11.5929 5.5 11.5V4.5Z'
     // Pin glyph pair for the running card's rows: the shell's own Pin components
     // when the seeded primitives expose them (the native Session-row pin button
     // uses the same pair, so the marker matches the sidebar exactly), with an
@@ -426,11 +430,9 @@ export function createDynamicWorkspacesInstaller(deps: DynamicWorkspacesDeps): D
 
     const DW_CSS = `
 .psd-panel-slot{flex:none;min-width:0;display:block}
-.psd-panel{--psd-time-col:48px;--psd-action-col:22px;--psd-chevron-col:24px;--psd-row-h:34px;margin:2px 8px 6px;border:0;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);overflow:hidden}
-.psd-panel-head{display:flex;align-items:center;gap:2px;padding:2px 4px 2px 2px}
-.psd-panel-head-time-spacer{flex:none;width:var(--psd-time-col,48px)}
-.psd-panel-head-actions{flex:none;display:inline-flex;align-items:center;justify-content:flex-end;width:var(--psd-action-col,22px)}
-.psd-panel-toggle{appearance:none;display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0;height:30px;box-sizing:border-box;padding:0 8px 0 17px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:var(--dsw-font-xs-13-line-height,20px);font-weight:500;text-align:left;cursor:pointer}
+.psd-panel{--psd-lead-col:16px;--psd-tail-col:46px;--psd-chevron-col:24px;--psd-row-h:34px;margin:2px 8px 6px;border:0;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-alias-bg-layer-1);overflow:hidden}
+.psd-panel-head{display:flex;align-items:center;gap:2px;padding:2px 12px 2px 2px}
+.psd-panel-toggle{appearance:none;display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0;height:30px;box-sizing:border-box;padding:0 8px 0 28px;border:0;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:var(--dsw-font-xs-13-line-height,20px);font-weight:500;text-align:left;cursor:pointer}
 .psd-panel-toggle:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .psd-panel-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-panel-head-spacer{flex:1 1 auto;min-width:8px}
@@ -455,25 +457,32 @@ export function createDynamicWorkspacesInstaller(deps: DynamicWorkspacesDeps): D
 .psd-panel-empty{padding:6px 10px 8px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:17px;display:flex;flex-direction:column;gap:2px}
 .psd-panel-empty strong{color:var(--dsw-alias-label-secondary);font-weight:500}
 .psd-item{display:flex;flex-direction:column;min-width:0}
-.psd-run{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:var(--psd-row-h,34px);padding:0 0 0 7px;border-radius:var(--dsw-radius-md,8px);cursor:pointer}
-.psd-run-main{appearance:none;display:flex;flex:0 1 auto;box-sizing:border-box;min-width:0;min-height:var(--psd-row-h,34px);max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:0;padding:4px 10px 4px 14px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-run{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:var(--psd-row-h,34px);padding:0 8px 0 7px;border-radius:var(--dsw-radius-md,8px);cursor:pointer}
+.psd-run-main{appearance:none;display:flex;flex:0 1 auto;box-sizing:border-box;min-width:0;min-height:var(--psd-row-h,34px);max-width:calc(100% - var(--psd-lead-col,16px) - var(--psd-tail-col,46px) - 8px);align-items:center;gap:0;padding:4px 10px 4px 0;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 /* The hover surface covers the whole row like the native sidebar rows (user
-   request); the old content-paced inner pill highlighted only the title. The
-   disclosure keeps its own 24 px block: hovering it suppresses the row surface.
+   request); the old content-paced inner pill highlighted only the title. It is
+   the row's ONLY hover surface: no control inside it paints a second block
+   (user request), so hovering the disclosure arrow, the "…" trigger, the pin or
+   New session keeps the row bar and only the glyphs change colour.
    Keyboard focus mirrors the shell's own rule, which paints focus surfaces only
    for the keyboard modality, so a mouse click on a row control cannot leave a
    stuck surface behind after the pointer leaves. */
-.psd-run:hover:not(:has(.psd-run-toggle:hover)){background-color:var(--dsw-alias-interactive-bg-hover)}
-html[data-input-modality='keyboard'] .psd-run:focus-within:not(:has(.psd-run-toggle:focus)){background-color:var(--dsw-alias-interactive-bg-hover)}
+.psd-run:hover{background-color:var(--dsw-alias-interactive-bg-hover)}
+html[data-input-modality='keyboard'] .psd-run:focus-within{background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-run-open{appearance:none;display:flex;flex:1 1 auto;min-width:0;max-width:100%;align-items:center;padding:0;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;margin-left:var(--psd-title-shift,0px);transition:margin-left 220ms cubic-bezier(.4,0,.2,1)}
 .psd-run-open:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px;border-radius:var(--dsw-radius-sm,6px)}
 .psd-run-spacer,.psd-child-spacer{flex:1 1 auto;min-width:0}
-.psd-run-timeslot{position:relative;flex:none;width:var(--psd-time-col,48px);height:20px}
-.psd-run-time{position:absolute;top:0;right:0;left:0;text-align:right;color:var(--dsw-alias-label-primary);font-size:11px;line-height:20px;font-variant-numeric:tabular-nums;transition:opacity 120ms var(--ds-ease-in-out,ease)}
-.psd-run-more{appearance:none;position:absolute;top:50%;right:0;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease),background-color 120ms var(--ds-ease-in-out,ease)}
-.psd-run[data-menuable='true']:hover .psd-run-time,.psd-run[data-menuable='true']:focus-within .psd-run-time,.psd-run[data-menu-open='true'] .psd-run-time{opacity:0}
-.psd-run[data-menuable='true']:hover .psd-run-more,.psd-run[data-menuable='true']:focus-within .psd-run-more,.psd-run[data-menu-open='true'] .psd-run-more{opacity:1;pointer-events:auto;transition:opacity 120ms var(--ds-ease-in-out,ease),background-color 120ms var(--ds-ease-in-out,ease)}
-.psd-run-more:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+/* One right-anchored trailing cell closes every row (user request: the time sits
+   at the row's far right, in the native sidebar Session-row recipe). At rest the
+   cell shows the relative time at 10 px in the tertiary label colour, exactly the
+   native time cell; row hover/focus swaps the "…" trigger and the New session
+   button over that same cell, the way a native row swaps time -> actions. */
+.psd-run-tail{position:relative;flex:none;width:var(--psd-tail-col,46px);height:20px}
+.psd-run-time,.psd-child-time{position:absolute;inset:0;text-align:right;color:var(--dsw-alias-label-tertiary);font-size:10px;line-height:20px;font-variant-numeric:tabular-nums}
+.psd-run-time{transition:opacity 120ms var(--ds-ease-in-out,ease)}
+.psd-run-more{appearance:none;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;transition:background-color 120ms var(--ds-ease-in-out,ease)}
+.psd-run:hover .psd-run-time,.psd-run:focus-within .psd-run-time,.psd-run[data-menu-open='true'] .psd-run-time{opacity:0}
+.psd-run-more:hover{color:var(--dsw-alias-label-primary)}
 .psd-run-more:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-run[data-state='done'] .psd-run-title{color:var(--dsw-alias-label-secondary)}
 /* The head is gap-less: the collapsed Continue slot is 0 px wide, so a flex
@@ -489,6 +498,25 @@ html[data-input-modality='keyboard'] .psd-run:focus-within:not(:has(.psd-run-tog
    margin is the rest gap to the title when every slot is collapsed. */
 .psd-run-glyph-cell{flex:none;display:inline-flex;align-items:center;justify-content:center;width:16px;height:20px;margin-right:9px}
 .psd-run-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
+/* Annotation targeting (user request): the status/identity glyph changes node
+   type with the row state (spinner svg -> dot span -> sparkle svg -> warning),
+   so a pointer pick that lands on the svg records a positional anchor and later
+   reads "no longer on the page". The glyphs are therefore transparent to hit
+   testing: the pointer picks the stable psd-run-glyph-cell / psd-child-glyph
+   span instead, which carries the Session-scoped data-testid the annotation
+   re-anchoring prefers. Row clicks are unaffected (the row body handles them). */
+.psd-run-glyph-cell > :is(svg,span):not(.psd-pending-flag):not(.psd-interrupted),.psd-child-glyph > :is(svg,span):not(.psd-interrupted){pointer-events:none}
+/* The same rule keeps the row controls' own glyphs from being the annotation
+   target: the pointer then picks the button, whose aria-label is a semantic,
+   Session-scoped anchor instead of an attribute-less svg. Hover and click
+   behaviour are unchanged (the button remains the hit target). */
+.psd-run-toggle > :is(svg,span),.psd-run-more > svg,.psd-row-action > svg,.psd-run-pin > svg,.psd-continue-inline > svg{pointer-events:none}
+/* Card chrome follows the same rule: the header indicator swaps node types with
+   the run state (pulse span <-> brand svg), so its glyphs are transparent to hit
+   testing and the pick lands on the one psd-indicator span, which carries a
+   stable data-testid; the fold chevrons and the bucket toggles route their glyphs
+   to the labelled button instead. */
+.psd-indicator > *,.psd-panel-chevron > *,.psd-group-toggle > .psd-chevron{pointer-events:none}
 .psd-run-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
 .psd-run-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap;color:var(--dsw-alias-label-primary);font-size:14px;line-height:20px}
 [data-clipped='true'].psd-run-title,[data-clipped='true'].psd-child-title{mask-image:linear-gradient(to right,#000 calc(100% - var(--psd-title-fade,28px)),#0000)}
@@ -506,7 +534,7 @@ html[data-input-modality='keyboard'] .psd-run:focus-within:not(:has(.psd-run-tog
 .psd-run[data-pinned='true'] .psd-run-pin-slot{width:16px;margin-right:9px;transition:none}
 .psd-run-pin{appearance:none;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:16px;height:16px;padding:0;border:0;border-radius:var(--dsw-radius-xs,4px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;opacity:0;visibility:hidden;pointer-events:none;transition:opacity 160ms cubic-bezier(.4,0,.2,1) 0ms,visibility 0s linear 160ms,background-color 120ms var(--ds-ease-in-out,ease)}
 .psd-run:hover .psd-run-pin,.psd-run:focus-within .psd-run-pin{opacity:1;visibility:visible;pointer-events:auto;transition:opacity 160ms cubic-bezier(.4,0,.2,1) 220ms,visibility 0s linear 220ms,background-color 120ms var(--ds-ease-in-out,ease)}
-.psd-run-pin:hover{background-color:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.psd-run-pin:hover{color:var(--dsw-alias-label-primary)}
 .psd-run-pin:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-run[data-pinned='true']{background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,transparent)}
 .psd-run[data-pinned='true'] .psd-run-pin{opacity:1;visibility:visible;pointer-events:none;color:var(--dsw-alias-state-business-primary);transition:background-color 120ms var(--ds-ease-in-out,ease)}
@@ -516,8 +544,8 @@ html[data-input-modality='keyboard'] .psd-run:focus-within:not(:has(.psd-run-tog
    specificity (0,5,0) beats (0,4,0) and layers the hover token over the tint. The
    atmosphere suppression below stays at the same specificity and is declared later,
    so a pinned current row still keeps its transparent surface. */
-.psd-run[data-pinned='true']:hover:not(:has(.psd-run-toggle:hover)){background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,var(--dsw-alias-interactive-bg-hover))}
-html[data-input-modality='keyboard'] .psd-run[data-pinned='true']:focus-within:not(:has(.psd-run-toggle:focus)){background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,var(--dsw-alias-interactive-bg-hover))}
+.psd-run[data-pinned='true']:hover{background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,var(--dsw-alias-interactive-bg-hover))}
+html[data-input-modality='keyboard'] .psd-run[data-pinned='true']:focus-within{background-color:color-mix(in srgb,var(--dsw-alias-state-business-primary) 7%,var(--dsw-alias-interactive-bg-hover))}
 @media (prefers-reduced-motion: reduce){
   .psd-run-pin,.psd-run-pin-slot,.psd-run-open{transition:none}
   .psd-run:hover .psd-run-pin,.psd-run:focus-within .psd-run-pin,
@@ -529,15 +557,15 @@ html[data-input-modality='keyboard'] .psd-run[data-pinned='true']:focus-within:n
   .psd-run[data-pinned='true']:hover .psd-run-pin,
   .psd-run[data-pinned='true']:focus-within .psd-run-pin{transition:none}
 }
-.psd-run-toggle{appearance:none;position:relative;z-index:1;flex:none;width:var(--psd-chevron-col,24px);height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
-.psd-run-toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.psd-run-toggle{appearance:none;position:relative;z-index:1;flex:none;width:var(--psd-lead-col,16px);height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer}
+.psd-run-toggle:hover{color:var(--dsw-alias-label-primary)}
 .psd-run-toggle:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
-.psd-run-toggle .psd-chevron{transition:transform 160ms var(--ds-ease-in-out,ease)}
-.psd-run-toggle[aria-expanded='false'] .psd-chevron{transform:rotate(-90deg)}
-.psd-run-toggle-spacer{flex:none;width:var(--psd-chevron-col,24px)}
-.psd-children{position:relative;display:flex;flex-direction:column;gap:5px;margin:4px 0 6px 28.5px;padding-left:9px;border-left:1px solid var(--dsw-alias-border-l2)}
-.psd-child{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:var(--psd-row-h,34px);padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:18px;text-align:left;cursor:pointer}
-.psd-child-main{appearance:none;display:flex;flex:0 1 auto;box-sizing:border-box;min-width:0;min-height:var(--psd-row-h,34px);max-width:calc(100% - var(--psd-time-col,48px) - var(--psd-action-col,22px) - var(--psd-chevron-col,24px) - 6px);align-items:center;gap:7px;padding:3px 8px 3px 10.5px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.psd-run-toggle .psd-triangle{transition:transform 150ms var(--ds-ease-in-out,ease)}
+.psd-run-toggle[aria-expanded='true'] .psd-triangle{transform:rotate(90deg)}
+.psd-run-lead-spacer{flex:none;width:var(--psd-lead-col,16px)}
+.psd-children{position:relative;display:flex;flex-direction:column;gap:5px;margin:4px 0 6px 32.5px;padding-left:9px;border-left:1px solid var(--dsw-alias-border-l2)}
+.psd-child{position:relative;display:flex;align-items:center;gap:2px;min-width:0;min-height:var(--psd-row-h,34px);padding:0 8px 0 0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:var(--dsw-font-xs-13-font-size,13px);line-height:18px;text-align:left;cursor:pointer}
+.psd-child-main{appearance:none;display:flex;flex:0 1 auto;box-sizing:border-box;min-width:0;min-height:var(--psd-row-h,34px);max-width:calc(100% - var(--psd-tail-col,46px) - 4px);align-items:center;gap:7px;padding:3px 8px 3px 10.5px;border:0;border-radius:inherit;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .psd-child:hover{background-color:var(--dsw-alias-interactive-bg-hover)}
 html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:var(--dsw-alias-interactive-bg-hover)}
 .psd-child::before{content:'';position:absolute;left:-10px;top:50%;width:14px;height:1px;background:var(--dsw-alias-border-l2);pointer-events:none}
@@ -545,9 +573,8 @@ html[data-input-modality='keyboard'] .psd-child:focus-within{background-color:va
 .psd-child-main:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-child-glyph{flex:none;display:inline-flex;align-items:center;justify-content:center}
 .psd-child-title{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap}
-.psd-child-time{flex:none;width:var(--psd-time-col,48px);text-align:right;color:var(--dsw-alias-label-primary);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
 .psd-child-brand{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary)}
-.psd-pending-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary);pointer-events:none}
+.psd-pending-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary);pointer-events:auto}
 .dps-row-pending-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary);pointer-events:none}
 .dps-row-pending-flag-fallback{margin-inline-end:6px}
 .dps-row-pending-slot > :not(.dps-row-pending-flag){display:none!important}
@@ -602,30 +629,29 @@ body:not([data-ds-dark-theme]) .psd-child{color:var(--dsw-alias-label-primary,#0
    secondary label (#61666b) so they sit at or above the native row icon weight;
    the brand/sparkle/indicator glyphs already use the primary label. Geometry,
    sizes and layout are untouched; dark mode keeps its original tertiary icons. */
-body:not([data-ds-dark-theme]) :is(.psd-row-action,.psd-run-toggle,.psd-chevron,.psd-panel-chevron){color:var(--dsw-alias-label-secondary,#61666b)}
+body:not([data-ds-dark-theme]) :is(.psd-row-action,.psd-chevron,.psd-panel-chevron){color:var(--dsw-alias-label-secondary,#61666b)}
 .psd-run,.psd-child{--psd-title-fade:28px}
-/* Fixed 22 px action slot between the time column and the disclosure column.
-   Main rows hold the New session button here; nested subagent rows hold only
-   Continue when interrupted and stay empty otherwise. The slot keeps its width
-   in every row and state, so every time column ends on the same x. */
-.psd-run-actions{flex:none;display:inline-flex;align-items:center;justify-content:flex-end;gap:2px;width:var(--psd-action-col,22px);min-height:22px;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
-.psd-run:hover .psd-run-actions,.psd-run:focus-within .psd-run-actions,.psd-child:hover .psd-run-actions,.psd-child:focus-within .psd-run-actions{opacity:1;pointer-events:auto}
-/* Continue on an interrupted main row is an overlay over the faded title tail,
-   immediately left of the time column: the 22 px action slot stays reserved for
-   New session, and no fixed column moves when the action appears. */
+/* The trailing cell's overlay: the "…" trigger and the New session button,
+   revealed over the time by opacity. Every row reserves the same cell, so every
+   time ends on the same x. */
+.psd-run-actions{position:absolute;inset:0;display:inline-flex;align-items:center;justify-content:flex-end;gap:2px;opacity:0;pointer-events:none;transition:opacity 120ms var(--ds-ease-in-out,ease)}
+.psd-run:hover .psd-run-actions,.psd-run:focus-within .psd-run-actions,.psd-child:hover .psd-run-actions,.psd-child:focus-within .psd-run-actions,.psd-run[data-menu-open='true'] .psd-run-actions{opacity:1;pointer-events:auto}
+/* Continue on an interrupted main row is an inline slot in the row head: it
+   expands from 0 to 22 px over the faded title tail and never moves the time
+   cell. */
 .psd-continue-slot{flex:none;display:inline-flex;align-items:center;justify-content:center;width:0;height:20px;margin-right:0;overflow:hidden;opacity:0;pointer-events:none;transition:width 200ms var(--ds-ease-in-out,ease) 160ms,margin-right 200ms var(--ds-ease-in-out,ease) 160ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
 .psd-run:hover .psd-continue-slot,.psd-run:focus-within .psd-continue-slot,.psd-child:hover .psd-continue-slot,.psd-child:focus-within .psd-continue-slot{width:22px;margin-right:2px;opacity:1;pointer-events:auto;transition:width 200ms var(--ds-ease-in-out,ease) 0ms,margin-right 200ms var(--ds-ease-in-out,ease) 0ms,opacity 120ms var(--ds-ease-in-out,ease) 0ms}
 .psd-child .psd-continue-slot{height:18px}
 .psd-child:hover .psd-continue-slot,.psd-child:focus-within .psd-continue-slot{width:18px}
 .psd-continue-inline{display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;margin:0;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;opacity:1;pointer-events:auto}
 .psd-continue-inline svg{display:block;flex:none}
-.psd-continue-inline:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.psd-continue-inline:hover{color:var(--dsw-alias-label-primary)}
 .psd-continue-inline:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-child .psd-continue-inline{width:18px;height:18px}
 body:not([data-ds-dark-theme]) .psd-run-current .psd-interrupted,
 body:not([data-ds-dark-theme]) .psd-child-current .psd-interrupted{color:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 72%,var(--dsw-alias-label-primary))}
 .psd-row-action{appearance:none;display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;padding:0;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
-.psd-row-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.psd-row-action:hover{color:var(--dsw-alias-label-primary)}
 .psd-row-action:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}
 .psd-row-action[data-variant='continue']{color:var(--dsw-alias-state-warn-primary)}
 .psd-interrupted{flex:none;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;color:var(--dsw-alias-state-warn-primary)}
@@ -684,12 +710,11 @@ body:not([data-ds-dark-theme]) .psd-child-current .psd-interrupted{color:color-m
    (pin, New session, disclosure) stay. The native sidebar current Session and
    Workspace rows get the same treatment so their own hover/selected background
    never mixes into the rainbow paint. */
-/* Specificity note: the full-row hover rule above includes a :not(:has(...))
-   guard, so the suppression must carry the same structural guards to win on
-   atmosphere rows (a plain .psd-run-current:hover would lose to 0,4,0). */
-.psd-run.psd-run-current:hover:not(:has(.psd-run-toggle:hover)),
+/* The suppression carries one extra class so it beats the plain row hover rule
+   regardless of source order. */
+.psd-run.psd-run-current:hover,
 .psd-child.psd-child-current:hover{background-color:transparent}
-html[data-input-modality='keyboard'] .psd-run.psd-run-current:focus-within:not(:has(.psd-run-toggle:focus)),
+html[data-input-modality='keyboard'] .psd-run.psd-run-current:focus-within,
 html[data-input-modality='keyboard'] .psd-child.psd-child-current:focus-within{background-color:transparent}
 .psd-run.psd-run-current[data-pinned='true']{background-color:transparent}
 [data-psd-current-workspace='true'],[data-psd-current-session='true']{background-color:transparent!important}
@@ -706,27 +731,11 @@ html[data-input-modality='keyboard'] .psd-child.psd-child-current:focus-within{b
 html[data-input-modality='keyboard'] .psd-run-current:focus-within > *:not(.psd-atmos),
 html[data-input-modality='keyboard'] .psd-child-current:focus-within > *:not(.psd-atmos){filter:brightness(1.5)}
 @media (prefers-reduced-motion: reduce){.psd-run-current > *:not(.psd-atmos),.psd-child-current > *:not(.psd-atmos),[data-psd-current-session='true'] > *:not([data-psd-atmos]),[data-psd-current-workspace='true'] > *:not([data-psd-atmos]){transition:none}}
-/* The trailing controls on an atmosphere row follow the same rule: New session,
-   disclosure, pin and Continue must not paint their own hover background inside
-   the rainbow rectangle either (user report). Their feedback is the same content
-   brightness lift — the row-level lift already applies while hovered, and the
-   control under the pointer brightens one small extra step. Native sidebar
-   rows' action buttons get the same treatment. */
-[data-psd-current-session='true'] button:hover,[data-psd-current-session='true'] [role='button']:hover,[data-psd-current-workspace='true'] button:hover,[data-psd-current-workspace='true'] [role='button']:hover{background-color:transparent!important;filter:brightness(1.2)}
-/* The card's own current rows need the same rule: the card lives in the sidebar
-   column but outside the native session row, so the native selectors above never
-   match it. This half was dropped by 235cd42 while the docs and the pin-mode E2E
-   still require transparent + brightness(1.2). Scope it to the current row's own
-   controls with child combinators: .psd-children renders inside the parent
-   .psd-run row, so a plain descendant selector would also suppress the hover
-   blocks of nested child rows that sit inside the current parent. */
-.psd-run-current > .psd-run-main .psd-run-pin:hover,
-.psd-run-current > .psd-run-main .psd-continue-inline:hover,
-.psd-run-current > .psd-run-timeslot .psd-run-more:hover,
-.psd-run-current > .psd-run-actions .psd-row-action:hover,
-.psd-run-current > .psd-run-toggle:hover,
-.psd-child-current > .psd-child-main .psd-continue-inline:hover,
-.psd-child-current > .psd-run-actions .psd-row-action:hover{background-color:transparent;filter:brightness(1.2)}
+/* Native sidebar rows' action buttons keep only the transparent-background
+   suppression inside the rainbow rectangle (they must not stack a block on the
+   row surface). They get no extra brightness step either: the row-level
+   brightness lift is the only highlight, the same rule the card follows. */
+[data-psd-current-session='true'] button:hover,[data-psd-current-session='true'] [role='button']:hover,[data-psd-current-workspace='true'] button:hover,[data-psd-current-workspace='true'] [role='button']:hover{background-color:transparent!important}
 /* Dark-mode atmosphere is intentionally lighter/pastel than the first vivid
    recipe: the canvas keeps the screen blend but is less saturated and brighter,
    the wrapper is slightly less opaque, and the scrim is a soft white veil
@@ -747,7 +756,7 @@ body:not([data-ds-dark-theme]) .psd-atmos-canvas{filter:blur(3px) saturate(1.35)
 body:not([data-ds-dark-theme]) .psd-atmos{opacity:.60}
 body:not([data-ds-dark-theme]) .psd-atmos-scrim{background:linear-gradient(90deg,rgba(255,255,255,.48),rgba(255,255,255,.36))}
 body:not([data-ds-dark-theme]) .psd-run-current:hover .psd-atmos,body:not([data-ds-dark-theme]) .psd-child-current:hover .psd-atmos,body:not([data-ds-dark-theme]) [data-psd-current-workspace='true']:hover .psd-atmos,body:not([data-ds-dark-theme]) [data-psd-current-session='true']:hover .psd-atmos{opacity:.68}
-body:not([data-ds-dark-theme]) .psd-run-current :is(.psd-run-brand,.psd-row-action,.psd-run-toggle),body:not([data-ds-dark-theme]) .psd-child-current :is(.psd-child-brand,.psd-row-action){color:var(--dsw-alias-label-secondary)}
+body:not([data-ds-dark-theme]) .psd-run-current :is(.psd-run-brand,.psd-row-action),body:not([data-ds-dark-theme]) .psd-child-current :is(.psd-child-brand,.psd-row-action){color:var(--dsw-alias-label-secondary)}
 body:not([data-ds-dark-theme]) .psd-run-current .psd-run-time,body:not([data-ds-dark-theme]) .psd-child-current .psd-child-time{color:var(--dsw-alias-label-primary)}
 /* Status dots keep their semantic shell colours (user fix): the light-mode icon
    lift above must not repaint the shell StateDot currentColor. The wrapper keeps
@@ -769,23 +778,25 @@ body:not([data-ds-dark-theme]) :is(.psd-run,.psd-child) :is(.psd-run-glyph,.psd-
 
 body:not([data-ds-dark-theme]) .psd-row-action:hover,
 body:not([data-ds-dark-theme]) .psd-row-action:focus-visible{color:var(--dsw-alias-label-primary)}
-/* Owner request: while the row is highlighted — pointer on it, keyboard focus
-   inside it, or an open row menu (the card's strip is invisible at rest, so
-   those three cover every visible state, rainbow row included) — the row menu
-   (⋯) and New session (⊕) read at the title colour (label-primary) instead of
-   their resting row-icon weight (both secondary #61666b in light; in dark ⋯ is
-   the secondary #cfd3d6 and ⊕ the tertiary #adb2b8), which washed out against
-   the hover fill and the pastel atmosphere. Each control keeps its own hover/
-   focus feedback, and the rules above still lift it to the same token. Focus is
-   gated to keyboard modality like the shell's own strip. Child combinators keep
-   a nested subagent row's own controls out. In dark mode a finished row's title
-   stays secondary, so its strip reads one step brighter than that title. */
-.psd-run:hover > .psd-run-timeslot .psd-run-more,
-.psd-run:hover > .psd-run-actions .psd-row-action,
-.psd-run[data-menu-open='true'] > .psd-run-timeslot .psd-run-more,
-.psd-run[data-menu-open='true'] > .psd-run-actions .psd-row-action,
-html[data-input-modality='keyboard'] .psd-run:focus-within > .psd-run-timeslot .psd-run-more,
-html[data-input-modality='keyboard'] .psd-run:focus-within > .psd-run-actions .psd-row-action{color:var(--dsw-alias-label-primary)}
+/* Owner request: while a card row is highlighted — pointer on it, keyboard focus
+   inside it, or an open row menu — every glyph in that row reads at the title
+   colour (label-primary) and nothing else changes. The row bar is the only hover
+   surface: no control paints its own block or its own brightness step (the
+   rainbow row keeps its whole-content lift on the row, not on a control). This
+   covers the disclosure triangle, the pin, the "…" trigger, New session,
+   Continue and the brand/robot identity glyphs in both themes — light yields
+   #0f1115 and dark #f9fafb, the same token the title uses on that row. A status
+   dot keeps its shell state colour, because that colour is the
+   running/finished/idle data rather than a text weight. Child combinators keep a
+   nested subagent row's own controls out. */
+.psd-run:hover > :is(.psd-run-main,.psd-run-tail) :is(.psd-run-brand,.psd-continue-inline,.psd-run-more,.psd-run-actions .psd-row-action),
+.psd-run:hover > .psd-run-toggle,
+.psd-run[data-menu-open='true'] > :is(.psd-run-main,.psd-run-tail) :is(.psd-run-brand,.psd-continue-inline,.psd-run-more,.psd-run-actions .psd-row-action),
+.psd-run[data-menu-open='true'] > .psd-run-toggle,
+html[data-input-modality='keyboard'] .psd-run:focus-within > :is(.psd-run-main,.psd-run-tail) :is(.psd-run-brand,.psd-continue-inline,.psd-run-more,.psd-run-actions .psd-row-action),
+html[data-input-modality='keyboard'] .psd-run:focus-within > .psd-run-toggle,
+.psd-child:hover > .psd-child-main :is(.psd-child-brand,.psd-continue-inline),
+html[data-input-modality='keyboard'] .psd-child:focus-within > .psd-child-main :is(.psd-child-brand,.psd-continue-inline){color:var(--dsw-alias-label-primary)}
 /* Same rule for the shell's own sidebar rows — Session rows and the Workspace
    (project) row above them: their strips pin the row-menu trigger and New
    session to label-tertiary and only darken while that single button is hovered,
@@ -1254,6 +1265,11 @@ function dwClearNativeAtmospheres() {
 
     /**
      * Format a coarse relative distance for Session rows.
+     *
+     * The buckets and their thresholds copy the shell's own `relativeTime`
+     * helper verbatim (now / minutes / hours / days / months / years), so a card
+     * row and a native sidebar Session row never disagree about the same
+     * distance.
      * @param {number} ms - elapsed milliseconds.
      * @param {Function} t - namespace-bound translate.
      * @returns {string} relative label.
@@ -1265,7 +1281,10 @@ function dwClearNativeAtmospheres() {
       if (minutes < 60) return t('time.min', { n: minutes })
       const hours = Math.floor(minutes / 60)
       if (hours < 24) return t('time.hour', { n: hours })
-      return t('time.day', { n: Math.floor(hours / 24) })
+      const days = Math.floor(hours / 24)
+      if (days < 30) return t('time.day', { n: days })
+      if (days < 365) return t('time.month', { n: Math.floor(days / 30) })
+      return t('time.year', { n: Math.floor(days / 365) })
     }
 
     /**
@@ -2013,6 +2032,24 @@ function dwClearNativeAtmospheres() {
     }
 
     /**
+     * Native sidebar disclosure glyph: the shell's filled
+     * `IconTriangleRightFillRegular` (16 viewBox, 14 px, currentColor fill).
+     * `aria-expanded` on the toggle rotates it 90 deg when the children are open,
+     * exactly like a native Workspace project row.
+     * @returns {object} the triangle svg.
+     */
+    function DwTriangle(): ReactElement {
+      return React.createElement('svg', {
+        width: 14,
+        height: 14,
+        viewBox: '0 0 16 16',
+        fill: 'none',
+        'aria-hidden': true,
+        focusable: 'false'
+      }, React.createElement('path', { d: DW_TRIANGLE_RIGHT_FILL_PATH, fill: 'currentColor' }))
+    }
+
+    /**
      * Direct subagent Sessions grouped under their parent Session.
      *
      * Only recent children (running now or last active inside the retention
@@ -2089,15 +2126,13 @@ function dwClearNativeAtmospheres() {
      * Continue CTA for an interrupted Session row: it opens that Session and
      * requests the continuation; it never opens the row.
      *
-     * Nested subagent rows put it in the fixed 22 px action slot (they carry no
-     * New session action); main rows render it as the `.psd-row-continue`
-     * overlay over the faded title tail, just left of the time column, because
-     * their fixed slot is reserved for New session and a second flex column
-     * would move the shared time column.
+     * It renders inline in the row head (`.psd-continue-slot` ->
+     * `.psd-continue-inline`) for both row kinds: the slot expands over the faded
+     * title tail and never moves the trailing time cell.
      * @param {object} props - action props.
      * @param {Function} props.interruptedT - interrupted-feature translate.
      * @param {object} props.row - row carrying id.
-     * @param {string} [props.className] - addition class for the overlay form.
+     * @param {string} [props.className] - extra class for the button (inline form).
      * @returns {object} the button element.
      */
     function DwContinueAction({ interruptedT, row, className }: { interruptedT: Translate, row: DynamicRow, className?: string }): ReactElement {
@@ -2118,8 +2153,8 @@ function dwClearNativeAtmospheres() {
 
     /**
      * New session action: creates and opens a blank Session in the row's own
-     * directory. It is anchored on the fixed 22 px action column, so the time
-     * and disclosure columns never move.
+     * directory. It fills the trailing cell next to the "…" trigger, so the time
+     * never moves while the controls swap in.
      * @param {object} props - action props.
      * @param {Function} props.t - dynamic-Workspaces translate.
      * @param {object} props.row - row carrying id/workspaceId/cwd.
@@ -2140,39 +2175,6 @@ function dwClearNativeAtmospheres() {
           onNewSession(row)
         }
       }, React.createElement(DwNewChatGlyph))
-    }
-
-    /**
-     * Fixed 22 px action slot between the time column and the disclosure
-     * column, revealed on row hover/focus-within through opacity only.
-     *
-     * Main rows hold the New session button. Nested subagent rows hold no New
-     * session button (user decision: creating a Session belongs to the main
-     * row) and keep only Continue when interrupted; the slot stays reserved when
-     * empty so a child row's time column ends exactly where a parent row's does.
-     * @param {object} props - slot props.
-     * @param {Function} props.t - dynamic-Workspaces translate.
-     * @param {Function} props.interruptedT - interrupted-feature translate.
-     * @param {object} props.row - row carrying id/workspaceId/cwd.
-     * @param {'main' | 'child'} props.kind - row kind.
-     * @param {boolean} props.interrupted - whether this Session was interrupted.
-     * @param {Function} props.onNewSession - create-and-open same-directory Session.
-     * @returns {object} the slot element.
-     */
-    function DwRowActionSlot({ t, interruptedT, row, kind, interrupted, onNewSession }: { t: Translate, interruptedT: Translate, row: DynamicRow, kind: 'main' | 'child', interrupted: boolean, onNewSession: (row: DynamicRow) => void }): ReactElement {
-      const buttons: ReactElement[] = []
-      if (kind === 'main') {
-        buttons.push(React.createElement(DwNewSessionAction, {
-          key: 'new-session',
-          t,
-          row,
-          onNewSession
-        }))
-      }
-      return React.createElement('span', {
-        className: 'psd-run-actions',
-        'data-empty': buttons.length === 0 ? 'true' : undefined
-      }, buttons)
     }
 
     /**
@@ -2610,7 +2612,7 @@ interface PanelWheelEvent {
           'aria-label': expanded ? t('panel.collapse') : t('panel.expand'),
           onClick: onToggle
         },
-        React.createElement('span', { className: 'psd-indicator', 'aria-hidden': true },
+        React.createElement('span', { className: 'psd-indicator', 'aria-hidden': true, 'data-testid': 'psd-panel-indicator' },
           anyRunning
             ? React.createElement('span', { className: 'psd-pulse' })
             // Identity glyph swap (user-requested): the all-complete header mark is
@@ -2627,13 +2629,10 @@ interface PanelWheelEvent {
           onClick: onToggleAll
         }, showAll ? t('panel.showLess') : t('panel.viewAll', { count: rows.length })))
       }
-      // Header trailing controls share the row grid: the count badge sits on the
-      // reserved action column (its natural width overlaps the empty time column
-      // on its left) and the disclosure chevron closes the same 24 px column as
-      // every row, so header and rows line up vertically.
-      headChildren.push(React.createElement('span', { key: 'time', className: 'psd-panel-head-time-spacer', 'aria-hidden': true }))
-      headChildren.push(React.createElement('span', { key: 'actions', className: 'psd-panel-head-actions' },
-        React.createElement('span', { className: 'psd-count' }, t('count', { count: rows.length }))))
+      // Header trailing controls: the count badge sits on the row's trailing
+      // column (the same right edge the row times end on) and the header chevron
+      // folds the whole card from the row's right edge.
+      headChildren.push(React.createElement('span', { key: 'count', className: 'psd-count' }, t('count', { count: rows.length })))
       headChildren.push(React.createElement('button', {
         key: 'chevron',
         type: 'button',
@@ -2676,12 +2675,13 @@ interface PanelWheelEvent {
             const hasChildren = rowChildren.length > 0
             const pinned = isPinned(row)
             const menuOpen = menuEnabled && typeof menuSessionId === 'string' && menuSessionId === row.id
-            // Fixed trailing columns, left to right: time 48 px, action 22 px,
-            // disclosure 24 px, each separated by the 2 px row gap. Every parent
-            // and child row reserves all three (child rows keep the action and
-            // disclosure columns empty), so every time ends on one x; the title
-            // takes the remaining width and fades out at its right edge only while
-            // it is actually clipped.
+            // Two fixed cells frame the row: a 16 px leading disclosure cell
+            // (parent rows only; child rows are already indented under the trunk)
+            // and one right-anchored 46 px trailing cell that holds the time and,
+            // on a main row, the revealed "…"/New session controls. The row keeps
+            // an 8 px right inset, so every time ends on one x; the title takes
+            // the remaining width and fades out at its right edge only while it is
+            // actually clipped.
             body.push(React.createElement('div', {
               key: row.id,
               className: 'psd-item',
@@ -2705,9 +2705,32 @@ interface PanelWheelEvent {
               onMouseLeave: hideHover
             },
               isCurrent(row.id) ? React.createElement(DwAtmosphere, { key: 'atmos' }) : null,
+              // The native project-row disclosure sits at the row's far left: a
+              // filled triangle (rotated when open) in a fixed 16 px cell, with an
+              // equal spacer on rows that have no subagents so every status glyph
+              // and title keeps one column.
+              hasChildren
+                ? React.createElement('button', {
+                  type: 'button',
+                  className: 'psd-run-toggle',
+                  'aria-expanded': !collapsed,
+                  'aria-label': t(collapsed ? 'panel.expandChildren' : 'panel.collapseChildren', { title: row.title }),
+                  onClick: () => onToggleChildren(row.id)
+                }, React.createElement('span', { className: 'psd-triangle' }, React.createElement(DwTriangle)))
+                : React.createElement('span', { className: 'psd-run-lead-spacer', 'aria-hidden': true }),
               React.createElement('div', { className: 'psd-run-main' },
               React.createElement('span', { className: 'psd-run-head' },
-                React.createElement('span', { className: 'psd-run-glyph-cell' },
+                // The identity/status cell is the annotation-friendly target for this
+                // row: it is one stable node per Session (React reuses the same span
+                // across state changes) and carries a white-listed `data-testid`, so a
+                // UI annotation recorded on it survives re-renders and row-state
+                // flips instead of degrading to "No longer on the page". Its glyphs
+                // are non-hit-testable (CSS), so the pointer picks this cell rather
+                // than the svg that the state branch happens to render.
+                React.createElement('span', {
+                  className: 'psd-run-glyph-cell',
+                  'data-testid': `psd-session-glyph:${row.id}`
+                },
                   pendingSet.has(row.id)
                     ? React.createElement('span', {
                       className: 'psd-pending-flag',
@@ -2755,8 +2778,11 @@ interface PanelWheelEvent {
                   onBlur: hideHover
                 }, React.createElement('span', { className: 'psd-run-title' }, row.title)))),
               React.createElement('span', { key: 'spacer', className: 'psd-run-spacer', 'aria-hidden': true }),
-              React.createElement('span', { key: 'time', className: 'psd-run-timeslot' },
+              // One right-anchored tail: the relative time at rest, and the "…"
+              // trigger plus New session over the same cell on hover/focus.
+              React.createElement('span', { key: 'tail', className: 'psd-run-tail' },
                 React.createElement('span', { className: 'psd-run-time' }, time),
+                React.createElement('span', { key: 'actions', className: 'psd-run-actions' },
                 menuEnabled ? React.createElement('button', {
                   type: 'button',
                   className: 'psd-run-more',
@@ -2773,24 +2799,8 @@ interface PanelWheelEvent {
                 }, DW_MORE_ICON === null
                   ? RemixGlyph(DW_MORE_PATH, 14)
                   : React.createElement(DW_MORE_ICON, { size: 14 }))
-                : null),
-              React.createElement(DwRowActionSlot, {
-                t,
-                interruptedT,
-                row,
-                kind: 'main',
-                interrupted,
-                onNewSession
-              }),
-              hasChildren
-                ? React.createElement('button', {
-                  type: 'button',
-                  className: 'psd-run-toggle',
-                  'aria-expanded': !collapsed,
-                  'aria-label': t(collapsed ? 'panel.expandChildren' : 'panel.collapseChildren', { title: row.title }),
-                  onClick: () => onToggleChildren(row.id)
-                }, React.createElement('span', { className: 'psd-chevron' }, React.createElement(DwChevron, null)))
-                : React.createElement('span', { className: 'psd-run-toggle-spacer', 'aria-hidden': true })),
+                : null,
+                React.createElement(DwNewSessionAction, { key: 'new-session', t, row, onNewSession })))),
             hasChildren && !collapsed
               ? React.createElement('div', { className: 'psd-children' }, rowChildren.map((child) => {
                 const childRow: DynamicRow = {
@@ -2831,7 +2841,10 @@ interface PanelWheelEvent {
                   onFocus: (event: UiEventLike) => showHover(childRow, event.currentTarget),
                   onBlur: hideHover
                 },
-                React.createElement('span', { className: 'psd-child-glyph' },
+                React.createElement('span', {
+                  className: 'psd-child-glyph',
+                  'data-testid': `psd-session-glyph:${child.id}`
+                },
                   childInterrupted
                     ? React.createElement('span', {
                       className: 'psd-interrupted',
@@ -2847,16 +2860,8 @@ interface PanelWheelEvent {
                           RemixGlyph(DW_ROBOT_2_LINE, 12))),
                 React.createElement('span', { className: 'psd-child-title' }, child.title)),
                 React.createElement('span', { key: 'spacer', className: 'psd-child-spacer', 'aria-hidden': true }),
-                React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t)),
-                React.createElement(DwRowActionSlot, {
-                  t,
-                  interruptedT,
-                  row: childRow,
-                  kind: 'child',
-                  interrupted: childInterrupted,
-                  onNewSession
-                }),
-                React.createElement('span', { className: 'psd-run-toggle-spacer', 'aria-hidden': true }))
+                React.createElement('span', { key: 'tail', className: 'psd-run-tail' },
+                  React.createElement('span', { className: 'psd-child-time' }, dwFormatRelative(now - child.updatedAt, t))))
               }))
               : null))
           }

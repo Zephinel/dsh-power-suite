@@ -202,20 +202,22 @@
   subagent does not finish the parent's task by itself. Blank and archived
   Sessions are skipped too.
 - **Row actions reveal on hover or keyboard focus.** The card's trailing
-  controls share one fixed grid (time 48 px → New session 22 px → disclosure
-  24 px) and the action is hidden until a row is hovered or focused with the
+  controls share one frame (a 16 px leading disclosure cell → the title → one
+  right-anchored 46 px trailing cell holding the time or the revealed "…"/New
+  session controls, inset 8 px from the row's right edge) and the action is
+  hidden until a row is hovered or focused with the
   keyboard; a touch-only device has no hover, so the New session action is not
   reachable there (the Workspace's own New Session still is). Nested subagent
-  rows intentionally have **no** New session action (their action/disclosure
-  columns are empty spacers so times still align); an interrupted child keeps
-  only Continue in the action slot. Hover never shifts the grid.
+  rows intentionally have **no** New session action: they are indented under the
+  parent's trunk and reserve only the right-anchored trailing cell, so their time
+  still ends on the parent row's x; an interrupted child keeps Continue inline
+  beside its badge. Hover never shifts the cells.
 - **The row "…" menu is the shell's native shared popup.** Every top-level row
   (including the current rainbow row) keeps its time at rest; hover/focus hides
   the time and shows the trigger, and the swap stays while the menu is open. It
   is a desktop hover/focus affordance, and subagent rows have no trigger. The
-  trigger paints the ordinary soft hover background; only the rainbow row
-  suppresses it (transparent background + `brightness(1.2)`), like its other
-  controls. The menu opens the shell's shared context-menu popup against a
+  row bar is the only hover surface: the trigger paints no block or brightness
+  step of its own on any row. The menu opens the shell's shared context-menu popup against a
   plugin-owned target kind, so its material, placement, keyed icons, shortcut
   hints, focus handling and Escape/outside-press/scroll/resize dismissal are
   native. Its entries are the shell's native Session action contributions (an

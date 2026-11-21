@@ -197,7 +197,7 @@ const PROMPT_HISTORY_PREVIEW_CSS = `
 .psp-search-input::placeholder{color:var(--dsw-static-neutral-bluish-400,#adb2b8)}
 .psp-search-count{color:var(--dsw-static-neutral-bluish-400,#adb2b8);font-family:inherit;font-size:11px;line-height:15px}
 .psp-search-empty{color:var(--dsw-static-neutral-bluish-400,#adb2b8);font-family:inherit;font-size:11px;line-height:15px}
-.psp-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.psp-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;pointer-events:none}
 @media (prefers-reduced-motion:no-preference){.psp-rail-card{animation:psp-rail-card-in .12s ease-out}}
 @media (prefers-reduced-motion:reduce){.psp-mark::before{transition:none}}
 @keyframes psp-rail-card-in{from{opacity:0;transform:translateX(4px)}to{opacity:1;transform:none}}

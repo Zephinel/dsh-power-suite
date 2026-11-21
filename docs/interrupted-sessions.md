@@ -80,7 +80,14 @@ Browser:
 - `sidebar.session.row.leading` — the default-visible warning mark for idle rows
   plus the hover/focus-revealed inline Continue triangle. The native status cell
   is `width: auto` for this row, so the 22 px triangle fits and the title slides
-  right; no opaque hover mask is painted.
+  right; no opaque hover mask is painted. The native row is the only hover
+  surface: Continue lifts its glyph colour but paints no block of its own (same
+  rule as the Running & recent card), and its glyph is pointer-transparent so a
+  UI annotation pick lands on the labelled button instead of the anonymous icon.
+  The warning mark itself stays `pointer-events: none` on purpose — it must not
+  intercept the native row's click — so annotating that leading area anchors on
+  the native row, and the mark legitimately disappears when the interruption
+  clears.
 - A row decorator covers rows whose native status still says running: it places
   the warning **and** its hover Continue CTA in the native leading span
   (skipping the injected rainbow atmosphere wrapper) and hides the stale

@@ -33,13 +33,13 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   the reported `current` is the package version (catches bundle-only root bugs);
 - the release-notes gate (`scripts/check-release-notes.mjs`).
 
-### Current gates (2026-11-20, Node 24.22.3)
+### Current gates (2026-11-21, Node 24.22.3)
 
 - `npm run build`: **`lib/index.js` 105.9 kB** (Host ESM bundle) and
-  **`lib/client.js` 939.8 kB** (ESM `src/client.js` + `src/browser/` bundled to a
+  **`lib/client.js` 942.4 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **411 tests, 411 passed, 0 failed**, **30 test files** — Host
+- `npm test`: **412 tests, 412 passed, 0 failed**, **30 test files** — Host
   stores/routes plus browser-side derivations, the atmosphere motion model, the
   release-notes approval round-trip, the protocol contract guard for duplicated
   route/enum literals, the shared route and settings contracts, the durable
@@ -60,11 +60,15 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   it builds `lib/` first, then runs syntax checks, strict/Host/browser typechecks,
   package-manifest validation, the built-entry smoke (update route reports
   `current=0.2.1`) and built-browser smoke (8 injects), local docs/hygiene checks,
-  the 411-test Node suite, and the release-notes gate (`0.2.1; 2 highlights, 2 English`),
+  the 412-test Node suite, and the release-notes gate (`0.2.1; 2 highlights, 2 English`),
   then `pack:check`.
 - `npm run pack:check`: **80 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).
-- Browser e2e (2026-11-18; current HEAD): live smoke is `sidebar.e2e.mjs
+- Browser e2e (2026-11-18 run, **not re-run for the 2026-11-21 sidebar
+  layout change** — the suite needs an interactive GUI with live rows, so the
+  sidebar oracles were updated from the measured geometry and still owe a run;
+  the annotation suite is unaffected by that layout):
+  live smoke is `sidebar.e2e.mjs
   --smoke` **4/4**, `annotation.e2e.mjs --smoke` **6/6** (now including a
   click-select check: a real pointer click opens `[data-psa-popover]` and keeps
   the mode active), and `update-prompt.e2e.mjs` **21/21**, 0 page errors. Full

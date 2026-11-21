@@ -744,6 +744,47 @@ only the status line and `via` hint update.
 anchors (or are generated from the live node when absent); with no usable anchor
 or node the action shows an honest unavailable toast.
 
+### The plugin's own dynamic rows (stable anchors)
+
+The Running & recent card's status/identity glyph is **state-dependent markup**:
+a running Session renders the shell spinner `<svg>`, a finished-unread row a dot
+`<span>`, a read row our sparkle `<svg>`, an interrupted row a warning `<svg>`,
+and a waiting row a flag `<svg>`. A pointer pick that lands on one of those nodes
+records a positional anchor (`span > span > span > svg`), so the next state flip
+leaves nothing to resolve and the record honestly degrades to **No longer on the
+page** — even though the row itself never moved.
+
+The card therefore routes annotation picks to stable anchors: every row's status
+cell carries `data-testid="psd-session-glyph:<sessionId>"` (a white-listed
+locator attribute, reliability 0.92) and its glyphs are `pointer-events: none`,
+so a pick on the icon lands on that one span, whose selector survives re-renders,
+group moves and state changes. The panel header's indicator — the one other
+node that swaps type with the run state (pulse span <-> brand svg) — carries
+`data-testid="psd-panel-indicator"` and routes the same way. Every other plugin
+control follows one rule: **an icon is never the pick target**. The row controls
+(disclosure triangle, "…" trigger, pin, New session), the card's fold chevrons
+and bucket toggles, the Files panel's action buttons and toolbar tool, the
+interrupted-session Continue button and the composer gallery's nav/close buttons
+are all labelled controls whose inner svgs are `pointer-events: none`, so the
+pick lands on the `aria-label`/text-bearing control; the Files panel's row glyph
+and thumbnail are transparent too and let the pick fall through to the row.
+Two deliberate exceptions keep their own pick target because the DOM node *is*
+the labelled thing: the card's pending/waiting and interrupted badges (they carry
+`role="img"` plus an `aria-label` and a native `title`, so the label is the
+anchor and their tooltip keeps working — the record goes stale only when the
+state itself clears, which is honest), and the prompt-history rail's tick buttons
+(the 1×1 screen-reader span is pointer-transparent, so the pick lands on the
+button whose accessible name carries the prompt text).
+
+Where this cannot be done the plugin does not pretend otherwise: the
+interrupted warning mark stays pointer-transparent because it must not intercept
+the native Session row's click, so that leading area anchors on the native row
+instead, and the mark is a state indicator that legitimately disappears when the
+interruption clears. Transient plugin surfaces (Files Quick Look, the composer
+gallery, the prompt-history preview, the update prompt, the workspace preset
+menu) are already reported as ephemeral by the annotation card, so their records
+are expected not to outlive them.
+
 ### Descendant anchors, confidence and identity limits
 
 - **Descendant text anchors:** a non-leaf target (row/card/button with child text)

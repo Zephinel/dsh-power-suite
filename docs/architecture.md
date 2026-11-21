@@ -416,14 +416,18 @@ status, and Workspace stores, inserts a summary card above the native Workspaces
 header and two bucket headers into the native `[role="tree"]`, and writes flex
 `order` values on the native group sections to band Active Projects above
 Inactive Projects. Inside the card, running, recent, and direct subagent
-Sessions are derived from the same stores: rows share one fixed trailing grid —
-title (its right edge faded by a mask while clipped) → **time 48 px**
-(right-aligned, tabular numerals) → **New session action 22 px**
-(hover/focus-revealed) → **disclosure chevron 24 px** — so parent and nested
-subagent rows right-align their times on one column; nested subagent rows have
-no New session action (they keep empty action/disclosure spacers, and an
-interrupted child keeps only Continue in the action slot), and the header joins
-the same grid. Each row's workspace title/path, status, last-active time,
+Sessions are derived from the same stores: each row is framed by a 16 px
+**disclosure cell** at its far left (the shell's filled `triangle-right-fill`
+arrow, rotated 90° when open) and a 46 px **trailing cell** at its right edge —
+title (its right edge faded by a mask while clipped) → **time** (right-aligned,
+10 px, tabular numerals, tertiary label) — so parent and nested subagent rows
+end their times 8 px inside the row's right edge (the native Session-row
+inset), the same x the native Session rows use;
+nested subagent rows have no New session action (their trailing cell holds only
+the time, and an interrupted child keeps only Continue beside its badge), and
+the header joins the same columns (indicator on the rows' leading-glyph column,
+count badge above the trailing cell, chevron closing the card on the row's
+8 px-inset right edge). Each row's workspace title/path, status, last-active time,
 subagent count, and the three native Session figures live in a native-style
 hover card that does not capture the pointer and follows the active theme
 (flush left edge, borderless, shell elevation/typography): light mode paints a
@@ -446,8 +450,9 @@ Active-project retention (`activeProjectDays`) bounds the Active bucket, with
 running Sessions always listed and always active. The card header's indicator is
 a blue pulsing business-primary dot while any listed Session runs and the white
 RemixIcon `deepseek-fill` brand glyph when nothing runs, horizontally centred on
-the same glyph column as the row glyphs and followed by the title on the
-row-title column; the header chevron shares the rows' disclosure column. Card
+the same glyph column as the row glyphs and followed by the title one label gap
+later; the header chevron folds the card from its right edge, above the time
+cell. Card
 state is Host-backed: read baselines sync through `api/power-suite.read-acks`,
 and card retention/times use the Host `api/power-suite.session-activity` map
 where the catalog time is stale (native sidebar times stay catalog-based). The
@@ -482,12 +487,13 @@ violet tint (a single row-level layer; the body pill stays transparent). Pinned
 main Sessions sort first (newest activity first) and never retire with the
 finished-Session retention window; unpin re-derives the row under the ordinary
 rules from its original end time. Top-level rows (the current rainbow row included)
-expose the native Session actions behind a "…" trigger in the 48 px time slot:
-the row keeps its time at rest, and hover/focus (or an open menu) hides the time
-and reveals the trigger, restoring it on leave. The trigger keeps the ordinary
-soft hover paint (plus the keyboard `focus-visible` ring); only the rainbow row
-suppresses it (transparent + the same `brightness(1.2)` lift as the other
-current-row controls). Nested subagent rows have no trigger. The trigger opens
+expose the native Session actions behind a "…" trigger in the right-anchored
+trailing cell: the row keeps its time at rest, and hover/focus (or an open menu)
+hides the time and reveals the trigger plus the New session button in the same
+cell, restoring the time on leave. The row bar is the only hover surface: no
+control paints its own block or brightness step, the trigger and New session
+included, and the revealed glyphs read at the title colour (plus the keyboard
+`focus-visible` ring). Nested subagent rows have no trigger. The trigger opens
 the shell's **native shared context-menu popup** against a plugin-owned
 captured-target kind (`powerSuiteSession`); a registered contribution resolves
 the native `session` target and hands the popup delegating actions that copy the
@@ -521,9 +527,9 @@ While UI-element
 annotation mode is active the hover card is pinned for pointer/selection
 (`data-psd-hovercard`, `data-psd-pinned`, `pointer-events: auto`, z-index 120)
 and clears on the annotation mode-state event or mode exit. The card body hides
-its scrollbar, rows have no native tooltips, and the row body and disclosure
-arrow highlight independently (the body highlight has 8 px horizontal inner
-padding). The Active/Inactive fold state persists in browser `localStorage` and
+its scrollbar, rows have no native tooltips, the row bar is the only hover
+surface (the leading disclosure triangle paints no block of its own), and the
+body highlight keeps 8 px horizontal inner padding. The Active/Inactive fold state persists in browser `localStorage` and
 is applied on the first observable paint through a persisted bucket
 classification cache that live data corrects once the Session store hydrates.
 A parent counts as active while a direct child runs. A `MutationObserver` on the

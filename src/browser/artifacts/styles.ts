@@ -54,10 +54,20 @@ export const ARTIFACTS_CSS = `
 .dsa-desc{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:17px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .dsa-actions{flex:none;display:flex;align-items:center;gap:6px}
 .dsa-action{appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:0;width:24px;height:24px;flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--dsw-radius-sm,6px);text-decoration:none}
-.dsa-action:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dsa-action:hover:not(:disabled):not([data-copied=true]){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dsa-action:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 .dsa-action[data-copied=true]{color:var(--dsw-alias-state-success-primary)}
 .dsa-action:disabled{color:var(--dsw-alias-label-tertiary);cursor:default;background:transparent}
+/* One hover surface per row (same rule as the Running & recent card): the row
+   paints the surface, and its action buttons only lift their glyph colour while
+   the row is hovered instead of stacking a second block inside it. */
+.dsa-row:hover .dsa-action:not([data-copied=true]):not(:disabled){color:var(--dsw-alias-label-primary)}
+.dsa-row:hover .dsa-action:hover:not(:disabled){background:transparent}
+/* Annotation targeting: an icon is never the pick target inside the Files panel.
+   The pointer lands on the labelled control (button/link aria-label) or, for the
+   row glyph and thumbnail, on the row itself, so the recorded anchor is a
+   semantic selector instead of a positional svg path. */
+.dsa-action > svg,.dsa-back > svg,.dsa-refresh > svg,.dsa-filter-trigger > svg,.dsa-filter-caret,.dsa-icon,.dsa-thumb,.dsa-empty-icon{pointer-events:none}
 .dsa-empty{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:24px;text-align:center}
 .dsa-empty-icon{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);display:flex;align-items:center;justify-content:center}
 .dsa-empty-title{font-weight:500}
@@ -74,7 +84,7 @@ export const ARTIFACTS_CSS = `
  */
 export const FILES_ARTIFACTS_CSS = `
 .psfa-tool{appearance:none;box-sizing:border-box;width:28px;height:28px;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-sm,8px);cursor:pointer;background:0 0;border:none;flex:none;justify-content:center;align-items:center;padding:5px;line-height:1;display:inline-flex}
-.psfa-tool svg{width:18px;height:18px}
+.psfa-tool svg{width:18px;height:18px;pointer-events:none}
 @media (hover:hover){.psfa-tool:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}}
 .psfa-tool[aria-pressed='true']{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .psfa-tool:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}

@@ -27,7 +27,12 @@ shows `aria-pressed="true"` while the list is shown.
   navigator stays mounted underneath.
 - The view reuses the same panel (count, All/Generated/Provided filter, Refresh,
   rows, thumbnails, hover Quick Look, footer) with one addition: a leading
-  **Back** button. Clicking the header button again, **Back**, or **Esc** returns
+  **Back** button. A row is the only hover surface: its action buttons (Open,
+  Download, Copy content, Copy path) lift their glyph colour while the row is
+  hovered instead of stacking a second block inside it, and their inner icons,
+  the row glyph and the thumbnail are pointer-transparent — a UI annotation pick
+  lands on the labelled control (or on the row itself), never on a positional
+  svg path. Clicking the header button again, **Back**, or **Esc** returns
   to Files; the header button's pressed state and focus follow the view.
 - `prefers-reduced-motion: reduce` swaps both directions instantly (no animation
   or transform); the pane is otherwise identical.

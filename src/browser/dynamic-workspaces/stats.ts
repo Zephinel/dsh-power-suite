@@ -74,6 +74,8 @@ export const DW_EN: Record<string, string> = {
   'time.min': '{n}min',
   'time.hour': '{n}h',
   'time.day': '{n}d',
+  'time.month': '{n}mo',
+  'time.year': '{n}y',
   'duration.seconds': '{s}s',
   'duration.minutes': '{m}m {s}s',
   'duration.hours': '{h}h {m}m'
@@ -133,6 +135,8 @@ export const DW_ZH: Record<string, string> = {
   'time.min': '{n}分钟',
   'time.hour': '{n}小时',
   'time.day': '{n}天',
+  'time.month': '{n}个月',
+  'time.year': '{n}年',
   'duration.seconds': '{s}秒',
   'duration.minutes': '{m}分{s}秒',
   'duration.hours': '{h}时{m}分'

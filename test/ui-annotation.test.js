@@ -506,6 +506,33 @@ if (ui === undefined) {
     )
   })
 
+  test('plugin-owned stable anchors survive capture with a unique data candidate', () => {
+    // The dynamic-Workspaces card marks its status/identity cell (a node that
+    // survives the row's state changes) and its header indicator with these
+    // values; the annotation capture must keep them as a `data` candidate rather
+    // than dropping the attribute and falling back to a positional path.
+    const sessionId = 'session-753fcac2-0311-4a93-ab70-427cedab8473'
+    const values = [
+      `psd-session-glyph:${sessionId}`,
+      'psd-panel-indicator'
+    ]
+    for (const value of values) {
+      assert.equal(sanitizeAnnotationAttributeValue('data-testid', value), value, `${value.slice(0, 16)}… is a stable anchor value`)
+    }
+    const candidates = selectorCandidates({
+      tag: 'span',
+      attrs: [{ name: 'data-testid', value: values[0] }],
+      path: 'span > span > span',
+      text: ''
+    })
+    const data = candidates.find((candidate) => candidate.kind === 'data')
+    assert.ok(data !== undefined, 'the glyph-cell testid yields a data candidate')
+    assert.equal(data.value, `[data-testid="${values[0]}"]`)
+    assert.equal(data.reliability, 0.92, 'the anchor keeps the first-tier data reliability')
+    // It must outranks the positional fallbacks that made the old records go stale.
+    assert.ok(data.reliability > (candidates.find((candidate) => candidate.kind === 'path')?.reliability ?? 0), 'the stable anchor outranks the tag path')
+  })
+
   test('R2: the real data-conversation-session shape and row keys survive; secret vectors still denied', () => {
     assert.equal(sanitizeAnnotationAttributeValue('data-conversation-session', SESSION_A), SESSION_A, 'real session-<uuid> attribute value')
     assert.equal(sanitizeAnnotationAttributeValue('data-row-key', REAL_ROW_KEY), REAL_ROW_KEY)

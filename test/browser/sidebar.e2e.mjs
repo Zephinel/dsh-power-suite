@@ -15,19 +15,20 @@
  * untouched.
  *
  * It then verifies the sidebar polish work on the real rendered DOM:
- *   B1  one fixed trailing grid shared by parent rows, child rows and the header —
- *       time 48 px (right-aligned) then the 22 px New session action slot then the
- *       24 px disclosure column; nested child rows reserve the action and disclosure
- *       columns as empty spacers so their time ends on the parent row's time x, and
- *       they render no New session control; clipped titles carry the right-edge
+ *   B1  one leading disclosure cell (16 px, native filled triangle, parent rows
+ *       only) and one right-anchored 46 px trailing cell shared by parent and
+ *       child rows — the time ends 8 px inside the row's right edge at 10 px in
+ *       the tertiary label colour, nested child rows end their time on the parent
+ *       row's x and render no New session control, the header chevron closes the
+ *       card on that same inset edge, and clipped titles carry the right-edge
  *       gradient mask.
  *   B2  hover highlight geometry: full-row hover surface like the native rows, fixed-size control highlights
- *       (22 px New session button, 24 px chevron) on the same columns in every row;
- *       revealing the actions moves no column, the main-row New session action
- *       still creates and opens a blank Session, and the 48 px time slot swaps to
- *       the "…" row-menu trigger on highlight (every top-level row including the
- *       current rainbow one; the trigger paints no hover background) and back on
- *       leaving.
+ *       (22 px New session button, 20 px "…" trigger) in the same trailing cell in
+ *       every main row; revealing the actions moves no column, the main-row New
+ *       session action still creates and opens a blank Session, and the trailing
+ *       cell swaps the time for the "…" row-menu trigger on highlight (every
+ *       top-level row including the current rainbow one; the trigger paints no
+ *       hover background) and back on leaving.
  *   B3  plugin input focus uses the shared rainbow track glow (prompt-history search
  *       field), with no solid-color focus border left behind.
  *   B4  the current Session row gets the rainbow smoke glow painted on the bottom face
@@ -957,7 +958,7 @@ const probe = {
 
   /**
    * Geometry of the "Running & recent" card: every row (parent and child) with the
-   * rect of its fixed trailing columns.
+   * rect of its leading disclosure cell and its right-anchored trailing cell.
    */
   panelGeometry: () => {
     const rect = (el) => {
@@ -1019,7 +1020,7 @@ const probe = {
         radius: getComputedStyle(button).borderRadius,
       })),
       toggle: (() => {
-        const node = el.querySelector('.psd-run-toggle') || el.querySelector('.psd-run-toggle-spacer')
+        const node = el.querySelector('.psd-run-toggle') || el.querySelector('.psd-run-lead-spacer')
         return node ? rect(node) : null
       })(),
       }
@@ -1693,7 +1694,7 @@ const probe = {
       if (backdrop === null) return null
       const titleNode = host.querySelector('.psd-run-title, .psd-child-title')
       const timeNode = host.querySelector('.psd-run-time, .psd-child-time')
-      const toggleNode = host.querySelector('.psd-run-toggle, .psd-run-toggle-spacer')
+      const toggleNode = host.querySelector('.psd-run-toggle, .psd-run-lead-spacer')
       const actionNode = host.querySelector('.psd-row-action')
       const glyphNode = host.querySelector('.psd-run-glyph, .psd-child-glyph')
       const named = (node) => {
@@ -2265,7 +2266,7 @@ async function runLayoutChecks({ page, results, state }) {
         const main = el.querySelector('.psd-run-main, .psd-child-main')
         const title = el.querySelector('.psd-run-title, .psd-child-title')
         const time = el.querySelector('.psd-run-time, .psd-child-time')
-        const toggle = el.querySelector('.psd-run-toggle, .psd-run-toggle-spacer')
+        const toggle = el.querySelector('.psd-run-toggle, .psd-run-lead-spacer')
         const style = getComputedStyle(main)
         const pill = box(main)
         const titleBox = box(title)
@@ -2280,7 +2281,7 @@ async function runLayoutChecks({ page, results, state }) {
           clipped: title.getAttribute('data-clipped') === 'true',
           row: box(el),
           timeRight: time ? box(time).right : null,
-          toggleRight: toggle ? box(toggle).right : null,
+          toggleLeft: toggle ? box(toggle).left : null,
         }
       })
     })
@@ -2290,13 +2291,15 @@ async function runLayoutChecks({ page, results, state }) {
     assert(parents.length >= 1 && children.length >= 1, 'need at least one parent and one child row')
     const report = []
     for (const row of rows) {
-      const expectedLeft = row.kind === 'parent' ? 14 : 10
+      const expectedLeft = row.kind === 'parent' ? 0 : 10
       const expectedRight = row.kind === 'parent' ? 10 : 8
-      assert(parseFloat(row.paddingLeft) >= expectedLeft, `${row.kind} pill left padding must be >= ${expectedLeft}px (today was parent 8 / child 4), got ${row.paddingLeft}`)
+      assert(parseFloat(row.paddingLeft) >= expectedLeft, `${row.kind} pill left padding must be >= ${expectedLeft}px (the main-row inset now sits in the leading disclosure cell), got ${row.paddingLeft}`)
       assert(parseFloat(row.paddingRight) >= expectedRight, `${row.kind} pill right padding must be >= ${expectedRight}px (today was 0), got ${row.paddingRight}`)
       assert(row.textRightInset >= 8, `${row.kind} title text must sit >= 8px inside the pill's right edge, got ${row.textRightInset}px (pill right ${row.pill.right}, text right ${row.title.right})`)
-      assertEqual(row.toggleRight, row.row.right, `${row.kind} disclosure column must stay right-anchored on the row edge`)
-      assertNear(row.timeRight, row.row.right - 50, 1, `${row.kind} time column must stay right-anchored`)
+      if (row.kind === 'parent') {
+        assertNear(row.toggleLeft, row.row.left + 7, 1, 'the parent row disclosure cell must sit on the row\'s leading edge')
+      }
+      assertNear(row.timeRight, row.row.right - 8, 1, `${row.kind} time must end inside the row's 8 px right inset`)
       report.push(`${row.kind} ${row.pill.width}px pad ${row.paddingLeft}/${row.paddingRight} text-right-inset ${row.textRightInset}px`)
     }
     const parentHeights = parents.map((row) => row.row.height)
@@ -2320,7 +2323,7 @@ async function runLayoutChecks({ page, results, state }) {
           }
           const rows = [...document.querySelectorAll('.psd-run, .psd-child')].map((el) => {
             const time = el.querySelector('.psd-run-time, .psd-child-time')
-            const toggle = el.querySelector('.psd-run-toggle, .psd-run-toggle-spacer')
+            const toggle = el.querySelector('.psd-run-toggle, .psd-run-lead-spacer')
             const title = el.querySelector('.psd-run-title, .psd-child-title')
             return {
               kind: el.classList.contains('psd-run') ? 'parent' : 'child',
@@ -2352,8 +2355,12 @@ async function runLayoutChecks({ page, results, state }) {
       const timeRights = sample.rows.map((row) => row.time.right)
       assertNear(Math.max(...timeRights) - Math.min(...timeRights), 0, 1, `at width ${sample.width} parent/child time right edges must be identical (${JSON.stringify(timeRights)})`)
       for (const row of sample.rows) {
-        assertEqual(row.toggle.right, row.row.right, `at width ${sample.width} a ${row.kind} row's disclosure column must sit on the row's right edge (toggle ${row.toggle.right}, row ${row.row.right})`)
-        assertNear(row.time.right, row.row.right - 50, 1, `at width ${sample.width} a ${row.kind} row's time must be right-anchored (time ${row.time.right}, row right ${row.row.right}, expected ${row.row.right - 50})`)
+        if (row.kind === 'parent') {
+          assertNear(row.toggle.left, row.row.left + 7, 1, `at width ${sample.width} a parent row's disclosure cell must sit on the row's leading edge (toggle ${row.toggle.left}, row ${row.row.left})`)
+        } else {
+          assertEqual(row.toggle, null, `at width ${sample.width} a child row must reserve no leading disclosure cell`)
+        }
+        assertNear(row.time.right, row.row.right - 8, 1, `at width ${sample.width} a ${row.kind} row's time must end inside the 8 px inset (time ${row.time.right}, row right ${row.row.right})`)
         if (row.title.clipped) {
           const pillRightPad = row.kind === 'parent' ? 10 : 8
           assert(row.title.rect.right <= row.time.left - 4 - pillRightPad + 1, `at width ${sample.width} a clipped ${row.kind} title must fade before the pill's ${pillRightPad}px right padding and never run under the trailing columns (title ${row.title.rect.right}, time left ${row.time.left})`)
@@ -2454,76 +2461,70 @@ async function runLayoutChecks({ page, results, state }) {
     return `item gaps ${spacing.itemGaps.join('/')} px; child gaps ${spacing.groups.map((group) => group.gaps.join('/') || 'n/a').join(' / ')}; parent-child ${spacing.groups.map((group) => group.parentGap).join('/')} px; trunk 1px; hover crosses gap`
   })
 
-  await results.check('b1-2', 'rows share one trailing grid: time → New session slot → disclosure (parent + child)', async () => {
+  await results.check('b1-2', 'rows share one leading disclosure cell and one right-anchored trailing cell (parent + child)', async () => {
     const geometry = await page.eval(probe.panelGeometry)
     const rows = geometry.rows
-    assert(rows.length >= 2, `need at least two rows to compare columns, got ${rows.length}`)
+    assert(rows.length >= 2, `need at least two rows to compare cells, got ${rows.length}`)
     state.geometry = geometry
     const parents = rows.filter((row) => row.kind === 'parent')
     const children = rows.filter((row) => row.kind === 'child')
     assert(parents.length >= 1 && children.length >= 1, `need both a parent and a nested child row, got ${parents.length} parent / ${children.length} child`)
     for (const row of rows) {
       const label = `${row.kind} row "${short(row.title?.text, 28)}"`
-      assert(row.time, `${label} has no time column`)
-      assert(row.actions, `${label} has no fixed action slot`)
-      assert(row.toggle, `${label} has no disclosure column/spacer`)
+      assert(row.time, `${label} has no trailing time cell`)
+      if (row.kind === 'parent') assert(row.toggle, `${label} has no leading disclosure cell/spacer`)
+      else assertEqual(row.toggle, null, 'a child row is indented under the trunk and reserves no leading disclosure cell')
     }
     const spread = (values) => Math.max(...values) - Math.min(...values)
+    const rowRights = rows.map((row) => row.rect.right)
     const timeRights = rows.map((row) => row.time.rect.right)
     const timeWidths = rows.map((row) => row.time.rect.width)
-    const actionLefts = rows.map((row) => row.actions.rect.left)
-    const actionRights = rows.map((row) => row.actions.rect.right)
-    const actionWidths = rows.map((row) => row.actions.rect.width)
-    const toggleLefts = rows.map((row) => row.toggle.left)
-    const toggleRights = rows.map((row) => row.toggle.right)
+    const parentRowsWithCell = parents
+    const leadOffsets = parentRowsWithCell.map((row) => row.toggle.left - row.rect.left)
+    const leadWidths = parentRowsWithCell.map((row) => row.toggle.width)
+    assertNear(spread(rowRights), 0, 1, `parent/child rows must share one right edge (${JSON.stringify(rowRights)})`)
     assertNear(spread(timeRights), 0, 1, `time right edges must align across every row (${JSON.stringify(timeRights)})`)
-    assertNear(spread(timeWidths), 0, 0.5, `time column width must be fixed (${JSON.stringify(timeWidths)})`)
-    assertNear(timeWidths[0], 48, 0.5, `time column must be 48 px wide, got ${timeWidths[0]}`)
-    assertNear(spread(actionLefts), 0, 1, `action-slot left edges must align across every row (${JSON.stringify(actionLefts)})`)
-    assertNear(spread(actionRights), 0, 1, `action-slot right edges must align across every row (${JSON.stringify(actionRights)})`)
-    assertNear(spread(actionWidths), 0, 0.5, `action slot width must be fixed (${JSON.stringify(actionWidths)})`)
-    assertNear(actionWidths[0], 22, 0.5, `action slot must be 22 px wide, got ${actionWidths[0]}`)
-    assertNear(spread(toggleLefts), 0, 1, `disclosure column left edges must align across every row (${JSON.stringify(toggleLefts)})`)
-    assertNear(spread(toggleRights), 0, 1, `disclosure column right edges must align across every row (${JSON.stringify(toggleRights)})`)
-    // Column order left to right: time, then the New session slot, then disclosure.
+    assertNear(spread(timeWidths), 0, 0.5, `trailing cell width must be fixed (${JSON.stringify(timeWidths)})`)
+    assertNear(timeWidths[0], 46, 0.5, `trailing cell must be 46 px wide, got ${timeWidths[0]}`)
     for (const row of rows) {
-      assert(row.time.rect.right < row.actions.rect.left, `time must sit left of the action slot on a ${row.kind} row`)
-      assert(row.actions.rect.right < row.toggle.left, `action slot must sit left of the disclosure column on a ${row.kind} row`)
+      assertNear(row.time.rect.right, row.rect.right - 8, 1, `the ${row.kind} row's time must end inside the row's 8 px right inset (time ${row.time.rect.right}, row ${row.rect.right})`)
+      assertEqual(row.time.style.fontSize, '10px', `the ${row.kind} row's time must use the native 10 px recipe, got ${row.time.style.fontSize}`)
     }
+    for (const parentRow of parents) {
+      assertNear(parentRow.toggle.width, 16, 0.5, `the parent disclosure cell must be 16 px wide, got ${parentRow.toggle.width}`)
+    }
+    assertNear(spread(leadOffsets), 0, 1, `parent disclosure cells must share one leading offset (${JSON.stringify(leadOffsets)})`)
+    assertNear(spread(leadWidths), 0, 0.5, `parent disclosure cell width must be fixed (${JSON.stringify(leadWidths)})`)
     // The user-reported bug: parent and child times must end on one x.
     const parentTimeRight = parents[0].time.rect.right
     for (const childRow of children) {
       assertNear(childRow.time.rect.right, parentTimeRight, 1, `child time right edge (${childRow.time.rect.right}) must equal parent time right edge (${parentTimeRight})`)
     }
-    // New session is a main-row action only.
+    // New session is a main-row action only, and it lives in the trailing cell.
     for (const parentRow of parents) {
+      assert(parentRow.actions, 'a main row must render its trailing action cell')
       const variants = parentRow.actionButtons.map((button) => button.variant)
       assertEqual(variants.filter((variant) => variant === 'new-session').length, 1, `main row must render exactly one New session action, got ${JSON.stringify(variants)}`)
       const button = parentRow.actionButtons.find((entry) => entry.variant === 'new-session')
       assertNear(button.rect.width, 22, 0.5, 'New session button width')
-      assertNear(button.rect.right, parentRow.actions.rect.right, 1, 'New session button must be right-anchored inside its fixed slot')
+      assertNear(button.rect.right, parentRow.rect.right - 8, 1, 'New session button must end inside the row\'s 8 px right inset, in the trailing cell')
+      assertNear(parentRow.actions.rect.right, parentRow.rect.right - 8, 1, 'the trailing action cell must end inside the row\'s 8 px right inset')
     }
     for (const childRow of children) {
-      const variants = childRow.actionButtons.map((button) => button.variant)
-      assertEqual(variants.filter((variant) => variant === 'new-session').length, 0, `child row must not render the New session action, got ${JSON.stringify(variants)}`)
-      assert(variants.every((variant) => variant === 'continue'), `child action slot may only hold Continue when interrupted, got ${JSON.stringify(variants)}`)
-      assertEqual(childRow.actions.empty, variants.length === 0, 'child action slot must be an empty fixed spacer unless it holds Continue')
+      assertEqual(childRow.actions, null, 'child rows render no trailing action cell')
+      assertEqual(childRow.actionButtons.length, 0, `child row must not render any action button, got ${JSON.stringify(childRow.actionButtons.map((entry) => entry.variant))}`)
     }
-    // The header shares the same grid: time spacer, count badge on the action
-    // column, chevron on the disclosure column.
-    const headTime = geometry.head.find((part) => part.className.includes('psd-panel-head-time-spacer'))
-    const headActions = geometry.head.find((part) => part.className.includes('psd-panel-head-actions'))
+    // The header closes the same right edge with its chevron; the count badge
+    // sits just left of it, above the rows' trailing cell.
+    const headCount = geometry.head.find((part) => part.className.includes('psd-count'))
     const headChevron = geometry.head.find((part) => part.className.includes('psd-panel-chevron'))
-    assert(headTime && headActions && headChevron, 'header is missing its time/action/chevron column parts')
-    assertNear(headTime.rect.right, timeRights[0], 1, `header time column right edge (${headTime.rect.right}) must line up with the row time column (${timeRights[0]})`)
-    assertNear(headActions.rect.right, actionRights[0], 1, `header action column right edge (${headActions.rect.right}) must line up with the row action column (${actionRights[0]})`)
-    assertNear(headChevron.rect.right, toggleRights[0], 1, `header chevron right edge (${headChevron.rect.right}) must line up with the row disclosure column (${toggleRights[0]})`)
+    assert(headCount && headChevron, 'header is missing its count badge or chevron')
+    assertNear(headChevron.rect.right, timeRights[0], 1, `header chevron right edge (${headChevron.rect.right}) must sit on the row time column (${timeRights[0]})`)
     assertNear(headChevron.rect.width, 24, 0.5, 'header chevron column width')
-    assert(geometry.headBadge, 'header count badge missing')
-    assertNear(geometry.headBadge.rect.right, headActions.rect.right, 1, 'count badge must be right-anchored on the header action column')
+    assert(headCount.rect.right <= headChevron.rect.left, `count badge (right ${headCount.rect.right}) must sit left of the header chevron (left ${headChevron.rect.left})`)
     const parentTimes = parents.map((row) => `${row.time.text}@${row.time.rect.right}`)
     const childTimes = children.map((row) => `${row.time.text}@${row.time.rect.right}`)
-    return `time right ${parentTimeRight} (${timeWidths[0]} px), New session slot right ${actionRights[0]} (${actionWidths[0]} px), disclosure right ${toggleRights[0]}; parent times ${parentTimes.join(', ')}; child times ${childTimes.join(', ')}; header ${headTime.rect.right}/${headActions.rect.right}/${headChevron.rect.right}`
+    return `time right ${parentTimeRight} (${timeWidths[0]} px cell, 8 px inset), leading cell ${leadWidths[0]} px at +${leadOffsets[0]}, New session ends ${parents[0].rect.right - 8}; parent times ${parentTimes.join(', ')}; child times ${childTimes.join(', ')}; header badge ${headCount.rect.right} / chevron ${headChevron.rect.right}`
   })
 
   await results.check('b1-3', 'long titles carry the right-edge gradient mask; short titles do not', async () => {
@@ -2539,7 +2540,7 @@ async function runLayoutChecks({ page, results, state }) {
       assertEqual(title.mask, 'none', `unclipped title "${short(title.text, 30)}" must not be masked`)
     }
     // A clipped title stops on the content-column boundary, immediately left of
-    // its row's time column, in parent and child rows alike.
+    // its row's trailing time cell, in parent and child rows alike.
     for (const row of geometry.rows) {
       if (!row.title || !row.title.clipped || !row.time) continue
       const pillRightPad = row.kind === 'parent' ? 10 : 8
@@ -2550,7 +2551,7 @@ async function runLayoutChecks({ page, results, state }) {
     return `${clipped.length} masked / ${unclipped.length} unmasked titles; fade ${sample.mask}`
   })
 
-  await results.check('b1-4', 'header controls are content-paced with fixed 24px disclosure column', async () => {
+  await results.check('b1-4', 'header controls are content-paced with the fixed 24px card chevron', async () => {
     const geometry = await page.eval(probe.panelGeometry)
     const toggle = geometry.head.find((part) => part.className.includes('psd-panel-toggle'))
     const spacer = geometry.head.find((part) => part.className.includes('psd-panel-head-spacer'))
@@ -2603,15 +2604,15 @@ async function runLayoutChecks({ page, results, state }) {
     const childHover = await page.eval(probe.hoverHighlight)
     assert(childHover.hovered && childHover.kind === 'child', 'child row did not register hover')
     assertEqual(childHover.actionRects.length, 0, `child row must reveal no action buttons, got ${JSON.stringify(childHover.actionVariants)}`)
-    assertEqual(childHover.actionsOpacity, '1', `child action slot must still reveal as an empty spacer (opacity ${childHover.actionsOpacity})`)
+    assertEqual(childHover.actionsOpacity, null, `child rows must render no action cell at all, got opacity ${childHover.actionsOpacity}`)
     const headerToggle = state.geometry.head.find((part) => part.className.includes('psd-panel-toggle'))
     assert(headerToggle && headerToggle.rect.height === 30, 'header toggle control lost its 30px height')
     await page.moveTo(900, 500)
     await sleep(300)
-    return `parent New session ${parentAction.width}x${parentAction.height} at x=${parentAction.left}; child action buttons 0 in its reserved 22px slot; header toggle ${headerToggle.rect.width}x30`
+    return `parent New session ${parentAction.width}x${parentAction.height} at x=${parentAction.left}; child action buttons 0 and no action cell; header toggle ${headerToggle.rect.width}x30`
   })
 
-  await results.check('b2-3', 'the time↔"…" row-menu swap follows highlight on every top-level row; only the rainbow row suppresses the trigger hover paint', async () => {
+  await results.check('b2-3', 'the time↔"…" row-menu swap follows highlight on every top-level row and no control paints its own hover block', async () => {
     await page.moveTo(900, 500)
     await sleep(250)
     const before = await page.eval(probe.panelGeometry)
@@ -2636,6 +2637,7 @@ async function runLayoutChecks({ page, results, state }) {
         moreOpacity: more === null ? null : styleOf(more).opacity,
         moreVisibility: more === null ? null : styleOf(more).visibility,
         morePointerEvents: more === null ? null : styleOf(more).pointerEvents,
+        actionsOpacity: row.querySelector('.psd-run-actions') === null ? null : styleOf(row.querySelector('.psd-run-actions')).opacity,
       }
     }, rowIndex)
     // At rest every top-level row keeps its time and hides the "…" trigger.
@@ -2643,8 +2645,9 @@ async function runLayoutChecks({ page, results, state }) {
     assert(rest !== null, 'the resting parent row was not found for the row-menu check')
     assert(rest.morePresent, 'every top-level row must render the "…" trigger')
     assertEqual(rest.timeOpacity, '1', `a resting top-level row must keep its time (opacity ${rest.timeOpacity})`)
-    assertEqual(rest.moreOpacity, '0', `the "…" trigger must be hidden at rest (opacity ${rest.moreOpacity})`)
-    assertEqual(rest.moreVisibility, 'visible', `the "…" trigger stays focusable; only its opacity hides it (${rest.moreVisibility})`)
+    assertEqual(rest.actionsOpacity, '0', `the trailing actions cell must be hidden at rest (opacity ${rest.actionsOpacity})`)
+    assertEqual(rest.morePointerEvents, 'none', `the resting "…" trigger must not take the pointer (${rest.morePointerEvents})`)
+    assertEqual(rest.moreVisibility, 'visible', `the "…" trigger stays focusable; only the cell's opacity hides it (${rest.moreVisibility})`)
     await hoverRow(page, parentIndex)
     await sleep(650)
     const during = await page.eval(probe.panelGeometry)
@@ -2685,18 +2688,14 @@ async function runLayoutChecks({ page, results, state }) {
     assert(hoveredMenu !== null, 'the hovered parent row disappeared during the row-menu check')
     assertEqual(hoveredMenu.timeOpacity, '0', `a highlighted top-level row must hide its time (opacity ${hoveredMenu.timeOpacity})`)
     assertEqual(hoveredMenu.moreOpacity, '1', `the "…" trigger must reveal on highlight (opacity ${hoveredMenu.moreOpacity})`)
+    assertEqual(rest.moreOpacity, '1', 'the trigger itself never carries the hide (its cell does)')
     assertEqual(hoveredMenu.moreVisibility, 'visible', `the "…" trigger must be visible on highlight (${hoveredMenu.moreVisibility})`)
     assertEqual(hoveredMenu.morePointerEvents, 'auto', `the "…" trigger must be interactive on highlight (${hoveredMenu.morePointerEvents})`)
-    // Ordinary rows paint the same soft hover background as their New session
-    // control; the rainbow row suppresses it and keeps only brightness(1.2).
+    // The row bar is the only hover surface: no trigger paints its own block or
+    // its own brightness step, on the rainbow row and on ordinary rows alike.
     const trigger = await hoverCardControl(page, 'parent', parentTitle, '.psd-run-more')
-    if (hoveredMenu.current) {
-      assertEqual(trigger.background, 'rgba(0, 0, 0, 0)', `the rainbow row's "…" trigger must paint no hover background (${trigger.background})`)
-      assertEqual(trigger.filter, 'brightness(1.2)', `the rainbow row's "…" trigger hover must keep its brightness suppression (filter ${trigger.filter})`)
-    } else {
-      assert(trigger.background !== 'rgba(0, 0, 0, 0)', `an ordinary row's "…" trigger must keep its soft hover background (${trigger.background})`)
-      assertEqual(trigger.filter, 'none', `an ordinary row's "…" trigger must not carry the atmosphere lift (filter ${trigger.filter})`)
-    }
+    assertEqual(trigger.background, 'rgba(0, 0, 0, 0)', `a highlighted row's "…" trigger must paint no hover background (${trigger.background})`)
+    assertEqual(trigger.filter, 'none', `a highlighted row's "…" trigger must not add a brightness step (filter ${trigger.filter})`)
     assertEqual(await page.eval(() => document.querySelectorAll('.psd-child .psd-run-more').length), 0,
       'subagent rows must not render the "…" trigger')
     await page.moveTo(900, 500)
@@ -2715,7 +2714,7 @@ async function runLayoutChecks({ page, results, state }) {
     assert(restored !== null, `the hovered row "${short(parentTitle, 40)}" disappeared after the pointer left`)
     assertEqual(restored.timeOpacity, '1', `the time must return after the pointer leaves (opacity ${restored.timeOpacity})`)
     const hoveredMargin = Number(before.rows[hoveredIndex].titleMarginLeft ?? before.rows[hoveredIndex].titleShift ?? 0)
-    return `rest: time visible / "…" hidden; hover: time hidden / "…" visible with the ordinary hover paint${hoveredMenu.current ? ' suppressed on the rainbow row (brightness(1.2))' : ''}; columns fixed (time ${before.rows[0].time.rect.right}, action ${before.rows[0].actions.rect.right}, disclosure ${before.rows[0].toggle.right}); hovered title slid ${before.rows[hoveredIndex].title.rect.left} -> ${during.rows[hoveredIndex].title.rect.left} = 25 − rest marginLeft ${hoveredMargin} (two-phase reveal); subagent rows have no trigger; leaving restores the time`
+    return `rest: time visible / "…" hidden; hover: time hidden / "…" visible, row bar only (no control block)${hoveredMenu.current ? ' on the rainbow row too' : ''}; cells fixed (time ${before.rows[0].time.rect.right}, action ${before.rows[0].actions.rect.right}, disclosure ${before.rows[0].toggle.right}); hovered title slid ${before.rows[hoveredIndex].title.rect.left} -> ${during.rows[hoveredIndex].title.rect.left} = 25 − rest marginLeft ${hoveredMargin} (two-phase reveal); subagent rows have no trigger; leaving restores the time`
   })
 
   await results.check('b2-5', 'the interrupted Continue triangle sits immediately after the badge and never moves the time column', async () => {
@@ -3288,10 +3287,11 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       }
       return {
         titles: [...document.querySelectorAll('.psd-run-title, .psd-child-title')].map((node) => getComputedStyle(node).color),
-        times: [...document.querySelectorAll('.psd-run-time, .psd-child-time')].map((node) => getComputedStyle(node).color),
+        times: [...document.querySelectorAll('.psd-run:not(.psd-run-current) .psd-run-time, .psd-child:not(.psd-child-current) .psd-child-time')].map((node) => getComputedStyle(node).color),
         childRows: [...document.querySelectorAll('.psd-child')].map((node) => getComputedStyle(node).color),
         nativeTitle: colorOf('[class*="sessionRow"] [class*="title"]'),
         nativeTime: colorOf('[class*="sessionRow"] [class*="time"]'),
+        currentTimes: [...document.querySelectorAll('.psd-run-current .psd-run-time, .psd-child-current .psd-child-time')].map((node) => getComputedStyle(node).color),
       }
     })
     await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'light' }])
@@ -3310,6 +3310,9 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       for (const color of light.times) {
         assert(color === light.nativeTime || color === 'rgb(97, 102, 107)', `light mode: running-panel time must stay native tertiary (${light.nativeTime}) or the highlighted-row secondary lift, got ${color}`)
       }
+      for (const color of light.currentTimes) {
+        assert(color === 'rgb(15, 17, 21)', `light mode: the current row's time is lifted to the primary label on the rainbow bar, got ${color}`)
+      }
       await page.emulateMedia([{ name: 'prefers-color-scheme', value: 'dark' }])
       await sleep(700)
       const dark = await read()
@@ -3325,7 +3328,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
     }
   })
 
-  await results.check('b4-14', 'running-panel icon colours match or beat the native Workspace icon weight in light mode', async () => {
+  await results.check('b4-14', 'running-panel icon colours match or beat the native Workspace icon weight in light mode (the disclosure triangle is painted at the title colour)', async () => {
     // A parked pointer over a card row now lifts that row's strip to the title
     // colour (highlighted-row rule), so the resting-state readings below need a
     // neutral pointer rather than whatever the previous check left behind.
@@ -3335,9 +3338,17 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       return {
         secondaryIcons: {
           action: colors('.psd-row-action'),
-          toggle: colors('.psd-run-toggle'),
           chevron: colors('.psd-chevron'),
           panelChevron: colors('.psd-panel-chevron'),
+        },
+        // Owner request: the disclosure triangle is painted at the title colour
+        // on every row (both themes), not on the native caption step.
+        triangleIcons: {
+          toggle: [...document.querySelectorAll('.psd-run-toggle')].map((node) => getComputedStyle(node).color),
+        },
+        currentRowTriangle: {
+          triangle: [...document.querySelectorAll('.psd-run-current .psd-run-toggle')].map((node) => getComputedStyle(node).color),
+          title: [...document.querySelectorAll('.psd-run-current .psd-run-title')].map((node) => getComputedStyle(node).color),
         },
 
         primaryIcons: {
@@ -3362,6 +3373,18 @@ async function runCurrentHighlightChecks({ page, results, state }) {
         for (const color of list) {
           assertEqual(color, 'rgb(97, 102, 107)', `light mode: ${name} icon must use the secondary label token (#61666b) so icons read darker than the native tertiary row icons, got ${color}`)
         }
+      }
+      for (const [name, list] of Object.entries(light.triangleIcons)) {
+        for (const color of list) {
+          assertEqual(color, 'rgb(15, 17, 21)', `light mode: the ${name} triangle must be painted at the title colour (#0f1115), got ${color}`)
+        }
+      }
+      // The current rainbow row is highlighted at rest: its triangle follows the
+      // title colour instead of the caption step (owner request).
+      const lightCurrent = light.currentRowTriangle
+      for (let index = 0; index < lightCurrent.triangle.length; index += 1) {
+        assertEqual(lightCurrent.triangle[index], lightCurrent.title[index] ?? lightCurrent.triangle[index],
+          `light mode: the current row's triangle must match its title colour, got ${lightCurrent.triangle[index]} vs ${lightCurrent.title[index]}`)
       }
       const primaryBrand = [...light.primaryIcons.brand, ...light.primaryIcons.indicator, ...light.primaryIcons.spark]
       for (const color of primaryBrand) {
@@ -3389,7 +3412,17 @@ async function runCurrentHighlightChecks({ page, results, state }) {
           assert(darkAllowed.has(color), `dark mode: ${name} icon must keep its unchanged dark colour, got ${color}`)
         }
       }
-      return `light: row/action/toggle/chevron/child glyph ${secondary.action[0]}, brand ${light.primaryIcons.brand[0] ?? 'n/a'}, native ${[...nativeColors].join(' / ')}; dark unchanged ${dark.secondaryIcons.action[0] ?? 'no rows'}`
+      for (const [name, list] of Object.entries(dark.triangleIcons)) {
+        for (const color of list) {
+          assertEqual(color, 'rgb(249, 250, 251)', `dark mode: the ${name} triangle must be painted at the title colour (#f9fafb), got ${color}`)
+        }
+      }
+      const darkCurrent = dark.currentRowTriangle
+      for (let index = 0; index < darkCurrent.triangle.length; index += 1) {
+        assertEqual(darkCurrent.triangle[index], darkCurrent.title[index] ?? darkCurrent.triangle[index],
+          `dark mode: the current row's triangle must match its title colour, got ${darkCurrent.triangle[index]} vs ${darkCurrent.title[index]}`)
+      }
+      return `light: row/action/chevron/child glyph ${secondary.action[0]}, triangle ${light.triangleIcons.toggle[0] ?? 'no rows'} (title colour), brand ${light.primaryIcons.brand[0] ?? 'n/a'}, native ${[...nativeColors].join(' / ')}; dark unchanged ${dark.secondaryIcons.action[0] ?? 'no rows'}`
     } finally {
       await page.emulateMedia([])
       await sleep(400)
@@ -3488,8 +3521,8 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       assertEqual(lightHover.currentAction.color, expectedPrimary.light, `light: the highlighted row New-session action must darken to the primary label on hover (like the pin), got ${lightHover.currentAction.color}`)
       assertEqual(lightHover.currentAction.glyph, expectedPrimary.light, `light: the + glyph itself must inherit the darkened hover colour, got ${lightHover.currentAction.glyph}`)
       assert(sameRect(lightBase.currentAction.rect, lightHover.currentAction.rect), `light: the action geometry must not move on hover (${JSON.stringify(lightBase.currentAction.rect)} vs ${JSON.stringify(lightHover.currentAction.rect)})`)
-      assertEqual(lightHover.currentAction.background, 'rgba(0, 0, 0, 0)', `light: an atmosphere-row action must not paint its own hover block inside the rainbow (transparent; the row lifts brightness instead), got ${lightHover.currentAction.background}`)
-      assertEqual(lightHover.currentAction.filter, 'brightness(1.2)', `light: an atmosphere-row action hover must brighten one step instead of painting a block (filter ${lightHover.currentAction.filter})`)
+      assertEqual(lightHover.currentAction.background, 'rgba(0, 0, 0, 0)', `light: an atmosphere-row action must not paint its own hover block inside the rainbow (transparent; the row is the only surface), got ${lightHover.currentAction.background}`)
+      assertEqual(lightHover.currentAction.filter, 'none', `light: an atmosphere-row action hover must not add a brightness step either (filter ${lightHover.currentAction.filter})`)
       // Keyboard focus: primary label through real focus-visible, no pointer involved.
       const lightFocus = await focusActionViaKeyboard()
       assert(lightFocus.currentAction && lightFocus.currentAction.focusVisible, 'light: the + action did not match :focus-visible after a real Tab-keyboard focus')
@@ -3529,7 +3562,7 @@ async function runCurrentHighlightChecks({ page, results, state }) {
       const darkHover = await measure()
       assertEqual(darkHover.currentAction.color, expectedPrimary.dark, `dark: the highlighted row New-session action must darken to the primary label on hover, got ${darkHover.currentAction.color}`)
       assert(sameRect(darkBase.currentAction.rect, darkHover.currentAction.rect), 'dark: the action geometry must not move on hover')
-      assertEqual(darkHover.currentAction.filter, 'brightness(1.2)', `dark: an atmosphere-row action hover must brighten one step instead of painting a block (filter ${darkHover.currentAction.filter})`)
+      assertEqual(darkHover.currentAction.filter, 'none', `dark: an atmosphere-row action hover must not add a brightness step either (filter ${darkHover.currentAction.filter})`)
       if (state.shotsEnabled && darkBase.currentRow) await writeEvidenceShot(page, '21-action-hover-dark', { left: darkBase.currentRow.left - 12, top: darkBase.currentRow.top - 6, width: darkBase.currentRow.width + 24, height: darkBase.currentRow.height + 12 })
       await moveAway()
       return `light ${lightBase.currentAction.color} -> hover ${lightHover.currentAction.color} / focus ${lightFocus.currentAction.color} (glyph ${lightHover.currentAction.glyph}, rect stable, bg ${lightHover.currentAction.background}, filter none); dark ${darkBase.currentAction.color} -> ${darkHover.currentAction.color}; non-current hover ${otherRest === null ? 'n/a' : otherRest + ' -> primary'}; ${notes.join('; ')}`
@@ -3757,7 +3790,7 @@ async function runHoverCardChecks({ page, results, state }) {
     assertEqual(parent.title.style.lineHeight, '20px', 'main row title line-height must match native session rows (20px)')
     assertEqual(parent.title.style.fontWeight, '400', 'main row title weight must match native session rows')
     assertEqual(child.title.style.fontSize, '13px', 'nested subagent title font-size')
-    assertEqual(parent.time.style.fontSize, '11px', 'row time font-size')
+    assertEqual(parent.time.style.fontSize, '10px', 'row time font-size (native Session-row recipe)')
     const family = await page.eval(() => getComputedStyle(document.body).fontFamily)
     assertEqual(parent.title.style.fontFamily, family, 'row title must inherit the shell font family')
     assertEqual(child.title.style.fontFamily, family, 'nested title must inherit the shell font family')
@@ -6997,7 +7030,7 @@ const probePin = {
     const pin = row.querySelector('.psd-run-pin')
     const time = row.querySelector('.psd-run-time')
     const actions = row.querySelector('.psd-run-actions')
-    const toggle = row.querySelector('.psd-run-toggle, .psd-run-toggle-spacer')
+    const toggle = row.querySelector('.psd-run-toggle, .psd-run-lead-spacer')
     const pinStyle = pin === null ? null : getComputedStyle(pin)
     const slotStyle = slot === null ? null : getComputedStyle(slot)
     const open = row.querySelector('.psd-run-open')
@@ -7056,7 +7089,7 @@ const probePin = {
       const pin = row.querySelector('.psd-run-pin')
       const time = row.querySelector('.psd-run-time')
       const actions = row.querySelector('.psd-run-actions')
-      const toggle = row.querySelector('.psd-run-toggle, .psd-run-toggle-spacer')
+      const toggle = row.querySelector('.psd-run-toggle, .psd-run-lead-spacer')
       const pinStyle = pin === null ? null : getComputedStyle(pin)
       samples.push({
         t: Math.round(now() - start),
@@ -8428,7 +8461,7 @@ async function runPinChecks({ page, results, state }) {
       if (row.pinned === 'true') {
         // A pinned row keeps the revealed space permanently.
         assertNear(row.slotWidth, 16, 0.75, `pinned row "${short(row.title, 30)}" must keep the 16 px slot at rest (got ${row.slotWidth})`)
-        assertNear(titleLeftRel, 71, 0.75, `pinned row "${short(row.title, 30)}" title must start at 71 px at rest (got ${titleLeftRel})`)
+        assertNear(titleLeftRel, 75, 0.75, `pinned row "${short(row.title, 30)}" title must start at 75 px at rest (got ${titleLeftRel})`)
         assertNear(row.titleMarginLeft, 0, 0.25, `pinned row "${short(row.title, 30)}" must force the title shift to 0 (margin-left ${row.titleMarginLeft})`)
         assertEqual(row.ariaPressed, 'true', `pinned row "${short(row.title, 30)}" must expose aria-pressed=true`)
         assertEqual(row.opacity, '1', `pinned row "${short(row.title, 30)}" must keep its filled marker visible without hover (opacity ${row.opacity})`)
@@ -8439,14 +8472,14 @@ async function runPinChecks({ page, results, state }) {
         // the measured half-advance of its first glyph so that the first character is
         // centred on the child status-dot column (54 px from the row's left edge).
         assertNear(row.slotWidth, 0, 0.25, `unpinned row "${short(row.title, 30)}" pin slot must be collapsed at rest (got ${row.slotWidth})`)
-        assert(titleLeftRel > 48 && titleLeftRel < 53, `unpinned row "${short(row.title, 30)}" rest title must sit between 48 and 53 px (got ${titleLeftRel})`)
+        assert(titleLeftRel > 52 && titleLeftRel < 57, `unpinned row "${short(row.title, 30)}" rest title must sit between 52 and 57 px (got ${titleLeftRel})`)
         assert(row.firstCharWidth !== null && row.firstCharWidth > 0, `unpinned row "${short(row.title, 30)}" first-glyph width could not be measured`)
-        assertNear(titleLeftRel + row.firstCharWidth / 2, 56, 0.7,
-          `unpinned row "${short(row.title, 30)}" first character centre must align with the requested right-biased column 56 (titleLeft ${titleLeftRel} + firstCharWidth/2 ${(row.firstCharWidth / 2).toFixed(2)})`)
+        assertNear(titleLeftRel + row.firstCharWidth / 2, 60, 0.7,
+          `unpinned row "${short(row.title, 30)}" first character centre must align with the requested right-biased column 60 (titleLeft ${titleLeftRel} + firstCharWidth/2 ${(row.firstCharWidth / 2).toFixed(2)})`)
         assertNear(row.titleShift, 10 - row.firstCharWidth / 2, 0.75,
           `unpinned row "${short(row.title, 30)}" shift must be 10 − firstGlyph/2 (shift ${row.titleShift}, firstGlyph ${row.firstCharWidth})`)
-        assertNear(titleLeftRel, 46 + row.titleShift, 0.75,
-          `unpinned row "${short(row.title, 30)}" rest title must be 46 + the measured shift (got ${titleLeftRel}, shift ${row.titleShift})`)
+        assertNear(titleLeftRel, 50 + row.titleShift, 0.75,
+          `unpinned row "${short(row.title, 30)}" rest title must be 50 + the measured shift (got ${titleLeftRel}, shift ${row.titleShift})`)
         assert(row.titleShift > 1.5 && row.titleShift < 6, `unpinned row "${short(row.title, 30)}" biased shift must stay in the ~2–5 px family (got ${row.titleShift})`)
         assertNear(row.titleMarginLeft, row.titleShift, 0.75,
           `unpinned row "${short(row.title, 30)}" rest margin-left must equal the shift (got ${row.titleMarginLeft})`)
@@ -8473,7 +8506,7 @@ async function runPinChecks({ page, results, state }) {
     }
     state.pinStructure = { mainRows: pin.mainRows, childRows: pin.childRows }
     const collapsed = pin.rows.filter((row) => row.pinned !== 'true').length
-    return `${pin.mainRows} main rows (${collapsed} unpinned: slot 0 px, right-biased first-character-centred rest title 46 + shift px, centre 56; pinned rows keep 16/71); ${pin.childRows} subagent child rows with no pin DOM; ${glyphGuard}`
+    return `${pin.mainRows} main rows (${collapsed} unpinned: slot 0 px, right-biased first-character-centred rest title 50 + shift px, centre 60; pinned rows keep 16/75); ${pin.childRows} subagent child rows with no pin DOM; ${glyphGuard}`
   })
 
   // ---- R1: running-card hover-card status dot ----------------------------------------------
@@ -8793,10 +8826,10 @@ async function runPinChecks({ page, results, state }) {
     assert(rest !== null, 'the reveal target row disappeared')
     assertEqual(rest.pinned, null, 'the reveal target must start unpinned')
     assertNear(rest.slotWidth, 0, 0.25, `rest slot width must be 0 (got ${rest.slotWidth})`)
-    assert(rest.titleLeftRel > 48 && rest.titleLeftRel < 53, `rest title must sit between 48 and 53 px (got ${rest.titleLeftRel})`)
+    assert(rest.titleLeftRel > 52 && rest.titleLeftRel < 57, `rest title must sit between 52 and 57 px (got ${rest.titleLeftRel})`)
     assert(rest.firstCharWidth !== null && rest.firstCharWidth > 0, 'rest first-glyph width could not be measured')
-    assertNear(rest.titleLeftRel + rest.firstCharWidth / 2, 56, 0.7,
-      `rest first character centre must align with the requested right-biased column 56 (titleLeft ${rest.titleLeftRel} + ${(rest.firstCharWidth / 2).toFixed(2)})`)
+    assertNear(rest.titleLeftRel + rest.firstCharWidth / 2, 60, 0.7,
+      `rest first character centre must align with the requested right-biased column 60 (titleLeft ${rest.titleLeftRel} + ${(rest.firstCharWidth / 2).toFixed(2)})`)
     assertNear(rest.titleShift, 10 - rest.firstCharWidth / 2, 0.75,
       `rest shift must be 10 − firstGlyph/2 (shift ${rest.titleShift}, firstGlyph ${rest.firstCharWidth})`)
     const restTitle = rest.titleLeftRel
@@ -8807,7 +8840,7 @@ async function runPinChecks({ page, results, state }) {
       for (const sample of samples) {
         assertNear(sample.timeLeft, restColumns.timeLeft, 0.5, `${label}: the time column must never move (${sample.timeLeft} vs ${restColumns.timeLeft})`)
         assertNear(sample.actionsLeft, restColumns.actionsLeft, 0.5, `${label}: the New session column must never move (${sample.actionsLeft} vs ${restColumns.actionsLeft})`)
-        assertNear(sample.toggleLeft, restColumns.toggleLeft, 0.5, `${label}: the disclosure column must never move (${sample.toggleLeft} vs ${restColumns.toggleLeft})`)
+        assertNear(sample.toggleLeft, restColumns.toggleLeft, 0.5, `${label}: the leading disclosure cell must never move (${sample.toggleLeft} vs ${restColumns.toggleLeft})`)
       }
     }
     // Hover: sample every ~10 ms in the page so both phases are captured deterministically.
@@ -8821,7 +8854,7 @@ async function runPinChecks({ page, results, state }) {
     const hoverWindow = hoverSamples.slice(hoverStart)
     // Phase 1 (~220 ms): the slot expands and the title slides right while the pin is hidden.
     const phase1 = hoverWindow.find((sample) => sample.slotWidth > 0.5 && sample.slotWidth < 15.5
-      && sample.titleLeftRel > restTitle && sample.titleLeftRel < 71)
+      && sample.titleLeftRel > restTitle && sample.titleLeftRel < 75)
     assert(phase1 !== undefined,
       `the hover samples must include the slot-expansion phase (${short(JSON.stringify(hoverWindow.slice(0, 10)), 360)})`)
     assert(phase1.pinOpacity === 0 || phase1.pinVisibility === 'hidden',
@@ -8830,13 +8863,13 @@ async function runPinChecks({ page, results, state }) {
     const mid = hoverWindow.find((sample) => sample.t >= phase1.t + 200)
     assert(mid !== undefined, 'no mid-reveal sample was captured')
     assertNear(mid.slotWidth, 16, 0.25, `mid-reveal slot width must be 16 px (got ${mid.slotWidth})`)
-    assertNear(mid.titleLeftRel, 71, 0.75, `mid-reveal title must be at 71 px (got ${mid.titleLeftRel})`)
+    assertNear(mid.titleLeftRel, 75, 0.75, `mid-reveal title must be at 75 px (got ${mid.titleLeftRel})`)
     assert(mid.pinOpacity >= 0 && mid.pinOpacity <= 1, `mid-reveal pin opacity must be a valid fade step (got ${mid.pinOpacity})`)
     const midNote = mid.pinOpacity < 1 ? `mid-reveal pin fading in (${mid.pinOpacity})` : 'mid-reveal pin already fully visible'
-    // Settled hover (>~380 ms): expanded slot, title 71, button fully in and interactive.
+    // Settled hover (>~380 ms): expanded slot, title 75, button fully in and interactive.
     const settledSample = hoverWindow[hoverWindow.length - 1]
     assertNear(settledSample.slotWidth, 16, 0.25, `settled slot width must be 16 px (got ${settledSample.slotWidth})`)
-    assertNear(settledSample.titleLeftRel, 71, 0.75, `settled title must start at 71 px (got ${settledSample.titleLeftRel})`)
+    assertNear(settledSample.titleLeftRel, 75, 0.75, `settled title must start at 75 px (got ${settledSample.titleLeftRel})`)
     // 0.99 tolerance: a live re-sort can re-start the 160 ms fade one last time under the
     // stationary pointer; the exact 1 is then asserted on the settled live read below.
     assert(Number(settledSample.pinOpacity) >= 0.99, `settled pin opacity must be ~1 (got ${settledSample.pinOpacity})`)
@@ -8846,7 +8879,7 @@ async function runPinChecks({ page, results, state }) {
       (facts) => facts.rowHovered && facts.slotWidth === 16 && facts.pinOpacity === '1' && facts.pinVisibility === 'visible',
       { timeout: 2000, label: 'settled expanded reveal' })
     assertEqual(settled.pinPointerEvents, 'auto', 'the settled pin must be interactive on hover')
-    assertNear(settled.titleLeftRel, 71, 0.75, `settled title must start at 71 px (got ${settled.titleLeftRel})`)
+    assertNear(settled.titleLeftRel, 75, 0.75, `settled title must start at 75 px (got ${settled.titleLeftRel})`)
     assertEqual(settled.slotMarginRight, '9px', `settled slot must keep the 9 px trailing gap (got ${settled.slotMarginRight})`)
     // Leave: the button fades out first with the slot still expanded, then the slot collapses.
     assertEqual(await page.eval(probePin.startRevealSampler, target.title, 1000), true, 'could not start the leave reveal sampler')
@@ -8860,7 +8893,7 @@ async function runPinChecks({ page, results, state }) {
     const fade = leaveWindow.find((sample) => sample.slotWidth === 16 && sample.pinOpacity > 0 && sample.pinOpacity < 1)
     assert(fade !== undefined,
       `the leave samples must include the button fade-out while the slot is still expanded (${short(JSON.stringify(leaveWindow.slice(0, 12)), 380)})`)
-    assertNear(fade.titleLeftRel, 71, 0.75, `during the fade-out the title must stay at 71 px (got ${fade.titleLeftRel})`)
+    assertNear(fade.titleLeftRel, 75, 0.75, `during the fade-out the title must stay at 75 px (got ${fade.titleLeftRel})`)
     const collapsedSample = leaveWindow[leaveWindow.length - 1]
     assertNear(collapsedSample.slotWidth, 0, 0.25, `collapsed slot width must be 0 (got ${collapsedSample.slotWidth})`)
     assertNear(collapsedSample.titleLeftRel, restTitle, 0.75,
@@ -8868,7 +8901,7 @@ async function runPinChecks({ page, results, state }) {
     const collapsedFirstChar = typeof collapsedSample.firstCharWidth === 'number' && collapsedSample.firstCharWidth > 0
       ? collapsedSample.firstCharWidth
       : rest.firstCharWidth
-    assertNear(collapsedSample.titleLeftRel + collapsedFirstChar / 2, 56, 0.7,
+    assertNear(collapsedSample.titleLeftRel + collapsedFirstChar / 2, 60, 0.7,
       'the collapsed rest first-character centre must stay on the requested right-biased column 56')
     assertEqual(collapsedSample.pinVisibility, 'hidden', 'collapsed pin must be hidden')
     assertColumnsFixed(leaveWindow, 'leave reveal')
@@ -8880,7 +8913,7 @@ async function runPinChecks({ page, results, state }) {
       const reducedHover = await waitRevealPhase(page, target.title,
         (facts) => facts.rowHovered && facts.slotWidth === 16 && facts.pinOpacity === '1',
         { timeout: 700, interval: 20, label: 'instant expanded reveal under reduced motion' })
-      assertNear(reducedHover.titleLeftRel, 71, 0.75, 'reduced motion must settle the title at 71 px immediately')
+      assertNear(reducedHover.titleLeftRel, 75, 0.75, 'reduced motion must settle the title at 75 px immediately')
       await parkPointerFast(page)
       const reducedRest = await waitRevealPhase(page, target.title,
         (facts) => !facts.rowHovered && facts.slotWidth === 0 && facts.pinVisibility === 'hidden',
@@ -8891,7 +8924,7 @@ async function runPinChecks({ page, results, state }) {
       await sleep(250)
       await resetPointer(page)
     }
-    return `rest slot 0/title ${restTitle} (right-biased first-char centre 56, shift ${rest.titleShift} px)/pin hidden; hover phase 1 slot ${phase1.slotWidth} px/title ${phase1.titleLeftRel} px/pin hidden (slide ${(71 - restTitle).toFixed(2)} px); ${midNote}; settled slot 16/title 71/pin interactive; leave fade at ${fade.pinOpacity} with slot 16/title 71 then collapsed to 0/${restTitle}; trailing columns ${restColumns.timeLeft}/${restColumns.actionsLeft}/${restColumns.toggleLeft} unchanged; reduced motion instant`
+    return `rest slot 0/title ${restTitle} (right-biased first-char centre 60, shift ${rest.titleShift} px)/pin hidden; hover phase 1 slot ${phase1.slotWidth} px/title ${phase1.titleLeftRel} px/pin hidden (slide ${(75 - restTitle).toFixed(2)} px); ${midNote}; settled slot 16/title 75/pin interactive; leave fade at ${fade.pinOpacity} with slot 16/title 75 then collapsed to 0/${restTitle}; trailing columns ${restColumns.timeLeft}/${restColumns.actionsLeft}/${restColumns.toggleLeft} unchanged; reduced motion instant`
   })
 
   await results.check('r3-4', 'clicking the pin keeps the pin in the card only: DOM, local cache/effective ids, native sidebar untouched', async () => {
@@ -8927,8 +8960,8 @@ async function runPinChecks({ page, results, state }) {
       `the pinned row must carry a subtle tint (row background ${calm.row.rowBackground})`)
     assertNear(calm.row.slotWidth, 16, 0.75,
       `a pinned row must keep the expanded 16 px slot while the pointer is away (got ${calm.row.slotWidth})`)
-    assertNear(calm.row.titleLeft - calm.row.rowRect.left, 71, 0.75,
-      `a pinned row's title must stay at 71 px while the pointer is away (got ${calm.row.titleLeft - calm.row.rowRect.left})`)
+    assertNear(calm.row.titleLeft - calm.row.rowRect.left, 75, 0.75,
+      `a pinned row's title must stay at 75 px while the pointer is away (got ${calm.row.titleLeft - calm.row.rowRect.left})`)
     // Only this row is pinned/tinted.
     const pinNow = await readCardPinState(page)
     for (const row of pinNow.rows) {
@@ -9261,10 +9294,10 @@ async function runPinChecks({ page, results, state }) {
     assertEqual(calmA.row.opacity, '0', 'the unpinned pin must hide when the pointer is away')
     assertEqual(calmA.row.visibility, 'hidden', 'the unpinned pin must be visibility:hidden when the pointer is away')
     assertNear(calmA.row.slotWidth, 0, 0.25, `an unpinned row must collapse its slot back to 0 px when the pointer is away (got ${calmA.row.slotWidth})`)
-    assert(calmA.row.titleLeftRel > 48 && calmA.row.titleLeftRel < 53,
+    assert(calmA.row.titleLeftRel > 52 && calmA.row.titleLeftRel < 57,
       `an unpinned row's title must return to its right-biased first-character-centred rest position (got ${calmA.row.titleLeftRel})`)
-    assertNear(calmA.row.titleLeftRel + calmA.row.firstCharWidth / 2, 56, 0.7,
-      `an unpinned row's first character must return to the requested right-biased column 56 (titleLeft ${calmA.row.titleLeftRel} + ${(calmA.row.firstCharWidth / 2).toFixed(2)})`)
+    assertNear(calmA.row.titleLeftRel + calmA.row.firstCharWidth / 2, 60, 0.7,
+      `an unpinned row's first character must return to the requested right-biased column 60 (titleLeft ${calmA.row.titleLeftRel} + ${(calmA.row.firstCharWidth / 2).toFixed(2)})`)
     assertEqual(calmA.row.rowBackground, targetA.rowBackgroundBefore ?? state.pinBaseline.rowBackgrounds[targetA.title],
       `the violet row tint must be gone after unpinning (row background ${calmA.row.rowBackground})`)
     const firstUnpinned = (await readCardPinState(page)).rows.findIndex((row) => row.pinned !== 'true')
@@ -9318,10 +9351,10 @@ async function runPinChecks({ page, results, state }) {
     debugLog(`r3-9 ${queueNote}`)
     for (const row of normalRows) {
       assertNear(row.slotWidth, 0, 0.25, `unpinned row "${short(row.title, 30)}" must keep the collapsed 0 px slot (got ${row.slotWidth})`)
-      assert(row.titleLeftRel > 48 && row.titleLeftRel < 53,
+      assert(row.titleLeftRel > 52 && row.titleLeftRel < 57,
         `unpinned row "${short(row.title, 30)}" title must sit in its right-biased first-character-centred rest range (got ${row.titleLeftRel})`)
-      assertNear(row.titleLeftRel + row.firstCharWidth / 2, 56, 0.7,
-        `unpinned row "${short(row.title, 30)}" first-character centre must stay on the requested right-biased column 56 (titleLeft ${row.titleLeftRel})`)
+      assertNear(row.titleLeftRel + row.firstCharWidth / 2, 60, 0.7,
+        `unpinned row "${short(row.title, 30)}" first-character centre must stay on the requested right-biased column 60 (titleLeft ${row.titleLeftRel})`)
     }
     if (state.pinBaseline.expectedChildren > 0) {
       const domChildren = await page.count('.psd-child')
@@ -9401,18 +9434,22 @@ async function runPinChecks({ page, results, state }) {
       const styleOf = (node) => (node === null ? null : getComputedStyle(node))
       const time = row.querySelector('.psd-run-time')
       const more = row.querySelector('.psd-run-more')
+      const actions = row.querySelector('.psd-run-actions')
       return {
         timeOpacity: time === null ? null : styleOf(time).opacity,
         morePresent: more !== null,
         moreOpacity: more === null ? null : styleOf(more).opacity,
+        morePointerEvents: more === null ? null : styleOf(more).pointerEvents,
         moreVisibility: more === null ? null : styleOf(more).visibility,
+        actionsOpacity: actions === null ? null : styleOf(actions).opacity,
       }
     })
     assert(currentMenu !== null, 'the current atmosphere row disappeared before the row-menu check')
     assert(currentMenu.morePresent, 'the current rainbow row must render the "…" trigger')
     assertEqual(currentMenu.timeOpacity, '1', `the current rainbow row must keep its time at rest (opacity ${currentMenu.timeOpacity})`)
-    assertEqual(currentMenu.moreOpacity, '0', `the current rainbow row's trigger must be hidden at rest (opacity ${currentMenu.moreOpacity})`)
-    assertEqual(currentMenu.moreVisibility, 'visible', `the current rainbow row's trigger must stay focusable; only its opacity hides it (${currentMenu.moreVisibility})`)
+    assertEqual(currentMenu.actionsOpacity, '0', `the current rainbow row's actions cell must be hidden at rest (opacity ${currentMenu.actionsOpacity})`)
+    assertEqual(currentMenu.morePointerEvents, 'none', `the resting current-row "…" trigger must not take the pointer (${currentMenu.morePointerEvents})`)
+    assertEqual(currentMenu.moreVisibility, 'visible', `the current rainbow row's trigger must stay focusable; only the cell's opacity hides it (${currentMenu.moreVisibility})`)
     // Fix #3: the affordance is a content brightness lift, not a background.
     assertContentBrightness(current, 'brightness(1.15)', 'current card row at rest', { expectTransition: true })
     await hoverCardRowByTitle(page, 'parent', currentTitle)
@@ -9439,18 +9476,22 @@ async function runPinChecks({ page, results, state }) {
       const styleOf = (node) => (node === null ? null : getComputedStyle(node))
       const time = row.querySelector('.psd-run-time')
       const more = row.querySelector('.psd-run-more')
+      const actions = row.querySelector('.psd-run-actions')
       return {
         timeOpacity: time === null ? null : styleOf(time).opacity,
         moreOpacity: more === null ? null : styleOf(more).opacity,
         moreVisibility: more === null ? null : styleOf(more).visibility,
+        actionsOpacity: actions === null ? null : styleOf(actions).opacity,
       }
     })
     assert(currentMenuHover !== null, 'the current rainbow row disappeared during the hover row-menu check')
     assertEqual(currentMenuHover.timeOpacity, '0', `the highlighted current row must hide its time (opacity ${currentMenuHover.timeOpacity})`)
+    assertEqual(currentMenuHover.actionsOpacity, '1', `the current row's actions cell must reveal on highlight (opacity ${currentMenuHover.actionsOpacity})`)
     assertEqual(currentMenuHover.moreOpacity, '1', `the "…" trigger must show on the highlighted current row (opacity ${currentMenuHover.moreOpacity})`)
     assertEqual(currentMenuHover.moreVisibility, 'visible', `the "…" trigger must be visible on the highlighted current row (${currentMenuHover.moreVisibility})`)
-    // Fix #4: trailing controls on an atmosphere row keep a transparent background and
-    // brighten their icon (extra brightness(1.2)) instead of painting the hover block.
+    // Owner request: the row bar is the only hover surface. No trailing control on
+    // an atmosphere row (or any row) paints its own block or its own brightness step;
+    // the control only takes the highlighted glyph colour.
     const controlChecks = []
     for (const selector of ['.psd-row-action', '.psd-run-toggle', '.psd-run-pin', '.psd-run-more']) {
       let control = null
@@ -9462,7 +9503,7 @@ async function runPinChecks({ page, results, state }) {
           const spacerOnly = await page.eval((rowTitle) => {
             const row = [...document.querySelectorAll('.psd-run')]
               .find((element) => ((element.querySelector('.psd-run-title')?.innerText ?? '').trim()) === rowTitle)
-            return row !== undefined && row.querySelector('.psd-run-toggle') === null && row.querySelector('.psd-run-toggle-spacer') !== null
+            return row !== undefined && row.querySelector('.psd-run-toggle') === null && row.querySelector('.psd-run-lead-spacer') !== null
           }, currentTitle).catch(() => false)
           if (spacerOnly) {
             controlChecks.push('.psd-run-toggle=spacer-only (childless row: no disclosure control)')
@@ -9473,9 +9514,9 @@ async function runPinChecks({ page, results, state }) {
       }
       assertEqual(control.background, 'rgba(0, 0, 0, 0)',
         `atmosphere-row control "${selector}" must keep a transparent background on hover (got ${control.background})`)
-      assertEqual(control.filter, 'brightness(1.2)',
-        `atmosphere-row control "${selector}" must brighten its icon on hover (filter ${control.filter})`)
-      controlChecks.push(`${selector}${control.variant === null ? '' : `[${control.variant}]`}=transparent+brightness(1.2)`)
+      assertEqual(control.filter, 'none',
+        `atmosphere-row control "${selector}" must not add a brightness step (filter ${control.filter})`)
+      controlChecks.push(`${selector}${control.variant === null ? '' : `[${control.variant}]`}=transparent+no-lift`)
     }
     // Pinning the current row must not add the violet tint under the rainbow.
     const resolved = await sessionIdByTitle(page, currentTitle)
@@ -9514,10 +9555,10 @@ async function runPinChecks({ page, results, state }) {
       `the ordinary row body must stay transparent (no nested pill, main background ${ordinaryHovered.mainBackground})`)
     assertContentBrightness(ordinaryHovered, 'none', 'hovered ordinary card row')
     const ordinaryControl = await hoverCardControl(page, 'parent', ordinary.title, '.psd-row-action')
-    assert(ordinaryControl.background !== 'rgba(0, 0, 0, 0)',
-      `an ordinary-row control must keep its normal hover block (background ${ordinaryControl.background})`)
+    assertEqual(ordinaryControl.background, 'rgba(0, 0, 0, 0)',
+      `an ordinary-row control must paint no hover block (the row bar is the surface; background ${ordinaryControl.background})`)
     assertEqual(ordinaryControl.filter, 'none',
-      `an ordinary-row control must not carry the atmosphere brightness filter (filter ${ordinaryControl.filter})`)
+      `an ordinary-row control must not carry a brightness filter (filter ${ordinaryControl.filter})`)
     // Nested subagent current row: open one child like a user, then hover it.
     const childTarget = await page.eval(() => {
       const child = [...document.querySelectorAll('.psd-child')]
@@ -9560,8 +9601,8 @@ async function runPinChecks({ page, results, state }) {
       const control = await hoverCardControl(page, 'child', childCurrent.title, '.psd-row-continue')
       assertEqual(control.background, 'rgba(0, 0, 0, 0)',
         `the child Continue overlay on an atmosphere row must keep a transparent background on hover (got ${control.background})`)
-      assertEqual(control.filter, 'brightness(1.2)',
-        `the child Continue overlay on an atmosphere row must brighten its icon on hover (filter ${control.filter})`)
+      assertEqual(control.filter, 'none',
+        `the child Continue overlay on an atmosphere row must not add a brightness step (filter ${control.filter})`)
       continueNote = `child Continue ${control.background} + ${control.filter}`
     }
     return `parent "${short(currentTitle, 30)}": atmosphere + transparent body on hover, "…" trigger hidden at rest / shown on highlight (hover-free), pin revealed/works, pinned tint suppressed; controls ${controlChecks.join(', ')}; ordinary "${short(ordinary.title, 26)}" hover ${ordinaryHovered.mainBackground} (control ${ordinaryControl.background}/${ordinaryControl.filter}); child "${short(childCurrent.title, 26)}" body transparent with atmosphere; ${continueNote}`
@@ -9625,8 +9666,8 @@ async function runPinChecks({ page, results, state }) {
     if (sessionControl !== null) {
       assertEqual(sessionControl.background, 'rgba(0, 0, 0, 0)',
         `a native current-Session action button must keep a transparent background on hover (got ${sessionControl.background})`)
-      assertEqual(sessionControl.filter, 'brightness(1.2)',
-        `a native current-Session action button must brighten its icon on hover (filter ${sessionControl.filter})`)
+      assertEqual(sessionControl.filter, 'none',
+        `a native current-Session action button must not add a brightness step (the row-level lift is the only highlight; filter ${sessionControl.filter})`)
     }
     const workspacePresent = await page.eval(() => document.querySelector('[data-psd-current-workspace="true"]') !== null)
     assertEqual(workspacePresent, true, 'no native current Workspace row marker is rendered')
@@ -9646,8 +9687,8 @@ async function runPinChecks({ page, results, state }) {
     if (workspaceControl !== null) {
       assertEqual(workspaceControl.background, 'rgba(0, 0, 0, 0)',
         `a native current-Workspace action button must keep a transparent background on hover (got ${workspaceControl.background})`)
-      assertEqual(workspaceControl.filter, 'brightness(1.2)',
-        `a native current-Workspace action button must brighten its icon on hover (filter ${workspaceControl.filter})`)
+      assertEqual(workspaceControl.filter, 'none',
+        `a native current-Workspace action button must not add a brightness step (the row-level lift is the only highlight; filter ${workspaceControl.filter})`)
     }
     let ordinaryNote = 'no ordinary native session row was available for the affordance comparison'
     const ordinarySelector = `[data-row-key^="session:"]:not([data-row-key="session:${initial.sessionId}"]):not([data-psd-current-session="true"])`
@@ -9926,7 +9967,7 @@ async function runPinChecks({ page, results, state }) {
     const expanded = await waitRevealPhase(page, expandedTitle,
       (reveal) => reveal.rowHovered && reveal.slotWidth === 16 && reveal.pinOpacity === '1',
       { timeout: 3000, label: 'expanded reveal for the alignment checks' })
-    assertNear(expanded.titleLeftRel, 71, 0.75, `expanded title must start at 71 px (got ${expanded.titleLeftRel})`)
+    assertNear(expanded.titleLeftRel, 75, 0.75, `expanded title must start at 75 px (got ${expanded.titleLeftRel})`)
     assertNear(expanded.titleMarginLeft, 0, 0.25, `the expanded state must force the first-character shift to 0 (margin-left ${expanded.titleMarginLeft})`)
     const expandedFacts = await page.eval(probePin.glyphAlignment)
     const hoveredRow = expandedFacts.rows.find((row) => row.title === expandedTitle)
@@ -9970,7 +10011,7 @@ async function runPinChecks({ page, results, state }) {
       '; sparkle ' + sparkleList + '; state dots ' + dotList)
     return 'rest: glyph cell 16x20 centred at ' + referenceCentre + 'px across ' + restRows.length + ' main rows (sparkle ' +
       sparkleList + ', state dots ' + dotList + ' centred; trunk ' + uniqueJoins(trunkCentres) + ' = cell centre); expanded "' +
-      short(expandedTitle, 30) + '": slot 16 px with 9/' + hoveredRow.gapRight + ' gaps and title at 71 px, pin centre ' +
+      short(expandedTitle, 30) + '": slot 16 px with 9/' + hoveredRow.gapRight + ' gaps and title at 75 px, pin centre ' +
       hoveredRow.pin.centre + ' = child dot ' + childDots.join(', ')
   })
   if (state.glyphBrandObserved === true) {
@@ -10012,7 +10053,7 @@ async function runPinChecks({ page, results, state }) {
       `a pinned row must carry the row-level violet tint (row background ${calm.row.background})`)
     const calmReveal = await page.eval(probePin.revealFacts, target.title)
     assertNear(calmReveal.slotWidth, 16, 0.75, `a pinned row must keep the expanded slot at rest (got ${calmReveal.slotWidth})`)
-    assertNear(calmReveal.titleLeftRel, 71, 0.75, `a pinned row's title must stay at 71 px at rest (got ${calmReveal.titleLeftRel})`)
+    assertNear(calmReveal.titleLeftRel, 75, 0.75, `a pinned row's title must stay at 75 px at rest (got ${calmReveal.titleLeftRel})`)
     assertEqual(calm.main.background, 'rgba(0, 0, 0, 0)',
       `the pinned body pill must stay transparent — the row tint is the only highlight layer (main background ${calm.main.background})`)
     assertEqual(calm.row.backgroundImage, 'none', `no background-image layer on the pinned row (${calm.row.backgroundImage})`)
@@ -10041,13 +10082,13 @@ async function runPinChecks({ page, results, state }) {
       `unpinning must clear the row tint (row background ${cleared.row.background}, baseline ${before.row.background})`)
     const clearedReveal = await page.eval(probePin.revealFacts, target.title)
     assertNear(clearedReveal.slotWidth, 0, 0.25, `unpinning must collapse the slot back to 0 px (got ${clearedReveal.slotWidth})`)
-    assert(clearedReveal.titleLeftRel > 48 && clearedReveal.titleLeftRel < 53,
+    assert(clearedReveal.titleLeftRel > 52 && clearedReveal.titleLeftRel < 57,
       `unpinning must return the title to its right-biased first-character-centred rest range (got ${clearedReveal.titleLeftRel})`)
     const clearedFirstChar = typeof clearedReveal.firstCharWidth === 'number' && clearedReveal.firstCharWidth > 0
       ? clearedReveal.firstCharWidth
       : 2 * (10 - clearedReveal.titleShift)
-    assertNear(clearedReveal.titleLeftRel + clearedFirstChar / 2, 56, 0.7,
-      `unpinning must put the first character back on the requested right-biased column 56 (titleLeft ${clearedReveal.titleLeftRel})`)
+    assertNear(clearedReveal.titleLeftRel + clearedFirstChar / 2, 60, 0.7,
+      `unpinning must put the first character back on the requested right-biased column 60 (titleLeft ${clearedReveal.titleLeftRel})`)
     assertEqual(cleared.main.background, 'rgba(0, 0, 0, 0)',
       `the unpinned body pill must stay transparent (main background ${cleared.main.background})`)
     return `pinned "${short(target.title, 30)}": row tint ${rowTint} only, body pill ${calm.main.background} at rest and no background-image; hover body ${hovered.main.background}; unpin restored the row to ${cleared.row.background}`
@@ -12222,6 +12263,7 @@ const probeRm = {
       menuOpen: row.getAttribute('data-menu-open') === 'true',
       timeOpacity: time === null ? null : getComputedStyle(time).opacity,
       moreOpacity: trigger === null ? null : getComputedStyle(trigger).opacity,
+      actionsOpacity: row.querySelector('.psd-run-actions') === null ? null : getComputedStyle(row.querySelector('.psd-run-actions')).opacity,
       activeIsTrigger: trigger !== null && document.activeElement === trigger,
     }
   },
@@ -12626,7 +12668,7 @@ async function runRowMenuChecks({ page, results, state }) {
     assertEqual(rowState.found, true, `the card row "${short(target.title, 50)}" disappeared while its menu was open`)
     assertEqual(rowState.menuOpen, true, 'the row must keep data-menu-open="true" while the shared popup is open')
     assertEqual(rowState.timeOpacity, '0', `the row time must stay swapped for the "…" trigger while the menu is open (opacity ${rowState.timeOpacity})`)
-    assertEqual(rowState.moreOpacity, '1', `the "…" trigger must stay visible while the menu is open (opacity ${rowState.moreOpacity})`)
+    assertEqual(rowState.actionsOpacity, '1', `the "…" trigger's cell must stay visible while the menu is open (opacity ${rowState.actionsOpacity})`)
     assertEqual(focusOpen.hoverCards, 0, 'the row hover card must be dismissed before Escape is asserted (pointer over the menu)')
     // (g) Escape dismisses and restores focus to the trigger; data-menu-open clears.
     await page.pressEscape()
@@ -12649,7 +12691,7 @@ async function runRowMenuChecks({ page, results, state }) {
     await sleep(400)
     const restored = await page.eval(probeRm.rowState, target.title)
     assertEqual(restored.timeOpacity, '1', 'the row time must return after the menu is dismissed and the pointer leaves')
-    assertEqual(restored.moreOpacity, '0', 'the "…" trigger must hide again after dismissal')
+    assertEqual(restored.actionsOpacity, '0', 'the "…" trigger cell must hide again after dismissal')
     state.rowMenu.comparison = {
       surfaceClass: menu.nativeSurface.className,
       items: menu.itemLabels,
@@ -13941,7 +13983,7 @@ const probeReadme = {
     const panel = document.querySelector('.psd-panel')
     if (panel === null) return { panel: null, header: null, row: null, control: null }
     const toggle = panel.querySelector('.psd-panel-toggle')
-    const count = panel.querySelector('.psd-panel-head-actions')
+    const count = panel.querySelector('.psd-count')
     const headerPoint = toggle === null
       ? null
       : (() => {

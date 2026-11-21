@@ -90,56 +90,68 @@ sidebar's panel tabs. It starts expanded.
   Both states are horizontally centred on the same **leading-glyph column** as
   the top-level rows (the header pulse/brand glyph and every row's leading-glyph
   cell share one centre; the sidebar E2E measures the two centres and asserts
-  they are equal), and the header title starts on the same column as the row
-  titles, followed by the **Running & recent** title. The text block (indicator, title) is content-sized, so its hover
+  they are equal), and the header title starts one label gap to its right,
+  followed by the **Running & recent** title. The text block (indicator, title) is content-sized, so its hover
   highlight hugs the label instead of stretching across the header; a flexible
-  spacer then pushes the trailing controls to the right. Those controls share
-  the row grid: the **View all** link keeps its 30 px hover block, an empty
-  **time column** (48 px) follows, then the **count badge** with the number of
-  listed rows is right-anchored on the fixed **action column** (its natural
-  width spills left into the empty time column), and the **header chevron**
-  closes the same 24 px **disclosure column** every row uses.
+  spacer then pushes the trailing controls to the right: the **View all** link
+  keeps its 30 px hover block, the **count badge** with the number of listed rows
+  sits above the rows' trailing cell, and the **header chevron** closes the card
+  on the same 8 px-inset right edge the row times end on.
   The toggle block, the link, and the chevron are all 30 px tall with the same
   corner radius (12 px in the shell), so header and row controls line up
   vertically. The chevron folds the body; clicking anywhere in the header that
   is not a control folds it too.
-- **Rows**: a Session row is **one line**. Four columns are anchored from the
-  right edge, left to right: the title/content column, a 48 px right-aligned
-  **time column** (11 px tabular numerals), a fixed 22 px **New session action
-  column**, and a 24 px **disclosure column**. Every parent and child row
-  reserves all of them — child rows keep the action and disclosure columns as
-  empty fixed spacers — so a subagent row's time ends on exactly the same x as
-  its parent row's time. A flexible **spacer** (`flex: 1 1 auto; min-width: 0`)
-  between the title control and the trailing grid absorbs every spare pixel, so
-  the trailing grid is **right-anchored at any card width**: the disclosure
-  column's right edge always equals the row's right edge and every row's time
-  right edge equals `row right − 50 px` (22 action + 24 disclosure + the two
-  2 px gaps), no matter whether a title is short or clipped. The title control
-  keeps its content-paced width (for the click target and the fade geometry)
-  and its `max-width: calc(100% − 100 px)` cap while the hover surface itself
-  spans the full row, and the right-edge gradient mask fades a clipped title
-  inside the row's right padding (parent rows end 10 px before the
-  content-column boundary, child rows 8 px), never under the trailing
-  columns. The 14 px/20 px title size matches the native sidebar rows, and the
-  time is drawn at 11 px in the tabular-numeric tertiary label colour. In light
+- **Rows**: a Session row is **one line**. Two fixed cells frame it: a 16 px
+  **disclosure cell** at the row's far left and a 46 px **trailing cell** at its
+  right edge, with the title/content column between them. The disclosure cell
+  holds the native project-row arrow — the shell's filled 14 px
+  `triangle-right-fill` glyph, pointing right while the subagents are folded and
+  rotating 90° when they are open (150 ms) — painted at the **title colour** on
+  every row (owner decision: the native caption arrow is too faint next to the
+  row's title and on the pastel bar; the shell's own project-row arrows keep
+  their caption weight), and rows without subagents reserve the same cell with an
+  empty spacer, so every row's status glyph and title keeps one column. The trailing cell carries the
+  right-aligned **relative time** at rest, ending 8 px inside the row's right
+  edge (the native Session-row inset) no matter whether a title is short or
+  clipped, and swaps to the "…"
+  trigger plus the New session button on hover/focus. Every parent and child row
+  reserves the same trailing cell, so a subagent row's time ends on exactly the
+  same x as its parent row's. A flexible **spacer**
+  (`flex: 1 1 auto; min-width: 0`) between the title control and the trailing
+  cell absorbs every spare pixel. The title control keeps its content-paced
+  width (for the click target and the fade geometry) and its
+  `max-width: calc(100% − 70 px)` cap (16 px disclosure + 46 px trailing + the
+  gaps) while the hover surface itself spans the full row, and the right-edge
+  gradient mask fades a clipped title inside the row's right padding (parent
+  rows end 10 px before the content-column boundary, child rows 8 px), never
+  under the trailing cell. The 14 px/20 px title size matches the native sidebar
+  rows, and the time copies the native Session-row time cell: 10 px type in the
+  tertiary label colour (`#adb2b8`), tabular numerals, so a card time and a
+  native time of the same age read identically (measured in the live GUI: card
+  time right edge 400 px, native 402 px, both 10 px `rgb(173,178,184)`). The
+  relative buckets are copied from the shell's own `relativeTime` helper: `now`
+  under a minute, then minutes, hours, days, months past 30 days and years past
+  365 days. In light
   mode every row title (including finished and child rows) uses the native
   Workspace session title token `label-primary` — finished rows no longer dim to
   `label-secondary` there, so the panel reads as dark as the native Workspace
   rows below it; dark mode keeps its original dimming. Light mode also lifts the
-  panel's minor icons to the same readable weight: row actions, the disclosure
-  toggle/chevron, the panel chevron, the status glyph and the child glyph use
-  `label-secondary` `#61666b` (measured; the native session-row slot/action
-  icons use the lighter `label-tertiary` `#81858c`, native project-row folder
-  glyphs use the business colour `#4176e6`, the native
-  disclosure/pin caption `#adb2b8`), while the brand / sparkle / header
-  indicator glyphs stay `label-primary` `#0f1115`. Icon geometry, sizes and
+  panel's minor icons to the same readable weight: row actions, the panel
+  chevron, the status glyph and the child glyph use `label-secondary` `#61666b`
+  (measured; the native session-row slot/action icons use the lighter
+  `label-tertiary` `#81858c`, native project-row folder glyphs use the business
+  colour `#4176e6`, the native disclosure/pin caption `#adb2b8`), while the
+  brand / sparkle / header indicator glyphs stay `label-primary` `#0f1115`, and
+  the row's disclosure triangle is deliberately painted at `label-primary` too
+  (both themes) rather than the native caption step, so it reads with the title. Icon geometry, sizes and
   layout are unchanged; dark mode keeps its original tertiary icons. While a row
   is highlighted (pointer on it, keyboard focus inside it, or its row menu
   open) its two trailing controls — the row menu `⋯` and New session `⊕` — read
   at the title's own `label-primary` (`#0f1115` light, `#f9fafb` dark) instead of
   the resting icon weight, so they are legible against the hover fill and the
-  pastel atmosphere; each control keeps its own hover/focus feedback, and the
-  resting weight returns when the row stops being highlighted. Running Sessions are always listed,
+  pastel atmosphere; the controls paint no block of their own (the row bar is
+  the only surface; keyboard `focus-visible` rings stay), and the resting weight
+  returns when the row stops being highlighted. Running Sessions are always listed,
   then recently finished Sessions inside
   the finished-Session **retention window** (default 2 hours, configurable in
   [Settings](settings.md)), each group newest activity first. A running row uses the
@@ -161,7 +173,7 @@ sidebar's panel tabs. It starts expanded.
   centred on that same column** as well: a 1–5 px per-row offset (measured from
   the first glyph's advance width plus a 2 px right bias, so the glyph ink reads
   visually centred on the dot line) keeps the character centre on the dot line,
-  while hover/focus/pinned states slide the title back to the expanded 71 px
+  while hover/focus/pinned states slide the title back to the expanded 75 px
   column. The panel header's all-complete glyph is the DeepSeek brand mark
   (`deepseek-fill`) in the same 14 px indicator slot; the swap changes only which
   static glyph each slot paints, never the pulse dot, the green dot, the glyph
@@ -180,15 +192,15 @@ sidebar's panel tabs. It starts expanded.
 
 ![Read marks restored on a fresh browser profile from the Host-shared document](assets/card-shared-ack.png)
 
-- **Row actions**: **main (parent) rows** carry the **New session** button on
-  the fixed 22 px action column between the time column and the disclosure
-  column. **Nested subagent rows carry no New session button at all** (user
-  decision: creating a Session belongs to the main row; the column stays
-  reserved as an empty spacer so the child time keeps the parent time x). The
-  button is hidden with opacity/`pointer-events` until the row is hovered or on
-  keyboard `focus-within`, so revealing it never shifts the title, time, action
-  or disclosure columns. The button stops the row's open handler; clicking the
-  row body (including the title's faded tail) still opens the Session.
+- **Row actions**: **main (parent) rows** carry the **New session** button in
+  the right-anchored trailing cell, beside the "…" trigger. **Nested subagent
+  rows carry no New session button at all** (user decision: creating a Session
+  belongs to the main row; their trailing cell holds only the time). The
+  controls are hidden with opacity/`pointer-events` until the row is hovered or
+  on keyboard `focus-within`, and they paint over the same cell the time
+  occupies, so revealing them never shifts the title or moves any column. The
+  button stops the row's open handler; clicking the row body (including the
+  title's faded tail) still opens the Session.
 - **Interrupted rows**: a row whose Session is interrupted (main or child)
   replaces its status dot with an amber warning badge, taken from the suite's
   shared interrupted-Session records. Immediately to its right sits an
@@ -197,8 +209,8 @@ sidebar's panel tabs. It starts expanded.
   interrupted feature's continuation request: it opens that Session and then
   sends the continuation once the conversation is open and idle. The triangle
   is inline in the row head, so its position never changes and no fixed column
-  moves; the trailing 22 px action slot stays reserved (New session only on a
-  main row, empty on a child row). The badge is deliberately darker on the
+  moves; the trailing cell keeps showing the time (New session only on a main
+  row). The badge is deliberately darker on the
   rainbow-highlighted rows in light mode so it does not glow too bright. New
   session is never reintroduced for child rows.
 - **New session**: the native shell's "new chat" sprite icon (with an inlined
@@ -247,23 +259,39 @@ sidebar's panel tabs. It starts expanded.
   *Session figures in the hover card* below). While the UI annotation mode is
   active the same card becomes **pinned/annotatable** (see *Plugin chrome and
   annotation mode* below).
-- **Disclosure column**: the header chevron and every row's disclosure arrow
-  share one 24 px right-edge column (not merely right-aligned), and rows without
-  children — including every nested subagent row — reserve the same column with a
-  spacer. Parent rows, child rows, and the header therefore share the same
-  time, action, and disclosure columns: the header's empty time column and its
-  count badge (right-anchored on the action column) complete the same grid.
+- **Disclosure cell**: every **top-level row** opens with a 16 px disclosure cell
+  on its far left, the position the native sidebar gives a project row's expand
+  arrow, and main rows without children reserve the same cell with a spacer so
+  the leading-glyph column, the title column and the child tree connector
+  (centred under the parent's status dot) never move. Nested subagent rows are
+  already indented under the trunk and reserve only the trailing cell — they
+  carry no disclosure cell of their own. The header chevron that folds the whole
+  card stays a separate control at the card's right edge, above the row times.
 - **Hover highlights**: hovering paints the **whole row** with the native hover
   surface, exactly like the native sidebar Session/Workspace rows (user request:
   the old content-paced inner pill highlighted only the title while the native
   rows light the full row). The row body (`.psd-run-main`/`.psd-child-main`)
   stays transparent, so there is no nested second pill; the text keeps roomy
-  horizontal insets (parent rows `4px 10px 4px 14px`, child rows
-  `3px 8px 3px 10px`). Non-text controls keep fixed highlight blocks that line
-  up across all rows: 22 x 22 px for each action button and 24 x 26 px for the
-  disclosure arrow. Hovering the disclosure arrow highlights only the arrow (the
-  row surface is suppressed), so the two highlights stay independent and never
-  compose into a nested two-layer highlight.
+  horizontal insets (parent rows `4px 10px 4px 0` plus the row's own
+  `0 8px 0 7px` padding, child rows `3px 8px 3px 10px`). That row bar is the **only**
+  hover surface (user request): no control inside a row paints its own highlight
+  block or adds its own brightness step, so hovering the disclosure triangle,
+  the "…" trigger, the pin or New session keeps the bar and nothing else moves.
+  The highlighted row's glyphs all read at the title colour: the disclosure
+  triangle, the pin, "…", New session, Continue and the brand/robot identity
+  glyphs go to `label-primary` (light `#0f1115`, dark `#f9fafb`) while the
+  pointer is on the row, keyboard focus is inside it, or its menu is open. A
+  status dot keeps its semantic state colour, because that colour is the
+  running/finished/idle data rather than a text weight. The disclosure triangle
+  is the one glyph that is visible at rest, and it is painted at the title colour
+  on every row, so no row ever shows a dim arrow waiting for hover. The row's right side
+  keeps an 8 px inset — the native Session row's own padding — so the time and
+  the revealed controls never touch the card edge; the header chevron is inset
+  to that same right edge. The status cell is also the row's **annotation
+  anchor**: it carries `data-testid="psd-session-glyph:<sessionId>"` and its
+  glyphs are pointer-transparent, so a UI annotation picked on the icon records
+  that one stable span instead of the state-dependent svg (see
+  [ui-annotation.md](ui-annotation.md#the-plugins-own-dynamic-rows-stable-anchors)).
 - **Row height**: every card row — main and nested child, ordinary and
   current/atmosphere — uses the native Workspace project-row height (34 px,
   `--psd-row-h` on the card), so the card and the Workspace list below it share
@@ -282,22 +310,22 @@ sidebar's panel tabs. It starts expanded.
   hides its scrollbar (native `scrollbar-width` / WebKit rules), matching the
   native sidebar surfaces.
 - **Nested subagents**: a parent row with running or recently active direct
-  subagent Sessions gets a per-parent disclosure chevron at its far right.
+  subagent Sessions gets a per-parent disclosure triangle at its far left.
   Expanding it shows the children indented deeper beneath the parent, connected
   by a thin vertical trunk that is centered under the parent's status indicator
   (the dot column) with one short horizontal branch to each child's indicator;
   the trunk is masked below the last child's tick, so no dangling line hangs
   under the group. Each child row has its own leading glyph (the same running /
   unread / acknowledged states, using the white `robot-2-line` icon when
-  acknowledged), title, relative time, and the same reserved trailing columns
-  (time, the always-empty 22 px action slot — Continue is inline beside the
-  interrupted badge, not in this slot — and the disclosure spacer), so child and
-  parent times and disclosure arrows sit on the same vertical lines. Child rows
+  acknowledged), title, relative time, and the same reserved trailing cell (the
+  time; Continue is inline beside the interrupted badge, never in the cell), so
+  child and parent times end on the same vertical line. Child rows
   render no New session control.
-  Each parent folds independently; the card header still folds the whole list.
+  Each parent folds independently through its leading triangle; the card header
+  chevron still folds the whole list.
 - **Click**: clicking a parent row opens that Session; clicking a child row
   opens the child Session. The whole row body is clickable (the action buttons
-  and the disclosure chevron are the separate controls).
+  and the leading disclosure triangle are the separate controls).
 - **Five-row default**: with more than five top-level rows the header also shows
   **View all {count}**; **Show less** returns to the first five (children stay
   inside their parent row and do not count against the limit). The body scrolls,
@@ -316,15 +344,16 @@ retires with time.
 
 ## Row actions
 
-The 48 px time column doubles as the row-actions slot on **every top-level
-row**, including the current rainbow row. At rest the slot shows the relative
-time; row hover or keyboard `focus-within` hides the time and shows a "…"
-trigger in the same slot, and that swap **stays while the row's menu is open**
-(`data-menu-open`) — leaving the row restores the time. On ordinary rows the
-trigger paints the same soft hover background as the sibling New-session
-control; only the **rainbow row** suppresses it, following the atmosphere
-control rule (transparent background with a `brightness(1.2)` icon lift). A
-keyboard `focus-visible` ring stays in both cases. Clicking the trigger opens the
+The right-anchored trailing cell doubles as the row-actions slot on **every
+top-level row**, including the current rainbow row. At rest the cell shows the
+relative time; row hover or keyboard `focus-within` hides the time and shows the
+"…" trigger plus the New session button in the same cell, and that swap **stays
+while the row's menu is open**
+(`data-menu-open`) — leaving the row restores the time. Neither the trigger nor
+the sibling New-session control paints its own hover block on any row, the
+rainbow row included: the row bar is the only surface, and the revealed glyphs
+take the title colour (see *Hover highlights*). A keyboard `focus-visible` ring
+stays in both cases. Clicking the trigger opens the
 shell's **native shared context-menu popup** — the same surface the native
 Workspace Session row's own "…" trigger opens — through a plugin-owned
 captured-target kind (`powerSuiteSession`). This card menu stays an additional
@@ -430,7 +459,7 @@ restarted with the merged linked checkout. Until then the card is local-only.
   the control is hidden, so the title sits next to the leading glyph exactly
   like the pre-pin layout. Hovering or keyboard-focusing the row runs a
   **two-phase reveal**: the slot first expands 0 → 16 px (the title's start
-  slides right while the time, New session, and disclosure columns stay put),
+  slides right while the time and the New session button stay put),
   and only after it has opened does the button fade in. Leaving reverses it —
   the button fades out first, then the slot collapses and the title expands
   back. The pace is deliberately gentle — 220 ms for the slot expansion or
@@ -883,17 +912,21 @@ native sidebar Session row of the open Session:
   sidebar rows' own hover/selected background are suppressed while the
   atmosphere is present, because a second rounded highlight painted inside the
   rainbow rectangle reads as a misaligned double highlight (user feedback). The
-  small control hovers (pin, New session, disclosure), the keyboard focus rings
-  and the hover opacity rise remain. Because the row has no surface highlight,
+  keyboard focus rings and the hover opacity rise remain, while the control hover
+  blocks are gone on every card row (see *Hover highlights*). Because the row has no surface highlight,
   the atmosphere row's **text and icons are brightened instead**: while
   highlighted the content sits at `filter: brightness(1.15)`, and hovering or
   keyboard-focusing the row lifts it to `brightness(1.5)` (140 ms transition, off
   under reduced motion) — the brightness lives on the real text/SVG content,
   never on a background layer. Pointer focus (a mouse click on a row control)
-  does not lift it, matching the shell's keyboard-gated focus surfaces. The row's own trailing controls (New session, disclosure,
-  pin, Continue, and the native sidebar rows' action buttons) follow the same
-  rule: while the row is an atmosphere row they never paint their own hover
-  background; the hovered control just brightens one extra step.
+  does not lift it, matching the shell's keyboard-gated focus surfaces. The row's
+  own trailing controls (New session, disclosure, pin, Continue) follow the same
+  rule and go one step further: they never paint a hover background or their own
+  brightness step on any card row, and while the row is highlighted they read at
+  the title colour. On the native sidebar rows the plugin adds only the
+  transparent-background suppression for the row's action buttons; those buttons
+  get no extra brightness step either, so the row-level lift is the only
+  highlight there too.
 - **Workspace and Session rows**: the native Workspace row of the current
   Session's project is marked with `data-psd-current-workspace="true"`, and the
   native sidebar Session row of the open Session with
@@ -993,8 +1026,8 @@ adds sibling nodes and inline layout:
   inserted node, clears every inline `order`/`display` it wrote, and removes the
   Workspace marker.
 - **Styling**: theme tokens only; the wave and focus animations are stopped
-  under reduced motion, and the disclosure chevrons keep their short transform
-  transition.
+  under reduced motion, and the disclosure chevrons and the row triangle keep
+  their short transform transition.
 
 ## Plugin chrome: fonts, borders, focus
 
@@ -1263,10 +1296,9 @@ The native **View options** menu picks how Sessions are grouped:
   either never changes the row layout or row height. The "…" Session-menu
   trigger follows the same highlight rule on **every top-level row**: at rest
   the time is visible, and hover/focus (or an open menu) hides it and shows the
-  trigger; leaving restores the time. On ordinary rows the trigger keeps the
-  ordinary soft hover paint (plus the keyboard `focus-visible` ring); only the
-  rainbow row suppresses it (transparent + the same `brightness(1.2)` lift as
-  the other current-row controls). Subagent rows have no trigger, and a
+  trigger; leaving restores the time. The trigger paints no hover block of its
+  own on any row (the row bar is the surface; only the keyboard `focus-visible`
+  ring remains). Subagent rows have no trigger, and a
   touch-only device cannot open it. Its popup is the shell's **native shared
   context-menu popup** — the same one the native Session row opens — against a
   plugin-owned target kind, so material/placement, keyed icons, shortcut hints,
@@ -1422,20 +1454,20 @@ Manual checks on a running DSH UI:
    tooltip (dark tooltip surface, no border, 16 px radius, native elevation,
    12 x 16 px padding, 14 px title, 320 px wide, viewport-clamped height), and it
    does not take the pointer; the row has no native `title` tooltip.
-7. Check the columns left to right: time, then the New session button (main
-   rows only; hover a parent row to reveal it), then the disclosure chevron.
-   Parent and child times end on the same x — child rows reserve the action and
-   disclosure columns as empty spacers — and the header's empty time column,
-   count badge and chevron sit on the same grid. Times are right-aligned with
-   tabular numerals; a long title fades out under the right-edge gradient mask
-   before the time column, while a short title is not masked. Hovering a parent
-   row reveals the 22 px New session button without moving any column; nested
-   child rows never show that button.
-8. If a listed Session delegated to subagents, its row shows a disclosure
-   chevron at the far right: expanding reveals the child rows indented under the
-   parent with the branch lines (the trunk is centered under the parent's dot
-   and stops at the last child's tick), each opens its own Session, and
-   collapsing hides the child rows again.
+7. Check the columns left to right: the leading disclosure triangle, the status
+   glyph, the title, then the right-anchored time. Parent and child times end
+   8 px inside the row's right edge (the native Session-row inset) and the header
+   chevron closes the card on that same edge, while the count badge sits above
+   the row's trailing cell. Times are right-aligned at 10 px with tabular numerals; a long
+   title fades out under the right-edge gradient mask before the time cell, while
+   a short title is not masked. Hovering a parent row swaps the time for the "…"
+   trigger and the 22 px New session button at the far right without moving any
+   column; nested child rows keep the time and never show that button.
+8. If a listed Session delegated to subagents, its row shows a filled disclosure
+   triangle at the far left: expanding it (the triangle rotates 90°) reveals the
+   child rows indented under the parent with the branch lines (the trunk is
+   centered under the parent's dot and stops at the last child's tick), each
+   opens its own Session, and collapsing hides the child rows again.
 9. Open a Session from the card or the native sidebar: that row's own rounded
    rectangle gets a faint rainbow rim along its bottom face plus a wide, soft
    rainbow haze that diffuses upward into the row (smoke-like, not a drawn
@@ -1453,10 +1485,10 @@ Manual checks on a running DSH UI:
     stays transparent) and the arrow's own highlight stays independent, and that
     the card body scrolls with a hidden scrollbar.
 11. Check the card header geometry: the text block is content-sized (its hover
-    highlight hugs the label), **View all** and the header chevron stay 30 px
-    tall with the shell corner radius, the count badge is right-anchored above
-    the rows' action column, and the chevron lines up with every row's
-    disclosure column.
+    highlight hugs the label), the header indicator shares the rows'
+    leading-glyph column, **View all** and the header chevron stay 30 px tall
+    with the shell corner radius, the count badge ends above the rows' time
+    column, and the chevron folds the card from the right edge.
 12. Focus the prompt-history search field and the settings choice pills: the
     solid focus border is gone and the rainbow track glow rings the control;
     with reduced motion it is a static rainbow ring.
@@ -1473,9 +1505,10 @@ Manual checks on a running DSH UI:
 16. Run `npm run check`; it stays green (syntax, package manifest, Markdown
     links, and the node tests).
 17. Hover any top-level card row (the current rainbow row behaves the same):
-    its time is hidden and a "…" trigger appears in the 48 px slot; the trigger
-    keeps the ordinary soft hover paint (the rainbow row suppresses it and keeps
-    only the `brightness(1.2)` icon lift; the keyboard focus ring remains). Click it
+    its time is hidden and a "…" trigger appears at the row's right end; the
+    trigger paints no hover block of its own (only the keyboard focus ring
+    remains) and it reads at the title colour with the rest of the row's glyphs.
+    Click it
     to open the card row's Session menu — the shell's native shared popup
     (Rename, Fork, Copy Session ID, Show in Finder, Archive — **no Pin/Unpin**),
     use arrow keys/Home/End to move, and

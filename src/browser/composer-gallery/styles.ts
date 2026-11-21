@@ -20,6 +20,9 @@ export const PSG_CSS = `
 .psg-prev{left:20px}
 .psg-next{right:20px}
 .psg-close:hover,.psg-nav:hover:enabled{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+/* Annotation targeting: the pick lands on the labelled nav/close button, not on
+   its icon (the gallery itself is a transient surface). */
+.psg-close > svg,.psg-nav > svg{pointer-events:none}
 .psg-close:focus-visible,.psg-nav:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:3px}
 .psg-nav:disabled{opacity:.35;cursor:default}
 .psg-counter{position:absolute;top:20px;left:50%;transform:translateX(-50%);z-index:2;display:inline-flex;align-items:center;height:36px;padding:0 14px;box-sizing:border-box;border-radius:999px;corner-shape:round;background:var(--dsw-specific-input-major,var(--dsw-alias-bg-layer-1));color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:18px;font-variant-numeric:tabular-nums;box-shadow:var(--dsw-elevation-panel,none)}
