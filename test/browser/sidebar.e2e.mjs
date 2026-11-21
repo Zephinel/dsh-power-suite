@@ -14591,6 +14591,14 @@ async function readmeResetUi(page) {
     // parking is best effort
   }
   await sleep(350)
+  // The demo poses widen the sidebar by dragging its handle; the panel can settle
+  // a few pixels later than the drag release, and a clip measured too early cuts
+  // the row's trailing time cell at the image edge.
+  try {
+    await readmeWaitStableRect(page, '.psd-panel', { timeout: 2500, interval: 120 })
+  } catch {
+    // no card on this surface
+  }
 }
 
 /** Wait until an element's rect stops changing (layout/scroll animations settle). */
