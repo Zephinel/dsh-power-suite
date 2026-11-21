@@ -109,8 +109,10 @@ load them.
    `scripts/build-readme-bento.mjs` reads the raw files, builds one HTML grid per
    group on the pale-beige README canvas (`#f6f1e6`, warm-white `#fffdf8` tiles,
    18 px gutter, aspect-matched tiles), and captures each grid as a 1600 px
-   WebP. It fails loudly on a missing source and verifies that every output has
-   the expected width/height:
+   WebP. It fails loudly on a missing source, refuses a cell whose crop no longer
+   matches its tile (a raw capture whose shape changed after a sidebar-width or
+   demo-data change names the cell instead of composing a cut-off image), and
+   verifies that every output has the expected width/height:
 
    | Output | Group |
    |---|---|

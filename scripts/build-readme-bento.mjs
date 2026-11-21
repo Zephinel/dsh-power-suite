@@ -126,6 +126,53 @@ async function dataUri(cell) {
   return `data:${mediaType(cell.file)};base64,${bytes.toString('base64')}`
 }
 
+/**
+ * Read a PNG's intrinsic size from its IHDR chunk.
+ * @param {Buffer} bytes - file bytes.
+ * @returns {{width: number, height: number}} pixel size.
+ */
+function pngSize(bytes) {
+  const signature = bytes.subarray(0, 8).toString('binary')
+  if (signature !== '\x89PNG\r\n\x1a\n') throw new Error('not a PNG file')
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
+}
+
+/**
+ * Refuse a group whose cell crop no longer matches its tile.
+ *
+ * The Bento cells are hand-tuned against one capture geometry. When the demo
+ * instance's sidebar width or row count changes, the raw captures change shape
+ * and a stale crop silently composes a cut-off image (the card loses its time
+ * column, a menu gets clipped). Failing here is the honest alternative: it names
+ * the cell and the two aspects so the layout can be re-tuned deliberately.
+ * @param {object} group - one Bento group.
+ * @returns {Promise<void>}
+ */
+async function preflightGroup(group) {
+  for (const cell of group.cells) {
+    const file = sourcePath(cell)
+    if (!existsSync(file)) throw new Error(`bento: ${group.out}: missing capture ${file}`)
+    if (cell.crop === undefined) continue
+    const size = pngSize(await readFile(file))
+    if (cell.crop.x + cell.crop.w > size.width || cell.crop.y + cell.crop.h > size.height) {
+      throw new Error(
+        `bento: ${group.out}: crop ${cell.crop.w}x${cell.crop.h} + offset (${cell.crop.x},${cell.crop.y}) ` +
+        `exceeds ${cell.file} (${size.width}x${size.height}); the capture geometry changed — re-tune this cell`
+      )
+    }
+    const cropAspect = cell.crop.w / cell.crop.h
+    const tileAspect = cell.w / cell.h
+    const drift = Math.abs(cropAspect - tileAspect) / Math.max(cropAspect, tileAspect)
+    if (drift > 0.015) {
+      throw new Error(
+        `bento: ${group.out}: ${cell.file} crop ${cell.crop.w}x${cell.crop.h} (aspect ${cropAspect.toFixed(3)}) ` +
+        `does not match its tile ${cell.w}x${cell.h} (aspect ${tileAspect.toFixed(3)}, drift ${(drift * 100).toFixed(1)}%); ` +
+        're-tune the Bento cells after a capture-geometry change'
+      )
+    }
+  }
+}
+
 /** Build the composed HTML page for one group. */
 async function buildHtml(group) {
   const figures = []
@@ -317,6 +364,7 @@ async function main() {
   try {
     const rows = []
     for (const group of groups) {
+      await preflightGroup(group)
       const html = await buildHtml(group)
       const pageFile = join(temp, `${group.out}.html`)
       await writeFile(pageFile, html, 'utf8')
