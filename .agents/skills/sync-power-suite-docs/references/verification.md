@@ -9,10 +9,10 @@ against a fresh build before installing.
 
 | Command | Expected (2026-11-21) | What it proves |
 | --- | --- | --- |
-| `npm run check` | Builds first (`build: index.js 105.9 kB, client.js 942.4 kB`), then `typecheck: ok (tsc --noEmit --strict over Host and browser sources; the browser profile gates next)` with `any budget: 0 explicit any sites in src/**/*.ts (limit 0)`, `suppression budget: 0`, `host typecheck: ok`, `built-entry smoke: update route reports current=0.2.2`, `built-browser smoke: @zephinel/dsh-power-suite registered; factory exposes 8 injects`, `docs links ok: 29 Markdown files`, `node --test` **412 tests / 412 pass / 0 fail**, `release-notes: ok (0.2.2; 6 highlight(s), 6 English)`, `check passed: 100 TypeScript modules, 1 JavaScript module(s), 30 test files`, browser ratchet `0 diagnostics (baseline 0)`, and `pack:check` `"entryCount": 82` | Built `lib/` entries, syntax, strict/Host/browser typechecks, package manifest, local/tarball docs hygiene, pure-logic tests, release-notes gate, and packed file set |
+| `npm run check` | Builds first (`build: index.js 105.9 kB, client.js 942.4 kB`), then `typecheck: ok (tsc --noEmit --strict over Host and browser sources; the browser profile gates next)` with `any budget: 0 explicit any sites in src/**/*.ts (limit 0)`, `suppression budget: 0`, `host typecheck: ok`, `built-entry smoke: update route reports current=0.2.2`, `built-browser smoke: @zephinel/dsh-power-suite registered; factory exposes 8 injects`, `docs links ok: 29 Markdown files`, `node --test` **416 tests / 416 pass / 0 fail**, `release-notes: ok (0.2.2; 6 highlight(s), 6 English)`, `check passed: 100 TypeScript modules, 1 JavaScript module(s), 31 test files`, browser ratchet `0 diagnostics (baseline 0)`, and `pack:check` `"entryCount": 82` | Built `lib/` entries, syntax, strict/Host/browser typechecks, package manifest, local/tarball docs hygiene, pure-logic tests, release-notes gate, and packed file set |
 | `npm run typecheck:browser` | Browser-profile diagnostics for `src/client.js` + `src/browser/` (`tsc -p tsconfig.browser.json`, DOM lib): current baseline is **0 diagnostics**, and `--check` gates `npm run check` | Browser-typing ratchet at 0 diagnostics (actively gated by `npm run check`) |
 | `npm run build` (`node scripts/build.mjs`) | `build: index.js 105.9 kB, client.js 942.4 kB`; writes the gitignored `lib/index.js` (Host ESM) and `lib/client.js` (ESM browser entry + `src/browser/` modules bundled to a classic script) | esbuild bundles the two entries and asserts the Host Loader contract (name `power-suite`, non-empty `inject`, `apply`), the browser entry's DSH module-loader call and package id, and package self-reference |
-| `npm test` | `node --test test/*.test.js`: **412 pass, 0 fail, 30 files** (needs Node >= 22.18, no build needed) | Host stores/routes plus browser-side pure models and copy-fence tests; does not read docs prose |
+| `npm test` | `node --test test/*.test.js`: **416 pass, 0 fail, 31 files** (needs Node >= 22.18, no build needed) | Host stores/routes plus browser-side pure models, copy-fence tests and the docs consistency guard; does not read docs prose |
 | `npm run typecheck` (`tsc --noEmit --strict`) | clean; `strict: true` over **all** Host and browser TypeScript sources including `src/client.js` (no `@ts-nocheck`), explicit `any` budget 0 | Type-only gate for Host, shared protocol, and browser modules |
 | `npm run check:docs-links` (`node scripts/check-docs-links.mjs`) | `docs links ok: 29 Markdown files` | Local links/images resolve across `docs/**/*.md`, `.agents/skills/**/*.md`, `README.md`, `README.zh.md`, `CHANGELOG.md`, `PRODUCT.md`; shipped relative links stay inside `package.json` `files`; shipped docs contain no `/Users/<name>/` personal paths; `README.md` and `README.zh.md` contain no `> [!` GitHub alerts |
 | `npm run check:release-notes` (`node scripts/check-release-notes.mjs`) | `release-notes: ok (0.2.2; 6 highlight(s), 6 English)` | `release-notes/<package version>.md` exists with `## Highlights` bullets; optional `.en.md` validated when present |
@@ -94,9 +94,10 @@ Also verify by hand:
   `src/features/update-check/{checker,release-notes}.ts` (6 h success cache, 5 min
   failure cache, 5 s timeout, six highlights, tag-pinned raw URL).
 - **DSH version claims** — no dependency in `package.json` pins DSH, so the
-  DSH 0.2.2 interface target and the 0.2.2-rc.1 browser-check host are
-  owner/platform facts, not code-derived; treat them as unverifiable from this
-  repo and confirm with the owner before changing them.
+  DSH 0.2.2 interface target and the running host version (`dsh --version`,
+  currently `0.2.2-rc.5`) are owner/platform facts, not code-derived; read the
+  live version with `dsh --version` and keep dated evidence rounds on the
+  version they recorded.
 - **README portability** — guarded mechanically by `scripts/check-docs-links.mjs`
   (fails on `> [!` markers in `README.md`, `/Users/<name>/` paths in shipped docs,
   and relative links from shipped docs pointing outside `package.json` `files`).

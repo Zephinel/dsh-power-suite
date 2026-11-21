@@ -110,7 +110,41 @@ Facts that shape the procedure:
    There is no `docs/current-facts.json` in this repository, so there is no
    packed-fact remeasurement to run; `lib/` is a gitignored build output and is
    rebuilt by `npm run check` and by `npm pack`.
-6. **Notes review gate (never skipped implicitly).** Show the complete
+6. **Pre-tag documentation audit (required; a release must not ship a doc
+   that is older than the code).** Run
+   `.agents/skills/sync-power-suite-docs/SKILL.md` in **delta, read-only** mode
+   over everything that changed since the previous tag, and load its
+   `references/doc-map.md` first:
+
+   ```bash
+   git diff --name-only v<previous-version>..HEAD -- \
+     docs README.md README.zh.md CHANGELOG.md PRODUCT.md test/browser/README.md \
+     assets docs/assets
+   ```
+
+   Do not stop at the version strings. Check four claim classes:
+   - **Release state and counts** — published version, test/file/pack counts,
+     route/slot/locale-namespace counts, harness scenario and check counts. The
+     flat `test/docs-consistency.test.js` guard pins the version sentences and
+     the annotation scenario count; everything else is manual.
+   - **Environment versions** — `dsh --version` and the running
+     `@deepseek-ai/dsh-*` client package versions against every version a doc
+     presents as current (README prerequisites, architecture/limitations seat
+     notes, the `## Automated` browser block).
+   - **Prose touched by the release** — UI copy, row geometry, retained caps,
+     routes and limits the release changed; a doc that still quotes the previous
+     wording or numbers counts as stale.
+   - **Screenshots** — any illustration whose surface, copy or theme the release
+     changed must be recaptured through its capture mode, or removed from the
+     as-built doc and kept only as historical evidence. A screenshot of a
+     superseded UI is a defect, not a nice-to-have.
+
+   Classify findings **MAJOR** (contradicts the current build or environment,
+   or shows a superseded UI) and **MINOR**. **An unresolved MAJOR blocks the
+   tag** unless the owner explicitly waives it in the release commit body.
+   Record what was checked, fixed or waived in the release commit or in
+   `docs/verification.md`.
+7. **Notes review gate (never skipped implicitly).** Show the complete
    `release-notes/<version>.md` Highlights (plus `.en.md` when present) to the
    owner and wait for an explicit approve-or-changes answer before section 2 —
    even when the owner's message already named the version ("发布 0.1.0"). These
@@ -247,6 +281,9 @@ gh run watch <run-id> --exit-status --interval 10
 
 - Don't tag or publish while release-notes are still draft or without the
   exact-version approval.
+- Don't tag with a known stale or rotted as-built doc — a superseded screenshot,
+  a version the running host no longer has, or a count from an older test run.
+  Fix it, or record the owner's explicit waiver in the release commit body.
 - Don't treat an exact-version approval as sign-off on the Highlights: the notes
   review is a separate gate unless the owner explicitly waives it.
 - Don't tag a release commit without the `Release-Notes-Review: sha256=<hash>`
