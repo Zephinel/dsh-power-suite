@@ -85,7 +85,9 @@ load them.
    ```
 
    Both modes force `prefers-color-scheme: light`, use DPR 2 at a 1728×900
-   viewport, and write their raws plus a `captures.json` manifest (source
+   viewport, dismiss the shell's first-run **Preview Notice** modal first (its
+   backdrop silently blocks every pointer pose on a fresh `DSH_HOME`), and write
+   their raws plus a `captures.json` manifest (source
    selector, crop rectangle, DPR, pose, masking state, privacy scan) to
    `.tmp-work/readme-shots/raw/`. `--readme-chat` creates a blank demo Session,
    sends a short generic prompt (e.g. a release checklist), waits for the real

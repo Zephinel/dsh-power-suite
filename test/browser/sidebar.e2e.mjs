@@ -2119,6 +2119,49 @@ async function hoverRowStable(page, rowIndex) {
 }
 
 /**
+ * Dismiss the shell's first-run onboarding modal (Preview Notice / Get started).
+ *
+ * A fresh isolated demo home renders it as a `role="dialog" aria-modal="true"`
+ * layer whose backdrop swallows every pointer event, so the README hover and
+ * row-menu poses fail while the DOM below is perfectly correct (the failure
+ * reads as "the card row hover card did not open"). Detection is role + size
+ * based and the click is a real CDP press on the modal's first enabled control,
+ * so it works for every locale; an absent modal is a no-op.
+ * @param {object} page - Page wrapper.
+ * @returns {Promise<number>} how many dialogs were dismissed.
+ */
+async function dismissFirstRunModal(page) {
+  let dismissed = 0
+  for (let round = 0; round < 3; round += 1) {
+    const point = await page.eval(() => {
+      for (const dialog of document.querySelectorAll('[role="dialog"][aria-modal="true"]')) {
+        const rect = dialog.getBoundingClientRect()
+        if (rect.width < 100 || rect.height < 80) continue
+        const style = getComputedStyle(dialog)
+        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) continue
+        const button = [...dialog.querySelectorAll('button')].find((candidate) => {
+          const buttonRect = candidate.getBoundingClientRect()
+          return !candidate.disabled && buttonRect.width > 0 && buttonRect.height > 0
+        })
+        if (button === undefined) continue
+        const buttonRect = button.getBoundingClientRect()
+        return {
+          x: Math.round(buttonRect.left + buttonRect.width / 2),
+          y: Math.round(buttonRect.top + buttonRect.height / 2)
+        }
+      }
+      return null
+    }).catch(() => null)
+    if (point === null) break
+    await page.clickAt(point.x, point.y)
+    dismissed += 1
+    await sleep(900)
+  }
+  if (dismissed > 0) log(`dismissed ${dismissed} first-run modal(s) before the README captures`)
+  return dismissed
+}
+
+/**
  * Make at least one finished parent row read (its identity glyph is visible)
  * by opening it from the card when no acknowledged row exists yet.
  * @param {object} page - Page wrapper.
@@ -15226,10 +15269,55 @@ async function runReadmeShotsMode({ page, results, state, cdp, opts }) {
       const row = await readmePickCardRow(page)
       await readmeOpenCardHover(page, row)
       assert(row.triggerPoint !== null, 'the hovered card row exposes no "…" trigger')
-      await page.moveTo(row.triggerPoint.x, row.triggerPoint.y)
-      await sleep(320)
-      await page.clickAt(row.triggerPoint.x, row.triggerPoint.y)
-      const menu = await readmeWaitRowMenu(page)
+      // Hover, then open the "…" trigger. Real input is preferred, but the live list
+      // re-sorts and the card body can scroll the row a hair under the pointer between
+      // the measurement and the press, so a press that misses falls back to the
+      // trigger's own click handler — the pose only needs the shared popup open.
+      let menu = null
+      let via = 'pointer press'
+      const openFromHandler = async () => {
+        const triggered = await page.eval(() => {
+          // Do not depend on :hover — a press that misses the moving row clears it.
+          for (const candidate of document.querySelectorAll('.psd-run')) {
+            const trigger = candidate.querySelector('.psd-run-more')
+            if (trigger === null) continue
+            trigger.click()
+            return true
+          }
+          return false
+        })
+        return triggered ? readmeWaitRowMenu(page).catch(() => null) : null
+      }
+      for (let attempt = 0; attempt < 3 && menu === null; attempt += 1) {
+        await readmeOpenCardHover(page, row).catch(() => null)
+        const liveTrigger = await page.eval(() => {
+          const hovered = document.querySelector('.psd-run:hover')
+          const trigger = hovered === null ? null : hovered.querySelector('.psd-run-more')
+          if (trigger === null) return null
+          const rect = trigger.getBoundingClientRect()
+          return {
+            x: Math.round(rect.left + rect.width / 2),
+            y: Math.round(rect.top + rect.height / 2)
+          }
+        })
+        if (liveTrigger !== null) {
+          await page.moveTo(liveTrigger.x, liveTrigger.y)
+          await sleep(260)
+          const onTrigger = await page.eval((point) => {
+            const element = document.elementFromPoint(point.x, point.y)
+            return element !== null && element.closest('.psd-run-more') !== null
+          }, liveTrigger)
+          if (onTrigger) {
+            await page.clickAt(liveTrigger.x, liveTrigger.y)
+            menu = await readmeWaitRowMenu(page).catch(() => null)
+          }
+        }
+        if (menu === null) {
+          menu = await openFromHandler()
+          if (menu !== null) via = 'trigger click handler'
+        }
+      }
+      assert(menu !== null, 'the card row "…" shared menu did not open; no capture written')
       // Move the pointer onto the shared popup so the row hover card dismisses and only the
       // row + popup remain in the crop.
       await page.moveTo(menu.menu.x + Math.round(menu.menu.width / 2), menu.menu.y + Math.round(menu.menu.height / 2))
@@ -15260,7 +15348,7 @@ async function runReadmeShotsMode({ page, results, state, cdp, opts }) {
       })
       state.readme.captures.push(capture)
       await writeManifest()
-      return `${capture.screenshot.width}x${capture.screenshot.height}px, ${menu.items} shared-menu items (no action clicked), masked ${JSON.stringify(capture.masked)}`
+      return `${capture.screenshot.width}x${capture.screenshot.height}px, ${menu.items} shared-menu items (no action clicked; opened via ${via}), masked ${JSON.stringify(capture.masked)}`
     })
 
     // ---- Native Workspaces browser (card collapsed for the tall crop) ------------------
@@ -17252,6 +17340,11 @@ async function run() {
     } else {
       await runSmoke({ page, results, state, opts })
       await ensureAppReady(page)
+    }
+    if (opts.mode === 'readme-shots' || opts.mode === 'readme-sidebar-annotation' || chatMode) {
+      // A fresh isolated demo home shows the first-run Preview Notice first;
+      // its backdrop blocks every pointer pose, so dismiss it before capturing.
+      await dismissFirstRunModal(page)
     }
     if (opts.mode === 'readme-shots') {
       try {
