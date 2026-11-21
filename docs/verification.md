@@ -42,7 +42,7 @@ node scripts/check-release-verification.mjs --verify # release commit only: inde
   **`lib/client.js` 942.4 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **433 tests, 433 passed, 0 failed**, **33 test files** — Host
+- `npm test`: **435 tests, 435 passed, 0 failed**, **33 test files** — Host
   stores/routes plus browser-side derivations, the atmosphere motion model, the
   release-notes approval round-trip, the docs consistency guard, the protocol contract guard for duplicated
   route/enum literals, the shared route and settings contracts, the durable
@@ -69,7 +69,7 @@ node scripts/check-release-verification.mjs --verify # release commit only: inde
   it builds `lib/` first, then runs syntax checks, strict/Host/browser typechecks,
   package-manifest validation, the built-entry smoke (update route reports
   `current=0.2.2`) and built-browser smoke (8 injects), local docs/hygiene checks,
-  the 433-test Node suite, and the release-notes gate (`0.2.2; 6 highlights, 6 English`),
+  the 435-test Node suite, and the release-notes gate (`0.2.2; 6 highlights, 6 English`),
   then `pack:check`.
 - `npm run pack:check`: **82 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).

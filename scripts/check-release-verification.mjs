@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const TRAILER = /^Release-Verification:\s*(.+)$/gmu
-const APPROVAL = /^APPROVE tree=([0-9a-f]{40}) reviewer=(\S.*)$/u
+const APPROVAL = /^APPROVE tree=([0-9a-f]{40}) reviewer=(.*)$/u
 
 /**
  * Parse and validate one `Release-Verification:` trailer.
@@ -48,7 +48,11 @@ export function parseReleaseVerification(message, headTree = null) {
   }
   const tree = match[1]
   const reviewer = match[2].trim()
-  if (reviewer.length === 0) problems.push('reviewer= must name the independent verifier')
+  if (reviewer.length < 3) {
+    problems.push('reviewer= must name the independent verifier (at least 3 characters)')
+  } else if (reviewer.includes('<') || reviewer.includes('>')) {
+    problems.push('reviewer= still contains the <...> placeholder; name the verifier that actually ran')
+  }
   if (typeof headTree === 'string' && headTree.length > 0 && tree !== headTree) {
     problems.push(`the approval is bound to tree ${tree} but HEAD's tree is ${headTree}; re-verify after a tree change`)
   }
@@ -110,7 +114,7 @@ function main() {
   }
   const tree = headTree()
   if (tree === null) {
-    console.error('release verification: not inside a Git checkout; the approval cannot be bound to a tree')
+    console.error('release verification: run this inside the release checkout; the approval is bound to its tree')
     process.exit(2)
   }
   const result = parseReleaseVerification(message, tree)

@@ -301,8 +301,11 @@ its tree, the previous tag and this contract:
 >
 > Report findings with severity (BLOCKER / MAJOR / MINOR / NIT), each with
 > evidence and the command that produced it; separate facts from inference; end
-> with **VERDICT: APPROVE** or **VERDICT: REQUEST CHANGES** and the residual
-> risks. Do not pad the report.
+> with **VERDICT: APPROVE** or **VERDICT: REQUEST CHANGES**, the residual
+> risks, and — on APPROVE — the exact line the operator must append, using the
+> tree you actually verified:
+> `Release-Verification: APPROVE tree=<git rev-parse HEAD^{tree}> reviewer=<your name, backend>`.
+> Do not pad the report.
 
 Rules:
 
@@ -312,8 +315,9 @@ Rules:
 - On **REQUEST CHANGES**, fix the findings, re-run the gates, and ask the same
   verifier to re-verify the delta. Re-run the whole contract when the tree
   changed materially.
-- On **APPROVE**, continue to the next section with the tree the verifier
-  actually approved.
+- On **APPROVE**, continue with the tree the verifier actually approved. It
+  must equal `git rev-parse HEAD^{tree}`; if it does not, the tree changed after
+  verification and the approval is void — re-verify instead of recording it.
 - A CI failure after the push forces a fix only when the tree changes; that
   invalidates the approval and needs a fresh verification round.
 
@@ -322,11 +326,15 @@ Rules:
 Only after the independent verifier's APPROVE and the owner's explicit approval
 of the exact version and release-notes text:
 
-1. Record the verdict without changing the tree (amend the message only):
+1. Append the verifier's own approval line, without changing the tree (amend
+   the message only). Stop if the tree moved since verification:
    ```bash
+   approved="<the tree the verifier approved>"
+   test "$(git rev-parse HEAD^{tree})" = "$approved" \
+     || { echo "tree changed since verification; re-verify"; exit 1; }
    git log -1 --format=%B > /tmp/release-commit-msg.txt
    printf '\nRelease-Verification: APPROVE tree=%s reviewer=%s\n' \
-     "$(git rev-parse HEAD^{tree})" "<verifier name, backend>" >> /tmp/release-commit-msg.txt
+     "$approved" "<verifier name, backend>" >> /tmp/release-commit-msg.txt
    git commit --amend -F /tmp/release-commit-msg.txt
    node scripts/check-release-verification.mjs --verify
    ```
@@ -344,7 +352,7 @@ Rules:
 - Do not use `--follow-tags` from an unrelated commit: push the tag explicitly
   so the workflow runs exactly once for this version.
 - The tagged commit must carry exactly one
-  `Docs-Audit: checked=... fixed=... waived=...` trailer (step 6), exactly one
+  `Docs-Audit: checked=... fixed=... waived=...` trailer (section 1 step 6), exactly one
   `Release-Verification: APPROVE tree=<tree> reviewer=<name>` line bound to the
   commit's tree, and exactly one
   `Release-Notes-Review: sha256=<hash>` line matching the committed notes;
@@ -413,11 +421,17 @@ gh run watch <run-id> --exit-status --interval 10
    what users actually receive:
    - registry: `npm view @zephinel/dsh-power-suite version dist-tags`, the
      version endpoint returns 200, and `dist.attestations.provenance` exists;
-   - tarball: `npm run check:release` (pack → throwaway `$DSH_HOME` install →
-     boot → uninstall), or an equivalent `npm pack` + install;
-   - tag-pinned notes: both raw URLs return 200 and their text equals the
-     reviewed files;
-   - GitHub Release: exists and carries both notes files;
+   - **registry tarball** (not a local repack): in a temp directory
+     `npm pack @zephinel/dsh-power-suite@<version>`, compare its sha512 with
+     `npm view @zephinel/dsh-power-suite@<version> dist.integrity`, and install
+     that downloaded tarball into a throwaway `$DSH_HOME` (boot, inspect the
+     shipped files, uninstall). `npm run check:release` packs the local
+     checkout, so it cannot prove what the registry serves;
+   - tag-pinned notes: the default `release-notes/<version>.md` raw URL returns
+     200 and equals the reviewed file; when `.en.md` was committed, the same
+     holds for it, and the default-file fallback still works when it was not;
+   - GitHub Release: exists and carries the notes files that were committed
+     (default always; English when present);
    - the `docs/verification.md` record matches what it observed.
    Record its verdict in the post-publish docs commit. A `REQUEST CHANGES` here
    is fixed in a docs-only follow-up (or a new version when package content is

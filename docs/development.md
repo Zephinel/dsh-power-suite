@@ -203,8 +203,10 @@ independent subagent verifies it. Neither substitutes for the other.**
    `dsh --version`, prose and copy, screenshots, changelog completeness,
    schema versions). On **APPROVE** the operation records the verdict without
    changing the tree:
-   `Release-Verification: APPROVE tree=<tree> reviewer=<name>` (amend the
-   message only, then `node scripts/check-release-verification.mjs --verify`).
+   `Release-Verification: APPROVE tree=<tree> reviewer=<name>` (append the
+   verifier's own line; if `git rev-parse HEAD^{tree}` differs from the approved
+   tree, stop and re-verify. Amend the message only, then
+   `node scripts/check-release-verification.mjs --verify`).
    On **REQUEST CHANGES**, fix, re-run the gates and have the verifier re-check
    the delta; a tree change invalidates the approval.
 4. **Push, tag and publish (operation).** Push `main`, wait for CI, then push
@@ -224,8 +226,11 @@ independent subagent verifies it. Neither substitutes for the other.**
    `npm audit signatures`. Then create the GitHub Release from the release
    notes and verify the tag-pinned raw notes URLs. Hand the published artifact
    to a **fresh verification subagent** (V2): registry/dist-tags, provenance,
-   `npm run check:release` or an equivalent pack+install, the tag-pinned notes
-   text, and the GitHub Release body. Record the workflow run, the registry
+   the **registry tarball** (`npm pack @zephinel/dsh-power-suite@<version>` in a
+   temp dir, sha512 against `dist.integrity`, then install that tarball into a
+   throwaway `$DSH_HOME` — `npm run check:release` only packs the local
+   checkout), the tag-pinned notes text (default always, English when
+   committed), and the GitHub Release body. Record the workflow run, the registry
    version/provenance, the integrity hash, the GitHub Release result, the
    tag-pinned notes check and the V2 verdict in
    [verification.md](verification.md). A V2 `REQUEST CHANGES` is fixed in a
