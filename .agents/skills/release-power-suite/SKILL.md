@@ -302,9 +302,11 @@ its tree, the previous tag and this contract:
 > Report findings with severity (BLOCKER / MAJOR / MINOR / NIT), each with
 > evidence and the command that produced it; separate facts from inference; end
 > with **VERDICT: APPROVE** or **VERDICT: REQUEST CHANGES**, the residual
-> risks, and — on APPROVE — the exact line the operator must append, using the
-> tree you actually verified:
-> `Release-Verification: APPROVE tree=<git rev-parse HEAD^{tree}> reviewer=<your name, backend>`.
+> risks, and — on APPROVE — the exact line the operator must append, carrying
+> the 40-hex tree of the commit you inspected (resolve it once with
+> `git rev-parse <commit>^{tree}` before any fix, and never refresh it later)
+> and your own name:
+> `Release-Verification: APPROVE tree=<that 40-hex tree> reviewer=<your name, backend>`.
 > Do not pad the report.
 
 Rules:
@@ -329,15 +331,18 @@ of the exact version and release-notes text:
 1. Append the verifier's own approval line, without changing the tree (amend
    the message only). Stop if the tree moved since verification:
    ```bash
-   approved="<the tree the verifier approved>"
+   approved="<the 40-hex tree the verifier reported>"
+   reviewer="<the exact reviewer name the verifier reported>"
    test "$(git rev-parse HEAD^{tree})" = "$approved" \
      || { echo "tree changed since verification; re-verify"; exit 1; }
    git log -1 --format=%B > /tmp/release-commit-msg.txt
    printf '\nRelease-Verification: APPROVE tree=%s reviewer=%s\n' \
-     "$approved" "<verifier name, backend>" >> /tmp/release-commit-msg.txt
+     "$approved" "$reviewer" >> /tmp/release-commit-msg.txt
    git commit --amend -F /tmp/release-commit-msg.txt
    node scripts/check-release-verification.mjs --verify
    ```
+   Copy both values from the verifier's report; a `<...>` placeholder is
+   rejected.
 2. Push `main` and wait for CI (`verify`) to be green before tagging.
 3. Tag and push:
    ```bash
@@ -397,18 +402,25 @@ gh run watch <run-id> --exit-status --interval 10
 
 ## 6. Post-publish
 
-1. Create the GitHub Release (the workflow does not do this), with both notes
-   files as the body:
+1. Create the GitHub Release (the workflow does not do this), with the notes
+   files that were committed as the body; the English file is optional:
    ```bash
-   { cat release-notes/<version>.md; echo; echo "---"; echo; cat release-notes/<version>.en.md; } > /tmp/release-<version>.md
+   { cat release-notes/<version>.md
+     if [ -f release-notes/<version>.en.md ]; then
+       echo; echo "---"; echo; cat release-notes/<version>.en.md
+     fi
+   } > /tmp/release-<version>.md
    gh release create v<version> --title "<version> — <UTC date>" --notes-file /tmp/release-<version>.md
    ```
 2. Verify the tag-pinned raw notes are readable — the in-app update prompt
    fetches exactly these URLs:
    ```bash
    curl -fsS "https://raw.githubusercontent.com/Zephinel/dsh-power-suite/v<version>/release-notes/<version>.md" >/dev/null
+   # only when release-notes/<version>.en.md was committed:
    curl -fsS "https://raw.githubusercontent.com/Zephinel/dsh-power-suite/v<version>/release-notes/<version>.en.md" >/dev/null
    ```
+   The default file is required; the prompt falls back to it when no English
+   file exists.
 3. Record only what the tag created and could not be known earlier in
    `docs/verification.md`: the workflow run ID, the npm `latest`/provenance
    confirmation, the tarball integrity hash, the GitHub Release result and the

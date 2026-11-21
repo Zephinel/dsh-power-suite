@@ -71,7 +71,7 @@ function commitMessage(path) {
   try {
     return execFileSync('git', ['log', '-1', '--format=%B'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
   } catch {
-    throw new Error('not inside a Git checkout; pass --message or --message-file')
+    throw new Error('not inside a Git checkout; run this inside the release checkout')
   }
 }
 

@@ -8,7 +8,7 @@
  */
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -16,7 +16,12 @@ import { parseReleaseVerification } from '../scripts/check-release-verification.
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const script = join(root, 'scripts/check-release-verification.mjs')
-const headTree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+// The release verifier runs `npm test` in a `git archive` copy with no .git.
+// The CLI binding test needs one; skip it there instead of failing the suite.
+const hasGit = existsSync(join(root, '.git'))
+const headTree = hasGit
+  ? execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  : null
 
 const TREE = '0123456789abcdef0123456789abcdef01234567'
 const message = (trailer) => `release: v0.2.3\n\n${trailer}\n`
@@ -73,7 +78,7 @@ test('refuses an approval bound to a different tree', () => {
   assert.ok(result.problems.some((problem) => problem.includes('re-verify')))
 })
 
-test('the CLI binds a valid approval to HEAD and refuses another tree', () => {
+test('the CLI binds a valid approval to HEAD and refuses another tree', { skip: hasGit ? false : 'requires a Git checkout' }, () => {
   const run = (text) =>
     execFileSync(process.execPath, [script, '--verify', '--message', text], {
       cwd: root,
@@ -109,4 +114,5 @@ test('publish.yml checks every release trailer before publishing', () => {
   }
   const publishBlock = workflow.slice(publish).split('\n      - name:')[0]
   assert.doesNotMatch(publishBlock, /continue-on-error|if:\s*false/u, 'the publish step must not be skippable')
+  assert.doesNotMatch(workflow, /continue-on-error/u, 'no release gate may be made non-blocking')
 })
