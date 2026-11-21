@@ -416,8 +416,9 @@ gh run watch <run-id> --exit-status --interval 10
    fetches exactly these URLs:
    ```bash
    curl -fsS "https://raw.githubusercontent.com/Zephinel/dsh-power-suite/v<version>/release-notes/<version>.md" >/dev/null
-   # only when release-notes/<version>.en.md was committed:
-   curl -fsS "https://raw.githubusercontent.com/Zephinel/dsh-power-suite/v<version>/release-notes/<version>.en.md" >/dev/null
+   if [ -f release-notes/<version>.en.md ]; then
+     curl -fsS "https://raw.githubusercontent.com/Zephinel/dsh-power-suite/v<version>/release-notes/<version>.en.md" >/dev/null
+   fi
    ```
    The default file is required; the prompt falls back to it when no English
    file exists.

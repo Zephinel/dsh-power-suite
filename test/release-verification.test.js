@@ -115,4 +115,6 @@ test('publish.yml checks every release trailer before publishing', () => {
   const publishBlock = workflow.slice(publish).split('\n      - name:')[0]
   assert.doesNotMatch(publishBlock, /continue-on-error|if:\s*false/u, 'the publish step must not be skippable')
   assert.doesNotMatch(workflow, /continue-on-error/u, 'no release gate may be made non-blocking')
+  const gateRegion = workflow.slice(workflow.indexOf(steps[0]), publish)
+  assert.doesNotMatch(gateRegion, /^\s{6,8}(if|continue-on-error):/mu, 'no release gate may be conditionally skipped')
 })

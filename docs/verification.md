@@ -42,7 +42,9 @@ node scripts/check-release-verification.mjs --verify # release commit only: inde
   **`lib/client.js` 942.4 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **435 tests, 435 passed, 0 failed**, **33 test files** — Host
+- `npm test`: **435 tests, 435 passed, 0 failed**, **33 test files** (in a
+  `git archive` copy without `.git` one release-verification CLI test is
+  skipped, so it reports 434 pass / 1 skip) — Host
   stores/routes plus browser-side derivations, the atmosphere motion model, the
   release-notes approval round-trip, the docs consistency guard, the protocol contract guard for duplicated
   route/enum literals, the shared route and settings contracts, the durable
