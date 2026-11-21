@@ -181,6 +181,29 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   docs-only follow-up after the tag. npm 0.1.0 installs will see the 0.2.0
   update notice once the new `latest` propagates.
 
+## 0.2.2 colored smoke, native row geometry and DSH 0.2.2 adaptation (2026-11-21)
+
+- Release commit `93e4487` (`release: v0.2.2`), annotated tag **`v0.2.2`**;
+  publish run **44932116426** passed every gate (tag/version, publish manifest,
+  `npm run check`, packed manifest, CHANGELOG section, release-notes gate, the
+  owner approval hash) and published with provenance.
+- npm `latest` is **0.2.2**
+  (`sha512-GUhcB7iuqYKO1FGh+D5U9fDmr3A8wj+4QdsFG2OXp5IfWUGlHC8K6l2LoepHEAAHplbl3jrdXa/HR1YVlx30nQ==`);
+  SLSA provenance v1 is recorded at
+  <https://registry.npmjs.org/-/npm/v1/attestations/@zephinel%2fdsh-power-suite@0.2.2>.
+- Local gates on the release commit: `npm run check` passed (412/412 tests,
+  `current=0.2.2`, 82 packed files), `npm run check:release` **PASS** (82
+  packaged files verified), `git diff --check` clean.
+- GitHub Release: <https://github.com/Zephinel/dsh-power-suite/releases/tag/v0.2.2>;
+  both tag-pinned raw notes returned HTTP 200.
+- Browser evidence for this release is the 2026-11-21 block under *Automated*:
+  smoke sidebar 4/4, annotation 6/6, update-prompt 21/21. The full live sidebar
+  run's open items (`b2-3`, `b4-13`, `c4-2` and two page `SyntaxError`s) are
+  recorded there and remain unaudited follow-ups.
+- 0.2.1 installs start seeing the update prompt once this `latest` propagates.
+  This record is a docs-only follow-up after the tag; it does not change the
+  version.
+
 ## 0.2.1 screenshot fix and marketplace submissions (2026-11-19)
 
 - Screenshot refresh commit `da5e700`: new current-theme
