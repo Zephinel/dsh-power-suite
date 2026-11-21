@@ -63,17 +63,18 @@ the code the Host runs after `npm run build` and a restart (the Host loads
    [`src/host/document-store.ts`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/host/document-store.ts) (atomic queued
    writes, coded read errors) — supply decode/encode/clone/change policy instead
    of hand-rolling filesystem code.
-2. Browser side: put the feature's browser module under `src/browser/<name>/`
-   and wire it from a `//#region feature: <name>` section in
-   [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js)
-   with its slot components, copy, and lifecycle hooks. The entry's `apply`
-   registers each feature's contributions.
+2. Browser side: put the feature's browser module (including its `copy.ts`
+   dictionaries and UI helpers) under `src/browser/<name>/` and wire it from a
+   `//#region feature: <name>` section in
+   [`src/client.js`](https://github.com/Zephinel/dsh-power-suite/blob/main/src/client.js).
+   The entry's `apply` registers each feature's contributions.
 3. Feature routes live under `/api/<feature>.*` and use
    `ctx.connection.fetch.register`, so they sit behind the same browser
    authentication and Host/Origin fence as the rest of the GUI; the path is
    declared once in `src/shared/routes.ts` for both halves.
 4. Put user-facing reference in `docs/<name>.md` and, when the display text is
-   user-visible, register the feature's `en`/`zh` dictionaries inline via
+   user-visible, define the feature's `en`/`zh` dictionaries under
+   `src/browser/<name>/` and register them via
    `ctx.locale.register(NS, { en, zh })` (`locale/*.json` holds only plugin
    display metadata).
 5. Add a pure-logic test under `test/` when a feature derives state from the

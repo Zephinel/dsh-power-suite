@@ -640,7 +640,7 @@ function AnnotationCollectionView(props: AnnotationSurfaceProps) {
         'data-psa-own': ''
       },
       state.selection.length > 0
-        ? `${t('rail.status.multi', { count: state.selection.length })} · ${t('sidebar.addHint')}`
+        ? `${state.selection.length === 1 ? t('rail.status.selected') : t('rail.status.multi', { count: state.selection.length })} · ${t('sidebar.addHint')}`
         : t('sidebar.hint', {
           passThrough: t(`modifier.${snapshot.settings.passThroughModifier}`),
           multi: t(`modifier.${snapshot.settings.multiModifier}`)
@@ -703,7 +703,9 @@ function AnnotationCollectionView(props: AnnotationSurfaceProps) {
       t('feedback.noComposer')))
   } else if (scopeCounts.other > 0) {
     nodes.push(React.createElement('div', { key: 'other', className: 'psa-sb-note', 'data-psa-other-notice': '' },
-      t('collection.crossSession', { count: scopeCounts.other })))
+      scopeCounts.other === 1
+        ? t('collection.crossSessionOne')
+        : t('collection.crossSession', { count: scopeCounts.other })))
   }
   if (entries.length >= ANNOTATION_RECORD_LIMIT) {
     nodes.push(React.createElement('div', {
@@ -795,7 +797,9 @@ function AnnotationGroupRow(props: AnnotationEntryRowProps) {
       onClick: () => controller.toggleGroup(entry.id)
     }, summary.text.length > 0 ? summary.text : t('collection.groupUntitled')),
     React.createElement('span', { className: 'psa-badge psa-sb-type', 'data-psa-type-badge': 'group', 'data-psa-own': '' },
-      t('sidebar.groupBadge', { count: items.length })),
+      items.length === 1
+        ? t('sidebar.groupBadgeOne')
+        : t('sidebar.groupBadge', { count: items.length })),
     React.createElement('button', {
       type: 'button',
       className: 'psa-icon-btn',
@@ -942,7 +946,9 @@ function AnnotationExitConfirm(props: AnnotationSurfaceProps) {
   },
   React.createElement('div', { className: 'psa-exit-confirm-title', 'data-psa-own': '' }, t('exitConfirm.title')),
   React.createElement('div', { className: 'psa-exit-confirm-message', 'data-psa-own': '' },
-    t('exitConfirm.message', { count: confirm.count })),
+    confirm.count === 1
+      ? t('exitConfirm.messageOne')
+      : t('exitConfirm.message', { count: confirm.count })),
   React.createElement('div', { className: 'psa-exit-confirm-actions', 'data-psa-own': '' },
     React.createElement('button', {
       type: 'button',
@@ -1563,7 +1569,7 @@ function AnnotationChipPreview(props: AnnotationSurfaceProps) {
     title = t('chip.batchLabel', { count: preview.count })
     content = [
       React.createElement('div', { key: 'count', className: 'psa-chip-preview-count', 'data-psa-chip-preview-count': '' },
-        `${preview.count} ${t('collection.count', { count: preview.count })}`),
+        preview.count === 1 ? t('collection.countOne') : t('collection.count', { count: preview.count })),
       React.createElement('ul', { key: 'items', className: 'psa-chip-preview-list' },
         (Array.isArray(preview.items) ? preview.items : []).map((item, index) => React.createElement('li', {
           key: `${index}-${item.label}`,
@@ -1667,7 +1673,7 @@ function AnnotationBatchPopover(props: AnnotationSurfaceProps) {
     'data-psa-own': '',
     'data-psa-count': String(state.selection.length),
     role: 'dialog',
-    'aria-label': t('batch.title', { count: state.selection.length }),
+    'aria-label': state.selection.length === 1 ? t('rail.status.selected') : t('batch.title', { count: state.selection.length }),
     style: { left: `${position.x}px`, top: `${position.y}px` }
   },
   React.createElement('div', {
@@ -1677,7 +1683,7 @@ function AnnotationBatchPopover(props: AnnotationSurfaceProps) {
     onPointerDown: (event: AnnotationUiEvent) => controller.beginBatchDrag(event)
   },
     React.createElement('span', { className: 'psa-popover-title', 'data-psa-batch-title': '' },
-      t('batch.title', { count: state.selection.length })),
+      state.selection.length === 1 ? t('rail.status.selected') : t('batch.title', { count: state.selection.length })),
     React.createElement('button', {
       type: 'button',
       className: 'psa-icon-btn',
@@ -1924,7 +1930,11 @@ function AnnotationNoteEditor(props: AnnotationSurfaceProps) {
       onClick: () => controller.closeNoteEditor()
     }, glyph(icons.close, 14))),
   React.createElement('div', { className: 'psa-muted psa-truncate' },
-    isGroup ? t('collection.groupEditorTitle', { count: annotationGroupItems(entry).length }) : elementLabel(entry)),
+    isGroup
+      ? (annotationGroupItems(entry).length === 1
+        ? t('collection.groupEditorTitleOne')
+        : t('collection.groupEditorTitle', { count: annotationGroupItems(entry).length }))
+      : elementLabel(entry)),
   React.createElement('div', { className: 'psa-rainbow-field', 'data-psa-own': '' },
     React.createElement('textarea', {
       className: 'psa-note-editor-textarea',

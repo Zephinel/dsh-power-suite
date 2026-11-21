@@ -750,13 +750,16 @@ and renders an **Annotations** header with a total badge, **All / Singles /
 Groups** filters with live counts, a unified list of single rows and collapsible
 group cards
 (shared requirement, item count, always-visible edit/delete/insert actions,
-Selector/Page/Session metadata and updated time), empty/filter-empty states, and
-a footer with **Add annotation** plus dynamic **Clear selection / Clear
-collection** (undoable). Groups insert as one grouped batch chip; a group keeps ONE ordinal shared by
+Selector/Page/Session metadata and updated time), empty/filter-empty states, a
+list toolbar with **Select current session**, **Clear selection**, **Delete
+selected** (undoable) and **Insert all into composer**, and a two-action footer.
+Groups insert as one grouped batch chip; a group keeps ONE ordinal shared by
 all of its items (page marks show the group number, never an incrementing
-sequence). The footer's **Add annotation** and **Cancel Annotation** actions
-share equal width; the danger action, the header exit and the final Esc step
-open a confirmation and, on confirm, clear every single/group record (marks and
+sequence). The footer's primary (**Add annotation** / **Insert all into
+composer**, or **Save change** / **Save as group** while a selection is active)
+and danger (**Cancel annotation**) actions share equal width; the danger
+action, the header exit and the final Esc step open a confirmation and, on
+confirm (**Clear & exit**), clear every single/group record (marks and
 persisted v3 document) before exiting — a re-entry starts empty.
 
 Annotation reference chips also carry a hover preview: the browser watches the

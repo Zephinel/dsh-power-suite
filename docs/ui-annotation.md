@@ -43,16 +43,16 @@ page's content elements, never reads form values, and never sends the message.
   native mouse behavior back, for the left and right buttons, without leaving the
   mode.
 - **Requirement popover** — element name, locator summary, live resolution
-  status, an ancestor lever, the **requirement** field, **Copy locator**, and the
-  commit surface: **Mark requirement** / **Update requirement** (primary),
+  status, an ancestor lever, the **Requested change** field, **Copy locator**, and the
+  commit surface: **Save change** / **Update change** (primary),
   **Quick reference**, and **Delete annotation**. Committing a requirement closes
   the popover and clears the selection automatically; floating surfaces are
-  marked as transient in the popover. Delete annotation appears only when the
+  marked as temporary in the popover. Delete annotation appears only when the
   element is **already marked** (then the primary action reads **Update
-  requirement**); the trash lives in the **Requirement caption row** at the row's
+  change**); the trash lives in the **Requested change** caption row at the row's
   right end, above the textarea, so the footer keeps exactly the two primary
   buttons on one row. An unmarked selection has nothing to delete yet, so it
-  shows **Mark requirement** only (no trash), and the popover's close X discards
+  shows **Save change** only (no trash), and the popover's close X discards
   the selection.
 - **Composer reference chip** — Quick reference (from the popover, the detail
   card, or a rail row) inserts one native inline reference chip into the current
@@ -66,8 +66,10 @@ page's content elements, never reads form values, and never sends the message.
   cards, and a two-action footer. Every row/card/child exposes always-visible
   edit + delete controls (never hover-only); groups show their shared requirement,
   item count, collapse/expand and child rows. Batch include/insert tools live in
-  the list toolbar; the footer primary is **Add annotation** and the danger action
-  switches between **Clear selection** and **Clear collection** (undoable).
+  the list toolbar; the footer primary switches between **Add annotation** and
+  **Insert all into composer** (or **Save change** / **Save as group** while a
+  selection is active) and the danger action is **Cancel annotation** (confirms
+  **Clear & exit**).
 - **Page marks** — every current-Session annotation whose target still resolves
   stays visible on the page as a pointer-transparent overlay mask with a numbered
   badge (`#3` plus a one-line requirement excerpt). Missing, ambiguous, and
@@ -75,13 +77,13 @@ page's content elements, never reads form values, and never sends the message.
 - **Hover detail card** — resting the pointer on a mark opens a floating card
   beside it after about 120 ms: full requirement, locator, live position box,
   Session + Workspace, status, transient marker, and the actions Quick reference,
-  Edit requirement (rainbow textarea with Save/Cancel), Go to element, Copy
+  Edit change (rainbow textarea with Save/Cancel), Go to element, Copy
   locator, and Delete. The pointer may move into the card, focus is never stolen,
   Esc closes it first, and it never covers the rail.
 - **Delete undo** — deleting an annotation from the popover, the detail card, or
-  a rail row (and **Clear**) immediately shows a 5 s undo toast with `role=status`
-  instead of a confirmation dialog; a newer deletion replaces the previous undo
-  slot.
+  a rail row (and **Delete selected** in the list toolbar) immediately shows a
+  5 s undo toast with `role=status` instead of a confirmation dialog; a newer
+  deletion replaces the previous undo slot.
 - **Collection** — an ordered list held in the rail with per-entry notes, copy
   locator, delete and re-locate actions, and a batch insert that produces one
   structured request for the model. It is persisted in the browser and restored
@@ -106,7 +108,7 @@ states the action and its pressed state follows the mode.
 - **Exactly one launcher control exists (`[data-psa-launcher]`):** visible and
   interactive while idle, hidden (`aria-hidden`, non-focusable, pointer-transparent)
   while the mode is active. Exit the mode from the rail header's X button, the
-  footer Cancel Annotation action, or the final Esc step.
+  footer Cancel annotation action, or the final Esc step.
 - **Drag** the floating launcher to move it. A drag never toggles the mode; the
   position is clamped inside the viewport with an 8 px margin.
 - The floating position is stored in the browser, so a page reload puts the
@@ -197,7 +199,7 @@ The launcher is a single floating control: clicking it starts annotation mode an
 the launcher **fades/scales out in place** (~180 ms); it does not fly anywhere and
 there is **no docked copy in the rail header**. It reappears with the reverse
 fade/scale animation at its remembered floating position only after the mode is
-**fully exited** (header X, footer Cancel Annotation, or the final Esc step).
+**fully exited** (header X, footer Cancel annotation, or the final Esc step).
 Idle drag/clamp/persistence are unchanged; `prefers-reduced-motion: reduce` makes
 both transitions instant. While active the hidden launcher is `aria-hidden`, not
 focusable and pointer-transparent, and exactly one `[data-psa-launcher]` element
@@ -408,10 +410,10 @@ A batch is a first-class **group** with one shared requirement:
   undoable through the same slot.
 - Insertion produces **ONE group chip** (`UI annotations × N`, N = total child
   elements). Its send-time serialization is one request: the batch header, then
-  the group block — the shared `Requirement:` line followed by the numbered
+  the group block — the shared `Shared change:` line (`共用修改说明：` in Chinese) followed by the numbered
   element references (`Element:` + `Reference:` + honest status line per item).
-  Group items do not carry per-item `Note:` lines. Singles in the same batch keep
-  their normal single-item block with the Note line.
+  Group items do not carry per-item `Change:` lines. Singles in the same batch keep
+  their normal single-item block with the `Change:` line.
 - The **100-element cap** counts singles + group items together; saving a group
   that would exceed it is refused with the visible limit message instead of a
   partial commit.
@@ -537,12 +539,12 @@ It shows:
   position, one undo step, and never sending the message. It inserts a native
   inline reference chip; when the composer chip services are unavailable it falls
   back to the plain-text block and says so with
-  **Reference chips unavailable here; inserted as plain text**;
-- **Mark requirement** / **Update requirement** — the primary action. It adds or
+  **Reference chips are unavailable here. Inserted as plain text.**;
+- **Save change** / **Update change** — the primary action. It adds or
   updates the record and then auto-dismisses the popover and clears the
   selection, keeping the page marks visible; it does not touch the composer;
 - **Delete annotation** — the danger X for an element that is already in the
-  collection. It sits in the Requirement caption row above the textarea
+  collection. It sits in the Requested change caption row above the textarea
   (right-aligned, same line as the caption; the footer stays two buttons on one
   row), deletes immediately (no confirmation), and shows the undo toast. The
   caption row sits 8 px above the textarea (the earlier gap was 4 px), and the
@@ -580,14 +582,14 @@ requirement (`white-space: pre-wrap`, internally scrollable), the locator
 (`uniqueSelector || describeLocator`), the live `x, y · width×height` position,
 the Session short label with its timestamp, the Workspace label, the transient
 surface marker for floating records, and the action row Quick reference / Edit
-requirement / Go to element / Copy locator / Delete. The card is anchored beside
+change / Go to element / Copy locator / Delete. The card is anchored beside
 the mark, flips to the left or above when there is no room, and clamps inside the
 viewport so it never covers the rail. The pointer may move into the card (the
 element-union-card is the keep-open area) and it closes about 120 ms after the
 pointer leaves; exactly one card is open at a time; opening the popover or
 pressing Esc closes it, and the page press that starts a new selection dismisses
-it first. It is opened by hover only and never steals focus; Edit requirement /
-Add requirement explicitly focus the rainbow-wrapped textarea, where Save bumps
+it first. It is opened by hover only and never steals focus; Edit change /
+Add change explicitly focus the rainbow-wrapped textarea, where Save bumps
 `updatedAt` and both Save and Cancel return to the read view. The popover and the
 detail card are mutually exclusive.
 
@@ -598,8 +600,8 @@ width, internal scroll, no wide drawer. Rows are ordered and numbered, and each
 row shows the element name, the locator summary, and its per-entry note; a row
 whose origin Session is the current Session also shows its resolution status,
 while an other-session row shows the **Other session** badge instead. When the
-collection is empty the view shows **No annotated elements** with the hint
-**Select an element, write a note, then add it to the collection.**
+collection is empty the view shows **No annotations yet** with the hint
+**Select an element on the page to add your first annotation.**
 
 ![Collection view in the rail with ordered annotated rows and inline notes](assets/annotation-collection.png)
 
@@ -607,7 +609,7 @@ collection is empty the view shows **No annotated elements** with the hint
   whole collection, so it is obvious what a batch insert will touch.
 - **Selection / include** — every row has a native include checkbox. Only
   current-Session rows can be included; an other-Session row is dashed, disabled,
-  and explained with **From another session; batch insert skips it**. **Select
+  and explained with **From another session. Batch insert skips it.** **Select
   current session** includes every current row, **Clear selection** deselects all.
 - **Order and moves** — entries stay in insertion order. The inline ↑/↓ controls
   move one row, keep the persisted `order` contiguous, and the footer states that
@@ -631,17 +633,18 @@ collection is empty the view shows **No annotated elements** with the hint
   The button is disabled with a visible reason when nothing is selectable (empty
   collection, no current Session, or only other-Session rows). The selected count
   is shown in the footer and the button label.
-- **Clear** empties the list in one click with no confirmation dialog and enters
-  the same 5 s undo slot.
+- **Cancel annotation** in the footer (or the header X / final Esc step) opens
+  the exit confirmation (**Clear & exit**), which clears every single/group
+  record and exits the mode.
 - **Cap** — the collection and its persisted document hold at most **100 elements**
   (single records plus every group item)
   annotations. Adding the 101st record is refused before it is committed, with a
   visible message (**The collection is full (100 annotations)…**); the collection
   view also states the cap once it is reached. Nothing is silently dropped and no
   record is evicted.
-- **Re-locate** scrolls a still-resolving element into view, flashes its
+- **Go to element** scrolls a still-resolving element into view, flashes its
   highlight for about 600 ms, and reports **Moved to the element**. If the
-  element no longer resolves, the action reports **The element cannot be located
+  element no longer resolves, the action reports **Cannot locate the element
   ({status})** instead of failing silently. Other-session entries refuse the
   action with **This annotation belongs to another session** because their DOM
   belongs to a different placement of the page.
@@ -681,8 +684,9 @@ created in.
   persisted.
 - Persistence is **local to this browser profile**: there is no Host write, no
   Session-log entry, and no cross-device sync. Notes, locators, `cwd`, and the
-  route stay on the machine. Clearing browser site data removes them; the
-  collection's **Clear** action also empties the persisted document.
+  route stay on the machine. Clearing browser site data removes them; confirming
+  **Clear & exit** when leaving annotation mode also empties the persisted
+  document.
 
 ### De-duplication
 
@@ -703,14 +707,14 @@ inserted, so a stale annotation is visible before it is used:
 |---|---|---|
 | Resolved | Exactly one element matches the candidates and its text is unchanged. | none |
 | Ambiguous | More than one element matches the candidates. | `Status: target matches more than one element (locator only)` / `状态：目标匹配到多个元素（仅保留定位信息）` |
-| Missing | No element matches any candidate any more. | `Status: target no longer resolves (locator only)` / `状态：目标已无法定位（仅保留定位信息）`; for a floating-surface record the honest variant is `Status: transient surface no longer present (locator only)` / `状态：瞬态浮层已不存在（仅保留定位信息）` |
+| Missing | No element matches any candidate any more. | `Status: target no longer resolves (locator only)` / `状态：目标已无法定位（仅保留定位信息）`; for a floating-surface record the honest variant is `Status: temporary surface no longer present (locator only)` / `状态：临时浮层已不存在（仅保留定位信息）` |
 | Changed | The element still matches but its text is different from the annotation. | `Status: target content changed` / `状态：目标内容已变化` |
 
 Both insertion paths mark a non-resolved target: a single reference adds the
 line after its `Note` line (making it five lines instead of four), and a batch
 item adds it indented under that item's `Note` line. Only the reference text and
 the recorded locator are inserted; the plugin never
-modifies the page to fix a stale reference. Re-locate works only for a resolved
+modifies the page to fix a stale reference. **Go to element** works only for a resolved
 element and explains why when it cannot.
 
 ### Multi-strategy anchors (CSS → text quote → text position → XPath)
@@ -731,7 +735,7 @@ Resolution order on every re-resolve is **CSS candidates → text quote → text
 position → XPath last**; the first unique match wins and the UI shows a small
 `via` hint (`· text anchor`, `· text position`, `· XPath`) beside the status. Only
 a unique text quotation resolves — multiple matches report **Matches several**;
-absent or changed text reports **No longer resolves** / **Content changed**
+absent or changed text reports **No longer on the page** / **Content changed**
 honestly. The popover/detail status keeps the captured locator text unchanged;
 only the status line and `via` hint update.
 
@@ -764,8 +768,8 @@ or node the action shows an honest unavailable toast.
   report Matches several and later text-position/XPath fallbacks cannot override
   it (self-anchor text resolution keeps the older weak-ambiguity chain).
 - **Confidence wording:** the four statuses are unchanged, but when the weak-identity
-  structural gate produces `changed` the UI shows **Unverifiable · weak identity**
-  (`无法验证 · 弱身份`, `data-psa-confidence="weak"`) in popover, detail card and
+  structural gate produces `changed` the UI shows **Unverified · weak match**
+  (`无法确认 · 定位较弱`, `data-psa-confidence="weak"`) in popover, detail card and
   rail row instead of “Content changed”.
 - **Identity limits:** elements without a stable identity (icon-only, no
   `data-testid`/`data-*`, no accessible name, or a stale verified selector) cannot
@@ -774,7 +778,7 @@ or node the action shows an honest unavailable toast.
   hits additionally need captured-ancestor corroboration and, when a text quote
   exists, the quote must assert on the candidate. Weak identity with a resolvable
   quote and a still-present surface may honestly report Content changed
-  (“Unverifiable · weak identity”). Transient/floating records whose captured
+  (“Unverified · weak match”). Transient/floating records whose captured
   surface is gone are **Missing**, never Changed/Resolved. Host apps should give
   annotatable elements stable `data-testid`/`data-*` or real accessible names.
 - **Scan/cache probe:** fallback resolution counts resolver invocations and cache misses
@@ -906,7 +910,7 @@ even when the captured text itself was empty or truncated.
 
 **Why some targets are red and others green.** Green **Resolved** means the
 captured locator still matches exactly one element whose text/name is unchanged.
-Red **Missing** / **No longer resolves** means the captured element is not in the
+Red **Missing** / **No longer on the page** means the captured element is not in the
 DOM any more (or, for a floating record, its transient surface is gone); that is
 a truthful report, not an error: the chat flow streams and virtualizes, so a
 leaf inside a message can be unmounted or replaced after it was annotated. The
@@ -985,18 +989,18 @@ afterwards, and is never sent automatically.
   is submitted; nothing is sent by the annotation feature itself. A single chip
   serializes exactly like the quick-reference block below; the batch chip
   serializes exactly like the ordered batch request below, where a batch group
-  contributes its shared `Requirement:` header followed by its numbered element
-  references and a single item keeps its Note line. A single chip whose
+  contributes its shared `Shared change:` header (`共用修改说明：` in Chinese) followed by its numbered element
+  references and a single item keeps its `Change:` line. A single chip whose
   record no longer exists fails serialization (the shell blocks the send and the
   chip renders its failure treatment) instead of silently downgrading; a batch
   chip skips deleted members and adds an explicit
-  `({count} annotation(s) no longer exist and were skipped)` line, and if every
+  `({count} deleted annotations skipped)` line (or `(1 deleted annotation skipped)` for a single item), and if every
   member is gone it emits the explicit `(no annotations remain for this
   reference)` line rather than an empty prompt.
 - **Fallback (D9)** — when there is no composer, no current Session, the
   insertion span changed, or the chip services are not installed, the same action
-  inserts the plain-text block instead and reports **Reference chips unavailable
-  here; inserted as plain text**. A missing inserted-session notification still
+  inserts the plain-text block instead and reports **Reference chips are unavailable
+  here. Inserted as plain text.** A missing inserted-session notification still
   reports **Open a session before inserting a reference**.
 - **Accessibility** — the chip is part of the shell's native editor (focusable
   draft, standard Backspace/undo semantics); the rail checkboxes are native
@@ -1014,7 +1018,7 @@ English:
 UI annotation · <name>
 Reference: <locator summary>
 Session: <session short> · <HH:MM>
-Note: <note or "—">
+Change: <note or "—">
 ```
 
 `<locator summary>` prefers the verified-unique selector when capture could build
@@ -1029,7 +1033,7 @@ Chinese:
 UI 标注 · <name>
 定位：<locator summary>
 会话：<session short> · <HH:MM>
-备注：<note or "—">
+修改说明：<note or "—">
 ```
 
 `<session short>` is the session-identifying part of the Session id: the
@@ -1046,13 +1050,13 @@ A single reference to a stale target gains a fifth line, for example:
 UI annotation · Old toolbar
 Reference: div "Toolbar" · [data-testid="toolbar"]
 Session: c5864acd · 09:12
-Note: Align the actions to the right edge
+Change: Align the actions to the right edge
 Status: target no longer resolves (locator only)
 ```
 
 A vanished floating-surface target says so explicitly instead of pretending it
-moved: `Status: transient surface no longer present (locator only)` /
-`状态：瞬态浮层已不存在（仅保留定位信息）`.
+moved: `Status: temporary surface no longer present (locator only)` /
+`状态：临时浮层已不存在（仅保留定位信息）`.
 
 ### Batch request (collection) — group-chip serialization
 
@@ -1065,20 +1069,20 @@ line. A non-resolved entry keeps its block and adds an explicit status line.
 English, with a skipped cross-session entry and one stale target:
 
 ```text
-Please adjust the UI elements below. Each item lists its reference and the requested change.
-(1 annotation(s) from other sessions skipped)
+Adjust the UI elements below. Each item lists its reference and the requested change.
+(1 annotation from another session skipped)
 
 1. New session
    Reference: button "New session" · div[data-slot="sidebar"] > div:nth-of-type(1) > button:nth-of-type(1)
-   Note: Make this button sticky in the header
+   Change: Make this button sticky in the header
 
 2. Artifacts
    Reference: button "Artifacts" · [role="tab"]
-   Note: —
+   Change: —
 
 3. Old toolbar
    Reference: div "Toolbar" · [data-testid="toolbar"]
-   Note: Align the actions to the right edge
+   Change: Align the actions to the right edge
    Status: target no longer resolves (locator only)
 ```
 
@@ -1086,20 +1090,20 @@ Chinese uses the same structure with the localized title, field labels, skip
 line, and status line:
 
 ```text
-请调整以下 UI 元素，每项都附有定位和修改说明。
+请调整以下 UI 元素。每项都附有定位和修改说明。
 （已跳过 1 条来自其他会话的标注）
 
 1. 新建会话
    定位：button "新建会话" · [aria-label="新建会话"]
-   备注：把这个按钮固定在标题栏
+   修改说明：把这个按钮固定在标题栏
 
 2. 会话产物
    定位：button "会话产物" · [role="tab"]
-   备注：—
+   修改说明：—
 
 3. 旧工具栏
    定位：div "工具栏" · [data-testid="toolbar"]
-   备注：把操作对齐到右侧
+   修改说明：把操作对齐到右侧
    状态：目标已无法定位（仅保留定位信息）
 ```
 
@@ -1634,7 +1638,7 @@ Phase 2 UX pass along with the new detail card and marks.
   virtualization accepts `missing`, `ambiguous`, `changed`, or `resolved` (that
   tolerance applies to the rebuilt row only). Only the current entry is inserted;
   the skip line's extracted count must equal the other-scope entry count (EN
-  `(N annotation(s) from other sessions skipped)` / ZH `另有 N 条…`); a leak check
+  `(N annotations from other sessions skipped)` / `(1 annotation from another session skipped)` / ZH `另有 N 条…`); a leak check
   over every other-scope entry's name, note, and locator text (tokens of 6+
   characters) proves none of it reaches the composer; and re-locate is invoked on
   the other-scope row's own control, must show `This annotation belongs to

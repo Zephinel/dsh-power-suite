@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "DSH 增强套件",
-    "description": "一个插件里持续增加的 DSH Web GUI 小能力：会话产物与悬停预览、动态工作区与 Running & recent 卡片、提示历史与草稿附件记忆、中断会话恢复、UI 元素标注、Host 同步的左侧栏宽度，以及它们的设置。"
+    "description": "在一个插件中增强 DeepSeek Harness Web 体验。提供会话产物与悬停预览、运行中与最近卡片、动态工作区、提示历史、草稿附件记忆、中断会话恢复、UI 元素标注和跨端同步的左侧栏宽度。"
   }
 }

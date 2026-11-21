@@ -154,7 +154,7 @@ and the trigger keeps a focus ring.
   log (no list-route request);
 - the header count switches to `{shown} of {total} artifacts` while a filtered
   view is active, and a filter whose result set is empty shows
-  **No artifacts in this filter**;
+  **No artifacts match this filter**;
 - a different Session resets the filter to All, so a filter cannot hide every
   new row.
 

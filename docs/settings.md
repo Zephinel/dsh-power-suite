@@ -50,17 +50,17 @@ keeps its project Active).
 
 | Setting | Values | Default |
 |---|---|---|
-| Finished Session retention | 1 hour, 2 hours, 6 hours, 12 hours, 24 hours | **2 hours** |
+| Finished session retention | 1 hour, 2 hours, 6 hours, 12 hours, 24 hours | **2 hours** |
 | Active project retention | 1 day, 3 days, 7 days, 14 days, 30 days | **7 days** |
 
-- **Finished Session retention** — how long a finished Session stays in the
+- **Finished session retention** — how long a finished Session stays in the
   **Running & recent** card, including nested subagent rows, after its last
-  activity. The hint reads e.g. `Currently 2 hours. Finished Sessions leave the
-  card after this window.` (field `recentSessionMinutes`, stored in minutes).
+  activity. The hint reads e.g. `Currently 2 hours. Finished sessions leave
+  Running & recent after this window.` (field `recentSessionMinutes`, stored in minutes).
 - **Active project retention** — how long a project stays in **Active
   Projects** after its last activity before it moves to **Inactive Projects**.
-  The hint reads e.g. `Currently 7 days. After this window the project moves to
-  Inactive Projects.` (field `activeProjectDays`).
+  The hint reads e.g. `Currently 7 days. Projects move to Inactive Projects
+  after this window.` (field `activeProjectDays`).
 
 A change applies immediately in the browser that made it: the card, its nested
 subagent rows, and the Active/Inactive buckets re-derive on the next render

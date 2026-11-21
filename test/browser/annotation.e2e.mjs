@@ -4420,7 +4420,7 @@ function buildScenarios(harness) {
       assert(noSessionState.notice, 'the collection rail is missing [data-psa-no-session] while no session is mounted (F8)')
       assert(/session|会话/i.test(noSessionState.noticeText), `the no-session notice is not explicit: ${JSON.stringify(noSessionState.noticeText)}`)
       assert(
-        !/from other sessions will be skipped|来自其他会话/.test(noSessionState.panelText),
+        !/from (?:other sessions|another session) (?:are|is) skipped|来自其他会话/.test(noSessionState.panelText),
         `the generic cross-session skip line must be hidden when no session exists (F8): ${short(noSessionState.panelText, 220)}`
       )
       assertEqual(noSessionState.batchDisabled, true, 'batch insert must be disabled when no session is mounted')
@@ -4480,7 +4480,7 @@ function buildScenarios(harness) {
         'batch insert must be disabled while only other-session entries exist'
       )
       const panelText = (await h.ui()).panelText
-      assert(/from other sessions will be skipped|来自其他会话/.test(panelText), `cross-session notice missing from the rail: ${short(panelText, 220)}`)
+      assert(/from (?:other sessions|another session) (?:are|is) skipped|来自其他会话/.test(panelText), `cross-session notice missing from the rail: ${short(panelText, 220)}`)
       // Add one current-session entry in session B so the collection has mixed scope.
       await h.clickBack()
       await h.selectElement('button[aria-label="New session"]')
@@ -4560,7 +4560,7 @@ function buildScenarios(harness) {
       assert(/UI annotations|UI 标注/.test(mixedLabel), `the mixed-scope chip is not the batch group label: ${short(mixedLabel)}`)
       assert(/×\s*1|×1/.test(mixedLabel), `the mixed-scope group chip must cover exactly the one current entry: ${short(mixedLabel)}`)
       const mixedText = mixedChip.text || ''
-      assert(!/\(\d+ annotation\(s\) from other sessions skipped\)|来自其他会话/.test(mixedText),
+      assert(!/\(\d+ annotations? from (?:other sessions|another session) skipped\)|来自其他会话/.test(mixedText),
         'the chip draft must not carry the plain skipped line (it belongs to the send-time codec/rail notice)')
       assert(!/^\d+\. /m.test(mixedText), 'the mixed-scope chip must not insert numbered plain blocks')
       // N4: leak check covers the entry name, note and locator text of every other-scope row.
@@ -7168,7 +7168,7 @@ function buildScenarios(harness) {
       assert(weakState !== null, 'weak-label record row missing')
       assertEqual(weakState.status, 'changed', `A3/T49: weak identity edit should be Changed: ${JSON.stringify(weakState)}`)
       assertEqual(weakState.confidence, 'weak', `A3/T49: weak identity Changed must be Unverifiable: ${JSON.stringify(weakState)}`)
-      assert(/Unverifiable|无法验证/.test(weakState.label + weakState.title), `A3/T49: weak label wording missing: ${JSON.stringify(weakState)}`)
+      assert(/Unverified|无法确认/.test(weakState.label + weakState.title), `A3/T49: weak label wording missing: ${JSON.stringify(weakState)}`)
       assert(!/Content changed/.test(weakState.label + weakState.title), `A3/T49: weak record must not read Content changed: ${JSON.stringify(weakState)}`)
       await h.page.evaluate(`(() => { document.getElementById('psa-scope-a')?.parentElement?.remove(); localStorage.setItem('psa-scope-seed', 'done'); return true })()`)
       await h.ensureStatusPanel()
@@ -7230,8 +7230,8 @@ function buildScenarios(harness) {
         add: document.querySelector('[data-psa-add]')?.innerText ?? '',
         hasDelete: document.querySelector('[data-psa-popover-delete]') !== null
       })`)
-      assert(/Mark requirement|标记需求/.test(unmarkedActions.add),
-        `A3/T22: an unmarked selection must offer Mark requirement, got "${unmarkedActions.add}"`)
+      assert(/Save change|保存修改说明/.test(unmarkedActions.add),
+        `A3/T22: an unmarked selection must offer Save change, got "${unmarkedActions.add}"`)
       assertEqual(unmarkedActions.hasDelete, false,
         'A3/T22: an unmarked selection must not show a delete button (nothing to delete yet)')
       await h.click('[data-psa-add]')
@@ -7258,7 +7258,7 @@ function buildScenarios(harness) {
       const singleChipText = String(singleChip.chips[0].text || '')
       assert(singleChipText.includes('@'), `the single chip lost its @ glyph: ${short(singleChipText)}`)
       assert(singleChipText.replace(/^@/, '').trim().length > 0, `the single chip label is empty: ${short(singleChipText)}`)
-      assert(!/UI annotation ·|Reference:|Note:|Status:/.test(singleChip.text || ''), `the draft still contains the plain 4-line block: ${short(singleChip.text, 260)}`)
+      assert(!/UI annotation ·|Reference:|Note:|Change:|Status:/.test(singleChip.text || ''), `the draft still contains the plain 4-line block: ${short(singleChip.text, 260)}`)
       const transcriptBefore = await h.transcript()
       assertEqual(transcriptBefore.messages, 0, 'the chip insertion sent a message')
 
@@ -7298,7 +7298,7 @@ function buildScenarios(harness) {
       assert(/Locator|Reference|定位/.test(chipPreview.text), `the chip preview is missing the locator label: ${short(chipPreview.text)}`)
       assert(/\d+, \d+ · \d+×\d+/.test(chipPreview.text), `the chip preview is missing the position box: ${short(chipPreview.text)}`)
       assert(/Session|会话/.test(chipPreview.text) && /Workspace|工作区/.test(chipPreview.text), `the chip preview is missing session/workspace: ${short(chipPreview.text)}`)
-      assert(/Resolved|已解析/.test(chipPreview.text), `the chip preview is missing the live status: ${short(chipPreview.text)}`)
+      assert(/Resolved|可定位/.test(chipPreview.text), `the chip preview is missing the live status: ${short(chipPreview.text)}`)
       if (process.env.PSA_CHIP_EVIDENCE_DIR) {
         await mkdir(process.env.PSA_CHIP_EVIDENCE_DIR, { recursive: true })
         const pad = 14
@@ -7363,8 +7363,8 @@ function buildScenarios(harness) {
         add: document.querySelector('[data-psa-add]')?.innerText ?? '',
         hasDelete: document.querySelector('[data-psa-popover-delete]') !== null
       })`)
-      assert(/Update requirement|更新需求/.test(markedActions.add),
-        `A3/T22: an already-marked selection must offer Update requirement, got "${markedActions.add}"`)
+      assert(/Update change|更新修改说明/.test(markedActions.add),
+        `A3/T22: an already-marked selection must offer Update change, got "${markedActions.add}"`)
       assertEqual(markedActions.hasDelete, true,
         'A3/T22: an already-marked selection must show the delete (trash) button')
       await h.click('[data-psa-quick-ref]')

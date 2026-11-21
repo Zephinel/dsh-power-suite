@@ -60,7 +60,7 @@ xerj corpus list            # ui-annotation-refs (loaded)
 |---|---|
 | Leaf-first picking, Parent/Child, surface root | DevTools `InspectElementModeController` + overlay; browser-use DOM tree |
 | Ordered selector candidates + verified unique CSS selector | DevTools `DOMPath.cssPath` (structure only), finder, css-selector-generator, Playwright `selectorGenerator` |
-| Four honest statuses (Resolved/Matches several/No longer resolves/Content changed) | Hypothesis anchoring recovery, W3C selector fallbacks |
+| Four honest statuses (Resolved/Matches several/No longer on the page/Content changed) | Hypothesis anchoring recovery, W3C selector fallbacks |
 | Page marks with one ordinal per group | browser-use Set-of-Marks/highlight index |
 | Pinning hover-triggered surfaces while editing | DevTools overlay/inspect-mode model (highlight survives pointer movement) |
 | Detail card / popover placement and clamping | Floating UI middleware |

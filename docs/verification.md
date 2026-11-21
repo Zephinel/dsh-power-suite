@@ -36,15 +36,15 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 ### Current gates (2026-11-20, Node 24.22.3)
 
 - `npm run build`: **`lib/index.js` 105.9 kB** (Host ESM bundle) and
-  **`lib/client.js` 940.6 kB** (ESM `src/client.js` + `src/browser/` bundled to a
+  **`lib/client.js` 939.8 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **403 tests, 403 passed, 0 failed**, **29 test files** — Host
+- `npm test`: **411 tests, 411 passed, 0 failed**, **30 test files** — Host
   stores/routes plus browser-side derivations, the atmosphere motion model, the
   release-notes approval round-trip, the protocol contract guard for duplicated
   route/enum literals, the shared route and settings contracts, the durable
-  document-store interface, and direct Node tests for the extracted browser
-  models.
+  document-store interface, the bilingual UI copy text fence and edge-value suite,
+  and direct Node tests for the extracted browser models.
 - `npm run typecheck`: `tsc --noEmit --strict` clean over **all** Host and browser
   TypeScript sources, including the ESM entry `src/client.js` (zero `@ts-nocheck`
   / `@ts-ignore` suppressions). `npm run typecheck:browser` is a second, DOM-lib
@@ -52,17 +52,17 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 - `npm run check` reports an explicit-`any` budget: **0 sites** in `src/**/*.ts`;
   the gate strips comments/strings and fails on any `any` code token (aliases,
   unions and generics included) — a lexical tripwire at 0, not a proof.
-- `npm run check:docs-links`: **28 Markdown files** ok (local links/images
+- `npm run check:docs-links`: **29 Markdown files** ok (local links/images
   resolve, shipped relative links stay inside `package.json` `files`, zero
   personal `/Users/<name>/` paths in shipped docs, and no non-portable `> [!`
   alerts in `README.md`).
-- `npm run check`: passed (`99 TypeScript modules, 1 JavaScript module(s), 29 test files`);
+- `npm run check`: passed (`100 TypeScript modules, 1 JavaScript module(s), 30 test files`);
   it builds `lib/` first, then runs syntax checks, strict/Host/browser typechecks,
   package-manifest validation, the built-entry smoke (update route reports
   `current=0.2.1`) and built-browser smoke (8 injects), local docs/hygiene checks,
-  the 403-test Node suite, and the release-notes gate (`0.2.1; 2 highlights, 2 English`),
+  the 411-test Node suite, and the release-notes gate (`0.2.1; 2 highlights, 2 English`),
   then `pack:check`.
-- `npm run pack:check`: **79 files**; inspect the file list rather than the byte totals
+- `npm run pack:check`: **80 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).
 - Browser e2e (2026-11-18; current HEAD): live smoke is `sidebar.e2e.mjs
   --smoke` **4/4**, `annotation.e2e.mjs --smoke` **6/6** (now including a

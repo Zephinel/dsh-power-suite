@@ -9,14 +9,14 @@ against a fresh build before installing.
 
 | Command | Expected (2026-11-20) | What it proves |
 | --- | --- | --- |
-| `npm run check` | Builds first (`build: index.js 105.9 kB, client.js 935.7 kB`), then `typecheck: ok (tsc --noEmit --strict over Host and browser sources; the browser profile gates next)` with `any budget: 0 explicit any sites in src/**/*.ts (limit 0)`, `suppression budget: 0`, `host typecheck: ok`, `built-entry smoke: update route reports current=0.2.1`, `built-browser smoke: @zephinel/dsh-power-suite registered; factory exposes 8 injects`, `docs links ok: 28 Markdown files`, `node --test` **403 tests / 403 pass / 0 fail**, `release-notes: ok (0.2.1; 2 highlight(s), 2 English)`, `check passed: 99 TypeScript modules, 1 JavaScript module(s), 29 test files`, browser ratchet `0 diagnostics (baseline 0)`, and `pack:check` `"entryCount": 79` | Built `lib/` entries, syntax, strict/Host/browser typechecks, package manifest, local/tarball docs hygiene, pure-logic tests, release-notes gate, and packed file set |
+| `npm run check` | Builds first (`build: index.js 105.9 kB, client.js 939.8 kB`), then `typecheck: ok (tsc --noEmit --strict over Host and browser sources; the browser profile gates next)` with `any budget: 0 explicit any sites in src/**/*.ts (limit 0)`, `suppression budget: 0`, `host typecheck: ok`, `built-entry smoke: update route reports current=0.2.1`, `built-browser smoke: @zephinel/dsh-power-suite registered; factory exposes 8 injects`, `docs links ok: 29 Markdown files`, `node --test` **411 tests / 411 pass / 0 fail**, `release-notes: ok (0.2.1; 2 highlight(s), 2 English)`, `check passed: 100 TypeScript modules, 1 JavaScript module(s), 30 test files`, browser ratchet `0 diagnostics (baseline 0)`, and `pack:check` `"entryCount": 80` | Built `lib/` entries, syntax, strict/Host/browser typechecks, package manifest, local/tarball docs hygiene, pure-logic tests, release-notes gate, and packed file set |
 | `npm run typecheck:browser` | Browser-profile diagnostics for `src/client.js` + `src/browser/` (`tsc -p tsconfig.browser.json`, DOM lib): current baseline is **0 diagnostics**, and `--check` gates `npm run check` | Browser-typing ratchet at 0 diagnostics (actively gated by `npm run check`) |
-| `npm run build` (`node scripts/build.mjs`) | `build: index.js 105.9 kB, client.js 935.7 kB`; writes the gitignored `lib/index.js` (Host ESM) and `lib/client.js` (ESM browser entry + `src/browser/` modules bundled to a classic script) | esbuild bundles the two entries and asserts the Host Loader contract (name `power-suite`, non-empty `inject`, `apply`), the browser entry's DSH module-loader call and package id, and package self-reference |
-| `npm test` | `node --test test/*.test.js`: **403 pass, 0 fail, 29 files** (needs Node >= 22.18, no build needed) | Host stores/routes plus browser-side pure models; does not read docs prose |
+| `npm run build` (`node scripts/build.mjs`) | `build: index.js 105.9 kB, client.js 939.8 kB`; writes the gitignored `lib/index.js` (Host ESM) and `lib/client.js` (ESM browser entry + `src/browser/` modules bundled to a classic script) | esbuild bundles the two entries and asserts the Host Loader contract (name `power-suite`, non-empty `inject`, `apply`), the browser entry's DSH module-loader call and package id, and package self-reference |
+| `npm test` | `node --test test/*.test.js`: **411 pass, 0 fail, 30 files** (needs Node >= 22.18, no build needed) | Host stores/routes plus browser-side pure models and copy-fence tests; does not read docs prose |
 | `npm run typecheck` (`tsc --noEmit --strict`) | clean; `strict: true` over **all** Host and browser TypeScript sources including `src/client.js` (no `@ts-nocheck`), explicit `any` budget 0 | Type-only gate for Host, shared protocol, and browser modules |
-| `npm run check:docs-links` (`node scripts/check-docs-links.mjs`) | `docs links ok: 28 Markdown files` | Local links/images resolve across `docs/**/*.md`, `.agents/skills/**/*.md`, `README.md`, `CHANGELOG.md`, `PRODUCT.md`; shipped relative links stay inside `package.json` `files`; shipped docs contain no `/Users/<name>/` personal paths; `README.md` contains no `> [!` GitHub alerts |
+| `npm run check:docs-links` (`node scripts/check-docs-links.mjs`) | `docs links ok: 29 Markdown files` | Local links/images resolve across `docs/**/*.md`, `.agents/skills/**/*.md`, `README.md`, `README.zh.md`, `CHANGELOG.md`, `PRODUCT.md`; shipped relative links stay inside `package.json` `files`; shipped docs contain no `/Users/<name>/` personal paths; `README.md` and `README.zh.md` contain no `> [!` GitHub alerts |
 | `npm run check:release-notes` (`node scripts/check-release-notes.mjs`) | `release-notes: ok (0.2.1; 2 highlight(s), 2 English)` | `release-notes/<package version>.md` exists with `## Highlights` bullets; optional `.en.md` validated when present |
-| `npm run pack:check` | 79 files; contains `lib/`, `docs/` (incl. `docs/assets/`), `assets/`, `locale/`, `release-notes/`, `README.md`, `CHANGELOG.md`, `PRODUCT.md`, `LICENSE`, `NOTICE`, `icon.png`, `cordis.patch.yml`; excludes `src/`, `.agents/`, `test/`, `.github/` | Shipped-file claims and package entry count |
+| `npm run pack:check` | 80 files; contains `lib/`, `docs/` (incl. `docs/assets/`), `assets/`, `locale/`, `release-notes/`, `README.md`, `README.zh.md`, `CHANGELOG.md`, `PRODUCT.md`, `LICENSE`, `NOTICE`, `icon.png`, `cordis.patch.yml`; excludes `src/`, `.agents/`, `test/`, `.github/` | Shipped-file claims and package entry count |
 | `npm run check:release` (`node scripts/release-check.mjs`) | `release-check: PASS` in ~9 s; needs `dsh` and `pnpm` on PATH; uses a throwaway `$DSH_HOME` and isolated Web instance | Tarball build/byte-identity/install/boot/uninstall check (local only, not in CI) |
 | `node scripts/check-publish-manifest.mjs` | `publish manifest ok: @zephinel/dsh-power-suite@0.2.1` | Release readiness check (not part of `npm run check`) |
 | CI `.github/workflows/ci.yml` | `verify` on Node 22 and 24; `changes` classifies docs-only as `CHANGELOG.md`, `PRODUCT.md`, `docs/**`, `.agents/**`; docs-only runs only `npm run check:docs-links`; anything else runs `npm run check` plus `git diff --exit-code`; no browser job | The CI claims in README/`docs/development.md`; also why a docs-only change still fails on a broken skill link |
@@ -74,12 +74,11 @@ grep -nE 'eleven|11 scenarios|SCENARIO_ORDER = ' test/browser/README.md test/bro
 ```
 
 # 6. README stays a landing page, not a manual (contract: SKILL.md § README
-#    contract (anti-rot)). Baseline 2026-11-17: 235 lines / ~21 KB, 11 table rows.
-wc -l -c README.md
-grep -c '^| \[' README.md          # expect 11 feature rows
-grep -q 'docs/README.md' README.md && echo 'docs index linked'
+#    contract (anti-rot)). Current shape: 135 lines / ~12.7 KB, 6 feature rows + 5 doc-index rows.
+wc -l -c README.md README.zh.md
+grep -q 'docs/README.md' README.md && grep -q 'docs/README.md' README.zh.md && echo 'docs index linked'
 # Doc-only long-form sections must not come back (settings/routes/limits/...).
-grep -nE '^## (Settings|Routes|Limits|Troubleshooting|Verification|Release notes)' README.md \
+grep -nE '^## (Settings|Routes|Limits|Troubleshooting|Verification|Release notes)' README.md README.zh.md \
   || echo 'no doc-only sections'
 
 Also verify by hand:

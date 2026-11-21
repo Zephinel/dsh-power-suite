@@ -3948,7 +3948,10 @@ export function createAnnotationController(t: DshTranslate, ctx: AnnotationContr
     closeDetailCard({ keepMarker: true })
     dispatch({ type: 'groupAdd', group })
     dispatch({ type: 'selectSingle', ref: null })
-    if (settingsForCommit.feedback !== false) feedback(t('feedback.groupAdded', { count: annotationGroupItems(group).length }))
+    if (settingsForCommit.feedback !== false) {
+      const groupCount = annotationGroupItems(group).length
+      feedback(groupCount === 1 ? t('feedback.groupAddedOne') : t('feedback.groupAdded', { count: groupCount }))
+    }
     return true
   }
 
@@ -4974,7 +4977,7 @@ export function createAnnotationController(t: DshTranslate, ctx: AnnotationContr
     const status = statusOf(ref)
     const node = status === 'resolved' ? liveNode(ref) : null
     if (node === null) {
-      feedback(t('feedback.relocateFailed', { status: t(`popover.status.${status}`) }), 'error')
+      feedback(t('feedback.relocateFailed', { status: t(`feedback.relocateReason.${status}`) }), 'error')
       return
     }
     const scrollHost = node as unknown as {

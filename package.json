@@ -9,7 +9,7 @@
     "access": "public"
   },
   "type": "module",
-  "description": "One DeepSeek Harness Web plugin that adds session artifacts, Dynamic Workspaces, prompt history, draft attachment memory, interrupted-session recovery, UI element annotation, a Host-synced sidebar width, and their settings.",
+  "description": "One DeepSeek Harness Web plugin that adds session artifacts, Dynamic Workspaces, prompt history, draft attachment memory, interrupted-session recovery, UI element annotation, synced sidebar width, and their settings.",
   "main": "./lib/index.js",
   "exports": {
     ".": "./lib/index.js",

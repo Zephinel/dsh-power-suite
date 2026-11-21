@@ -128,15 +128,18 @@ function sessionIdOf(ref: unknown): unknown {
 function serializeGroupBlock(group: unknown, items: readonly unknown[], labels: unknown): string {
   const source = asRecord(labels)
   const reference = typeof source.reference === 'string' ? source.reference : 'Reference:'
-  const requirementLabel = typeof source.groupRequirement === 'string' ? source.groupRequirement : 'Requirement:'
+  const requirementLabel = typeof source.groupRequirement === 'string' ? source.groupRequirement : 'Shared change:'
   const referenceLabel = typeof source.groupReference === 'string' ? source.groupReference : 'Element:'
   const groupHeader = typeof source.groupHeader === 'string' ? source.groupHeader : 'Group'
   const statusLabel = typeof source.status === 'string' ? source.status : 'Status: target no longer resolves (locator only)'
-  const statusEphemeral = typeof source.statusEphemeral === 'string' ? source.statusEphemeral : 'Status: transient surface no longer present (locator only)'
+  const statusEphemeral = typeof source.statusEphemeral === 'string' ? source.statusEphemeral : 'Status: temporary surface no longer present (locator only)'
   const statusAmbiguous = typeof source.statusAmbiguous === 'string' ? source.statusAmbiguous : 'Status: target matches more than one element (locator only)'
   const statusChanged = typeof source.statusChanged === 'string' ? source.statusChanged : 'Status: target content changed'
   const requirement = normalizeUserNote(annotationIsGroup(group) ? group.requirement : '')
-  const lines = [`${groupHeader} · ${items.length} ${String(source.itemsCountLabel ?? 'items')}`]
+  const countLabel = items.length === 1
+    ? String(source.itemsCountLabelOne ?? (typeof source.itemsCountLabel === 'string' ? source.itemsCountLabel : 'item'))
+    : String(source.itemsCountLabel ?? 'items')
+  const lines = [`${groupHeader} · ${items.length} ${countLabel}`]
   lines.push(`   ${annotationJoinLabel(requirementLabel, requirement || (typeof source.emptyNote === 'string' ? source.emptyNote : '—'))}`)
   items.forEach((item, index) => {
     const ref = refOfItem(item)
@@ -314,7 +317,7 @@ export function serializeQuickReference(ref: unknown, note: unknown, labels: unk
   const title = typeof source.title === 'string' ? source.title : 'UI annotation'
   const reference = typeof source.reference === 'string' ? source.reference : 'Reference:'
   const sessionLabel = typeof source.session === 'string' ? source.session : 'Session:'
-  const noteLabel = typeof source.note === 'string' ? source.note : 'Note:'
+  const noteLabel = typeof source.note === 'string' ? source.note : 'Change:'
   const emptyNote = typeof source.emptyNote === 'string' ? source.emptyNote : '—'
   const timeText = typeof source.time === 'string' ? source.time : formatAnnotationTime(recordOrNull(ref)?.at)
   const sessionText = sessionShortLabel(sessionIdOf(ref)) || (typeof source.noSession === 'string' ? source.noSession : '—')
@@ -330,8 +333,10 @@ export function serializeQuickReference(ref: unknown, note: unknown, labels: unk
   const status = recordOrNull(ref)?.status
   const ephemeral = isEphemeralRef(ref)
   if (status === 'missing') {
-    lines.push(ephemeral && typeof source.statusEphemeral === 'string'
-      ? source.statusEphemeral
+    lines.push(ephemeral
+      ? (typeof source.statusEphemeral === 'string'
+        ? source.statusEphemeral
+        : 'Status: temporary surface no longer present (locator only)')
       : (typeof source.status === 'string' ? source.status : 'Status: target no longer resolves (locator only)'))
   }
   else if (status === 'ambiguous') lines.push(typeof source.statusAmbiguous === 'string' ? source.statusAmbiguous : 'Status: target matches more than one element (locator only)')
@@ -350,24 +355,36 @@ export function serializeBatchRequest(items: unknown, labels: unknown): string {
   const source = asRecord(labels)
   const batchHeader = typeof source.batchHeader === 'string'
     ? source.batchHeader
-    : 'Please adjust the UI elements below. Each item lists its reference and the requested change.'
+    : 'Adjust the UI elements below. Each item lists its reference and the requested change.'
   const reference = typeof source.reference === 'string' ? source.reference : 'Reference:'
-  const noteLabel = typeof source.note === 'string' ? source.note : 'Note:'
+  const noteLabel = typeof source.note === 'string' ? source.note : 'Change:'
   const emptyNote = typeof source.emptyNote === 'string' ? source.emptyNote : '—'
   const statusLabel = typeof source.status === 'string' ? source.status : 'Status: target no longer resolves (locator only)'
   const statusEphemeral = typeof source.statusEphemeral === 'string'
     ? source.statusEphemeral
-    : 'Status: transient surface no longer present (locator only)'
+    : 'Status: temporary surface no longer present (locator only)'
   const statusAmbiguous = typeof source.statusAmbiguous === 'string' ? source.statusAmbiguous : 'Status: target matches more than one element (locator only)'
   const statusChanged = typeof source.statusChanged === 'string' ? source.statusChanged : 'Status: target content changed'
-  const skippedTemplate = typeof source.skipped === 'string' ? source.skipped : '({count} annotation(s) from other sessions skipped)'
   const skippedCount = typeof source.skippedCount === 'number' && Number.isFinite(source.skippedCount) && source.skippedCount > 0
     ? Math.round(source.skippedCount)
     : 0
-  const removedTemplate = typeof source.removed === 'string' ? source.removed : '({count} annotation(s) no longer exist and were skipped)'
+  const skippedTemplate = skippedCount === 1 && typeof source.skippedOne === 'string'
+    ? source.skippedOne
+    : (typeof source.skipped === 'string'
+      ? source.skipped
+      : (skippedCount === 1
+        ? '(1 annotation from another session skipped)'
+        : '({count} annotations from other sessions skipped)'))
   const removedCount = typeof source.removedCount === 'number' && Number.isFinite(source.removedCount) && source.removedCount > 0
     ? Math.round(source.removedCount)
     : 0
+  const removedTemplate = removedCount === 1 && typeof source.removedOne === 'string'
+    ? source.removedOne
+    : (typeof source.removed === 'string'
+      ? source.removed
+      : (removedCount === 1
+        ? '(1 deleted annotation skipped)'
+        : '({count} deleted annotations skipped)'))
   const lines = [batchHeader]
   if (removedCount > 0) {
     lines.push('')
@@ -416,7 +433,7 @@ export function serializeBatchEntries(
   const resolveStatus: (record: AnnotationCollectionEntry) => string = typeof statusOf === 'function' ? statusOf : () => 'resolved'
   const lines = [typeof source.batchHeader === 'string'
     ? source.batchHeader
-    : 'Please adjust the UI elements below. Each item lists its reference and the requested change.']
+    : 'Adjust the UI elements below. Each item lists its reference and the requested change.']
   const skippedCount = typeof source.skippedCount === 'number' && Number.isFinite(source.skippedCount) && source.skippedCount > 0
     ? Math.round(source.skippedCount)
     : 0
@@ -425,11 +442,25 @@ export function serializeBatchEntries(
     : 0
   if (removedCount > 0) {
     lines.push('')
-    lines.push(String(source.removed ?? '({count} annotation(s) no longer exist and were skipped)').replace('{count}', String(removedCount)))
+    const removedLine = removedCount === 1 && typeof source.removedOne === 'string'
+      ? source.removedOne
+      : (typeof source.removed === 'string'
+        ? source.removed
+        : (removedCount === 1
+          ? '(1 deleted annotation skipped)'
+          : '({count} deleted annotations skipped)'))
+    lines.push(removedLine.replace('{count}', String(removedCount)))
   }
   if (skippedCount > 0) {
     lines.push('')
-    lines.push(String(source.skipped ?? '({count} annotation(s) from other sessions skipped)').replace('{count}', String(skippedCount)))
+    const skippedLine = skippedCount === 1 && typeof source.skippedOne === 'string'
+      ? source.skippedOne
+      : (typeof source.skipped === 'string'
+        ? source.skipped
+        : (skippedCount === 1
+          ? '(1 annotation from another session skipped)'
+          : '({count} annotations from other sessions skipped)'))
+    lines.push(skippedLine.replace('{count}', String(skippedCount)))
   }
   lines.push('')
   let number = 0
@@ -444,10 +475,10 @@ export function serializeBatchEntries(
       const ref: AnnotationCollectionEntry = { ...entry as AnnotationCollectionEntry, status: resolveStatus(entry as AnnotationCollectionEntry) }
       lines.push(`${number}. ${elementLabel(ref)}`)
       lines.push(`   ${annotationJoinLabel(source.reference ?? 'Reference:', describeLocator(ref))}`)
-      lines.push(`   ${annotationJoinLabel(source.note ?? 'Note:', normalizeUserNote(ref.note) || String(source.emptyNote ?? '—'))}`)
+      lines.push(`   ${annotationJoinLabel(source.note ?? 'Change:', normalizeUserNote(ref.note) || String(source.emptyNote ?? '—'))}`)
       const status = ref.status
       const ephemeral = isEphemeralRef(ref)
-      if (status === 'missing') lines.push(`   ${ephemeral ? String(source.statusEphemeral ?? 'Status: transient surface no longer present (locator only)') : String(source.status ?? 'Status: target no longer resolves (locator only)')}`)
+      if (status === 'missing') lines.push(`   ${ephemeral ? String(source.statusEphemeral ?? 'Status: temporary surface no longer present (locator only)') : String(source.status ?? 'Status: target no longer resolves (locator only)')}`)
       else if (status === 'ambiguous') lines.push(`   ${String(source.statusAmbiguous ?? 'Status: target matches more than one element (locator only)')}`)
       else if (status === 'changed') lines.push(`   ${String(source.statusChanged ?? 'Status: target content changed')}`)
       lines.push('')

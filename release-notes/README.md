@@ -16,7 +16,7 @@ release cannot drift after publishing.
 ## Highlights
 
 - 一句话说明用户能感知的变化
-- 另一条要点（最多 6 条；更新提示的「查看更新内容」直接显示这些条目）
+- 另一条要点（最多 6 条；更新提示的「查看详情 → 更新要点」直接显示这些条目）
 
 ## Details
 

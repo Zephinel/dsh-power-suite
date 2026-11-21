@@ -118,7 +118,6 @@ export interface UpdateCheckInstaller {
 interface UpdatePromptProps {
   t: UpdateCheckTranslate
   controller: UpdatePromptController
-  name: string
   [key: string]: unknown
 }
 
@@ -134,33 +133,28 @@ const UPDATE_PROMPT_DELAY_MS = 1500
 /** Upper bound for the one Host check request; dispose aborts it immediately. */
 const UPDATE_CHECK_TIMEOUT_MS = 8000
 
-/**
- * Short package name used by the English title. It matches `locale/en.json`'s
- * `meta.title`; the Chinese dictionary carries its localized name
- * (`locale/zh.json`) inside the title itself instead of branching on locale.
- */
-const UPDATE_PACKAGE_SHORT = 'DSH Power Suite'
-
-/** Localised copy for the update prompt. */
-const UPDATE_EN: Record<string, string> = {
+/** Localized copy for the update prompt, aligned with Intelligent UI. */
+export const UPDATE_EN: Record<string, string> = {
+  'name': 'DSH Power Suite',
   'title': 'A new version of {name} is available',
   'update': 'Update',
   'later': 'Later',
   'details': 'Details',
   'hideDetails': 'Hide details',
-  'dontRemind': 'Do not remind me again',
-  'highlights': 'What’s new',
-  'noHighlights': 'This version has no published highlights. Open the plugin details for the full notes.'
+  'dontRemind': "Don't remind me again",
+  'highlights': "What's new",
+  'noHighlights': 'This release has no published highlights. Open the plugin details for the full notes.'
 }
-const UPDATE_ZH: Record<string, string> = {
-  'title': 'DSH 增强套件 有新版本可用',
+export const UPDATE_ZH: Record<string, string> = {
+  'name': 'DSH 增强套件',
+  'title': '{name}有新版本可用',
   'update': '更新',
   'later': '下次再说',
-  'details': '查看更新内容',
-  'hideDetails': '收起',
+  'details': '查看详情',
+  'hideDetails': '收起详情',
   'dontRemind': '不再提醒',
   'highlights': '更新要点',
-  'noHighlights': '该版本未提供更新要点，可在插件详情页查看完整说明。'
+  'noHighlights': '该版本未提供更新要点。打开插件详情页可查看完整说明。'
 }
 
 /**
@@ -444,7 +438,7 @@ export function createUpdateCheck(deps: UpdateCheckDeps): UpdateCheckInstaller {
    * @returns the card, or null while nothing is shown.
    */
   function UpdatePrompt(props: UpdatePromptProps): ReactElement | null {
-    const { t, controller, name } = props
+    const { t, controller } = props
     const snapshot = React.useSyncExternalStore(
       controller.store.subscribe,
       controller.store.getSnapshot,
@@ -478,7 +472,7 @@ export function createUpdateCheck(deps: UpdateCheckDeps): UpdateCheckInstaller {
     }, [shown, actions])
 
     if (snapshot.kind !== 'shown') return null
-    const title = t('title', { name })
+    const title = t('title', { name: t('name') })
     return React.createElement('div', {
       className: 'psu-card',
       ref: cardRef,
@@ -574,8 +568,7 @@ export function createUpdateCheck(deps: UpdateCheckDeps): UpdateCheckInstaller {
       : React.createElement(UpdatePrompt, {
         ...props,
         t,
-        controller: updatePromptController,
-        name: UPDATE_PACKAGE_SHORT
+        controller: updatePromptController
       })))), 'power-suite: update prompt overlay')
   }
 

@@ -491,11 +491,12 @@
   measured by an **ad hoc vm/fake-DOM probe (not the committed E2E harness)**,
   and neither is unit-tested end to end.
 
-- **Annotation records are browser-local.** The v2 document lives in
-  `localStorage` for this browser profile/origin; it is capped at 100 records
+- **Annotation records are browser-local.** The v3 document (carrying v2 single
+  records and batch groups) lives in
+  `localStorage` for this browser profile/origin; it is capped at 100 elements
   (the 101st add is refused visibly), never synced to the Host or another
   device, and can hold full Workspace paths plus the notes you typed. Clearing
-  browser site data or the collection removes it. A page reload restores the
+  browser site data or confirming exit removes it. A page reload restores the
   records, but the page mark only appears for records that still resolve in the
   current page.
 - **Floating-surface annotations are ephemeral by nature.** A native hover
@@ -511,7 +512,7 @@
   mode is active; close them to annotate the page behind them.
 - **A uniquely verified selector can still go stale.** The selector is verified
   at capture time; after a re-render or data change the four live statuses report
-  it honestly (Resolved / Matches several / No longer resolves / Content
+  it honestly (Resolved / Matches several / No longer on the page / Content
   changed), and relocating refuses non-resolved targets.
 - **The composer chip path has a fallback that is unit-tested only.** The
   plain-text fallback and its toast are covered by unit tests and code review;
@@ -613,7 +614,7 @@
   is not deterministic in the blank-session E2E harness, so a synthetic
   hover-menu fixture is the acceptance oracle for this behavior.
 - **Exiting the mode clears the annotation records (by design).** The header X,
-  the footer **Cancel Annotation** action and the final Esc step ask for
+  the footer **Cancel annotation** action and the final Esc step ask for
   confirmation and then clear every single/group record, page mark and the
   persisted v3 document, so a re-entry starts empty; records still survive a
   page reload while the mode is active. There is no "keep annotations on exit"

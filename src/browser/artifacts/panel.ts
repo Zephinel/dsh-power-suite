@@ -488,7 +488,11 @@ export function createArtifactsComponents(deps: ArtifactsComponentsDeps): Artifa
       ? artifacts
       : artifacts.filter((artifact) => (filter === 'provided' ? artifact.provided : !artifact.provided))
     let countText: string
-    if (filter !== 'all') countText = t('list.countOf', { shown: shownArtifacts.length, total: artifacts.length })
+    if (filter !== 'all') {
+      countText = artifacts.length === 1
+        ? t('list.countOfOne', { shown: shownArtifacts.length })
+        : t('list.countOf', { shown: shownArtifacts.length, total: artifacts.length })
+    }
     else if (artifacts.length === 1) countText = t('list.countOne')
     else countText = t('list.count', { count: artifacts.length })
 

@@ -203,15 +203,16 @@ releases are stable semver with an annotated `v<version>` tag.
    union. Durable JSON documents go through `src/host/document-store.ts`; pass the
    document policy (decode/encode/clone/change rule) instead of writing files
    directly.
-2. **Browser side** — put browser modules under `src/browser/<name>/` and wire
-   a `//#region feature: <name>` section in `src/client.js` with its slot
-   components and copy; register it from `apply`.
+2. **Browser side** — put browser modules (including `copy.ts` for user-visible
+   `en`/`zh` dictionaries) under `src/browser/<name>/` and wire its installer or
+   `//#region feature: <name>` section in `src/client.js`; register it from `apply`.
 3. **Routes** — keep them under `/api/<feature>.*` and behind
    `ctx.connection.fetch.register`; declare the path once in
    `src/shared/routes.ts` and re-export it from the Host module (the browser half
    imports it through `browserRoute`).
-4. **Copy** — register the feature's dictionary inline in its client region with
-   `ctx.locale.register(NS, { en, zh })` and bind it with `ctx.locale.bind(NS)`;
+4. **Copy** — define the feature's `en`/`zh` dictionaries in
+   `src/browser/<name>/` (for example `copy.ts`), register them with
+   `ctx.locale.register(NS, { en, zh })` and bind with `ctx.locale.bind(NS)`;
    `locale/*.json` holds only the plugin's display metadata (title/description).
 5. **Docs and tests** — add `docs/<name>.md` and a pure-logic test under
    `test/`.

@@ -2268,11 +2268,11 @@ if (ui === undefined) {
     const alpha = recordOf('Alpha')
     const items = [{ ref: { ...alpha, status: 'resolved' }, note: 'n' }]
     const base = serializeBatchRequest(items, EN_LABELS)
-    assert.ok(!plain(base).includes('no longer exist'), 'no removed line without removedCount')
+    assert.ok(!plain(base).includes('deleted annotations skipped'), 'no removed line without removedCount')
     const withRemoved = serializeBatchRequest(items, { ...EN_LABELS, removedCount: 2, skippedCount: 1 })
-    assert.ok(plain(withRemoved).includes('(2 annotation(s) no longer exist and were skipped)'))
+    assert.ok(plain(withRemoved).includes('(2 deleted annotations skipped)'))
     assert.ok(plain(withRemoved).includes(EN_LABELS.skipped.replace('{count}', '1')))
-    assert.ok(plain(withRemoved).indexOf('no longer exist') < plain(withRemoved).indexOf('other sessions'), 'removed line precedes the skip line')
+    assert.ok(plain(withRemoved).indexOf('deleted annotations') < plain(withRemoved).indexOf('other sessions'), 'removed line precedes the skip line')
   })
 
   test('T9: the chip source hides its group header and self-identifies candidates instead', () => {
@@ -2292,8 +2292,9 @@ if (ui === undefined) {
     const controllerCandidates = controllerSource.slice(candidatesStart, candidatesEnd > 0 ? candidatesEnd : controllerSource.length)
     assert.ok(controllerCandidates.includes("t('chip.candidateLabel')"), 'candidates must use the localized self-identifying label template')
     assert.ok(controllerCandidates.includes('annotationChipCandidates'), 'candidates come from the pure helper')
-    assert.ok(source.includes("'chip.candidateLabel': 'UI annotation · {name}'"), 'the EN candidate label prefix exists')
-    assert.ok(source.includes("'chip.candidateLabel': 'UI 标注 · {name}'"), 'the ZH candidate label prefix exists')
+    const copySource = readFileSync(new URL('../src/browser/ui-annotation/copy.ts', import.meta.url), 'utf8')
+    assert.ok(copySource.includes("'chip.candidateLabel': 'UI annotation · {name}'"), 'the EN candidate label prefix exists')
+    assert.ok(copySource.includes("'chip.candidateLabel': 'UI 标注 · {name}'"), 'the ZH candidate label prefix exists')
   })
 
   test('T9: the chip source contract wires candidates, pick, preview and the serializing codec', () => {

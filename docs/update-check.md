@@ -20,17 +20,17 @@ a newer stable version exists — shows a card fixed in the bottom-right corner
 (`width: min(360px, calc(100vw - 40px))`, elevation above the page, click-through
 around the card):
 
-- a layered brand mark (inline SVG, `currentColor`/theme tokens only) and the title **DSH 增强套件 有新版本可用**
+- a layered brand mark (inline SVG, `currentColor`/theme tokens only) and the title **DSH 增强套件有新版本可用**
   (English: "A new version of DSH Power Suite is available"; the card follows
   the active locale of the page);
 - a monospace version line such as `0.1.0 → 0.2.0` — the running version and
   the npm `latest` version;
 - the primary **更新** button, the secondary **下次再说** button, and the
-  **查看更新内容 / 收起** text link;
+  **查看详情 / 收起详情** text link;
 - after three **下次再说** clicks (counted per version) an extra text link
   **不再提醒**;
 - an expandable area with at most **6** release highlights, or the sentence
-  **该版本未提供更新要点，可在插件详情页查看完整说明。** when the release notes
+  **该版本未提供更新要点。打开插件详情页可查看完整说明。** when the release notes
   carry none.
 
 The card uses theme tokens only, follows light/dark mode, has no animation (so
@@ -68,7 +68,7 @@ prompt, by design.
 |---|---|
 | **更新** | Calls `pluginNavigation.openBundle('@zephinel/dsh-power-suite')` to open the bundle's Plugin detail page; the actual install/update is performed by DSH's plugin manager, never by this plugin. The prompt closes but **no silence state is written**, so the next page load prompts again if the version still differs. When plugin navigation is unavailable the card stays open (it does not close silently). |
 | **下次再说** | Closes the card and increments the per-version `laterClicks` counter; the next page load prompts again. After three clicks the **不再提醒** link appears. |
-| **查看更新内容 / 收起** | Expands or collapses the highlight list in place; the card stays open. |
+| **查看详情 / 收起详情** | Expands or collapses the highlight list in place; the card stays open. |
 | **不再提醒** | Records `silencedVersion = <latest>`; that version is not prompted again. A *higher* version resets the situation: the prompt returns (with a fresh later-count). |
 | **Escape / click outside** | Same as **下次再说** — close and count one more "later". |
 

@@ -8,7 +8,7 @@ preset you chose for it instead of the global default.
 
 1. Right-click a Workspace row in the sidebar (or open its `...` menu).
 2. Choose **Default agent preset**.
-3. Pick a preset, or **Follow the global default** to clear the override.
+3. Pick a preset, or **Follow global default** to clear the override.
 
 The parent row always shows the effective choice, for example
 `Default agent preset: Creator`. The current option is marked, and presets that

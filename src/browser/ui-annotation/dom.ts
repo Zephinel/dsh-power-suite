@@ -134,12 +134,19 @@ export interface AnnotationInsertLabels {
   note: string
   emptyNote: string
   batchHeader: string
+  groupHeader: string
+  groupRequirement: string
+  groupReference: string
+  itemsCountLabel: string
+  itemsCountLabelOne: string
   status: string
   statusEphemeral: string
   statusAmbiguous: string
   statusChanged: string
   skipped: string
+  skippedOne: string
   removed: string
+  removedOne: string
   removedCount: number
   noRemaining: string
 }
@@ -890,12 +897,19 @@ export function annotationInsertLabels(t: DshTranslate): AnnotationInsertLabels 
     note: t('insert.note'),
     emptyNote: t('insert.emptyNote'),
     batchHeader: t('insert.batchHeader'),
+    groupHeader: t('insert.groupHeader'),
+    groupRequirement: t('insert.groupRequirement'),
+    groupReference: t('insert.groupReference'),
+    itemsCountLabel: t('insert.itemsCountLabel'),
+    itemsCountLabelOne: t('insert.itemsCountLabelOne'),
     status: t('insert.status'),
     statusEphemeral: t('insert.statusEphemeral'),
     statusAmbiguous: t('insert.statusAmbiguous'),
     statusChanged: t('insert.statusChanged'),
     skipped: t('insert.skipped'),
+    skippedOne: t('insert.skippedOne'),
     removed: t('insert.removed'),
+    removedOne: t('insert.removedOne'),
     removedCount: 0,
     noRemaining: t('insert.noRemaining')
   }

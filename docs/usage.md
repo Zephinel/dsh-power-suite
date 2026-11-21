@@ -14,7 +14,7 @@ to your own prompts. Image rows show a 40 px rounded thumbnail by default (other
 files keep a file icon). The **filter dropdown at the header's right edge,
 immediately left of Refresh**, offers **All / Generated / Provided** with their
 counts and filters the list client-side (`{shown} of {total}` while filtered; an
-empty filter shows **No artifacts in this filter**).
+empty filter shows **No artifacts match this filter**).
 
 - **Open** previews a generated file through the native document preview;
   a provided attachment opens its inline URL in a new tab.
@@ -39,7 +39,7 @@ Missing files are filtered out.
 
 Right-click a Workspace in the Sidebar and choose **Default agent preset**.
 The choice applies to new Sessions created in that Workspace; existing Sessions
-keep their preset. **Follow the global default** clears the override.
+keep their preset. **Follow global default** clears the override.
 
 ## Dynamic workspaces
 
@@ -143,11 +143,11 @@ reduces it to a strip. Exit with the rail's exit control, the launcher, or Esc.
   outlines the whole surface, and **Child element / Parent element** step into
   the card's inner text rows or back out. Tooltips that explicitly let pointer
   events through cannot be hit-tested; annotate their anchor control instead.
-- Type the requested change, then choose **Mark requirement**: the popover closes
+- Type the requested change, then choose **Save change**: the popover closes
   and the element keeps a page marker with a numbered badge showing a short
   requirement excerpt. Hovering the marker opens a detail card with the full
   requirement, locator, position, Session/Workspace, status, and actions
-  (**Quick reference**, **Edit requirement**, **Relocate**, **Copy locator**,
+  (**Quick reference**, **Edit change**, **Go to element**, **Copy locator**,
   **Delete**). Re-select an annotated element (or use the card) to update its
   requirement; deletion is immediate and a **5 s Undo** toast restores it.
 - **Quick reference** inserts the annotation into the current Session's composer
@@ -158,31 +158,35 @@ reduces it to a strip. Exit with the rail's exit control, the launcher, or Esc.
   service is unavailable the same text is inserted as plain text with an
   explanation instead.
 - Hold **Shift** (the default multi-select modifier) to add or remove elements
-  without reopening the popover while more than one stays selected, or drag while
+  without reopening the single-element popover while more than one stays selected, or drag while
   holding it to draw a selection box. A plain drag never draws a box. With
-  several elements selected, the rail shows **Add {count} to collection** and
-  **Clear selection**.
+  several elements selected, the batch popover opens with `{count} elements selected`,
+  one shared change field, **Save as group** and **Clear selection** (the rail
+  footer primary button also reads **Save as group**).
 - Hold **Alt / Option** (the default pass-through modifier) to use the page
   normally: left clicks perform their real action and right clicks open the
   native menu. Releasing the modifier returns to annotation; the mode never fakes
   a click.
-- **Collection** in the rail is the batch surface: every saved annotation is a
-  row with an include checkbox, index, status, Session/Workspace and surface
-  metadata, an inline requirement editor (plus an expanded editor), **Preview**
-  (scrolls to the element, flashes it, opens its detail card),
-  **Insert reference**, **↑ / ↓**, and **Delete**. **Select current session** /
-  **Deselect all** drive the footer's **Delete selected** (one undo slot) and
-  **Insert batch (N)** actions, which insert **one grouped chip**; **Clear** also
-  offers undo. Entries from another Session stay visible (dashed, disabled
-  checkbox) but are skipped by the batch, with an explicit count; the batch
-  control explains why it is disabled. Drag-free reordering happens with the
-  arrow buttons, and the order is the batch order.
-- Esc steps back one layer at a time: an open detail card or active requirement
-  edit ends first, then the selection clears, then the mode turns off. From the
-  collection or settings view, Esc first returns to the status view.
-- The two modifiers are changed in the rail's **settings** view and stored in
-  this browser. They must differ; a conflicting choice moves the other modifier
-  to a different key and the view explains what changed.
+- **Annotations** in the rail is the unified management and batch surface (`All /
+  Singles / Groups`): every saved annotation or group is a row/card with an
+  include checkbox, index, status, Session/Workspace and surface metadata, an
+  inline change editor (plus an expanded editor), **Preview** (scrolls to the
+  element, flashes it, opens its detail card), **Insert reference**, **↑ / ↓**,
+  and **Remove**. The list toolbar's **Select current session** / **Clear
+  selection** drive **Delete selected** (one undo slot) and **Insert all into
+  composer** (also shown as the footer primary action when current-Session
+  items exist), which inserts **one grouped chip**. The footer danger action is
+  **Cancel annotation** (confirms **Clear & exit**). Entries from another Session
+  stay visible (dashed, disabled checkbox) but are skipped by the batch, with an
+  explicit count; the batch control explains why it is disabled. Drag-free
+  reordering happens with the arrow buttons, and the order is the batch order.
+- Esc steps back one layer at a time: an open modifier-settings popover, detail
+  card or active change edit ends first, then the selection clears, then the exit
+  confirmation turns the mode off.
+- The two modifiers are changed in the rail header's info **`(i)`** (**Modifier
+  settings**) popover and stored in this browser. They must differ; a conflicting
+  choice moves the other modifier to a different key and the popover explains
+  what changed.
 
 Clicking while annotating does not trigger the page: native controls such as
 **New session** are selected, not activated. The feature never edits the page's
@@ -256,7 +260,7 @@ Once per page load the Host checks the npm `latest` dist-tag for
 notice stays silent. When a newer stable release exists, a compact bottom-right
 card shows the version change and up to six highlights: **Update** opens the
 bundle's Plugins page (DSH handles the install), **Later** dismisses it for this
-load (after three dismissals for the same version, **Don't remind me** silences
+load (after three dismissals for the same version, **Don't remind me again** silences
 only that version), and Esc or an outside click acts like **Later**.
 
 ## Settings
@@ -264,7 +268,7 @@ only that version), and Esc or an outside click acts like **Later**.
 The Plugins detail page for the bundle carries the suite's settings in two
 groups. **Prompt history** holds the shortcut modifier (⌘ on macOS, Ctrl on
 Windows/Linux). **Active & recent** holds the two retention windows: Finished
-Session retention (1/2/6/12/24 hours, default 2 hours) and Active project
+session retention (1/2/6/12/24 hours, default 2 hours) and Active project
 retention (1/3/7/14/30 days, default 7 days); each row's hint shows the current
 value. The package README that the Plugins page normally renders above the
 configuration is hidden on this page while the controls are shown. Changes

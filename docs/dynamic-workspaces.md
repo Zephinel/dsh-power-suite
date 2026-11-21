@@ -1396,7 +1396,7 @@ Manual checks on a running DSH UI:
    Workspace becomes Inactive only after the configured active-project window,
    re-evaluated on the 30-second tick; no page reload is needed at any step.
 4. Open **Plugins → DSH Power Suite → Active & recent** and change the windows:
-   setting Finished Session retention to 1 hour should drop a finished row older
+   setting Finished session retention to 1 hour should drop a finished row older
    than one hour from the card (rows 4 → 3), and reverting to 2 hours should
    restore it (3 → 4); setting Active project retention to 1 day should move
    projects whose last activity is older than a day into Inactive (e.g. Active

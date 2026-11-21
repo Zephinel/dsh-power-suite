@@ -74,7 +74,7 @@ A round launcher at the bottom-right toggles point-and-click annotation; the pag
 ![Annotating the Running & recent panel in a demo DSH session: compact numbered markers on the panel header, a recent row and its disclosure chevron, with the annotation rail showing the three requirement texts](assets/readme-annotation.webp)
 
 - **Point & drill into surfaces.** Hover outlines elements including floating hover cards; the popover offers locator summary, parent/child stepping and requirement editing.
-- **Persisted markers & native chips.** Annotations persist as numbered page markers (with edit, relocate, copy locator and 5 s undo) and insert into the composer as native inline reference chips — single or batched — without sending.
+- **Persisted markers & native chips.** Annotations persist as numbered page markers (with edit, go to element, copy locator and 5 s undo) and insert into the composer as native inline reference chips — single or batched — without sending.
 
 Read more: [UI element annotation](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/ui-annotation.md).
 
