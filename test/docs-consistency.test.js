@@ -19,6 +19,22 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+
+/**
+ * Drop the harness README's recorded-evidence sections: they are history and
+ * stay verbatim, so an older recorded run must never fail this guard.
+ * @param {string} markdown - harness README source.
+ * @returns {string} the as-built sections only.
+ */
+function asBuiltSections(markdown) {
+  return markdown
+    .split(/^(?=## )/mu)
+    .filter((block) => {
+      const heading = block.match(/^## (.+)$/mu)?.[1] ?? ''
+      return !/evidence|recorded/iu.test(heading)
+    })
+    .join('\n')
+}
 const read = (path) => readFileSync(join(root, path), 'utf8')
 const version = JSON.parse(read('package.json')).version
 const escaped = version.replaceAll('.', '\\.')
@@ -86,10 +102,13 @@ test('harness README scenario counts and ranges match SCENARIO_ORDER', () => {
   assert.ok(order, 'SCENARIO_ORDER was not found in annotation.e2e.mjs')
   const ids = order[1].split(',').map((entry) => Number(entry.trim())).filter((entry) => Number.isInteger(entry))
   assert.ok(ids.length > 0, 'SCENARIO_ORDER is empty')
-  assert.deepEqual([...ids].sort((left, right) => left - right), ids, 'SCENARIO_ORDER must be ascending')
-  assert.equal(new Set(ids).size, ids.length, 'SCENARIO_ORDER must not repeat an id')
+  assert.deepEqual(
+    ids,
+    Array.from({ length: ids.length }, (_, index) => index + 1),
+    'SCENARIO_ORDER must be 1..N without gaps, duplicates or reordering',
+  )
   const last = ids.at(-1)
-  const readme = read('test/browser/README.md')
+  const readme = asBuiltSections(read('test/browser/README.md'))
 
   const countPatterns = [/(\d+) acceptance scenarios/gu, /smoke \+ (\d+) scenarios/gu, /Runs the (\d+) scenarios/gu]
   for (const pattern of countPatterns) {
