@@ -103,10 +103,26 @@ Facts that shape the procedure:
      Highlights; the English file is validated when present and falls back to
      the default file when absent.
    - See `release-notes/README.md` for the full format rules.
-5. Update current version/status claims:
-   - README status block and install text (package name, first-release framing);
-   - `docs/development.md` if it names a version/tag example;
-   - `docs/verification.md` with the release evidence record (see step 5).
+5. **Write the release-state claims in advance, in this commit** — the tag is
+   what makes them true, so they belong to the tree that gets tagged. Never
+   leave the new version for a post-publish fixup.
+   - Every sentence that names the version: the README status block plus both
+     install pins, and the published-version lines in `docs/development.md`,
+     `docs/limitations.md` and `docs/update-check.md`. The flat
+     `test/docs-consistency.test.js` guard fails `npm run check` when any of
+     them disagrees with `package.json`.
+   - The CHANGELOG dated heading and `release-notes/<version>{,.en}.md`
+     (steps 3–4) ship with this tag.
+   - Deterministic post-release locations can already be written and checked:
+     the GitHub Release URL (`.../releases/tag/v<version>`) and both tag-pinned
+     notes raw URLs (`.../v<version>/release-notes/<version>{,.en}.md`).
+   - `docs/verification.md`: the dated release round, including everything that
+     is known before the tag.
+   Only these are genuinely unknowable until the tag publishes and therefore
+   stay in the post-publish follow-up: the publish workflow run id, the registry
+   `dist-tags`/propagation confirmation, the tarball integrity hash and the
+   result of creating the GitHub Release. Do not defer version sentences there,
+   and never write a placeholder for an unknown value.
    There is no `docs/current-facts.json` in this repository, so there is no
    packed-fact remeasurement to run; `lib/` is a gitignored build output and is
    rebuilt by `npm run check` and by `npm pack`.
@@ -138,6 +154,10 @@ Facts that shape the procedure:
      changed must be recaptured through its capture mode, or removed from the
      as-built doc and kept only as historical evidence. A screenshot of a
      superseded UI is a defect, not a nice-to-have.
+
+   Treat this release's own forward claims (the version the tag is about to
+   publish) as expected: check that they name exactly the version being tagged,
+   not that npm already serves it.
 
    Classify findings **MAJOR** (contradicts the current build or environment,
    or shows a superseded UI) and **MINOR**. **An unresolved MAJOR blocks the
@@ -265,12 +285,13 @@ gh run watch <run-id> --exit-status --interval 10
    curl -fsS "https://raw.githubusercontent.com/Zephinel/dsh-power-suite/v<version>/release-notes/<version>.md" >/dev/null
    curl -fsS "https://raw.githubusercontent.com/Zephinel/dsh-power-suite/v<version>/release-notes/<version>.en.md" >/dev/null
    ```
-3. Record the release result in `docs/verification.md` (workflow run ID, npm
-   `latest`, provenance, GitHub Release URL, notes URL check) in a docs-only
-   follow-up. The CHANGELOG entries were already moved under the dated heading
-   during preparation — verify the published section and run
-   `.agents/skills/sync-power-suite-docs/SKILL.md` in delta mode for the
-   README/verification updates in that follow-up. **Do not bump the version.**
+3. Record only what the tag created and could not be known earlier in
+   `docs/verification.md`: the workflow run ID, the npm `latest`/provenance
+   confirmation, the tarball integrity hash, the GitHub Release result and the
+   tag-pinned notes check. The version claims, CHANGELOG heading and release
+   notes were already committed before the tag (step 1.5), so this docs-only
+   follow-up must not introduce the new version for the first time.
+   **Do not bump the version.**
 4. If the release was prompted by an issue, comment with the fixed version and
    evidence, then close it if the reporter's scenario is resolved.
 5. The update prompt only starts appearing for users after the **next** release:

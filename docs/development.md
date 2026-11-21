@@ -173,6 +173,14 @@ provenance, configured for `Zephinel/dsh-power-suite` / `publish.yml` during the
    `node scripts/check-publish-manifest.mjs`. The in-app update notice reads the
    notes from the **tag-pinned** raw URL, so they must be committed before the
    tag.
+   Write the release-state claims in the same commit: the version in
+   `package.json`/the lockfile, both README install pins and status blocks, and
+   the published-version lines in `docs/development.md`,
+   `docs/limitations.md` and `docs/update-check.md`. They describe the state
+   the tag creates; `test/docs-consistency.test.js` fails `npm run check` when
+   one of them drifts from `package.json`. Only the publish run id, the
+   registry confirmation and the integrity hash wait for the post-publish
+   record.
 2. **Gates.** `npm run check` (syntax, manifest, docs links, Node tests,
    release-notes gate), `npm run check:docs-links`,
    `node scripts/release-notes-approval.mjs --verify`, `npm run pack:check`,
