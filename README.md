@@ -15,7 +15,7 @@ English | [中文](README.zh.md)
 
 *All screenshots come from a temporary, isolated DSH instance with demo Sessions and demo artifacts; no personal content is involved.*
 
-> **Current status**: `@zephinel/dsh-power-suite@0.2.1` is published on npm (Web platform only); recent visual refinements shown above — including the colored smoke atmosphere and title-colour highlighted icons — are on `main` for the next release. See [CHANGELOG](https://github.com/Zephinel/dsh-power-suite/blob/main/CHANGELOG.md).
+> **Current status**: `@zephinel/dsh-power-suite@0.2.2` is published on npm (Web platform only); this release ships the colored smoke atmosphere, the native row geometry and the refreshed bilingual UI copy shown above. See [CHANGELOG](https://github.com/Zephinel/dsh-power-suite/blob/main/CHANGELOG.md).
 
 [Install](#install) · [Overview](#overview) · [Features](#features-at-a-glance) · [Quick start](#quick-start) · [Documentation](#documentation) · [Local development](#get-the-code-and-local-development)
 
@@ -24,11 +24,11 @@ English | [中文](README.zh.md)
 Install from npm (requires `pnpm` on `PATH`), then reload the plugin or restart DSH Web so the Host half loads:
 
 ```bash
-dsh plugin --profile web add @zephinel/dsh-power-suite@0.2.1
+dsh plugin --profile web add @zephinel/dsh-power-suite@0.2.2
 dsh web
 ```
 
-Or install in the Web UI via **Plugins → Add plugin → `@zephinel/dsh-power-suite@0.2.1` → Install → Enable now**. Local checkout installation (`link:` dependency) and release steps live in [docs/development.md](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/development.md).
+Or install in the Web UI via **Plugins → Add plugin → `@zephinel/dsh-power-suite@0.2.2` → Install → Enable now**. Local checkout installation (`link:` dependency) and release steps live in [docs/development.md](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/development.md).
 
 ## Overview
 

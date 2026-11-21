@@ -147,8 +147,8 @@ or Session id.
 
 ## Release flow
 
-The current published release on npm is **0.2.1** (first public release: 0.1.0
-on 2026-11-17); `package.json` stays at `0.2.1` until the next release
+The current published release on npm is **0.2.2** (first public release: 0.1.0
+on 2026-11-17); `package.json` stays at `0.2.2` until the next release
 preparation.
 Tagging and publishing are separate, explicit approvals, and the full procedure
 lives in the release skill

@@ -3,7 +3,7 @@
 ## Packaging
 
 - This checkout is installed as a local `link:` bundle in a DSH profile, and
-  the package is published on npm as `0.2.1` (see
+  the package is published on npm as `0.2.2` (see
   [CHANGELOG.md](../CHANGELOG.md)). `npm run build` bundles `src/` into the
   gitignored `lib/` entries (Host ESM plus the browser entry bundled to a classic
   script); the npm
@@ -102,7 +102,7 @@
 ## Update notice
 
 - **Silent until a newer version is published.** The currently published release
-  (`0.2.1`) is its own `latest`, so installs on the latest stable release see no
+  (`0.2.2`) is its own `latest`, so installs on the latest stable release see no
   prompt until a newer stable version is published. A blocked `registry.npmjs.org`
   or `raw.githubusercontent.com` also means silence, not an error.
 - **It never updates anything.** **更新** only opens the bundle's Plugin detail

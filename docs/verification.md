@@ -59,20 +59,31 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 - `npm run check`: passed (`100 TypeScript modules, 1 JavaScript module(s), 30 test files`);
   it builds `lib/` first, then runs syntax checks, strict/Host/browser typechecks,
   package-manifest validation, the built-entry smoke (update route reports
-  `current=0.2.1`) and built-browser smoke (8 injects), local docs/hygiene checks,
-  the 412-test Node suite, and the release-notes gate (`0.2.1; 2 highlights, 2 English`),
+  `current=0.2.2`) and built-browser smoke (8 injects), local docs/hygiene checks,
+  the 412-test Node suite, and the release-notes gate (`0.2.2; 6 highlights, 6 English`),
   then `pack:check`.
-- `npm run pack:check`: **80 files**; inspect the file list rather than the byte totals
+- `npm run pack:check`: **82 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).
-- Browser e2e (2026-11-18 run, **not re-run for the 2026-11-21 sidebar
-  layout change** — the suite needs an interactive GUI with live rows, so the
-  sidebar oracles were updated from the measured geometry and still owe a run;
-  the annotation suite is unaffected by that layout):
-  live smoke is `sidebar.e2e.mjs
-  --smoke` **4/4**, `annotation.e2e.mjs --smoke` **6/6** (now including a
-  click-select check: a real pointer click opens `[data-psa-popover]` and keeps
-  the mode active), and `update-prompt.e2e.mjs` **21/21**, 0 page errors. Full
-  suite evidence:
+- Browser e2e, local only (2026-11-21 run on DSH 0.2.2, live GUI; the suites
+  need an interactive GUI with live rows):
+  * live smoke: `sidebar.e2e.mjs --smoke` **4/4**, `annotation.e2e.mjs --smoke`
+    **6/6** (including the click-select check: a real pointer click opens
+    `[data-psa-popover]` and keeps the mode active) and `update-prompt.e2e.mjs`
+    **21/21**, 0 page errors in the smoke runs. A first update-prompt run aborted
+    at the plugin-surface wait after 14 checks and still exited 0: the harness's
+    `finally` block exits with the failed-check count, so an aborted run reports
+    green (open harness defect, not a product result); the rerun passed 21/21.
+  * live full sidebar (`--no-shots`): **54 PASS / 4 SKIP / 14 FAIL**, 168 s.
+    Eleven FAILs are live-data shape — the profile had four parent rows, no
+    nested child row, no long/clipped title and no row opened as current — so the
+    parent+child oracles cannot run. Three remain open: `b2-3` (the hovered title
+    slid 20 px where the oracle expects 25 − 3 = 22 ± 1), `b4-13` (the oracle's
+    native-time probe resolved to the primary `rgb(15, 17, 21)` while the card
+    time keeps `--dsw-alias-label-tertiary`; root cause not established) and
+    `c4-2` (the persisted fold took 4.5 s to repaint). Two unattributed page
+    `SyntaxError: Invalid or unexpected token` events also occurred in this long
+    run and not in the smoke runs.
+- Earlier evidence (2026-11-18 full runs):
   * update-prompt full: **21/21 PASS** isolated and live.
   * sidebar full (live, after the harness fixes): `b2-3` and `f6-1` are fixed
     (the former passed a title object instead of `.title.text`; the latter read

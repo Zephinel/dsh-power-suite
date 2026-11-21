@@ -56,7 +56,7 @@ most checks an in-memory hit. Switching the page language does not re-check;
 the next page load asks for highlights in the then-active language.
 
 Because the version comparison is strict, the **current published release
-(`0.2.1`) is its own latest version**: installs already on `latest` never show a
+(`0.2.2`) is its own latest version**: installs already on `latest` never show a
 prompt until a newer stable version is published (at which point older installs
 see `<installed> → <latest>`, as in the example above). A `link:` install runs
 the local checkout, which usually *is* the newest code — it normally gets no
@@ -203,7 +203,7 @@ https://raw.githubusercontent.com/Zephinel/dsh-power-suite/v<latest>/release-not
 ## Limitations
 
 - **The latest release is silent.** Installs already on the current `latest`
-  (`0.2.1`) see no prompt until a newer stable version ships; a registry read
+  (`0.2.2`) see no prompt until a newer stable version ships; a registry read
   failure is silent too.
 - **No self-update.** The plugin never installs anything: **更新** only opens the
   Plugin detail page and DSH's plugin manager performs the update.

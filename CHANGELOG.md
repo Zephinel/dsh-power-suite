@@ -6,6 +6,8 @@ All notable changes to this repository are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-21
+
 ### Changed
 
 - **The disclosure triangle is painted at the title colour on every row.** The triangle copied the native project-row arrow's caption grey (`#adb2b8`), which nearly vanished on the bright pastel rainbow bar of the current row and read fainter than the row's own title everywhere else. Every row's triangle now uses the same `label-primary` token as its title (near-black `#0f1115` in light mode, white `#f9fafb` in dark), at rest and on hover, while the shell's own project-row arrows keep their native caption weight. Measured in the live GUI: the triangle resolves to the row's title colour (`rgb(15, 17, 21)` in light mode; the same token makes it `#f9fafb` in dark).

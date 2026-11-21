@@ -15,7 +15,7 @@
 
 *全部截图均来自临时隔离的 DSH 演示实例与演示产物，不含任何个人数据。*
 
-> **当前状态**：`@zephinel/dsh-power-suite@0.2.1` 已发布到 npm（仅 Web 平台）；上方截图中的部分视觉优化（彩色烟雾流光与高亮行深墨图标）目前在 `main` 分支，将在下一版发布。版本变更见 [CHANGELOG](https://github.com/Zephinel/dsh-power-suite/blob/main/CHANGELOG.md)。
+> **当前状态**：`@zephinel/dsh-power-suite@0.2.2` 已发布到 npm（仅 Web 平台）；本版包含上方截图中的彩色烟雾流光、原生行几何与更新后的中英界面文案。版本变更见 [CHANGELOG](https://github.com/Zephinel/dsh-power-suite/blob/main/CHANGELOG.md)。
 
 [安装](#安装) · [总览](#总览) · [功能一览](#功能一览) · [快速上手](#快速上手) · [文档索引](#文档索引) · [本地开发](#获取代码与本地开发)
 
@@ -24,11 +24,11 @@
 从 npm 安装（需 `PATH` 中有 `pnpm`），安装后重载插件或重启 DSH Web 使 Host 端生效：
 
 ```bash
-dsh plugin --profile web add @zephinel/dsh-power-suite@0.2.1
+dsh plugin --profile web add @zephinel/dsh-power-suite@0.2.2
 dsh web
 ```
 
-也可在 Web 界面内安装：**插件 → 添加插件 → 输入 `@zephinel/dsh-power-suite@0.2.1` → 安装 → 立即启用**。本地源码安装（`link:` 依赖）与发版流程见 [docs/development.md](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/development.md)。
+也可在 Web 界面内安装：**插件 → 添加插件 → 输入 `@zephinel/dsh-power-suite@0.2.2` → 安装 → 立即启用**。本地源码安装（`link:` 依赖）与发版流程见 [docs/development.md](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/development.md)。
 
 ## 总览
 
