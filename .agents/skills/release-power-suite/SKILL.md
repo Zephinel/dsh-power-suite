@@ -48,6 +48,33 @@ Facts that shape the procedure:
   (`.agents/skills/sync-power-suite-docs/SKILL.md`); it owns only the release
   branch of work.
 
+## Two processes: operation and verification
+
+Every release runs as two separate processes, and the main agent must not merge
+them:
+
+- **Operation (main agent).** Prepare the version, release notes and docs;
+  commit the prepared tree; run the gates; hand the release commit to a
+  verifier; after approval, record the verdict, push, tag, watch the publish,
+  and record the result.
+- **Verification (independent subagent).** A fresh-context, read-only reviewer
+  that did not write the release re-runs the gates and audits the as-built docs
+  against the implementation. Its `APPROVE` is a hard gate: **no push of the
+  release commit, no tag and no publish before it**, and `REQUEST CHANGES` is
+  fixed and re-verified, never overruled.
+
+The commit that gets tagged records the verdict in its body:
+
+```
+Release-Verification: APPROVE tree=<git tree sha> reviewer=<subagent name, backend>
+```
+
+`scripts/check-release-verification.mjs --verify` recomputes `HEAD^{tree}`, and
+`publish.yml` refuses a missing, duplicated or mismatched trailer. The approval
+is bound to the content: after verification you may amend the commit message to
+add the trailer, but a tree change invalidates the approval and requires a new
+verification round.
+
 ## Preconditions
 
 1. Confirm the target version with the user (stable semver). The first public
@@ -240,18 +267,75 @@ git diff --check
   node test/browser/sidebar.e2e.mjs
   node test/browser/update-prompt.e2e.mjs
   ```
-- Push `main` and wait for CI (`verify`) to be green before tagging. A
-  push-triggered `verify` run is not the publish gate; the tag reruns its own
-  checks.
+- **Do not push yet.** The release commit stays local until the independent
+  verifier approves it (section 3); pushing first would force a force-push to
+  add the trailer. A push-triggered `verify` run is not the publish gate; the
+  tag reruns its own checks anyway.
 
-## 3. Tag and publish
+## 3. Independent verification (before the tag)
 
-Only after explicit approval of the exact version and release-notes text:
+Start a fresh subagent — `subagent`, not `subagent_fork`, so it inherits neither
+the operator's context nor its conclusions — and give it the prepared commit,
+its tree, the previous tag and this contract:
 
-```bash
-git tag -a v<version> -m "<version> — <UTC date>"
-git push origin v<version>
-```
+> You are the release verifier. Read-only: do not edit, commit, tag, push or
+> publish anything, do not restart services; put experiments in throwaway
+> copies under `/tmp` (`git archive <commit> | tar -x -C /tmp/...`). Do not
+> accept the operator's logs as evidence — re-run the gates yourself, and state
+> what you ran versus what you only read.
+>
+> Verify the release commit `<sha>` (tree `<tree>`) against the previous tag
+> `v<previous>`:
+> - `npm run check`, `npm run check:release`, `npm run check:docs-links`,
+>   `npm run check:release-notes`, `node scripts/release-notes-approval.mjs
+>   --verify`, `node scripts/check-docs-audit.mjs --verify` and
+>   `node scripts/check-docs-audit.mjs --scan` on this host.
+> - The as-built docs touched since the previous tag: release state and counts,
+>   environment versions (`dsh --version`), prose and copy, screenshots whose
+>   surface changed, changelog completeness for every shipped change, and
+>   record/document schema versions.
+> - The version claims, CHANGELOG dated heading, the `release-notes/<version>`
+>   pair and the `Docs-Audit` / `Release-Notes-Review` trailers against the
+>   tree.
+> - `git diff --check` and a clean work tree.
+>
+> Report findings with severity (BLOCKER / MAJOR / MINOR / NIT), each with
+> evidence and the command that produced it; separate facts from inference; end
+> with **VERDICT: APPROVE** or **VERDICT: REQUEST CHANGES** and the residual
+> risks. Do not pad the report.
+
+Rules:
+
+- The verifier must be independent: a different agent from the one that wrote
+  the release, fresh context, read-only. Never "verify" your own work, and never
+  pass the operator's run logs off as verification.
+- On **REQUEST CHANGES**, fix the findings, re-run the gates, and ask the same
+  verifier to re-verify the delta. Re-run the whole contract when the tree
+  changed materially.
+- On **APPROVE**, continue to the next section with the tree the verifier
+  actually approved.
+- A CI failure after the push forces a fix only when the tree changes; that
+  invalidates the approval and needs a fresh verification round.
+
+## 4. Finalize, tag and publish
+
+Only after the independent verifier's APPROVE and the owner's explicit approval
+of the exact version and release-notes text:
+
+1. Record the verdict without changing the tree (amend the message only):
+   ```bash
+   git log -1 --format=%B > /tmp/release-commit-msg.txt
+   printf '\nRelease-Verification: APPROVE tree=%s reviewer=%s\n' \
+     "$(git rev-parse HEAD^{tree})" "<verifier name, backend>" >> /tmp/release-commit-msg.txt
+   git commit --amend -F /tmp/release-commit-msg.txt
+   node scripts/check-release-verification.mjs --verify
+   ```
+2. Push `main` and wait for CI (`verify`) to be green before tagging.
+3. Tag and push:
+   ```bash
+   git tag -a v<version> -m "<version> — <UTC date>"
+   git push origin v<version>
+   ```
 
 Rules:
 
@@ -260,17 +344,20 @@ Rules:
 - Do not use `--follow-tags` from an unrelated commit: push the tag explicitly
   so the workflow runs exactly once for this version.
 - The tagged commit must carry exactly one
-  `Docs-Audit: checked=... fixed=... waived=...` trailer (step 6) and exactly one
+  `Docs-Audit: checked=... fixed=... waived=...` trailer (step 6), exactly one
+  `Release-Verification: APPROVE tree=<tree> reviewer=<name>` line bound to the
+  commit's tree, and exactly one
   `Release-Notes-Review: sha256=<hash>` line matching the committed notes;
   `publish.yml` recomputes the hash and refuses a missing, duplicated or
   mismatched approval. Editing the notes after the approval line is generated
   invalidates it — regenerate (and re-review) before tagging.
 - The workflow reruns `npm run check`, `pack:check`, the CHANGELOG section
-  check, `check:release-notes` and the notes-approval verification, then
-  publishes with OIDC + provenance. There is **no `NODE_AUTH_TOKEN`**; never add
+  check, `check:release-notes`, the notes-approval verification, the docs-audit
+  trailer and the release-verification trailer, then publishes with OIDC +
+  provenance. There is **no `NODE_AUTH_TOKEN`**; never add
   or print one.
 
-## 4. Watch the publish workflow
+## 5. Watch the publish workflow
 
 ```bash
 gh run list --workflow=publish.yml --limit 1 --json databaseId,status,headSha
@@ -300,7 +387,7 @@ gh run watch <run-id> --exit-status --interval 10
   A temporary install + `npm audit signatures` is optional but useful for
   provenance.
 
-## 5. Post-publish
+## 6. Post-publish
 
 1. Create the GitHub Release (the workflow does not do this), with both notes
    files as the body:
@@ -321,9 +408,23 @@ gh run watch <run-id> --exit-status --interval 10
    notes were already committed before the tag (step 5 in section 1), so this docs-only
    follow-up must not introduce the new version for the first time.
    **Do not bump the version.**
-4. If the release was prompted by an issue, comment with the fixed version and
+4. **Verification V2 — the published artifact.** Start a fresh subagent (a new
+   `subagent`, not a fork and not the same context as V1) and have it verify
+   what users actually receive:
+   - registry: `npm view @zephinel/dsh-power-suite version dist-tags`, the
+     version endpoint returns 200, and `dist.attestations.provenance` exists;
+   - tarball: `npm run check:release` (pack → throwaway `$DSH_HOME` install →
+     boot → uninstall), or an equivalent `npm pack` + install;
+   - tag-pinned notes: both raw URLs return 200 and their text equals the
+     reviewed files;
+   - GitHub Release: exists and carries both notes files;
+   - the `docs/verification.md` record matches what it observed.
+   Record its verdict in the post-publish docs commit. A `REQUEST CHANGES` here
+   is fixed in a docs-only follow-up (or a new version when package content is
+   wrong) — never by moving or re-tagging `v<version>`.
+5. If the release was prompted by an issue, comment with the fixed version and
    evidence, then close it if the reporter's scenario is resolved.
-5. The update prompt only starts appearing for users after the **next** release:
+6. The update prompt only starts appearing for users after the **next** release:
    an installed 0.1.0 sees the prompt when 0.2.0 becomes npm `latest`. This is
    expected behavior, not a release failure.
 
@@ -331,6 +432,12 @@ gh run watch <run-id> --exit-status --interval 10
 
 - Don't tag or publish while release-notes are still draft or without the
   exact-version approval.
+- Don't push the release commit, tag, or publish before the independent
+  verifier's APPROVE; the trailer is the recorded verdict, not a formality.
+- Don't verify your own release: no `subagent_fork`, no same-context review, and
+  no operator-supplied log as evidence.
+- Don't change the tree after verification; amend the message only, and re-run
+  the verification when the tree changes.
 - Don't tag with a known stale or rotted as-built doc — a superseded screenshot,
   a version the running host no longer has, or a count from an older test run.
   Fix it, or record the owner's explicit waiver in the release commit body.

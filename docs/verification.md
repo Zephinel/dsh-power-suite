@@ -14,6 +14,7 @@ npm run pack:check
 npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 node scripts/check-docs-audit.mjs --scan   # host versions vs README/docs; needs dsh
 node scripts/check-docs-audit.mjs --verify # release commit only: carries a Docs-Audit: trailer
+node scripts/check-release-verification.mjs --verify # release commit only: independent APPROVE bound to the tree
 ```
 
 `npm run check` performs:
@@ -41,7 +42,7 @@ node scripts/check-docs-audit.mjs --verify # release commit only: carries a Docs
   **`lib/client.js` 942.4 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **427 tests, 427 passed, 0 failed**, **32 test files** — Host
+- `npm test`: **433 tests, 433 passed, 0 failed**, **33 test files** — Host
   stores/routes plus browser-side derivations, the atmosphere motion model, the
   release-notes approval round-trip, the docs consistency guard, the protocol contract guard for duplicated
   route/enum literals, the shared route and settings contracts, the durable
@@ -51,6 +52,12 @@ node scripts/check-docs-audit.mjs --verify # release commit only: carries a Docs
   TypeScript sources, including the ESM entry `src/client.js` (zero `@ts-nocheck`
   / `@ts-ignore` suppressions). `npm run typecheck:browser` is a second, DOM-lib
   profile gated at **0 diagnostics** (`baseline 0`).
+- **Release runs as two processes.** The main agent operates the release
+  (prepare → gates → push/tag/publish → record); an independent, read-only
+  subagent verifies the prepared commit and, after publishing, the artifact.
+  The tagged commit records `Release-Verification: APPROVE tree=<tree>
+  reviewer=<name>`, and `publish.yml` recomputes `HEAD^{tree}` and refuses a
+  missing, duplicated or mismatched verdict.
 - `npm run check` reports an explicit-`any` budget: **0 sites** in `src/**/*.ts`;
   the gate strips comments/strings and fails on any `any` code token (aliases,
   unions and generics included) — a lexical tripwire at 0, not a proof.
@@ -58,11 +65,11 @@ node scripts/check-docs-audit.mjs --verify # release commit only: carries a Docs
   resolve, shipped relative links stay inside `package.json` `files`, zero
   personal `/Users/<name>/` paths in shipped docs, and no non-portable `> [!`
   alerts in `README.md`).
-- `npm run check`: passed (`100 TypeScript modules, 1 JavaScript module(s), 32 test files`);
+- `npm run check`: passed (`100 TypeScript modules, 1 JavaScript module(s), 33 test files`);
   it builds `lib/` first, then runs syntax checks, strict/Host/browser typechecks,
   package-manifest validation, the built-entry smoke (update route reports
   `current=0.2.2`) and built-browser smoke (8 injects), local docs/hygiene checks,
-  the 427-test Node suite, and the release-notes gate (`0.2.2; 6 highlights, 6 English`),
+  the 433-test Node suite, and the release-notes gate (`0.2.2; 6 highlights, 6 English`),
   then `pack:check`.
 - `npm run pack:check`: **82 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).

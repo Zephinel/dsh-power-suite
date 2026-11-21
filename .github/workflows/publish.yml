@@ -114,6 +114,13 @@ jobs:
         # audit result in the release commit, and a waiver must quote them.
         run: node scripts/check-docs-audit.mjs --verify
 
+      - name: Release verification recorded
+        # The release skill splits operation from verification: an independent
+        # subagent approves the release tree, and the tagged commit records
+        # that verdict bound to the tree (`Release-Verification: APPROVE
+        # tree=<sha> reviewer=<name>`). A tree change after approval fails here.
+        run: node scripts/check-release-verification.mjs --verify
+
       - name: Publish with provenance
         run: npm publish --access public --tag latest --provenance
 

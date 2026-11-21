@@ -159,9 +159,10 @@ The parts that touch this document:
 provenance, configured for `Zephinel/dsh-power-suite` / `publish.yml` during the
 0.1.0 bootstrap), so no npm token is stored in the repository or CI.
 
-**A release:**
+**A release runs as two processes: the main agent operates it, and an
+independent subagent verifies it. Neither substitutes for the other.**
 
-1. **Prepare (no tag yet).** Commit `release-notes/<version>.md` (and the
+1. **Prepare (operation, no tag yet).** Commit `release-notes/<version>.md` (and the
    optional `.en.md`) with a `## Highlights` section of 2–6 reviewed,
    user-facing bullets. Review the exact Highlights with the owner, then run
    `node scripts/release-notes-approval.mjs` and put the printed
@@ -186,19 +187,33 @@ provenance, configured for `Zephinel/dsh-power-suite` / `publish.yml` during the
    `Docs-Audit: checked=release-state,counts,environment,prose,screenshots,changelog fixed=<…> waived=<none|owner:"…">`.
    `node scripts/check-docs-audit.mjs --verify` and the publish workflow refuse
    a missing, duplicated or malformed trailer.
-2. **Gates.** `npm run check` (syntax, manifest, docs links, Node tests,
-   release-notes gate), `npm run check:docs-links`,
+2. **Gates (operation).** `npm run check` (syntax, manifest, docs links, Node
+   tests, release-notes gate), `npm run check:docs-links`,
    `node scripts/release-notes-approval.mjs --verify`,
    `node scripts/check-docs-audit.mjs --scan` (host versions; needs `dsh`),
    `node scripts/check-docs-audit.mjs --verify`, `npm run pack:check`,
    `npm run check:release` (pack → throwaway `$DSH_HOME` → isolated boot →
    byte identity → clean uninstall; needs `dsh` + `pnpm`, not in CI),
    `git diff --check`, a clean work tree, and the publish-manifest gate.
-3. **Tag and publish.** Push the annotated `v<version>` tag; the tag-triggered
-   `publish.yml` workflow re-runs the gates (including the notes-approval
-   verification) and publishes through npm Trusted Publishing. Never run
-   `npm publish` locally outside the bootstrap step above.
-4. **Verify and finish.** After the workflow settles, verify the registry result:
+   The release commit stays local: do not push before verification.
+3. **Independent verification (subagent, mandatory).** Start a fresh `subagent`
+   (not `subagent_fork`, and not the agent that wrote the release). It works
+   read-only, experiments in `/tmp`, re-runs the gates itself and audits the
+   as-built claims touched since the previous tag (release state and counts,
+   `dsh --version`, prose and copy, screenshots, changelog completeness,
+   schema versions). On **APPROVE** the operation records the verdict without
+   changing the tree:
+   `Release-Verification: APPROVE tree=<tree> reviewer=<name>` (amend the
+   message only, then `node scripts/check-release-verification.mjs --verify`).
+   On **REQUEST CHANGES**, fix, re-run the gates and have the verifier re-check
+   the delta; a tree change invalidates the approval.
+4. **Push, tag and publish (operation).** Push `main`, wait for CI, then push
+   the annotated `v<version>` tag. `publish.yml` re-runs the gates (including
+   the notes-approval, docs-audit and release-verification trailers) and
+   publishes through npm Trusted Publishing. Never run `npm publish` locally
+   outside the bootstrap step above.
+5. **Post-publish verification and record.** After the workflow settles, verify
+   the registry result:
 
    ```bash
    npm view @zephinel/dsh-power-suite version dist-tags --json --prefer-online
@@ -207,9 +222,15 @@ provenance, configured for `Zephinel/dsh-power-suite` / `publish.yml` during the
 
    Optionally verify the signature from a temporary install with
    `npm audit signatures`. Then create the GitHub Release from the release
-   notes, verify the tag-pinned raw notes URLs, and record the workflow run,
-   the registry version/provenance, the integrity hash, the GitHub Release
-   result and the tag-pinned notes check in [verification.md](verification.md).
+   notes and verify the tag-pinned raw notes URLs. Hand the published artifact
+   to a **fresh verification subagent** (V2): registry/dist-tags, provenance,
+   `npm run check:release` or an equivalent pack+install, the tag-pinned notes
+   text, and the GitHub Release body. Record the workflow run, the registry
+   version/provenance, the integrity hash, the GitHub Release result, the
+   tag-pinned notes check and the V2 verdict in
+   [verification.md](verification.md). A V2 `REQUEST CHANGES` is fixed in a
+   docs-only follow-up (or a new version when package content is wrong) — never
+   by moving the tag.
 
 Tag and CHANGELOG/GitHub Release dates use the **UTC** release date; normal
 releases are stable semver with an annotated `v<version>` tag.
