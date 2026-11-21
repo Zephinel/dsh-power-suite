@@ -39,9 +39,9 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   **`lib/client.js` 942.4 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **412 tests, 412 passed, 0 failed**, **30 test files** — Host
+- `npm test`: **416 tests, 416 passed, 0 failed**, **31 test files** — Host
   stores/routes plus browser-side derivations, the atmosphere motion model, the
-  release-notes approval round-trip, the protocol contract guard for duplicated
+  release-notes approval round-trip, the docs consistency guard, the protocol contract guard for duplicated
   route/enum literals, the shared route and settings contracts, the durable
   document-store interface, the bilingual UI copy text fence and edge-value suite,
   and direct Node tests for the extracted browser models.
@@ -56,15 +56,15 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   resolve, shipped relative links stay inside `package.json` `files`, zero
   personal `/Users/<name>/` paths in shipped docs, and no non-portable `> [!`
   alerts in `README.md`).
-- `npm run check`: passed (`100 TypeScript modules, 1 JavaScript module(s), 30 test files`);
+- `npm run check`: passed (`100 TypeScript modules, 1 JavaScript module(s), 31 test files`);
   it builds `lib/` first, then runs syntax checks, strict/Host/browser typechecks,
   package-manifest validation, the built-entry smoke (update route reports
   `current=0.2.2`) and built-browser smoke (8 injects), local docs/hygiene checks,
-  the 412-test Node suite, and the release-notes gate (`0.2.2; 6 highlights, 6 English`),
+  the 416-test Node suite, and the release-notes gate (`0.2.2; 6 highlights, 6 English`),
   then `pack:check`.
 - `npm run pack:check`: **82 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).
-- Browser e2e, local only (2026-11-21 run on DSH 0.2.2, live GUI; the suites
+- Browser e2e, local only (2026-11-21 run on DSH 0.2.2-rc.5, live GUI; the suites
   need an interactive GUI with live rows):
   * live smoke: `sidebar.e2e.mjs --smoke` **4/4**, `annotation.e2e.mjs --smoke`
     **6/6** (including the click-select check: a real pointer click opens

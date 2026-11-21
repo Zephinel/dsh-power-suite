@@ -1,7 +1,5 @@
 # Settings
 
-![The suite settings page with the prompt-history and Active & recent options](assets/settings-page.png)
-
 The bundle carries its own configuration section on its **Plugins** page:
 
 1. Sidebar **Plugins** → **Installed plugins** → **DSH Power Suite**.

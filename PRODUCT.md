@@ -30,6 +30,10 @@ Colored outlines or tinted pills used as decoration, card-inside-card layouts,
 oversized rounded corners, always-visible destructive text buttons, emoji used
 as icons, and duplicated controls that already exist in the native shell.
 
+The current-Session row's colored atmosphere is the deliberate exception: it
+marks the open Session (a state signal, not decoration) and is the only colored
+surface the suite adds.
+
 ## Design principles
 
 1. **One suite, one row.** Users install one plugin; feature boundaries stay

@@ -91,7 +91,7 @@ node test/browser/annotation.e2e.mjs --shots-only    five screenshots only (no s
 node test/browser/annotation.e2e.mjs --assets        write screenshots to docs/assets instead of /tmp
 node test/browser/annotation.e2e.mjs --client PATH   inject a different classic client.js (e.g. a baseline; ESM entries are bundled)
 node test/browser/annotation.e2e.mjs --scenario 8    run exactly one scenario (validation: 1..16)
-node test/browser/annotation.e2e.mjs --from 7        run scenarios 7-10 and 15 (ids in SCENARIO_ORDER)
+node test/browser/annotation.e2e.mjs --from 7        run every scenario from id 7 onward (7-16 in SCENARIO_ORDER)
 node test/browser/annotation.e2e.mjs --no-shots      skip screenshots
 node test/browser/annotation.e2e.mjs --keep-open     leave Chrome running (prints pid/CDP/profile)
 node test/browser/annotation.e2e.mjs --headful       show the browser window
@@ -483,7 +483,7 @@ but do not fail the run (they are not page errors or same-origin HTTP failures).
 
 - Pipeline smoke: ~5 s.
 - `--shots-only`: ~35 s.
-- Full run (smoke + 9 scenarios + screenshots): ~8-10 min on the live GUI at 1728x900.
+- Full run (smoke + 16 scenarios + screenshots): ~8-10 min on the live GUI at 1728x900.
 
 ## Troubleshooting
 

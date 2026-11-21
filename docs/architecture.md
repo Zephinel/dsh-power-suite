@@ -228,7 +228,7 @@ attaches to the layout plugin's shared store handle seated on its `root` slot
 registration (`entry.store` → `create()` / `getSnapshot().layoutInfo.sidebar` /
 `actions.setSidebar` / `subscribe`), retries the attach briefly, and stays inert
 (reports `attached: false`) when the pinned
-`@deepseek-ai/dsh-client-ui-layout@0.2.2-rc.1` seat shape is absent; it
+`@deepseek-ai/dsh-client-ui-layout@0.2.2-rc.5` seat shape is absent; it
 contributes no slot, copy, or settings row. See
 [sidebar-width.md](sidebar-width.md).
 

@@ -132,7 +132,7 @@
 
 - **The layout-store seat is private.** The feature attaches to the shared
   layout-store handle that
-  `@deepseek-ai/dsh-client-ui-layout@0.2.2-rc.1` seats on its `root` slot
+  `@deepseek-ai/dsh-client-ui-layout@0.2.2-rc.5` seats on its `root` slot
   registration; that seat is not a public width API. If a DSH upgrade changes
   the package version or the seat shape (no `.store` handle, `create()`,
   `layoutInfo`, or `actions.setSidebar`), the feature stays inert instead of

@@ -120,7 +120,7 @@ npm ci
 npm run check
 ```
 
-**前置环境**：DSH 0.2.2 插件接口（完整浏览器套件验证于 `0.2.2-rc.1`，0.2.2 滚动/悬停适配验证于 macOS **DSH 0.2.2**，更高版本未验证）、Node.js `>= 22.18`（原生 TypeScript 类型剥离运行 `npm test`，CI 覆盖 Node 22 与 24）、`pnpm`（供 `dsh plugin add` 调用）、Git，以及可选的 Google Chrome（用于运行本地浏览器套件：`node test/browser/sidebar.e2e.mjs --smoke`、`annotation.e2e.mjs --smoke`、`update-prompt.e2e.mjs`）。
+**前置环境**：DSH 0.2.2 插件接口，当前在 **DSH 0.2.2-rc.5** 宿主上验证（smoke 与 update-prompt 套件通过；完整套件的记录来自更早的 `0.2.2-rc.1`；更高版本未验证）、Node.js `>= 22.18`（原生 TypeScript 类型剥离运行 `npm test`，CI 覆盖 Node 22 与 24）、`pnpm`（供 `dsh plugin add` 调用）、Git，以及可选的 Google Chrome（用于运行本地浏览器套件：`node test/browser/sidebar.e2e.mjs --smoke`、`annotation.e2e.mjs --smoke`、`update-prompt.e2e.mjs`）。
 
 无运行时依赖，无独立 watch 服务：修改代码后运行 `npm run build`（浏览器改动刷新页面即可，Host 改动需重载插件或重启 `dsh web`）。完整命令与部署流程见 [docs/development.md](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/development.md)。
 

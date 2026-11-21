@@ -190,8 +190,6 @@ sidebar's panel tabs. It starts expanded.
   children share the same baselines, and completed rows still leave the card
   once the finished-Session retention window expires.
 
-![Read marks restored on a fresh browser profile from the Host-shared document](assets/card-shared-ack.png)
-
 - **Row actions**: **main (parent) rows** carry the **New session** button in
   the right-anchored trailing cell, beside the "…" trigger. **Nested subagent
   rows carry no New session button at all** (user decision: creating a Session
