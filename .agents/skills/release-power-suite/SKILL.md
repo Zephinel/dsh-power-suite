@@ -163,9 +163,9 @@ Facts that shape the procedure:
      keep the file only as historical evidence. A screenshot of a superseded UI
      is a defect, not a nice-to-have.
    - **Changelog completeness** — every shipped user-visible change in the
-     range (`src/`, `docs/`, `assets/`, README) needs an `## [Unreleased]` entry
-     before the release moves it under the dated heading; an asset-only change
-     counts too.
+     range (`src/`, `docs/`, `assets/`, README) needs an entry under the
+     **dated** `## [<version>]` heading (the `Unreleased` block was just moved
+     there in step 3); an asset-only change counts too.
 
    Treat this release's own forward claims (the version the tag is about to
    publish) as expected: check that they name exactly the version being tagged,
@@ -180,13 +180,16 @@ Facts that shape the procedure:
    Record the outcome in the release commit body:
 
    ```
-   Docs-Audit: checked=release-state,counts,environment,prose,screenshots fixed=<what changed> waived=<none|owner:"<the owner's words>">
+   Docs-Audit: checked=release-state,counts,environment,prose,screenshots,changelog fixed=<what changed> waived=<none|owner:"<the owner's words>">
    ```
 
    `node scripts/check-docs-audit.mjs --verify` (also run by `publish.yml`)
    refuses a missing, duplicated or malformed trailer, a skipped claim class,
    or a waiver that does not quote the owner. The tagged commit must carry
-   exactly one such line.
+   exactly one such line. The trailer is an attestation: it proves the audit
+   was recorded, not that every image was compared — the owner reviews the
+   result in the release commit. `--scan` fails when `dsh` is missing instead
+   of skipping silently.
 7. **Notes review gate (never skipped implicitly).** Show the complete
    `release-notes/<version>.md` Highlights (plus `.en.md` when present) to the
    owner and wait for an explicit approve-or-changes answer before section 2 —

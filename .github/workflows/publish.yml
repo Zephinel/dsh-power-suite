@@ -109,8 +109,9 @@ jobs:
 
       - name: Documentation audit recorded
         # release-power-suite step 6 requires a pre-tag as-built audit. The
-        # tagged commit records it as a `Docs-Audit:` trailer naming the five
-        # claim classes; a waiver must quote the owner, never the agent.
+        # tagged commit records it as a `Docs-Audit:` trailer naming the six
+        # claim classes. The trailer is an attestation; the owner reviews the
+        # audit result in the release commit, and a waiver must quote them.
         run: node scripts/check-docs-audit.mjs --verify
 
       - name: Publish with provenance

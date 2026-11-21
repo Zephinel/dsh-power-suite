@@ -46,7 +46,7 @@ npm run check:release       # build → pack → compare lib with the build, oth
 
 `npm run check` is the required gate before committing a functional change. CI
 runs it on push and pull request. A docs-only change (CHANGELOG/PRODUCT/docs/`
-`.agents`) skips the full gate and runs only `check:docs-links`, so it also skips
+`.agents`) skips the full gate and runs `check:docs-links` plus the docs-consistency guard, so it also skips
 the typecheck. The release-notes gate runs inside `npm run check` and again in
 the publish workflow.
 
@@ -183,7 +183,7 @@ provenance, configured for `Zephinel/dsh-power-suite` / `publish.yml` during the
    for the post-publish record.
    Run the pre-tag documentation audit (the release skill's step 6) and record
    it in the same commit body as
-   `Docs-Audit: checked=release-state,counts,environment,prose,screenshots fixed=<…> waived=<none|owner:"…">`.
+   `Docs-Audit: checked=release-state,counts,environment,prose,screenshots,changelog fixed=<…> waived=<none|owner:"…">`.
    `node scripts/check-docs-audit.mjs --verify` and the publish workflow refuse
    a missing, duplicated or malformed trailer.
 2. **Gates.** `npm run check` (syntax, manifest, docs links, Node tests,
@@ -208,8 +208,8 @@ provenance, configured for `Zephinel/dsh-power-suite` / `publish.yml` during the
    Optionally verify the signature from a temporary install with
    `npm audit signatures`. Then create the GitHub Release from the release
    notes, verify the tag-pinned raw notes URLs, and record the workflow run,
-   the registry version/provenance, the integrity hash and the GitHub Release
-   result in [verification.md](verification.md).
+   the registry version/provenance, the integrity hash, the GitHub Release
+   result and the tag-pinned notes check in [verification.md](verification.md).
 
 Tag and CHANGELOG/GitHub Release dates use the **UTC** release date; normal
 releases are stable semver with an annotated `v<version>` tag.
