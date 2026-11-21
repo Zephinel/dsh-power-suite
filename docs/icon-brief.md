@@ -2,9 +2,10 @@
 
 ![Shipped icon: 48 px and 24 px on light and dark surfaces](assets/icon-preview.png)
 
-The shipped plugin icon is the supplied 3D toolbox illustration, composited
-onto a soft sky-blue rounded tile so it reads on both light and dark pages. This
-page records how it was produced and how to replace it.
+The shipped plugin icon is a flat vector mark with light depth: a ruler, a
+browser-window card, and a wrench rising out of a chat bubble, on a near-black
+tile with one lime accent. It says "a set of tools around the conversation".
+This page records its specification and how to replace it.
 
 ## Where the icon appears
 
@@ -18,55 +19,44 @@ page records how it was produced and how to replace it.
 | Constraint | Value |
 |---|---|
 | Format | PNG, WebP, JPEG, or SVG, ≤ 256 KiB, inside the package |
-| Canvas | Square; shipped as `256×256` PNG (renders at 48 px, over-sampled for crisp small sizes) |
+| Canvas | Square; shipped as a `64×64` viewBox SVG (`icon.svg`, about 3 KB) |
 | Theme | One file for both themes; all colors baked in, no `currentColor`/CSS variables/external references |
-| Surface | Must not rely on a transparent background: the composited tile supplies contrast on light and dark pages |
-| Content | Illustration centered with ~10% margin; no text; the toolbox silhouette must stay readable at 24 px |
-| Look | 3D clay/isometric illustration: soft pastel purples and blues, warm yellow and coral accents, a browser-window card, hand tools, burst marks, and the blue whale mark on the toolbox |
+| Surface | Must not rely on a transparent background: the icon carries its own tile so it reads on light and dark pages |
+| Content | Glyph optically centered on the tile; no text; the bubble and tools must stay readable at 24 px |
 
-## How the shipped icon was produced
+## Specification
 
-Source: a `1254×1254` transparent PNG containing the toolbox illustration.
+The icon shares one system with the DSH Intelligent UI icon (same tile, bubble
+shape, palette, and depth treatment), so the two read as a family.
 
-1. **Trim transparency** — the illustration's alpha bounding box was `930×1075`
-   (the tools and burst marks make it taller than wide).
-2. **Scale** to `228 px` tall, keep aspect, center on a `256×256` canvas.
-3. **Background tile** — rounded rectangle, radius `56`, gradient
-   `#EAF6FF → #C9E4FF` (top to bottom), plus a `3 px` inner hairline at
-   `rgba(8,52,110,0.08)`.
-4. **Ground shadow** — a blurred ellipse (`rx 82`, `ry 11`) at the tile bottom,
-   `rgba(8,56,120,0.18)`, Gaussian blur `7`, drawn behind the illustration.
-5. Export `256×256` PNG (about 76 KB, under the 256 KiB cap).
-
-The shipped file is `icon.png` at the repository root; the package manifest points
-`icon` and the `./icon` export at it.
+| Part | Value |
+|---|---|
+| Tile | Rounded square `x 2, y 2, 60×60`, radius `13.5`; vertical gradient `#2A2D31 → #111418` (base `#15181D`) |
+| Tile rim | Top-down white highlight (`16% → 0%` over the top half) and a `0.7` white hairline at `7%` |
+| Glyph | Off-white `#EEF0EA`, top-lit gradient `#F8F9F7 → #DDDFDA` |
+| Secondary | Wrench in grey `#B6BBB2`, gradient `#C8CCC5 → #A4A8A0` |
+| Accent | Lime `#C8F031` (ruler), gradient `#D4F35E → #B4D82C`; ruler ticks `#9CBB26` |
+| Detail | Window dots, header bar, and bubble text lines use the tile color `#15181D` (text lines at `28%`) |
+| Depth | One soft drop shadow under the whole glyph: `dy 1.4`, blur `1.3`, black at `45%` |
+| Bubble | `40×19` body, radius `9`, tail at the bottom-left starting where the corner arc ends; the whole tools-and-bubble group is drawn at `92%` |
+| Separation | A `2.6` tile-colored outline around the bubble and window card keeps overlapping shapes apart |
+| Centering | Glyph shifted so the mean of its bounding-box center and visual mass center sits at `y 32` |
 
 ## Replacing it
 
-Keep the same pipeline so the new artwork sits correctly in the 48 px tile:
-
-- Start from a transparent square illustration, ideally at least `512×512`.
-- Trim alpha, fit the subject to about `89%` of the canvas height, center it.
-- Keep one fixed background composed into the file (a soft light-blue or
-  lavender gradient works with this illustration family); do not ship a
-  transparent-only icon.
-- Export a `256×256` PNG (or SVG) under `256 KiB`, replace `icon.png`, and bump
-  the package version if the change ships to others.
-
-### Prompt for an alternative illustration
-
-> Design a square 3D clay-style app illustration for "DSH Power Suite", a
-> developer tool plugin. Show an open white toolbox with soft lavender shading
-> and a blue whale mark on its front, holding a browser-window card (white with
-> blue content blocks and red/yellow/green dots), a lavender wrench, a coral
-> screwdriver, and a yellow notepad card; add small green/yellow burst marks
-> above. Pastel palette, soft studio lighting, transparent background, no text,
-> centered composition with margins. It will be composited onto a soft sky-blue
-> rounded tile and shown at 48 px, so keep silhouettes bold and details large.
+- Keep a square `64×64` SVG (or a `256×256` PNG) with its own tile; do not ship
+  a transparent-only icon.
+- Keep colors baked in; the Host shows the file through `<img>`, so CSS
+  variables and `currentColor` do not resolve.
+- Replace `icon.svg` at the repository root. If the format changes, update the
+  `icon` field, the `./icon` export, and the `files` entry in `package.json`,
+  the `<img>` at the top of both READMEs, and the required-file list in
+  `scripts/release-check.mjs`.
+- Bump the package version if the change ships to others.
 
 ## Verify before shipping
 
-1. Replace the PNG, then reload the Plugins page.
+1. Replace the file, then reload the Plugins page.
 2. Check the 48 px card and header tile on both light and dark page themes.
-3. Check a 24 px rendering: the box, tools, and burst marks must not collapse
-   into a blur.
+3. Check a 24 px rendering: the bubble, the window card, and the ruler and wrench
+   must not collapse into a blur.

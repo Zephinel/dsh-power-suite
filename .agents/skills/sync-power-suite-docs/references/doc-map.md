@@ -70,7 +70,7 @@ single English set.
 | `assets/*.webp` | Regenerate with `npm run build:readme-bento` after recapturing raws; never hand-edit an image. The composer-gallery capture has no generator — recapture through the README capture modes |
 | `docs/assets/*.png` | Written by the browser harnesses; regenerate with the matching suite instead of editing pixels |
 | `docs/demo/*.png` | Demo captures; recapture, don't edit |
-| `icon.png` | Shipped plugin icon; replace per `docs/icon-brief.md` constraints, don't retouch |
+| `icon.svg` | Shipped plugin icon (flat vector, baked-in colors); replace per `docs/icon-brief.md` constraints |
 | `lib/**` | Gitignored build output from `scripts/build.mjs` (esbuild); the npm package ships it, but never hand-edit or commit it — rebuild with `npm run build` |
 | `.tmp-work/**`, `*.log`, `*.tgz` | Gitignored local captures/logs; never cite them as shipped evidence or commit them |
 | `LICENSE`, `NOTICE` | Legal attribution; don't edit content |

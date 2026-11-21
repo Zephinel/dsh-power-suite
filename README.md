@@ -1,4 +1,4 @@
-<img src="icon.png" alt="DSH Power Suite" width="72" height="72" align="right">
+<img src="icon.svg" alt="DSH Power Suite" width="72" height="72" align="right">
 
 # DSH Power Suite
 

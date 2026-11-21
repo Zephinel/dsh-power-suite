@@ -52,7 +52,7 @@ const REQUIRED_PACK_FILES = [
   'CHANGELOG.md',
   'PRODUCT.md',
   'docs/README.md',
-  'icon.png',
+  'icon.svg',
   `release-notes/${pkg.version}.md`,
   'LICENSE',
   'NOTICE',
