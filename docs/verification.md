@@ -203,6 +203,14 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
 - 0.2.1 installs start seeing the update prompt once this `latest` propagates.
   This record is a docs-only follow-up after the tag; it does not change the
   version.
+- The released `## [0.2.2]` CHANGELOG section does not list the README/Bento
+  screenshot refresh that shipped in this version. Released sections are not
+  rewritten, so this note is the pointer; the release skill now requires
+  doc/asset changes to be recorded before the tag.
+- The 2026-11-21 documentation audit (`f1dd899`, `1071567`) removed the stale
+  host-version claims, the superseded `card-shared-ack.png` and
+  `settings-page.png` references and the harness count drift, and added
+  `test/docs-consistency.test.js`; totals are now 416/416 tests in 31 files.
 
 ## 0.2.1 screenshot fix and marketplace submissions (2026-11-19)
 
