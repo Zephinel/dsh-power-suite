@@ -41,7 +41,7 @@ node scripts/check-docs-audit.mjs --verify # release commit only: carries a Docs
   **`lib/client.js` 942.4 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **425 tests, 425 passed, 0 failed**, **32 test files** — Host
+- `npm test`: **427 tests, 427 passed, 0 failed**, **32 test files** — Host
   stores/routes plus browser-side derivations, the atmosphere motion model, the
   release-notes approval round-trip, the docs consistency guard, the protocol contract guard for duplicated
   route/enum literals, the shared route and settings contracts, the durable
@@ -62,7 +62,7 @@ node scripts/check-docs-audit.mjs --verify # release commit only: carries a Docs
   it builds `lib/` first, then runs syntax checks, strict/Host/browser typechecks,
   package-manifest validation, the built-entry smoke (update route reports
   `current=0.2.2`) and built-browser smoke (8 injects), local docs/hygiene checks,
-  the 425-test Node suite, and the release-notes gate (`0.2.2; 6 highlights, 6 English`),
+  the 427-test Node suite, and the release-notes gate (`0.2.2; 6 highlights, 6 English`),
   then `pack:check`.
 - `npm run pack:check`: **82 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).
@@ -211,18 +211,18 @@ node scripts/check-docs-audit.mjs --verify # release commit only: carries a Docs
   requires an entry under the dated heading for every shipped doc/asset change
   (step 6, claim class *Changelog completeness*).
 - The 2026-11-21 documentation audit (commits `f1dd899`, `1071567`, `8632001`,
-  `ba9a185`, `53c9cae`) removed the stale
-  host-version claims, the superseded `card-shared-ack.png` and
-  `settings-page.png` references and the harness count drift, and added
-  `test/docs-consistency.test.js` and `test/docs-audit.test.js`; totals are now
-  422/422 tests in 32 files.
+  `ba9a185`, `53c9cae`, `6a47f57`, `f46d306`, and the per-target scan fix in
+  this series) removed the stale host-version claims, the superseded
+  `card-shared-ack.png` and `settings-page.png` references and the harness count
+  drift, and added `test/docs-consistency.test.js` and
+  `test/docs-audit.test.js`; totals are now 427/427 tests in 32 files.
 - Two independent reviewers then returned REQUEST CHANGES on that fix: the
   guard's coverage was overstated, the audit step could still skip source-only
   drift, and the audit was a self-waivable prose gate. The follow-up tightened
   the guard (every occurrence, install-line pins, lockfile, ascending
   `SCENARIO_ORDER`, prerelease versions), widened the audit scope to `src/` and
-  the harness, and made the audit a verified `Docs-Audit:` trailer enforced by
-  `publish.yml`.
+  the harness, and made the audit an attested `Docs-Audit:` trailer that
+  `publish.yml` checks before publishing.
 
 ## 0.2.1 screenshot fix and marketplace submissions (2026-11-19)
 

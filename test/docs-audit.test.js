@@ -84,6 +84,24 @@ test('the host scan ignores historical versions outside the scoped section', () 
   assert.ok(stale.problems.some((problem) => problem.includes('rc.1')))
 })
 
+test('the host scan requires a claim in every scoped target', () => {
+  const files = [
+    { file: 'a.md', pattern: /\*\*DSH ([0-9][0-9A-Za-z.-]*)\*\*/gu },
+    { file: 'b.md', pattern: /\*\*DSH ([0-9][0-9A-Za-z.-]*)\*\*/gu },
+  ]
+  const reader = (file) => (file === 'a.md' ? '**DSH 0.2.2-rc.5**\n' : '# no claim here\n')
+  const result = scanHostClaims('0.2.2-rc.5', files, reader)
+  assert.equal(result.ok, false)
+  assert.ok(result.problems.some((problem) => problem.includes('b.md') && problem.includes('no host-version claim')))
+})
+
+test('sliceSections drops historical ### sub-sections inside an included ## section', () => {
+  const text = '## Automated\n### Current gates\ncurrent 0.2.2-rc.5\n### Recorded evidence\nold 0.2.2-rc.1\n'
+  const scoped = sliceSections(text, { include: /^Automated$/iu })
+  assert.match(scoped, /rc\.5/u)
+  assert.doesNotMatch(scoped, /rc\.1/u)
+})
+
 test('the host scan refuses to pass without dsh or without a claim', () => {
   const missingHost = scanHostClaims(null, HOST_FILES, () => '')
   assert.equal(missingHost.ok, false)

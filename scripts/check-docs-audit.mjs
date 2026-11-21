@@ -86,10 +86,11 @@ export function parseDocsAudit(message) {
 /**
  * Keep only the sections a claim belongs to.
  * @param {string} text - Markdown source.
- * @param {{include?: RegExp, exclude?: RegExp}} [filter] - heading filters.
+ * @param {{include?: RegExp, exclude?: RegExp, subExclude?: RegExp}} [filter] - heading filters.
  * @returns {string} the concatenated matching sections (the preamble is dropped when `include` is set).
  */
 export function sliceSections(text, filter = {}) {
+  const subExclude = filter.subExclude ?? /evidence|recorded|history|measured acceptance|dated/iu
   return text
     .split(/^(?=## )/mu)
     .filter((block) => {
@@ -98,6 +99,13 @@ export function sliceSections(text, filter = {}) {
       if (filter.exclude !== undefined && filter.exclude.test(heading)) return false
       return true
     })
+    .map((block) => block
+      .split(/^(?=### )/mu)
+      .filter((sub) => {
+        const heading = sub.match(/^### (.+)$/mu)?.[1]?.trim() ?? ''
+        return !subExclude.test(heading)
+      })
+      .join('\n'))
     .join('\n')
 }
 
@@ -152,15 +160,23 @@ export function scanHostClaims(dshVersion, files, read = readOrNull) {
       problems.push(`${target.file}: promised by the audit but missing`)
       continue
     }
-    const scoped = sliceSections(text, { include: target.include, exclude: target.exclude })
+    const scoped = sliceSections(text, {
+      include: target.include,
+      exclude: target.exclude,
+      subExclude: target.subExclude,
+    })
+    let targetClaims = 0
     for (const match of scoped.matchAll(target.pattern)) {
+      targetClaims += 1
       claims += 1
       if (match[1] !== dshVersion) {
         problems.push(`${target.file}: claims ${match[0]} but the running host is ${dshVersion}`)
       }
     }
+    if (targetClaims === 0) {
+      problems.push(`${target.file}: the scoped section carries no host-version claim`)
+    }
   }
-  if (claims === 0 && problems.length === 0) problems.push('no host-version claim was found in the audited sections')
   return { ok: problems.length === 0, problems, claims }
 }
 
@@ -174,7 +190,7 @@ function commitMessage(path) {
     }
   }
   try {
-    return execFileSync('git', ['log', '-1', '--format=%B'], { cwd: root, encoding: 'utf8' })
+    return execFileSync('git', ['log', '-1', '--format=%B'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
   } catch {
     throw new Error('not inside a Git checkout; pass --message or --message-file')
   }

@@ -139,7 +139,7 @@ Facts that shape the procedure:
    ```
 
    Audit **files and pages, not hunks**: a page whose surface changed is in
-   scope even when its Markdown was untouched. Check five claim classes:
+   scope even when its Markdown was untouched. Check six claim classes:
    - **Release state and counts** — published version, test/file/pack counts,
      route/slot/locale-namespace counts, harness scenario and check counts, and
      record/document schema versions (`v2 record` vs `v3 document`). The flat
@@ -150,7 +150,7 @@ Facts that shape the procedure:
      with the running host:
      ```bash
      dsh --version
-     node scripts/check-docs-audit.mjs --scan   # README prerequisite + layout-seat notes
+     node scripts/check-docs-audit.mjs --scan   # README prerequisites, layout-seat notes, verification ## Automated
      ```
      A doc that names an older host version as current is stale; dated evidence
      rounds keep the version they recorded.
