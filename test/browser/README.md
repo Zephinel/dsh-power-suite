@@ -131,7 +131,7 @@ reviewed files) to publish `docs/assets/annotation-idle.png`, `annotation-mode.p
 - Every requested scenario must produce a result row; a missing row is recorded as FAIL.
 - Exit code contract (N6): `0` only when every check passes; `1` for any scenario failure,
   page error, real network/API failure, missing scenario row, feature gate failure or harness
-  fatal error; `2` only for usage/argument errors (`--scenario 16`, `--from 16`, missing value,
+  fatal error; `2` only for usage/argument errors (`--scenario 17`, `--from 17`, missing value,
   `Network` setup failure is NOT a usage error and exits 1).
 
 ## Evidence scope (pre-merge branch builds)
@@ -703,7 +703,7 @@ failure or fatal error; `2` for usage errors.
   brief default-width frame before the layout store seat attaches; attach is retried rather
   than guaranteed pre-paint, and the boot decision itself is unit-tested.
 - The `lw-8` reopen assertion needs the shell's toggle/opener controls; the pinned
-  `dsh-client-ui-sidebar@0.2.2-rc.1` renders `[data-sidebar-toggle]` and
+  `dsh-client-ui-sidebar@0.2.2-rc.5` renders `[data-sidebar-toggle]` and
   `[data-sidebar-opener]`, so a shell build without them fails the row loudly.
 - The expected pre-restart route probes also appear as Chrome's non-JS console
   "Failed to load resource: 404" log entries; they are printed with the non-JS console/log

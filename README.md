@@ -120,7 +120,7 @@ npm ci
 npm run check
 ```
 
-**Prerequisites**: DSH 0.2.2 plugin interface, verified against the current **DSH 0.2.2-rc.5** host (smoke and update-prompt suites green; the recorded full-suite run predates it, on `0.2.2-rc.1`; later DSH versions unverified), Node.js `>= 22.18` (native TypeScript type stripping for `npm test`; CI runs Node 22 and 24), `pnpm` (used by `dsh plugin add`), Git, and optional Google Chrome for the local browser suites (`node test/browser/sidebar.e2e.mjs --smoke`, `annotation.e2e.mjs --smoke`, `update-prompt.e2e.mjs`).
+**Prerequisites**: DSH 0.2.2 plugin interface, verified against the current **DSH 0.2.2-rc.5** host (smoke and update-prompt suites green; the last recorded green full-suite run predates it, on `0.2.2-rc.1`; later DSH versions unverified), Node.js `>= 22.18` (native TypeScript type stripping for `npm test`; CI runs Node 22 and 24), `pnpm` (used by `dsh plugin add`), Git, and optional Google Chrome for the local browser suites (`node test/browser/sidebar.e2e.mjs --smoke`, `annotation.e2e.mjs --smoke`, `update-prompt.e2e.mjs`).
 
 No runtime dependencies and no watch server: rebuild with `npm run build` (refresh the browser after client changes; reload the plugin or restart `dsh web` after Host changes). Full command table and deployment/release steps: [docs/development.md](https://github.com/Zephinel/dsh-power-suite/blob/main/docs/development.md).
 

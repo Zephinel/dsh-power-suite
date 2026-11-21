@@ -32,7 +32,7 @@ as icons, and duplicated controls that already exist in the native shell.
 
 The current-Session row's colored atmosphere is the deliberate exception: it
 marks the open Session (a state signal, not decoration) and is the only colored
-surface the suite adds.
+row atmosphere the suite adds.
 
 ## Design principles
 
