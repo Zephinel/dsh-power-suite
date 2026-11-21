@@ -14856,6 +14856,36 @@ async function readmeArchiveTaskSession(page, sessionId, workspaceName) {
  * @param {object} [options] - `{ delta }` pixels to drag.
  * @returns {Promise<{before: number, after: number}>} panel widths.
  */
+/**
+ * Pin the sidebar width through the plugin's own Host route before capturing.
+ *
+ * The demo poses used to widen the sidebar by dragging its handle. The drop point
+ * depended on the pointer path and the Host write landed asynchronously, so the
+ * same pose produced different raw geometries run to run (card.png 824 vs 904 px
+ * wide) and the hand-tuned Bento cells could not stay valid. The committed
+ * screenshots were shot on the native 420 px sidebar (840 px at DPR 2), so the
+ * pass now posts that width and reloads: every pose sees one geometry.
+ * @param {object} page - Page wrapper.
+ * @param {number} [width] - sidebar width in CSS px.
+ * @returns {Promise<{pinned: boolean, width?: number, reason?: string}>} pin result.
+ */
+async function readmePinSidebarWidth(page, width = 420) {
+  const posted = await page.eval((value) => fetch('/api/power-suite.sidebar-width', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sidebarWidth: value }),
+  }).then((response) => response.ok).catch(() => false), width)
+  if (posted !== true) return { pinned: false, reason: 'sidebar-width route unavailable (Host predates the merged plugin)' }
+  await page.send('Page.reload', { ignoreCache: true })
+  await page.waitForFn(probe.appReady, [], { timeout: 60000, label: 'shell ready after the sidebar-width pin' })
+  await ensureAppReady(page)
+  await page.waitForFn(() => {
+    const panel = document.querySelector('.psd-panel')
+    return panel !== null && panel.getBoundingClientRect().width >= 380
+  }, [], { timeout: 15000, label: 'sidebar pinned to the README capture width' }).catch(() => {})
+  return { pinned: true, width }
+}
+
 async function readmeWidenSidebar(page, { delta = 170 } = {}) {
   const measure = () => page.evaluate(`(() => {
     const panel = document.querySelector('.psd-panel')
@@ -15047,6 +15077,9 @@ async function readmeOpenCardHover(page, row) {
       const hover = await page.eval(probeReadme.hoverCardState)
       const hovered = await page.eval(probeReadme.hoveredCardRows)
       if (hover !== null && hover.textLength > 30 && hovered > 0) return hover
+      if (process.env.PSD_SHOT_DEBUG === '1') {
+        log(`readme hover attempt ${attempt}: mainPoint ${JSON.stringify(row.mainPoint)} hover ${hover === null ? 'null' : hover.textLength} hovered ${hovered}`)
+      }
     }
   }
   throw new Error('the card row hover card did not open (live list kept re-sorting); no capture written')
@@ -15155,8 +15188,18 @@ async function runReadmeShotsMode({ page, results, state, cdp, opts }) {
   assertEqual(lightChrome.dark, false, 'the capture pass must render the light appearance')
   log(`readme theme: light (body ${lightChrome.bodyBackground}, main ${lightChrome.mainBackground})`)
   if (dashboardOnly === true) {
-    await readmeWidenSidebar(page)
+    const pinned = await readmePinSidebarWidth(page)
+    if (pinned.pinned === true) {
+      log(`readme sidebar width: pinned to ${pinned.width} px through the Host route`)
+    } else {
+      log(`readme sidebar width: pin unavailable (${pinned.reason}); falling back to the handle drag`)
+      await readmeWidenSidebar(page)
+    }
     await sleep(500)
+    // The width pin reloads the document, and this isolated home shows the
+    // first-run Preview Notice on every fresh document — dismiss it again so the
+    // pointer poses are not blocked by its backdrop.
+    await dismissFirstRunModal(page)
   }
   // Hydrate like the rest of the harness: the shell restores its Session and the card rows
   // asynchronously after first paint.
