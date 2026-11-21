@@ -12,6 +12,8 @@ npm run check
 npm test
 npm run pack:check
 npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
+node scripts/check-docs-audit.mjs --scan   # host versions vs README/docs; needs dsh
+node scripts/check-docs-audit.mjs --verify # release commit carries a Docs-Audit: trailer
 ```
 
 `npm run check` performs:
@@ -39,7 +41,7 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   **`lib/client.js` 942.4 kB** (ESM `src/client.js` + `src/browser/` bundled to a
   classic-script IIFE); `lib/` is gitignored and
   rebuilt by `npm run check` and by `npm pack`'s `prepare`.
-- `npm test`: **416 tests, 416 passed, 0 failed**, **31 test files** — Host
+- `npm test`: **422 tests, 422 passed, 0 failed**, **32 test files** — Host
   stores/routes plus browser-side derivations, the atmosphere motion model, the
   release-notes approval round-trip, the docs consistency guard, the protocol contract guard for duplicated
   route/enum literals, the shared route and settings contracts, the durable
@@ -56,11 +58,11 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   resolve, shipped relative links stay inside `package.json` `files`, zero
   personal `/Users/<name>/` paths in shipped docs, and no non-portable `> [!`
   alerts in `README.md`).
-- `npm run check`: passed (`100 TypeScript modules, 1 JavaScript module(s), 31 test files`);
+- `npm run check`: passed (`100 TypeScript modules, 1 JavaScript module(s), 32 test files`);
   it builds `lib/` first, then runs syntax checks, strict/Host/browser typechecks,
   package-manifest validation, the built-entry smoke (update route reports
   `current=0.2.2`) and built-browser smoke (8 injects), local docs/hygiene checks,
-  the 416-test Node suite, and the release-notes gate (`0.2.2; 6 highlights, 6 English`),
+  the 422-test Node suite, and the release-notes gate (`0.2.2; 6 highlights, 6 English`),
   then `pack:check`.
 - `npm run pack:check`: **82 files**; inspect the file list rather than the byte totals
   (they shift with any packed edit and vary by platform/npm version).
@@ -205,12 +207,21 @@ npm run check:release   # local pre-release gate: needs dsh + pnpm, not in CI
   version.
 - The released `## [0.2.2]` CHANGELOG section does not list the README/Bento
   screenshot refresh that shipped in this version. Released sections are not
-  rewritten, so this note is the pointer; the release skill now requires
-  doc/asset changes to be recorded before the tag.
+  rewritten, so this note is the pointer; the release skill's audit now
+  requires an `## [Unreleased]` entry for every shipped doc/asset change
+  (step 6, claim class *Changelog completeness*).
 - The 2026-11-21 documentation audit (`f1dd899`, `1071567`) removed the stale
   host-version claims, the superseded `card-shared-ack.png` and
   `settings-page.png` references and the harness count drift, and added
-  `test/docs-consistency.test.js`; totals are now 416/416 tests in 31 files.
+  `test/docs-consistency.test.js` and `test/docs-audit.test.js`; totals are now
+  422/422 tests in 32 files.
+- Two independent reviewers then returned REQUEST CHANGES on that fix: the
+  guard's coverage was overstated, the audit step could still skip source-only
+  drift, and the audit was a self-waivable prose gate. The follow-up tightened
+  the guard (every occurrence, install-line pins, lockfile, ascending
+  `SCENARIO_ORDER`, prerelease versions), widened the audit scope to `src/` and
+  the harness, and made the audit a verified `Docs-Audit:` trailer enforced by
+  `publish.yml`.
 
 ## 0.2.1 screenshot fix and marketplace submissions (2026-11-19)
 

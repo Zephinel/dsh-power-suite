@@ -179,11 +179,18 @@ provenance, configured for `Zephinel/dsh-power-suite` / `publish.yml` during the
    `docs/limitations.md` and `docs/update-check.md`. They describe the state
    the tag creates; `test/docs-consistency.test.js` fails `npm run check` when
    one of them drifts from `package.json`. Only the publish run id, the
-   registry confirmation and the integrity hash wait for the post-publish
-   record.
+   registry confirmation, the integrity hash and the GitHub Release result wait
+   for the post-publish record.
+   Run the pre-tag documentation audit (the release skill's step 6) and record
+   it in the same commit body as
+   `Docs-Audit: checked=release-state,counts,environment,prose,screenshots fixed=<…> waived=<none|owner:"…">`.
+   `node scripts/check-docs-audit.mjs --verify` and the publish workflow refuse
+   a missing, duplicated or malformed trailer.
 2. **Gates.** `npm run check` (syntax, manifest, docs links, Node tests,
    release-notes gate), `npm run check:docs-links`,
-   `node scripts/release-notes-approval.mjs --verify`, `npm run pack:check`,
+   `node scripts/release-notes-approval.mjs --verify`,
+   `node scripts/check-docs-audit.mjs --scan` (host versions; needs `dsh`),
+   `node scripts/check-docs-audit.mjs --verify`, `npm run pack:check`,
    `npm run check:release` (pack → throwaway `$DSH_HOME` → isolated boot →
    byte identity → clean uninstall; needs `dsh` + `pnpm`, not in CI),
    `git diff --check`, a clean work tree, and the publish-manifest gate.
@@ -201,7 +208,8 @@ provenance, configured for `Zephinel/dsh-power-suite` / `publish.yml` during the
    Optionally verify the signature from a temporary install with
    `npm audit signatures`. Then create the GitHub Release from the release
    notes, verify the tag-pinned raw notes URLs, and record the workflow run,
-   registry version and provenance in [verification.md](verification.md).
+   the registry version/provenance, the integrity hash and the GitHub Release
+   result in [verification.md](verification.md).
 
 Tag and CHANGELOG/GitHub Release dates use the **UTC** release date; normal
 releases are stable semver with an annotated `v<version>` tag.

@@ -127,43 +127,66 @@ Facts that shape the procedure:
    packed-fact remeasurement to run; `lib/` is a gitignored build output and is
    rebuilt by `npm run check` and by `npm pack`.
 6. **Pre-tag documentation audit (required; a release must not ship a doc
-   that is older than the code).** Run
-   `.agents/skills/sync-power-suite-docs/SKILL.md` in **delta, read-only** mode
-   over everything that changed since the previous tag, and load its
-   `references/doc-map.md` first:
+   that is older than the code).** Audit **read-only first**, fix in sync mode,
+   then re-audit. Load
+   `.agents/skills/sync-power-suite-docs/references/doc-map.md`, then diff
+   everything the release changed — including the sources that invalidate a
+   doc's prose or its screenshots, not only the Markdown files:
 
    ```bash
-   git diff --name-only v<previous-version>..HEAD -- \
-     docs README.md README.zh.md CHANGELOG.md PRODUCT.md test/browser/README.md \
-     assets docs/assets
+   git diff --name-only v<previous-version>..HEAD
+   git log --oneline v<previous-version>..HEAD -- src docs README.md README.zh.md assets test/browser
    ```
 
-   Do not stop at the version strings. Check four claim classes:
+   Audit **files and pages, not hunks**: a page whose surface changed is in
+   scope even when its Markdown was untouched. Check five claim classes:
    - **Release state and counts** — published version, test/file/pack counts,
-     route/slot/locale-namespace counts, harness scenario and check counts. The
-     flat `test/docs-consistency.test.js` guard pins the version sentences and
-     the annotation scenario count; everything else is manual.
-   - **Environment versions** — `dsh --version` and the running
-     `@deepseek-ai/dsh-*` client package versions against every version a doc
-     presents as current (README prerequisites, architecture/limitations seat
-     notes, the `## Automated` browser block).
+     route/slot/locale-namespace counts, harness scenario and check counts, and
+     record/document schema versions (`v2 record` vs `v3 document`). The flat
+     `test/docs-consistency.test.js` guard pins the version sentences, the
+     lockfile version and the annotation scenario count; everything else is
+     manual.
+   - **Environment versions** — compare every version a doc presents as current
+     with the running host:
+     ```bash
+     dsh --version
+     node scripts/check-docs-audit.mjs --scan   # README prerequisite + layout-seat notes
+     ```
+     A doc that names an older host version as current is stale; dated evidence
+     rounds keep the version they recorded.
    - **Prose touched by the release** — UI copy, row geometry, retained caps,
      routes and limits the release changed; a doc that still quotes the previous
      wording or numbers counts as stale.
-   - **Screenshots** — any illustration whose surface, copy or theme the release
-     changed must be recaptured through its capture mode, or removed from the
-     as-built doc and kept only as historical evidence. A screenshot of a
-     superseded UI is a defect, not a nice-to-have.
+   - **Screenshots** — for every as-built page whose surface, copy or theme
+     changed, compare its illustrations with the current UI. Recapture through
+     the page's capture mode, or remove the reference from the as-built doc and
+     keep the file only as historical evidence. A screenshot of a superseded UI
+     is a defect, not a nice-to-have.
+   - **Changelog completeness** — every shipped user-visible change in the
+     range (`src/`, `docs/`, `assets/`, README) needs an `## [Unreleased]` entry
+     before the release moves it under the dated heading; an asset-only change
+     counts too.
 
    Treat this release's own forward claims (the version the tag is about to
    publish) as expected: check that they name exactly the version being tagged,
-   not that npm already serves it.
+   not that npm already serves it. The deterministic post-release URLs are
+   written now but only become reachable after the tag, so a pre-tag 404 is not
+   drift; if the tag is abandoned, revert the forward claims.
 
-   Classify findings **MAJOR** (contradicts the current build or environment,
-   or shows a superseded UI) and **MINOR**. **An unresolved MAJOR blocks the
-   tag** unless the owner explicitly waives it in the release commit body.
-   Record what was checked, fixed or waived in the release commit or in
-   `docs/verification.md`.
+   Classify findings **MAJOR** (contradicts the current build or environment, or
+   shows a superseded UI) and **MINOR** (wording or a stale count that cannot
+   mislead an operator; fix it in the same release when cheap). **An
+   unresolved MAJOR blocks the tag** unless the owner waives it by message.
+   Record the outcome in the release commit body:
+
+   ```
+   Docs-Audit: checked=release-state,counts,environment,prose,screenshots fixed=<what changed> waived=<none|owner:"<the owner's words>">
+   ```
+
+   `node scripts/check-docs-audit.mjs --verify` (also run by `publish.yml`)
+   refuses a missing, duplicated or malformed trailer, a skipped claim class,
+   or a waiver that does not quote the owner. The tagged commit must carry
+   exactly one such line.
 7. **Notes review gate (never skipped implicitly).** Show the complete
    `release-notes/<version>.md` Highlights (plus `.en.md` when present) to the
    owner and wait for an explicit approve-or-changes answer before section 2 —
@@ -189,6 +212,8 @@ npm run check:docs-links      # the docs-only link gate, recorded explicitly
 npm run check:release-notes   # Highlights in default + optional English file
 node scripts/release-notes-approval.mjs --verify  # the release commit carries the approved notes hash
 node scripts/check-publish-manifest.mjs  # after removing "private": true
+node scripts/check-docs-audit.mjs --scan   # host versions vs README/docs (needs dsh)
+node scripts/check-docs-audit.mjs --verify # the release commit carries Docs-Audit:
 npm run pack:check            # npm pack --dry-run --json (prepare builds lib/); inspect the file list
 npm run check:release         # build → pack → compare lib with the build, other files with the checkout → install/boot/uninstall (local, needs dsh + pnpm)
 git diff --check
@@ -232,6 +257,7 @@ Rules:
 - Do not use `--follow-tags` from an unrelated commit: push the tag explicitly
   so the workflow runs exactly once for this version.
 - The tagged commit must carry exactly one
+  `Docs-Audit: checked=... fixed=... waived=...` trailer (step 6) and exactly one
   `Release-Notes-Review: sha256=<hash>` line matching the committed notes;
   `publish.yml` recomputes the hash and refuses a missing, duplicated or
   mismatched approval. Editing the notes after the approval line is generated
@@ -289,7 +315,7 @@ gh run watch <run-id> --exit-status --interval 10
    `docs/verification.md`: the workflow run ID, the npm `latest`/provenance
    confirmation, the tarball integrity hash, the GitHub Release result and the
    tag-pinned notes check. The version claims, CHANGELOG heading and release
-   notes were already committed before the tag (step 1.5), so this docs-only
+   notes were already committed before the tag (step 5 in section 1), so this docs-only
    follow-up must not introduce the new version for the first time.
    **Do not bump the version.**
 4. If the release was prompted by an issue, comment with the fixed version and
