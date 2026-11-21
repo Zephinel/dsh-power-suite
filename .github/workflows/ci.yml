@@ -120,8 +120,11 @@ jobs:
       - name: Generated files are committed
         if: env.DOCS_ONLY != 'true'
         run: git diff --exit-code
-      - name: Docs-only link gate
+      - name: Docs-only link and claim gate
         if: env.DOCS_ONLY == 'true'
-        # A docs-only change skips the Node gate but still runs the one check a
-        # documentation change can break: local Markdown links and images.
-        run: npm run check:docs-links
+        # A docs-only change skips the Node gate but still runs the checks a
+        # documentation change can break: local Markdown links/images and the
+        # release-state version sentences in the docs it can touch.
+        run: |
+          npm run check:docs-links
+          node --test test/docs-consistency.test.js
